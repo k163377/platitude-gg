@@ -51,9 +51,11 @@ QtObject {
     readonly property color statusConflict: "#EF4444"
 
     // ---- colors: commit graph lanes (cycled modulo length) ----
+    // Okabe-Ito color-universal-design palette (black swapped for a light
+    // gray that survives the dark background).
     readonly property var graphLane: [
-        "#60A5FA", "#4ADE80", "#FBBF24", "#F87171",
-        "#C084FC", "#22D3EE", "#FB923C", "#F472B6"
+        "#56B4E9", "#E69F00", "#009E73", "#CC79A7",
+        "#F0E442", "#D55E00", "#0072B2", "#DDDDDD"
     ]
 
     // ---- typography ----

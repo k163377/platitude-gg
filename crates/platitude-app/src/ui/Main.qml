@@ -25,15 +25,14 @@ ApplicationWindow {
 
     // Commit-graph geometry and interaction values not yet covered by the
     // design tokens; kept in one place and grid-aligned. Pending token
-    // additions (do not tune): lane pitch = spaceLg, node diameter =
-    // iconSm, lane stroke = 2, wheel step = 6 rows/notch, middle-drag
-    // gain = 0.12, ref-label column width = 180.
+    // additions (do not tune): lane pitch = spaceLg, node icon = iconMd,
+    // lane stroke = 2, wheel step = 6 rows/notch, middle autoscroll gain
+    // = 0.12, ref-label column width = 144.
     readonly property int laneW: Theme.spaceLg
-    readonly property int nodeDiameter: Theme.iconSm
     readonly property int laneStroke: 2
     readonly property int wheelRows: 6
     readonly property real middleScrollGain: 0.12
-    readonly property int labelColW: 180
+    readonly property int labelColW: 144
 
     palette {
         window: Theme.bgBase
@@ -267,20 +266,58 @@ ApplicationWindow {
         readonly property int graphAreaW: shownLanes * root.laneW + Theme.spaceSm
         property string selectedOid: ""
 
+        // Center area switches between the graph and a file diff.
+        property bool diffShown: false
+        property string diffKey: ""
+        function toggleDiff(kind, path, origPath) {
+            const key = kind + ":" + path
+            if (page.diffShown && page.diffKey === key) {
+                page.closeDiff()
+                return
+            }
+            page.diffKey = key
+            if (kind === "commit")
+                diffModel.requestCommitFile(detailsModel.shaHex, detailsModel.parentHex,
+                                            path, origPath)
+            else
+                diffModel.requestWorkTree(kind, path, origPath)
+            page.diffShown = true
+        }
+        function closeDiff() {
+            page.diffShown = false
+            page.diffKey = ""
+            diffModel.clear()
+        }
+
+        // Sidebar section expansion (filter reveals collapsed sections).
+        property bool expBranches: true
+        property bool expRemotes: true
+        property bool expWorktree: true
+        property bool expStashes: true
+        property bool expTags: true
+
         RepoTab { id: repoTab }
         GraphModel { id: graphModel }
-        SidebarModel { id: sidebarModel }
         WorkTreeModel { id: workTree }
         DetailsModel { id: detailsModel }
         DiffModel { id: diffModel }
+        NavSectionModel { id: branchesModel }
+        NavSectionModel { id: remotesModel }
+        NavSectionModel { id: worktreeModel }
+        NavSectionModel { id: stashesModel }
+        NavSectionModel { id: tagsModel }
 
         Component.onCompleted: {
             repoTab.attach(page.tab_id)
             graphModel.attach(page.tab_id)
-            sidebarModel.attach(page.tab_id)
             workTree.attach(page.tab_id)
             detailsModel.attach(page.tab_id)
             diffModel.attach(page.tab_id)
+            branchesModel.attachSection(page.tab_id, "branches")
+            remotesModel.attachSection(page.tab_id, "remotes")
+            worktreeModel.attachSection(page.tab_id, "worktree")
+            stashesModel.attachSection(page.tab_id, "stashes")
+            tagsModel.attachSection(page.tab_id, "tags")
         }
 
         Connections {
@@ -363,9 +400,8 @@ ApplicationWindow {
             enabled: AppBackend.autoSelect
             function onChanged() {
                 if (detailsModel.shaHex !== "" && fileList.count > 0 && diffModel.title === "")
-                    diffModel.requestCommitFile(detailsModel.shaHex, detailsModel.parentHex,
-                                                detailsModel.filePathAt(0),
-                                                detailsModel.fileOrigPathAt(0))
+                    page.toggleDiff("commit", detailsModel.filePathAt(0),
+                                    detailsModel.fileOrigPathAt(0))
             }
         }
 
@@ -486,12 +522,6 @@ ApplicationWindow {
                         implicitHeight: Theme.controlHeight
                     }
                     ToolButton {
-                        text: qsTr("⚑ Tags")
-                        checkable: true
-                        checked: repoTab.tagsShown
-                        onToggled: repoTab.setTagsShown(checked)
-                    }
-                    ToolButton {
                         text: qsTr("Refresh")
                         onClicked: repoTab.refreshAll()
                     }
@@ -509,8 +539,8 @@ ApplicationWindow {
                     color: Theme.borderSubtle
                 }
 
-                // Navigation sidebar: branches / remotes / working tree /
-                // stashes / tags (collapsible sections, shared filter).
+                // Navigation sidebar: fixed section headers, each section
+                // scrolls inside its own list.
                 Rectangle {
                     SplitView.preferredWidth: 260
                     SplitView.minimumWidth: 180
@@ -524,248 +554,281 @@ ApplicationWindow {
                             Layout.margins: Theme.spaceSm
                             implicitHeight: Theme.controlHeight
                             placeholderText: qsTr("Filter")
-                            onTextChanged: sidebarModel.setFilter(text)
-                        }
-                        ListView {
-                            id: sidebarList
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            clip: true
-                            model: sidebarModel
-                            reuseItems: true
-                            ScrollBar.vertical: ScrollBar {}
-                            delegate: SidebarRowDelegate {
-                                listWidth: sidebarList.width
-                                onSectionToggled: group => sidebarModel.toggleGroup(group)
-                                onRefActivated: oidHex => {
-                                    const row = graphModel.rowOf(oidHex)
-                                    if (row >= 0) {
-                                        graphList.currentIndex = row
-                                        graphList.positionViewAtIndex(row, ListView.Center)
-                                    }
-                                    // Details resolve even outside the window.
-                                    page.selectedOid = oidHex
-                                    detailsModel.request(oidHex)
-                                    diffModel.clear()
-                                }
-                                onFileActivated: (bucket, path, origPath) =>
-                                    diffModel.requestWorkTree(bucket, path, origPath)
+                            onTextChanged: {
+                                branchesModel.setFilter(text)
+                                remotesModel.setFilter(text)
+                                worktreeModel.setFilter(text)
+                                stashesModel.setFilter(text)
+                                tagsModel.setFilter(text)
                             }
                         }
+
+                        NavHeader {
+                            caption: qsTr("BRANCHES")
+                            count: branchesModel.total
+                            expanded: page.expBranches || refFilter.text !== ""
+                            onToggled: page.expBranches = !page.expBranches
+                        }
+                        NavList {
+                            sectionModel: branchesModel
+                            expanded: page.expBranches || refFilter.text !== ""
+                            kindHint: "branch"
+                            onRefActivated: oidHex => page.jumpToRef(oidHex)
+                        }
+
+                        NavHeader {
+                            caption: qsTr("REMOTES")
+                            count: remotesModel.total
+                            expanded: page.expRemotes || refFilter.text !== ""
+                            onToggled: page.expRemotes = !page.expRemotes
+                        }
+                        NavList {
+                            sectionModel: remotesModel
+                            expanded: page.expRemotes || refFilter.text !== ""
+                            kindHint: "remote"
+                            onRefActivated: oidHex => page.jumpToRef(oidHex)
+                        }
+
+                        NavHeader {
+                            caption: qsTr("WORKING TREE")
+                            count: worktreeModel.total
+                            expanded: page.expWorktree || refFilter.text !== ""
+                            onToggled: page.expWorktree = !page.expWorktree
+                        }
+                        NavList {
+                            sectionModel: worktreeModel
+                            expanded: page.expWorktree || refFilter.text !== ""
+                            kindHint: "wt"
+                            onFileActivated: (bucket, path, origPath) =>
+                                page.toggleDiff(bucket, path, origPath)
+                        }
+
+                        NavHeader {
+                            caption: qsTr("STASHES")
+                            count: stashesModel.total
+                            expanded: page.expStashes || refFilter.text !== ""
+                            onToggled: page.expStashes = !page.expStashes
+                        }
+                        NavList {
+                            sectionModel: stashesModel
+                            expanded: page.expStashes || refFilter.text !== ""
+                            kindHint: "stash"
+                        }
+
+                        NavHeader {
+                            caption: qsTr("TAGS")
+                            count: tagsModel.total
+                            expanded: page.expTags || refFilter.text !== ""
+                            onToggled: page.expTags = !page.expTags
+                            showTagToggle: true
+                            tagsShown: repoTab.tagsShown
+                            onTagsToggled: shown => repoTab.setTagsShown(shown)
+                        }
+                        NavList {
+                            sectionModel: tagsModel
+                            expanded: page.expTags || refFilter.text !== ""
+                            kindHint: "tag"
+                            onRefActivated: oidHex => page.jumpToRef(oidHex)
+                        }
+
+                        // Absorbs leftover space when sections are collapsed.
+                        Item { Layout.fillHeight: true; Layout.minimumHeight: 0 }
                     }
                 }
 
-                // Commit graph
-                Rectangle {
+                // Center: commit graph ⇄ file diff
+                StackLayout {
                     SplitView.fillWidth: true
                     SplitView.minimumWidth: 420
-                    color: Theme.bgSurface
-                    ListView {
-                        id: graphList
-                        anchors.fill: parent
-                        clip: true
-                        model: graphModel
-                        reuseItems: true
-                        boundsBehavior: Flickable.StopAtBounds
-                        flickDeceleration: 8000
-                        maximumFlickVelocity: 9000
-                        ScrollBar.vertical: ScrollBar {}
-                        // Bridge into the page scope for the shared delegate
-                        // component (inline components cannot see page ids).
-                        property int graphAreaWidth: page.graphAreaW
-                        signal rowSelected(string oidHex)
-                        onRowSelected: oidHex => {
-                            page.selectedOid = oidHex
-                            detailsModel.request(oidHex)
-                            diffModel.clear()
-                        }
-                        delegate: GraphRowDelegate {}
-                        // Window-limit hint appears only when scrolled to
-                        // the very end (GitKraken-style truncation).
-                        footer: Rectangle {
-                            width: graphList.width
-                            height: graphModel.truncated ? Theme.rowHeight : 0
-                            visible: graphModel.truncated
-                            color: Theme.bgElevated
-                            Label {
-                                anchors.centerIn: parent
-                                text: qsTr("Showing the first %L1 commits").arg(graphModel.rowTotal)
-                                color: Theme.textSecondary
-                                font.pixelSize: Theme.fontSm
-                            }
-                        }
-                        // Mouse wheels scroll a fixed number of rows per
-                        // notch; touchpads keep native Flickable panning.
-                        WheelHandler {
-                            acceptedDevices: PointerDevice.Mouse
-                            onWheel: event => {
-                                graphList.cancelFlick()
-                                const step = (event.angleDelta.y / 120)
-                                           * root.wheelRows * Theme.rowHeight
-                                const maxY = Math.max(0, graphList.contentHeight - graphList.height)
-                                graphList.contentY = Math.max(0, Math.min(graphList.contentY - step, maxY))
-                            }
-                        }
-                    }
-                    // Middle-drag autoscroll: hold the middle button and
-                    // drag vertically; speed follows the drag distance.
-                    MouseArea {
-                        id: midScroll
-                        anchors.fill: parent
-                        acceptedButtons: Qt.MiddleButton
-                        property real anchorY: 0
-                        property real currentY: 0
-                        onPressed: mouse => {
-                            anchorY = mouse.y
-                            currentY = mouse.y
-                            midScrollTimer.start()
-                        }
-                        onReleased: midScrollTimer.stop()
-                        onCanceled: midScrollTimer.stop()
-                        onPositionChanged: mouse => currentY = mouse.y
-                        Timer {
-                            id: midScrollTimer
-                            interval: 16
-                            repeat: true
-                            onTriggered: {
-                                const delta = (midScroll.currentY - midScroll.anchorY)
-                                            * root.middleScrollGain
-                                const maxY = Math.max(0, graphList.contentHeight - graphList.height)
-                                graphList.contentY = Math.max(0, Math.min(graphList.contentY + delta, maxY))
-                            }
-                        }
-                    }
-                    BusyIndicator {
-                        anchors.centerIn: parent
-                        running: graphModel.loading && graphModel.rowTotal === 0
-                    }
-                    Label {
-                        anchors.centerIn: parent
-                        visible: graphModel.error !== ""
-                        text: graphModel.error
-                        color: Theme.danger
-                        width: parent.width - 2 * Theme.spaceXl
-                        wrapMode: Text.Wrap
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                }
+                    currentIndex: page.diffShown ? 1 : 0
 
-                // Right side: commit details + diff
-                Rectangle {
-                    SplitView.preferredWidth: 460
-                    SplitView.minimumWidth: 320
-                    color: Theme.bgSurface
-                    SplitView {
-                        anchors.fill: parent
-                        orientation: Qt.Vertical
-                        handle: Rectangle {
-                            implicitWidth: Theme.splitterWidth
-                            implicitHeight: Theme.splitterWidth
-                            color: Theme.borderSubtle
+                    // -- graph --
+                    Rectangle {
+                        color: Theme.bgSurface
+                        ListView {
+                            id: graphList
+                            anchors.fill: parent
+                            clip: true
+                            model: graphModel
+                            reuseItems: true
+                            boundsBehavior: Flickable.StopAtBounds
+                            flickDeceleration: 8000
+                            maximumFlickVelocity: 9000
+                            ScrollBar.vertical: ScrollBar {}
+                            // Bridge into the page scope for the shared
+                            // delegate (inline components cannot see page ids).
+                            property int graphAreaWidth: page.graphAreaW
+                            signal rowSelected(string oidHex)
+                            onRowSelected: oidHex => {
+                                page.selectedOid = oidHex
+                                detailsModel.request(oidHex)
+                                page.closeDiff()
+                            }
+                            delegate: GraphRowDelegate {}
+                            // Window cut: lanes keep running through the
+                            // footer and the message sits where subjects go.
+                            footer: Item {
+                                width: graphList.width
+                                height: graphModel.truncated ? 2 * Theme.rowHeight : 0
+                                visible: graphModel.truncated
+                                Canvas {
+                                    id: tailCanvas
+                                    x: root.labelColW + Theme.spaceSm
+                                    width: page.graphAreaW
+                                    height: parent.height
+                                    onPaint: {
+                                        const ctx = getContext("2d")
+                                        ctx.clearRect(0, 0, width, height)
+                                        if (graphModel.tailGeometry === "")
+                                            return
+                                        ctx.lineWidth = root.laneStroke
+                                        ctx.globalAlpha = 0.45
+                                        const toks = graphModel.tailGeometry.split(";")
+                                        for (let n = 0; n < toks.length; n++) {
+                                            const dot = toks[n].indexOf(".")
+                                            const lane = parseInt(toks[n].substring(0, dot))
+                                            const color = parseInt(toks[n].substring(dot + 1))
+                                            const x = lane * root.laneW + root.laneW / 2
+                                            ctx.strokeStyle = Theme.graphLane[color % Theme.graphLane.length]
+                                            ctx.beginPath()
+                                            ctx.moveTo(x, 0)
+                                            ctx.lineTo(x, height)
+                                            ctx.stroke()
+                                        }
+                                    }
+                                    Connections {
+                                        target: graphModel
+                                        function onStatsChanged() { tailCanvas.requestPaint() }
+                                    }
+                                }
+                                Label {
+                                    x: root.labelColW + Theme.spaceSm + page.graphAreaW + Theme.spaceSm
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: qsTr("Showing the first %L1 commits — older history is not loaded")
+                                          .arg(graphModel.rowTotal)
+                                    color: Theme.warning
+                                    font.pixelSize: Theme.fontMd
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+                            // Mouse wheels scroll a fixed number of rows per
+                            // notch; touchpads keep native Flickable panning.
+                            WheelHandler {
+                                acceptedDevices: PointerDevice.Mouse
+                                onWheel: event => {
+                                    graphList.cancelFlick()
+                                    const step = (event.angleDelta.y / 120)
+                                               * root.wheelRows * Theme.rowHeight
+                                    const maxY = Math.max(0, graphList.contentHeight - graphList.height)
+                                    graphList.contentY = Math.max(0, Math.min(graphList.contentY - step, maxY))
+                                }
+                            }
                         }
+                        // Middle-click toggles autoscroll mode: the pointer
+                        // distance from the anchor sets the speed; any click
+                        // exits.
+                        property bool autoScrolling: false
+                        property real autoAnchorX: 0
+                        property real autoAnchorY: 0
+                        property real autoCurrentY: 0
+                        id: graphArea
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.MiddleButton
+                            onClicked: mouse => {
+                                graphArea.autoAnchorX = mouse.x
+                                graphArea.autoAnchorY = mouse.y
+                                graphArea.autoCurrentY = mouse.y
+                                graphArea.autoScrolling = true
+                            }
+                        }
+                        MouseArea {
+                            visible: graphArea.autoScrolling
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.AllButtons
+                            cursorShape: Qt.SizeVerCursor
+                            onPositionChanged: mouse => graphArea.autoCurrentY = mouse.y
+                            onPressed: mouse => {
+                                graphArea.autoScrolling = false
+                                mouse.accepted = true
+                            }
+                            Timer {
+                                running: graphArea.autoScrolling
+                                interval: 16
+                                repeat: true
+                                onTriggered: {
+                                    const delta = (graphArea.autoCurrentY - graphArea.autoAnchorY)
+                                                * root.middleScrollGain
+                                    const maxY = Math.max(0, graphList.contentHeight - graphList.height)
+                                    graphList.contentY = Math.max(0, Math.min(graphList.contentY + delta, maxY))
+                                }
+                            }
+                            // Anchor marker
+                            Rectangle {
+                                x: graphArea.autoAnchorX - Theme.iconMd / 2
+                                y: graphArea.autoAnchorY - Theme.iconMd / 2
+                                width: Theme.iconMd
+                                height: Theme.iconMd
+                                radius: Theme.iconMd / 2
+                                color: "transparent"
+                                border.color: Theme.borderStrong
+                                border.width: Theme.borderWidth
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    width: Theme.spaceXs
+                                    height: Theme.spaceXs
+                                    radius: Theme.spaceXs / 2
+                                    color: Theme.borderStrong
+                                }
+                            }
+                        }
+                        BusyIndicator {
+                            anchors.centerIn: parent
+                            running: graphModel.loading && graphModel.rowTotal === 0
+                        }
+                        Label {
+                            anchors.centerIn: parent
+                            visible: graphModel.error !== ""
+                            text: graphModel.error
+                            color: Theme.danger
+                            width: parent.width - 2 * Theme.spaceXl
+                            wrapMode: Text.Wrap
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
 
-                        // Commit details + file list
+                    // -- diff --
+                    Rectangle {
+                        color: Theme.bgSurface
                         ColumnLayout {
-                            SplitView.preferredHeight: 320
-                            SplitView.minimumHeight: 160
+                            anchors.fill: parent
                             spacing: 0
-                            PaneHeader { text: qsTr("COMMIT") }
-                            ColumnLayout {
+                            Rectangle {
                                 Layout.fillWidth: true
-                                Layout.margins: Theme.spaceSm
-                                spacing: Theme.spaceXs
-                                visible: detailsModel.shaHex !== ""
+                                implicitHeight: Theme.headerHeight
+                                color: Theme.bgElevated
                                 RowLayout {
-                                    spacing: Theme.spaceXs
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Theme.spaceSm
+                                    anchors.rightMargin: Theme.spaceSm
+                                    spacing: Theme.spaceSm
                                     Label {
-                                        text: detailsModel.sha8
-                                        font.family: Theme.monoFamily
-                                        color: Theme.textLink
+                                        text: qsTr("DIFF · %1").arg(diffModel.title)
                                         font.pixelSize: Theme.fontSm
-                                    }
-                                    ToolButton {
-                                        text: "⧉"
-                                        padding: 0
-                                        implicitWidth: Theme.iconLg
-                                        implicitHeight: Theme.iconLg
-                                        ToolTip.visible: hovered
-                                        ToolTip.delay: 600
-                                        ToolTip.text: qsTr("Copy full hash")
-                                        onClicked: root.copyText(detailsModel.shaHex)
-                                    }
-                                    Label {
-                                        id: detailsDate
-                                        text: Qt.formatDateTime(new Date(detailsModel.authorTime * 1000),
-                                                                "yyyy-MM-dd HH:mm")
+                                        font.weight: Font.DemiBold
                                         color: Theme.textSecondary
-                                        font.pixelSize: Theme.fontSm
-                                    }
-                                    ToolButton {
-                                        text: "⧉"
-                                        padding: 0
-                                        implicitWidth: Theme.iconLg
-                                        implicitHeight: Theme.iconLg
-                                        ToolTip.visible: hovered
-                                        ToolTip.delay: 600
-                                        ToolTip.text: qsTr("Copy date")
-                                        onClicked: root.copyText(detailsDate.text)
-                                    }
-                                    Label {
-                                        text: detailsModel.author
-                                        elide: Text.ElideRight
+                                        elide: Text.ElideMiddle
                                         Layout.fillWidth: true
-                                        color: Theme.textSecondary
-                                        font.pixelSize: Theme.fontSm
+                                    }
+                                    ToolButton {
+                                        text: "×"
+                                        implicitWidth: Theme.iconLg
+                                        implicitHeight: Theme.iconLg
+                                        padding: 0
+                                        onClicked: page.closeDiff()
                                     }
                                 }
-                                ScrollView {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: Math.min(messageArea.implicitHeight + Theme.spaceSm, 96)
-                                    TextArea {
-                                        id: messageArea
-                                        readOnly: true
-                                        wrapMode: TextArea.Wrap
-                                        text: detailsModel.message
-                                        font.pixelSize: Theme.fontMd
-                                        color: Theme.textPrimary
-                                        background: null
-                                    }
-                                }
-                            }
-                            Label {
-                                visible: detailsModel.shaHex === ""
-                                Layout.margins: Theme.spaceSm
-                                text: qsTr("Select a commit to see its details")
-                                color: Theme.textMuted
-                                font.pixelSize: Theme.fontSm
-                            }
-                            ListView {
-                                id: fileList
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                clip: true
-                                model: detailsModel
-                                reuseItems: true
-                                ScrollBar.vertical: ScrollBar {}
-                                delegate: FileRowDelegate {
-                                    listWidth: fileList.width
-                                    onActivated: (bucket, path, origPath) =>
-                                        diffModel.requestCommitFile(detailsModel.shaHex,
-                                                                    detailsModel.parentHex,
-                                                                    path, origPath)
-                                }
-                            }
-                        }
-
-                        // Unified diff
-                        ColumnLayout {
-                            SplitView.fillHeight: true
-                            SplitView.minimumHeight: 140
-                            spacing: 0
-                            PaneHeader {
-                                text: diffModel.title === ""
-                                      ? qsTr("DIFF")
-                                      : qsTr("DIFF · %1").arg(diffModel.title)
                             }
                             Label {
                                 visible: diffModel.isBinary
@@ -839,13 +902,120 @@ ApplicationWindow {
                         }
                     }
                 }
+
+                // Right side: commit details
+                Rectangle {
+                    SplitView.preferredWidth: 400
+                    SplitView.minimumWidth: 300
+                    color: Theme.bgSurface
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 0
+                        PaneHeader { text: qsTr("COMMIT") }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.margins: Theme.spaceSm
+                            spacing: Theme.spaceXs
+                            visible: detailsModel.shaHex !== ""
+                            RowLayout {
+                                spacing: Theme.spaceXs
+                                Label {
+                                    text: detailsModel.sha8
+                                    font.family: Theme.monoFamily
+                                    color: Theme.textLink
+                                    font.pixelSize: Theme.fontSm
+                                }
+                                ToolButton {
+                                    text: "⧉"
+                                    padding: 0
+                                    implicitWidth: Theme.iconLg
+                                    implicitHeight: Theme.iconLg
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 600
+                                    ToolTip.text: qsTr("Copy full hash")
+                                    onClicked: root.copyText(detailsModel.shaHex)
+                                }
+                                Label {
+                                    id: detailsDate
+                                    text: Qt.formatDateTime(new Date(detailsModel.authorTime * 1000),
+                                                            "yyyy-MM-dd HH:mm")
+                                    color: Theme.textSecondary
+                                    font.pixelSize: Theme.fontSm
+                                }
+                                ToolButton {
+                                    text: "⧉"
+                                    padding: 0
+                                    implicitWidth: Theme.iconLg
+                                    implicitHeight: Theme.iconLg
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 600
+                                    ToolTip.text: qsTr("Copy date")
+                                    onClicked: root.copyText(detailsDate.text)
+                                }
+                                Label {
+                                    text: detailsModel.author
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                    color: Theme.textSecondary
+                                    font.pixelSize: Theme.fontSm
+                                }
+                            }
+                            ScrollView {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Math.min(messageArea.implicitHeight + Theme.spaceSm, 120)
+                                TextArea {
+                                    id: messageArea
+                                    readOnly: true
+                                    wrapMode: TextArea.Wrap
+                                    text: detailsModel.message
+                                    font.pixelSize: Theme.fontMd
+                                    color: Theme.textPrimary
+                                    background: null
+                                }
+                            }
+                        }
+                        Label {
+                            visible: detailsModel.shaHex === ""
+                            Layout.margins: Theme.spaceSm
+                            text: qsTr("Select a commit to see its details")
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fontSm
+                        }
+                        ListView {
+                            id: fileList
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            model: detailsModel
+                            reuseItems: true
+                            ScrollBar.vertical: ScrollBar {}
+                            delegate: FileRowDelegate {
+                                listWidth: fileList.width
+                                onActivated: (bucket, path, origPath) =>
+                                    page.toggleDiff("commit", path, origPath)
+                            }
+                        }
+                    }
+                }
             }
+        }
+
+        function jumpToRef(oidHex) {
+            const row = graphModel.rowOf(oidHex)
+            if (row >= 0) {
+                graphList.currentIndex = row
+                graphList.positionViewAtIndex(row, ListView.Center)
+            }
+            // Details resolve even outside the window.
+            page.selectedOid = oidHex
+            detailsModel.request(oidHex)
+            page.closeDiff()
         }
     }
 
     // ======================================================================
-    // Commit-graph row: [ref label][lanes][avatar][subject] — fixed-width
-    // label and graph columns keep every subject start aligned.
+    // Commit-graph row: [branch/tag chips][lanes + identicon node][subject]
+    // — fixed-width label and graph columns keep subjects aligned.
     // ======================================================================
     component GraphRowDelegate: Item {
         id: rowItem
@@ -864,8 +1034,11 @@ ApplicationWindow {
         height: Theme.rowHeight
 
         readonly property bool selected: ListView.isCurrentItem
-        // Chip records are separated by U+001F (see encode.rs).
+        // Chip records are separated by U+001F (see encode.rs). Branch-like
+        // records (HEAD / local / remote) and tags get separate chips.
         readonly property var labelRecords: labels === "" ? [] : labels.split(String.fromCharCode(31))
+        readonly property var branchRecords: labelRecords.filter(r => r[0] !== "T")
+        readonly property var tagRecords: labelRecords.filter(r => r[0] === "T")
 
         Rectangle {
             anchors.fill: parent
@@ -880,92 +1053,53 @@ ApplicationWindow {
 
         onGeometryChanged: laneCanvas.requestPaint()
         onNode_laneChanged: laneCanvas.requestPaint()
-        onNode_colorChanged: laneCanvas.requestPaint()
-        onAvatarChanged: avatarCanvas.requestPaint()
+        onAvatarChanged: laneCanvas.requestPaint()
 
         RowLayout {
             anchors.fill: parent
             spacing: Theme.spaceSm
 
-            // Ref label column: one chip per commit; hover lists them all.
+            // Branch / tag chips, right-aligned against the graph.
             Item {
                 Layout.preferredWidth: root.labelColW
                 Layout.fillHeight: true
-                Rectangle {
-                    id: chip
-                    visible: rowItem.labelRecords.length > 0
+                Row {
                     anchors.right: parent.right
                     anchors.rightMargin: Theme.spaceXs
                     anchors.verticalCenter: parent.verticalCenter
-                    height: Theme.fontSmLine
-                    width: Math.min(chipRow.implicitWidth + 2 * Theme.spaceXs,
-                                    root.labelColW - Theme.spaceXs)
-                    radius: Theme.radiusSm
-                    color: "transparent"
-                    clip: true
-                    readonly property string rec: rowItem.labelRecords.length > 0
-                                                  ? rowItem.labelRecords[0] : "L00"
-                    readonly property string chipKind: rec[0]
-                    readonly property bool chipHead: rec[1] === "1"
-                    readonly property bool chipRemote: rec[2] === "1"
-                    readonly property color chipColor: chipKind === "T" ? Theme.warning
-                                                      : chipKind === "R" ? Theme.textSecondary
-                                                      : chipKind === "H" ? Theme.danger
-                                                      : Theme.accent
-                    border.color: chipColor
-                    border.width: Theme.borderWidth
-                    Row {
-                        id: chipRow
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.left: parent.left
-                        anchors.leftMargin: Theme.spaceXs
-                        spacing: Theme.spaceXs
-                        Rectangle {
-                            visible: chip.chipKind === "L"
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: Theme.spaceXs + 2
-                            height: Theme.spaceXs + 2
-                            radius: Theme.radiusSm + 1
-                            color: chip.chipRemote ? chip.chipColor : "transparent"
-                            border.color: chip.chipColor
-                            border.width: Theme.borderWidth
-                        }
-                        Label {
-                            text: chip.rec.substring(3)
-                            color: chip.chipColor
-                            font.pixelSize: Theme.fontSm
-                            font.weight: chip.chipHead ? Font.DemiBold : Font.Normal
-                            elide: Text.ElideRight
-                            width: Math.min(implicitWidth,
-                                            root.labelColW - 5 * Theme.spaceXs
-                                            - (chip.chipKind === "L" ? Theme.spaceSm : 0)
-                                            - (rowItem.labelRecords.length > 1 ? Theme.spaceLg : 0))
-                        }
-                        Label {
-                            visible: rowItem.labelRecords.length > 1
-                            text: "+" + (rowItem.labelRecords.length - 1)
-                            color: chip.chipColor
-                            font.pixelSize: Theme.fontSm
-                        }
+                    spacing: Theme.spaceXs
+                    RefChip {
+                        records: rowItem.branchRecords
+                        tagStyle: false
+                        maxWidth: rowItem.tagRecords.length > 0
+                                  ? (root.labelColW - Theme.spaceSm) / 2
+                                  : root.labelColW - Theme.spaceSm
                     }
-                    MouseArea {
-                        id: chipMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.NoButton
+                    RefChip {
+                        records: rowItem.tagRecords
+                        tagStyle: true
+                        maxWidth: rowItem.branchRecords.length > 0
+                                  ? (root.labelColW - Theme.spaceSm) / 2
+                                  : root.labelColW - Theme.spaceSm
                     }
-                    ToolTip.visible: chipMouse.containsMouse
-                    ToolTip.delay: 300
-                    ToolTip.text: {
-                        let lines = []
-                        for (let i = 0; i < rowItem.labelRecords.length; i++) {
-                            const r = rowItem.labelRecords[i]
-                            const icon = r[0] === "T" ? "⚑" : r[0] === "R" ? "☁"
-                                       : r[0] === "H" ? "HEAD" : "⎇"
-                            lines.push(icon + " " + r.substring(3))
-                        }
-                        return lines.join("\n")
+                }
+                MouseArea {
+                    id: labelHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                }
+                ToolTip.visible: labelHover.containsMouse && rowItem.labelRecords.length > 0
+                ToolTip.delay: 300
+                ToolTip.text: {
+                    let lines = []
+                    for (let i = 0; i < rowItem.labelRecords.length; i++) {
+                        const r = rowItem.labelRecords[i]
+                        const icon = r[0] === "T" ? "⚑" : r[0] === "R" ? "☁"
+                                   : r[0] === "H" ? "HEAD" : "⎇"
+                        lines.push(icon + " " + r.substring(3))
                     }
+                    return lines.join("\n")
                 }
             }
 
@@ -1006,42 +1140,34 @@ ApplicationWindow {
                             ctx.stroke()
                         }
                     }
-                    const r = root.nodeDiameter / 2
-                    ctx.fillStyle = Theme.graphLane[rowItem.node_color % laneCount]
+                    // The commit node is the author's identicon (5x5,
+                    // mirrored; local substitute for network avatars).
+                    const r = Theme.iconMd / 2
+                    ctx.save()
                     ctx.beginPath()
-                    ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
-                    ctx.fill()
-                    ctx.strokeStyle = Theme.bgSurface
-                    ctx.lineWidth = Theme.borderWidth
-                    ctx.beginPath()
-                    ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
-                    ctx.stroke()
-                }
-            }
-
-            // Local identicon (5x5, mirrored pattern from the avatar code;
-            // fetching real avatars would require network access).
-            Canvas {
-                id: avatarCanvas
-                Layout.preferredWidth: Theme.iconMd
-                Layout.preferredHeight: Theme.iconMd
-                Layout.alignment: Qt.AlignVCenter
-                onPaint: {
-                    const ctx = getContext("2d")
-                    const cell = width / 5
-                    ctx.clearRect(0, 0, width, height)
+                    ctx.arc(nodeX, midY, r, 0, 2 * Math.PI)
+                    ctx.clip()
                     ctx.fillStyle = Theme.bgElevated
-                    ctx.fillRect(0, 0, width, height)
+                    ctx.fillRect(nodeX - r, midY - r, 2 * r, 2 * r)
                     ctx.fillStyle = Theme.graphLane[(rowItem.avatar >> 15) & 0x7]
+                    const cell = (2 * r) / 5
                     for (let row = 0; row < 5; row++) {
                         for (let col = 0; col < 3; col++) {
                             if ((rowItem.avatar >> (row * 3 + col)) & 1) {
-                                ctx.fillRect(col * cell, row * cell, cell + 0.5, cell + 0.5)
+                                ctx.fillRect(nodeX - r + col * cell, midY - r + row * cell,
+                                             cell + 0.5, cell + 0.5)
                                 if (col < 2)
-                                    ctx.fillRect((4 - col) * cell, row * cell, cell + 0.5, cell + 0.5)
+                                    ctx.fillRect(nodeX - r + (4 - col) * cell, midY - r + row * cell,
+                                                 cell + 0.5, cell + 0.5)
                             }
                         }
                     }
+                    ctx.restore()
+                    ctx.strokeStyle = Theme.borderStrong
+                    ctx.lineWidth = Theme.borderWidth
+                    ctx.beginPath()
+                    ctx.arc(nodeX, midY, r, 0, 2 * Math.PI)
+                    ctx.stroke()
                 }
             }
 
@@ -1073,14 +1199,153 @@ ApplicationWindow {
                       + rowItem.oid_hex.substring(0, 8)
     }
 
+    // One aggregated chip: primary name + "+N". Branch chips are outlined
+    // (⎇ / ☁ / HEAD, blue), tag chips are filled (⚑, amber) so the two
+    // kinds read differently at a glance.
+    component RefChip: Rectangle {
+        id: chip
+        property var records: []
+        property bool tagStyle: false
+        property real maxWidth: 140
+
+        visible: records.length > 0
+        height: Theme.fontSmLine
+        width: Math.min(chipContent.implicitWidth + 2 * Theme.spaceXs, maxWidth)
+        radius: Theme.radiusSm
+        clip: true
+
+        readonly property string rec: records.length > 0 ? records[0] : "L00"
+        readonly property string recKind: rec[0]
+        readonly property bool recHead: rec[1] === "1"
+        readonly property color chipColor: tagStyle ? Theme.warning
+                                          : recKind === "R" ? Theme.textSecondary
+                                          : recKind === "H" ? Theme.danger
+                                          : Theme.accent
+
+        color: tagStyle ? Theme.bgElevated : "transparent"
+        border.color: chipColor
+        border.width: Theme.borderWidth
+
+        Row {
+            id: chipContent
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.spaceXs
+            spacing: Theme.spaceXs
+            Label {
+                text: chip.tagStyle ? "⚑"
+                      : chip.recKind === "R" ? "☁"
+                      : chip.recKind === "H" ? "●" : "⎇"
+                color: chip.chipColor
+                font.pixelSize: Theme.fontSm
+            }
+            Label {
+                text: chip.rec.substring(3)
+                color: chip.chipColor
+                font.pixelSize: Theme.fontSm
+                font.weight: chip.recHead ? Font.DemiBold : Font.Normal
+                elide: Text.ElideRight
+                width: Math.min(implicitWidth,
+                                chip.maxWidth - Theme.spaceLg
+                                - (chip.records.length > 1 ? Theme.spaceLg : 0))
+            }
+            Label {
+                visible: chip.records.length > 1
+                text: "+" + (chip.records.length - 1)
+                color: chip.chipColor
+                font.pixelSize: Theme.fontSm
+            }
+        }
+    }
+
     // ======================================================================
-    // Sidebar row: section header or item (ref / work-tree file / stash)
+    // Sidebar building blocks
     // ======================================================================
-    component SidebarRowDelegate: Item {
+    component NavHeader: Rectangle {
+        id: header
+        property string caption
+        property int count: 0
+        property bool expanded: true
+        property bool showTagToggle: false
+        property bool tagsShown: true
+        signal toggled()
+        signal tagsToggled(bool shown)
+
+        Layout.fillWidth: true
+        implicitHeight: Theme.rowHeight
+        color: Theme.bgElevated
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Theme.spaceSm
+            anchors.rightMargin: Theme.spaceXs
+            spacing: Theme.spaceXs
+            Label {
+                text: header.expanded ? "▾" : "▸"
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+            }
+            Label {
+                text: header.caption
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+                font.weight: Font.DemiBold
+            }
+            Label {
+                text: "(" + header.count + ")"
+                color: Theme.textMuted
+                font.pixelSize: Theme.fontSm
+            }
+            Item { Layout.fillWidth: true }
+            ToolButton {
+                visible: header.showTagToggle
+                checkable: true
+                checked: header.tagsShown
+                text: "⚑"
+                opacity: checked ? 1.0 : 0.35
+                padding: 0
+                implicitWidth: Theme.iconLg
+                implicitHeight: Theme.iconLg
+                ToolTip.visible: hovered
+                ToolTip.delay: 600
+                ToolTip.text: qsTr("Show tags in the graph")
+                onToggled: header.tagsToggled(checked)
+            }
+        }
+        MouseArea {
+            anchors.fill: parent
+            // Leave the toggle button clickable.
+            anchors.rightMargin: header.showTagToggle ? Theme.spaceXl : 0
+            onClicked: header.toggled()
+        }
+    }
+
+    component NavList: ListView {
+        id: navList
+        property var sectionModel
+        property bool expanded: true
+        property string kindHint: "branch"
+        signal refActivated(string oidHex)
+        signal fileActivated(string bucket, string path, string origPath)
+
+        visible: expanded
+        Layout.fillWidth: true
+        Layout.fillHeight: expanded
+        Layout.maximumHeight: expanded ? count * Theme.rowHeight + Theme.spaceXs : 0
+        clip: true
+        model: sectionModel
+        reuseItems: true
+        ScrollBar.vertical: ScrollBar {}
+        delegate: NavItemDelegate {
+            listWidth: navList.width
+            kindHint: navList.kindHint
+            onRefClicked: oidHex => navList.refActivated(oidHex)
+            onFileClicked: (bucket, path, origPath) => navList.fileActivated(bucket, path, origPath)
+        }
+    }
+
+    component NavItemDelegate: Item {
         id: navRow
         required property int index
-        required property string kind
-        required property string group
         required property string name
         required property string oid_hex
         required property string change
@@ -1088,125 +1353,76 @@ ApplicationWindow {
         required property string orig_path
         required property bool is_head
         required property bool has_remote
-        required property bool collapsed
-        required property int count
+        property string kindHint: "branch"
         property real listWidth: 200
 
-        signal sectionToggled(string group)
-        signal refActivated(string oidHex)
-        signal fileActivated(string bucket, string path, string origPath)
-
-        readonly property bool isHeader: kind === "header"
+        signal refClicked(string oidHex)
+        signal fileClicked(string bucket, string path, string origPath)
 
         width: listWidth
         height: Theme.rowHeight
 
-        // ---- section header ----
         Rectangle {
             anchors.fill: parent
-            visible: navRow.isHeader
-            color: Theme.bgElevated
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: Theme.spaceSm
-                anchors.rightMargin: Theme.spaceSm
-                spacing: Theme.spaceXs
-                Label {
-                    text: navRow.collapsed ? "▸" : "▾"
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSm
-                }
-                Label {
-                    text: navRow.group === "branches" ? qsTr("BRANCHES")
-                          : navRow.group === "remotes" ? qsTr("REMOTES")
-                          : navRow.group === "worktree" ? qsTr("WORKING TREE")
-                          : navRow.group === "stashes" ? qsTr("STASHES")
-                          : qsTr("TAGS")
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
-                }
-                Label {
-                    text: "(" + navRow.count + ")"
-                    color: Theme.textMuted
-                    font.pixelSize: Theme.fontSm
-                }
-                Item { Layout.fillWidth: true }
+            color: Theme.bgHover
+            visible: itemMouse.containsMouse
+        }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Theme.spaceMd
+            anchors.rightMargin: Theme.spaceSm
+            spacing: Theme.spaceXs
+            Label {
+                visible: navRow.kindHint !== "wt"
+                text: navRow.kindHint === "tag" ? "⚑"
+                      : navRow.kindHint === "remote" ? "☁"
+                      : navRow.kindHint === "stash" ? "☰" : "⎇"
+                color: navRow.kindHint === "tag" ? Theme.warning
+                       : navRow.kindHint === "branch" ? Theme.accent
+                       : Theme.textSecondary
+                font.pixelSize: Theme.fontSm
             }
-            MouseArea {
-                anchors.fill: parent
-                onClicked: navRow.sectionToggled(navRow.group)
+            Label {
+                visible: navRow.kindHint === "wt"
+                text: navRow.change
+                font.family: Theme.monoFamily
+                font.pixelSize: Theme.fontSm
+                font.weight: Font.DemiBold
+                color: navRow.bucket === "staged" ? Theme.statusStaged
+                       : navRow.bucket === "unstaged" ? Theme.statusUnstaged
+                       : navRow.bucket === "untracked" ? Theme.statusUntracked
+                       : Theme.statusConflict
+                Layout.preferredWidth: Theme.iconLg
+            }
+            Label {
+                Layout.fillWidth: true
+                text: navRow.name
+                elide: Text.ElideMiddle
+                font.weight: navRow.is_head ? Font.DemiBold : Font.Normal
+                color: navRow.is_head ? Theme.textLink : Theme.textPrimary
+                font.pixelSize: Theme.fontMd
+            }
+            // Branch state badge: filled = has remote, hollow = local only
+            // (PR state joins in Phase 4 as a third look).
+            Rectangle {
+                visible: navRow.kindHint === "branch"
+                width: Theme.spaceSm
+                height: Theme.spaceSm
+                radius: Theme.spaceXs
+                color: navRow.has_remote ? Theme.accent : "transparent"
+                border.color: navRow.has_remote ? Theme.accent : Theme.textMuted
+                border.width: Theme.borderWidth
             }
         }
-
-        // ---- item row ----
-        Item {
+        MouseArea {
+            id: itemMouse
             anchors.fill: parent
-            visible: !navRow.isHeader
-            Rectangle {
-                anchors.fill: parent
-                color: Theme.bgHover
-                visible: itemMouse.containsMouse
-            }
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: Theme.spaceMd
-                anchors.rightMargin: Theme.spaceSm
-                spacing: Theme.spaceXs
-                // Kind marker: ref icon or work-tree change letter.
-                Label {
-                    visible: navRow.kind !== "wt"
-                    text: navRow.kind === "tag" ? "⚑"
-                          : navRow.kind === "remote" ? "☁"
-                          : navRow.kind === "stash" ? "☰" : "⎇"
-                    color: navRow.kind === "tag" ? Theme.warning
-                           : navRow.kind === "remote" ? Theme.textSecondary
-                           : navRow.kind === "stash" ? Theme.textSecondary
-                           : Theme.accent
-                    font.pixelSize: Theme.fontSm
-                }
-                Label {
-                    visible: navRow.kind === "wt"
-                    text: navRow.change
-                    font.family: Theme.monoFamily
-                    font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
-                    color: navRow.bucket === "staged" ? Theme.statusStaged
-                           : navRow.bucket === "unstaged" ? Theme.statusUnstaged
-                           : navRow.bucket === "untracked" ? Theme.statusUntracked
-                           : Theme.statusConflict
-                    Layout.preferredWidth: Theme.iconLg
-                }
-                Label {
-                    Layout.fillWidth: true
-                    text: navRow.name
-                    elide: Text.ElideMiddle
-                    font.weight: navRow.is_head ? Font.DemiBold : Font.Normal
-                    color: navRow.is_head ? Theme.textLink : Theme.textPrimary
-                    font.pixelSize: Theme.fontMd
-                }
-                // Branch state badge: filled = has remote, hollow = local
-                // only (PR state joins in Phase 4 as a third look).
-                Rectangle {
-                    visible: navRow.kind === "branch"
-                    width: Theme.spaceSm
-                    height: Theme.spaceSm
-                    radius: Theme.spaceXs
-                    color: navRow.has_remote ? Theme.accent : "transparent"
-                    border.color: navRow.has_remote ? Theme.accent : Theme.textMuted
-                    border.width: Theme.borderWidth
-                }
-            }
-            MouseArea {
-                id: itemMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                onClicked: {
-                    if (navRow.kind === "wt")
-                        navRow.fileActivated(navRow.bucket, navRow.name, navRow.orig_path)
-                    else if (navRow.oid_hex !== "")
-                        navRow.refActivated(navRow.oid_hex)
-                }
+            hoverEnabled: true
+            onClicked: {
+                if (navRow.kindHint === "wt")
+                    navRow.fileClicked(navRow.bucket, navRow.name, navRow.orig_path)
+                else if (navRow.oid_hex !== "")
+                    navRow.refClicked(navRow.oid_hex)
             }
         }
     }

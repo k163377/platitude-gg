@@ -450,6 +450,9 @@ pub struct GraphModel {
     first_chunk_ms: i32,
     total_ms: i32,
     truncated: bool,
+    /// Lanes running off the end of the window (`lane.color;...`), drawn
+    /// by the truncation footer.
+    tail_geometry: String,
     error: String,
     started_at: Option<Instant>,
     feed: Option<Arc<Feed<GraphMsg>>>,
@@ -493,6 +496,11 @@ impl GraphModel {
     );
     qproperty!("totalMs", Member = total_ms, Notify = stats_changed);
     qproperty!("truncated", Member = truncated, Notify = stats_changed);
+    qproperty!(
+        "tailGeometry",
+        Member = tail_geometry,
+        Notify = stats_changed
+    );
     qproperty!("error", Member = error, Notify = stats_changed);
 
     #[qsignal]
@@ -567,6 +575,14 @@ impl GraphModel {
                         self.total_ms = elapsed_ms as i32;
                         self.row_total = total as i32;
                         self.truncated = truncated;
+                        self.tail_geometry = if truncated {
+                            self.rows
+                                .last()
+                                .map(|r| crate::encode::tail_lanes(&r.geometry))
+                                .unwrap_or_default()
+                        } else {
+                            String::new()
+                        };
                         // Release Vec growth slack after the stream ends.
                         self.rows.shrink_to_fit();
                         tracing::info!(total, elapsed_ms, truncated, "graph stream finished");
@@ -623,19 +639,14 @@ fn to_row_item(row: &LogRow) -> GraphRowItem {
 }
 
 // ---------------------------------------------------------------------------
-// SidebarModel: the navigation column — branches / remotes / working tree /
-// stashes / tags with collapsible sections and an incremental filter.
-// Section headers are model rows (kind = "header") so a collapsed section
-// keeps its clickable header while the list stays fully virtualized.
+// NavSectionModel: one sidebar section (branches / remotes / worktree /
+// stashes / tags). Five QML instances share this type; each attaches to its
+// section's feed and owns its inner scrolling list, so section headers can
+// stay fixed in the sidebar while contents scroll.
 // ---------------------------------------------------------------------------
 
 #[derive(QModelItem, Default, Clone)]
-pub struct SidebarItem {
-    /// `header` / `branch` / `remote` / `tag` / `wt` / `stash`.
-    kind: String,
-    /// Section key: `branches` / `remotes` / `worktree` / `stashes` / `tags`
-    /// (QML maps keys to translated captions).
-    group: String,
+pub struct NavItem {
     name: String,
     oid_hex: String,
     change: String,
@@ -643,29 +654,75 @@ pub struct SidebarItem {
     orig_path: String,
     is_head: bool,
     has_remote: bool,
-    collapsed: bool,
-    count: i32,
 }
 
-struct WtRow {
-    bucket: &'static str,
-    change: String,
-    path: String,
-    orig_path: String,
+#[derive(Default)]
+pub struct NavSectionModel {
+    section: String,
+    all: Vec<NavItem>,
+    items: Vec<NavItem>,
+    filter: String,
+    total: i32,
+    refs_feed: Option<Arc<Feed<platitude_core::session::RefsSnapshot>>>,
+    status_feed: Option<Arc<Feed<StatusMsg>>>,
+    stash_feed: Option<Arc<Feed<Vec<platitude_core::stash::StashEntry>>>>,
+    tab_id: i32,
+}
+
+impl QListModel for NavSectionModel {
+    type Item = NavItem;
+
+    fn len(&self) -> usize {
+        self.items.len()
+    }
+    fn get(&self, index: usize) -> Option<&NavItem> {
+        self.items.get(index)
+    }
+    fn reset_unnotified(&mut self) {
+        let needle = self.filter.to_lowercase();
+        self.items = self
+            .all
+            .iter()
+            .filter(|i| needle.is_empty() || i.name.to_lowercase().contains(&needle))
+            .cloned()
+            .collect();
+    }
+}
+
+fn branch_nav_items(list: &[platitude_core::session::BranchItem]) -> Vec<NavItem> {
+    list.iter()
+        .map(|b| NavItem {
+            name: b.short.clone(),
+            oid_hex: b.oid_hex.clone(),
+            is_head: b.is_head,
+            has_remote: b.has_remote,
+            ..Default::default()
+        })
+        .collect()
 }
 
 /// Working-tree entries in display order (conflicts → staged → unstaged →
-/// untracked); shared shape for the sidebar section.
-fn status_to_wt_rows(status: &platitude_core::status::WorkTreeStatus) -> Vec<WtRow> {
+/// untracked).
+fn status_nav_items(status: &platitude_core::status::WorkTreeStatus) -> Vec<NavItem> {
+    let push = |out: &mut Vec<NavItem>, bucket: &str, change: String, path: &str, orig: String| {
+        out.push(NavItem {
+            name: path.to_string(),
+            change,
+            bucket: bucket.into(),
+            orig_path: orig,
+            ..Default::default()
+        });
+    };
     let mut rows = Vec::new();
     for entry in status.conflicted() {
         if let platitude_core::status::StatusItem::Unmerged { ours, theirs, path } = entry {
-            rows.push(WtRow {
-                bucket: "conflicts",
-                change: format!("{ours}{theirs}"),
-                path: path.clone(),
-                orig_path: String::new(),
-            });
+            push(
+                &mut rows,
+                "conflicts",
+                format!("{ours}{theirs}"),
+                path,
+                String::new(),
+            );
         }
     }
     for entry in status.staged() {
@@ -676,213 +733,123 @@ fn status_to_wt_rows(status: &platitude_core::status::WorkTreeStatus) -> Vec<WtR
             ..
         } = entry
         {
-            rows.push(WtRow {
-                bucket: "staged",
-                change: staged.to_string(),
-                path: path.clone(),
-                orig_path: orig_path.clone().unwrap_or_default(),
-            });
+            push(
+                &mut rows,
+                "staged",
+                staged.to_string(),
+                path,
+                orig_path.clone().unwrap_or_default(),
+            );
         }
     }
     for entry in status.unstaged() {
         if let platitude_core::status::StatusItem::Tracked { unstaged, path, .. } = entry {
-            rows.push(WtRow {
-                bucket: "unstaged",
-                change: unstaged.to_string(),
-                path: path.clone(),
-                orig_path: String::new(),
-            });
+            push(
+                &mut rows,
+                "unstaged",
+                unstaged.to_string(),
+                path,
+                String::new(),
+            );
         }
     }
     for entry in status.untracked() {
-        rows.push(WtRow {
-            bucket: "untracked",
-            change: "?".to_string(),
-            path: entry.path().to_string(),
-            orig_path: String::new(),
-        });
+        push(
+            &mut rows,
+            "untracked",
+            "?".to_string(),
+            entry.path(),
+            String::new(),
+        );
     }
     rows
 }
 
-#[derive(Default)]
-pub struct SidebarModel {
-    refs: platitude_core::session::RefsSnapshot,
-    wt: Vec<WtRow>,
-    stashes: Vec<platitude_core::stash::StashEntry>,
-    collapsed: std::collections::HashSet<String>,
-    filter: String,
-    visible: Vec<SidebarItem>,
-    refs_feed: Option<Arc<Feed<platitude_core::session::RefsSnapshot>>>,
-    status_feed: Option<Arc<Feed<StatusMsg>>>,
-    stash_feed: Option<Arc<Feed<Vec<platitude_core::stash::StashEntry>>>>,
-    tab_id: i32,
-}
-
-impl QListModel for SidebarModel {
-    type Item = SidebarItem;
-
-    fn len(&self) -> usize {
-        self.visible.len()
-    }
-    fn get(&self, index: usize) -> Option<&SidebarItem> {
-        self.visible.get(index)
-    }
-    fn reset_unnotified(&mut self) {
-        self.visible = self.build_rows();
-    }
-}
-
-impl SidebarModel {
-    fn build_rows(&self) -> Vec<SidebarItem> {
-        let needle = self.filter.to_lowercase();
-        let matches = |name: &str| needle.is_empty() || name.to_lowercase().contains(&needle);
-        // While filtering, collapsed sections still reveal their matches
-        // (that is what a filter box is for).
-        let is_collapsed = |group: &str| needle.is_empty() && self.collapsed.contains(group);
-        let mut out = Vec::new();
-
-        let section = |out: &mut Vec<SidebarItem>, group: &str, items: Vec<SidebarItem>| {
-            let collapsed = is_collapsed(group);
-            out.push(SidebarItem {
-                kind: "header".into(),
-                group: group.into(),
-                collapsed,
-                count: items.len() as i32,
-                ..Default::default()
-            });
-            if !collapsed {
-                out.extend(items);
-            }
-        };
-
-        let branch_items =
-            |list: &[platitude_core::session::BranchItem], kind: &str, group: &str| {
-                list.iter()
-                    .filter(|b| matches(&b.short))
-                    .map(|b| SidebarItem {
-                        kind: kind.into(),
-                        group: group.into(),
-                        name: b.short.clone(),
-                        oid_hex: b.oid_hex.clone(),
-                        is_head: b.is_head,
-                        has_remote: b.has_remote,
-                        ..Default::default()
-                    })
-                    .collect::<Vec<_>>()
-            };
-
-        section(
-            &mut out,
-            "branches",
-            branch_items(&self.refs.locals, "branch", "branches"),
-        );
-        section(
-            &mut out,
-            "remotes",
-            branch_items(&self.refs.remotes, "remote", "remotes"),
-        );
-        section(
-            &mut out,
-            "worktree",
-            self.wt
-                .iter()
-                .filter(|w| matches(&w.path))
-                .map(|w| SidebarItem {
-                    kind: "wt".into(),
-                    group: "worktree".into(),
-                    name: w.path.clone(),
-                    change: w.change.clone(),
-                    bucket: w.bucket.into(),
-                    orig_path: w.orig_path.clone(),
-                    ..Default::default()
-                })
-                .collect(),
-        );
-        section(
-            &mut out,
-            "stashes",
-            self.stashes
-                .iter()
-                .filter(|s| matches(&s.message) || matches(&s.name))
-                .map(|s| SidebarItem {
-                    kind: "stash".into(),
-                    group: "stashes".into(),
-                    name: format!("{}  {}", s.name, s.message),
-                    ..Default::default()
-                })
-                .collect(),
-        );
-        section(
-            &mut out,
-            "tags",
-            self.refs
-                .tags
-                .iter()
-                .filter(|t| matches(&t.short))
-                .map(|t| SidebarItem {
-                    kind: "tag".into(),
-                    group: "tags".into(),
-                    name: t.short.clone(),
-                    oid_hex: t.oid_hex.clone(),
-                    ..Default::default()
-                })
-                .collect(),
-        );
-        out
-    }
-}
-
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
-impl SidebarModel {
+impl NavSectionModel {
+    qproperty!("total", Member = total, Notify = changed);
+
+    #[qsignal]
+    fn changed(&mut self);
+
+    /// Wires this instance to one section's data feed.
+    /// `section`: `branches` / `remotes` / `worktree` / `stashes` / `tags`.
     #[qslot]
-    fn attach(&mut self, tab_id: i32) {
+    fn attach_section(&mut self, tab_id: i32, section: String) {
         self.tab_id = tab_id;
-        if let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) {
-            let refs_feed = Arc::clone(&feeds.refs);
-            refs_feed.attach(self.get_qml_method_invoker());
-            self.refs_feed = Some(refs_feed);
-            let status_feed = Arc::clone(&feeds.status_nav);
-            status_feed.attach(self.get_qml_method_invoker());
-            self.status_feed = Some(status_feed);
-            let stash_feed = Arc::clone(&feeds.stash);
-            stash_feed.attach(self.get_qml_method_invoker());
-            self.stash_feed = Some(stash_feed);
+        self.section = section;
+        let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) else {
+            return;
+        };
+        let invoker = self.get_qml_method_invoker();
+        match self.section.as_str() {
+            "branches" => {
+                let feed = Arc::clone(&feeds.refs_branches);
+                feed.attach(invoker);
+                self.refs_feed = Some(feed);
+            }
+            "remotes" => {
+                let feed = Arc::clone(&feeds.refs_remotes);
+                feed.attach(invoker);
+                self.refs_feed = Some(feed);
+            }
+            "tags" => {
+                let feed = Arc::clone(&feeds.refs_tags);
+                feed.attach(invoker);
+                self.refs_feed = Some(feed);
+            }
+            "worktree" => {
+                let feed = Arc::clone(&feeds.status_nav);
+                feed.attach(invoker);
+                self.status_feed = Some(feed);
+            }
+            "stashes" => {
+                let feed = Arc::clone(&feeds.stash);
+                feed.attach(invoker);
+                self.stash_feed = Some(feed);
+            }
+            other => tracing::warn!(section = other, "unknown sidebar section"),
         }
     }
 
     #[qslot]
     fn drain(&mut self) {
-        let mut dirty = false;
         if let Some(feed) = self.refs_feed.clone()
             && let Some(snapshot) = feed.drain().pop()
         {
-            self.refs = snapshot;
-            dirty = true;
+            self.all = match self.section.as_str() {
+                "branches" => branch_nav_items(&snapshot.locals),
+                "remotes" => branch_nav_items(&snapshot.remotes),
+                _ => snapshot
+                    .tags
+                    .iter()
+                    .map(|t| NavItem {
+                        name: t.short.clone(),
+                        oid_hex: t.oid_hex.clone(),
+                        ..Default::default()
+                    })
+                    .collect(),
+            };
         }
         if let Some(feed) = self.status_feed.clone()
             && let Some(StatusMsg { status, .. }) = feed.drain().pop()
         {
-            self.wt = status_to_wt_rows(&status);
-            dirty = true;
+            self.all = status_nav_items(&status);
         }
         if let Some(feed) = self.stash_feed.clone()
             && let Some(stashes) = feed.drain().pop()
         {
-            self.stashes = stashes;
-            dirty = true;
+            self.all = stashes
+                .into_iter()
+                .map(|s| NavItem {
+                    name: format!("{}  {}", s.name, s.message),
+                    ..Default::default()
+                })
+                .collect();
         }
-        if dirty {
-            self.reset();
-        }
-    }
-
-    #[qslot]
-    fn toggle_group(&mut self, group: String) {
-        if !self.collapsed.remove(&group) {
-            self.collapsed.insert(group);
-        }
+        self.total = self.all.len() as i32;
         self.reset();
+        self.changed();
     }
 
     #[qslot]
@@ -890,14 +857,21 @@ impl SidebarModel {
         if self.filter != filter {
             self.filter = filter;
             self.reset();
+            self.changed();
         }
     }
+
+    /// Filtered row count (the header shows `shown/total` while filtering).
+    #[qslot]
+    fn shown(&self) -> i32 {
+        self.items.len() as i32
+    }
 }
-qml_register!(SidebarModel, "SidebarModel", singleton = false);
+qml_register!(NavSectionModel, "NavSectionModel", singleton = false);
 
 // ---------------------------------------------------------------------------
 // WorkTreeModel: always-on header state (branch / ops / conflicts / counts).
-// The working-tree file list itself lives in the sidebar (SidebarModel).
+// The working-tree file list itself lives in the sidebar (NavSectionModel).
 // ---------------------------------------------------------------------------
 
 #[derive(Default)]

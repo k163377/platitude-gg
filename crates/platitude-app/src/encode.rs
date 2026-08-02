@@ -72,6 +72,31 @@ pub fn avatar_code(author: &str) -> i32 {
     (pattern | (color << 15)) as i32
 }
 
+/// Lanes that touch the bottom edge of a row (from its geometry tokens):
+/// `t` segments plus `o` targets. Used by the truncation footer to draw
+/// the lanes running off the end of the window. Output: `lane.color;...`.
+pub fn tail_lanes(geometry: &str) -> String {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = String::new();
+    for token in geometry.split(';').filter(|t| t.len() > 1) {
+        let kind = token.as_bytes()[0];
+        if kind != b't' && kind != b'o' {
+            continue;
+        }
+        let rest = &token[1..];
+        let Some((lane, _color)) = rest.split_once('.') else {
+            continue;
+        };
+        if seen.insert(lane.to_string()) {
+            if !out.is_empty() {
+                out.push(';');
+            }
+            out.push_str(rest);
+        }
+    }
+    out
+}
+
 /// Stable identity of a diff request (stale-response guard in the pane).
 pub fn diff_key(target: &DiffTarget) -> String {
     match target {
@@ -166,6 +191,14 @@ mod tests {
         ];
         assert_eq!(encode_geometry(&segs), "t0.3;i2.11;o1.0");
         assert_eq!(encode_geometry(&[]), "");
+    }
+
+    #[test]
+    fn tail_lanes_picks_bottom_touching_segments() {
+        assert_eq!(tail_lanes("t0.3;i2.11;o1.0"), "0.3;1.0");
+        assert_eq!(tail_lanes("i2.5"), "", "into-node stops at the node");
+        assert_eq!(tail_lanes("t0.1;o0.2"), "0.1", "deduped by lane");
+        assert_eq!(tail_lanes(""), "");
     }
 
     #[test]

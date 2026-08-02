@@ -11,7 +11,7 @@ mod urlpath;
 
 use hub::Hub;
 use models::{
-    AppBackend, DetailsModel, DiffModel, GraphModel, RepoTab, SidebarModel, TabsModel,
+    AppBackend, DetailsModel, DiffModel, GraphModel, NavSectionModel, RepoTab, TabsModel,
     WorkTreeModel,
 };
 use qtbridge::QApp;
@@ -43,7 +43,7 @@ fn main() {
         .register::<TabsModel>()
         .register::<RepoTab>()
         .register::<GraphModel>()
-        .register::<SidebarModel>()
+        .register::<NavSectionModel>()
         .register::<WorkTreeModel>()
         .register::<DetailsModel>()
         .register::<DiffModel>()

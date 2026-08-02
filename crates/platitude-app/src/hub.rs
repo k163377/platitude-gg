@@ -150,10 +150,13 @@ impl<T> Feed<T> {
 pub struct Feeds {
     pub tab: Arc<Feed<TabMsg>>,
     pub graph: Arc<Feed<GraphMsg>>,
-    pub refs: Arc<Feed<RefsSnapshot>>,
+    /// Refs fan out to one feed per sidebar section (one consumer each).
+    pub refs_branches: Arc<Feed<RefsSnapshot>>,
+    pub refs_remotes: Arc<Feed<RefsSnapshot>>,
+    pub refs_tags: Arc<Feed<RefsSnapshot>>,
     /// Status headline consumer (WorkTreeModel: header props/counts).
     pub status: Arc<Feed<StatusMsg>>,
-    /// Status list consumer (SidebarModel: working-tree section).
+    /// Status list consumer (working-tree sidebar section).
     pub status_nav: Arc<Feed<StatusMsg>>,
     pub stash: Arc<Feed<Vec<StashEntry>>>,
     pub details: Arc<Feed<platitude_core::details::CommitDetails>>,
@@ -209,7 +212,11 @@ impl SessionSink for BridgeSink {
             SessionEvent::LabelsChanged { rows } => {
                 self.feeds.graph.push(GraphMsg::Labels { rows });
             }
-            SessionEvent::RefsLoaded { snapshot } => self.feeds.refs.push_replace(snapshot),
+            SessionEvent::RefsLoaded { snapshot } => {
+                self.feeds.refs_branches.push_replace(snapshot.clone());
+                self.feeds.refs_remotes.push_replace(snapshot.clone());
+                self.feeds.refs_tags.push_replace(snapshot);
+            }
             SessionEvent::StatusLoaded { status, op_state } => {
                 self.feeds.status_nav.push_replace(StatusMsg {
                     status: status.clone(),
