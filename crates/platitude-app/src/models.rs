@@ -89,6 +89,7 @@ pub struct AppBackend {
     auto_quit_ms: i32,
     auto_select: bool,
     auto_scroll: bool,
+    auto_wip: bool,
     scroll_to: String,
     check_feed: Arc<Feed<GitCheckMsg>>,
 }
@@ -109,6 +110,7 @@ impl Default for AppBackend {
                 .unwrap_or(0),
             auto_select: std::env::var("PG_AUTO_SELECT").as_deref() == Ok("1"),
             auto_scroll: std::env::var("PG_AUTO_SCROLL").as_deref() == Ok("1"),
+            auto_wip: std::env::var("PG_AUTO_WIP").as_deref() == Ok("1"),
             // Smoke-test hook: "top" / "bottom" jumps the graph after load.
             scroll_to: std::env::var("PG_SCROLL_TO").unwrap_or_default(),
             check_feed: Arc::new(Feed::default()),
@@ -130,6 +132,7 @@ impl AppBackend {
     qproperty!("autoQuitMs", Member = auto_quit_ms, Constant);
     qproperty!("autoSelect", Member = auto_select, Constant);
     qproperty!("autoScroll", Member = auto_scroll, Constant);
+    qproperty!("autoWip", Member = auto_wip, Constant);
     qproperty!("scrollTo", Member = scroll_to, Constant);
 
     #[qsignal]
@@ -688,6 +691,8 @@ pub struct NavSectionModel {
     /// True once a refs snapshot arrived (distinguishes "no head yet"
     /// from "detached / no local branches" for the default selection).
     refs_loaded: bool,
+    /// Worktree section only: tree (default) vs flat-path display.
+    tree_view: bool,
     /// Explicit folder open/close choices (key = folder path); anything
     /// absent uses the section default.
     folder_overrides: HashMap<String, bool>,
@@ -718,11 +723,26 @@ impl QListModel for NavSectionModel {
                 .collect();
             return;
         }
-        if matches!(self.section.as_str(), "branches" | "remotes") {
-            self.items = self.build_tree();
-        } else {
-            self.items = self.all.clone();
-        }
+        self.items = match self.section.as_str() {
+            "branches" | "remotes" => self.build_tree(),
+            // The worktree keeps its bucket runs (conflicts → staged →
+            // unstaged → untracked) and trees each run independently.
+            "worktree" if self.tree_view => {
+                let mut out = Vec::new();
+                let mut i = 0;
+                while i < self.all.len() {
+                    let bucket = self.all[i].bucket.clone();
+                    let mut j = i + 1;
+                    while j < self.all.len() && self.all[j].bucket == bucket {
+                        j += 1;
+                    }
+                    wt_tree_into(&self.all[i..j], &bucket, &self.folder_overrides, &mut out);
+                    i = j;
+                }
+                out
+            }
+            _ => self.all.clone(),
+        };
     }
 }
 
@@ -806,12 +826,91 @@ fn branch_nav_items(list: &[platitude_core::session::BranchItem]) -> Vec<NavItem
         .collect()
 }
 
+/// Trees one bucket run of worktree entries: single-child directory
+/// chains compact into one `a/b/c` row; fold-toggle keys are
+/// bucket-prefixed so equal paths in different buckets fold apart.
+fn wt_tree_into(
+    entries: &[NavItem],
+    bucket: &str,
+    overrides: &HashMap<String, bool>,
+    out: &mut Vec<NavItem>,
+) {
+    #[derive(Default)]
+    struct DirNode {
+        dirs: std::collections::BTreeMap<String, DirNode>,
+        files: Vec<NavItem>,
+    }
+    let mut root = DirNode::default();
+    for entry in entries {
+        let mut node = &mut root;
+        let mut rest = entry.full.as_str();
+        while let Some((dir, tail)) = rest.split_once('/') {
+            node = node.dirs.entry(dir.to_string()).or_default();
+            rest = tail;
+        }
+        let mut leaf = entry.clone();
+        leaf.name = rest.to_string();
+        node.files.push(leaf);
+    }
+    fn emit(
+        node: &DirNode,
+        bucket: &str,
+        prefix: &str,
+        depth: i32,
+        overrides: &HashMap<String, bool>,
+        out: &mut Vec<NavItem>,
+    ) {
+        for (dir_name, child) in &node.dirs {
+            let mut label = dir_name.clone();
+            let mut target = child;
+            while target.files.is_empty() && target.dirs.len() == 1 {
+                let Some((next_name, next)) = target.dirs.iter().next() else {
+                    break;
+                };
+                label.push('/');
+                label.push_str(next_name);
+                target = next;
+            }
+            let path = format!("{prefix}{label}");
+            let key = format!("{bucket}:{path}");
+            let expanded = overrides.get(&key).copied().unwrap_or(true);
+            out.push(NavItem {
+                name: label,
+                full: key.clone(),
+                bucket: bucket.to_string(),
+                depth,
+                folder: true,
+                collapsed: !expanded,
+                ..Default::default()
+            });
+            if expanded {
+                emit(
+                    target,
+                    bucket,
+                    &format!("{path}/"),
+                    depth + 1,
+                    overrides,
+                    out,
+                );
+            }
+        }
+        for f in &node.files {
+            let mut item = f.clone();
+            item.depth = depth;
+            out.push(item);
+        }
+    }
+    emit(&root, bucket, "", 0, overrides, out);
+}
+
 /// Working-tree entries in display order (conflicts → staged → unstaged →
-/// untracked).
+/// untracked). `full` always carries the real path (tree leaves rename
+/// `name` to their last segment).
 fn status_nav_items(status: &platitude_core::status::WorkTreeStatus) -> Vec<NavItem> {
     let push = |out: &mut Vec<NavItem>, bucket: &str, change: String, path: &str, orig: String| {
         out.push(NavItem {
             name: path.to_string(),
+            full: path.to_string(),
             change,
             bucket: bucket.into(),
             orig_path: orig,
@@ -877,6 +976,7 @@ impl NavSectionModel {
     qproperty!("headOid", Member = head_oid, Notify = changed);
     qproperty!("headHasRemote", Member = head_has_remote, Notify = changed);
     qproperty!("refsLoaded", Member = refs_loaded, Notify = changed);
+    qproperty!("treeView", Member = tree_view, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -887,6 +987,7 @@ impl NavSectionModel {
     fn attach_section(&mut self, tab_id: i32, section: String) {
         self.tab_id = tab_id;
         self.section = section;
+        self.tree_view = true;
         let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) else {
             return;
         };
@@ -989,6 +1090,17 @@ impl NavSectionModel {
         let current = self.folder_expanded(&key, depth);
         self.folder_overrides.insert(key, !current);
         self.reset();
+    }
+
+    /// Switches the worktree list between tree and flat-path display.
+    #[qslot]
+    fn set_tree_view(&mut self, tree: bool) {
+        if self.tree_view == tree {
+            return;
+        }
+        self.tree_view = tree;
+        self.reset();
+        self.changed();
     }
 
     /// Filtered row count (the header shows `shown/total` while filtering).

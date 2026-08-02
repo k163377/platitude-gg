@@ -153,9 +153,14 @@ impl GraphBuilder {
             }
         }
         for p in parents {
-            if let Some(existing) = self.expects.get(p).and_then(|v| v.iter().min().copied()) {
-                // Another edge already waits for this parent: merge into it
-                // immediately (keeps the graph narrow).
+            if let Some(existing) = self.expects.get(p).and_then(|v| {
+                // Another edge already waits for this parent: merge into
+                // the nearest waiting lane (keeps the graph narrow and the
+                // horizontal jog short).
+                v.iter()
+                    .min_by_key(|l| (l.abs_diff(node_lane), **l))
+                    .copied()
+            }) {
                 segments.push(Segment {
                     kind: SegmentKind::OutOfNode,
                     lane: existing,
@@ -164,7 +169,7 @@ impl GraphBuilder {
             } else if self.already_emitted(p, commit) {
                 // Out-of-order stream: skip, as above.
             } else {
-                let lane = self.find_free_lane();
+                let lane = self.find_free_lane_near(node_lane);
                 let color = self.take_color();
                 self.occupy(lane, *p, color);
                 segments.push(Segment {
@@ -214,6 +219,28 @@ impl GraphBuilder {
             .iter()
             .position(Option::is_none)
             .unwrap_or(self.lanes.len()) as u16
+    }
+
+    /// Free lane nearest to `near` (ties prefer the left side); appending
+    /// a rightmost lane competes under the same distance rule. Keeping a
+    /// fork's target lane close to its node shortens the horizontal run,
+    /// which is the main source of avoidable edge crossings.
+    fn find_free_lane_near(&self, near: u16) -> u16 {
+        let mut best: Option<(u16, u16)> = None; // (distance, lane)
+        for (i, s) in self.lanes.iter().enumerate() {
+            if s.is_none() {
+                let lane = i as u16;
+                let candidate = (lane.abs_diff(near), lane);
+                if best.is_none_or(|b| candidate < b) {
+                    best = Some(candidate);
+                }
+            }
+        }
+        let append = self.lanes.len() as u16;
+        match best {
+            Some((dist, lane)) if dist <= append.abs_diff(near) => lane,
+            _ => append,
+        }
     }
 
     fn occupy(&mut self, lane: u16, expects: Oid, color: u8) {
@@ -447,6 +474,34 @@ mod tests {
         // Root of the first chain frees lane 0 while chain 2 passes through.
         assert_eq!(rows[2].node_lane, 0);
         insta::assert_snapshot!(render(&rows));
+    }
+
+    #[test]
+    fn fork_prefers_the_nearest_free_lane() {
+        // Node at lane 2 forks its second parent while lane 0 is free:
+        // crossing lane 1 to reach it would be worse than opening the
+        // adjacent lane 3.
+        let mut pool = StrPool::new();
+        let commits = vec![
+            commit(&mut pool, 9, &[1]),    // lane 0
+            commit(&mut pool, 8, &[2]),    // lane 1
+            commit(&mut pool, 7, &[3]),    // lane 2
+            commit(&mut pool, 1, &[]),     // root: frees lane 0
+            commit(&mut pool, 3, &[4, 5]), // node lane 2, forks parent 5
+            commit(&mut pool, 2, &[]),
+            commit(&mut pool, 4, &[]),
+            commit(&mut pool, 5, &[]),
+        ];
+        let (rows, _) = build(&commits);
+        let fork = &rows[4];
+        assert_eq!(fork.node_lane, 2);
+        let outs: Vec<u16> = fork
+            .segments
+            .iter()
+            .filter(|s| s.kind == SegmentKind::OutOfNode)
+            .map(|s| s.lane)
+            .collect();
+        assert_eq!(outs, vec![2, 3], "second parent takes the adjacent lane");
     }
 
     #[test]
