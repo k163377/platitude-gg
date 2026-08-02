@@ -1,0 +1,21 @@
+# Rust build artifacts (workspace root and spike/)
+target/
+
+# IDE / editors
+.idea/
+*.iml
+.vscode/
+
+# Qt / QML tooling
+.qmlls.ini
+
+# insta snapshot tests (pending snapshots are review-time only)
+*.pending-snap
+
+# Byproduct of running aqtinstall from the project directory
+aqtinstall.log
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
