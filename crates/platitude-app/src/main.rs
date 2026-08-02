@@ -32,8 +32,13 @@ fn main() {
     };
     Hub::install(runtime);
 
-    let code = QApp::new()
-        .application_name("platitude-gg")
+    let mut app = QApp::new();
+    app.application_name("platitude-gg");
+    // Embed the QML module (Theme singleton + Main) as qrc resources.
+    qtbridge::include_bytes_qml!("ui/qmldir", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/Theme.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/Main.qml", "qt/qml/platitude");
+    let code = app
         .register::<AppBackend>()
         .register::<TabsModel>()
         .register::<RepoTab>()
@@ -43,7 +48,8 @@ fn main() {
         .register::<StashModel>()
         .register::<DetailsModel>()
         .register::<DiffModel>()
-        .load_qml(include_bytes!("Main.qml"))
+        .add_import_path("qrc:/qt/qml")
+        .load_qml_from_file("qrc:/qt/qml/platitude/ui/Main.qml")
         .run();
 
     Hub::shutdown();

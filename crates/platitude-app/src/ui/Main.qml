@@ -1,6 +1,9 @@
 // platitude-gg main window. Presentation only: every model row arrives
 // precomputed from Rust; the only JS here decodes compact draw/chip tokens
 // and formats dates for display.
+//
+// All colors / fonts / dimensions come from the Theme singleton
+// (internal-docs/デザイン規約.md is the source of truth).
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -8,6 +11,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import QtQuick.Dialogs
 import platitude
+import platitude.ui
 
 ApplicationWindow {
     id: root
@@ -15,53 +19,31 @@ ApplicationWindow {
     height: 900
     visible: true
     title: qsTr("platitude-gg")
-    color: theme.window
+    color: Theme.bgBase
+    font.family: Theme.uiFamily
+    font.pixelSize: Theme.fontMd
 
-    // ---- theme (dark blue only, per product requirement) ----------------
-    QtObject {
-        id: theme
-        readonly property color window: "#0d1b2a"
-        readonly property color base: "#0a1420"
-        readonly property color panel: "#101d2e"
-        readonly property color panelAlt: "#152538"
-        readonly property color border: "#24344a"
-        readonly property color text: "#c9d7e8"
-        readonly property color dim: "#5f7387"
-        readonly property color accent: "#4fc3f7"
-        readonly property color highlight: "#2a6fb0"
-        readonly property color danger: "#e57373"
-        readonly property color warn: "#ffd54f"
-        readonly property color ok: "#81c784"
-        // diff palette (designed together with the dark theme)
-        readonly property color diffAddBg: "#0d2b1d"
-        readonly property color diffDelBg: "#33191f"
-        readonly property color diffHunkBg: "#17293d"
-        readonly property color diffAddText: "#8ce2b0"
-        readonly property color diffDelText: "#ff9aa2"
-        // graph lane palette — size must match core GRAPH_PALETTE_SIZE (12)
-        readonly property var laneColors: [
-            "#4fc3f7", "#81c784", "#ff8a65", "#ba68c8", "#ffd54f", "#64b5f6",
-            "#e57373", "#4db6ac", "#f06292", "#aed581", "#7986cb", "#ffb74d"
-        ]
-    }
+    // Commit-graph geometry not yet covered by the design tokens; kept in
+    // one place and grid-aligned. Pending token additions (do not tune):
+    // lane pitch = spaceLg, node diameter = iconSm, lane stroke = 2.
+    readonly property int laneW: Theme.spaceLg
+    readonly property int nodeDiameter: Theme.iconSm
+    readonly property int laneStroke: 2
 
     palette {
-        window: theme.window
-        windowText: theme.text
-        base: theme.base
-        text: theme.text
-        button: "#17293d"
-        buttonText: theme.text
-        highlight: theme.highlight
-        highlightedText: "#ffffff"
-        placeholderText: theme.dim
-        mid: theme.border
-        dark: "#091018"
-        light: theme.border
+        window: Theme.bgBase
+        windowText: Theme.textPrimary
+        base: Theme.bgBase
+        text: Theme.textPrimary
+        button: Theme.bgElevated
+        buttonText: Theme.textPrimary
+        highlight: Theme.accent
+        highlightedText: Theme.textOnAccent
+        placeholderText: Theme.textMuted
+        mid: Theme.borderDefault
+        dark: Theme.bgBase
+        light: Theme.borderDefault
     }
-
-    readonly property int rowH: 24
-    readonly property int laneW: 14
 
     // Window focus is a refresh trigger (refs/status/stash only).
     property int focusEpoch: 0
@@ -117,12 +99,12 @@ ApplicationWindow {
         visible: AppBackend.gitState !== "ok"
         Column {
             anchors.centerIn: parent
-            spacing: 14
-            width: Math.min(640, root.width - 80)
+            spacing: Theme.spaceLg
+            width: Math.min(640, root.width - 2 * Theme.spaceXxl)
             Label {
                 text: qsTr("platitude-gg")
-                font.pixelSize: 28
-                font.bold: true
+                font.pixelSize: Theme.fontXl
+                font.weight: Font.DemiBold
                 anchors.horizontalCenter: parent.horizontalCenter
             }
             BusyIndicator {
@@ -140,7 +122,7 @@ ApplicationWindow {
             Label {
                 visible: AppBackend.gitState === "unsupported" || AppBackend.gitState === "error"
                 text: AppBackend.gitError
-                color: theme.danger
+                color: Theme.danger
                 wrapMode: Text.Wrap
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
@@ -158,8 +140,8 @@ ApplicationWindow {
         // Tab strip
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 34
-            color: theme.panel
+            implicitHeight: Theme.toolbarHeight
+            color: Theme.bgElevated
             RowLayout {
                 anchors.fill: parent
                 spacing: 0
@@ -184,7 +166,7 @@ ApplicationWindow {
                             required property string repo_path
                             width: implicitWidth
                             contentItem: RowLayout {
-                                spacing: 6
+                                spacing: Theme.spaceXs
                                 Label {
                                     text: tabButton.title
                                     elide: Text.ElideRight
@@ -193,8 +175,8 @@ ApplicationWindow {
                                 ToolButton {
                                     text: "×"
                                     padding: 0
-                                    implicitWidth: 18
-                                    implicitHeight: 18
+                                    implicitWidth: Theme.iconLg
+                                    implicitHeight: Theme.iconLg
                                     onClicked: tabsModel.closeTab(tabButton.tab_id)
                                 }
                             }
@@ -203,15 +185,15 @@ ApplicationWindow {
                 }
                 ToolButton {
                     text: "+"
-                    font.pixelSize: 16
+                    font.pixelSize: Theme.fontLg
                     onClicked: folderDialog.open()
                 }
                 Item { Layout.fillWidth: true }
                 Label {
                     text: AppBackend.gitVersion === "" ? "" : qsTr("git %1").arg(AppBackend.gitVersion)
-                    color: theme.dim
-                    font.pixelSize: 11
-                    rightPadding: 10
+                    color: Theme.textMuted
+                    font.pixelSize: Theme.fontXs
+                    rightPadding: Theme.spaceSm
                 }
             }
         }
@@ -223,16 +205,16 @@ ApplicationWindow {
             visible: tabsModel.currentIndex < 0
             Column {
                 anchors.centerIn: parent
-                spacing: 16
+                spacing: Theme.spaceLg
                 Label {
                     text: qsTr("platitude-gg")
-                    font.pixelSize: 30
-                    font.bold: true
+                    font.pixelSize: Theme.fontXl
+                    font.weight: Font.DemiBold
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
                 Label {
                     text: qsTr("A thin, fast GUI over your installed git.")
-                    color: theme.dim
+                    color: Theme.textSecondary
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
                 Button {
@@ -266,7 +248,7 @@ ApplicationWindow {
         required property int tab_id
 
         readonly property int shownLanes: Math.max(1, Math.min(graphModel.maxLanes, 12))
-        readonly property int graphAreaW: shownLanes * root.laneW + 8
+        readonly property int graphAreaW: shownLanes * root.laneW + Theme.spaceSm
 
         RepoTab { id: repoTab }
         GraphModel { id: graphModel }
@@ -323,7 +305,7 @@ ApplicationWindow {
             target: graphList
             property: "contentY"
             from: 0
-            to: Math.min(3000, graphModel.rowTotal - 40) * root.rowH
+            to: Math.min(3000, graphModel.rowTotal - 40) * Theme.rowHeight
             duration: 12000
             onStopped: {
                 const secs = (Date.now() - page.benchT0) / 1000
@@ -363,17 +345,17 @@ ApplicationWindow {
         Column {
             anchors.centerIn: parent
             visible: repoTab.state === "error"
-            spacing: 12
-            width: Math.min(700, page.width - 60)
+            spacing: Theme.spaceMd
+            width: Math.min(700, page.width - 2 * Theme.spaceXl)
             Label {
                 text: qsTr("Could not open this folder as a git repository")
-                font.pixelSize: 18
-                font.bold: true
+                font.pixelSize: Theme.fontLg
+                font.weight: Font.DemiBold
                 anchors.horizontalCenter: parent.horizontalCenter
             }
             Label {
                 text: repoTab.error
-                color: theme.danger
+                color: Theme.danger
                 wrapMode: Text.Wrap
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
@@ -393,65 +375,66 @@ ApplicationWindow {
             // ---- always-on status header --------------------------------
             Rectangle {
                 Layout.fillWidth: true
-                implicitHeight: 32
-                color: theme.panelAlt
+                implicitHeight: Theme.toolbarHeight
+                color: Theme.bgElevated
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    spacing: 8
+                    anchors.leftMargin: Theme.spaceMd
+                    anchors.rightMargin: Theme.spaceMd
+                    spacing: Theme.spaceSm
 
                     Label {
                         text: workTree.detached
                               ? qsTr("DETACHED HEAD")
                               : (workTree.branch === "" ? qsTr("(no branch)") : workTree.branch)
-                        font.bold: true
-                        color: workTree.detached ? theme.warn : theme.text
+                        font.weight: Font.DemiBold
+                        color: workTree.detached ? Theme.warning : Theme.textPrimary
                     }
                     Label {
                         visible: workTree.upstream !== ""
                         text: "↑" + workTree.ahead + " ↓" + workTree.behind
-                        color: theme.dim
-                        font.pixelSize: 12
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSm
                     }
                     Rectangle {
                         visible: workTree.opText !== ""
                         color: "transparent"
-                        border.color: theme.warn
-                        radius: 4
-                        implicitHeight: 20
-                        implicitWidth: opLabel.implicitWidth + 12
+                        border.color: Theme.warning
+                        border.width: Theme.borderWidth
+                        radius: Theme.radiusSm
+                        implicitHeight: Theme.iconLg
+                        implicitWidth: opLabel.implicitWidth + 2 * Theme.spaceXs
                         Label {
                             id: opLabel
                             anchors.centerIn: parent
                             text: workTree.opText
-                            color: theme.warn
-                            font.pixelSize: 11
-                            font.bold: true
+                            color: Theme.warning
+                            font.pixelSize: Theme.fontXs
+                            font.weight: Font.DemiBold
                         }
                     }
                     Rectangle {
                         visible: workTree.hasConflicts
-                        color: theme.danger
-                        radius: 4
-                        implicitHeight: 20
-                        implicitWidth: conflictLabel.implicitWidth + 12
+                        color: Theme.danger
+                        radius: Theme.radiusSm
+                        implicitHeight: Theme.iconLg
+                        implicitWidth: conflictLabel.implicitWidth + 2 * Theme.spaceXs
                         Label {
                             id: conflictLabel
                             anchors.centerIn: parent
                             text: qsTr("CONFLICTS")
-                            color: "#000000"
-                            font.pixelSize: 11
-                            font.bold: true
+                            color: Theme.textOnAccent
+                            font.pixelSize: Theme.fontXs
+                            font.weight: Font.DemiBold
                         }
                     }
                     Label {
                         visible: repoTab.lastError !== ""
                         text: repoTab.lastError
-                        color: theme.danger
+                        color: Theme.danger
                         elide: Text.ElideRight
                         Layout.maximumWidth: 320
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontXs
                         MouseArea {
                             anchors.fill: parent
                             onClicked: repoTab.clearLastError()
@@ -463,8 +446,8 @@ ApplicationWindow {
                     // Reserved: auto-fetch indicator (Phase 4)
                     Label {
                         text: "↻"
-                        color: theme.border
-                        font.pixelSize: 14
+                        color: Theme.borderDefault
+                        font.pixelSize: Theme.fontMd
                     }
                     // Reserved: search box (backlog)
                     TextField {
@@ -472,7 +455,7 @@ ApplicationWindow {
                         opacity: 0.35
                         placeholderText: qsTr("Search")
                         implicitWidth: 160
-                        implicitHeight: 24
+                        implicitHeight: Theme.controlHeight
                     }
                     ToolButton {
                         text: qsTr("Refresh")
@@ -486,19 +469,25 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 orientation: Qt.Horizontal
+                handle: Rectangle {
+                    implicitWidth: Theme.splitterWidth
+                    implicitHeight: Theme.splitterWidth
+                    color: Theme.borderSubtle
+                }
 
                 // Sidebar: refs + filter
                 Rectangle {
                     SplitView.preferredWidth: 240
                     SplitView.minimumWidth: 160
-                    color: theme.panel
+                    color: Theme.bgSurface
                     ColumnLayout {
                         anchors.fill: parent
                         spacing: 0
                         TextField {
                             id: refFilter
                             Layout.fillWidth: true
-                            Layout.margins: 6
+                            Layout.margins: Theme.spaceSm
+                            implicitHeight: Theme.controlHeight
                             placeholderText: qsTr("Filter refs")
                             onTextChanged: sidebarModel.setFilter(text)
                         }
@@ -513,18 +502,18 @@ ApplicationWindow {
                             section.delegate: Rectangle {
                                 required property string section
                                 width: sidebarList.width
-                                height: 22
-                                color: theme.panel
+                                height: Theme.rowHeight
+                                color: Theme.bgSurface
                                 Label {
                                     anchors.verticalCenter: parent.verticalCenter
-                                    x: 8
+                                    x: Theme.spaceSm
                                     text: parent.section
-                                    color: theme.dim
-                                    font.pixelSize: 10
-                                    font.bold: true
+                                    color: Theme.textSecondary
+                                    font.pixelSize: Theme.fontXs
+                                    font.weight: Font.DemiBold
                                 }
                             }
-                            delegate: Rectangle {
+                            delegate: Item {
                                 id: refRow
                                 required property string name
                                 required property string oid_hex
@@ -532,39 +521,44 @@ ApplicationWindow {
                                 required property bool is_head
                                 required property bool has_remote
                                 width: sidebarList.width
-                                height: 24
-                                color: refMouse.containsMouse ? theme.panelAlt : "transparent"
+                                height: Theme.rowHeight
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: Theme.bgHover
+                                    visible: refMouse.containsMouse
+                                }
                                 RowLayout {
                                     anchors.fill: parent
-                                    anchors.leftMargin: 10
-                                    anchors.rightMargin: 8
-                                    spacing: 6
+                                    anchors.leftMargin: Theme.spaceSm
+                                    anchors.rightMargin: Theme.spaceSm
+                                    spacing: Theme.spaceXs
                                     Label {
                                         text: refRow.kind === "tag" ? "⚑"
                                               : refRow.kind === "remote" ? "☁" : "⎇"
-                                        color: refRow.kind === "tag" ? theme.warn
-                                               : refRow.kind === "remote" ? "#ba68c8" : theme.accent
-                                        font.pixelSize: 11
+                                        color: refRow.kind === "tag" ? Theme.warning
+                                               : refRow.kind === "remote" ? Theme.textSecondary
+                                               : Theme.accent
+                                        font.pixelSize: Theme.fontXs
                                     }
                                     Label {
                                         Layout.fillWidth: true
                                         text: refRow.name
                                         elide: Text.ElideMiddle
-                                        font.bold: refRow.is_head
-                                        color: refRow.is_head ? theme.accent : theme.text
-                                        font.pixelSize: 12
+                                        font.weight: refRow.is_head ? Font.DemiBold : Font.Normal
+                                        color: refRow.is_head ? Theme.textLink : Theme.textPrimary
+                                        font.pixelSize: Theme.fontSm
                                     }
                                     // Branch state badge: filled = has remote,
                                     // hollow = local-only (PR state joins in
                                     // Phase 4 as a third look).
                                     Rectangle {
                                         visible: refRow.kind === "branch"
-                                        width: 8
-                                        height: 8
-                                        radius: 4
-                                        color: refRow.has_remote ? theme.ok : "transparent"
-                                        border.color: refRow.has_remote ? theme.ok : theme.dim
-                                        border.width: 1
+                                        width: Theme.spaceSm
+                                        height: Theme.spaceSm
+                                        radius: Theme.spaceXs
+                                        color: refRow.has_remote ? Theme.accent : "transparent"
+                                        border.color: refRow.has_remote ? Theme.accent : Theme.textMuted
+                                        border.width: Theme.borderWidth
                                     }
                                 }
                                 MouseArea {
@@ -589,7 +583,7 @@ ApplicationWindow {
                 Rectangle {
                     SplitView.fillWidth: true
                     SplitView.minimumWidth: 420
-                    color: theme.base
+                    color: Theme.bgSurface
                     ListView {
                         id: graphList
                         anchors.fill: parent
@@ -618,8 +612,8 @@ ApplicationWindow {
                         anchors.centerIn: parent
                         visible: graphModel.error !== ""
                         text: graphModel.error
-                        color: theme.danger
-                        width: parent.width - 40
+                        color: Theme.danger
+                        width: parent.width - 2 * Theme.spaceXl
                         wrapMode: Text.Wrap
                         horizontalAlignment: Text.AlignHCenter
                     }
@@ -629,10 +623,15 @@ ApplicationWindow {
                 Rectangle {
                     SplitView.preferredWidth: 460
                     SplitView.minimumWidth: 320
-                    color: theme.panel
+                    color: Theme.bgSurface
                     SplitView {
                         anchors.fill: parent
                         orientation: Qt.Vertical
+                        handle: Rectangle {
+                            implicitWidth: Theme.splitterWidth
+                            implicitHeight: Theme.splitterWidth
+                            color: Theme.borderSubtle
+                        }
 
                         // Working tree + stashes (always visible)
                         ColumnLayout {
@@ -656,14 +655,17 @@ ApplicationWindow {
                                 section.delegate: Rectangle {
                                     required property string section
                                     width: workTreeList.width
-                                    height: 20
-                                    color: theme.panelAlt
+                                    height: Theme.iconLg
+                                    color: Theme.bgElevated
                                     Label {
                                         anchors.verticalCenter: parent.verticalCenter
-                                        x: 8
-                                        font.pixelSize: 10
-                                        font.bold: true
-                                        color: parent.section === "conflicts" ? theme.danger : theme.dim
+                                        x: Theme.spaceSm
+                                        font.pixelSize: Theme.fontXs
+                                        font.weight: Font.DemiBold
+                                        color: parent.section === "conflicts" ? Theme.statusConflict
+                                               : parent.section === "staged" ? Theme.statusStaged
+                                               : parent.section === "unstaged" ? Theme.statusUnstaged
+                                               : Theme.textSecondary
                                         text: parent.section === "staged" ? qsTr("STAGED")
                                               : parent.section === "unstaged" ? qsTr("UNSTAGED")
                                               : parent.section === "untracked" ? qsTr("UNTRACKED")
@@ -682,7 +684,7 @@ ApplicationWindow {
                             ListView {
                                 id: stashList
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Math.min(count * 22 + 4, 92)
+                                Layout.preferredHeight: Math.min(count * Theme.rowHeight + Theme.spaceXs, 96)
                                 clip: true
                                 model: stashModel
                                 delegate: Item {
@@ -690,14 +692,14 @@ ApplicationWindow {
                                     required property string name
                                     required property string message
                                     width: stashList.width
-                                    height: 22
+                                    height: Theme.rowHeight
                                     Label {
-                                        x: 8
+                                        x: Theme.spaceSm
                                         anchors.verticalCenter: parent.verticalCenter
-                                        width: parent.width - 16
+                                        width: parent.width - 2 * Theme.spaceSm
                                         elide: Text.ElideRight
-                                        font.pixelSize: 11
-                                        color: theme.text
+                                        font.pixelSize: Theme.fontSm
+                                        color: Theme.textPrimary
                                         text: stashRow.name + "  " + stashRow.message
                                     }
                                 }
@@ -712,49 +714,51 @@ ApplicationWindow {
                             PaneHeader { text: qsTr("COMMIT") }
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                Layout.margins: 8
-                                spacing: 2
+                                Layout.margins: Theme.spaceSm
+                                spacing: Theme.spaceXs
                                 visible: detailsModel.shaHex !== ""
                                 RowLayout {
+                                    spacing: Theme.spaceSm
                                     Label {
                                         text: detailsModel.sha8
-                                        font.family: "Consolas"
-                                        color: theme.accent
-                                        font.pixelSize: 12
+                                        font.family: Theme.monoFamily
+                                        color: Theme.textLink
+                                        font.pixelSize: Theme.fontSm
                                     }
                                     Label {
                                         text: detailsModel.author
                                         elide: Text.ElideRight
                                         Layout.fillWidth: true
-                                        color: theme.dim
-                                        font.pixelSize: 12
+                                        color: Theme.textSecondary
+                                        font.pixelSize: Theme.fontSm
                                     }
                                     Label {
                                         text: Qt.formatDateTime(new Date(detailsModel.authorTime * 1000),
                                                                 "yyyy-MM-dd HH:mm")
-                                        color: theme.dim
-                                        font.pixelSize: 12
+                                        color: Theme.textSecondary
+                                        font.pixelSize: Theme.fontSm
                                     }
                                 }
                                 ScrollView {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: Math.min(messageArea.implicitHeight + 8, 96)
+                                    Layout.preferredHeight: Math.min(messageArea.implicitHeight + Theme.spaceSm, 96)
                                     TextArea {
                                         id: messageArea
                                         readOnly: true
                                         wrapMode: TextArea.Wrap
                                         text: detailsModel.message
-                                        font.pixelSize: 12
+                                        font.pixelSize: Theme.fontMd
+                                        color: Theme.textPrimary
                                         background: null
                                     }
                                 }
                             }
                             Label {
                                 visible: detailsModel.shaHex === ""
-                                Layout.margins: 8
+                                Layout.margins: Theme.spaceSm
                                 text: qsTr("Select a commit to see its details")
-                                color: theme.dim
-                                font.pixelSize: 12
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fontSm
                             }
                             ListView {
                                 id: fileList
@@ -786,9 +790,9 @@ ApplicationWindow {
                             }
                             Label {
                                 visible: diffModel.isBinary
-                                Layout.margins: 8
+                                Layout.margins: Theme.spaceSm
                                 text: qsTr("Binary file — no text diff")
-                                color: theme.dim
+                                color: Theme.textMuted
                             }
                             ListView {
                                 id: diffList
@@ -806,43 +810,49 @@ ApplicationWindow {
                                     required property int new_no
                                     required property string text
                                     width: diffList.width
-                                    height: 18
-                                    color: kind === "add" ? theme.diffAddBg
-                                           : kind === "del" ? theme.diffDelBg
-                                           : kind === "hunk" ? theme.diffHunkBg
+                                    height: Theme.rowHeight
+                                    color: kind === "add" ? Theme.diffAddedBg
+                                           : kind === "del" ? Theme.diffRemovedBg
+                                           : kind === "hunk" ? Theme.diffHunkHeaderBg
                                            : "transparent"
                                     Row {
                                         anchors.fill: parent
                                         spacing: 0
                                         Label {
                                             width: 42
+                                            height: parent.height
+                                            verticalAlignment: Text.AlignVCenter
                                             text: diffRow.old_no >= 0 ? diffRow.old_no : ""
                                             horizontalAlignment: Text.AlignRight
-                                            rightPadding: 6
-                                            color: theme.dim
-                                            font.family: "Consolas"
-                                            font.pixelSize: 11
+                                            rightPadding: Theme.spaceXs
+                                            color: Theme.textMuted
+                                            font.family: Theme.monoFamily
+                                            font.pixelSize: Theme.fontSm
                                         }
                                         Label {
                                             width: 42
+                                            height: parent.height
+                                            verticalAlignment: Text.AlignVCenter
                                             text: diffRow.new_no >= 0 ? diffRow.new_no : ""
                                             horizontalAlignment: Text.AlignRight
-                                            rightPadding: 6
-                                            color: theme.dim
-                                            font.family: "Consolas"
-                                            font.pixelSize: 11
+                                            rightPadding: Theme.spaceXs
+                                            color: Theme.textMuted
+                                            font.family: Theme.monoFamily
+                                            font.pixelSize: Theme.fontSm
                                         }
                                         Label {
                                             width: parent.width - 84
+                                            height: parent.height
+                                            verticalAlignment: Text.AlignVCenter
                                             text: diffRow.text
                                             elide: Text.ElideRight
-                                            font.family: "Consolas"
-                                            font.pixelSize: 11
-                                            color: diffRow.kind === "add" ? theme.diffAddText
-                                                   : diffRow.kind === "del" ? theme.diffDelText
-                                                   : diffRow.kind === "hunk" ? theme.accent
-                                                   : diffRow.kind === "meta" ? theme.dim
-                                                   : theme.text
+                                            font.family: Theme.monoFamily
+                                            font.pixelSize: Theme.fontSm
+                                            color: diffRow.kind === "add" ? Theme.diffAddedFg
+                                                   : diffRow.kind === "del" ? Theme.diffRemovedFg
+                                                   : diffRow.kind === "hunk" ? Theme.diffHunkHeaderFg
+                                                   : diffRow.kind === "meta" ? Theme.textMuted
+                                                   : Theme.textPrimary
                                         }
                                     }
                                 }
@@ -870,15 +880,19 @@ ApplicationWindow {
         required property string labels
 
         width: ListView.view.width
-        height: root.rowH
+        height: Theme.rowHeight
 
         readonly property bool selected: ListView.isCurrentItem
 
         Rectangle {
             anchors.fill: parent
-            color: rowItem.selected ? Qt.rgba(0.16, 0.44, 0.69, 0.35)
-                                    : rowMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.04)
-                                                             : "transparent"
+            color: Theme.bgSelected
+            visible: rowItem.selected
+        }
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.bgHover
+            visible: rowMouse.containsMouse && !rowItem.selected
         }
 
         onGeometryChanged: laneCanvas.requestPaint()
@@ -887,7 +901,7 @@ ApplicationWindow {
 
         RowLayout {
             anchors.fill: parent
-            spacing: 8
+            spacing: Theme.spaceSm
 
             Canvas {
                 id: laneCanvas
@@ -897,7 +911,8 @@ ApplicationWindow {
                 onPaint: {
                     const ctx = getContext("2d")
                     ctx.clearRect(0, 0, width, height)
-                    ctx.lineWidth = 2
+                    ctx.lineWidth = root.laneStroke
+                    const laneCount = Theme.graphLane.length
                     const cx = function (l) { return l * root.laneW + root.laneW / 2 }
                     const midY = height / 2
                     const nodeX = cx(rowItem.node_lane)
@@ -909,7 +924,7 @@ ApplicationWindow {
                             const dot = t.indexOf(".")
                             const lane = parseInt(t.substring(1, dot))
                             const x = cx(lane)
-                            ctx.strokeStyle = theme.laneColors[parseInt(t.substring(dot + 1)) % 12]
+                            ctx.strokeStyle = Theme.graphLane[parseInt(t.substring(dot + 1)) % laneCount]
                             ctx.beginPath()
                             if (t[0] === "t") {
                                 ctx.moveTo(x, 0)
@@ -925,21 +940,22 @@ ApplicationWindow {
                             ctx.stroke()
                         }
                     }
-                    ctx.fillStyle = theme.laneColors[rowItem.node_color % 12]
+                    const r = root.nodeDiameter / 2
+                    ctx.fillStyle = Theme.graphLane[rowItem.node_color % laneCount]
                     ctx.beginPath()
-                    ctx.arc(nodeX, midY, 4.5, 0, 2 * Math.PI)
+                    ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
                     ctx.fill()
-                    ctx.strokeStyle = theme.base
-                    ctx.lineWidth = 1
+                    ctx.strokeStyle = Theme.bgSurface
+                    ctx.lineWidth = Theme.borderWidth
                     ctx.beginPath()
-                    ctx.arc(nodeX, midY, 4.5, 0, 2 * Math.PI)
+                    ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
                     ctx.stroke()
                 }
             }
 
             // Ref label chips (precomputed records: K + head + remote + text)
             Row {
-                spacing: 4
+                spacing: Theme.spaceXs
                 Layout.maximumWidth: 300
                 Repeater {
                     // Chip records are separated by U+001F (see encode.rs).
@@ -951,35 +967,35 @@ ApplicationWindow {
                         readonly property bool chipHead: modelData[1] === "1"
                         readonly property bool chipRemote: modelData[2] === "1"
                         readonly property string chipText: modelData.substring(3)
-                        readonly property color chipColor: chipKind === "T" ? theme.warn
-                                                          : chipKind === "R" ? "#ba68c8"
-                                                          : chipKind === "H" ? theme.danger
-                                                          : theme.accent
-                        height: 16
-                        width: chipRow.implicitWidth + 10
-                        radius: 8
+                        readonly property color chipColor: chipKind === "T" ? Theme.warning
+                                                          : chipKind === "R" ? Theme.textSecondary
+                                                          : chipKind === "H" ? Theme.danger
+                                                          : Theme.accent
+                        height: Theme.fontXsLine
+                        width: chipRow.implicitWidth + 2 * Theme.spaceXs
+                        radius: Theme.radiusSm
                         color: "transparent"
                         border.color: chipColor
-                        border.width: chipHead ? 2 : 1
+                        border.width: Theme.borderWidth
                         Row {
                             id: chipRow
                             anchors.centerIn: parent
-                            spacing: 3
+                            spacing: Theme.spaceXs
                             Rectangle {
                                 visible: chip.chipKind === "L"
                                 anchors.verticalCenter: parent.verticalCenter
-                                width: 6
-                                height: 6
-                                radius: 3
+                                width: Theme.spaceXs + 2
+                                height: Theme.spaceXs + 2
+                                radius: Theme.radiusSm + 1
                                 color: chip.chipRemote ? chip.chipColor : "transparent"
                                 border.color: chip.chipColor
-                                border.width: 1
+                                border.width: Theme.borderWidth
                             }
                             Label {
                                 text: chip.chipText
                                 color: chip.chipColor
-                                font.pixelSize: 10
-                                font.bold: chip.chipHead
+                                font.pixelSize: Theme.fontXs
+                                font.weight: chip.chipHead ? Font.DemiBold : Font.Normal
                             }
                         }
                     }
@@ -990,29 +1006,29 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 text: rowItem.subject
                 elide: Text.ElideRight
-                font.pixelSize: 12
-                color: theme.text
+                font.pixelSize: Theme.fontSm
+                color: Theme.textPrimary
             }
             Label {
                 Layout.preferredWidth: 130
                 text: rowItem.author
                 elide: Text.ElideRight
-                font.pixelSize: 11
-                color: theme.dim
+                font.pixelSize: Theme.fontSm
+                color: Theme.textSecondary
             }
             Label {
                 Layout.preferredWidth: 110
                 text: Qt.formatDateTime(new Date(rowItem.atime * 1000), "yyyy-MM-dd HH:mm")
-                font.pixelSize: 11
-                color: theme.dim
+                font.pixelSize: Theme.fontSm
+                color: Theme.textSecondary
             }
             Label {
                 Layout.preferredWidth: 64
                 text: rowItem.oid_hex.substring(0, 8)
-                font.family: "Consolas"
-                font.pixelSize: 11
-                color: theme.dim
-                rightPadding: 8
+                font.family: Theme.monoFamily
+                font.pixelSize: Theme.fontSm
+                color: Theme.textSecondary
+                rightPadding: Theme.spaceSm
             }
         }
 
@@ -1030,7 +1046,7 @@ ApplicationWindow {
     // ======================================================================
     // A changed-file row (working tree pane and commit file list)
     // ======================================================================
-    component FileRowDelegate: Rectangle {
+    component FileRowDelegate: Item {
         id: fileRow
         // `model` covers both lists: work-tree rows carry `bucket`, commit
         // file rows don't (undefined → "").
@@ -1046,26 +1062,34 @@ ApplicationWindow {
         signal activated(string bucket, string path, string origPath)
 
         width: listWidth
-        height: 22
-        color: fileMouse.containsMouse ? theme.panelAlt : "transparent"
+        height: Theme.rowHeight
+
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.bgHover
+            visible: fileMouse.containsMouse
+        }
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 8
-            anchors.rightMargin: 8
-            spacing: 6
+            anchors.leftMargin: Theme.spaceSm
+            anchors.rightMargin: Theme.spaceSm
+            spacing: Theme.spaceXs
             Label {
                 text: fileRow.changeText
-                font.family: "Consolas"
-                font.pixelSize: 11
-                font.bold: true
-                color: fileRow.changeText.startsWith("A") ? theme.ok
-                       : fileRow.changeText.startsWith("D") ? theme.danger
-                       : fileRow.changeText.startsWith("R") ? "#ba68c8"
-                       : fileRow.changeText === "?" ? theme.dim
-                       : fileRow.changeText.length === 2 ? theme.danger
-                       : theme.warn
-                Layout.preferredWidth: 18
+                font.family: Theme.monoFamily
+                font.pixelSize: Theme.fontSm
+                font.weight: Font.DemiBold
+                // Work-tree rows color by bucket (status tokens); commit
+                // file rows only distinguish added/removed (diff tokens).
+                color: fileRow.bucketText === "staged" ? Theme.statusStaged
+                       : fileRow.bucketText === "unstaged" ? Theme.statusUnstaged
+                       : fileRow.bucketText === "untracked" ? Theme.statusUntracked
+                       : fileRow.bucketText === "conflicts" ? Theme.statusConflict
+                       : fileRow.changeText.startsWith("A") ? Theme.diffAddedFg
+                       : fileRow.changeText.startsWith("D") ? Theme.diffRemovedFg
+                       : Theme.textSecondary
+                Layout.preferredWidth: Theme.iconLg
             }
             Label {
                 Layout.fillWidth: true
@@ -1073,8 +1097,8 @@ ApplicationWindow {
                       ? fileRow.pathText
                       : qsTr("%1 → %2").arg(fileRow.origPathText).arg(fileRow.pathText)
                 elide: Text.ElideMiddle
-                font.pixelSize: 11
-                color: theme.text
+                font.pixelSize: Theme.fontSm
+                color: Theme.textPrimary
             }
         }
         MouseArea {
@@ -1088,15 +1112,15 @@ ApplicationWindow {
     component PaneHeader: Rectangle {
         property alias text: headerLabel.text
         Layout.fillWidth: true
-        implicitHeight: 24
-        color: theme.panelAlt
+        implicitHeight: Theme.headerHeight
+        color: Theme.bgElevated
         Label {
             id: headerLabel
             anchors.verticalCenter: parent.verticalCenter
-            x: 8
-            font.pixelSize: 10
-            font.bold: true
-            color: theme.dim
+            x: Theme.spaceSm
+            font.pixelSize: Theme.fontXs
+            font.weight: Font.DemiBold
+            color: Theme.textSecondary
         }
     }
 }

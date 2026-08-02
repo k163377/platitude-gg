@@ -13,9 +13,10 @@ use std::collections::HashMap;
 use crate::model::CommitMeta;
 use crate::oid::Oid;
 
-/// Nominal number of distinct chain colors. The app theme must define this
-/// many graph colors; the engine only hands out palette indices.
-pub const GRAPH_PALETTE_SIZE: u32 = 12;
+/// Nominal number of distinct chain colors; must match the `graphLane`
+/// palette in the design tokens (internal-docs/デザイン規約.md). The engine
+/// only hands out palette indices.
+pub const GRAPH_PALETTE_SIZE: u32 = 8;
 
 /// How a segment participates in its row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
