@@ -93,9 +93,10 @@ async fn open_streams_the_full_pipeline() {
             })
         })
         .await;
-    assert_eq!(total, 4, "root + side + main + merge");
+    assert_eq!(total, 5, "root + side + main + merge + stash row");
 
-    // All rows delivered, topo-consistent, head row exists.
+    // All rows delivered, topo-consistent; the stash (newest child of the
+    // merge) streams first, the head commit right after.
     let rows = sink
         .wait_for("chunk rows", |evs| {
             let mut rows = Vec::new();
@@ -104,30 +105,37 @@ async fn open_streams_the_full_pipeline() {
                     rows.extend(r.iter().cloned());
                 }
             }
-            (rows.len() == 4).then_some(rows)
+            (rows.len() == 5).then_some(rows)
         })
         .await;
-    assert_eq!(rows[0].oid_hex, head, "merge commit is the newest row");
-    assert_eq!(rows[0].row, 0);
+    assert_eq!(rows[0].stash_ref, "stash@{0}", "stash row leads");
+    assert!(
+        rows[0].subject.contains("wip stash"),
+        "stash subject is its reflog message: {:?}",
+        rows[0].subject
+    );
+    assert_eq!(rows[1].oid_hex, head, "merge commit is the newest commit");
+    assert_eq!(rows[1].row, 1);
+    assert!(rows.iter().skip(1).all(|r| r.stash_ref.is_empty()));
     assert!(rows.iter().all(|r| !r.subject.is_empty()));
     assert!(rows.iter().all(|r| r.author == "Test User"));
 
-    // Labels: head row must end up carrying main (+ v1 tag), either inline
-    // or via a LabelsChanged update.
+    // Labels: the head row must end up carrying main (+ v1 tag), either
+    // inline or via a LabelsChanged update.
     sink.wait_for("labels on head row", |evs| {
         let mut latest: Vec<String> = Vec::new();
         for e in evs {
             match e {
                 SessionEvent::LogChunk { rows, .. } => {
                     for r in rows {
-                        if r.row == 0 {
+                        if r.row == 1 {
                             latest = r.labels.iter().map(|l| l.text.clone()).collect();
                         }
                     }
                 }
                 SessionEvent::LabelsChanged { rows } => {
                     for (row, labels) in rows {
-                        if *row == 0 {
+                        if *row == 1 {
                             latest = labels.iter().map(|l| l.text.clone()).collect();
                         }
                     }
@@ -214,7 +222,8 @@ async fn restart_log_delivers_a_new_generation() {
         .await;
     assert!(second_gen > first_gen);
 
-    // The restarted stream re-delivers all rows under the new generation.
+    // The restarted stream re-delivers all rows under the new generation
+    // (4 commits + the stash row).
     sink.wait_for("second-generation rows", |evs| {
         let count: usize = evs
             .iter()
@@ -225,7 +234,7 @@ async fn restart_log_delivers_a_new_generation() {
                 _ => None,
             })
             .sum();
-        (count == 4).then_some(())
+        (count == 5).then_some(())
     })
     .await;
 
