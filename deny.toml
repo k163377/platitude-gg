@@ -21,8 +21,16 @@ allow = [
     "Unicode-3.0",
     "CC0-1.0",
 ]
+# The qtbridge family is "LicenseRef-Qt-Commercial OR LGPL-3.0-only"; we
+# take the LGPL-3.0-only branch (approved exception, dynamically linked).
 exceptions = [
-    { crate = "qtbridge", allow = ["LGPL-3.0-only", "LGPL-3.0"] },
+    { crate = "qtbridge", allow = ["LGPL-3.0-only"] },
+    { crate = "qtbridge-build-utils", allow = ["LGPL-3.0-only"] },
+    { crate = "qtbridge-gen", allow = ["LGPL-3.0-only"] },
+    { crate = "qtbridge-gen-common", allow = ["LGPL-3.0-only"] },
+    { crate = "qtbridge-interfaces", allow = ["LGPL-3.0-only"] },
+    { crate = "qtbridge-runtime", allow = ["LGPL-3.0-only"] },
+    { crate = "qtbridge-type-lib", allow = ["LGPL-3.0-only"] },
 ]
 
 [bans]
