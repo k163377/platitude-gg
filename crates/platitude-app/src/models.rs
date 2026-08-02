@@ -941,18 +941,15 @@ impl NavSectionModel {
         if let Some(feed) = self.stash_feed.clone()
             && let Some(stashes) = feed.drain().pop()
         {
-            // Message is the display text; the reflog selector rides in
-            // `full` (tooltip + Phase 2 stash ops) with a short `{n}`
-            // index badge in `change`. The commit id makes rows clickable
-            // (details pane shows the stashed changes).
+            // Message only — the reflog selector (stash@{0}) stays hidden
+            // by request (Phase 2 stash ops will resolve it internally).
+            // The commit id makes rows clickable: the details pane then
+            // shows the stashed changes.
             self.all = stashes
                 .into_iter()
-                .enumerate()
-                .map(|(i, s)| NavItem {
+                .map(|s| NavItem {
                     name: s.message,
-                    full: s.name,
                     oid_hex: s.oid.to_hex(),
-                    change: format!("{{{i}}}"),
                     ..Default::default()
                 })
                 .collect();

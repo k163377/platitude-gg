@@ -8,9 +8,9 @@ import QtQuick
 QtObject {
     // ---- colors: backgrounds ----
     readonly property color bgBase: "#020617"
-    readonly property color bgSurface: "#0F172A"
-    readonly property color bgElevated: "#1E293B"
-    readonly property color bgSelected: "#1E3A8A"
+    readonly property color bgSurface: "#020617"
+    readonly property color bgElevated: "#0F172A"
+    readonly property color bgSelected: "#172554"
     readonly property color bgHover: "#14FFFFFF"
     readonly property color bgPressed: "#1FFFFFFF"
 
@@ -31,11 +31,11 @@ QtObject {
     readonly property color accent: "#3B82F6"
     readonly property color accentHover: "#60A5FA"
     readonly property color accentPressed: "#2563EB"
-    readonly property color accentMuted: "#1E3A8A"
+    readonly property color accentMuted: "#172554"
 
     // ---- colors: states ----
-    readonly property color success: "#22C55E"
-    readonly property color warning: "#F59E0B"
+    readonly property color success: "#16A34A"
+    readonly property color warning: "#D97706"
     readonly property color danger: "#EF4444"
 
     // ---- colors: git / diff ----
@@ -44,9 +44,9 @@ QtObject {
     readonly property color diffRemovedFg: "#F87171"
     readonly property color diffRemovedBg: "#450A0A"
     readonly property color diffHunkHeaderFg: "#94A3B8"
-    readonly property color diffHunkHeaderBg: "#1E293B"
-    readonly property color statusStaged: "#22C55E"
-    readonly property color statusUnstaged: "#F59E0B"
+    readonly property color diffHunkHeaderBg: "#0F172A"
+    readonly property color statusStaged: "#16A34A"
+    readonly property color statusUnstaged: "#D97706"
     readonly property color statusUntracked: "#64748B"
     readonly property color statusConflict: "#EF4444"
 

@@ -257,24 +257,32 @@ ApplicationWindow {
             }
         }
 
-        // Bottom status bar: closes the window with a border line; the
-        // git version lives bottom-right by request.
-        Rectangle {
+        // Bottom edge: a thin border line across the window; only the
+        // git-version chip in the corner is thick (it rises above the
+        // line, overlapping the content).
+        Item {
             Layout.fillWidth: true
             implicitHeight: Theme.borderWidth
-            color: Theme.borderSubtle
-        }
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: Theme.rowHeight
-            color: Theme.bgElevated
-            Label {
-                anchors.verticalCenter: parent.verticalCenter
+            Rectangle {
+                anchors.fill: parent
+                color: Theme.borderSubtle
+            }
+            Rectangle {
+                visible: AppBackend.gitVersion !== ""
                 anchors.right: parent.right
-                anchors.rightMargin: Theme.spaceSm
-                text: AppBackend.gitVersion === "" ? "" : qsTr("git %1").arg(AppBackend.gitVersion)
-                color: Theme.textMuted
-                font.pixelSize: Theme.fontSm
+                anchors.bottom: parent.bottom
+                implicitWidth: versionLabel.implicitWidth + 2 * Theme.spaceSm
+                implicitHeight: Theme.rowHeight
+                color: Theme.bgElevated
+                border.color: Theme.borderSubtle
+                border.width: Theme.borderWidth
+                Label {
+                    id: versionLabel
+                    anchors.centerIn: parent
+                    text: qsTr("git %1").arg(AppBackend.gitVersion)
+                    color: Theme.textMuted
+                    font.pixelSize: Theme.fontSm
+                }
             }
         }
     }
@@ -623,7 +631,7 @@ ApplicationWindow {
                                 NavIcon {
                                     visible: !workTree.detached && branchesModel.headHasRemote
                                     kind: "remote"
-                                    tint: Theme.textLink
+                                    tint: Theme.textSecondary
                                     width: Theme.iconSm + 2
                                     height: Theme.iconSm + 2
                                 }
@@ -648,7 +656,7 @@ ApplicationWindow {
                         NavHeader {
                             caption: qsTr("REMOTES")
                             iconKind: "remote"
-                            iconTint: Theme.textLink
+                            iconTint: Theme.textSecondary
                             count: remotesModel.total
                             expanded: page.expRemotes || refFilter.text !== ""
                             onToggled: page.expRemotes = !page.expRemotes
@@ -1436,7 +1444,7 @@ ApplicationWindow {
         readonly property string recKind: rec[0]
         readonly property bool recHead: rec[1] === "1"
         readonly property color chipColor: tagStyle ? Theme.warning
-                                          : recKind === "R" ? Theme.textLink
+                                          : recKind === "R" ? Theme.textSecondary
                                           : recKind === "H" ? Theme.danger
                                           : Theme.accent
 
@@ -1615,13 +1623,6 @@ ApplicationWindow {
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
             }
-            Label {
-                visible: navRow.kindHint === "stash" && navRow.change !== ""
-                text: navRow.change
-                color: Theme.textMuted
-                font.family: Theme.monoFamily
-                font.pixelSize: Theme.fontSm
-            }
             ChangeIcon {
                 visible: !navRow.folder && navRow.kindHint === "wt"
                 change: navRow.change
@@ -1676,7 +1677,7 @@ ApplicationWindow {
                 visible: !navRow.folder && navRow.kindHint === "branch"
                          && navRow.has_remote
                 kind: "remote"
-                tint: Theme.textLink
+                tint: Theme.textSecondary
                 width: Theme.iconSm + 2
                 height: Theme.iconSm + 2
                 ToolTip.visible: remoteHover.containsMouse
