@@ -1,0 +1,11 @@
+[package]
+name = "platitude-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core logic for platitude-gg: git subprocess execution, output parsing, domain model. Qt-free."
+
+[dependencies]
+
+[lints]
+workspace = true

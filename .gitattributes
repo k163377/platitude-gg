@@ -1,0 +1,11 @@
+# Normalize line endings to LF in the repository (checkout stays platform-native
+# for files git considers text). Keeps fmt/clippy/CI consistent across 3 OSes.
+* text=auto
+*.rs text
+*.toml text
+*.md text
+*.qml text
+*.yml text
+*.yaml text
+*.ps1 text
+*.sh text eol=lf
