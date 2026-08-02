@@ -839,10 +839,12 @@ impl NavSectionModel {
         if let Some(feed) = self.stash_feed.clone()
             && let Some(stashes) = feed.drain().pop()
         {
+            // The reflog selector (stash@{0}) is an implementation detail;
+            // Phase 2 stash operations will carry it in a hidden role.
             self.all = stashes
                 .into_iter()
                 .map(|s| NavItem {
-                    name: format!("{}  {}", s.name, s.message),
+                    name: s.message,
                     ..Default::default()
                 })
                 .collect();
@@ -973,8 +975,10 @@ pub struct DetailsModel {
     sha_hex: String,
     sha8: String,
     parent_hex: String,
-    author: String,
+    author_name: String,
+    author_email: String,
     author_time: i64,
+    avatar: i32,
     committer: String,
     committer_time: i64,
     message: String,
@@ -1002,8 +1006,10 @@ impl DetailsModel {
     qproperty!("shaHex", Member = sha_hex, Notify = changed);
     qproperty!("sha8", Member = sha8, Notify = changed);
     qproperty!("parentHex", Member = parent_hex, Notify = changed);
-    qproperty!("author", Member = author, Notify = changed);
+    qproperty!("authorName", Member = author_name, Notify = changed);
+    qproperty!("authorEmail", Member = author_email, Notify = changed);
     qproperty!("authorTime", Member = author_time, Notify = changed);
+    qproperty!("avatar", Member = avatar, Notify = changed);
     qproperty!("committer", Member = committer, Notify = changed);
     qproperty!("committerTime", Member = committer_time, Notify = changed);
     qproperty!("message", Member = message, Notify = changed);
@@ -1060,7 +1066,10 @@ impl DetailsModel {
         self.sha_hex = hex;
         self.sha8 = details.oid.short_hex(8);
         self.parent_hex = details.parents.first().map(Oid::to_hex).unwrap_or_default();
-        self.author = format!("{} <{}>", details.author_name, details.author_email);
+        self.author_name = details.author_name.clone();
+        self.author_email = details.author_email.clone();
+        // Same input as the graph rows (author name) → same identicon.
+        self.avatar = crate::encode::avatar_code(&details.author_name);
         self.author_time = details.author_time;
         self.committer = format!("{} <{}>", details.committer_name, details.committer_email);
         self.committer_time = details.committer_time;

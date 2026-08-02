@@ -23,13 +23,14 @@ ApplicationWindow {
     font.family: Theme.uiFamily
     font.pixelSize: Theme.fontMd
 
-    // Commit-graph geometry and interaction values not yet covered by the
-    // design tokens; kept in one place and grid-aligned. Pending token
-    // additions (do not tune): lane pitch = spaceLg, node icon = iconMd,
-    // lane stroke = 2, wheel step = 6 rows/notch, middle autoscroll gain
-    // = 0.12, ref-label column width = 144.
+    // Graph-geometry / interaction constants still being tuned. This block
+    // is their single source of truth for now (デザイン規約.md §運用の例外);
+    // values follow the guideline principles (4px grid, token reuse) and
+    // graduate into the document once they stabilize.
     readonly property int laneW: Theme.spaceLg
+    readonly property int nodeIcon: Theme.iconLg
     readonly property int laneStroke: 2
+    readonly property real iconStroke: 1.5
     readonly property int wheelRows: 6
     readonly property real middleScrollGain: 0.12
     readonly property int labelColW: 144
@@ -80,8 +81,14 @@ ApplicationWindow {
 
     Component.onCompleted: {
         AppBackend.initialize()
-        if (AppBackend.autoOpen !== "")
-            tabsModel.openRepositoryPath(AppBackend.autoOpen)
+        if (AppBackend.autoOpen !== "") {
+            // Multiple repositories separated by ';' open as tabs in order.
+            const paths = AppBackend.autoOpen.split(";")
+            for (let i = 0; i < paths.length; i++) {
+                if (paths[i] !== "")
+                    tabsModel.openRepositoryPath(paths[i])
+            }
+        }
         if (AppBackend.autoQuitMs > 0)
             quitTimer.start()
         if (AppBackend.shotDir !== "")
@@ -565,6 +572,7 @@ ApplicationWindow {
 
                         NavHeader {
                             caption: qsTr("BRANCHES")
+                            iconKind: "branch"
                             count: branchesModel.total
                             expanded: page.expBranches || refFilter.text !== ""
                             onToggled: page.expBranches = !page.expBranches
@@ -578,6 +586,7 @@ ApplicationWindow {
 
                         NavHeader {
                             caption: qsTr("REMOTES")
+                            iconKind: "remote"
                             count: remotesModel.total
                             expanded: page.expRemotes || refFilter.text !== ""
                             onToggled: page.expRemotes = !page.expRemotes
@@ -591,6 +600,7 @@ ApplicationWindow {
 
                         NavHeader {
                             caption: qsTr("WORKING TREE")
+                            iconKind: "tree"
                             count: worktreeModel.total
                             expanded: page.expWorktree || refFilter.text !== ""
                             onToggled: page.expWorktree = !page.expWorktree
@@ -605,6 +615,7 @@ ApplicationWindow {
 
                         NavHeader {
                             caption: qsTr("STASHES")
+                            iconKind: "stash"
                             count: stashesModel.total
                             expanded: page.expStashes || refFilter.text !== ""
                             onToggled: page.expStashes = !page.expStashes
@@ -617,6 +628,7 @@ ApplicationWindow {
 
                         NavHeader {
                             caption: qsTr("TAGS")
+                            iconKind: "tag"
                             count: tagsModel.total
                             expanded: page.expTags || refFilter.text !== ""
                             onToggled: page.expTags = !page.expTags
@@ -917,13 +929,73 @@ ApplicationWindow {
                             Layout.margins: Theme.spaceSm
                             spacing: Theme.spaceXs
                             visible: detailsModel.shaHex !== ""
+
+                            // -- author block --
+                            RowLayout {
+                                spacing: Theme.spaceSm
+                                IdentIcon { code: detailsModel.avatar }
+                                Label {
+                                    id: authorLabel
+                                    text: detailsModel.authorName
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                    color: Theme.textPrimary
+                                    font.pixelSize: Theme.fontMd
+                                    ToolTip.visible: authorHover.containsMouse
+                                    ToolTip.delay: 400
+                                    ToolTip.text: qsTr("Author: %1 <%2>\nCommitter: %3")
+                                                  .arg(detailsModel.authorName)
+                                                  .arg(detailsModel.authorEmail)
+                                                  .arg(detailsModel.committer)
+                                    MouseArea {
+                                        id: authorHover
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        acceptedButtons: Qt.NoButton
+                                    }
+                                }
+                            }
+                            // -- date block --
+                            RowLayout {
+                                spacing: Theme.spaceSm
+                                NavIcon {
+                                    kind: "clock"
+                                    tint: Theme.textSecondary
+                                    width: Theme.iconLg
+                                    height: Theme.iconLg
+                                }
+                                Label {
+                                    id: detailsDate
+                                    text: Qt.formatDateTime(new Date(detailsModel.authorTime * 1000),
+                                                            "yyyy-MM-dd HH:mm")
+                                    color: Theme.textSecondary
+                                    font.pixelSize: Theme.fontMd
+                                }
+                                ToolButton {
+                                    text: "⧉"
+                                    padding: 0
+                                    implicitWidth: Theme.iconLg
+                                    implicitHeight: Theme.iconLg
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 600
+                                    ToolTip.text: qsTr("Copy date")
+                                    onClicked: root.copyText(detailsDate.text)
+                                }
+                                Item { Layout.fillWidth: true }
+                            }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: Theme.borderWidth
+                                color: Theme.borderSubtle
+                            }
+                            // -- hash block: own hash + first parent link --
                             RowLayout {
                                 spacing: Theme.spaceXs
                                 Label {
                                     text: detailsModel.sha8
                                     font.family: Theme.monoFamily
-                                    color: Theme.textLink
-                                    font.pixelSize: Theme.fontSm
+                                    color: Theme.textPrimary
+                                    font.pixelSize: Theme.fontMd
                                 }
                                 ToolButton {
                                     text: "⧉"
@@ -936,30 +1008,38 @@ ApplicationWindow {
                                     onClicked: root.copyText(detailsModel.shaHex)
                                 }
                                 Label {
-                                    id: detailsDate
-                                    text: Qt.formatDateTime(new Date(detailsModel.authorTime * 1000),
-                                                            "yyyy-MM-dd HH:mm")
-                                    color: Theme.textSecondary
-                                    font.pixelSize: Theme.fontSm
-                                }
-                                ToolButton {
-                                    text: "⧉"
-                                    padding: 0
-                                    implicitWidth: Theme.iconLg
-                                    implicitHeight: Theme.iconLg
-                                    ToolTip.visible: hovered
-                                    ToolTip.delay: 600
-                                    ToolTip.text: qsTr("Copy date")
-                                    onClicked: root.copyText(detailsDate.text)
+                                    visible: detailsModel.parentHex !== ""
+                                    text: "←"
+                                    color: Theme.textMuted
+                                    font.pixelSize: Theme.fontMd
                                 }
                                 Label {
-                                    text: detailsModel.author
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                    color: Theme.textSecondary
-                                    font.pixelSize: Theme.fontSm
+                                    id: parentLink
+                                    visible: detailsModel.parentHex !== ""
+                                    text: detailsModel.parentHex.substring(0, 8)
+                                    font.family: Theme.monoFamily
+                                    color: Theme.textLink
+                                    font.pixelSize: Theme.fontMd
+                                    font.underline: parentHover.containsMouse
+                                    ToolTip.visible: parentHover.containsMouse
+                                    ToolTip.delay: 600
+                                    ToolTip.text: qsTr("Go to parent commit")
+                                    MouseArea {
+                                        id: parentHover
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: page.jumpToRef(detailsModel.parentHex)
+                                    }
                                 }
+                                Item { Layout.fillWidth: true }
                             }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: Theme.borderWidth
+                                color: Theme.borderSubtle
+                            }
+                            // -- message --
                             ScrollView {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: Math.min(messageArea.implicitHeight + Theme.spaceSm, 120)
@@ -1142,7 +1222,7 @@ ApplicationWindow {
                     }
                     // The commit node is the author's identicon (5x5,
                     // mirrored; local substitute for network avatars).
-                    const r = Theme.iconMd / 2
+                    const r = root.nodeIcon / 2
                     ctx.save()
                     ctx.beginPath()
                     ctx.arc(nodeX, midY, r, 0, 2 * Math.PI)
@@ -1232,12 +1312,12 @@ ApplicationWindow {
             anchors.left: parent.left
             anchors.leftMargin: Theme.spaceXs
             spacing: Theme.spaceXs
-            Label {
-                text: chip.tagStyle ? "⚑"
-                      : chip.recKind === "R" ? "☁"
-                      : chip.recKind === "H" ? "●" : "⎇"
-                color: chip.chipColor
-                font.pixelSize: Theme.fontSm
+            NavIcon {
+                anchors.verticalCenter: parent.verticalCenter
+                kind: chip.tagStyle ? "tag" : chip.recKind === "R" ? "remote" : "branch"
+                tint: chip.chipColor
+                width: Theme.iconSm
+                height: Theme.iconSm
             }
             Label {
                 text: chip.rec.substring(3)
@@ -1264,6 +1344,7 @@ ApplicationWindow {
     component NavHeader: Rectangle {
         id: header
         property string caption
+        property string iconKind: "branch"
         property int count: 0
         property bool expanded: true
         property bool showTagToggle: false
@@ -1283,6 +1364,12 @@ ApplicationWindow {
                 text: header.expanded ? "▾" : "▸"
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
+            }
+            NavIcon {
+                kind: header.iconKind
+                tint: Theme.textSecondary
+                width: Theme.iconSm + 2
+                height: Theme.iconSm + 2
             }
             Label {
                 text: header.caption
@@ -1372,17 +1459,17 @@ ApplicationWindow {
             anchors.leftMargin: Theme.spaceMd
             anchors.rightMargin: Theme.spaceSm
             spacing: Theme.spaceXs
-            Label {
+            NavIcon {
                 visible: navRow.kindHint !== "wt"
-                text: navRow.kindHint === "tag" ? "⚑"
-                      : navRow.kindHint === "remote" ? "☁"
-                      : navRow.kindHint === "stash" ? "☰" : "⎇"
-                color: navRow.kindHint === "tag" ? Theme.warning
-                       : navRow.kindHint === "branch" ? Theme.accent
-                       : Theme.textSecondary
-                font.pixelSize: Theme.fontSm
+                kind: navRow.kindHint === "stash" ? "stash" : navRow.kindHint
+                tint: navRow.kindHint === "tag" ? Theme.warning
+                      : navRow.kindHint === "branch" ? Theme.accent
+                      : Theme.textSecondary
+                width: Theme.iconSm + 2
+                height: Theme.iconSm + 2
             }
             Label {
+                id: wtLetter
                 visible: navRow.kindHint === "wt"
                 text: navRow.change
                 font.family: Theme.monoFamily
@@ -1393,6 +1480,31 @@ ApplicationWindow {
                        : navRow.bucket === "untracked" ? Theme.statusUntracked
                        : Theme.statusConflict
                 Layout.preferredWidth: Theme.iconLg
+                // Git status letters are standard but terse; explain them.
+                ToolTip.visible: wtHover.containsMouse
+                ToolTip.delay: 600
+                ToolTip.text: {
+                    const c = navRow.change.length > 0 ? navRow.change[0] : ""
+                    const what = navRow.change.length === 2 ? qsTr("Conflicted")
+                               : c === "M" ? qsTr("Modified")
+                               : c === "A" ? qsTr("Added")
+                               : c === "D" ? qsTr("Deleted")
+                               : c === "R" ? qsTr("Renamed")
+                               : c === "C" ? qsTr("Copied")
+                               : c === "T" ? qsTr("Type changed")
+                               : c === "?" ? qsTr("Untracked") : navRow.change
+                    const where = navRow.bucket === "staged" ? qsTr("staged")
+                                : navRow.bucket === "unstaged" ? qsTr("unstaged")
+                                : navRow.bucket === "untracked" ? qsTr("untracked")
+                                : qsTr("conflict")
+                    return what + " · " + where
+                }
+                MouseArea {
+                    id: wtHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                }
             }
             Label {
                 Layout.fillWidth: true
@@ -1480,6 +1592,121 @@ ApplicationWindow {
             anchors.fill: parent
             hoverEnabled: true
             onClicked: fileRow.activated("", fileRow.pathText, fileRow.origPathText)
+        }
+    }
+
+    // Hand-drawn 16px-grid icons in the common git-client style (branch
+    // fork, cloud remote, price-tag, archive box, tree, clock). Scaled by
+    // the item size; single stroke color.
+    component NavIcon: Canvas {
+        id: icon
+        property string kind: "branch"
+        property color tint: Theme.textSecondary
+        width: Theme.iconMd
+        height: Theme.iconMd
+        onKindChanged: requestPaint()
+        onTintChanged: requestPaint()
+        onPaint: {
+            const ctx = getContext("2d")
+            const s = width / 16
+            ctx.clearRect(0, 0, width, height)
+            ctx.strokeStyle = icon.tint
+            ctx.fillStyle = icon.tint
+            ctx.lineWidth = root.iconStroke
+            ctx.lineCap = "round"
+            if (icon.kind === "branch") {
+                ctx.beginPath()
+                ctx.moveTo(5 * s, 5 * s)
+                ctx.lineTo(5 * s, 11 * s)
+                ctx.stroke()
+                ctx.beginPath()
+                ctx.moveTo(11 * s, 7 * s)
+                ctx.bezierCurveTo(11 * s, 9.5 * s, 8 * s, 9.5 * s, 5.8 * s, 10.2 * s)
+                ctx.stroke()
+                for (const c of [[5, 3.5], [5, 12.5], [11, 5]]) {
+                    ctx.beginPath()
+                    ctx.arc(c[0] * s, c[1] * s, 1.8 * s, 0, 2 * Math.PI)
+                    ctx.stroke()
+                }
+            } else if (icon.kind === "remote") {
+                ctx.beginPath()
+                ctx.arc(6 * s, 9 * s, 3 * s, Math.PI * 0.5, Math.PI * 1.5)
+                ctx.arc(8.5 * s, 6.8 * s, 3.2 * s, Math.PI * 0.95, Math.PI * 0.02, false)
+                ctx.arc(11 * s, 9.4 * s, 2.6 * s, Math.PI * 1.55, Math.PI * 0.5)
+                ctx.closePath()
+                ctx.stroke()
+            } else if (icon.kind === "tag") {
+                ctx.save()
+                ctx.translate(8 * s, 8.5 * s)
+                ctx.rotate(Math.PI / 4)
+                ctx.strokeRect(-3.6 * s, -3.6 * s, 7.2 * s, 7.2 * s)
+                ctx.beginPath()
+                ctx.arc(-1.4 * s, -1.4 * s, 1 * s, 0, 2 * Math.PI)
+                ctx.fill()
+                ctx.restore()
+            } else if (icon.kind === "stash") {
+                ctx.strokeRect(3 * s, 4 * s, 10 * s, 3 * s)
+                ctx.strokeRect(4 * s, 7 * s, 8 * s, 6 * s)
+                ctx.beginPath()
+                ctx.moveTo(6.5 * s, 9.5 * s)
+                ctx.lineTo(9.5 * s, 9.5 * s)
+                ctx.stroke()
+            } else if (icon.kind === "tree") {
+                ctx.beginPath()
+                ctx.arc(8 * s, 6.5 * s, 4 * s, 0, 2 * Math.PI)
+                ctx.stroke()
+                ctx.beginPath()
+                ctx.moveTo(8 * s, 10.5 * s)
+                ctx.lineTo(8 * s, 14 * s)
+                ctx.stroke()
+            } else if (icon.kind === "clock") {
+                ctx.beginPath()
+                ctx.arc(8 * s, 8 * s, 5.5 * s, 0, 2 * Math.PI)
+                ctx.stroke()
+                ctx.beginPath()
+                ctx.moveTo(8 * s, 8 * s)
+                ctx.lineTo(8 * s, 4.8 * s)
+                ctx.moveTo(8 * s, 8 * s)
+                ctx.lineTo(10.4 * s, 8 * s)
+                ctx.stroke()
+            }
+        }
+    }
+
+    // Author identicon (same packed code as the graph nodes).
+    component IdentIcon: Canvas {
+        id: ident
+        property int code: 0
+        width: Theme.iconLg
+        height: Theme.iconLg
+        onCodeChanged: requestPaint()
+        onPaint: {
+            const ctx = getContext("2d")
+            const r = width / 2
+            ctx.clearRect(0, 0, width, height)
+            ctx.save()
+            ctx.beginPath()
+            ctx.arc(r, r, r, 0, 2 * Math.PI)
+            ctx.clip()
+            ctx.fillStyle = Theme.bgElevated
+            ctx.fillRect(0, 0, width, height)
+            ctx.fillStyle = Theme.graphLane[(ident.code >> 15) & 0x7]
+            const cell = width / 5
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 3; col++) {
+                    if ((ident.code >> (row * 3 + col)) & 1) {
+                        ctx.fillRect(col * cell, row * cell, cell + 0.5, cell + 0.5)
+                        if (col < 2)
+                            ctx.fillRect((4 - col) * cell, row * cell, cell + 0.5, cell + 0.5)
+                    }
+                }
+            }
+            ctx.restore()
+            ctx.strokeStyle = Theme.borderStrong
+            ctx.lineWidth = Theme.borderWidth
+            ctx.beginPath()
+            ctx.arc(r, r, r - 0.5, 0, 2 * Math.PI)
+            ctx.stroke()
         }
     }
 
