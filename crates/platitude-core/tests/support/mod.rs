@@ -4,10 +4,10 @@
 
 // Test-only helper: panicking on setup failure is the desired behavior, but
 // the `allow-*-in-tests` clippy options only cover `#[test]` functions.
-#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic, dead_code)]
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 
 /// Base timestamp for deterministic commits (arbitrary fixed epoch).
 const BASE_EPOCH: u64 = 1_700_000_000;
@@ -48,11 +48,43 @@ impl TestRepo {
         self.git_in(&dir, args)
     }
 
+    /// Like [`TestRepo::git`] but returns raw stdout bytes (for capturing
+    /// parser fixtures byte-exactly).
+    pub fn git_raw(&mut self, args: &[&str]) -> Vec<u8> {
+        let dir = self.path.clone();
+        let out = self.run(&dir, args);
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+        out.stdout
+    }
+
+    /// Runs git expecting a non-zero exit (e.g. a conflicting merge).
+    pub fn git_expect_failure(&mut self, args: &[&str]) {
+        let dir = self.path.clone();
+        let out = self.run(&dir, args);
+        assert!(!out.status.success(), "git {args:?} unexpectedly succeeded");
+    }
+
     /// Runs git in an arbitrary directory (e.g. for `clone`).
     pub fn git_in(&mut self, dir: &Path, args: &[&str]) -> String {
+        let out = self.run(dir, args);
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn run(&mut self, dir: &Path, args: &[&str]) -> Output {
         self.tick += 1;
         let stamp = format!("{} +0000", BASE_EPOCH + self.tick * 60);
-        let out = Command::new("git")
+        Command::new("git")
             .args(args)
             .current_dir(dir)
             // Isolate from developer/global configuration.
@@ -68,14 +100,7 @@ impl TestRepo {
             .env("GIT_AUTHOR_DATE", &stamp)
             .env("GIT_COMMITTER_DATE", &stamp)
             .output()
-            .expect("spawn git");
-        assert!(
-            out.status.success(),
-            "git {:?} failed: {}",
-            args,
-            String::from_utf8_lossy(&out.stderr)
-        );
-        String::from_utf8_lossy(&out.stdout).trim().to_string()
+            .expect("spawn git")
     }
 
     /// Writes a file (creating parent dirs) relative to the work tree.

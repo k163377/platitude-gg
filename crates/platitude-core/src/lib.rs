@@ -9,10 +9,13 @@ pub mod error;
 pub mod graph;
 pub mod model;
 pub mod oid;
+pub mod opstate;
 pub mod parse;
 pub mod process;
 pub mod refs;
 pub mod repo;
+pub mod stash;
+pub mod status;
 pub mod version;
 
 pub use error::GitError;

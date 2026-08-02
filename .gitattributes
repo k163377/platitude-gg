@@ -9,3 +9,6 @@
 *.yaml text
 *.ps1 text
 *.sh text eol=lf
+
+# Captured raw git output for parser tests: byte-exact, never re-encoded.
+*.bin binary
