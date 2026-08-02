@@ -576,6 +576,7 @@ ApplicationWindow {
                         NavHeader {
                             caption: qsTr("BRANCHES")
                             iconKind: "branch"
+                            iconTint: Theme.accent
                             count: branchesModel.total
                             expanded: page.expBranches || refFilter.text !== ""
                             onToggled: page.expBranches = !page.expBranches
@@ -590,6 +591,7 @@ ApplicationWindow {
                         NavHeader {
                             caption: qsTr("REMOTES")
                             iconKind: "remote"
+                            iconTint: Theme.textLink
                             count: remotesModel.total
                             expanded: page.expRemotes || refFilter.text !== ""
                             onToggled: page.expRemotes = !page.expRemotes
@@ -604,6 +606,7 @@ ApplicationWindow {
                         NavHeader {
                             caption: qsTr("WORKING TREE")
                             iconKind: "tree"
+                            iconTint: Theme.success
                             count: worktreeModel.total
                             expanded: page.expWorktree || refFilter.text !== ""
                             onToggled: page.expWorktree = !page.expWorktree
@@ -619,6 +622,7 @@ ApplicationWindow {
                         NavHeader {
                             caption: qsTr("STASHES")
                             iconKind: "stash"
+                            iconTint: Theme.textSecondary
                             count: stashesModel.total
                             expanded: page.expStashes || refFilter.text !== ""
                             onToggled: page.expStashes = !page.expStashes
@@ -632,6 +636,7 @@ ApplicationWindow {
                         NavHeader {
                             caption: qsTr("TAGS")
                             iconKind: "tag"
+                            iconTint: Theme.warning
                             count: tagsModel.total
                             expanded: page.expTags || refFilter.text !== ""
                             onToggled: page.expTags = !page.expTags
@@ -933,7 +938,57 @@ ApplicationWindow {
                             spacing: Theme.spaceXs
                             visible: detailsModel.shaHex !== ""
 
-                            // -- author block: avatar with name over date --
+                            // -- message first, like the commit editor:
+                            // a prominent summary box and a dimmer
+                            // description box (Phase 2 makes these editable
+                            // for new commits and amend) --
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: subjectArea.implicitHeight + Theme.spaceSm
+                                color: Theme.bgBase
+                                radius: Theme.radiusMd
+                                border.color: Theme.borderDefault
+                                border.width: Theme.borderWidth
+                                TextArea {
+                                    id: subjectArea
+                                    anchors.fill: parent
+                                    anchors.margins: Theme.spaceXs
+                                    readOnly: true
+                                    wrapMode: TextArea.Wrap
+                                    text: detailsModel.messageSubject
+                                    font.pixelSize: Theme.fontLg
+                                    font.weight: Font.DemiBold
+                                    color: Theme.textPrimary
+                                    background: null
+                                    padding: 0
+                                }
+                            }
+                            Rectangle {
+                                visible: detailsModel.messageBody !== ""
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Math.min(bodyArea.implicitHeight + Theme.spaceSm, 120)
+                                color: Theme.bgBase
+                                radius: Theme.radiusMd
+                                border.color: Theme.borderSubtle
+                                border.width: Theme.borderWidth
+                                ScrollView {
+                                    anchors.fill: parent
+                                    anchors.margins: Theme.spaceXs
+                                    TextArea {
+                                        id: bodyArea
+                                        readOnly: true
+                                        wrapMode: TextArea.Wrap
+                                        text: detailsModel.messageBody
+                                        font.pixelSize: Theme.fontMd
+                                        color: Theme.textSecondary
+                                        background: null
+                                        padding: 0
+                                    }
+                                }
+                            }
+                            // -- author card: avatar + name/date on the
+                            // left, own hash over parent hash on the right
+                            // (rows aligned) --
                             RowLayout {
                                 spacing: Theme.spaceSm
                                 IdentIcon {
@@ -965,14 +1020,25 @@ ApplicationWindow {
                                             acceptedButtons: Qt.NoButton
                                         }
                                     }
+                                    Label {
+                                        id: detailsDate
+                                        text: Qt.formatDateTime(new Date(detailsModel.authorTime * 1000),
+                                                                "yyyy-MM-dd HH:mm")
+                                        color: Theme.textSecondary
+                                        font.pixelSize: Theme.fontSm
+                                    }
+                                }
+                                ColumnLayout {
+                                    spacing: 0
+                                    Layout.alignment: Qt.AlignRight
                                     RowLayout {
                                         spacing: Theme.spaceXs
+                                        Layout.alignment: Qt.AlignRight
                                         Label {
-                                            id: detailsDate
-                                            text: Qt.formatDateTime(new Date(detailsModel.authorTime * 1000),
-                                                                    "yyyy-MM-dd HH:mm")
-                                            color: Theme.textSecondary
-                                            font.pixelSize: Theme.fontSm
+                                            text: detailsModel.sha8
+                                            font.family: Theme.monoFamily
+                                            color: Theme.textPrimary
+                                            font.pixelSize: Theme.fontMd
                                         }
                                         ToolButton {
                                             text: "⧉"
@@ -981,81 +1047,29 @@ ApplicationWindow {
                                             implicitHeight: Theme.iconMd
                                             ToolTip.visible: hovered
                                             ToolTip.delay: 600
-                                            ToolTip.text: qsTr("Copy date")
-                                            onClicked: root.copyText(detailsDate.text)
+                                            ToolTip.text: qsTr("Copy full hash")
+                                            onClicked: root.copyText(detailsModel.shaHex)
                                         }
-                                        Item { Layout.fillWidth: true }
                                     }
-                                }
-                            }
-                            // -- hash block: own hash + first parent link --
-                            RowLayout {
-                                spacing: Theme.spaceXs
-                                Label {
-                                    text: detailsModel.sha8
-                                    font.family: Theme.monoFamily
-                                    color: Theme.textPrimary
-                                    font.pixelSize: Theme.fontMd
-                                }
-                                ToolButton {
-                                    text: "⧉"
-                                    padding: 0
-                                    implicitWidth: Theme.iconLg
-                                    implicitHeight: Theme.iconLg
-                                    ToolTip.visible: hovered
-                                    ToolTip.delay: 600
-                                    ToolTip.text: qsTr("Copy full hash")
-                                    onClicked: root.copyText(detailsModel.shaHex)
-                                }
-                                Label {
-                                    visible: detailsModel.parentHex !== ""
-                                    text: "←"
-                                    color: Theme.textMuted
-                                    font.pixelSize: Theme.fontMd
-                                }
-                                Label {
-                                    id: parentLink
-                                    visible: detailsModel.parentHex !== ""
-                                    text: detailsModel.parentHex.substring(0, 8)
-                                    font.family: Theme.monoFamily
-                                    color: Theme.textLink
-                                    font.pixelSize: Theme.fontMd
-                                    font.underline: parentHover.containsMouse
-                                    ToolTip.visible: parentHover.containsMouse
-                                    ToolTip.delay: 600
-                                    ToolTip.text: qsTr("Go to parent commit")
-                                    MouseArea {
-                                        id: parentHover
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: page.jumpToRef(detailsModel.parentHex)
-                                    }
-                                }
-                                Item { Layout.fillWidth: true }
-                            }
-                            // -- message: framed like the future commit
-                            // editor so viewing and writing feel identical
-                            // (Phase 2 makes this editable for new commits
-                            // and amend) --
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: Math.min(messageArea.implicitHeight + Theme.spaceSm, 140)
-                                color: Theme.bgBase
-                                radius: Theme.radiusMd
-                                border.color: Theme.borderDefault
-                                border.width: Theme.borderWidth
-                                ScrollView {
-                                    anchors.fill: parent
-                                    anchors.margins: Theme.spaceXs
-                                    TextArea {
-                                        id: messageArea
-                                        readOnly: true
-                                        wrapMode: TextArea.Wrap
-                                        text: detailsModel.message
-                                        font.pixelSize: Theme.fontMd
-                                        color: Theme.textPrimary
-                                        background: null
+                                    Label {
+                                        id: parentLink
+                                        visible: detailsModel.parentHex !== ""
+                                        Layout.alignment: Qt.AlignRight
+                                        text: "← " + detailsModel.parentHex.substring(0, 8)
+                                        font.family: Theme.monoFamily
+                                        color: Theme.textLink
+                                        font.pixelSize: Theme.fontSm
+                                        font.underline: parentHover.containsMouse
+                                        ToolTip.visible: parentHover.containsMouse
+                                        ToolTip.delay: 600
+                                        ToolTip.text: qsTr("Go to parent commit")
+                                        MouseArea {
+                                            id: parentHover
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: page.jumpToRef(detailsModel.parentHex)
+                                        }
                                     }
                                 }
                             }
@@ -1360,6 +1374,7 @@ ApplicationWindow {
         id: header
         property string caption
         property string iconKind: "branch"
+        property color iconTint: Theme.textSecondary
         property int count: 0
         property bool expanded: true
         property bool showTagToggle: false
@@ -1382,7 +1397,7 @@ ApplicationWindow {
             }
             NavIcon {
                 kind: header.iconKind
-                tint: Theme.textSecondary
+                tint: header.iconTint
                 width: Theme.iconSm + 2
                 height: Theme.iconSm + 2
             }
@@ -1486,35 +1501,11 @@ ApplicationWindow {
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
             }
-            NavIcon {
-                visible: navRow.folder
-                kind: "folder"
-                tint: Theme.textSecondary
-                width: Theme.iconSm + 2
-                height: Theme.iconSm + 2
-            }
-            NavIcon {
-                visible: !navRow.folder && navRow.kindHint !== "wt"
-                kind: navRow.kindHint === "stash" ? "stash" : navRow.kindHint
-                tint: navRow.kindHint === "tag" ? Theme.warning
-                      : navRow.kindHint === "branch" ? Theme.accent
-                      : Theme.textSecondary
-                width: Theme.iconSm + 2
-                height: Theme.iconSm + 2
-            }
-            Label {
-                id: wtLetter
+            ChangeIcon {
                 visible: !navRow.folder && navRow.kindHint === "wt"
-                text: navRow.change
-                font.family: Theme.monoFamily
-                font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
-                color: navRow.bucket === "staged" ? Theme.statusStaged
-                       : navRow.bucket === "unstaged" ? Theme.statusUnstaged
-                       : navRow.bucket === "untracked" ? Theme.statusUntracked
-                       : Theme.statusConflict
-                Layout.preferredWidth: Theme.iconLg
-                // Git status letters are standard but terse; explain them.
+                change: navRow.change
+                width: Theme.iconSm + 2
+                height: Theme.iconSm + 2
                 ToolTip.visible: wtHover.containsMouse
                 ToolTip.delay: 600
                 ToolTip.text: {
@@ -1610,15 +1601,27 @@ ApplicationWindow {
             anchors.leftMargin: Theme.spaceSm
             anchors.rightMargin: Theme.spaceSm
             spacing: Theme.spaceXs
-            Label {
-                text: fileRow.changeText
-                font.family: Theme.monoFamily
-                font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
-                color: fileRow.changeText.startsWith("A") ? Theme.diffAddedFg
-                       : fileRow.changeText.startsWith("D") ? Theme.diffRemovedFg
-                       : Theme.textSecondary
-                Layout.preferredWidth: Theme.iconLg
+            ChangeIcon {
+                change: fileRow.changeText
+                width: Theme.iconSm + 2
+                height: Theme.iconSm + 2
+                ToolTip.visible: changeHover.containsMouse
+                ToolTip.delay: 600
+                ToolTip.text: {
+                    const c = fileRow.changeText.length > 0 ? fileRow.changeText[0] : ""
+                    return c === "M" ? qsTr("Modified")
+                         : c === "A" ? qsTr("Added")
+                         : c === "D" ? qsTr("Deleted")
+                         : c === "R" ? qsTr("Renamed")
+                         : c === "C" ? qsTr("Copied")
+                         : c === "T" ? qsTr("Type changed") : fileRow.changeText
+                }
+                MouseArea {
+                    id: changeHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                }
             }
             Label {
                 Layout.fillWidth: true
@@ -1702,6 +1705,50 @@ ApplicationWindow {
                 ctx.moveTo(8 * s, 10.5 * s)
                 ctx.lineTo(8 * s, 14 * s)
                 ctx.stroke()
+            } else if (icon.kind === "pen") {
+                ctx.save()
+                ctx.translate(8 * s, 8 * s)
+                ctx.rotate(Math.PI / 4)
+                ctx.strokeRect(-1.4 * s, -6 * s, 2.8 * s, 8.5 * s)
+                ctx.beginPath()
+                ctx.moveTo(-1.4 * s, 2.5 * s)
+                ctx.lineTo(0, 5.5 * s)
+                ctx.lineTo(1.4 * s, 2.5 * s)
+                ctx.closePath()
+                ctx.fill()
+                ctx.restore()
+            } else if (icon.kind === "plus") {
+                ctx.beginPath()
+                ctx.moveTo(8 * s, 3.5 * s)
+                ctx.lineTo(8 * s, 12.5 * s)
+                ctx.moveTo(3.5 * s, 8 * s)
+                ctx.lineTo(12.5 * s, 8 * s)
+                ctx.stroke()
+            } else if (icon.kind === "minus") {
+                ctx.beginPath()
+                ctx.moveTo(3.5 * s, 8 * s)
+                ctx.lineTo(12.5 * s, 8 * s)
+                ctx.stroke()
+            } else if (icon.kind === "arrow") {
+                ctx.beginPath()
+                ctx.moveTo(3.5 * s, 8 * s)
+                ctx.lineTo(11.5 * s, 8 * s)
+                ctx.moveTo(11.5 * s, 8 * s)
+                ctx.lineTo(8.8 * s, 5.2 * s)
+                ctx.moveTo(11.5 * s, 8 * s)
+                ctx.lineTo(8.8 * s, 10.8 * s)
+                ctx.stroke()
+            } else if (icon.kind === "copyicon") {
+                ctx.strokeRect(5.5 * s, 3.5 * s, 7 * s, 7 * s)
+                ctx.strokeRect(3.5 * s, 5.5 * s, 7 * s, 7 * s)
+            } else if (icon.kind === "bang") {
+                ctx.beginPath()
+                ctx.moveTo(8 * s, 3.5 * s)
+                ctx.lineTo(8 * s, 10 * s)
+                ctx.stroke()
+                ctx.beginPath()
+                ctx.arc(8 * s, 12.8 * s, 1 * s, 0, 2 * Math.PI)
+                ctx.fill()
             } else if (icon.kind === "folder") {
                 ctx.beginPath()
                 ctx.moveTo(2.5 * s, 12.5 * s)
@@ -1724,6 +1771,30 @@ ApplicationWindow {
                 ctx.stroke()
             }
         }
+    }
+
+    // Change-kind icon (pen = edit, + / − = add / delete, → = rename,
+    // stacked squares = copy, ! = conflict). Edits are amber by request;
+    // adds/deletes reuse the diff colors.
+    component ChangeIcon: NavIcon {
+        id: changeIcon
+        property string change: ""
+        readonly property string letter: change.length > 0 ? change[0] : ""
+        readonly property bool conflict: change.length === 2
+        kind: conflict ? "bang"
+              : letter === "A" ? "plus"
+              : letter === "D" ? "minus"
+              : letter === "R" ? "arrow"
+              : letter === "C" ? "copyicon"
+              : letter === "?" ? "plus"
+              : "pen"
+        tint: conflict ? Theme.danger
+              : letter === "A" ? Theme.diffAddedFg
+              : letter === "D" ? Theme.diffRemovedFg
+              : letter === "R" ? Theme.textLink
+              : letter === "C" ? Theme.textSecondary
+              : letter === "?" ? Theme.statusUntracked
+              : Theme.warning
     }
 
     // Author identicon (same packed code as the graph nodes).

@@ -1078,7 +1078,8 @@ pub struct DetailsModel {
     avatar: i32,
     committer: String,
     committer_time: i64,
-    message: String,
+    message_subject: String,
+    message_body: String,
     loading: bool,
     requested: String,
     requested_at: Option<Instant>,
@@ -1109,7 +1110,8 @@ impl DetailsModel {
     qproperty!("avatar", Member = avatar, Notify = changed);
     qproperty!("committer", Member = committer, Notify = changed);
     qproperty!("committerTime", Member = committer_time, Notify = changed);
-    qproperty!("message", Member = message, Notify = changed);
+    qproperty!("messageSubject", Member = message_subject, Notify = changed);
+    qproperty!("messageBody", Member = message_body, Notify = changed);
     qproperty!("loading", Member = loading, Notify = changed);
 
     #[qsignal]
@@ -1170,7 +1172,14 @@ impl DetailsModel {
         self.author_time = details.author_time;
         self.committer = format!("{} <{}>", details.committer_name, details.committer_email);
         self.committer_time = details.committer_time;
-        self.message = details.message.clone();
+        // Subject / body split mirrors the commit-editor fields.
+        let (subject, body) = details
+            .message
+            .split_once('\n')
+            .map(|(s, b)| (s.to_string(), b.trim_start_matches('\n').to_string()))
+            .unwrap_or_else(|| (details.message.clone(), String::new()));
+        self.message_subject = subject;
+        self.message_body = body;
         self.loading = false;
         self.files = details
             .files
