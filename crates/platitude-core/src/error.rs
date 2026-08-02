@@ -57,6 +57,12 @@ pub enum GitError {
     /// The command succeeded but printed something we cannot interpret.
     #[error("unexpected output from `{command}`: {message}")]
     UnexpectedOutput { command: String, message: String },
+
+    /// A value the application refused to hand to git. git never ran, so
+    /// there is no message of its own to pass through — this one is
+    /// written for the person who typed the value, and is shown as is.
+    #[error("{message}")]
+    Rejected { message: String },
 }
 
 impl GitError {

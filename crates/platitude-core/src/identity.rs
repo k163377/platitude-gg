@@ -337,8 +337,7 @@ pub async fn set_identity(
     scope: ConfigScope,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let invalid = |e: IdentityError| GitError::UnexpectedOutput {
-        command: "git config user.name/user.email".to_string(),
+    let invalid = |e: IdentityError| GitError::Rejected {
         message: e.to_string(),
     };
     validate("name", name).map_err(invalid)?;
