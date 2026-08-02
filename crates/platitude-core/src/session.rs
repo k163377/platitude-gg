@@ -1,0 +1,663 @@
+//! RepoSession: one open repository = one session (実装計画 §2.3).
+//!
+//! Owns all git activity for a repository: the streaming log → graph
+//! pipeline, parallel snapshot refreshes (refs / status / stash) and
+//! on-demand queries (details, diffs). Everything runs on a tokio runtime;
+//! results are pushed to the UI through a [`SessionSink`], which must be
+//! cheap and non-blocking (the app bridge posts queued invocations to the
+//! Qt main thread).
+//!
+//! Reads run concurrently. Write serialization arrives with Phase 2; the
+//! session is the natural place to add it.
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
+
+use tokio_util::sync::CancellationToken;
+
+use crate::details::{self, CommitDetails, DiffTarget};
+use crate::error::GitError;
+use crate::graph::{GraphBuilder, Segment};
+use crate::model::CommitMeta;
+use crate::oid::Oid;
+use crate::opstate::{self, OpState};
+use crate::parse::diff::FilePatch;
+use crate::parse::log::{LOG_FORMAT_ARG, LogParser};
+use crate::process::{GitCommand, GitExecutor};
+use crate::refs::{self, HeadState, RefEntry, RefKind};
+use crate::repo::{self, RepoInfo};
+use crate::stash::{self, StashEntry};
+use crate::status::{self, WorkTreeStatus};
+
+/// First chunk is small so the first paint happens as early as possible.
+const FIRST_CHUNK_ROWS: usize = 512;
+const CHUNK_ROWS: usize = 4096;
+
+/// Revisions shown in the graph: everything reachable from HEAD, local
+/// branches, tags and remotes.
+const LOG_REVS: [&str; 4] = ["HEAD", "--branches", "--tags", "--remotes"];
+
+/// Kind of a row label chip.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LabelKind {
+    /// Detached-HEAD marker (synthetic `HEAD` chip).
+    Head,
+    LocalBranch,
+    RemoteBranch,
+    Tag,
+}
+
+/// One label chip on a graph row (branch / tag / HEAD).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefLabel {
+    pub text: String,
+    pub kind: LabelKind,
+    /// Badge state for local branches (local-only vs has-remote); the PR
+    /// dimension is wired in Phase 4.
+    pub has_remote: bool,
+    /// True when HEAD is on this branch (bold chip).
+    pub is_head: bool,
+}
+
+/// Display-ready row of the commit graph.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogRow {
+    pub row: u32,
+    pub oid_hex: String,
+    pub short_sha: String,
+    pub author: String,
+    /// Author time (unix seconds); formatting is presentation.
+    pub time: i64,
+    pub subject: String,
+    pub node_lane: u16,
+    pub node_color: u8,
+    pub width: u16,
+    pub segments: Vec<Segment>,
+    pub labels: Vec<RefLabel>,
+}
+
+/// Sidebar-ready refs snapshot (sorted).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RefsSnapshot {
+    pub locals: Vec<BranchItem>,
+    pub remotes: Vec<BranchItem>,
+    pub tags: Vec<TagItem>,
+    pub head: Option<HeadState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BranchItem {
+    pub short: String,
+    pub full: String,
+    pub oid_hex: String,
+    pub has_remote: bool,
+    pub is_head: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TagItem {
+    pub short: String,
+    /// Peeled commit id (what the graph row is keyed on).
+    pub oid_hex: String,
+    pub annotated: bool,
+}
+
+/// Everything the session can tell the UI.
+#[derive(Debug)]
+pub enum SessionEvent {
+    Opened {
+        info: RepoInfo,
+    },
+    OpenFailed {
+        error: GitError,
+    },
+    /// A (re)load of the graph began; the model must reset.
+    LogStarted {
+        generation: u64,
+    },
+    LogChunk {
+        generation: u64,
+        rows: Vec<LogRow>,
+    },
+    LogFinished {
+        generation: u64,
+        total: u32,
+        elapsed_ms: u64,
+    },
+    LogFailed {
+        generation: u64,
+        error: String,
+    },
+    /// Labels of already-delivered rows changed (refs arrived/refreshed).
+    LabelsChanged {
+        rows: Vec<(u32, Vec<RefLabel>)>,
+    },
+    RefsLoaded {
+        snapshot: RefsSnapshot,
+    },
+    StatusLoaded {
+        status: WorkTreeStatus,
+        op_state: OpState,
+    },
+    StashesLoaded {
+        stashes: Vec<StashEntry>,
+    },
+    DetailsLoaded {
+        details: CommitDetails,
+    },
+    DiffLoaded {
+        target: DiffTarget,
+        patches: Vec<FilePatch>,
+    },
+    /// A background refresh/query failed (op is a stable identifier).
+    OpFailed {
+        op: &'static str,
+        error: GitError,
+    },
+}
+
+/// Receives session events; implementations must be non-blocking.
+pub trait SessionSink: Send + Sync + 'static {
+    fn event(&self, event: SessionEvent);
+}
+
+/// Shared mutable state between the log task and refs joins.
+#[derive(Default)]
+struct Shared {
+    builder: GraphBuilder,
+    /// Label chips per commit id, derived from the last refs snapshot.
+    label_map: HashMap<Oid, Vec<RefLabel>>,
+    /// Labels currently shown per row (for diffing on refs refresh).
+    applied: HashMap<u32, Vec<RefLabel>>,
+}
+
+/// Guards snapshot-replacing ops against out-of-order completion.
+#[derive(Default)]
+struct OpGate(AtomicU64);
+
+impl OpGate {
+    fn begin(&self) -> u64 {
+        self.0.fetch_add(1, Ordering::SeqCst) + 1
+    }
+    fn is_current(&self, generation: u64) -> bool {
+        self.0.load(Ordering::SeqCst) == generation
+    }
+}
+
+pub struct RepoSession {
+    executor: GitExecutor,
+    runtime: tokio::runtime::Handle,
+    sink: Arc<dyn SessionSink>,
+    /// Cancelled when the session closes; all ops derive from it.
+    root_cancel: CancellationToken,
+    info: Mutex<Option<RepoInfo>>,
+    shared: Arc<Mutex<Shared>>,
+    log_gen: AtomicU64,
+    log_cancel: Mutex<Option<CancellationToken>>,
+    refs_gate: OpGate,
+    status_gate: OpGate,
+    stash_gate: OpGate,
+}
+
+impl RepoSession {
+    /// Creates the session and starts opening `path` in the background.
+    /// On success everything loads: log stream, refs, status, stashes.
+    pub fn open(
+        executor: GitExecutor,
+        runtime: tokio::runtime::Handle,
+        path: PathBuf,
+        sink: Arc<dyn SessionSink>,
+    ) -> Arc<Self> {
+        let session = Arc::new(Self {
+            executor,
+            runtime: runtime.clone(),
+            sink,
+            root_cancel: CancellationToken::new(),
+            info: Mutex::new(None),
+            shared: Arc::new(Mutex::new(Shared::default())),
+            log_gen: AtomicU64::new(0),
+            log_cancel: Mutex::new(None),
+            refs_gate: OpGate::default(),
+            status_gate: OpGate::default(),
+            stash_gate: OpGate::default(),
+        });
+
+        let s = Arc::clone(&session);
+        runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            match repo::open(&s.executor, &path, &cancel).await {
+                Ok(info) => {
+                    s.set_info(info.clone());
+                    s.sink.event(SessionEvent::Opened { info });
+                    s.restart_log();
+                    s.refresh_quick();
+                }
+                Err(error) => {
+                    if !error.is_cancelled() {
+                        s.sink.event(SessionEvent::OpenFailed { error });
+                    }
+                }
+            }
+        });
+        session
+    }
+
+    /// Workdir of the opened repository (None until `Opened`).
+    pub fn workdir(&self) -> Option<PathBuf> {
+        self.lock_info().as_ref().map(|i| i.workdir.clone())
+    }
+
+    /// Cancels everything this session is doing. Idempotent.
+    pub fn close(&self) {
+        self.root_cancel.cancel();
+    }
+
+    /// Restarts the log → graph stream (used by manual full refresh).
+    pub fn restart_log(self: &Arc<Self>) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
+
+        // Cancel the previous stream and install this run's child token.
+        let run_cancel = self.root_cancel.child_token();
+        if let Some(prev) = self
+            .log_cancel
+            .lock()
+            .map(|mut g| g.replace(run_cancel.clone()))
+            .unwrap_or_default()
+        {
+            prev.cancel();
+        }
+
+        {
+            // Reset graph state for the new stream under one lock.
+            let mut shared = self.lock_shared();
+            shared.builder = GraphBuilder::new();
+            shared.applied.clear();
+        }
+
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            s.sink.event(SessionEvent::LogStarted { generation });
+            let started = Instant::now();
+            match s.stream_log(&workdir, generation, &run_cancel).await {
+                Ok(total) => {
+                    s.sink.event(SessionEvent::LogFinished {
+                        generation,
+                        total,
+                        elapsed_ms: started.elapsed().as_millis() as u64,
+                    });
+                }
+                Err(error) => {
+                    if !matches!(error, GitError::Cancelled { .. }) {
+                        s.sink.event(SessionEvent::LogFailed {
+                            generation,
+                            error: error.to_string(),
+                        });
+                    }
+                }
+            }
+        });
+    }
+
+    /// Refreshes refs, status(+op state) and stashes concurrently.
+    /// Cheap enough for window-focus and post-operation triggers.
+    pub fn refresh_quick(self: &Arc<Self>) {
+        self.refresh_refs();
+        self.refresh_status();
+        self.refresh_stashes();
+    }
+
+    pub fn refresh_refs(self: &Arc<Self>) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        let op_gen = self.refs_gate.begin();
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            let refs = refs::load(&s.executor, &workdir, &cancel).await;
+            let head = refs::head_state(&s.executor, &workdir, &cancel).await;
+            match (refs, head) {
+                (Ok(refs), Ok(head)) => {
+                    if !s.refs_gate.is_current(op_gen) {
+                        return;
+                    }
+                    let snapshot = build_snapshot(&refs, &head);
+                    let label_updates = s.apply_refs(&refs, &head);
+                    s.sink.event(SessionEvent::RefsLoaded { snapshot });
+                    if !label_updates.is_empty() {
+                        s.sink.event(SessionEvent::LabelsChanged {
+                            rows: label_updates,
+                        });
+                    }
+                }
+                (Err(e), _) | (_, Err(e)) => s.fail("refs", e),
+            }
+        });
+    }
+
+    pub fn refresh_status(self: &Arc<Self>) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        let op_gen = self.status_gate.begin();
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            let status = status::load(&s.executor, &workdir, &cancel).await;
+            let op = opstate::detect(&s.executor, &workdir, &cancel).await;
+            match (status, op) {
+                (Ok(status), Ok(op_state)) => {
+                    if s.status_gate.is_current(op_gen) {
+                        s.sink
+                            .event(SessionEvent::StatusLoaded { status, op_state });
+                    }
+                }
+                (Err(e), _) | (_, Err(e)) => s.fail("status", e),
+            }
+        });
+    }
+
+    pub fn refresh_stashes(self: &Arc<Self>) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        let op_gen = self.stash_gate.begin();
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            match stash::load(&s.executor, &workdir, &cancel).await {
+                Ok(stashes) => {
+                    if s.stash_gate.is_current(op_gen) {
+                        s.sink.event(SessionEvent::StashesLoaded { stashes });
+                    }
+                }
+                Err(e) => s.fail("stash", e),
+            }
+        });
+    }
+
+    /// Loads full details of one commit (metadata + changed files).
+    pub fn load_details(self: &Arc<Self>, oid: Oid) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            match details::commit_details(&s.executor, &workdir, &oid, &cancel).await {
+                Ok(details) => s.sink.event(SessionEvent::DetailsLoaded { details }),
+                Err(e) => s.fail("details", e),
+            }
+        });
+    }
+
+    /// Loads a unified diff for one file.
+    pub fn load_diff(self: &Arc<Self>, target: DiffTarget) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            match details::file_diff(&s.executor, &workdir, &target, &cancel).await {
+                Ok(patches) => s.sink.event(SessionEvent::DiffLoaded { target, patches }),
+                Err(e) => s.fail("diff", e),
+            }
+        });
+    }
+
+    // --- internals ------------------------------------------------------
+
+    fn fail(&self, op: &'static str, error: GitError) {
+        if error.is_cancelled() {
+            return;
+        }
+        tracing::warn!(op, error = %error, "session operation failed");
+        self.sink.event(SessionEvent::OpFailed { op, error });
+    }
+
+    fn set_info(&self, info: RepoInfo) {
+        if let Ok(mut guard) = self.info.lock() {
+            *guard = Some(info);
+        }
+    }
+
+    fn lock_info(&self) -> std::sync::MutexGuard<'_, Option<RepoInfo>> {
+        // A poisoned lock only happens if a holder panicked; the data is a
+        // plain snapshot, safe to keep using.
+        match self.info.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        }
+    }
+
+    fn lock_shared(&self) -> std::sync::MutexGuard<'_, Shared> {
+        match self.shared.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        }
+    }
+
+    async fn stream_log(
+        self: &Arc<Self>,
+        workdir: &std::path::Path,
+        generation: u64,
+        cancel: &CancellationToken,
+    ) -> Result<u32, GitError> {
+        // An unborn HEAD has nothing to log.
+        let head = refs::head_state(&self.executor, workdir, cancel).await?;
+        if head.oid.is_none() {
+            return Ok(0);
+        }
+
+        let cmd = GitCommand::new()
+            .cwd(workdir)
+            .args(["log", "-z", "--topo-order", LOG_FORMAT_ARG])
+            .args(LOG_REVS)
+            .no_timeout();
+
+        let mut parser = LogParser::new();
+        let mut pending: Vec<CommitMeta> = Vec::new();
+        let mut first_sent = false;
+        let mut parse_error: Option<String> = None;
+        let mut total: u32 = 0;
+
+        let result = self
+            .executor
+            .run_streaming(cmd, cancel, &mut |bytes| {
+                if parse_error.is_some() {
+                    return;
+                }
+                if let Err(e) = parser.feed(bytes, &mut pending) {
+                    parse_error = Some(e.to_string());
+                    cancel.cancel();
+                    return;
+                }
+                let threshold = if first_sent {
+                    CHUNK_ROWS
+                } else {
+                    FIRST_CHUNK_ROWS
+                };
+                if pending.len() >= threshold {
+                    let batch = std::mem::take(&mut pending);
+                    total += batch.len() as u32;
+                    first_sent = true;
+                    self.emit_rows(generation, &batch, parser.pool());
+                }
+            })
+            .await;
+
+        match result {
+            Ok(_) => {}
+            Err(e) => {
+                // A self-inflicted cancel means the parser hit a fatal error.
+                if let Some(msg) = parse_error {
+                    return Err(GitError::UnexpectedOutput {
+                        command: "git log".to_string(),
+                        message: msg,
+                    });
+                }
+                return Err(e);
+            }
+        }
+        if let Err(e) = parser.finish() {
+            return Err(GitError::UnexpectedOutput {
+                command: "git log".to_string(),
+                message: e.to_string(),
+            });
+        }
+        if !pending.is_empty() {
+            let batch = std::mem::take(&mut pending);
+            total += batch.len() as u32;
+            self.emit_rows(generation, &batch, parser.pool());
+        }
+        Ok(total)
+    }
+
+    /// Builds graph rows for a batch and sends them (holding the shared
+    /// lock so generations cannot interleave).
+    fn emit_rows(&self, generation: u64, batch: &[CommitMeta], pool: &crate::model::StrPool) {
+        let mut shared = self.lock_shared();
+        if self.log_gen.load(Ordering::SeqCst) != generation {
+            return;
+        }
+        let mut rows = Vec::with_capacity(batch.len());
+        for commit in batch {
+            let g = shared.builder.push(commit);
+            let labels = shared
+                .label_map
+                .get(&commit.oid)
+                .cloned()
+                .unwrap_or_default();
+            if !labels.is_empty() {
+                shared.applied.insert(g.row, labels.clone());
+            }
+            rows.push(LogRow {
+                row: g.row,
+                oid_hex: commit.oid.to_hex(),
+                short_sha: commit.oid.short_hex(8),
+                author: pool.get(commit.author).to_string(),
+                time: commit.time,
+                subject: commit.subject.to_string(),
+                node_lane: g.node_lane,
+                node_color: g.node_color,
+                width: g.width,
+                segments: g.segments,
+                labels,
+            });
+        }
+        self.sink.event(SessionEvent::LogChunk { generation, rows });
+    }
+
+    /// Installs a new refs snapshot into the label join and returns the
+    /// rows whose chips changed.
+    fn apply_refs(&self, refs: &[RefEntry], head: &HeadState) -> Vec<(u32, Vec<RefLabel>)> {
+        let label_map = build_label_map(refs, head);
+        let mut shared = self.lock_shared();
+        shared.label_map = label_map;
+
+        let mut fresh: HashMap<u32, Vec<RefLabel>> = HashMap::new();
+        for (oid, labels) in &shared.label_map {
+            if let Some(row) = shared.builder.row_of(oid) {
+                fresh.insert(row, labels.clone());
+            }
+        }
+        let mut changed: Vec<(u32, Vec<RefLabel>)> = Vec::new();
+        for (row, labels) in &fresh {
+            if shared.applied.get(row) != Some(labels) {
+                changed.push((*row, labels.clone()));
+            }
+        }
+        for row in shared.applied.keys() {
+            if !fresh.contains_key(row) {
+                changed.push((*row, Vec::new()));
+            }
+        }
+        shared.applied = fresh;
+        changed.sort_by_key(|(row, _)| *row);
+        changed
+    }
+}
+
+impl Drop for RepoSession {
+    fn drop(&mut self) {
+        self.root_cancel.cancel();
+    }
+}
+
+/// Builds the per-commit label chips from a refs listing.
+fn build_label_map(refs: &[RefEntry], head: &HeadState) -> HashMap<Oid, Vec<RefLabel>> {
+    let with_remote = refs::branches_with_remote(refs);
+    let mut map: HashMap<Oid, Vec<RefLabel>> = HashMap::new();
+    for r in refs {
+        let kind = match r.kind {
+            RefKind::LocalBranch => LabelKind::LocalBranch,
+            RefKind::RemoteBranch => LabelKind::RemoteBranch,
+            RefKind::Tag => LabelKind::Tag,
+        };
+        map.entry(r.commit_oid()).or_default().push(RefLabel {
+            text: r.short.clone(),
+            kind,
+            has_remote: r.kind == RefKind::LocalBranch && with_remote.contains(&r.name),
+            is_head: r.is_head,
+        });
+    }
+    if head.detached
+        && let Some(oid) = head.oid
+    {
+        map.entry(oid).or_default().push(RefLabel {
+            text: "HEAD".to_string(),
+            kind: LabelKind::Head,
+            has_remote: false,
+            is_head: true,
+        });
+    }
+    for labels in map.values_mut() {
+        labels.sort_by(|a, b| {
+            (!a.is_head, a.kind, a.text.as_str()).cmp(&(!b.is_head, b.kind, b.text.as_str()))
+        });
+    }
+    map
+}
+
+/// Builds the sorted sidebar snapshot.
+fn build_snapshot(refs: &[RefEntry], head: &HeadState) -> RefsSnapshot {
+    let with_remote = refs::branches_with_remote(refs);
+    let mut snapshot = RefsSnapshot {
+        head: Some(head.clone()),
+        ..Default::default()
+    };
+    for r in refs {
+        match r.kind {
+            RefKind::LocalBranch => snapshot.locals.push(BranchItem {
+                short: r.short.clone(),
+                full: r.name.clone(),
+                oid_hex: r.commit_oid().to_hex(),
+                has_remote: with_remote.contains(&r.name),
+                is_head: r.is_head,
+            }),
+            RefKind::RemoteBranch => snapshot.remotes.push(BranchItem {
+                short: r.short.clone(),
+                full: r.name.clone(),
+                oid_hex: r.commit_oid().to_hex(),
+                has_remote: true,
+                is_head: false,
+            }),
+            RefKind::Tag => snapshot.tags.push(TagItem {
+                short: r.short.clone(),
+                oid_hex: r.commit_oid().to_hex(),
+                annotated: r.peeled.is_some(),
+            }),
+        }
+    }
+    snapshot.locals.sort_by(|a, b| a.short.cmp(&b.short));
+    snapshot.remotes.sort_by(|a, b| a.short.cmp(&b.short));
+    snapshot.tags.sort_by(|a, b| a.short.cmp(&b.short));
+    snapshot
+}

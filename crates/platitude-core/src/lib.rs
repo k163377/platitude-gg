@@ -15,6 +15,7 @@ pub mod parse;
 pub mod process;
 pub mod refs;
 pub mod repo;
+pub mod session;
 pub mod stash;
 pub mod status;
 pub mod version;

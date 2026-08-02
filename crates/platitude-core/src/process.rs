@@ -215,7 +215,7 @@ impl GitExecutor {
         &self,
         cmd: GitCommand,
         cancel: &CancellationToken,
-        on_stdout: &mut dyn FnMut(&[u8]),
+        on_stdout: &mut (dyn FnMut(&[u8]) + Send),
     ) -> Result<GitOutput, GitError> {
         let described = cmd.describe();
         let out = self.execute(&cmd, cancel, on_stdout).await?;
@@ -233,7 +233,7 @@ impl GitExecutor {
         &self,
         cmd: &GitCommand,
         cancel: &CancellationToken,
-        on_stdout: &mut dyn FnMut(&[u8]),
+        on_stdout: &mut (dyn FnMut(&[u8]) + Send),
     ) -> Result<GitOutput, GitError> {
         let described = cmd.describe();
 
@@ -321,7 +321,7 @@ async fn run_child(
     child: &mut Child,
     timeout: Option<Duration>,
     cancel: &CancellationToken,
-    on_stdout: &mut dyn FnMut(&[u8]),
+    on_stdout: &mut (dyn FnMut(&[u8]) + Send),
 ) -> std::io::Result<ChildOutcome> {
     let mut stdout_pipe = child.stdout.take();
     let mut stderr_pipe = child.stderr.take();
