@@ -37,6 +37,7 @@ ApplicationWindow {
     readonly property real middleScrollGain: 0.12
     readonly property int labelColW: 144
     readonly property int detailsAvatar: 40
+    readonly property int anchorDelayMs: 50
 
     palette {
         window: Theme.bgBase
@@ -75,6 +76,13 @@ ApplicationWindow {
     TabsModel {
         id: tabsModel
     }
+
+    // The RepoPage of the active tab (the toolbar's right-side controls
+    // act on it).
+    readonly property var curPage: (pageRepeater.count > 0
+                                    && tabsModel.currentIndex >= 0
+                                    && tabsModel.currentIndex < pageRepeater.count)
+                                   ? pageRepeater.itemAt(tabsModel.currentIndex) : null
 
     FolderDialog {
         id: folderDialog
@@ -162,17 +170,21 @@ ApplicationWindow {
         spacing: 0
         visible: AppBackend.gitState === "ok"
 
-        // Tab strip
+        // Top toolbar: prominent tabs and the per-repository controls
+        // share one row.
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: Theme.toolbarHeight
             color: Theme.bgElevated
             RowLayout {
                 anchors.fill: parent
-                spacing: 0
+                anchors.rightMargin: Theme.spaceMd
+                spacing: Theme.spaceSm
                 TabBar {
                     id: tabBar
                     Layout.fillWidth: false
+                    Layout.fillHeight: true
+                    background: null
                     // Two-way sync without a binding loop: user clicks push
                     // into the model; model changes push back here.
                     onCurrentIndexChanged: tabsModel.setCurrentIndex(currentIndex)
@@ -190,12 +202,33 @@ ApplicationWindow {
                             required property string title
                             required property string repo_path
                             width: implicitWidth
+                            height: tabBar.height
+                            background: Rectangle {
+                                color: tabButton.checked ? Theme.bgSelected : "transparent"
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: Theme.bgHover
+                                    visible: tabButton.hovered && !tabButton.checked
+                                }
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    height: 2 * Theme.borderWidth
+                                    color: Theme.accent
+                                    visible: tabButton.checked
+                                }
+                            }
                             contentItem: RowLayout {
                                 spacing: Theme.spaceXs
                                 Label {
                                     text: tabButton.title
                                     elide: Text.ElideRight
                                     Layout.maximumWidth: 180
+                                    leftPadding: Theme.spaceXs
+                                    font.weight: tabButton.checked ? Font.DemiBold : Font.Normal
+                                    color: tabButton.checked ? Theme.textPrimary
+                                                             : Theme.textSecondary
                                 }
                                 ToolButton {
                                     text: "×"
@@ -214,6 +247,76 @@ ApplicationWindow {
                     onClicked: folderDialog.open()
                 }
                 Item { Layout.fillWidth: true }
+
+                // Transient state of the current repository.
+                Rectangle {
+                    visible: root.curPage !== null && root.curPage.pageWt.opText !== ""
+                    color: "transparent"
+                    border.color: Theme.warning
+                    border.width: Theme.borderWidth
+                    radius: Theme.radiusSm
+                    implicitHeight: Theme.iconLg
+                    implicitWidth: opLabel.implicitWidth + 2 * Theme.spaceXs
+                    Label {
+                        id: opLabel
+                        anchors.centerIn: parent
+                        text: root.curPage !== null ? root.curPage.pageWt.opText : ""
+                        color: Theme.warning
+                        font.pixelSize: Theme.fontSm
+                        font.weight: Font.DemiBold
+                    }
+                }
+                Rectangle {
+                    visible: root.curPage !== null && root.curPage.pageWt.hasConflicts
+                    color: Theme.danger
+                    radius: Theme.radiusSm
+                    implicitHeight: Theme.iconLg
+                    implicitWidth: conflictLabel.implicitWidth + 2 * Theme.spaceXs
+                    Label {
+                        id: conflictLabel
+                        anchors.centerIn: parent
+                        text: qsTr("CONFLICTS")
+                        color: Theme.textOnAccent
+                        font.pixelSize: Theme.fontSm
+                        font.weight: Font.DemiBold
+                    }
+                }
+                Label {
+                    visible: root.curPage !== null && root.curPage.pageTab.lastError !== ""
+                    text: root.curPage !== null ? root.curPage.pageTab.lastError : ""
+                    color: Theme.danger
+                    elide: Text.ElideRight
+                    Layout.maximumWidth: 320
+                    font.pixelSize: Theme.fontSm
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: if (root.curPage !== null) root.curPage.pageTab.clearLastError()
+                    }
+                }
+                // Reserved: auto-fetch indicator (Phase 4)
+                Label {
+                    text: "↻"
+                    color: Theme.borderDefault
+                    font.pixelSize: Theme.fontMd
+                }
+                // Reserved: search box (backlog)
+                TextField {
+                    enabled: false
+                    opacity: 0.35
+                    placeholderText: qsTr("Search")
+                    implicitWidth: 160
+                    implicitHeight: Theme.controlHeight
+                }
+                // Local re-read only (no network) — fetch arrives in
+                // Phase 4 as its own action.
+                ToolButton {
+                    text: qsTr("Reload")
+                    enabled: root.curPage !== null
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 600
+                    ToolTip.text: qsTr("Re-read this repository from disk (does not fetch)")
+                    onClicked: root.curPage.pageTab.refreshAll()
+                }
             }
         }
 
@@ -252,6 +355,7 @@ ApplicationWindow {
             visible: tabsModel.currentIndex >= 0
             currentIndex: Math.max(0, tabsModel.currentIndex)
             Repeater {
+                id: pageRepeater
                 model: tabsModel
                 RepoPage {}
             }
@@ -329,6 +433,19 @@ ApplicationWindow {
         property bool expStashes: true
         property bool expTags: true
 
+        // The last expanded section absorbs the leftover height so the
+        // sidebar packs top to bottom.
+        readonly property string lastOpen: refFilter.text !== "" ? "tags"
+            : expTags ? "tags"
+            : expStashes ? "stashes"
+            : expWorktree ? "worktree"
+            : expRemotes ? "remotes"
+            : expBranches ? "branches" : ""
+
+        // Exposed for the window toolbar (acts on the active tab).
+        readonly property var pageTab: repoTab
+        readonly property var pageWt: workTree
+
         RepoTab { id: repoTab }
         GraphModel { id: graphModel }
         WorkTreeModel { id: workTree }
@@ -361,17 +478,61 @@ ApplicationWindow {
             }
         }
 
-        // Restore the selected row after the tag-inclusive swap pass (the
-        // model reset drops currentIndex).
+        // Selection policy: restore across the tag-swap reset, and default
+        // to the current branch's newest commit on first load so the
+        // details pane always shows something.
+        function trySelectDefault() {
+            if (page.selectedOid !== "" || AppBackend.autoSelect || graphModel.rowTotal === 0)
+                return
+            // Refs decide which commit is "current" — wait for them
+            // instead of guessing the newest row too early.
+            if (!branchesModel.refsLoaded)
+                return
+            let row = branchesModel.headOid !== ""
+                      ? graphModel.rowOf(branchesModel.headOid) : -1
+            if (row < 0) {
+                if (graphModel.loading)
+                    return // the head row may still be streaming in
+                row = 0 // detached / head outside the window: newest commit
+            }
+            graphList.currentIndex = row
+            anchorTimer.restart()
+            graphList.rowSelected(graphModel.oidAt(row))
+        }
+        // Centering must outlive the ListView's own relayout: a model
+        // reset (tag swap / reload) zeroes contentY during the polish that
+        // runs after our handlers, so the anchor is applied a beat later.
+        Timer {
+            id: anchorTimer
+            interval: root.anchorDelayMs
+            onTriggered: {
+                if (graphList.currentIndex >= 0)
+                    graphList.positionViewAtIndex(graphList.currentIndex, ListView.Center)
+            }
+        }
+        // Each finished pass ends in one drain (the swap never shows a
+        // loading edge), so watch the pass counter instead: re-resolve the
+        // selection by oid and re-anchor the viewport on it.
+        property int seenFinishCount: 0
         Connections {
             target: graphModel
             function onStatsChanged() {
-                if (page.selectedOid !== "" && graphList.currentIndex < 0) {
-                    const row = graphModel.rowOf(page.selectedOid)
-                    if (row >= 0)
-                        graphList.currentIndex = row
+                if (graphModel.finishCount !== page.seenFinishCount) {
+                    page.seenFinishCount = graphModel.finishCount
+                    if (page.selectedOid !== "") {
+                        const row = graphModel.rowOf(page.selectedOid)
+                        if (row >= 0) {
+                            graphList.currentIndex = row
+                            anchorTimer.restart()
+                        }
+                    }
                 }
+                page.trySelectDefault()
             }
+        }
+        Connections {
+            target: branchesModel
+            function onChanged() { page.trySelectDefault() }
         }
 
         // Scroll benchmark (PG_AUTO_SCROLL=1): after the stream finishes,
@@ -469,89 +630,9 @@ ApplicationWindow {
             spacing: 0
             visible: repoTab.state !== "error"
 
-            // ---- always-on status header --------------------------------
-            Rectangle {
-                Layout.fillWidth: true
-                implicitHeight: Theme.toolbarHeight
-                color: Theme.bgElevated
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spaceMd
-                    anchors.rightMargin: Theme.spaceMd
-                    spacing: Theme.spaceSm
-
-                    // The current branch + ahead/behind moved into the
-                    // BRANCHES section (pinned row); this bar keeps only
-                    // transient state (op / conflicts / last error).
-                    Rectangle {
-                        visible: workTree.opText !== ""
-                        color: "transparent"
-                        border.color: Theme.warning
-                        border.width: Theme.borderWidth
-                        radius: Theme.radiusSm
-                        implicitHeight: Theme.iconLg
-                        implicitWidth: opLabel.implicitWidth + 2 * Theme.spaceXs
-                        Label {
-                            id: opLabel
-                            anchors.centerIn: parent
-                            text: workTree.opText
-                            color: Theme.warning
-                            font.pixelSize: Theme.fontSm
-                            font.weight: Font.DemiBold
-                        }
-                    }
-                    Rectangle {
-                        visible: workTree.hasConflicts
-                        color: Theme.danger
-                        radius: Theme.radiusSm
-                        implicitHeight: Theme.iconLg
-                        implicitWidth: conflictLabel.implicitWidth + 2 * Theme.spaceXs
-                        Label {
-                            id: conflictLabel
-                            anchors.centerIn: parent
-                            text: qsTr("CONFLICTS")
-                            color: Theme.textOnAccent
-                            font.pixelSize: Theme.fontSm
-                            font.weight: Font.DemiBold
-                        }
-                    }
-                    Label {
-                        visible: repoTab.lastError !== ""
-                        text: repoTab.lastError
-                        color: Theme.danger
-                        elide: Text.ElideRight
-                        Layout.maximumWidth: 320
-                        font.pixelSize: Theme.fontSm
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: repoTab.clearLastError()
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    // Reserved: auto-fetch indicator (Phase 4)
-                    Label {
-                        text: "↻"
-                        color: Theme.borderDefault
-                        font.pixelSize: Theme.fontMd
-                    }
-                    // Reserved: search box (backlog)
-                    TextField {
-                        enabled: false
-                        opacity: 0.35
-                        placeholderText: qsTr("Search")
-                        implicitWidth: 160
-                        implicitHeight: Theme.controlHeight
-                    }
-                    ToolButton {
-                        text: qsTr("Refresh")
-                        onClicked: repoTab.refreshAll()
-                    }
-                }
-            }
-
             // ---- three-pane layout --------------------------------------
+            // (repository state / search / reload live in the window
+            // toolbar, next to the tabs)
             SplitView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -648,6 +729,7 @@ ApplicationWindow {
                             sectionModel: branchesModel
                             expanded: page.expBranches || refFilter.text !== ""
                             kindHint: "branch"
+                            stretch: page.lastOpen === "branches"
                             headTrack: workTree.upstream !== ""
                                        ? "↑" + workTree.ahead + " ↓" + workTree.behind : ""
                             onRefActivated: oidHex => page.jumpToRef(oidHex)
@@ -665,6 +747,7 @@ ApplicationWindow {
                             sectionModel: remotesModel
                             expanded: page.expRemotes || refFilter.text !== ""
                             kindHint: "remote"
+                            stretch: page.lastOpen === "remotes"
                             onRefActivated: oidHex => page.jumpToRef(oidHex)
                         }
 
@@ -680,6 +763,7 @@ ApplicationWindow {
                             sectionModel: worktreeModel
                             expanded: page.expWorktree || refFilter.text !== ""
                             kindHint: "wt"
+                            stretch: page.lastOpen === "worktree"
                             onFileActivated: (bucket, path, origPath) =>
                                 page.toggleDiff(bucket, path, origPath)
                         }
@@ -696,6 +780,7 @@ ApplicationWindow {
                             sectionModel: stashesModel
                             expanded: page.expStashes || refFilter.text !== ""
                             kindHint: "stash"
+                            stretch: page.lastOpen === "stashes"
                             // A stash is a commit: clicking shows its
                             // stashed changes in the details pane.
                             onRefActivated: oidHex => page.jumpToRef(oidHex)
@@ -716,11 +801,9 @@ ApplicationWindow {
                             sectionModel: tagsModel
                             expanded: page.expTags || refFilter.text !== ""
                             kindHint: "tag"
+                            stretch: page.lastOpen === "tags"
                             onRefActivated: oidHex => page.jumpToRef(oidHex)
                         }
-
-                        // Absorbs leftover space when sections are collapsed.
-                        Item { Layout.fillHeight: true; Layout.minimumHeight: 0 }
                     }
                 }
 
@@ -1145,13 +1228,6 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        Label {
-                            visible: detailsModel.shaHex === ""
-                            Layout.margins: Theme.spaceSm
-                            text: qsTr("Select a commit to see its details")
-                            color: Theme.textMuted
-                            font.pixelSize: Theme.fontSm
-                        }
                         // CHANGES header with the tree ⇄ path view toggle.
                         Rectangle {
                             visible: detailsModel.shaHex !== ""
@@ -1552,6 +1628,9 @@ ApplicationWindow {
         property var sectionModel
         property bool expanded: true
         property string kindHint: "branch"
+        // The stretching section absorbs the sidebar's leftover height;
+        // the others stay content-sized.
+        property bool stretch: false
         // "↑a ↓b" of the current branch (branches section only).
         property string headTrack: ""
         signal refActivated(string oidHex)
@@ -1560,7 +1639,9 @@ ApplicationWindow {
         visible: expanded
         Layout.fillWidth: true
         Layout.fillHeight: expanded
-        Layout.maximumHeight: expanded ? count * Theme.rowHeight + Theme.spaceXs : 0
+        Layout.maximumHeight: !expanded ? 0
+                              : stretch ? Number.POSITIVE_INFINITY
+                              : count * Theme.rowHeight + Theme.spaceXs
         clip: true
         model: sectionModel
         reuseItems: true

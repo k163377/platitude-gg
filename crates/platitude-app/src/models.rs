@@ -450,6 +450,9 @@ pub struct GraphModel {
     first_chunk_ms: i32,
     total_ms: i32,
     truncated: bool,
+    /// Completed stream passes (direct + tag swap + reloads). QML watches
+    /// this edge to re-anchor the viewport after each model reset.
+    finish_count: i32,
     /// Lanes running off the end of the window (`lane.color;...`), drawn
     /// by the truncation footer.
     tail_geometry: String,
@@ -496,6 +499,7 @@ impl GraphModel {
     );
     qproperty!("totalMs", Member = total_ms, Notify = stats_changed);
     qproperty!("truncated", Member = truncated, Notify = stats_changed);
+    qproperty!("finishCount", Member = finish_count, Notify = stats_changed);
     qproperty!(
         "tailGeometry",
         Member = tail_geometry,
@@ -575,6 +579,7 @@ impl GraphModel {
                         self.total_ms = elapsed_ms as i32;
                         self.row_total = total as i32;
                         self.truncated = truncated;
+                        self.finish_count += 1;
                         self.tail_geometry = if truncated {
                             self.rows
                                 .last()
@@ -676,6 +681,9 @@ pub struct NavSectionModel {
     head_name: String,
     head_oid: String,
     head_has_remote: bool,
+    /// True once a refs snapshot arrived (distinguishes "no head yet"
+    /// from "detached / no local branches" for the default selection).
+    refs_loaded: bool,
     /// Explicit folder open/close choices (key = folder path); anything
     /// absent uses the section default.
     folder_overrides: HashMap<String, bool>,
@@ -864,6 +872,7 @@ impl NavSectionModel {
     qproperty!("headName", Member = head_name, Notify = changed);
     qproperty!("headOid", Member = head_oid, Notify = changed);
     qproperty!("headHasRemote", Member = head_has_remote, Notify = changed);
+    qproperty!("refsLoaded", Member = refs_loaded, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -913,6 +922,7 @@ impl NavSectionModel {
         if let Some(feed) = self.refs_feed.clone()
             && let Some(snapshot) = feed.drain().pop()
         {
+            self.refs_loaded = true;
             self.all = match self.section.as_str() {
                 "branches" => {
                     let head = snapshot.locals.iter().find(|b| b.is_head);
