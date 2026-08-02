@@ -1,0 +1,391 @@
+//! Refs listing (`for-each-ref`) and HEAD state.
+//!
+//! Record separator is newline (refnames cannot contain newlines), field
+//! separator is NUL via `%00`.
+
+use std::collections::HashSet;
+use std::path::Path;
+
+use tokio_util::sync::CancellationToken;
+
+use crate::error::GitError;
+use crate::oid::Oid;
+use crate::process::{GitCommand, GitExecutor};
+
+/// `--format=` for `for-each-ref`; keep in sync with [`parse_refs`].
+/// Fields: refname, objecttype, objectname, peeled objectname, upstream,
+/// HEAD marker, creator date (unix).
+pub const REFS_FORMAT_ARG: &str = "--format=%(refname)%00%(objecttype)%00%(objectname)%00%(*objectname)%00%(upstream)%00%(HEAD)%00%(creatordate:unix)";
+
+const REFS_FIELDS: usize = 7;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefKind {
+    LocalBranch,
+    RemoteBranch,
+    Tag,
+}
+
+/// One entry of the refs listing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefEntry {
+    /// Full refname (`refs/heads/main`).
+    pub name: String,
+    /// Display name (`main`, `origin/main`, `v1.0`).
+    pub short: String,
+    pub kind: RefKind,
+    /// Direct target of the ref (a tag object for annotated tags).
+    pub target: Oid,
+    /// Peeled commit for annotated tags.
+    pub peeled: Option<Oid>,
+    /// Configured upstream refname (`refs/remotes/origin/main`), if any.
+    /// May point at a deleted remote branch; see [`has_remote_counterpart`].
+    pub upstream: Option<String>,
+    /// True for the branch HEAD is on (never true when detached).
+    pub is_head: bool,
+    /// Creator date (unix seconds); tag date for annotated tags, commit
+    /// date otherwise. Used for sidebar sorting.
+    pub created_unix: i64,
+}
+
+impl RefEntry {
+    /// The commit this ref designates (annotated tags peeled).
+    pub fn commit_oid(&self) -> Oid {
+        self.peeled.unwrap_or(self.target)
+    }
+}
+
+/// Non-fatal parse problem: malformed entries are skipped with a warning
+/// (a single broken ref must not blank the whole sidebar).
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("malformed for-each-ref line: {0}")]
+pub struct RefsParseError(pub String);
+
+/// Parses `for-each-ref` output produced with [`REFS_FORMAT_ARG`].
+///
+/// Skips `refs/remotes/<remote>/HEAD` symrefs (UI noise) and refs outside
+/// the three queried namespaces. Malformed lines are skipped with a
+/// warning rather than failing the whole listing.
+pub fn parse_refs(bytes: &[u8]) -> Vec<RefEntry> {
+    let mut out = Vec::new();
+    for line in bytes.split(|b| *b == b'\n') {
+        if line.is_empty() {
+            continue;
+        }
+        match parse_line(line) {
+            Ok(Some(entry)) => out.push(entry),
+            Ok(None) => {}
+            Err(e) => tracing::warn!(error = %e, "skipping unparsable ref"),
+        }
+    }
+    out
+}
+
+fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
+    let lossy = || String::from_utf8_lossy(line).into_owned();
+    let fields: Vec<&[u8]> = line.split(|b| *b == 0).collect();
+    if fields.len() != REFS_FIELDS {
+        return Err(RefsParseError(lossy()));
+    }
+    let name = String::from_utf8_lossy(fields[0]).into_owned();
+
+    let (kind, short) = if let Some(rest) = name.strip_prefix("refs/heads/") {
+        (RefKind::LocalBranch, rest.to_string())
+    } else if let Some(rest) = name.strip_prefix("refs/remotes/") {
+        // `origin/HEAD` is a symref to the remote's default branch; hide it.
+        if rest.ends_with("/HEAD") {
+            return Ok(None);
+        }
+        (RefKind::RemoteBranch, rest.to_string())
+    } else if let Some(rest) = name.strip_prefix("refs/tags/") {
+        (RefKind::Tag, rest.to_string())
+    } else {
+        return Ok(None);
+    };
+
+    let target = Oid::from_hex(fields[2]).map_err(|_| RefsParseError(lossy()))?;
+    let peeled = if fields[3].is_empty() {
+        None
+    } else {
+        Some(Oid::from_hex(fields[3]).map_err(|_| RefsParseError(lossy()))?)
+    };
+    let upstream = if fields[4].is_empty() {
+        None
+    } else {
+        Some(String::from_utf8_lossy(fields[4]).into_owned())
+    };
+    let is_head = fields[5] == b"*";
+    let created_unix = std::str::from_utf8(fields[6])
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0);
+
+    Ok(Some(RefEntry {
+        name,
+        short,
+        kind,
+        target,
+        peeled,
+        upstream,
+        is_head,
+        created_unix,
+    }))
+}
+
+/// Local branches that verifiably have a remote counterpart **right now**:
+/// either the configured upstream still exists, or some remote has a
+/// same-named branch. Everything else is "local only" (the 3-state badge's
+/// PR dimension is wired up in Phase 4).
+pub fn branches_with_remote(refs: &[RefEntry]) -> HashSet<String> {
+    let remote_full: HashSet<&str> = refs
+        .iter()
+        .filter(|r| r.kind == RefKind::RemoteBranch)
+        .map(|r| r.name.as_str())
+        .collect();
+    // `origin/feature/x` → `feature/x` (strip the remote component).
+    let remote_suffix: HashSet<&str> = refs
+        .iter()
+        .filter(|r| r.kind == RefKind::RemoteBranch)
+        .filter_map(|r| r.short.split_once('/').map(|(_, rest)| rest))
+        .collect();
+
+    refs.iter()
+        .filter(|r| r.kind == RefKind::LocalBranch)
+        .filter(|r| {
+            let upstream_exists = r
+                .upstream
+                .as_deref()
+                .is_some_and(|u| remote_full.contains(u));
+            upstream_exists || remote_suffix.contains(r.short.as_str())
+        })
+        .map(|r| r.name.clone())
+        .collect()
+}
+
+/// Where HEAD points right now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeadState {
+    /// Current branch short name; `None` when detached or unborn.
+    pub branch: Option<String>,
+    /// Commit HEAD resolves to; `None` for an unborn branch (empty repo).
+    pub oid: Option<Oid>,
+    pub detached: bool,
+}
+
+/// Loads the refs listing.
+pub async fn load(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<Vec<RefEntry>, GitError> {
+    let cmd = GitCommand::new().cwd(workdir).args([
+        "for-each-ref",
+        REFS_FORMAT_ARG,
+        "refs/heads",
+        "refs/remotes",
+        "refs/tags",
+    ]);
+    let out = executor.run(cmd, cancel).await?;
+    Ok(parse_refs(&out.stdout))
+}
+
+/// Resolves the current HEAD state (branch / detached / unborn).
+pub async fn head_state(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<HeadState, GitError> {
+    let sym = executor
+        .run_unchecked(
+            GitCommand::new()
+                .cwd(workdir)
+                .args(["symbolic-ref", "-q", "--short", "HEAD"]),
+            cancel,
+        )
+        .await?;
+    let branch = (sym.code == 0).then(|| sym.stdout_utf8().trim().to_string());
+
+    let head = executor
+        .run_unchecked(
+            GitCommand::new()
+                .cwd(workdir)
+                .args(["rev-parse", "--verify", "-q", "HEAD"]),
+            cancel,
+        )
+        .await?;
+    let oid = if head.code == 0 {
+        Some(
+            Oid::from_hex(head.stdout_utf8().trim().as_bytes()).map_err(|_| {
+                GitError::UnexpectedOutput {
+                    command: "git rev-parse --verify -q HEAD".to_string(),
+                    message: head.stdout_utf8().trim().to_string(),
+                }
+            })?,
+        )
+    } else {
+        None
+    };
+
+    Ok(HeadState {
+        detached: branch.is_none() && oid.is_some(),
+        branch,
+        oid,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SHA_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const SHA_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const SHA_T: &str = "1111111111111111111111111111111111111111";
+
+    fn line(fields: [&str; 7]) -> Vec<u8> {
+        let mut v = fields.join("\u{0}").into_bytes();
+        v.push(b'\n');
+        v
+    }
+
+    #[test]
+    fn parses_the_three_namespaces() {
+        let mut bytes = line([
+            "refs/heads/main",
+            "commit",
+            SHA_A,
+            "",
+            "refs/remotes/origin/main",
+            "*",
+            "1700000100",
+        ]);
+        bytes.extend(line([
+            "refs/remotes/origin/main",
+            "commit",
+            SHA_A,
+            "",
+            "",
+            "",
+            "1700000100",
+        ]));
+        bytes.extend(line([
+            "refs/tags/v1.0",
+            "tag",
+            SHA_T,
+            SHA_B,
+            "",
+            "",
+            "1700000200",
+        ]));
+
+        let refs = parse_refs(&bytes);
+        assert_eq!(refs.len(), 3);
+
+        let main = &refs[0];
+        assert_eq!(main.kind, RefKind::LocalBranch);
+        assert_eq!(main.short, "main");
+        assert!(main.is_head);
+        assert_eq!(main.upstream.as_deref(), Some("refs/remotes/origin/main"));
+        assert_eq!(main.commit_oid().to_hex(), SHA_A);
+        assert_eq!(main.created_unix, 1_700_000_100);
+
+        let remote = &refs[1];
+        assert_eq!(remote.kind, RefKind::RemoteBranch);
+        assert_eq!(remote.short, "origin/main");
+        assert!(!remote.is_head);
+
+        let tag = &refs[2];
+        assert_eq!(tag.kind, RefKind::Tag);
+        assert_eq!(tag.short, "v1.0");
+        assert_eq!(tag.target.to_hex(), SHA_T, "annotated tag object");
+        assert_eq!(tag.commit_oid().to_hex(), SHA_B, "peeled commit");
+    }
+
+    #[test]
+    fn skips_remote_head_symref() {
+        let bytes = line(["refs/remotes/origin/HEAD", "commit", SHA_A, "", "", "", "0"]);
+        assert!(parse_refs(&bytes).is_empty());
+    }
+
+    #[test]
+    fn skips_malformed_lines_but_keeps_the_rest() {
+        let mut bytes = b"garbage-without-fields\n".to_vec();
+        bytes.extend(line(["refs/heads/ok", "commit", SHA_A, "", "", "", "1"]));
+        let refs = parse_refs(&bytes);
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].short, "ok");
+    }
+
+    #[test]
+    fn branch_with_slash_in_name_keeps_full_short_name() {
+        let bytes = line([
+            "refs/heads/feature/deep/name",
+            "commit",
+            SHA_A,
+            "",
+            "",
+            "",
+            "1",
+        ]);
+        let refs = parse_refs(&bytes);
+        assert_eq!(refs[0].short, "feature/deep/name");
+    }
+
+    fn entry(kind: RefKind, name: &str, short: &str, upstream: Option<&str>) -> RefEntry {
+        RefEntry {
+            name: name.to_string(),
+            short: short.to_string(),
+            kind,
+            target: Oid::from_hex_str(SHA_A).expect("valid test sha"),
+            peeled: None,
+            upstream: upstream.map(String::from),
+            is_head: false,
+            created_unix: 0,
+        }
+    }
+
+    #[test]
+    fn remote_state_via_upstream_or_name_match() {
+        let refs = vec![
+            // upstream configured and alive
+            entry(
+                RefKind::LocalBranch,
+                "refs/heads/main",
+                "main",
+                Some("refs/remotes/origin/main"),
+            ),
+            // upstream configured but the remote branch is gone
+            entry(
+                RefKind::LocalBranch,
+                "refs/heads/dead",
+                "dead",
+                Some("refs/remotes/origin/dead"),
+            ),
+            // no upstream, but origin has a same-named branch
+            entry(
+                RefKind::LocalBranch,
+                "refs/heads/feature/x",
+                "feature/x",
+                None,
+            ),
+            // truly local
+            entry(RefKind::LocalBranch, "refs/heads/local", "local", None),
+            entry(
+                RefKind::RemoteBranch,
+                "refs/remotes/origin/main",
+                "origin/main",
+                None,
+            ),
+            entry(
+                RefKind::RemoteBranch,
+                "refs/remotes/origin/feature/x",
+                "origin/feature/x",
+                None,
+            ),
+        ];
+        let with_remote = branches_with_remote(&refs);
+        assert!(with_remote.contains("refs/heads/main"));
+        assert!(!with_remote.contains("refs/heads/dead"), "[gone] upstream");
+        assert!(with_remote.contains("refs/heads/feature/x"));
+        assert!(!with_remote.contains("refs/heads/local"));
+    }
+}

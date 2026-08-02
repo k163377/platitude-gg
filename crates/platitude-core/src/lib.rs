@@ -11,6 +11,7 @@ pub mod model;
 pub mod oid;
 pub mod parse;
 pub mod process;
+pub mod refs;
 pub mod repo;
 pub mod version;
 
