@@ -6,12 +6,15 @@
 //! implementation is swapped (Qt Bridges -> CXX-Qt).
 
 pub mod error;
+pub mod model;
 pub mod oid;
+pub mod parse;
 pub mod process;
 pub mod repo;
 pub mod version;
 
 pub use error::GitError;
+pub use model::{CommitMeta, StrPool};
 pub use oid::Oid;
 pub use process::{DEFAULT_TIMEOUT, GitCommand, GitExecutor, GitOutput};
 pub use repo::{ObjectFormat, RepoInfo};
