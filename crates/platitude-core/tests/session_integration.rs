@@ -292,6 +292,103 @@ async fn details_and_diff_round_trip_through_the_session() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn tag_only_commits_follow_the_include_tags_option() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "base");
+    // A commit reachable only through a tag (detached, then back to main).
+    repo.git(&["checkout", "--detach", "HEAD"]);
+    repo.commit_file("g.txt", "t\n", "tag only work");
+    repo.git(&["tag", "islet"]);
+    repo.git(&["checkout", "main"]);
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+
+    // Tags are walked by default → the tag-only commit has a row.
+    let first_gen = sink
+        .wait_for("tags-on LogFinished", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::LogFinished {
+                    generation, total, ..
+                } if *total == 2 => Some(*generation),
+                _ => None,
+            })
+        })
+        .await;
+
+    session.set_include_tags(false);
+    sink.wait_for("tags-off LogFinished", |evs| {
+        evs.iter().find_map(|e| match e {
+            SessionEvent::LogFinished {
+                generation, total, ..
+            } if *generation > first_gen && *total == 1 => Some(()),
+            _ => None,
+        })
+    })
+    .await;
+
+    session.close();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn log_limit_truncates_the_window() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "1\n", "one");
+    repo.commit_file("f.txt", "2\n", "two");
+    repo.commit_file("f.txt", "3\n", "three");
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+
+    let first_gen = sink
+        .wait_for("full LogFinished", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::LogFinished {
+                    generation,
+                    total,
+                    truncated,
+                    ..
+                } if *total == 3 => {
+                    assert!(!truncated, "3 commits fit in the default window");
+                    Some(*generation)
+                }
+                _ => None,
+            })
+        })
+        .await;
+
+    session.set_log_limit(Some(2));
+    sink.wait_for("limited LogFinished", |evs| {
+        evs.iter().find_map(|e| match e {
+            SessionEvent::LogFinished {
+                generation,
+                total,
+                truncated,
+                ..
+            } if *generation > first_gen => {
+                assert_eq!(*total, 2);
+                assert!(truncated);
+                Some(())
+            }
+            _ => None,
+        })
+    })
+    .await;
+
+    session.close();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn unborn_repository_finishes_with_zero_rows() {
     let repo = TestRepo::init();
     let sink = CaptureSink::new();

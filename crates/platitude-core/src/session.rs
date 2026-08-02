@@ -36,15 +36,32 @@ use crate::status::{self, WorkTreeStatus};
 const FIRST_CHUNK_ROWS: usize = 512;
 const CHUNK_ROWS: usize = 4096;
 
-/// Revisions walked for the graph: HEAD, local branches and remotes.
+/// Default cap on the graph window (GitKraken-like initial view). Bounds
+/// memory and stream time on 100k+ commit repositories; the UI shows a
+/// truncation hint when the cap is hit.
+pub const DEFAULT_LOG_LIMIT: u32 = 2000;
+
+/// What the log stream walks.
 ///
-/// `--tags` is deliberately absent: tag tips dominate the `--topo-order`
-/// frontier setup on tag-heavy repositories (measured on JetBrains/kotlin:
-/// 44k tags turn a 0.4s first-byte into 2.1s, blowing the 3s first-paint
-/// budget). Tag *labels* still appear — they are joined by commit id from
-/// the refs snapshot — only commits reachable exclusively through a tag
-/// have no row. A future setting can opt tags back into the walk.
-const LOG_REVS: [&str; 3] = ["HEAD", "--branches", "--remotes"];
+/// Tags are shown by default (product decision). On tag-heavy repositories
+/// they dominate the `--topo-order` frontier setup (JetBrains/kotlin: 44k
+/// tags cost ~1.7s extra before the first byte even with a commit-graph),
+/// which is why the toggle exists.
+#[derive(Debug, Clone, Copy)]
+pub struct LogOptions {
+    pub include_tags: bool,
+    /// `None` walks the full history.
+    pub limit: Option<u32>,
+}
+
+impl Default for LogOptions {
+    fn default() -> Self {
+        Self {
+            include_tags: true,
+            limit: Some(DEFAULT_LOG_LIMIT),
+        }
+    }
+}
 
 /// Kind of a row label chip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -132,6 +149,9 @@ pub enum SessionEvent {
         generation: u64,
         total: u32,
         elapsed_ms: u64,
+        /// True when the stream stopped at the configured window limit
+        /// (older history exists but is not shown).
+        truncated: bool,
     },
     LogFailed {
         generation: u64,
@@ -201,6 +221,7 @@ pub struct RepoSession {
     root_cancel: CancellationToken,
     info: Mutex<Option<RepoInfo>>,
     shared: Arc<Mutex<Shared>>,
+    log_options: Mutex<LogOptions>,
     log_gen: AtomicU64,
     log_cancel: Mutex<Option<CancellationToken>>,
     refs_gate: OpGate,
@@ -224,6 +245,7 @@ impl RepoSession {
             root_cancel: CancellationToken::new(),
             info: Mutex::new(None),
             shared: Arc::new(Mutex::new(Shared::default())),
+            log_options: Mutex::new(LogOptions::default()),
             log_gen: AtomicU64::new(0),
             log_cancel: Mutex::new(None),
             refs_gate: OpGate::default(),
@@ -261,6 +283,41 @@ impl RepoSession {
         self.root_cancel.cancel();
     }
 
+    pub fn log_options(&self) -> LogOptions {
+        *self.lock_log_options()
+    }
+
+    /// Toggles tags in the graph walk and restarts the stream.
+    pub fn set_include_tags(self: &Arc<Self>, include_tags: bool) {
+        {
+            let mut options = self.lock_log_options();
+            if options.include_tags == include_tags {
+                return;
+            }
+            options.include_tags = include_tags;
+        }
+        self.restart_log();
+    }
+
+    /// Changes the graph window size (`None` = full history) and restarts.
+    pub fn set_log_limit(self: &Arc<Self>, limit: Option<u32>) {
+        {
+            let mut options = self.lock_log_options();
+            if options.limit == limit {
+                return;
+            }
+            options.limit = limit;
+        }
+        self.restart_log();
+    }
+
+    fn lock_log_options(&self) -> std::sync::MutexGuard<'_, LogOptions> {
+        match self.log_options.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        }
+    }
+
     /// Restarts the log → graph stream (used by manual full refresh).
     pub fn restart_log(self: &Arc<Self>) {
         let Some(workdir) = self.workdir() else {
@@ -287,15 +344,20 @@ impl RepoSession {
         }
 
         let s = Arc::clone(self);
+        let options = self.log_options();
         self.runtime.spawn(async move {
             s.sink.event(SessionEvent::LogStarted { generation });
             let started = Instant::now();
-            match s.stream_log(&workdir, generation, &run_cancel).await {
+            match s
+                .stream_log(&workdir, generation, options, &run_cancel)
+                .await
+            {
                 Ok(total) => {
                     s.sink.event(SessionEvent::LogFinished {
                         generation,
                         total,
                         elapsed_ms: started.elapsed().as_millis() as u64,
+                        truncated: options.limit.is_some_and(|n| total >= n),
                     });
                 }
                 Err(error) => {
@@ -454,6 +516,7 @@ impl RepoSession {
         self: &Arc<Self>,
         workdir: &std::path::Path,
         generation: u64,
+        options: LogOptions,
         cancel: &CancellationToken,
     ) -> Result<u32, GitError> {
         // An unborn HEAD has nothing to log.
@@ -462,11 +525,17 @@ impl RepoSession {
             return Ok(0);
         }
 
-        let cmd = GitCommand::new()
+        let mut cmd = GitCommand::new()
             .cwd(workdir)
             .args(["log", "-z", "--topo-order", LOG_FORMAT_ARG])
-            .args(LOG_REVS)
+            .args(["HEAD", "--branches", "--remotes"])
             .no_timeout();
+        if options.include_tags {
+            cmd = cmd.arg("--tags");
+        }
+        if let Some(limit) = options.limit {
+            cmd = cmd.arg(format!("--max-count={limit}"));
+        }
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();

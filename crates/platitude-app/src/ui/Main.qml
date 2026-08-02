@@ -23,12 +23,14 @@ ApplicationWindow {
     font.family: Theme.uiFamily
     font.pixelSize: Theme.fontMd
 
-    // Commit-graph geometry not yet covered by the design tokens; kept in
-    // one place and grid-aligned. Pending token additions (do not tune):
-    // lane pitch = spaceLg, node diameter = iconSm, lane stroke = 2.
+    // Commit-graph geometry and interaction values not yet covered by the
+    // design tokens; kept in one place and grid-aligned. Pending token
+    // additions (do not tune): lane pitch = spaceLg, node diameter =
+    // iconSm, lane stroke = 2, wheel step = 5 rows per notch.
     readonly property int laneW: Theme.spaceLg
     readonly property int nodeDiameter: Theme.iconSm
     readonly property int laneStroke: 2
+    readonly property int wheelRows: 5
 
     palette {
         window: Theme.bgBase
@@ -192,7 +194,7 @@ ApplicationWindow {
                 Label {
                     text: AppBackend.gitVersion === "" ? "" : qsTr("git %1").arg(AppBackend.gitVersion)
                     color: Theme.textMuted
-                    font.pixelSize: Theme.fontXs
+                    font.pixelSize: Theme.fontSm
                     rightPadding: Theme.spaceSm
                 }
             }
@@ -409,7 +411,7 @@ ApplicationWindow {
                             anchors.centerIn: parent
                             text: workTree.opText
                             color: Theme.warning
-                            font.pixelSize: Theme.fontXs
+                            font.pixelSize: Theme.fontSm
                             font.weight: Font.DemiBold
                         }
                     }
@@ -424,7 +426,7 @@ ApplicationWindow {
                             anchors.centerIn: parent
                             text: qsTr("CONFLICTS")
                             color: Theme.textOnAccent
-                            font.pixelSize: Theme.fontXs
+                            font.pixelSize: Theme.fontSm
                             font.weight: Font.DemiBold
                         }
                     }
@@ -434,7 +436,7 @@ ApplicationWindow {
                         color: Theme.danger
                         elide: Text.ElideRight
                         Layout.maximumWidth: 320
-                        font.pixelSize: Theme.fontXs
+                        font.pixelSize: Theme.fontSm
                         MouseArea {
                             anchors.fill: parent
                             onClicked: repoTab.clearLastError()
@@ -456,6 +458,12 @@ ApplicationWindow {
                         placeholderText: qsTr("Search")
                         implicitWidth: 160
                         implicitHeight: Theme.controlHeight
+                    }
+                    ToolButton {
+                        text: qsTr("⚑ Tags")
+                        checkable: true
+                        checked: repoTab.tagsShown
+                        onToggled: repoTab.setTagsShown(checked)
                     }
                     ToolButton {
                         text: qsTr("Refresh")
@@ -498,6 +506,7 @@ ApplicationWindow {
                             clip: true
                             model: sidebarModel
                             reuseItems: true
+                            ScrollBar.vertical: ScrollBar {}
                             section.property: "group"
                             section.delegate: Rectangle {
                                 required property string section
@@ -509,7 +518,7 @@ ApplicationWindow {
                                     x: Theme.spaceSm
                                     text: parent.section
                                     color: Theme.textSecondary
-                                    font.pixelSize: Theme.fontXs
+                                    font.pixelSize: Theme.fontSm
                                     font.weight: Font.DemiBold
                                 }
                             }
@@ -538,7 +547,7 @@ ApplicationWindow {
                                         color: refRow.kind === "tag" ? Theme.warning
                                                : refRow.kind === "remote" ? Theme.textSecondary
                                                : Theme.accent
-                                        font.pixelSize: Theme.fontXs
+                                        font.pixelSize: Theme.fontSm
                                     }
                                     Label {
                                         Layout.fillWidth: true
@@ -546,7 +555,7 @@ ApplicationWindow {
                                         elide: Text.ElideMiddle
                                         font.weight: refRow.is_head ? Font.DemiBold : Font.Normal
                                         color: refRow.is_head ? Theme.textLink : Theme.textPrimary
-                                        font.pixelSize: Theme.fontSm
+                                        font.pixelSize: Theme.fontMd
                                     }
                                     // Branch state badge: filled = has remote,
                                     // hollow = local-only (PR state joins in
@@ -570,9 +579,37 @@ ApplicationWindow {
                                         if (row >= 0) {
                                             graphList.currentIndex = row
                                             graphList.positionViewAtIndex(row, ListView.Center)
-                                            detailsModel.request(refRow.oid_hex)
                                         }
+                                        // Outside the graph window the row is
+                                        // absent, but details still resolve.
+                                        detailsModel.request(refRow.oid_hex)
                                     }
+                                }
+                            }
+                        }
+                        PaneHeader {
+                            text: qsTr("STASHES (%1)").arg(stashList.count)
+                        }
+                        ListView {
+                            id: stashList
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Math.min(count * Theme.rowHeight + Theme.spaceXs, 120)
+                            clip: true
+                            model: stashModel
+                            delegate: Item {
+                                id: stashRow
+                                required property string name
+                                required property string message
+                                width: stashList.width
+                                height: Theme.rowHeight
+                                Label {
+                                    x: Theme.spaceSm
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width - 2 * Theme.spaceSm
+                                    elide: Text.ElideRight
+                                    font.pixelSize: Theme.fontMd
+                                    color: Theme.textPrimary
+                                    text: stashRow.name + "  " + stashRow.message
                                 }
                             }
                         }
@@ -584,25 +621,55 @@ ApplicationWindow {
                     SplitView.fillWidth: true
                     SplitView.minimumWidth: 420
                     color: Theme.bgSurface
-                    ListView {
-                        id: graphList
+                    ColumnLayout {
                         anchors.fill: parent
-                        clip: true
-                        model: graphModel
-                        reuseItems: true
-                        boundsBehavior: Flickable.StopAtBounds
-                        flickDeceleration: 8000
-                        maximumFlickVelocity: 9000
-                        ScrollBar.vertical: ScrollBar {}
-                        // Bridge into the page scope for the shared delegate
-                        // component (inline components cannot see page ids).
-                        property int graphAreaWidth: page.graphAreaW
-                        signal rowSelected(string oidHex)
-                        onRowSelected: oidHex => {
-                            detailsModel.request(oidHex)
-                            diffModel.clear()
+                        spacing: 0
+                        ListView {
+                            id: graphList
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            model: graphModel
+                            reuseItems: true
+                            boundsBehavior: Flickable.StopAtBounds
+                            flickDeceleration: 8000
+                            maximumFlickVelocity: 9000
+                            ScrollBar.vertical: ScrollBar {}
+                            // Bridge into the page scope for the shared delegate
+                            // component (inline components cannot see page ids).
+                            property int graphAreaWidth: page.graphAreaW
+                            signal rowSelected(string oidHex)
+                            onRowSelected: oidHex => {
+                                detailsModel.request(oidHex)
+                                diffModel.clear()
+                            }
+                            delegate: GraphRowDelegate {}
+                            // Mouse wheels scroll a fixed number of rows per
+                            // notch; touchpads keep native Flickable panning.
+                            WheelHandler {
+                                acceptedDevices: PointerDevice.Mouse
+                                onWheel: event => {
+                                    graphList.cancelFlick()
+                                    const step = (event.angleDelta.y / 120)
+                                               * root.wheelRows * Theme.rowHeight
+                                    const maxY = Math.max(0, graphList.contentHeight - graphList.height)
+                                    graphList.contentY = Math.max(0, Math.min(graphList.contentY - step, maxY))
+                                }
+                            }
                         }
-                        delegate: GraphRowDelegate {}
+                        // Window-limit hint (GitKraken-style truncation).
+                        Rectangle {
+                            Layout.fillWidth: true
+                            implicitHeight: Theme.rowHeight
+                            visible: graphModel.truncated
+                            color: Theme.bgElevated
+                            Label {
+                                anchors.centerIn: parent
+                                text: qsTr("Showing the first %L1 commits").arg(graphModel.rowTotal)
+                                color: Theme.textSecondary
+                                font.pixelSize: Theme.fontSm
+                            }
+                        }
                     }
                     BusyIndicator {
                         anchors.centerIn: parent
@@ -660,7 +727,7 @@ ApplicationWindow {
                                     Label {
                                         anchors.verticalCenter: parent.verticalCenter
                                         x: Theme.spaceSm
-                                        font.pixelSize: Theme.fontXs
+                                        font.pixelSize: Theme.fontSm
                                         font.weight: Font.DemiBold
                                         color: parent.section === "conflicts" ? Theme.statusConflict
                                                : parent.section === "staged" ? Theme.statusStaged
@@ -676,32 +743,6 @@ ApplicationWindow {
                                     listWidth: workTreeList.width
                                     onActivated: (bucket, path, origPath) =>
                                         diffModel.requestWorkTree(bucket, path, origPath)
-                                }
-                            }
-                            PaneHeader {
-                                text: qsTr("STASHES (%1)").arg(stashList.count)
-                            }
-                            ListView {
-                                id: stashList
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: Math.min(count * Theme.rowHeight + Theme.spaceXs, 96)
-                                clip: true
-                                model: stashModel
-                                delegate: Item {
-                                    id: stashRow
-                                    required property string name
-                                    required property string message
-                                    width: stashList.width
-                                    height: Theme.rowHeight
-                                    Label {
-                                        x: Theme.spaceSm
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        width: parent.width - 2 * Theme.spaceSm
-                                        elide: Text.ElideRight
-                                        font.pixelSize: Theme.fontSm
-                                        color: Theme.textPrimary
-                                        text: stashRow.name + "  " + stashRow.message
-                                    }
                                 }
                             }
                         }
@@ -847,7 +888,7 @@ ApplicationWindow {
                                             text: diffRow.text
                                             elide: Text.ElideRight
                                             font.family: Theme.monoFamily
-                                            font.pixelSize: Theme.fontSm
+                                            font.pixelSize: Theme.fontMd
                                             color: diffRow.kind === "add" ? Theme.diffAddedFg
                                                    : diffRow.kind === "del" ? Theme.diffRemovedFg
                                                    : diffRow.kind === "hunk" ? Theme.diffHunkHeaderFg
@@ -971,7 +1012,7 @@ ApplicationWindow {
                                                           : chipKind === "R" ? Theme.textSecondary
                                                           : chipKind === "H" ? Theme.danger
                                                           : Theme.accent
-                        height: Theme.fontXsLine
+                        height: Theme.fontSmLine
                         width: chipRow.implicitWidth + 2 * Theme.spaceXs
                         radius: Theme.radiusSm
                         color: "transparent"
@@ -994,7 +1035,7 @@ ApplicationWindow {
                             Label {
                                 text: chip.chipText
                                 color: chip.chipColor
-                                font.pixelSize: Theme.fontXs
+                                font.pixelSize: Theme.fontSm
                                 font.weight: chip.chipHead ? Font.DemiBold : Font.Normal
                             }
                         }
@@ -1006,7 +1047,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 text: rowItem.subject
                 elide: Text.ElideRight
-                font.pixelSize: Theme.fontSm
+                font.pixelSize: Theme.fontMd
                 color: Theme.textPrimary
             }
             Label {
@@ -1097,7 +1138,7 @@ ApplicationWindow {
                       ? fileRow.pathText
                       : qsTr("%1 → %2").arg(fileRow.origPathText).arg(fileRow.pathText)
                 elide: Text.ElideMiddle
-                font.pixelSize: Theme.fontSm
+                font.pixelSize: Theme.fontMd
                 color: Theme.textPrimary
             }
         }
@@ -1118,7 +1159,7 @@ ApplicationWindow {
             id: headerLabel
             anchors.verticalCenter: parent.verticalCenter
             x: Theme.spaceSm
-            font.pixelSize: Theme.fontXs
+            font.pixelSize: Theme.fontSm
             font.weight: Font.DemiBold
             color: Theme.textSecondary
         }

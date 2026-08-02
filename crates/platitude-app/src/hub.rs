@@ -48,6 +48,7 @@ pub enum GraphMsg {
         generation: u64,
         total: u32,
         elapsed_ms: u64,
+        truncated: bool,
     },
     Failed {
         generation: u64,
@@ -188,10 +189,12 @@ impl SessionSink for BridgeSink {
                 generation,
                 total,
                 elapsed_ms,
+                truncated,
             } => self.feeds.graph.push(GraphMsg::Finished {
                 generation,
                 total,
                 elapsed_ms,
+                truncated,
             }),
             SessionEvent::LogFailed { generation, error } => {
                 self.feeds.graph.push(GraphMsg::Failed {

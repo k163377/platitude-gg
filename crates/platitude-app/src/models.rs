@@ -306,7 +306,6 @@ qml_register!(TabsModel, "TabsModel", singleton = false);
 // RepoTab: per-tab lifecycle + error surface + refresh entry points
 // ---------------------------------------------------------------------------
 
-#[derive(Default)]
 pub struct RepoTab {
     tab_id: i32,
     state: String,
@@ -314,7 +313,24 @@ pub struct RepoTab {
     repo_path: String,
     error: String,
     last_error: String,
+    tags_shown: bool,
     feed: Option<Arc<Feed<TabMsg>>>,
+}
+
+impl Default for RepoTab {
+    fn default() -> Self {
+        Self {
+            tab_id: 0,
+            state: String::new(),
+            title: String::new(),
+            repo_path: String::new(),
+            error: String::new(),
+            last_error: String::new(),
+            // Mirrors core LogOptions::default().
+            tags_shown: true,
+            feed: None,
+        }
+    }
 }
 
 #[qobject(ConvertToCamelCase, NoQmlElement)]
@@ -324,6 +340,7 @@ impl RepoTab {
     qproperty!("repoPath", Member = repo_path, Notify = changed);
     qproperty!("error", Member = error, Notify = changed);
     qproperty!("lastError", Member = last_error, Notify = changed);
+    qproperty!("tagsShown", Member = tags_shown, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -386,6 +403,19 @@ impl RepoTab {
         self.last_error = String::new();
         self.changed();
     }
+
+    /// Shows/hides tags in the graph walk (restarts the stream).
+    #[qslot]
+    fn set_tags_shown(&mut self, shown: bool) {
+        if self.tags_shown == shown {
+            return;
+        }
+        self.tags_shown = shown;
+        self.changed();
+        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
+            session.set_include_tags(shown);
+        }
+    }
 }
 qml_register!(RepoTab, "RepoTab", singleton = false);
 
@@ -417,6 +447,7 @@ pub struct GraphModel {
     max_lanes: i32,
     first_chunk_ms: i32,
     total_ms: i32,
+    truncated: bool,
     error: String,
     started_at: Option<Instant>,
     feed: Option<Arc<Feed<GraphMsg>>>,
@@ -459,6 +490,7 @@ impl GraphModel {
         Notify = stats_changed
     );
     qproperty!("totalMs", Member = total_ms, Notify = stats_changed);
+    qproperty!("truncated", Member = truncated, Notify = stats_changed);
     qproperty!("error", Member = error, Notify = stats_changed);
 
     #[qsignal]
@@ -490,6 +522,7 @@ impl GraphModel {
                         self.max_lanes = 1;
                         self.first_chunk_ms = -1;
                         self.total_ms = -1;
+                        self.truncated = false;
                         self.error = String::new();
                         self.started_at = Some(Instant::now());
                     }
@@ -525,14 +558,16 @@ impl GraphModel {
                     generation,
                     total,
                     elapsed_ms,
+                    truncated,
                 } => {
                     if generation == self.generation {
                         self.loading = false;
                         self.total_ms = elapsed_ms as i32;
                         self.row_total = total as i32;
-                        // Release Vec growth slack (tens of MB at 200k rows).
+                        self.truncated = truncated;
+                        // Release Vec growth slack after the stream ends.
                         self.rows.shrink_to_fit();
-                        tracing::info!(total, elapsed_ms, "graph stream finished");
+                        tracing::info!(total, elapsed_ms, truncated, "graph stream finished");
                     }
                 }
                 GraphMsg::Failed {
