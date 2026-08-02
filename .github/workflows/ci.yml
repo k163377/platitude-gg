@@ -1,0 +1,64 @@
+# 3-OS build + test + lint, with egress control from day one (実装計画.md §11.3).
+# This workflow must pass on runners WITHOUT Qt: the workspace contains only
+# Qt-free crates (the Phase 0 spike is excluded from the workspace).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Harden runner (egress allowlist)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            static.rust-lang.org:443
+            index.crates.io:443
+            static.crates.io:443
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format check
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --workspace
+
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner (egress allowlist)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            index.crates.io:443
+            static.crates.io:443
+      - uses: actions/checkout@v4
+      - name: cargo-deny (bans / licenses / sources)
+        uses: EmbarkStudios/cargo-deny-action@v2
