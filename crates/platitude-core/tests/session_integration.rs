@@ -767,32 +767,55 @@ async fn a_write_rebuilds_the_graph_once() {
             .then_some(())
     })
     .await;
-    let before = sink.count(|e| matches!(e, SessionEvent::LogStarted { .. }));
 
     session.stage_all();
     session.commit(
         "add new file".into(),
         platitude_core::commit::CommitOptions::default(),
     );
-    sink.wait_for("both writes finished", |evs| {
-        (sink_finished(evs) == 2).then_some(())
-    })
-    .await;
-    // Nothing else is running now; give any stray rebuild time to appear.
-    tokio::time::sleep(Duration::from_millis(400)).await;
 
-    let started = sink.count(|e| matches!(e, SessionEvent::LogStarted { .. })) - before;
-    // Tags are on by default, so one rebuild is a fast pass plus the
-    // tag-inclusive swap: two LogStarted per rebuild, and staging (which
-    // leaves the tree dirty) does not trigger one at all.
-    assert_eq!(started, 2, "one rebuild for the commit, none for staging");
+    // Counting from where each write finished ignores whatever the open
+    // sequence was still doing, which a wall-clock delay would not.
+    let (during_stage, after_commit) = sink
+        .wait_for("the commit's rebuild finished", |evs| {
+            let stage_at = position_of(evs, "stage")?;
+            let commit_at = position_of(evs, "commit")?;
+            // One rebuild is a fast pass plus the tag-inclusive swap, so
+            // it is complete once two streams have finished.
+            let finished = evs[commit_at..]
+                .iter()
+                .filter(|e| matches!(e, SessionEvent::LogFinished { .. }))
+                .count();
+            (finished >= 2).then(|| {
+                (
+                    log_starts(&evs[stage_at..commit_at]),
+                    log_starts(&evs[commit_at..]),
+                )
+            })
+        })
+        .await;
+
+    assert_eq!(
+        during_stage, 0,
+        "staging left the tree dirty, so the graph did not change"
+    );
+    assert_eq!(
+        after_commit, 2,
+        "the commit rebuilt the graph once (fast pass + tag swap)"
+    );
     session.close();
 }
 
-/// Counts finished writes in an event list.
-fn sink_finished(events: &[SessionEvent]) -> usize {
+/// Index of the `WriteFinished` for one operation.
+fn position_of(events: &[SessionEvent], op: &str) -> Option<usize> {
     events
         .iter()
-        .filter(|e| matches!(e, SessionEvent::WriteFinished { .. }))
+        .position(|e| matches!(e, SessionEvent::WriteFinished { op: got, .. } if *got == op))
+}
+
+fn log_starts(events: &[SessionEvent]) -> usize {
+    events
+        .iter()
+        .filter(|e| matches!(e, SessionEvent::LogStarted { .. }))
         .count()
 }

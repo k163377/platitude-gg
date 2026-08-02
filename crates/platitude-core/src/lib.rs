@@ -11,6 +11,7 @@ pub mod conflict;
 pub mod details;
 pub mod error;
 pub mod graph;
+pub mod identity;
 pub mod integrate;
 pub mod model;
 pub mod oid;

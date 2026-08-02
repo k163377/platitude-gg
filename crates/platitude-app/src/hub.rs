@@ -48,6 +48,14 @@ pub enum TabMsg {
         total: i32,
         published: i32,
     },
+    /// Author identity and signing state.
+    Author {
+        name: String,
+        email: String,
+        complete: bool,
+        signing: bool,
+        signing_format: String,
+    },
 }
 
 /// Graph-model messages (log stream lifecycle).
@@ -266,6 +274,15 @@ impl SessionSink for BridgeSink {
             SessionEvent::OpFailed { op, error } => self.feeds.tab.push(TabMsg::OpError {
                 message: format!("{op}: {error}"),
             }),
+            SessionEvent::AuthorLoaded { config } => {
+                self.feeds.tab.push(TabMsg::Author {
+                    complete: config.identity.is_complete(),
+                    name: config.identity.name.unwrap_or_default(),
+                    email: config.identity.email.unwrap_or_default(),
+                    signing: config.signing.is_active(),
+                    signing_format: config.signing.format.as_str().to_string(),
+                });
+            }
             SessionEvent::PublishChecked { range, state } => {
                 self.feeds.tab.push(TabMsg::Publish {
                     range,

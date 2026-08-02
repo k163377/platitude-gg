@@ -329,6 +329,14 @@ pub struct RepoTab {
     publish_range: String,
     publish_total: i32,
     publish_published: i32,
+    /// Author identity; `identityReady` false means git cannot commit yet
+    /// and the UI should ask for a name and address.
+    author_name: String,
+    author_email: String,
+    identity_ready: bool,
+    /// Whether this repository signs commits or tags, and how.
+    signing_active: bool,
+    signing_format: String,
     feed: Option<Arc<Feed<TabMsg>>>,
 }
 
@@ -348,6 +356,13 @@ impl Default for RepoTab {
             publish_range: String::new(),
             publish_total: 0,
             publish_published: 0,
+            author_name: String::new(),
+            author_email: String::new(),
+            // Assumed fine until the check says otherwise, so nothing
+            // flashes a warning during startup.
+            identity_ready: true,
+            signing_active: false,
+            signing_format: String::new(),
             feed: None,
         }
     }
@@ -379,6 +394,11 @@ impl RepoTab {
         Member = publish_published,
         Notify = changed
     );
+    qproperty!("authorName", Member = author_name, Notify = changed);
+    qproperty!("authorEmail", Member = author_email, Notify = changed);
+    qproperty!("identityReady", Member = identity_ready, Notify = changed);
+    qproperty!("signingActive", Member = signing_active, Notify = changed);
+    qproperty!("signingFormat", Member = signing_format, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -413,6 +433,19 @@ impl RepoTab {
                 }
                 TabMsg::OpError { message } => {
                     self.last_error = message;
+                }
+                TabMsg::Author {
+                    name,
+                    email,
+                    complete,
+                    signing,
+                    signing_format,
+                } => {
+                    self.author_name = name;
+                    self.author_email = email;
+                    self.identity_ready = complete;
+                    self.signing_active = signing;
+                    self.signing_format = signing_format;
                 }
                 TabMsg::Publish {
                     range,
@@ -725,6 +758,29 @@ impl RepoTab {
     #[qslot]
     fn check_publish(&mut self, range: String) {
         self.with_session(|s| s.check_publish(range.clone()));
+    }
+
+    /// Records `user.name` / `user.email`. `global` writes the user's own
+    /// configuration, which is the right default for a first-run prompt:
+    /// the answer is about the person, not the project.
+    #[qslot]
+    fn set_identity(&mut self, name: String, email: String, global: bool) {
+        let scope = if global {
+            platitude_core::identity::ConfigScope::Global
+        } else {
+            platitude_core::identity::ConfigScope::Local
+        };
+        self.with_session(|s| s.set_identity(name.clone(), email.clone(), scope));
+    }
+
+    /// Time budget for fetch / push, in seconds. Zero is ignored.
+    #[qslot]
+    fn set_network_timeout(&mut self, seconds: i32) {
+        if seconds <= 0 {
+            return;
+        }
+        let timeout = std::time::Duration::from_secs(seconds as u64);
+        self.with_session(|s| s.set_network_timeout(timeout));
     }
 
     /// Shows/hides tags in the graph walk (restarts the stream).

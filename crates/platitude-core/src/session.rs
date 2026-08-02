@@ -30,6 +30,7 @@ use crate::conflict;
 use crate::details::{self, CommitDetails, DiffTarget};
 use crate::error::GitError;
 use crate::graph::{GraphBuilder, Segment};
+use crate::identity;
 use crate::integrate;
 use crate::model::CommitMeta;
 use crate::oid::Oid;
@@ -195,6 +196,11 @@ pub enum SessionEvent {
         range: String,
         state: publish::PublishState,
     },
+    /// Author identity and signing configuration. Emitted on open so the
+    /// UI can ask for an identity before the first commit fails.
+    AuthorLoaded {
+        config: identity::AuthorConfig,
+    },
     StashesLoaded {
         stashes: Vec<StashEntry>,
     },
@@ -231,6 +237,8 @@ pub enum AfterWrite {
     Snapshots,
     /// History or refs moved, so the graph has to be rebuilt too.
     Graph,
+    /// Snapshots plus the author configuration (an identity write).
+    Author,
 }
 
 /// Receives session events; implementations must be non-blocking.
@@ -340,6 +348,10 @@ impl RepoSession {
                 Ok(info) => {
                     s.set_info(info.clone());
                     s.sink.event(SessionEvent::Opened { info });
+                    // Before anything else: a missing identity turns the
+                    // first commit into a wall of git text, and the UI can
+                    // ask for one instead.
+                    s.refresh_author();
                     s.restart_log();
                     s.refresh_quick();
                 }
@@ -657,6 +669,37 @@ impl RepoSession {
         self.refresh_worktrees();
     }
 
+    /// Re-reads the author identity and signing configuration.
+    pub fn refresh_author(self: &Arc<Self>) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            match identity::load(&s.executor, &workdir, &cancel).await {
+                Ok(config) => s.sink.event(SessionEvent::AuthorLoaded { config }),
+                Err(e) => s.fail("identity", e),
+            }
+        });
+    }
+
+    /// Records `user.name` / `user.email`.
+    pub fn set_identity(
+        self: &Arc<Self>,
+        name: String,
+        email: String,
+        scope: identity::ConfigScope,
+    ) {
+        self.write(
+            "identity",
+            AfterWrite::Author,
+            move |exec, repo, cancel| async move {
+                identity::set_identity(&exec, &repo.workdir, &name, &email, scope, &cancel).await
+            },
+        );
+    }
+
     pub fn refresh_stashes(self: &Arc<Self>) {
         let Some(workdir) = self.workdir() else {
             return;
@@ -774,6 +817,9 @@ impl RepoSession {
             self.restart_log();
         }
         self.refresh_side_snapshots();
+        if after == AfterWrite::Author {
+            self.refresh_author();
+        }
     }
 
     /// `git add` for whole files.
