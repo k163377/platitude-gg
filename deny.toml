@@ -1,4 +1,4 @@
-# cargo-deny configuration — machine-enforces two core guarantees (see 実装計画.md §11.1):
+# cargo-deny configuration — machine-enforces two core guarantees (see internal-docs/実装計画.md §11.1):
 #   1. No networking capability in the dependency closure (all networking goes
 #      through the installed git CLI, executed as a subprocess).
 #   2. No git implementation libraries (system git subprocess only).

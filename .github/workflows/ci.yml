@@ -1,4 +1,4 @@
-# 3-OS build + test + lint, with egress control from day one (実装計画.md §11.3).
+# 3-OS build + test + lint, with egress control from day one (internal-docs/実装計画.md §11.3).
 # This workflow must pass on runners WITHOUT Qt: the workspace contains only
 # Qt-free crates (the Phase 0 spike is excluded from the workspace).
 name: CI

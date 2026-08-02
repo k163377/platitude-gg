@@ -1,4 +1,4 @@
-# Enforced with `-D warnings` in CI (see 実装計画.md §11.1 and CLAUDE.md).
+# Enforced with `-D warnings` in CI (see internal-docs/実装計画.md §11.1 and CLAUDE.md).
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true
