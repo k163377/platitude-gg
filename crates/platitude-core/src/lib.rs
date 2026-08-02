@@ -17,6 +17,7 @@ pub mod parse;
 pub mod patch;
 pub mod process;
 pub mod refs;
+pub mod remote;
 pub mod repo;
 pub mod scratch;
 pub mod session;

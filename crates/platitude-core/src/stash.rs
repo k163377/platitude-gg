@@ -1,4 +1,8 @@
-//! Stash listing: `git stash list -z --format=...`.
+//! Stash listing and stash operations.
+//!
+//! Selectors (`stash@{0}`) come from a listing and are passed straight
+//! back; nothing here builds one from an index, because the numbering
+//! shifts under every push and drop.
 
 use std::path::Path;
 
@@ -79,6 +83,89 @@ pub async fn load(
         command: "git stash list".to_string(),
         message: e.to_string(),
     })
+}
+
+/// Knobs of `git stash push`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PushOptions {
+    /// Stash untracked files too (`--include-untracked`).
+    pub include_untracked: bool,
+    /// Leave the index as it is (`--keep-index`).
+    pub keep_index: bool,
+    /// Stash only what is staged (`--staged`).
+    pub staged_only: bool,
+}
+
+/// `git stash push`: saves the working tree, optionally limited to `paths`.
+pub async fn push(
+    executor: &GitExecutor,
+    workdir: &Path,
+    message: &str,
+    options: PushOptions,
+    paths: &[String],
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let mut cmd = GitCommand::new().cwd(workdir).args(["stash", "push"]);
+    if options.include_untracked {
+        cmd = cmd.arg("--include-untracked");
+    }
+    if options.keep_index {
+        cmd = cmd.arg("--keep-index");
+    }
+    if options.staged_only {
+        cmd = cmd.arg("--staged");
+    }
+    if !message.trim().is_empty() {
+        cmd = cmd.args(["--message", message]);
+    }
+    if !paths.is_empty() {
+        cmd = cmd
+            .arg("--")
+            .args(paths.iter().map(|p| crate::process::literal_pathspec(p)));
+    }
+    executor.run(cmd, cancel).await.map(|_| ())
+}
+
+/// `git stash pop <selector>`: restores and removes the entry.
+pub async fn pop(
+    executor: &GitExecutor,
+    workdir: &Path,
+    selector: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    run_selector(executor, workdir, "pop", selector, cancel).await
+}
+
+/// `git stash apply <selector>`: restores and keeps the entry.
+pub async fn apply(
+    executor: &GitExecutor,
+    workdir: &Path,
+    selector: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    run_selector(executor, workdir, "apply", selector, cancel).await
+}
+
+/// `git stash drop <selector>`: discards the entry. Destructive — the
+/// caller confirms first.
+pub async fn drop(
+    executor: &GitExecutor,
+    workdir: &Path,
+    selector: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    run_selector(executor, workdir, "drop", selector, cancel).await
+}
+
+async fn run_selector(
+    executor: &GitExecutor,
+    workdir: &Path,
+    op: &str,
+    selector: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let cmd = GitCommand::new().cwd(workdir).args(["stash", op, selector]);
+    executor.run(cmd, cancel).await.map(|_| ())
 }
 
 #[cfg(test)]
