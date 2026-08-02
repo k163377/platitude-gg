@@ -325,6 +325,10 @@ pub struct RepoTab {
     /// but requests can queue up).
     busy_count: i32,
     busy_op: String,
+    /// Last answer to `checkPublish`: how much of a range a remote has.
+    publish_range: String,
+    publish_total: i32,
+    publish_published: i32,
     feed: Option<Arc<Feed<TabMsg>>>,
 }
 
@@ -341,6 +345,9 @@ impl Default for RepoTab {
             tags_shown: true,
             busy_count: 0,
             busy_op: String::new(),
+            publish_range: String::new(),
+            publish_total: 0,
+            publish_published: 0,
             feed: None,
         }
     }
@@ -365,6 +372,13 @@ impl RepoTab {
     qproperty!("tagsShown", Member = tags_shown, Notify = changed);
     qproperty!("busyCount", Member = busy_count, Notify = changed);
     qproperty!("busyOp", Member = busy_op, Notify = changed);
+    qproperty!("publishRange", Member = publish_range, Notify = changed);
+    qproperty!("publishTotal", Member = publish_total, Notify = changed);
+    qproperty!(
+        "publishPublished",
+        Member = publish_published,
+        Notify = changed
+    );
 
     #[qsignal]
     fn changed(&mut self);
@@ -399,6 +413,15 @@ impl RepoTab {
                 }
                 TabMsg::OpError { message } => {
                     self.last_error = message;
+                }
+                TabMsg::Publish {
+                    range,
+                    total,
+                    published,
+                } => {
+                    self.publish_range = range;
+                    self.publish_total = total;
+                    self.publish_published = published;
                 }
                 TabMsg::WriteState { op, running } => {
                     if running {
@@ -614,6 +637,94 @@ impl RepoTab {
     #[qslot]
     fn delete_remote_branch(&mut self, remote: String, branch: String) {
         self.with_session(|s| s.delete_remote_branch(remote.clone(), branch.clone()));
+    }
+
+    /// `git merge <rev>`.
+    #[qslot]
+    fn merge(&mut self, rev: String, no_ff: bool, ff_only: bool, message: String) {
+        let options = platitude_core::integrate::MergeOptions {
+            no_ff,
+            ff_only,
+            squash: false,
+            message: (!message.trim().is_empty()).then_some(message),
+        };
+        self.with_session(|s| s.merge(rev.clone(), options.clone()));
+    }
+
+    /// `git rebase <upstream>`; an empty `onto` uses `upstream` as the base.
+    #[qslot]
+    fn rebase(&mut self, upstream: String, onto: String, autostash: bool, update_refs: bool) {
+        let options = platitude_core::integrate::RebaseOptions {
+            onto: (!onto.is_empty()).then_some(onto),
+            branch: None,
+            autostash,
+            update_refs,
+        };
+        self.with_session(|s| s.rebase(upstream.clone(), options.clone()));
+    }
+
+    #[qslot]
+    fn cherry_pick(&mut self, rev: String) {
+        self.with_session(|s| s.cherry_pick(vec![rev.clone()]));
+    }
+
+    #[qslot]
+    fn revert(&mut self, rev: String) {
+        self.with_session(|s| s.revert(vec![rev.clone()]));
+    }
+
+    /// Continues / aborts / skips whatever is in progress. `how` is
+    /// `"continue"` / `"abort"` / `"skip"` / `"quit"`.
+    #[qslot]
+    fn resolve_operation(&mut self, how: String) {
+        use platitude_core::integrate::Continuation;
+        let continuation = match how.as_str() {
+            "continue" => Continuation::Continue,
+            "abort" => Continuation::Abort,
+            "skip" => Continuation::Skip,
+            "quit" => Continuation::Quit,
+            other => {
+                tracing::warn!(how = other, "unknown continuation");
+                return;
+            }
+        };
+        self.with_session(|s| s.resolve_current(continuation));
+    }
+
+    /// Resolves one conflicted path by taking a side (`"ours"`/`"theirs"`).
+    ///
+    /// During a rebase the sides are reversed: the commits being replayed
+    /// are "theirs".
+    #[qslot]
+    fn take_side(&mut self, path: String, side: String) {
+        use platitude_core::conflict::Side;
+        let side = match side.as_str() {
+            "ours" => Side::Ours,
+            "theirs" => Side::Theirs,
+            other => {
+                tracing::warn!(side = other, "unknown conflict side");
+                return;
+            }
+        };
+        self.with_session(|s| s.take_side(vec![path.clone()], side));
+    }
+
+    /// Hands a conflicted path to `git mergetool` (empty = all of them).
+    #[qslot]
+    fn open_mergetool(&mut self, path: String) {
+        let paths = if path.is_empty() {
+            Vec::new()
+        } else {
+            vec![path]
+        };
+        self.with_session(|s| s.mergetool(paths.clone()));
+    }
+
+    /// Asks how much of `range` is already on a remote; the answer arrives
+    /// as `publishRange` / `publishTotal` / `publishPublished`.
+    #[qslot]
+    fn check_publish(&mut self, range: String) {
+        self.with_session(|s| s.check_publish(range.clone()));
     }
 
     /// Shows/hides tags in the graph walk (restarts the stream).
@@ -1416,6 +1527,10 @@ pub struct WorkTreeModel {
     staged_count: i32,
     unstaged_count: i32,
     untracked_count: i32,
+    conflict_count: i32,
+    /// Rebase progress; both zero when nothing is stepping.
+    op_step: i32,
+    op_steps: i32,
     feed: Option<Arc<Feed<StatusMsg>>>,
     tab_id: i32,
 }
@@ -1432,6 +1547,9 @@ impl WorkTreeModel {
     qproperty!("stagedCount", Member = staged_count, Notify = changed);
     qproperty!("unstagedCount", Member = unstaged_count, Notify = changed);
     qproperty!("untrackedCount", Member = untracked_count, Notify = changed);
+    qproperty!("conflictCount", Member = conflict_count, Notify = changed);
+    qproperty!("opStep", Member = op_step, Notify = changed);
+    qproperty!("opSteps", Member = op_steps, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -1451,7 +1569,12 @@ impl WorkTreeModel {
         let Some(feed) = self.feed.clone() else {
             return;
         };
-        let Some(StatusMsg { status, op_state }) = feed.drain().pop() else {
+        let Some(StatusMsg {
+            status,
+            op_state,
+            progress,
+        }) = feed.drain().pop()
+        else {
             return;
         };
 
@@ -1481,6 +1604,11 @@ impl WorkTreeModel {
         self.staged_count = status.staged().count() as i32;
         self.unstaged_count = status.unstaged().count() as i32;
         self.untracked_count = status.untracked().count() as i32;
+        self.conflict_count = status.conflicted().count() as i32;
+        (self.op_step, self.op_steps) = match progress {
+            Some(p) => (p.current as i32, p.total as i32),
+            None => (0, 0),
+        };
         self.changed();
     }
 }

@@ -7,11 +7,14 @@
 //! cheap and non-blocking (the app bridge posts queued invocations to the
 //! Qt main thread).
 //!
-//! Reads run concurrently; writes take a session-wide lock so two commands
+//! Reads run concurrently; writes go through a single queue so two commands
 //! can never touch one repository's index or refs at the same time
-//! (実装計画 §2.3). Every write refreshes afterwards — including a failed
-//! one, because a command that stops halfway (a conflicted merge, an
-//! interrupted rebase) has still changed the repository.
+//! (実装計画 §2.3). A queue rather than a lock, because order is part of
+//! the contract: "stage this, now commit" must not run the other way round,
+//! and independently spawned tasks racing for a mutex give no such
+//! guarantee. Every write refreshes afterwards — including a failed one,
+//! because a command that stops halfway (a conflicted merge, an interrupted
+//! rebase) has still changed the repository.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -23,9 +26,11 @@ use tokio_util::sync::CancellationToken;
 
 use crate::branch::{self, CheckoutTarget};
 use crate::commit::{self, CommitOptions};
+use crate::conflict;
 use crate::details::{self, CommitDetails, DiffTarget};
 use crate::error::GitError;
 use crate::graph::{GraphBuilder, Segment};
+use crate::integrate;
 use crate::model::CommitMeta;
 use crate::oid::Oid;
 use crate::opstate::{self, OpState};
@@ -33,9 +38,11 @@ use crate::parse::diff::FilePatch;
 use crate::parse::log::{LOG_FORMAT_ARG, LogParser};
 use crate::patch::HunkSelect;
 use crate::process::{GitCommand, GitExecutor};
+use crate::publish;
 use crate::refs::{self, HeadState, RefEntry, RefKind};
 use crate::remote;
 use crate::repo::{self, RepoInfo};
+use crate::sequencer;
 use crate::stage;
 use crate::stash::{self, StashEntry};
 use crate::status::{self, WorkTreeStatus};
@@ -180,6 +187,13 @@ pub enum SessionEvent {
     StatusLoaded {
         status: WorkTreeStatus,
         op_state: OpState,
+        /// "commit N of M" while a rebase is stepping through commits.
+        progress: Option<conflict::Progress>,
+    },
+    /// Answer to [`RepoSession::check_publish`].
+    PublishChecked {
+        range: String,
+        state: publish::PublishState,
     },
     StashesLoaded {
         stashes: Vec<StashEntry>,
@@ -224,6 +238,25 @@ pub trait SessionSink: Send + Sync + 'static {
     fn event(&self, event: SessionEvent);
 }
 
+/// A queued write: what to run, what it invalidates, what to call it.
+struct WriteRequest {
+    op: &'static str,
+    after: AfterWrite,
+    #[expect(
+        clippy::type_complexity,
+        reason = "a boxed async job needs its shape spelled out"
+    )]
+    run: Box<
+        dyn FnOnce(
+                GitExecutor,
+                RepoInfo,
+                CancellationToken,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<(), GitError>> + Send>,
+            > + Send,
+    >,
+}
+
 /// Shared mutable state between the log task and refs joins.
 #[derive(Default)]
 struct Shared {
@@ -260,9 +293,8 @@ pub struct RepoSession {
     log_cancel: Mutex<Option<CancellationToken>>,
     /// Dirty working tree → the log stream prepends a synthetic WIP row.
     wip_dirty: std::sync::atomic::AtomicBool,
-    /// Serializes write commands within this repository (held across the
-    /// subprocess, hence tokio's mutex rather than std's).
-    write_lock: tokio::sync::Mutex<()>,
+    /// Submission end of the write queue (see the module docs).
+    write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,
     refs_gate: OpGate,
     status_gate: OpGate,
     stash_gate: OpGate,
@@ -278,6 +310,7 @@ impl RepoSession {
         path: PathBuf,
         sink: Arc<dyn SessionSink>,
     ) -> Arc<Self> {
+        let (write_tx, write_rx) = tokio::sync::mpsc::unbounded_channel();
         let session = Arc::new(Self {
             executor,
             runtime: runtime.clone(),
@@ -289,12 +322,13 @@ impl RepoSession {
             log_gen: AtomicU64::new(0),
             log_cancel: Mutex::new(None),
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
-            write_lock: tokio::sync::Mutex::new(()),
+            write_tx,
             refs_gate: OpGate::default(),
             status_gate: OpGate::default(),
             stash_gate: OpGate::default(),
             worktrees_gate: OpGate::default(),
         });
+        runtime.spawn(Arc::clone(&session).write_loop(write_rx));
 
         let s = Arc::clone(&session);
         runtime.spawn(async move {
@@ -551,10 +585,22 @@ impl RepoSession {
             let op = opstate::detect(&s.executor, &workdir, &cancel).await;
             match (status, op) {
                 (Ok(status), Ok(op_state)) => {
+                    // Only a stepping rebase has a counter to read, so the
+                    // common refresh costs nothing extra.
+                    let progress = if op_state.rebasing {
+                        conflict::rebase_progress(&s.executor, &workdir, &cancel)
+                            .await
+                            .unwrap_or_default()
+                    } else {
+                        None
+                    };
                     if s.status_gate.is_current(op_gen) {
                         s.update_wip(status.is_dirty());
-                        s.sink
-                            .event(SessionEvent::StatusLoaded { status, op_state });
+                        s.sink.event(SessionEvent::StatusLoaded {
+                            status,
+                            op_state,
+                            progress,
+                        });
                     }
                 }
                 (Err(e), _) | (_, Err(e)) => s.fail("status", e),
@@ -611,43 +657,66 @@ impl RepoSession {
     fn write<F, Fut>(self: &Arc<Self>, op: &'static str, after: AfterWrite, task: F)
     where
         F: FnOnce(GitExecutor, RepoInfo, CancellationToken) -> Fut + Send + 'static,
-        Fut: std::future::Future<Output = Result<(), GitError>> + Send,
+        Fut: std::future::Future<Output = Result<(), GitError>> + Send + 'static,
     {
+        let request = WriteRequest {
+            op,
+            after,
+            run: Box::new(move |exec, repo, cancel| Box::pin(task(exec, repo, cancel))),
+        };
+        // Enqueueing is synchronous, so the queue order is the order the UI
+        // asked in. Sending only fails once the session has shut down.
+        if self.write_tx.send(request).is_err() {
+            tracing::debug!(op, "write dropped: the session is closed");
+        }
+    }
+
+    /// Runs queued writes one at a time, in submission order.
+    async fn write_loop(
+        self: Arc<Self>,
+        mut queue: tokio::sync::mpsc::UnboundedReceiver<WriteRequest>,
+    ) {
+        loop {
+            let request = tokio::select! {
+                _ = self.root_cancel.cancelled() => return,
+                request = queue.recv() => match request {
+                    Some(request) => request,
+                    None => return,
+                },
+            };
+            self.run_write(request).await;
+        }
+    }
+
+    async fn run_write(self: &Arc<Self>, request: WriteRequest) {
+        let WriteRequest { op, after, run } = request;
         let Some(info) = self.repo_info() else {
+            tracing::debug!(op, "write dropped: no repository is open");
             return;
         };
-        let s = Arc::clone(self);
-        self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            let result = {
-                let guard = s.write_lock.lock().await;
-                s.sink.event(SessionEvent::WriteStarted { op });
-                let result = task(s.executor.clone(), info, cancel).await;
-                drop(guard);
-                result
-            };
-            match result {
-                Ok(()) => {
-                    s.sink
-                        .event(SessionEvent::WriteFinished { op, error: None });
-                    if after == AfterWrite::Graph {
-                        s.restart_log();
-                    }
-                    s.refresh_quick();
+        let cancel = self.root_cancel.clone();
+        self.sink.event(SessionEvent::WriteStarted { op });
+        match run(self.executor.clone(), info, cancel).await {
+            Ok(()) => {
+                self.sink
+                    .event(SessionEvent::WriteFinished { op, error: None });
+                if after == AfterWrite::Graph {
+                    self.restart_log();
                 }
-                Err(error) if error.is_cancelled() => {}
-                Err(error) => {
-                    tracing::warn!(op, %error, "write failed");
-                    s.sink.event(SessionEvent::WriteFinished {
-                        op,
-                        error: Some(error.to_string()),
-                    });
-                    // A half-finished command still changed the repository
-                    // (conflicted merge, interrupted rebase, partial apply).
-                    s.refresh_quick();
-                }
+                self.refresh_quick();
             }
-        });
+            Err(error) if error.is_cancelled() => {}
+            Err(error) => {
+                tracing::warn!(op, %error, "write failed");
+                self.sink.event(SessionEvent::WriteFinished {
+                    op,
+                    error: Some(error.to_string()),
+                });
+                // A half-finished command still changed the repository
+                // (conflicted merge, interrupted rebase, partial apply).
+                self.refresh_quick();
+            }
+        }
     }
 
     /// `git add` for whole files.
@@ -877,6 +946,128 @@ impl RepoSession {
                 .await
             },
         );
+    }
+
+    /// `git merge <rev>`.
+    pub fn merge(self: &Arc<Self>, rev: String, options: integrate::MergeOptions) {
+        self.write(
+            "merge",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                integrate::merge(&exec, &repo.workdir, &rev, &options, &cancel).await
+            },
+        );
+    }
+
+    /// `git rebase <upstream>`.
+    pub fn rebase(self: &Arc<Self>, upstream: String, options: integrate::RebaseOptions) {
+        self.write(
+            "rebase",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                integrate::rebase(&exec, &repo.workdir, &upstream, &options, &cancel).await
+            },
+        );
+    }
+
+    /// `git rebase --interactive` with a plan assembled in the UI. The todo
+    /// editor is the helper binary shipped beside the application.
+    pub fn rebase_interactive(
+        self: &Arc<Self>,
+        upstream: String,
+        steps: Vec<sequencer::RebaseStep>,
+        options: integrate::RebaseOptions,
+    ) {
+        self.write(
+            "rebase",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                let helper = sequencer::helper_path().map_err(|source| GitError::Io {
+                    command: "git rebase --interactive".to_string(),
+                    source,
+                })?;
+                sequencer::rebase_interactive(
+                    &exec, &repo, &upstream, &steps, &options, &helper, &cancel,
+                )
+                .await
+            },
+        );
+    }
+
+    /// `git cherry-pick <revs>`.
+    pub fn cherry_pick(self: &Arc<Self>, revs: Vec<String>) {
+        self.write(
+            "cherry-pick",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                integrate::cherry_pick(&exec, &repo.workdir, &revs, &cancel).await
+            },
+        );
+    }
+
+    /// `git revert <revs>`.
+    pub fn revert(self: &Arc<Self>, revs: Vec<String>) {
+        self.write(
+            "revert",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                integrate::revert(&exec, &repo.workdir, &revs, &cancel).await
+            },
+        );
+    }
+
+    /// Continues / aborts / skips whatever operation is in progress.
+    pub fn resolve_current(self: &Arc<Self>, continuation: integrate::Continuation) {
+        self.write(
+            "resolve",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                integrate::resolve_current(&exec, &repo.workdir, continuation, &cancel)
+                    .await
+                    .map(drop)
+            },
+        );
+    }
+
+    /// Resolves conflicted paths by taking one side wholesale.
+    pub fn take_side(self: &Arc<Self>, paths: Vec<String>, side: conflict::Side) {
+        self.write(
+            "resolve",
+            AfterWrite::Snapshots,
+            move |exec, repo, cancel| async move {
+                conflict::take_side(&exec, &repo.workdir, &paths, side, &cancel).await
+            },
+        );
+    }
+
+    /// Hands conflicted paths to `git mergetool` (empty = all of them).
+    ///
+    /// Runs under the write lock like any other write, which means it holds
+    /// the lock for as long as the user keeps the tool open.
+    pub fn mergetool(self: &Arc<Self>, paths: Vec<String>) {
+        self.write(
+            "mergetool",
+            AfterWrite::Snapshots,
+            move |exec, repo, cancel| async move {
+                conflict::mergetool(&exec, &repo.workdir, &paths, &cancel).await
+            },
+        );
+    }
+
+    /// Asks how much of `range` a remote already has, so the UI can warn
+    /// before rewriting published history. A read, not a write.
+    pub fn check_publish(self: &Arc<Self>, range: String) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            match publish::state_of(&s.executor, &workdir, &range, &cancel).await {
+                Ok(state) => s.sink.event(SessionEvent::PublishChecked { range, state }),
+                Err(e) => s.fail("publish", e),
+            }
+        });
     }
 
     /// Loads full details of one commit (metadata + changed files).

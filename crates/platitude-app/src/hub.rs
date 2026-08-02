@@ -42,6 +42,12 @@ pub enum TabMsg {
         op: String,
         running: bool,
     },
+    /// How much of a range a remote already has (rewrite warning).
+    Publish {
+        range: String,
+        total: i32,
+        published: i32,
+    },
 }
 
 /// Graph-model messages (log stream lifecycle).
@@ -73,6 +79,8 @@ pub enum GraphMsg {
 pub struct StatusMsg {
     pub status: WorkTreeStatus,
     pub op_state: OpState,
+    /// "commit N of M" while a rebase is stepping.
+    pub progress: Option<platitude_core::conflict::Progress>,
 }
 
 #[derive(Debug)]
@@ -231,14 +239,21 @@ impl SessionSink for BridgeSink {
                 self.feeds.refs_remotes.push_replace(snapshot.clone());
                 self.feeds.refs_tags.push_replace(snapshot);
             }
-            SessionEvent::StatusLoaded { status, op_state } => {
+            SessionEvent::StatusLoaded {
+                status,
+                op_state,
+                progress,
+            } => {
                 self.feeds.status_nav.push_replace(StatusMsg {
                     status: status.clone(),
                     op_state,
+                    progress,
                 });
-                self.feeds
-                    .status
-                    .push_replace(StatusMsg { status, op_state });
+                self.feeds.status.push_replace(StatusMsg {
+                    status,
+                    op_state,
+                    progress,
+                });
             }
             SessionEvent::StashesLoaded { stashes } => self.feeds.stash.push_replace(stashes),
             SessionEvent::WorktreesLoaded { worktrees } => {
@@ -251,6 +266,13 @@ impl SessionSink for BridgeSink {
             SessionEvent::OpFailed { op, error } => self.feeds.tab.push(TabMsg::OpError {
                 message: format!("{op}: {error}"),
             }),
+            SessionEvent::PublishChecked { range, state } => {
+                self.feeds.tab.push(TabMsg::Publish {
+                    range,
+                    total: state.total as i32,
+                    published: state.published() as i32,
+                });
+            }
             SessionEvent::WriteStarted { op } => self.feeds.tab.push(TabMsg::WriteState {
                 op: op.to_string(),
                 running: true,

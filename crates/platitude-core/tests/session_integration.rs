@@ -173,7 +173,9 @@ async fn open_streams_the_full_pipeline() {
 
     sink.wait_for("StatusLoaded", |evs| {
         evs.iter().find_map(|e| match e {
-            SessionEvent::StatusLoaded { status, op_state } => {
+            SessionEvent::StatusLoaded {
+                status, op_state, ..
+            } => {
                 assert_eq!(status.branch_head.as_deref(), Some("main"));
                 assert!(!op_state.any());
                 Some(())
@@ -570,6 +572,10 @@ async fn a_failed_write_reports_and_refreshes() {
 }
 
 /// The full local round trip through the session: stage, commit, branch.
+///
+/// Order is the point: committing before staging, or branching before
+/// committing, would produce a different repository. Serialization alone
+/// does not give this — the queue does.
 #[tokio::test(flavor = "multi_thread")]
 async fn stage_commit_and_branch_through_the_session() {
     let mut repo = TestRepo::init();
@@ -597,21 +603,142 @@ async fn stage_commit_and_branch_through_the_session() {
     );
     session.create_branch("feature".into(), None, true);
 
-    sink.wait_for("three writes finished", |evs| {
-        let done: Vec<&Option<String>> = evs
-            .iter()
-            .filter_map(|e| match e {
-                SessionEvent::WriteFinished { error, .. } => Some(error),
-                _ => None,
-            })
-            .collect();
-        (done.len() == 3).then(|| {
-            assert!(done.iter().all(|e| e.is_none()), "all succeeded: {done:?}");
+    let done = sink
+        .wait_for("three writes finished", |evs| {
+            let done: Vec<(&str, Option<String>)> = evs
+                .iter()
+                .filter_map(|e| match e {
+                    SessionEvent::WriteFinished { op, error } => Some((*op, error.clone())),
+                    _ => None,
+                })
+                .collect();
+            (done.len() == 3).then_some(done)
         })
-    })
-    .await;
+        .await;
+    assert!(
+        done.iter().all(|(_, error)| error.is_none()),
+        "all succeeded: {done:?}"
+    );
+    assert_eq!(
+        done.iter().map(|(op, _)| *op).collect::<Vec<_>>(),
+        vec!["stage", "commit", "branch"],
+        "they ran in the order they were asked for"
+    );
 
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "add new file");
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "feature");
+    session.close();
+}
+
+/// A conflicting rebase driven through the session: the failure is
+/// reported, the status refresh carries the step counter, and the abort
+/// lands through the same write path.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "base\n", "root");
+    repo.git(&["checkout", "-b", "topic"]);
+    repo.commit_file("f.txt", "topic\n", "topic change");
+    repo.commit_file("g.txt", "extra\n", "topic extra");
+    repo.git(&["checkout", "main"]);
+    repo.commit_file("f.txt", "main\n", "main change");
+    repo.git(&["checkout", "topic"]);
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    sink.wait_for("Opened", |evs| {
+        evs.iter()
+            .any(|e| matches!(e, SessionEvent::Opened { .. }))
+            .then_some(())
+    })
+    .await;
+
+    session.rebase(
+        "main".into(),
+        platitude_core::integrate::RebaseOptions::default(),
+    );
+
+    let error = sink
+        .wait_for("rebase reported", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::WriteFinished {
+                    op: "rebase",
+                    error,
+                } => Some(error.clone()),
+                _ => None,
+            })
+        })
+        .await;
+    assert!(error.is_some(), "the conflict is reported as a failure");
+
+    // The refresh that follows a failed write carries the step counter.
+    let progress = sink
+        .wait_for("progress in a status refresh", |evs| {
+            evs.iter().rev().find_map(|e| match e {
+                SessionEvent::StatusLoaded {
+                    progress: Some(p),
+                    op_state,
+                    ..
+                } if op_state.rebasing => Some(*p),
+                _ => None,
+            })
+        })
+        .await;
+    assert_eq!((progress.current, progress.total), (1, 2));
+
+    session.resolve_current(platitude_core::integrate::Continuation::Abort);
+    sink.wait_for("clean again", |evs| {
+        evs.iter().rev().find_map(|e| match e {
+            SessionEvent::StatusLoaded {
+                op_state, progress, ..
+            } if !op_state.any() && progress.is_none() => Some(()),
+            _ => None,
+        })
+    })
+    .await;
+    assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "topic extra");
+    session.close();
+}
+
+/// The publish check answers through its own event, so a UI can warn
+/// before rewriting history a remote already has.
+#[tokio::test(flavor = "multi_thread")]
+async fn publish_check_answers_through_the_session() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.commit_file("b.txt", "two\n", "second");
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    sink.wait_for("Opened", |evs| {
+        evs.iter()
+            .any(|e| matches!(e, SessionEvent::Opened { .. }))
+            .then_some(())
+    })
+    .await;
+
+    session.check_publish("HEAD~1..HEAD".into());
+    let state = sink
+        .wait_for("PublishChecked", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::PublishChecked { range, state } if range == "HEAD~1..HEAD" => {
+                    Some(*state)
+                }
+                _ => None,
+            })
+        })
+        .await;
+    assert_eq!(state.total, 1);
+    assert!(!state.rewrites_published(), "nothing is on a remote");
     session.close();
 }
