@@ -957,6 +957,22 @@ ApplicationWindow {
                     // -- graph --
                     Rectangle {
                         color: Theme.bgSurface
+                        // Divider hover-lines live under the list so the
+                        // message ticks and lane strokes stay in front.
+                        Rectangle {
+                            x: labelDivider.x + Theme.borderWidth
+                            width: Theme.splitterWidth - 2 * Theme.borderWidth
+                            height: parent.height
+                            color: Theme.borderStrong
+                            visible: labelDivider.containsMouse || labelDivider.pressed
+                        }
+                        Rectangle {
+                            x: graphDivider.x + Theme.borderWidth
+                            width: Theme.splitterWidth - 2 * Theme.borderWidth
+                            height: parent.height
+                            color: Theme.borderStrong
+                            visible: graphDivider.containsMouse || graphDivider.pressed
+                        }
                         ListView {
                             id: graphList
                             anchors.fill: parent
@@ -1206,13 +1222,6 @@ ApplicationWindow {
                                 page.labelWManual = Math.max(Theme.spaceXxl,
                                     Math.min(nx, graphArea.width - 2 * Theme.spaceXxl))
                             }
-                            Rectangle {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.borderWidth
-                                anchors.rightMargin: Theme.borderWidth
-                                color: Theme.borderStrong
-                                visible: labelDivider.containsMouse || labelDivider.pressed
-                            }
                         }
                         MouseArea {
                             id: graphDivider
@@ -1234,13 +1243,6 @@ ApplicationWindow {
                                 page.graphColWManual = Math.max(root.laneInset + root.laneW,
                                     Math.min(nx - page.labelW,
                                              graphArea.width - page.labelW - 2 * Theme.spaceXxl))
-                            }
-                            Rectangle {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.borderWidth
-                                anchors.rightMargin: Theme.borderWidth
-                                color: Theme.borderStrong
-                                visible: graphDivider.containsMouse || graphDivider.pressed
                             }
                         }
                         // Horizontal scroll of the lanes when the full graph
