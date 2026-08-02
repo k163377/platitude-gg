@@ -269,9 +269,7 @@ ApplicationWindow {
                                     elide: Text.ElideRight
                                     Layout.maximumWidth: 180
                                     Layout.fillHeight: true
-                                    // Hugging the underline; air on top.
-                                    verticalAlignment: Text.AlignBottom
-                                    bottomPadding: Theme.spaceXs + 2 * Theme.borderWidth
+                                    verticalAlignment: Text.AlignVCenter
                                     font.weight: tabItem.current ? Font.DemiBold : Font.Normal
                                     color: tabItem.current ? Theme.textPrimary
                                                            : Theme.textSecondary
@@ -279,8 +277,7 @@ ApplicationWindow {
                                 ToolButton {
                                     text: "×"
                                     padding: 0
-                                    Layout.alignment: Qt.AlignBottom
-                                    Layout.bottomMargin: Theme.spaceXs
+                                    Layout.alignment: Qt.AlignVCenter
                                     implicitWidth: Theme.iconLg
                                     implicitHeight: Theme.iconLg
                                     onClicked: tabsModel.closeTab(tabItem.tab_id)
