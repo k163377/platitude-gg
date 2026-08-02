@@ -1,0 +1,74 @@
+# ネットワーク非通信 baseline 実測（Windows x64）— Phase 0
+
+実装計画 §11.2 の CI 照合の元データ。P0 スパイク（`spike/`）の windeployqt 配布物を実測したもの。
+P5 でリリース workflow の allowlist 照合スクリプトがこのデータを pin する。
+
+- 計測対象: `pg_spike.exe`（qtbridge 0.2.0 / Qt 6.10.3 msvc2022_64 / rustc 1.97.1, release）
+- deploy コマンド: `windeployqt --release --compiler-runtime --no-translations --qmldir spike/src <exe>`
+- 検査コマンド: `dumpbin /imports <exe>` / `dumpbin /dependents <dll>`（VS 2022 Build Tools）
+- 配布物: 217 ファイル / 約111MB（qml/ の .qml 資材・vc_redist 含む）
+
+## 1. 実行ファイル自身の import table（DLL 名のみ）
+
+```
+kernel32.dll  KERNEL32.dll  ntdll.dll
+bcryptprimitives.dll            ← Rust std の乱数(BCryptGenRandom)。通信機能ではない
+api-ms-win-core-synch-l1-2-0.dll
+Qt6Core.dll  Qt6Gui.dll  Qt6Qml.dll
+VCRUNTIME140.dll  api-ms-win-crt-{runtime,heap,math,stdio,locale}-l1-1-0.dll
+```
+
+**assert（アプリ自身の主張）**: exe の import table に
+`Qt6Network.dll` / `WS2_32.dll` / `winhttp.dll` / `wininet.dll` は**含まれない**。
+
+## 2. 同梱 Qt DLL の推移的依存（要点）
+
+| DLL | ネットワーク関連の依存 |
+|---|---|
+| Qt6Qml.dll | **Qt6Network.dll（ハードインポート）** |
+| Qt6Quick.dll | **Qt6Network.dll(ハードインポート)** |
+| Qt6Core.dll | **WS2_32.dll**（OS の socket API） |
+| Qt6Gui.dll | なし（d3d11/dxgi/d3d12 等の描画系のみ) |
+
+### 帰結（§11.2 の invariant 修正が必要）
+
+計画の「**Qt6Network を同梱しない**」は Qt Quick 構成では**成立しない**
+（Qt6Qml/Qt6Quick がロード時に要求するため、DLL を除くと起動不能になる）。
+主張は以下の形に修正する:
+
+1. アプリ**自身**のバイナリはネットワーク系 DLL をインポートしない（§1 を baseline に pin）
+2. Qt6Network.dll は Qt6Qml/Qt6Quick のロード時依存としてのみ同梱される。
+   アプリコード・QML から QtNetwork API（`XMLHttpRequest`、`Image { source: "http://..." }` 等）を使わないことは
+   静的 grep + 動的オフラインテスト（§11.3）で担保する
+3. ネットワーク系**プラグイン**は同梱しない（下記の除外候補を P5 の deploy スクリプトで除外し、除外後の起動を検証する）
+
+## 3. 同梱 DLL / プラグイン一覧（P5 allowlist の種）
+
+トップレベル:
+```
+pg_spike.exe  vc_redist.x64.exe
+Qt6Core / Qt6Gui / Qt6Network / Qt6OpenGL / Qt6Qml / Qt6QmlMeta / Qt6QmlModels /
+Qt6QmlWorkerScript / Qt6Quick / Qt6QuickControls2 / Qt6QuickControls2Basic /
+Qt6QuickControls2BasicStyleImpl / Qt6QuickControls2Fusion / Qt6QuickControls2FusionStyleImpl /
+Qt6QuickControls2Impl / Qt6QuickLayouts / Qt6QuickShapes / Qt6QuickTemplates2 / Qt6Svg (.dll)
+icuuc.dll  d3dcompiler_47.dll  dxcompiler.dll  dxil.dll  opengl32sw.dll
+```
+
+プラグイン:
+```
+generic\qtuiotouchplugin.dll
+iconengines\qsvgicon.dll
+imageformats\{qgif,qico,qjpeg,qsvg}.dll
+platforms\qwindows.dll
+networkinformation\qnetworklistmanager.dll   ← 除外候補（QtNetwork 利用時のみ意味を持つ）
+tls\{qcertonlybackend,qschannelbackend}.dll  ← 除外候補（同上）
+qmltooling\qmldbg_*.dll（11個, qmldbg_tcp 含む） ← 除外候補（QML デバッガ。リリース配布に不要）
+qml\**\*plugin.dll（QtQuick/QtQml の QML モジュール群 12個）
+```
+
+除外は `windeployqt --skip-plugin-types networkinformation,tls,qmltooling` で可能（P5 で採用判断・起動検証）。
+
+## 4. 補足
+
+- mac / Linux の baseline は Phase 1 の CI 初回ビルドで取得する（計画 §3 S6 注記）
+- 本ファイルの数値・一覧を更新する場合は、必ず実測（上記コマンド）とセットで行うこと
