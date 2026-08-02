@@ -17,6 +17,9 @@ fn env() -> (GitExecutor, CancellationToken) {
     (GitExecutor::new(), CancellationToken::new())
 }
 
+/// A `file://` remote answers instantly; the budget just has to exist.
+const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
+
 /// A bare repository serving as `origin`, plus a working clone of it.
 fn origin_and_clone() -> (TestRepo, TestRepo) {
     let mut seed = TestRepo::init();
@@ -206,6 +209,7 @@ async fn push_then_fetch_moves_commits_between_repositories() {
             set_upstream: true,
             force: PushForce::None,
         },
+        NET,
         &cancel,
     )
     .await
@@ -225,7 +229,7 @@ async fn push_then_fetch_moves_commits_between_repositories() {
     // A third repository fetches what was pushed.
     let mut other = TestRepo::init();
     other.git(&["remote", "add", "origin", &bare.file_url()]);
-    remote::fetch(&exec, &other.path, Some("origin"), &cancel)
+    remote::fetch(&exec, &other.path, Some("origin"), NET, &cancel)
         .await
         .expect("fetch");
     assert_eq!(
@@ -256,7 +260,7 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
         set_upstream: false,
         force: PushForce::None,
     };
-    let err = remote::push(&exec, &work.path, &spec, &cancel)
+    let err = remote::push(&exec, &work.path, &spec, NET, &cancel)
         .await
         .expect_err("non-fast-forward");
     assert!(
@@ -272,7 +276,7 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
         },
         ..spec.clone()
     };
-    remote::push(&exec, &work.path, &leased, &cancel)
+    remote::push(&exec, &work.path, &leased, NET, &cancel)
         .await
         .expect_err("stale lease");
 
@@ -281,7 +285,7 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
         force: PushForce::Force,
         ..spec
     };
-    remote::push(&exec, &work.path, &forced, &cancel)
+    remote::push(&exec, &work.path, &forced, NET, &cancel)
         .await
         .expect("forced push");
     assert_eq!(
@@ -307,18 +311,19 @@ async fn deleting_a_remote_branch_prunes_on_the_next_fetch() {
             set_upstream: false,
             force: PushForce::None,
         },
+        NET,
         &cancel,
     )
     .await
     .expect("push temp");
     assert!(bare.git(&["branch", "--list"]).contains("temp"));
 
-    remote::delete_remote_branch(&exec, &work.path, "origin", "temp", &cancel)
+    remote::delete_remote_branch(&exec, &work.path, "origin", "temp", NET, &cancel)
         .await
         .expect("delete remote branch");
     assert!(!bare.git(&["branch", "--list"]).contains("temp"));
 
-    remote::fetch(&exec, &work.path, Some("origin"), &cancel)
+    remote::fetch(&exec, &work.path, Some("origin"), NET, &cancel)
         .await
         .expect("fetch --prune");
     assert!(

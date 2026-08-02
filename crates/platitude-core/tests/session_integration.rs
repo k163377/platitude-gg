@@ -742,3 +742,57 @@ async fn publish_check_answers_through_the_session() {
     assert!(!state.rewrites_published(), "nothing is on a remote");
     session.close();
 }
+
+/// A write rebuilds the graph exactly once. Committing turns a dirty tree
+/// clean, which removes the WIP row; reacting to that separately from the
+/// write itself would stream the whole graph twice for one action.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_write_rebuilds_the_graph_once() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("root.txt", "0\n", "root");
+    repo.write_file("new.txt", "content\n");
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    // Wait for the tree to be seen as dirty, so the WIP row is on screen
+    // and the commit below is the transition that removes it.
+    sink.wait_for("dirty tree", |evs| {
+        evs.iter()
+            .any(|e| matches!(e, SessionEvent::StatusLoaded { status, .. } if status.is_dirty()))
+            .then_some(())
+    })
+    .await;
+    let before = sink.count(|e| matches!(e, SessionEvent::LogStarted { .. }));
+
+    session.stage_all();
+    session.commit(
+        "add new file".into(),
+        platitude_core::commit::CommitOptions::default(),
+    );
+    sink.wait_for("both writes finished", |evs| {
+        (sink_finished(evs) == 2).then_some(())
+    })
+    .await;
+    // Nothing else is running now; give any stray rebuild time to appear.
+    tokio::time::sleep(Duration::from_millis(400)).await;
+
+    let started = sink.count(|e| matches!(e, SessionEvent::LogStarted { .. })) - before;
+    // Tags are on by default, so one rebuild is a fast pass plus the
+    // tag-inclusive swap: two LogStarted per rebuild, and staging (which
+    // leaves the tree dirty) does not trigger one at all.
+    assert_eq!(started, 2, "one rebuild for the commit, none for staging");
+    session.close();
+}
+
+/// Counts finished writes in an event list.
+fn sink_finished(events: &[SessionEvent]) -> usize {
+    events
+        .iter()
+        .filter(|e| matches!(e, SessionEvent::WriteFinished { .. }))
+        .count()
+}

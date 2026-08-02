@@ -295,6 +295,8 @@ pub struct RepoSession {
     wip_dirty: std::sync::atomic::AtomicBool,
     /// Submission end of the write queue (see the module docs).
     write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,
+    /// Time budget for fetch / push (settings, Phase 4, persist this).
+    network_timeout: Mutex<std::time::Duration>,
     refs_gate: OpGate,
     status_gate: OpGate,
     stash_gate: OpGate,
@@ -323,6 +325,7 @@ impl RepoSession {
             log_cancel: Mutex::new(None),
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
             write_tx,
+            network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
             refs_gate: OpGate::default(),
             status_gate: OpGate::default(),
             stash_gate: OpGate::default(),
@@ -358,6 +361,25 @@ impl RepoSession {
     /// Resolved repository paths (None until `Opened`).
     pub fn repo_info(&self) -> Option<RepoInfo> {
         self.lock_info().clone()
+    }
+
+    /// Time budget for fetch / push.
+    pub fn network_timeout(&self) -> std::time::Duration {
+        match self.network_timeout.lock() {
+            Ok(g) => *g,
+            Err(e) => *e.into_inner(),
+        }
+    }
+
+    /// Raises or lowers the fetch / push time budget. Zero is ignored — a
+    /// network command must always have a backstop.
+    pub fn set_network_timeout(&self, timeout: std::time::Duration) {
+        if timeout.is_zero() {
+            return;
+        }
+        if let Ok(mut guard) = self.network_timeout.lock() {
+            *guard = timeout;
+        }
     }
 
     /// Cancels everything this session is doing. Idempotent.
@@ -574,38 +596,65 @@ impl RepoSession {
     }
 
     pub fn refresh_status(self: &Arc<Self>) {
-        let Some(workdir) = self.workdir() else {
-            return;
-        };
         let s = Arc::clone(self);
-        let op_gen = self.status_gate.begin();
         self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            let status = status::load(&s.executor, &workdir, &cancel).await;
-            let op = opstate::detect(&s.executor, &workdir, &cancel).await;
-            match (status, op) {
-                (Ok(status), Ok(op_state)) => {
-                    // Only a stepping rebase has a counter to read, so the
-                    // common refresh costs nothing extra.
-                    let progress = if op_state.rebasing {
-                        conflict::rebase_progress(&s.executor, &workdir, &cancel)
-                            .await
-                            .unwrap_or_default()
-                    } else {
-                        None
-                    };
-                    if s.status_gate.is_current(op_gen) {
-                        s.update_wip(status.is_dirty());
-                        s.sink.event(SessionEvent::StatusLoaded {
-                            status,
-                            op_state,
-                            progress,
-                        });
-                    }
-                }
-                (Err(e), _) | (_, Err(e)) => s.fail("status", e),
+            // An external change (another tool, the terminal) can make the
+            // tree dirty or clean, which adds or removes the WIP row.
+            if s.publish_status().await {
+                s.restart_log();
             }
         });
+    }
+
+    /// Loads status + op state and publishes them, returning whether
+    /// working-tree dirtiness flipped.
+    ///
+    /// Does not rebuild the graph itself: after a write the caller knows
+    /// whether it needs one anyway, and rebuilding on both counts would do
+    /// it twice.
+    async fn publish_status(self: &Arc<Self>) -> bool {
+        let Some(workdir) = self.workdir() else {
+            return false;
+        };
+        let op_gen = self.status_gate.begin();
+        let cancel = self.root_cancel.clone();
+        let status = status::load(&self.executor, &workdir, &cancel).await;
+        let op = opstate::detect(&self.executor, &workdir, &cancel).await;
+        match (status, op) {
+            (Ok(status), Ok(op_state)) => {
+                // Only a stepping rebase has a counter to read, so the
+                // common refresh costs nothing extra.
+                let progress = if op_state.rebasing {
+                    conflict::rebase_progress(&self.executor, &workdir, &cancel)
+                        .await
+                        .unwrap_or_default()
+                } else {
+                    None
+                };
+                if !self.status_gate.is_current(op_gen) {
+                    return false;
+                }
+                let dirty = status.is_dirty();
+                let flipped = self.wip_dirty.swap(dirty, Ordering::SeqCst) != dirty;
+                self.sink.event(SessionEvent::StatusLoaded {
+                    status,
+                    op_state,
+                    progress,
+                });
+                flipped
+            }
+            (Err(e), _) | (_, Err(e)) => {
+                self.fail("status", e);
+                false
+            }
+        }
+    }
+
+    /// Everything [`RepoSession::refresh_quick`] covers except status.
+    fn refresh_side_snapshots(self: &Arc<Self>) {
+        self.refresh_refs();
+        self.refresh_stashes();
+        self.refresh_worktrees();
     }
 
     pub fn refresh_stashes(self: &Arc<Self>) {
@@ -696,16 +745,14 @@ impl RepoSession {
         };
         let cancel = self.root_cancel.clone();
         self.sink.event(SessionEvent::WriteStarted { op });
-        match run(self.executor.clone(), info, cancel).await {
+        let result = run(self.executor.clone(), info, cancel).await;
+        let rebuild_graph = match result {
             Ok(()) => {
                 self.sink
                     .event(SessionEvent::WriteFinished { op, error: None });
-                if after == AfterWrite::Graph {
-                    self.restart_log();
-                }
-                self.refresh_quick();
+                after == AfterWrite::Graph
             }
-            Err(error) if error.is_cancelled() => {}
+            Err(error) if error.is_cancelled() => return,
             Err(error) => {
                 tracing::warn!(op, %error, "write failed");
                 self.sink.event(SessionEvent::WriteFinished {
@@ -713,10 +760,20 @@ impl RepoSession {
                     error: Some(error.to_string()),
                 });
                 // A half-finished command still changed the repository
-                // (conflicted merge, interrupted rebase, partial apply).
-                self.refresh_quick();
+                // (conflicted merge, interrupted rebase, partial apply),
+                // but it did not move history the way it meant to.
+                false
             }
+        };
+
+        // Settle the working tree before touching the graph: the WIP row
+        // exists only while the tree is dirty, so rebuilding first and then
+        // reacting to the status would rebuild twice for one write.
+        let wip_flipped = self.publish_status().await;
+        if rebuild_graph || wip_flipped {
+            self.restart_log();
         }
+        self.refresh_side_snapshots();
     }
 
     /// `git add` for whole files.
@@ -910,28 +967,31 @@ impl RepoSession {
 
     /// `git fetch --prune`; `None` fetches every remote.
     pub fn fetch(self: &Arc<Self>, remote: Option<String>) {
+        let timeout = self.network_timeout();
         self.write(
             "fetch",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                remote::fetch(&exec, &repo.workdir, remote.as_deref(), &cancel).await
+                remote::fetch(&exec, &repo.workdir, remote.as_deref(), timeout, &cancel).await
             },
         );
     }
 
     /// `git push` for one branch.
     pub fn push(self: &Arc<Self>, spec: remote::PushSpec) {
+        let timeout = self.network_timeout();
         self.write(
             "push",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                remote::push(&exec, &repo.workdir, &spec, &cancel).await
+                remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await
             },
         );
     }
 
     /// `git push <remote> --delete <branch>`.
     pub fn delete_remote_branch(self: &Arc<Self>, remote_name: String, branch_name: String) {
+        let timeout = self.network_timeout();
         self.write(
             "push",
             AfterWrite::Graph,
@@ -941,6 +1001,7 @@ impl RepoSession {
                     &repo.workdir,
                     &remote_name,
                     &branch_name,
+                    timeout,
                     &cancel,
                 )
                 .await
@@ -1350,14 +1411,6 @@ impl RepoSession {
             out.push(row);
         }
         Ok(())
-    }
-
-    /// Records the working-tree dirtiness; an edge restarts the log so
-    /// the synthetic WIP row appears/disappears with proper lanes.
-    fn update_wip(self: &Arc<Self>, dirty: bool) {
-        if self.wip_dirty.swap(dirty, Ordering::SeqCst) != dirty {
-            self.restart_log();
-        }
     }
 
     /// Sends the synthetic WIP row (dirty working tree) as its own chunk.

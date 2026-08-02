@@ -5,10 +5,10 @@
 //! is git's (`GIT_TERMINAL_PROMPT=0` keeps a missing credential helper from
 //! hanging the process instead of failing).
 //!
-//! Network commands get a generous timeout rather than none: a wedged
-//! connection must not leave a subprocess running forever, but a large
-//! fetch must not be cut short either. Cancellation is the normal way to
-//! stop one early.
+//! Network commands take a timeout rather than running unbounded: a wedged
+//! connection must not leave a subprocess running forever. Cancellation is
+//! the normal way to stop one early; the timeout is the backstop for a
+//! connection that neither finishes nor fails.
 
 use std::path::Path;
 use std::time::Duration;
@@ -18,8 +18,12 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-/// Time budget for commands that talk to a remote.
-pub const NETWORK_TIMEOUT: Duration = Duration::from_secs(600);
+/// Default time budget for commands that talk to a remote.
+///
+/// Three minutes covers an ordinary fetch of a large repository over a slow
+/// link without leaving a hung connection running for an hour. A user on a
+/// genuinely slow line can raise it (the setting is persisted in Phase 4).
+pub const DEFAULT_NETWORK_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// A configured remote.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -111,12 +115,13 @@ pub async fn fetch(
     executor: &GitExecutor,
     workdir: &Path,
     remote: Option<&str>,
+    timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["fetch", "--prune"])
-        .timeout(NETWORK_TIMEOUT);
+        .timeout(timeout);
     let cmd = match remote {
         Some(name) => cmd.args(["--", name]),
         None => cmd.arg("--all"),
@@ -156,12 +161,10 @@ pub async fn push(
     executor: &GitExecutor,
     workdir: &Path,
     spec: &PushSpec,
+    timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let mut cmd = GitCommand::new()
-        .cwd(workdir)
-        .arg("push")
-        .timeout(NETWORK_TIMEOUT);
+    let mut cmd = GitCommand::new().cwd(workdir).arg("push").timeout(timeout);
     if spec.set_upstream {
         cmd = cmd.arg("--set-upstream");
     }
@@ -185,12 +188,13 @@ pub async fn delete_remote_branch(
     workdir: &Path,
     remote: &str,
     branch: &str,
+    timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["push", "--delete", "--", remote, branch])
-        .timeout(NETWORK_TIMEOUT);
+        .timeout(timeout);
     executor.run(cmd, cancel).await.map(|_| ())
 }
 
