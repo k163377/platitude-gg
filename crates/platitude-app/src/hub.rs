@@ -398,6 +398,15 @@ impl Hub {
         }
     }
 
+    /// Re-reads the author configuration of every open tab. Each session
+    /// caches what it read when the repository opened, so a write made
+    /// outside them (the app-level identity screen) leaves them stale.
+    pub fn refresh_authors(&self) {
+        for tab in self.tabs.values() {
+            tab.session.refresh_author();
+        }
+    }
+
     pub fn session(&self, id: i32) -> Option<Arc<RepoSession>> {
         self.tabs.get(&id).map(|t| Arc::clone(&t.session))
     }

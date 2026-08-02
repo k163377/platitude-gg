@@ -60,6 +60,17 @@ ApplicationWindow {
     property int focusEpoch: 0
     onActiveChanged: if (active) focusEpoch++
 
+    // Identity setup screen: shown on startup when git has no name and
+    // email to put on a commit, and on demand from the app menu or the
+    // toolbar badge. "Not now" leaves the app fully usable — reading a
+    // repository needs no identity.
+    property bool identityDismissed: false
+    property bool identityEditing: false
+    readonly property bool identityWanted: AppBackend.gitState === "ok"
+                                           && (identityEditing
+                                               || (AppBackend.identityState === "missing"
+                                                   && !identityDismissed))
+
     // Frame counter for the scroll benchmark (PG_AUTO_SCROLL=1).
     property int frameCounter: 0
     onFrameSwapped: frameCounter++
@@ -117,7 +128,10 @@ ApplicationWindow {
         interval: AppBackend.autoQuitMs > 800 ? AppBackend.autoQuitMs - 800 : 3500
         onTriggered: {
             const path = AppBackend.shotDir + "/app.png"
-            const ok = mainUi.grabToImage(function (res) {
+            // Whatever is on screen: the identity screen takes the window
+            // over while it is up (a grab only sees its own subtree).
+            const target = identityScreen.visible ? identityScreen : mainUi
+            const ok = target.grabToImage(function (res) {
                 const saved = res.saveToFile(path)
                 console.warn("screenshot saved=" + saved + " path=" + path)
                 if (AppBackend.autoQuitMs <= 0)
@@ -165,12 +179,170 @@ ApplicationWindow {
         }
     }
 
+    // ---- identity gate ---------------------------------------------------
+    Item {
+        id: identityScreen
+        anchors.fill: parent
+        visible: root.identityWanted
+
+        // A write is in flight that this screen asked for. Only then does
+        // a finished write close it — the notification is shared with the
+        // startup check, which must not close the screen under the user.
+        property bool saving: false
+
+        function submit() {
+            if (!saveButton.enabled)
+                return
+            identityScreen.saving = true
+            AppBackend.saveIdentity(nameField.text, emailField.text)
+        }
+
+        onVisibleChanged: {
+            if (!visible)
+                return
+            nameField.text = AppBackend.identityName
+            emailField.text = AppBackend.identityEmail
+            nameField.forceActiveFocus()
+            // Next tick: this handler runs inside the evaluation of the
+            // binding it would answer, and Qt reports that round trip as a
+            // binding loop.
+            if (AppBackend.autoIdentity !== "")
+                Qt.callLater(identityScreen.applyAutoIdentity)
+        }
+
+        // Screenshot hook: PG_AUTO_IDENTITY="<name>|<email>" fills the
+        // fields, PG_AUTO_IDENTITY_SAVE=1 submits them, and "skip" answers
+        // "Not now" to show the state behind this screen.
+        function applyAutoIdentity() {
+            if (AppBackend.autoIdentity === "skip") {
+                root.identityEditing = false
+                root.identityDismissed = true
+                return
+            }
+            const parts = AppBackend.autoIdentity.split("|")
+            nameField.text = parts[0]
+            emailField.text = parts.length > 1 ? parts[1] : ""
+            if (AppBackend.autoIdentitySave)
+                identityScreen.submit()
+        }
+
+        Connections {
+            target: AppBackend
+            function onIdentityChanged() {
+                if (!identityScreen.saving || AppBackend.identityBusy)
+                    return
+                identityScreen.saving = false
+                if (AppBackend.identityError === "")
+                    root.identityEditing = false
+            }
+        }
+
+        // This is a screen rather than a panel over the app, so it brings
+        // its own background instead of dimming what is behind it.
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.bgBase
+        }
+
+        Column {
+            anchors.centerIn: parent
+            width: Math.min(640, root.width - 2 * Theme.spaceXxl)
+            spacing: Theme.spaceLg
+
+            Label {
+                text: AppBackend.identityState === "ready" ? qsTr("Your identity")
+                                                           : qsTr("Set up your identity")
+                font.pixelSize: Theme.fontXl
+                font.weight: Font.DemiBold
+            }
+            Label {
+                width: parent.width
+                wrapMode: Text.Wrap
+                color: Theme.textSecondary
+                text: qsTr("git records a name and an email address on every commit you "
+                           + "make. They are stored in your git configuration — "
+                           + "platitude-gg keeps no copy of them.")
+            }
+
+            Column {
+                width: parent.width
+                spacing: Theme.spaceXs
+                Label {
+                    text: qsTr("Name")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSm
+                }
+                FormField {
+                    id: nameField
+                    width: parent.width
+                    placeholderText: qsTr("Ada Lovelace")
+                    onAccepted: identityScreen.submit()
+                }
+            }
+            Column {
+                width: parent.width
+                spacing: Theme.spaceXs
+                Label {
+                    text: qsTr("Email address")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSm
+                }
+                FormField {
+                    id: emailField
+                    width: parent.width
+                    placeholderText: qsTr("ada@example.com")
+                    onAccepted: identityScreen.submit()
+                }
+            }
+
+            Label {
+                width: parent.width
+                wrapMode: Text.Wrap
+                color: Theme.textMuted
+                font.pixelSize: Theme.fontSm
+                text: qsTr("Saved for every repository on this computer "
+                           + "(user.name and user.email).")
+            }
+            // git's own message, unedited.
+            Label {
+                width: parent.width
+                visible: AppBackend.identityError !== ""
+                wrapMode: Text.Wrap
+                color: Theme.danger
+                text: AppBackend.identityError
+            }
+
+            Row {
+                anchors.right: parent.right
+                spacing: Theme.spaceSm
+                Button {
+                    implicitHeight: Theme.controlHeight
+                    text: root.identityEditing ? qsTr("Cancel") : qsTr("Not now")
+                    onClicked: {
+                        root.identityEditing = false
+                        root.identityDismissed = true
+                    }
+                }
+                Button {
+                    id: saveButton
+                    implicitHeight: Theme.controlHeight
+                    highlighted: true
+                    text: AppBackend.identityBusy ? qsTr("Saving…") : qsTr("Save")
+                    enabled: !AppBackend.identityBusy
+                             && nameField.text.trim() !== ""
+                             && emailField.text.trim() !== ""
+                    onClicked: identityScreen.submit()
+                }
+            }
+        }
+    }
+
     // ---- main ------------------------------------------------------------
     ColumnLayout {
         id: mainUi
         anchors.fill: parent
         spacing: 0
-        visible: AppBackend.gitState === "ok"
+        visible: AppBackend.gitState === "ok" && !root.identityWanted
 
         // Top toolbar: prominent tabs and the per-repository controls
         // share one row.
@@ -206,6 +378,10 @@ ApplicationWindow {
                             enabled: false
                         }
                         MenuSeparator {}
+                        MenuItem {
+                            text: qsTr("Identity…")
+                            onTriggered: root.identityEditing = true
+                        }
                         MenuItem {
                             text: qsTr("Settings…")
                             enabled: false
@@ -325,6 +501,36 @@ ApplicationWindow {
                         color: Theme.textOnAccent
                         font.pixelSize: Theme.fontSm
                         font.weight: Font.DemiBold
+                    }
+                }
+                // Nothing to attribute commits to. Kept next to the other
+                // repository-state badges so the way back to the setup
+                // screen stays visible after "Not now".
+                Rectangle {
+                    visible: AppBackend.identityState === "missing"
+                             || (root.curPage !== null
+                                 && !root.curPage.pageTab.identityReady)
+                    color: "transparent"
+                    border.color: Theme.warning
+                    border.width: Theme.borderWidth
+                    radius: Theme.radiusSm
+                    implicitHeight: Theme.iconLg
+                    implicitWidth: identityBadge.implicitWidth + 2 * Theme.spaceXs
+                    Label {
+                        id: identityBadge
+                        anchors.centerIn: parent
+                        text: qsTr("SET IDENTITY")
+                        color: Theme.warning
+                        font.pixelSize: Theme.fontSm
+                        font.weight: Font.DemiBold
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: root.identityEditing = true
+                        ToolTip.visible: containsMouse
+                        ToolTip.delay: 600
+                        ToolTip.text: qsTr("git has no name or email to record on commits")
                     }
                 }
                 Label {
@@ -2890,6 +3096,24 @@ ApplicationWindow {
             color: Theme.bgBase
             radius: Theme.radiusSm
             border.color: slim.activeFocus ? Theme.borderFocus : Theme.borderDefault
+            border.width: Theme.borderWidth
+        }
+    }
+
+    // The same frame at the height buttons and combo boxes use: for form
+    // input rather than the toolbar's slim filters.
+    component FormField: TextField {
+        id: form
+        implicitHeight: Theme.controlHeight
+        font.pixelSize: Theme.fontMd
+        leftPadding: Theme.spaceSm
+        rightPadding: Theme.spaceSm
+        topPadding: 0
+        bottomPadding: 0
+        background: Rectangle {
+            color: Theme.bgBase
+            radius: Theme.radiusSm
+            border.color: form.activeFocus ? Theme.borderFocus : Theme.borderDefault
             border.width: Theme.borderWidth
         }
     }
