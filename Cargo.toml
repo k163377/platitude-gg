@@ -1,8 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/platitude-core"]
-# The Phase 0 spike is intentionally outside the workspace: it requires Qt at
-# build time, while the workspace must stay buildable on machines without Qt.
+members = ["crates/platitude-core", "crates/platitude-app"]
+# platitude-core stays Qt-free (`cargo test -p platitude-core` works without
+# Qt); building the whole workspace requires a Qt installation because of
+# platitude-app. The Phase 0 spike stays excluded (throwaway reference code).
 exclude = ["spike"]
 
 [workspace.package]
