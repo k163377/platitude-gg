@@ -119,4 +119,15 @@ impl TestRepo {
         self.git(&["commit", "-m", message]);
         self.git(&["rev-parse", "HEAD"])
     }
+
+    /// `file://` URL of this repository, so remote-protocol paths can be
+    /// exercised without a network (実装計画 §11.3).
+    pub fn file_url(&self) -> String {
+        let mut p = self.path.to_string_lossy().replace('\\', "/");
+        // Windows paths start with a drive letter; the URL needs a root.
+        if !p.starts_with('/') {
+            p.insert(0, '/');
+        }
+        format!("file://{p}")
+    }
 }

@@ -148,6 +148,20 @@ impl GitOutput {
     pub fn stderr_utf8(&self) -> std::borrow::Cow<'_, str> {
         String::from_utf8_lossy(&self.stderr)
     }
+
+    /// git's own explanation of a failure, passed through unedited.
+    ///
+    /// Usually stderr, but some porcelain reports on stdout and exits
+    /// non-zero with stderr empty (`git commit` printing "nothing to
+    /// commit" is the one users hit daily), so stdout is the fallback.
+    pub fn failure_message(&self) -> String {
+        let stderr = self.stderr_utf8().trim().to_string();
+        if stderr.is_empty() {
+            self.stdout_utf8().trim().to_string()
+        } else {
+            stderr
+        }
+    }
 }
 
 /// Spawns git subprocesses. Cheap to clone; shared across sessions.
@@ -189,7 +203,7 @@ impl GitExecutor {
             return Err(GitError::Failed {
                 command: described,
                 code: out.code,
-                stderr: out.stderr_utf8().trim().to_string(),
+                stderr: out.failure_message(),
             });
         }
         Ok(out)
