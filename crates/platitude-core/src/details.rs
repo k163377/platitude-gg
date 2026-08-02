@@ -155,6 +155,22 @@ pub async fn file_diff(
     target: &DiffTarget,
     cancel: &CancellationToken,
 ) -> Result<Vec<FilePatch>, GitError> {
+    Ok(parse_patch(
+        &file_diff_raw(executor, workdir, target, cancel).await?,
+    ))
+}
+
+/// Same diff as [`file_diff`], returned unparsed.
+///
+/// Partial staging rebuilds patches from these bytes (see [`crate::patch`]),
+/// so both paths must run the exact same command: hunk and line indices are
+/// only meaningful against the output they were derived from.
+pub async fn file_diff_raw(
+    executor: &GitExecutor,
+    workdir: &Path,
+    target: &DiffTarget,
+    cancel: &CancellationToken,
+) -> Result<Vec<u8>, GitError> {
     let base = GitCommand::new().cwd(workdir).args(DIFF_SHAPE_ARGS);
     let cmd = match target {
         DiffTarget::Commit {
@@ -207,11 +223,11 @@ pub async fn file_diff(
                     stderr: out.stderr_utf8().trim().to_string(),
                 });
             }
-            return Ok(parse_patch(&out.stdout));
+            return Ok(out.stdout);
         }
     };
     let out = executor.run(cmd, cancel).await?;
-    Ok(parse_patch(&out.stdout))
+    Ok(out.stdout)
 }
 
 #[cfg(test)]
