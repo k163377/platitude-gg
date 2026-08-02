@@ -82,6 +82,9 @@ pub struct GitCommand {
     args: Vec<OsString>,
     cwd: Option<PathBuf>,
     timeout: Option<Duration>,
+    /// Applied after [`FIXED_ENV`], so a command can override a default
+    /// (interactive rebase replaces the editors).
+    env: Vec<(OsString, OsString)>,
 }
 
 impl GitCommand {
@@ -90,6 +93,7 @@ impl GitCommand {
             args: Vec::new(),
             cwd: None,
             timeout: Some(DEFAULT_TIMEOUT),
+            env: Vec::new(),
         }
     }
 
@@ -110,6 +114,13 @@ impl GitCommand {
     /// Directory the command runs in (normally the repository work tree).
     pub fn cwd(mut self, dir: impl Into<PathBuf>) -> Self {
         self.cwd = Some(dir.into());
+        self
+    }
+
+    /// Sets one environment variable for this invocation only, overriding
+    /// the fixed defaults.
+    pub fn env(mut self, key: impl Into<OsString>, value: impl Into<OsString>) -> Self {
+        self.env.push((key.into(), value.into()));
         self
     }
 
@@ -270,6 +281,9 @@ impl GitExecutor {
             command.current_dir(dir);
         }
         for (k, v) in FIXED_ENV {
+            command.env(k, v);
+        }
+        for (k, v) in &cmd.env {
             command.env(k, v);
         }
         command

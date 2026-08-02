@@ -7,19 +7,23 @@
 
 pub mod branch;
 pub mod commit;
+pub mod conflict;
 pub mod details;
 pub mod error;
 pub mod graph;
+pub mod integrate;
 pub mod model;
 pub mod oid;
 pub mod opstate;
 pub mod parse;
 pub mod patch;
 pub mod process;
+pub mod publish;
 pub mod refs;
 pub mod remote;
 pub mod repo;
 pub mod scratch;
+pub mod sequencer;
 pub mod session;
 pub mod stage;
 pub mod stash;
