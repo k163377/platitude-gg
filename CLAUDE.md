@@ -114,9 +114,10 @@ cargo fmt --all
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)、メッセージは英語
 - force push しない
 
-## 現在のフェーズ: Phase 1 完了・UI 基準確定(2026-08-02)→ Phase 2 準備(完了したらこのセクションを書き換える)
+## 現在のフェーズ: **Phase 1 完了(2026-08-03)**→ Phase 2(コミットと基本書き込み)へ(着手したらこのセクションを書き換える)
 
-- Phase 1(読み取り専用ビューア)+多数の UI フィードバック反復まで実装済み。性能予算 4 項目は UI 基準確定時点の再実測でクリア: [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)
+- Phase 1(読み取り専用ビューア)は UI フィードバック反復・基準確定込みで**完了**。Done 条件の性能 4 項目は完了時点の最終確認でもクリア(first chunk 79ms / 詳細 75ms / 178fps / peak 269MB): [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)
+- Phase 2 の主対象: staging 実配線(ファイル/hunk/行 — UI は実装済み)・コミット/amend(エディタ UI は実装済み)・checkout・ブランチ作成/削除/リネーム・stash 残り(push 系。pop/apply は実装済み)・fetch/push・破壊的操作の確認ダイアログ方針
 - グラフは **2 段ストリーミング**(タグ無し即描画→タグ込みを単一 drain で無フリッカー置換。44k タグの topo フロンティア初期化コスト対策)+ `--max-count=2000` ウィンドウ。**WIP(未コミット)を HEAD の子の仮想行**として、**stash を walk 参加の実行行**として描く(合成親コミットは sift で除去)— いずれも `platitude-core::session` 参照。dirty ⇄ clean の変化でストリームを再構築する
 - 実装済みの実操作: stash pop / apply(それ以外の書き込みは Phase 2)。staging・コミット・hunk/行ステージングは**見た目のみ実装済み**(配線が Phase 2)
 - ブリッジは **Qt Bridges 採用で確定**(Phase 0 スパイク合格)。CXX-Qt へ差し替え可能な構成を維持。スパイクコードは `spike/` に残置
