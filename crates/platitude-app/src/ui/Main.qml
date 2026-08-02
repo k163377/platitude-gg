@@ -760,14 +760,30 @@ ApplicationWindow {
                     ColumnLayout {
                         anchors.fill: parent
                         spacing: 0
-                        SlimField {
+                        // Frameless, full-width filter: the sidebar is
+                        // already enclosed by dividers, so the input only
+                        // keeps a hairline underline (accent on focus).
+                        TextField {
                             id: refFilter
                             Layout.fillWidth: true
-                            Layout.leftMargin: Theme.spaceSm
-                            Layout.rightMargin: Theme.spaceSm
-                            Layout.topMargin: Theme.spaceXs
-                            Layout.bottomMargin: Theme.spaceXs
+                            implicitHeight: Theme.rowHeight
+                            font.pixelSize: Theme.fontMd
+                            leftPadding: Theme.spaceSm
+                            rightPadding: Theme.spaceSm
+                            topPadding: 0
+                            bottomPadding: 0
                             placeholderText: qsTr("Filter")
+                            background: Rectangle {
+                                color: "transparent"
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    height: Theme.borderWidth
+                                    color: refFilter.activeFocus ? Theme.borderFocus
+                                                                 : Theme.borderSubtle
+                                }
+                            }
                             onTextChanged: {
                                 branchesModel.setFilter(text)
                                 remotesModel.setFilter(text)
