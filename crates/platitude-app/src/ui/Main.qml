@@ -361,9 +361,9 @@ ApplicationWindow {
             }
         }
 
-        // Bottom edge: a thin border line across the window; only the
-        // git-version chip in the corner is thick (it rises above the
-        // line, overlapping the content).
+        // Bottom edge: a thin border line across the window; the git
+        // version floats above it bottom-right as faint bare text (no
+        // box), overlapping the content.
         Item {
             Layout.fillWidth: true
             implicitHeight: Theme.borderWidth
@@ -371,22 +371,15 @@ ApplicationWindow {
                 anchors.fill: parent
                 color: Theme.borderSubtle
             }
-            Rectangle {
+            Label {
                 visible: AppBackend.gitVersion !== ""
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                implicitWidth: versionLabel.implicitWidth + 2 * Theme.spaceSm
-                implicitHeight: Theme.rowHeight
-                color: Theme.bgElevated
-                border.color: Theme.borderSubtle
-                border.width: Theme.borderWidth
-                Label {
-                    id: versionLabel
-                    anchors.centerIn: parent
-                    text: qsTr("git %1").arg(AppBackend.gitVersion)
-                    color: Theme.textMuted
-                    font.pixelSize: Theme.fontSm
-                }
+                anchors.rightMargin: Theme.spaceSm
+                anchors.bottomMargin: Theme.spaceXs
+                text: qsTr("git %1").arg(AppBackend.gitVersion)
+                color: Theme.textMuted
+                font.pixelSize: Theme.fontSm
             }
         }
     }
@@ -533,6 +526,28 @@ ApplicationWindow {
         Connections {
             target: branchesModel
             function onChanged() { page.trySelectDefault() }
+        }
+
+        // Smoke hook (PG_SCROLL_TO=top|bottom): jump the graph after the
+        // final pass settles, using the same clamped math as the wheel.
+        Timer {
+            id: scrollToTimer
+            interval: 600
+            onTriggered: {
+                if (AppBackend.scrollTo === "bottom")
+                    graphList.contentY = graphList.clampY(graphList.originY
+                                                          + graphList.contentHeight)
+                else
+                    graphList.contentY = graphList.clampY(graphList.originY)
+            }
+        }
+        Connections {
+            target: graphModel
+            enabled: AppBackend.scrollTo !== ""
+            function onStatsChanged() {
+                if (graphModel.finishCount > 0)
+                    scrollToTimer.restart()
+            }
         }
 
         // Scroll benchmark (PG_AUTO_SCROLL=1): after the stream finishes,
@@ -882,6 +897,18 @@ ApplicationWindow {
                                     font.weight: Font.DemiBold
                                 }
                             }
+                            // Manual contentY math must respect originY:
+                            // after positionViewAtIndex jumps, the ListView
+                            // shifts its coordinate origin as item positions
+                            // are fixed up, so [0, contentHeight-height] no
+                            // longer matches the real scroll range (top rows
+                            // become unreachable, the bottom overshoots the
+                            // truncation footer).
+                            function clampY(y) {
+                                const minY = graphList.originY
+                                const maxY = minY + Math.max(0, graphList.contentHeight - graphList.height)
+                                return Math.max(minY, Math.min(y, maxY))
+                            }
                             // Mouse wheels scroll a fixed number of rows per
                             // notch; touchpads keep native Flickable panning.
                             WheelHandler {
@@ -890,8 +917,7 @@ ApplicationWindow {
                                     graphList.cancelFlick()
                                     const step = (event.angleDelta.y / 120)
                                                * root.wheelRows * Theme.rowHeight
-                                    const maxY = Math.max(0, graphList.contentHeight - graphList.height)
-                                    graphList.contentY = Math.max(0, Math.min(graphList.contentY - step, maxY))
+                                    graphList.contentY = graphList.clampY(graphList.contentY - step)
                                 }
                             }
                         }
@@ -931,8 +957,7 @@ ApplicationWindow {
                                 onTriggered: {
                                     const delta = (graphArea.autoCurrentY - graphArea.autoAnchorY)
                                                 * root.middleScrollGain
-                                    const maxY = Math.max(0, graphList.contentHeight - graphList.height)
-                                    graphList.contentY = Math.max(0, Math.min(graphList.contentY + delta, maxY))
+                                    graphList.contentY = graphList.clampY(graphList.contentY + delta)
                                 }
                             }
                             // Anchor marker

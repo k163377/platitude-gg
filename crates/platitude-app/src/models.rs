@@ -89,6 +89,7 @@ pub struct AppBackend {
     auto_quit_ms: i32,
     auto_select: bool,
     auto_scroll: bool,
+    scroll_to: String,
     check_feed: Arc<Feed<GitCheckMsg>>,
 }
 
@@ -108,6 +109,8 @@ impl Default for AppBackend {
                 .unwrap_or(0),
             auto_select: std::env::var("PG_AUTO_SELECT").as_deref() == Ok("1"),
             auto_scroll: std::env::var("PG_AUTO_SCROLL").as_deref() == Ok("1"),
+            // Smoke-test hook: "top" / "bottom" jumps the graph after load.
+            scroll_to: std::env::var("PG_SCROLL_TO").unwrap_or_default(),
             check_feed: Arc::new(Feed::default()),
         }
     }
@@ -127,6 +130,7 @@ impl AppBackend {
     qproperty!("autoQuitMs", Member = auto_quit_ms, Constant);
     qproperty!("autoSelect", Member = auto_select, Constant);
     qproperty!("autoScroll", Member = auto_scroll, Constant);
+    qproperty!("scrollTo", Member = scroll_to, Constant);
 
     #[qsignal]
     fn git_state_changed(&mut self);
