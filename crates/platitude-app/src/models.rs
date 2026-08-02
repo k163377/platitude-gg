@@ -704,6 +704,9 @@ pub struct NavItem {
     orig_path: String,
     is_head: bool,
     has_remote: bool,
+    /// PR-state badge. Real data arrives in Phase 4 (ls-remote refs/pull
+    /// matching); until then PG_FAKE_PR previews the look.
+    has_pr: bool,
     depth: i32,
     folder: bool,
     collapsed: bool,
@@ -849,12 +852,18 @@ impl NavSectionModel {
 }
 
 fn branch_nav_items(list: &[platitude_core::session::BranchItem]) -> Vec<NavItem> {
+    // Design-preview hook: PG_FAKE_PR=name[,name…] marks branches as
+    // having a PR so the badge can be reviewed before Phase 4 wires data.
+    let fake_pr: std::collections::HashSet<String> = std::env::var("PG_FAKE_PR")
+        .map(|v| v.split(',').map(str::to_string).collect())
+        .unwrap_or_default();
     list.iter()
         .map(|b| NavItem {
             name: b.short.clone(),
             oid_hex: b.oid_hex.clone(),
             is_head: b.is_head,
             has_remote: b.has_remote,
+            has_pr: fake_pr.contains(&b.short),
             ..Default::default()
         })
         .collect()

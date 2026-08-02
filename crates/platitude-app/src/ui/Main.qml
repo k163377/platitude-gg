@@ -820,9 +820,10 @@ ApplicationWindow {
                                 anchors.leftMargin: Theme.spaceMd
                                 anchors.rightMargin: Theme.spaceSm
                                 spacing: Theme.spaceXs
-                                // "You are here" marker.
+                                // "You are here" marker, sharing the fold
+                                // arrows' column so the sidebar lines up.
                                 NavIcon {
-                                    kind: "pin"
+                                    kind: "check"
                                     tint: Theme.accent
                                     width: Theme.iconSm + 2
                                     height: Theme.iconSm + 2
@@ -1522,10 +1523,12 @@ ApplicationWindow {
                                     padding: 0
                                 }
                             }
+                            // Two lines tall from the start (matches the
+                            // details pane's description box).
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: Math.min(Math.max(wipBody.implicitHeight,
-                                                                          Theme.fontMdLine)
+                                                                          2 * Theme.fontMdLine)
                                                                  + Theme.spaceSm, 120)
                                 color: Theme.bgBase
                                 radius: Theme.radiusMd
@@ -1701,12 +1704,13 @@ ApplicationWindow {
                                     padding: 0
                                 }
                             }
-                            // Always shown, even empty — the pair mirrors
-                            // the future commit editor's two fields.
+                            // Always shown, even empty, and two lines tall
+                            // from the start — the pair mirrors the commit
+                            // editor's fields.
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: Math.min(Math.max(bodyArea.implicitHeight,
-                                                                          Theme.fontMdLine)
+                                                                          2 * Theme.fontMdLine)
                                                                  + Theme.spaceSm, 120)
                                 color: Theme.bgBase
                                 radius: Theme.radiusMd
@@ -2069,11 +2073,15 @@ ApplicationWindow {
                         const bw = r * 1.2
                         ctx.strokeRect(nodeX - bw / 2, midY - bw / 2, bw, bw * 0.36)
                         ctx.strokeRect(nodeX - bw * 0.4, midY - bw * 0.1, bw * 0.8, bw * 0.58)
-                        ctx.strokeStyle = Theme.borderStrong
-                        ctx.lineWidth = Theme.borderWidth
+                        // Dashed ring like the WIP node: not part of the
+                        // committed history proper.
+                        ctx.strokeStyle = Theme.textSecondary
+                        ctx.lineWidth = root.laneStroke
+                        ctx.setLineDash([3, 3])
                         ctx.beginPath()
                         ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
                         ctx.stroke()
+                        ctx.setLineDash([])
                         return
                     }
                     // The commit node is the author's identicon (5x5,
@@ -2327,6 +2335,7 @@ ApplicationWindow {
         required property string orig_path
         required property bool is_head
         required property bool has_remote
+        required property bool has_pr
         required property int depth
         required property bool folder
         required property bool collapsed
@@ -2360,11 +2369,15 @@ ApplicationWindow {
             anchors.leftMargin: Theme.spaceMd + navRow.depth * Theme.spaceMd
             anchors.rightMargin: Theme.spaceSm
             spacing: Theme.spaceXs
+            // Fixed-width slot so the arrow column lines up with the
+            // pinned-branch check icon.
             Label {
                 visible: navRow.folder
                 text: navRow.collapsed ? "▸" : "▾"
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
+                Layout.preferredWidth: Theme.iconSm + 2
+                horizontalAlignment: Text.AlignHCenter
             }
             ChangeIcon {
                 visible: !navRow.folder && navRow.kindHint === "wt"
@@ -2423,18 +2436,19 @@ ApplicationWindow {
                 font.pixelSize: Theme.fontSm
             }
             // Branch remote state: nothing = local only, remote icon =
-            // has a remote; a PR icon replaces it once forge data exists
-            // (Phase 4 — the `pr` NavIcon kind is already drawn).
+            // has a remote, PR icon = has a PR (real data in Phase 4;
+            // PG_FAKE_PR previews the look).
             NavIcon {
                 visible: !navRow.folder && navRow.kindHint === "branch"
-                         && navRow.has_remote
-                kind: "remote"
-                tint: Theme.textSecondary
+                         && (navRow.has_remote || navRow.has_pr)
+                kind: navRow.has_pr ? "pr" : "remote"
+                tint: navRow.has_pr ? Theme.success : Theme.textSecondary
                 width: Theme.iconSm + 2
                 height: Theme.iconSm + 2
                 ToolTip.visible: remoteHover.containsMouse
                 ToolTip.delay: 600
-                ToolTip.text: qsTr("Has a remote branch")
+                ToolTip.text: navRow.has_pr ? qsTr("Has an open pull request")
+                                            : qsTr("Has a remote branch")
                 MouseArea {
                     id: remoteHover
                     anchors.fill: parent
@@ -2734,6 +2748,12 @@ ApplicationWindow {
                 ctx.moveTo(8.8 * s, 2.5 * s)
                 ctx.lineTo(7.2 * s, 3.8 * s)
                 ctx.lineTo(8.8 * s, 5.1 * s)
+                ctx.stroke()
+            } else if (icon.kind === "check") {
+                ctx.beginPath()
+                ctx.moveTo(3.5 * s, 8.5 * s)
+                ctx.lineTo(6.8 * s, 11.8 * s)
+                ctx.lineTo(12.5 * s, 4.5 * s)
                 ctx.stroke()
             } else if (icon.kind === "pin") {
                 // Map pin: "you are here".
