@@ -1,0 +1,49 @@
+# cargo-deny configuration — machine-enforces two core guarantees (see 実装計画.md §11.1):
+#   1. No networking capability in the dependency closure (all networking goes
+#      through the installed git CLI, executed as a subprocess).
+#   2. No git implementation libraries (system git subprocess only).
+# Licensing: MIT app; permissive deps only. Qt / qtbridge are LGPL-3.0-only,
+# an approved exception (dynamically linked).
+
+[graph]
+all-features = true
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "CC0-1.0",
+]
+exceptions = [
+    { crate = "qtbridge", allow = ["LGPL-3.0-only", "LGPL-3.0"] },
+]
+
+[bans]
+multiple-versions = "allow"
+deny = [
+    # --- networking stacks: forbidden, the app itself must never open a socket ---
+    { crate = "reqwest", reason = "networking is forbidden: all network I/O goes through the git CLI" },
+    { crate = "hyper", reason = "networking is forbidden: all network I/O goes through the git CLI" },
+    { crate = "ureq", reason = "networking is forbidden: all network I/O goes through the git CLI" },
+    { crate = "curl", reason = "networking is forbidden: all network I/O goes through the git CLI" },
+    { crate = "curl-sys", reason = "networking is forbidden: all network I/O goes through the git CLI" },
+    { crate = "native-tls", reason = "TLS implies networking, which is forbidden" },
+    { crate = "rustls", reason = "TLS implies networking, which is forbidden" },
+    { crate = "openssl-sys", reason = "TLS implies networking, which is forbidden" },
+    { crate = "libssh2-sys", reason = "ssh auth is delegated to the git CLI" },
+    # --- git implementation libraries: system git subprocess only ---
+    { crate = "git2", reason = "system git subprocess only; no libgit2" },
+    { crate = "libgit2-sys", reason = "system git subprocess only; no libgit2" },
+    { crate = "gix", reason = "system git subprocess only; no gitoxide" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

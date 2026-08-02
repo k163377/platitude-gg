@@ -1,0 +1,10 @@
+# Enforced with `-D warnings` in CI (see 実装計画.md §11.1 and CLAUDE.md).
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+
+disallowed-types = [
+    { path = "std::net::TcpStream", reason = "the app must never open a socket; network I/O happens only inside the git CLI subprocess" },
+    { path = "std::net::TcpListener", reason = "the app must never open a socket; network I/O happens only inside the git CLI subprocess" },
+    { path = "std::net::UdpSocket", reason = "the app must never open a socket; network I/O happens only inside the git CLI subprocess" },
+]
