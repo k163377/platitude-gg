@@ -99,6 +99,13 @@ impl GraphBuilder {
 
     /// Processes the next commit of the topo-ordered stream.
     pub fn push(&mut self, commit: &CommitMeta) -> GraphRow {
+        self.push_with_edge_style(commit, false)
+    }
+
+    /// Like [`GraphBuilder::push`], but the first-parent edge leaving the
+    /// node draws dashed (stash rows: not part of committed history
+    /// proper).
+    pub fn push_with_edge_style(&mut self, commit: &CommitMeta, dashed_edge: bool) -> GraphRow {
         let row = self.next_row;
         self.next_row += 1;
 
@@ -149,12 +156,12 @@ impl GraphBuilder {
                 // Out-of-order stream: the edge cannot be drawn; leave the
                 // lane free rather than leaking it forever.
             } else {
-                self.occupy(node_lane, *p0, node_color, false);
+                self.occupy(node_lane, *p0, node_color, dashed_edge);
                 segments.push(Segment {
                     kind: SegmentKind::OutOfNode,
                     lane: node_lane,
                     color: node_color,
-                    dashed: false,
+                    dashed: dashed_edge,
                 });
             }
         }

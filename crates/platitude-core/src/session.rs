@@ -839,7 +839,8 @@ impl RepoSession {
                 let mut items = Vec::with_capacity(batch.len());
                 sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
                 for item in items {
-                    let mut row = make_row(&item.meta, parser.pool(), builder);
+                    let mut row =
+                        make_row(&item.meta, parser.pool(), builder, item.stash_ref.is_some());
                     if let Some(r) = item.stash_ref {
                         row.stash_ref = r;
                     }
@@ -869,7 +870,7 @@ impl RepoSession {
         let mut items = Vec::with_capacity(batch.len());
         sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
         for item in items {
-            let mut row = make_row(&item.meta, parser.pool(), builder);
+            let mut row = make_row(&item.meta, parser.pool(), builder, item.stash_ref.is_some());
             if let Some(r) = item.stash_ref {
                 row.stash_ref = r;
             }
@@ -911,7 +912,12 @@ impl RepoSession {
         let shared = &mut *guard;
         let mut rows = Vec::with_capacity(batch.len());
         for item in batch {
-            let mut row = make_row(&item.meta, pool, &mut shared.builder);
+            let mut row = make_row(
+                &item.meta,
+                pool,
+                &mut shared.builder,
+                item.stash_ref.is_some(),
+            );
             if let Some(r) = &item.stash_ref {
                 row.stash_ref = r.clone();
             }
@@ -1014,12 +1020,14 @@ fn sift_batch(
 }
 
 /// Builds one display row from a commit (labels attached by the caller).
+/// `dashed_edge` draws the first-parent edge dashed (stash rows).
 fn make_row(
     commit: &CommitMeta,
     pool: &crate::model::StrPool,
     builder: &mut GraphBuilder,
+    dashed_edge: bool,
 ) -> LogRow {
-    let g = builder.push(commit);
+    let g = builder.push_with_edge_style(commit, dashed_edge);
     LogRow {
         row: g.row,
         oid_hex: commit.oid.to_hex(),

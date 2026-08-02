@@ -724,6 +724,7 @@ pub struct NavSectionModel {
     head_name: String,
     head_oid: String,
     head_has_remote: bool,
+    head_has_pr: bool,
     /// True once a refs snapshot arrived (distinguishes "no head yet"
     /// from "detached / no local branches" for the default selection).
     refs_loaded: bool,
@@ -852,18 +853,13 @@ impl NavSectionModel {
 }
 
 fn branch_nav_items(list: &[platitude_core::session::BranchItem]) -> Vec<NavItem> {
-    // Design-preview hook: PG_FAKE_PR=name[,name…] marks branches as
-    // having a PR so the badge can be reviewed before Phase 4 wires data.
-    let fake_pr: std::collections::HashSet<String> = std::env::var("PG_FAKE_PR")
-        .map(|v| v.split(',').map(str::to_string).collect())
-        .unwrap_or_default();
     list.iter()
         .map(|b| NavItem {
             name: b.short.clone(),
             oid_hex: b.oid_hex.clone(),
             is_head: b.is_head,
             has_remote: b.has_remote,
-            has_pr: fake_pr.contains(&b.short),
+            has_pr: crate::encode::fake_pr_set().contains(&b.short),
             ..Default::default()
         })
         .collect()
@@ -1030,6 +1026,7 @@ impl NavSectionModel {
     qproperty!("headName", Member = head_name, Notify = changed);
     qproperty!("headOid", Member = head_oid, Notify = changed);
     qproperty!("headHasRemote", Member = head_has_remote, Notify = changed);
+    qproperty!("headHasPr", Member = head_has_pr, Notify = changed);
     qproperty!("refsLoaded", Member = refs_loaded, Notify = changed);
     qproperty!("treeView", Member = tree_view, Notify = changed);
 
@@ -1090,11 +1087,13 @@ impl NavSectionModel {
             self.refs_loaded = true;
             self.all = match self.section.as_str() {
                 "branches" => {
-                    let head = snapshot.locals.iter().find(|b| b.is_head);
-                    self.head_name = head.map(|b| b.short.clone()).unwrap_or_default();
+                    let items = branch_nav_items(&snapshot.locals);
+                    let head = items.iter().find(|b| b.is_head);
+                    self.head_name = head.map(|b| b.name.clone()).unwrap_or_default();
                     self.head_oid = head.map(|b| b.oid_hex.clone()).unwrap_or_default();
                     self.head_has_remote = head.is_some_and(|b| b.has_remote);
-                    branch_nav_items(&snapshot.locals)
+                    self.head_has_pr = head.is_some_and(|b| b.has_pr);
+                    items
                 }
                 "remotes" => branch_nav_items(&snapshot.remotes),
                 _ => snapshot

@@ -39,6 +39,7 @@ ApplicationWindow {
     readonly property int graphDefaultLanes: 12
     readonly property int detailsAvatar: 40
     readonly property int anchorDelayMs: 50
+    readonly property var laneDash: [2, 2]
 
     palette {
         window: Theme.bgBase
@@ -844,9 +845,12 @@ ApplicationWindow {
                                     font.pixelSize: Theme.fontSm
                                 }
                                 NavIcon {
-                                    visible: !workTree.detached && branchesModel.headHasRemote
-                                    kind: "remote"
-                                    tint: Theme.textSecondary
+                                    visible: !workTree.detached
+                                             && (branchesModel.headHasRemote
+                                                 || branchesModel.headHasPr)
+                                    kind: branchesModel.headHasPr ? "pr" : "remote"
+                                    tint: branchesModel.headHasPr ? Theme.success
+                                                                  : Theme.textSecondary
                                     width: Theme.iconSm + 2
                                     height: Theme.iconSm + 2
                                 }
@@ -1993,7 +1997,9 @@ ApplicationWindow {
                         const r = rowItem.labelRecords[i]
                         const icon = r[0] === "T" ? "⚑" : r[0] === "R" ? "☁"
                                    : r[0] === "H" ? "HEAD" : "⎇"
-                        lines.push(icon + " " + r.substring(3))
+                        // Aggregated records keep their PR mark visible here.
+                        const pr = r.length > 3 && r[3] === "1" ? qsTr(" · PR") : ""
+                        lines.push(icon + " " + r.substring(4) + pr)
                     }
                     return lines.join("\n")
                 }
@@ -2031,7 +2037,7 @@ ApplicationWindow {
                             const lane = parseInt(t.substring(1, dot))
                             const x = cx(lane)
                             ctx.strokeStyle = Theme.graphLane[parseInt(t.substring(dot + 1)) % laneCount]
-                            ctx.setLineDash(t[0] === k ? [] : [3, 3])
+                            ctx.setLineDash(t[0] === k ? [] : root.laneDash)
                             ctx.beginPath()
                             if (k === "t") {
                                 ctx.moveTo(x, 0)
@@ -2054,7 +2060,7 @@ ApplicationWindow {
                     if (rowItem.isWip) {
                         ctx.strokeStyle = Theme.textSecondary
                         ctx.lineWidth = root.laneStroke
-                        ctx.setLineDash([3, 3])
+                        ctx.setLineDash(root.laneDash)
                         ctx.beginPath()
                         ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
                         ctx.stroke()
@@ -2077,7 +2083,7 @@ ApplicationWindow {
                         // committed history proper.
                         ctx.strokeStyle = Theme.textSecondary
                         ctx.lineWidth = root.laneStroke
-                        ctx.setLineDash([3, 3])
+                        ctx.setLineDash(root.laneDash)
                         ctx.beginPath()
                         ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
                         ctx.stroke()
@@ -2184,9 +2190,10 @@ ApplicationWindow {
         radius: Theme.radiusSm
         clip: true
 
-        readonly property string rec: records.length > 0 ? records[0] : "L00"
+        readonly property string rec: records.length > 0 ? records[0] : "L000"
         readonly property string recKind: rec[0]
         readonly property bool recHead: rec[1] === "1"
+        readonly property bool recPr: rec.length > 3 && rec[3] === "1"
         readonly property color chipColor: tagStyle ? Theme.warning
                                           : recKind === "R" ? Theme.textSecondary
                                           : recKind === "H" ? Theme.danger
@@ -2203,20 +2210,30 @@ ApplicationWindow {
             anchors.leftMargin: Theme.spaceXs
             spacing: Theme.spaceXs
             Label {
-                text: chip.rec.substring(3)
+                text: chip.rec.substring(4)
                 color: chip.chipColor
                 font.pixelSize: Theme.fontSm
                 font.weight: chip.recHead ? Font.DemiBold : Font.Normal
                 elide: Text.ElideRight
                 width: Math.min(implicitWidth,
                                 chip.maxWidth - 2 * Theme.spaceXs
-                                - (chip.records.length > 1 ? Theme.spaceLg : 0))
+                                - (chip.records.length > 1 ? Theme.spaceLg : 0)
+                                - (chip.recPr ? Theme.iconSm + Theme.spaceXs : 0))
             }
             Label {
                 visible: chip.records.length > 1
                 text: "+" + (chip.records.length - 1)
                 color: chip.chipColor
                 font.pixelSize: Theme.fontSm
+            }
+            // PR badge: reserved width above, so it survives any elision.
+            NavIcon {
+                visible: chip.recPr
+                anchors.verticalCenter: parent.verticalCenter
+                kind: "pr"
+                tint: Theme.success
+                width: Theme.iconSm
+                height: Theme.iconSm
             }
         }
     }

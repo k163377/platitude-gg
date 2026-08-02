@@ -36,8 +36,20 @@ pub fn encode_geometry(segments: &[Segment]) -> String {
     out
 }
 
-/// Labels → `\u{1f}`-joined chip records `KHRtext`:
-/// K = `H`ead / `L`ocal / `R`emote / `T`ag, H = head?, R = has-remote?
+/// Branch names previewing the PR badge (`PG_FAKE_PR=a,b`). Real PR data
+/// joins in Phase 4; this hook exists so the design can be reviewed.
+pub(crate) fn fake_pr_set() -> &'static std::collections::HashSet<String> {
+    static SET: std::sync::OnceLock<std::collections::HashSet<String>> = std::sync::OnceLock::new();
+    SET.get_or_init(|| {
+        std::env::var("PG_FAKE_PR")
+            .map(|v| v.split(',').map(str::to_string).collect())
+            .unwrap_or_default()
+    })
+}
+
+/// Labels → `\u{1f}`-joined chip records `KHRP` + text:
+/// K = `H`ead / `L`ocal / `R`emote / `T`ag, H = head?, R = has-remote?,
+/// P = has-PR? (preview via [`fake_pr_set`] until Phase 4).
 pub fn encode_labels(labels: &[RefLabel]) -> String {
     let mut out = String::new();
     for (i, l) in labels.iter().enumerate() {
@@ -52,6 +64,8 @@ pub fn encode_labels(labels: &[RefLabel]) -> String {
         });
         out.push(if l.is_head { '1' } else { '0' });
         out.push(if l.has_remote { '1' } else { '0' });
+        let pr = matches!(l.kind, LabelKind::LocalBranch) && fake_pr_set().contains(&l.text);
+        out.push(if pr { '1' } else { '0' });
         out.push_str(&l.text);
     }
     out
@@ -243,7 +257,7 @@ mod tests {
                 is_head: false,
             },
         ];
-        assert_eq!(encode_labels(&labels), "L11main\u{1f}T00v1.0");
+        assert_eq!(encode_labels(&labels), "L110main\u{1f}T000v1.0");
     }
 
     #[test]
