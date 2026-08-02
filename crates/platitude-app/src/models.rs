@@ -671,6 +671,11 @@ pub struct NavSectionModel {
     items: Vec<NavItem>,
     filter: String,
     total: i32,
+    /// Current branch (branches section only) — feeds the pinned row
+    /// shown under the section header.
+    head_name: String,
+    head_oid: String,
+    head_has_remote: bool,
     /// Explicit folder open/close choices (key = folder path); anything
     /// absent uses the section default.
     folder_overrides: HashMap<String, bool>,
@@ -856,6 +861,9 @@ fn status_nav_items(status: &platitude_core::status::WorkTreeStatus) -> Vec<NavI
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
 impl NavSectionModel {
     qproperty!("total", Member = total, Notify = changed);
+    qproperty!("headName", Member = head_name, Notify = changed);
+    qproperty!("headOid", Member = head_oid, Notify = changed);
+    qproperty!("headHasRemote", Member = head_has_remote, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -906,7 +914,13 @@ impl NavSectionModel {
             && let Some(snapshot) = feed.drain().pop()
         {
             self.all = match self.section.as_str() {
-                "branches" => branch_nav_items(&snapshot.locals),
+                "branches" => {
+                    let head = snapshot.locals.iter().find(|b| b.is_head);
+                    self.head_name = head.map(|b| b.short.clone()).unwrap_or_default();
+                    self.head_oid = head.map(|b| b.oid_hex.clone()).unwrap_or_default();
+                    self.head_has_remote = head.is_some_and(|b| b.has_remote);
+                    branch_nav_items(&snapshot.locals)
+                }
                 "remotes" => branch_nav_items(&snapshot.remotes),
                 _ => snapshot
                     .tags
@@ -927,12 +941,18 @@ impl NavSectionModel {
         if let Some(feed) = self.stash_feed.clone()
             && let Some(stashes) = feed.drain().pop()
         {
-            // The reflog selector (stash@{0}) is an implementation detail;
-            // Phase 2 stash operations will carry it in a hidden role.
+            // Message is the display text; the reflog selector rides in
+            // `full` (tooltip + Phase 2 stash ops) with a short `{n}`
+            // index badge in `change`. The commit id makes rows clickable
+            // (details pane shows the stashed changes).
             self.all = stashes
                 .into_iter()
-                .map(|s| NavItem {
+                .enumerate()
+                .map(|(i, s)| NavItem {
                     name: s.message,
+                    full: s.name,
+                    oid_hex: s.oid.to_hex(),
+                    change: format!("{{{i}}}"),
                     ..Default::default()
                 })
                 .collect();
@@ -1062,13 +1082,91 @@ qml_register!(WorkTreeModel, "WorkTreeModel", singleton = false);
 #[derive(QModelItem, Default, Clone)]
 pub struct FileItem {
     change: String,
+    /// Full path (diff request + tooltip); folder rows carry their
+    /// directory path here, which doubles as the fold toggle key.
     path: String,
     orig_path: String,
+    /// Display text: the last segment in tree view, the full path in
+    /// path view.
+    name: String,
+    depth: i32,
+    folder: bool,
+    collapsed: bool,
 }
 
-#[derive(Default)]
+/// Turns flat changed-file entries into an indented tree: directories
+/// first (alphabetical), single-child directory chains compacted into one
+/// row (`a/b/c`), leaves labeled by their last segment.
+fn build_file_tree(raw: &[FileItem], overrides: &HashMap<String, bool>) -> Vec<FileItem> {
+    #[derive(Default)]
+    struct DirNode {
+        dirs: std::collections::BTreeMap<String, DirNode>,
+        files: Vec<FileItem>,
+    }
+    let mut root = DirNode::default();
+    for entry in raw {
+        let mut node = &mut root;
+        let mut rest = entry.path.as_str();
+        while let Some((dir, tail)) = rest.split_once('/') {
+            node = node.dirs.entry(dir.to_string()).or_default();
+            rest = tail;
+        }
+        let mut leaf = entry.clone();
+        leaf.name = rest.to_string();
+        node.files.push(leaf);
+    }
+    fn emit(
+        node: &DirNode,
+        prefix: &str,
+        depth: i32,
+        overrides: &HashMap<String, bool>,
+        out: &mut Vec<FileItem>,
+    ) {
+        for (dir_name, child) in &node.dirs {
+            let mut label = dir_name.clone();
+            let mut target = child;
+            while target.files.is_empty() && target.dirs.len() == 1 {
+                let Some((next_name, next)) = target.dirs.iter().next() else {
+                    break;
+                };
+                label.push('/');
+                label.push_str(next_name);
+                target = next;
+            }
+            let key = format!("{prefix}{label}");
+            let expanded = overrides.get(&key).copied().unwrap_or(true);
+            out.push(FileItem {
+                name: label,
+                path: key.clone(),
+                depth,
+                folder: true,
+                collapsed: !expanded,
+                ..Default::default()
+            });
+            if expanded {
+                emit(target, &format!("{key}/"), depth + 1, overrides, out);
+            }
+        }
+        for f in &node.files {
+            let mut item = f.clone();
+            item.depth = depth;
+            out.push(item);
+        }
+    }
+    let mut out = Vec::new();
+    emit(&root, "", 0, overrides, &mut out);
+    out
+}
+
 pub struct DetailsModel {
     files: Vec<FileItem>,
+    /// Flat entries in git output order; display rows derive from these.
+    raw_files: Vec<FileItem>,
+    file_total: i32,
+    tree_view: bool,
+    /// Explicit folder open/close choices (key = directory path); cleared
+    /// per commit, anything absent defaults to open.
+    folder_overrides: HashMap<String, bool>,
     sha_hex: String,
     sha8: String,
     parent_hex: String,
@@ -1085,6 +1183,46 @@ pub struct DetailsModel {
     requested_at: Option<Instant>,
     feed: Option<Arc<Feed<platitude_core::details::CommitDetails>>>,
     tab_id: i32,
+}
+
+impl Default for DetailsModel {
+    fn default() -> Self {
+        Self {
+            files: Vec::new(),
+            raw_files: Vec::new(),
+            file_total: 0,
+            // Tree view is the default look of the CHANGES list.
+            tree_view: true,
+            folder_overrides: HashMap::new(),
+            sha_hex: String::new(),
+            sha8: String::new(),
+            parent_hex: String::new(),
+            author_name: String::new(),
+            author_email: String::new(),
+            author_time: 0,
+            avatar: 0,
+            committer: String::new(),
+            committer_time: 0,
+            message_subject: String::new(),
+            message_body: String::new(),
+            loading: false,
+            requested: String::new(),
+            requested_at: None,
+            feed: None,
+            tab_id: 0,
+        }
+    }
+}
+
+impl DetailsModel {
+    /// Rebuilds display rows from the raw entries for the current view.
+    fn rebuild_rows(&mut self) {
+        self.files = if self.tree_view {
+            build_file_tree(&self.raw_files, &self.folder_overrides)
+        } else {
+            self.raw_files.clone()
+        };
+    }
 }
 
 impl QListModel for DetailsModel {
@@ -1113,6 +1251,8 @@ impl DetailsModel {
     qproperty!("messageSubject", Member = message_subject, Notify = changed);
     qproperty!("messageBody", Member = message_body, Notify = changed);
     qproperty!("loading", Member = loading, Notify = changed);
+    qproperty!("treeView", Member = tree_view, Notify = changed);
+    qproperty!("fileTotal", Member = file_total, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -1181,25 +1321,51 @@ impl DetailsModel {
         self.message_subject = subject;
         self.message_body = body;
         self.loading = false;
-        self.files = details
+        self.raw_files = details
             .files
             .iter()
             .map(|f| FileItem {
                 change: f.status.to_string(),
                 path: f.path.clone(),
                 orig_path: f.orig_path.clone().unwrap_or_default(),
+                name: f.path.clone(),
+                ..Default::default()
             })
             .collect();
+        self.file_total = self.raw_files.len() as i32;
+        self.folder_overrides.clear();
+        self.rebuild_rows();
         self.reset();
         self.changed();
     }
 
-    /// Path of the changed file at `row` (keyboard navigation, automation).
+    /// Switches the CHANGES list between tree and flat-path display.
+    #[qslot]
+    fn set_tree_view(&mut self, tree: bool) {
+        if self.tree_view == tree {
+            return;
+        }
+        self.tree_view = tree;
+        self.rebuild_rows();
+        self.reset();
+        self.changed();
+    }
+
+    /// Opens/closes one directory row in tree view (key = its path).
+    #[qslot]
+    fn toggle_folder(&mut self, key: String) {
+        let expanded = self.folder_overrides.get(&key).copied().unwrap_or(true);
+        self.folder_overrides.insert(key, !expanded);
+        self.rebuild_rows();
+        self.reset();
+    }
+
+    /// Path of the changed file at `row` of the flat list (automation).
     #[qslot]
     fn file_path_at(&self, row: i32) -> String {
         usize::try_from(row)
             .ok()
-            .and_then(|i| self.files.get(i))
+            .and_then(|i| self.raw_files.get(i))
             .map(|f| f.path.clone())
             .unwrap_or_default()
     }
@@ -1209,7 +1375,7 @@ impl DetailsModel {
     fn file_orig_path_at(&self, row: i32) -> String {
         usize::try_from(row)
             .ok()
-            .and_then(|i| self.files.get(i))
+            .and_then(|i| self.raw_files.get(i))
             .map(|f| f.orig_path.clone())
             .unwrap_or_default()
     }

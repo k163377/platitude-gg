@@ -214,12 +214,6 @@ ApplicationWindow {
                     onClicked: folderDialog.open()
                 }
                 Item { Layout.fillWidth: true }
-                Label {
-                    text: AppBackend.gitVersion === "" ? "" : qsTr("git %1").arg(AppBackend.gitVersion)
-                    color: Theme.textMuted
-                    font.pixelSize: Theme.fontSm
-                    rightPadding: Theme.spaceSm
-                }
             }
         }
 
@@ -260,6 +254,27 @@ ApplicationWindow {
             Repeater {
                 model: tabsModel
                 RepoPage {}
+            }
+        }
+
+        // Bottom status bar: closes the window with a border line; the
+        // git version lives bottom-right by request.
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: Theme.borderWidth
+            color: Theme.borderSubtle
+        }
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: Theme.rowHeight
+            color: Theme.bgElevated
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.spaceSm
+                text: AppBackend.gitVersion === "" ? "" : qsTr("git %1").arg(AppBackend.gitVersion)
+                color: Theme.textMuted
+                font.pixelSize: Theme.fontSm
             }
         }
     }
@@ -457,19 +472,9 @@ ApplicationWindow {
                     anchors.rightMargin: Theme.spaceMd
                     spacing: Theme.spaceSm
 
-                    Label {
-                        text: workTree.detached
-                              ? qsTr("DETACHED HEAD")
-                              : (workTree.branch === "" ? qsTr("(no branch)") : workTree.branch)
-                        font.weight: Font.DemiBold
-                        color: workTree.detached ? Theme.warning : Theme.textPrimary
-                    }
-                    Label {
-                        visible: workTree.upstream !== ""
-                        text: "↑" + workTree.ahead + " ↓" + workTree.behind
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSm
-                    }
+                    // The current branch + ahead/behind moved into the
+                    // BRANCHES section (pinned row); this bar keeps only
+                    // transient state (op / conflicts / last error).
                     Rectangle {
                         visible: workTree.opText !== ""
                         color: "transparent"
@@ -581,10 +586,62 @@ ApplicationWindow {
                             expanded: page.expBranches || refFilter.text !== ""
                             onToggled: page.expBranches = !page.expBranches
                         }
+                        // Current branch pinned under the header (it stays
+                        // in the list too, highlighted). Replaces the old
+                        // top-left branch display.
+                        Rectangle {
+                            visible: (page.expBranches || refFilter.text !== "")
+                                     && (branchesModel.headName !== "" || workTree.detached)
+                            Layout.fillWidth: true
+                            implicitHeight: Theme.rowHeight
+                            color: Theme.accentMuted
+                            Rectangle {
+                                anchors.fill: parent
+                                color: Theme.bgHover
+                                visible: headRowMouse.containsMouse
+                            }
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: Theme.spaceMd
+                                anchors.rightMargin: Theme.spaceSm
+                                spacing: Theme.spaceXs
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: workTree.detached ? qsTr("DETACHED HEAD")
+                                                            : branchesModel.headName
+                                    color: workTree.detached ? Theme.warning : Theme.textLink
+                                    font.weight: Font.DemiBold
+                                    font.pixelSize: Theme.fontMd
+                                    elide: Text.ElideMiddle
+                                }
+                                Label {
+                                    visible: !workTree.detached && workTree.upstream !== ""
+                                    text: "↑" + workTree.ahead + " ↓" + workTree.behind
+                                    color: Theme.textSecondary
+                                    font.pixelSize: Theme.fontSm
+                                }
+                                NavIcon {
+                                    visible: !workTree.detached && branchesModel.headHasRemote
+                                    kind: "remote"
+                                    tint: Theme.textLink
+                                    width: Theme.iconSm + 2
+                                    height: Theme.iconSm + 2
+                                }
+                            }
+                            MouseArea {
+                                id: headRowMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                enabled: branchesModel.headOid !== ""
+                                onClicked: page.jumpToRef(branchesModel.headOid)
+                            }
+                        }
                         NavList {
                             sectionModel: branchesModel
                             expanded: page.expBranches || refFilter.text !== ""
                             kindHint: "branch"
+                            headTrack: workTree.upstream !== ""
+                                       ? "↑" + workTree.ahead + " ↓" + workTree.behind : ""
                             onRefActivated: oidHex => page.jumpToRef(oidHex)
                         }
 
@@ -631,6 +688,9 @@ ApplicationWindow {
                             sectionModel: stashesModel
                             expanded: page.expStashes || refFilter.text !== ""
                             kindHint: "stash"
+                            // A stash is a commit: clicking shows its
+                            // stashed changes in the details pane.
+                            onRefActivated: oidHex => page.jumpToRef(oidHex)
                         }
 
                         NavHeader {
@@ -963,10 +1023,13 @@ ApplicationWindow {
                                     padding: 0
                                 }
                             }
+                            // Always shown, even empty — the pair mirrors
+                            // the future commit editor's two fields.
                             Rectangle {
-                                visible: detailsModel.messageBody !== ""
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Math.min(bodyArea.implicitHeight + Theme.spaceSm, 120)
+                                Layout.preferredHeight: Math.min(Math.max(bodyArea.implicitHeight,
+                                                                          Theme.fontMdLine)
+                                                                 + Theme.spaceSm, 120)
                                 color: Theme.bgBase
                                 radius: Theme.radiusMd
                                 border.color: Theme.borderSubtle
@@ -1081,9 +1144,53 @@ ApplicationWindow {
                             color: Theme.textMuted
                             font.pixelSize: Theme.fontSm
                         }
-                        PaneHeader {
+                        // CHANGES header with the tree ⇄ path view toggle.
+                        Rectangle {
                             visible: detailsModel.shaHex !== ""
-                            text: qsTr("CHANGES (%1)").arg(fileList.count)
+                            Layout.fillWidth: true
+                            implicitHeight: Theme.headerHeight
+                            color: Theme.bgElevated
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: Theme.spaceSm
+                                anchors.rightMargin: Theme.spaceXs
+                                spacing: Theme.spaceXs
+                                Label {
+                                    text: qsTr("CHANGES (%1)").arg(detailsModel.fileTotal)
+                                    font.pixelSize: Theme.fontSm
+                                    font.weight: Font.DemiBold
+                                    color: Theme.textSecondary
+                                }
+                                Item { Layout.fillWidth: true }
+                                ToolButton {
+                                    padding: 0
+                                    implicitWidth: Theme.iconLg
+                                    implicitHeight: Theme.iconLg
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 600
+                                    ToolTip.text: qsTr("View as tree")
+                                    onClicked: detailsModel.setTreeView(true)
+                                    contentItem: NavIcon {
+                                        kind: "hier"
+                                        tint: detailsModel.treeView ? Theme.accent
+                                                                    : Theme.textMuted
+                                    }
+                                }
+                                ToolButton {
+                                    padding: 0
+                                    implicitWidth: Theme.iconLg
+                                    implicitHeight: Theme.iconLg
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 600
+                                    ToolTip.text: qsTr("View as paths")
+                                    onClicked: detailsModel.setTreeView(false)
+                                    contentItem: NavIcon {
+                                        kind: "list"
+                                        tint: detailsModel.treeView ? Theme.textMuted
+                                                                    : Theme.accent
+                                    }
+                                }
+                            }
                         }
                         ListView {
                             id: fileList
@@ -1097,6 +1204,7 @@ ApplicationWindow {
                                 listWidth: fileList.width
                                 onActivated: (bucket, path, origPath) =>
                                     page.toggleDiff("commit", path, origPath)
+                                onFolderToggled: key => detailsModel.toggleFolder(key)
                             }
                         }
                     }
@@ -1308,9 +1416,10 @@ ApplicationWindow {
                       + rowItem.oid_hex.substring(0, 8)
     }
 
-    // One aggregated chip: primary name + "+N". Branch chips are outlined
-    // (⎇ / ☁ / HEAD, blue), tag chips are filled (⚑, amber) so the two
-    // kinds read differently at a glance.
+    // One aggregated chip: primary name + "+N". No icons — the kind reads
+    // through color alone, matching the sidebar header tints (local =
+    // accent, remote = light blue, detached HEAD = red, tag = amber);
+    // tags are additionally filled while branches stay outlined.
     component RefChip: Rectangle {
         id: chip
         property var records: []
@@ -1327,7 +1436,7 @@ ApplicationWindow {
         readonly property string recKind: rec[0]
         readonly property bool recHead: rec[1] === "1"
         readonly property color chipColor: tagStyle ? Theme.warning
-                                          : recKind === "R" ? Theme.textSecondary
+                                          : recKind === "R" ? Theme.textLink
                                           : recKind === "H" ? Theme.danger
                                           : Theme.accent
 
@@ -1341,13 +1450,6 @@ ApplicationWindow {
             anchors.left: parent.left
             anchors.leftMargin: Theme.spaceXs
             spacing: Theme.spaceXs
-            NavIcon {
-                anchors.verticalCenter: parent.verticalCenter
-                kind: chip.tagStyle ? "tag" : chip.recKind === "R" ? "remote" : "branch"
-                tint: chip.chipColor
-                width: Theme.iconSm
-                height: Theme.iconSm
-            }
             Label {
                 text: chip.rec.substring(3)
                 color: chip.chipColor
@@ -1355,7 +1457,7 @@ ApplicationWindow {
                 font.weight: chip.recHead ? Font.DemiBold : Font.Normal
                 elide: Text.ElideRight
                 width: Math.min(implicitWidth,
-                                chip.maxWidth - Theme.spaceLg
+                                chip.maxWidth - 2 * Theme.spaceXs
                                 - (chip.records.length > 1 ? Theme.spaceLg : 0))
             }
             Label {
@@ -1424,7 +1526,8 @@ ApplicationWindow {
                 implicitHeight: Theme.iconLg
                 ToolTip.visible: hovered
                 ToolTip.delay: 600
-                ToolTip.text: qsTr("Show tags in the graph")
+                ToolTip.text: header.tagsShown ? qsTr("Hide tags in the graph")
+                                               : qsTr("Show tags in the graph")
                 onToggled: header.tagsToggled(checked)
             }
         }
@@ -1441,6 +1544,8 @@ ApplicationWindow {
         property var sectionModel
         property bool expanded: true
         property string kindHint: "branch"
+        // "↑a ↓b" of the current branch (branches section only).
+        property string headTrack: ""
         signal refActivated(string oidHex)
         signal fileActivated(string bucket, string path, string origPath)
 
@@ -1455,6 +1560,7 @@ ApplicationWindow {
         delegate: NavItemDelegate {
             listWidth: navList.width
             kindHint: navList.kindHint
+            headTrack: navList.headTrack
             onRefClicked: oidHex => navList.refActivated(oidHex)
             onFileClicked: (bucket, path, origPath) => navList.fileActivated(bucket, path, origPath)
             onFolderClicked: key => navList.sectionModel.toggleFolder(key)
@@ -1476,6 +1582,7 @@ ApplicationWindow {
         required property bool folder
         required property bool collapsed
         property string kindHint: "branch"
+        property string headTrack: ""
         property real listWidth: 200
 
         signal refClicked(string oidHex)
@@ -1485,6 +1592,13 @@ ApplicationWindow {
         width: listWidth
         height: Theme.rowHeight
 
+        // The current branch stays highlighted inside the list (it is
+        // also pinned under the section header).
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.accentMuted
+            visible: navRow.is_head && !navRow.folder
+        }
         Rectangle {
             anchors.fill: parent
             color: Theme.bgHover
@@ -1499,6 +1613,13 @@ ApplicationWindow {
                 visible: navRow.folder
                 text: navRow.collapsed ? "▸" : "▾"
                 color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+            }
+            Label {
+                visible: navRow.kindHint === "stash" && navRow.change !== ""
+                text: navRow.change
+                color: Theme.textMuted
+                font.family: Theme.monoFamily
                 font.pixelSize: Theme.fontSm
             }
             ChangeIcon {
@@ -1540,16 +1661,33 @@ ApplicationWindow {
                        : navRow.is_head ? Theme.textLink : Theme.textPrimary
                 font.pixelSize: Theme.fontMd
             }
-            // Branch state badge: filled = has remote, hollow = local only
-            // (PR state joins in Phase 4 as a third look).
-            Rectangle {
+            // Current branch's ahead/behind, left of the state icon.
+            Label {
                 visible: !navRow.folder && navRow.kindHint === "branch"
-                width: Theme.spaceSm
-                height: Theme.spaceSm
-                radius: Theme.spaceXs
-                color: navRow.has_remote ? Theme.accent : "transparent"
-                border.color: navRow.has_remote ? Theme.accent : Theme.textMuted
-                border.width: Theme.borderWidth
+                         && navRow.is_head && navRow.headTrack !== ""
+                text: navRow.headTrack
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+            }
+            // Branch remote state: nothing = local only, remote icon =
+            // has a remote; a PR icon replaces it once forge data exists
+            // (Phase 4 — the `pr` NavIcon kind is already drawn).
+            NavIcon {
+                visible: !navRow.folder && navRow.kindHint === "branch"
+                         && navRow.has_remote
+                kind: "remote"
+                tint: Theme.textLink
+                width: Theme.iconSm + 2
+                height: Theme.iconSm + 2
+                ToolTip.visible: remoteHover.containsMouse
+                ToolTip.delay: 600
+                ToolTip.text: qsTr("Has a remote branch")
+                MouseArea {
+                    id: remoteHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                }
             }
         }
         MouseArea {
@@ -1574,7 +1712,9 @@ ApplicationWindow {
     }
 
     // ======================================================================
-    // A changed-file row (commit file list)
+    // A changed-file row (commit file list): tree view shows indented,
+    // collapsible directory rows with leaf names; path view shows flat
+    // full paths.
     // ======================================================================
     component FileRowDelegate: Item {
         id: fileRow
@@ -1582,10 +1722,13 @@ ApplicationWindow {
         property real listWidth: 200
 
         readonly property string changeText: model.change ?? ""
+        readonly property string nameText: model.name ?? ""
         readonly property string pathText: model.path ?? ""
         readonly property string origPathText: model.orig_path ?? ""
+        readonly property bool isFolder: (model.folder ?? false) === true
 
         signal activated(string bucket, string path, string origPath)
+        signal folderToggled(string key)
 
         width: listWidth
         height: Theme.rowHeight
@@ -1598,10 +1741,17 @@ ApplicationWindow {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: Theme.spaceSm
+            anchors.leftMargin: Theme.spaceSm + (fileRow.model.depth ?? 0) * Theme.spaceMd
             anchors.rightMargin: Theme.spaceSm
             spacing: Theme.spaceXs
+            Label {
+                visible: fileRow.isFolder
+                text: (fileRow.model.collapsed ?? false) ? "▸" : "▾"
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+            }
             ChangeIcon {
+                visible: !fileRow.isFolder
                 change: fileRow.changeText
                 width: Theme.iconSm + 2
                 height: Theme.iconSm + 2
@@ -1625,20 +1775,30 @@ ApplicationWindow {
             }
             Label {
                 Layout.fillWidth: true
-                text: fileRow.origPathText === ""
-                      ? fileRow.pathText
-                      : qsTr("%1 → %2").arg(fileRow.origPathText).arg(fileRow.pathText)
+                text: fileRow.isFolder || fileRow.origPathText === ""
+                      ? fileRow.nameText
+                      : qsTr("%1 → %2").arg(fileRow.origPathText).arg(fileRow.nameText)
                 elide: Text.ElideMiddle
                 font.pixelSize: Theme.fontMd
-                color: Theme.textPrimary
+                color: fileRow.isFolder ? Theme.textSecondary : Theme.textPrimary
             }
         }
         MouseArea {
             id: fileMouse
             anchors.fill: parent
             hoverEnabled: true
-            onClicked: fileRow.activated("", fileRow.pathText, fileRow.origPathText)
+            onClicked: {
+                if (fileRow.isFolder)
+                    fileRow.folderToggled(fileRow.pathText)
+                else
+                    fileRow.activated("", fileRow.pathText, fileRow.origPathText)
+            }
         }
+        // Tree leaves show only their file name; hover reveals the path.
+        ToolTip.visible: fileMouse.containsMouse && !fileRow.isFolder
+                         && fileRow.nameText !== fileRow.pathText
+        ToolTip.delay: 700
+        ToolTip.text: fileRow.pathText
     }
 
     // Hand-drawn 16px-grid icons in the common git-client style (branch
@@ -1749,6 +1909,53 @@ ApplicationWindow {
                 ctx.beginPath()
                 ctx.arc(8 * s, 12.8 * s, 1 * s, 0, 2 * Math.PI)
                 ctx.fill()
+            } else if (icon.kind === "hier") {
+                ctx.strokeRect(3 * s, 3 * s, 3 * s, 3 * s)
+                ctx.beginPath()
+                ctx.moveTo(4.5 * s, 6 * s)
+                ctx.lineTo(4.5 * s, 12 * s)
+                ctx.moveTo(4.5 * s, 8 * s)
+                ctx.lineTo(10 * s, 8 * s)
+                ctx.moveTo(4.5 * s, 12 * s)
+                ctx.lineTo(10 * s, 12 * s)
+                ctx.stroke()
+                ctx.strokeRect(10 * s, 6.5 * s, 3 * s, 3 * s)
+                ctx.strokeRect(10 * s, 10.5 * s, 3 * s, 3 * s)
+            } else if (icon.kind === "list") {
+                ctx.beginPath()
+                for (const ly of [4.5, 8, 11.5]) {
+                    ctx.moveTo(5.5 * s, ly * s)
+                    ctx.lineTo(13 * s, ly * s)
+                }
+                ctx.stroke()
+                for (const ly of [4.5, 8, 11.5]) {
+                    ctx.beginPath()
+                    ctx.arc(3.4 * s, ly * s, 0.9 * s, 0, 2 * Math.PI)
+                    ctx.fill()
+                }
+            } else if (icon.kind === "pr") {
+                // GitHub-style pull request: left commit line, right elbow
+                // arrow into the merge node.
+                ctx.beginPath()
+                ctx.moveTo(4.5 * s, 5.5 * s)
+                ctx.lineTo(4.5 * s, 10.5 * s)
+                ctx.stroke()
+                for (const c of [[4.5, 3.8], [4.5, 12.2], [11.5, 12.2]]) {
+                    ctx.beginPath()
+                    ctx.arc(c[0] * s, c[1] * s, 1.7 * s, 0, 2 * Math.PI)
+                    ctx.stroke()
+                }
+                ctx.beginPath()
+                ctx.moveTo(7.4 * s, 3.8 * s)
+                ctx.lineTo(9.8 * s, 3.8 * s)
+                ctx.quadraticCurveTo(11.5 * s, 3.8 * s, 11.5 * s, 5.5 * s)
+                ctx.lineTo(11.5 * s, 10.5 * s)
+                ctx.stroke()
+                ctx.beginPath()
+                ctx.moveTo(8.8 * s, 2.5 * s)
+                ctx.lineTo(7.2 * s, 3.8 * s)
+                ctx.lineTo(8.8 * s, 5.1 * s)
+                ctx.stroke()
             } else if (icon.kind === "folder") {
                 ctx.beginPath()
                 ctx.moveTo(2.5 * s, 12.5 * s)
