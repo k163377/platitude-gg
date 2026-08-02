@@ -188,9 +188,7 @@ ApplicationWindow {
                     text: "☰"
                     font.pixelSize: Theme.fontLg
                     Layout.leftMargin: Theme.spaceXs
-                    // Level with the bottom-aligned tab titles.
-                    Layout.alignment: Qt.AlignBottom
-                    Layout.bottomMargin: Theme.spaceXs / 2
+                    Layout.alignment: Qt.AlignVCenter
                     padding: 0
                     implicitWidth: Theme.spaceXl
                     implicitHeight: Theme.spaceXl
@@ -222,64 +220,61 @@ ApplicationWindow {
                         }
                     }
                 }
-                TabBar {
-                    id: tabBar
-                    Layout.fillWidth: false
+                // Plain Row tabs (no TabBar): full control of the geometry
+                // so the selected underline sits exactly on the toolbar's
+                // bottom edge with no styling leftovers beneath it.
+                Row {
+                    id: tabRow
                     Layout.fillHeight: true
-                    background: null
-                    // No inner padding: the selected-tab underline must sit
-                    // flush on the toolbar's bottom edge.
-                    padding: 0
-                    // Two-way sync without a binding loop: user clicks push
-                    // into the model; model changes push back here.
-                    onCurrentIndexChanged: tabsModel.setCurrentIndex(currentIndex)
-                    Connections {
-                        target: tabsModel
-                        function onCurrentIndexChanged() {
-                            tabBar.currentIndex = tabsModel.currentIndex
-                        }
-                    }
+                    spacing: 0
                     Repeater {
                         model: tabsModel
-                        TabButton {
-                            id: tabButton
+                        Rectangle {
+                            id: tabItem
+                            required property int index
                             required property int tab_id
                             required property string title
                             required property string repo_path
-                            width: implicitWidth
-                            height: tabBar.height
-                            background: Rectangle {
-                                color: tabButton.checked ? Theme.bgSelected : "transparent"
-                                Rectangle {
-                                    anchors.fill: parent
-                                    color: Theme.bgHover
-                                    visible: tabButton.hovered && !tabButton.checked
-                                }
-                                Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.bottom: parent.bottom
-                                    height: 2 * Theme.borderWidth
-                                    color: Theme.accent
-                                    visible: tabButton.checked
-                                }
+                            readonly property bool current: tabsModel.currentIndex === index
+                            width: tabContent.implicitWidth + 2 * Theme.spaceSm
+                            height: tabRow.height
+                            color: current ? Theme.bgSelected : "transparent"
+                            MouseArea {
+                                id: tabMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: tabsModel.setCurrentIndex(tabItem.index)
                             }
-                            contentItem: RowLayout {
+                            Rectangle {
+                                anchors.fill: parent
+                                color: Theme.bgHover
+                                visible: tabMouse.containsMouse && !tabItem.current
+                            }
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                height: 2 * Theme.borderWidth
+                                color: Theme.accent
+                                visible: tabItem.current
+                            }
+                            RowLayout {
+                                id: tabContent
+                                anchors.fill: parent
+                                anchors.leftMargin: Theme.spaceSm
+                                anchors.rightMargin: Theme.spaceXs
                                 spacing: Theme.spaceXs
                                 Label {
-                                    text: tabButton.title
+                                    text: tabItem.title
                                     elide: Text.ElideRight
                                     Layout.maximumWidth: 180
                                     Layout.fillHeight: true
-                                    // Bottom-aligned toward the accent
-                                    // underline (the tall tab reads
-                                    // stretched with centered text).
+                                    // Hugging the underline; air on top.
                                     verticalAlignment: Text.AlignBottom
                                     bottomPadding: Theme.spaceXs + 2 * Theme.borderWidth
-                                    leftPadding: Theme.spaceXs
-                                    font.weight: tabButton.checked ? Font.DemiBold : Font.Normal
-                                    color: tabButton.checked ? Theme.textPrimary
-                                                             : Theme.textSecondary
+                                    font.weight: tabItem.current ? Font.DemiBold : Font.Normal
+                                    color: tabItem.current ? Theme.textPrimary
+                                                           : Theme.textSecondary
                                 }
                                 ToolButton {
                                     text: "×"
@@ -288,7 +283,7 @@ ApplicationWindow {
                                     Layout.bottomMargin: Theme.spaceXs
                                     implicitWidth: Theme.iconLg
                                     implicitHeight: Theme.iconLg
-                                    onClicked: tabsModel.closeTab(tabButton.tab_id)
+                                    onClicked: tabsModel.closeTab(tabItem.tab_id)
                                 }
                             }
                         }
