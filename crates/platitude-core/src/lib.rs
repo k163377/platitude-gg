@@ -19,6 +19,7 @@ pub mod session;
 pub mod stash;
 pub mod status;
 pub mod version;
+pub mod worktrees;
 
 pub use error::GitError;
 pub use model::{CommitMeta, StrPool};

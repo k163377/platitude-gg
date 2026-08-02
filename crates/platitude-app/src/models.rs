@@ -411,6 +411,22 @@ impl RepoTab {
         self.changed();
     }
 
+    /// `git stash pop` on the given selector (stash-row action).
+    #[qslot]
+    fn pop_stash(&mut self, selector: String) {
+        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
+            session.stash_pop(selector);
+        }
+    }
+
+    /// `git stash apply` on the given selector (keeps the stash).
+    #[qslot]
+    fn apply_stash(&mut self, selector: String) {
+        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
+            session.stash_apply(selector);
+        }
+    }
+
     /// Shows/hides tags in the graph walk (restarts the stream).
     #[qslot]
     fn set_tags_shown(&mut self, shown: bool) {
@@ -445,6 +461,8 @@ pub struct GraphRowItem {
     avatar: i32,
     geometry: String,
     labels: String,
+    /// `stash@{n}` when the row is a stash; empty otherwise.
+    stash_ref: String,
 }
 
 #[derive(Default)]
@@ -623,6 +641,16 @@ impl GraphModel {
             .map_or(-1, |i| i as i32)
     }
 
+    /// Reflog selector when the commit is a stash row (empty otherwise).
+    #[qslot]
+    fn stash_ref_of(&self, oid_hex: String) -> String {
+        self.rows
+            .iter()
+            .find(|r| r.oid_hex == oid_hex)
+            .map(|r| r.stash_ref.clone())
+            .unwrap_or_default()
+    }
+
     /// Full commit id at a row (selection / keyboard navigation).
     #[qslot]
     fn oid_at(&self, row: i32) -> String {
@@ -647,6 +675,7 @@ fn to_row_item(row: &LogRow) -> GraphRowItem {
         avatar: crate::encode::avatar_code(&row.author),
         geometry: encode_geometry(&row.segments),
         labels: encode_labels(&row.labels),
+        stash_ref: row.stash_ref.clone(),
     }
 }
 
@@ -703,6 +732,7 @@ pub struct NavSectionModel {
     refs_feed: Option<Arc<Feed<platitude_core::session::RefsSnapshot>>>,
     status_feed: Option<Arc<Feed<StatusMsg>>>,
     stash_feed: Option<Arc<Feed<Vec<platitude_core::stash::StashEntry>>>>,
+    worktrees_feed: Option<Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>>,
     tab_id: i32,
 }
 
@@ -1034,6 +1064,11 @@ impl NavSectionModel {
                 feed.attach(invoker);
                 self.stash_feed = Some(feed);
             }
+            "worktrees" => {
+                let feed = Arc::clone(&feeds.worktrees);
+                feed.attach(invoker);
+                self.worktrees_feed = Some(feed);
+            }
             other => tracing::warn!(section = other, "unknown sidebar section"),
         }
     }
@@ -1068,6 +1103,32 @@ impl NavSectionModel {
             && let Some(StatusMsg { status, .. }) = feed.drain().pop()
         {
             self.all = status_nav_items(&status);
+        }
+        if let Some(feed) = self.worktrees_feed.clone()
+            && let Some(list) = feed.drain().pop()
+        {
+            // The current worktree is marked like the current branch;
+            // `bucket` carries the branch (empty = detached) and `full`
+            // the absolute path (tooltip + click-to-open).
+            let current = Hub::with(|hub| hub.session(self.tab_id).and_then(|s| s.workdir()))
+                .flatten()
+                .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
+                .unwrap_or_default();
+            self.all = list
+                .into_iter()
+                .filter(|w| !w.bare)
+                .map(|w| {
+                    let norm = w.path.replace('\\', "/");
+                    let name = norm.rsplit('/').next().unwrap_or(norm.as_str()).to_string();
+                    NavItem {
+                        name,
+                        is_head: norm.to_lowercase() == current,
+                        full: w.path,
+                        bucket: w.branch.unwrap_or_default(),
+                        ..Default::default()
+                    }
+                })
+                .collect();
         }
         if let Some(feed) = self.stash_feed.clone()
             && let Some(stashes) = feed.drain().pop()

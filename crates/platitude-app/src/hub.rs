@@ -159,6 +159,7 @@ pub struct Feeds {
     /// Status list consumer (working-tree sidebar section).
     pub status_nav: Arc<Feed<StatusMsg>>,
     pub stash: Arc<Feed<Vec<StashEntry>>>,
+    pub worktrees: Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>,
     pub details: Arc<Feed<platitude_core::details::CommitDetails>>,
     pub diff: Arc<Feed<DiffMsg>>,
 }
@@ -227,6 +228,9 @@ impl SessionSink for BridgeSink {
                     .push_replace(StatusMsg { status, op_state });
             }
             SessionEvent::StashesLoaded { stashes } => self.feeds.stash.push_replace(stashes),
+            SessionEvent::WorktreesLoaded { worktrees } => {
+                self.feeds.worktrees.push_replace(worktrees)
+            }
             SessionEvent::DetailsLoaded { details } => self.feeds.details.push_replace(details),
             SessionEvent::DiffLoaded { target, patches } => {
                 self.feeds.diff.push_replace(DiffMsg { target, patches });

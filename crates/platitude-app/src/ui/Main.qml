@@ -188,6 +188,12 @@ ApplicationWindow {
                     text: "☰"
                     font.pixelSize: Theme.fontLg
                     Layout.leftMargin: Theme.spaceXs
+                    // Level with the bottom-aligned tab titles.
+                    Layout.alignment: Qt.AlignBottom
+                    Layout.bottomMargin: Theme.spaceXs / 2
+                    padding: 0
+                    implicitWidth: Theme.spaceXl
+                    implicitHeight: Theme.spaceXl
                     onClicked: appMenu.open()
                     Menu {
                         id: appMenu
@@ -221,6 +227,9 @@ ApplicationWindow {
                     Layout.fillWidth: false
                     Layout.fillHeight: true
                     background: null
+                    // No inner padding: the selected-tab underline must sit
+                    // flush on the toolbar's bottom edge.
+                    padding: 0
                     // Two-way sync without a binding loop: user clicks push
                     // into the model; model changes push back here.
                     onCurrentIndexChanged: tabsModel.setCurrentIndex(currentIndex)
@@ -456,10 +465,12 @@ ApplicationWindow {
 
         // Right pane switches to the working-tree (WIP) view.
         property bool wipShown: false
+        // Selected stash row's reflog selector ("" = not a stash).
+        property string selectedStashRef: ""
         function showWip() {
             page.wipShown = true
-            page.expWorktree = true
             page.selectedOid = ""
+            page.selectedStashRef = ""
             page.closeDiff()
         }
 
@@ -502,7 +513,7 @@ ApplicationWindow {
         readonly property string lastOpen: refFilter.text !== "" ? "tags"
             : expTags ? "tags"
             : expStashes ? "stashes"
-            : (expWorktree && worktreeModel.total > 0) ? "worktree"
+            : expWorktree ? "worktree"
             : expRemotes ? "remotes"
             : expBranches ? "branches" : ""
 
@@ -518,6 +529,7 @@ ApplicationWindow {
         NavSectionModel { id: branchesModel }
         NavSectionModel { id: remotesModel }
         NavSectionModel { id: worktreeModel }
+        NavSectionModel { id: worktreesModel }
         NavSectionModel { id: stashesModel }
         NavSectionModel { id: tagsModel }
 
@@ -530,6 +542,7 @@ ApplicationWindow {
             branchesModel.attachSection(page.tab_id, "branches")
             remotesModel.attachSection(page.tab_id, "remotes")
             worktreeModel.attachSection(page.tab_id, "worktree")
+            worktreesModel.attachSection(page.tab_id, "worktrees")
             stashesModel.attachSection(page.tab_id, "stashes")
             tagsModel.attachSection(page.tab_id, "tags")
         }
@@ -619,11 +632,8 @@ ApplicationWindow {
             id: scrollToTimer
             interval: 600
             onTriggered: {
-                if (AppBackend.scrollTo === "bottom")
-                    graphList.contentY = graphList.clampY(graphList.originY
-                                                          + graphList.contentHeight)
-                else
-                    graphList.contentY = graphList.clampY(graphList.originY)
+                graphList.contentY = graphList.clampY(
+                    AppBackend.scrollTo === "bottom" ? 1e12 : -1e12)
             }
         }
         Connections {
@@ -763,7 +773,7 @@ ApplicationWindow {
                             onTextChanged: {
                                 branchesModel.setFilter(text)
                                 remotesModel.setFilter(text)
-                                worktreeModel.setFilter(text)
+                                worktreesModel.setFilter(text)
                                 stashesModel.setFilter(text)
                                 tagsModel.setFilter(text)
                             }
@@ -860,24 +870,24 @@ ApplicationWindow {
                             onRefActivated: oidHex => page.jumpToRef(oidHex)
                         }
 
-                        // Hidden entirely while the working tree is clean.
+                        // git worktrees (checkouts), GitKraken-style; the
+                        // changed-file lists live in the right pane's WIP
+                        // view. Clicking one opens it as a new tab.
                         NavHeader {
-                            visible: worktreeModel.total > 0
-                            caption: qsTr("WORKING TREE")
+                            caption: qsTr("WORKTREES")
                             iconKind: "tree"
                             iconTint: Theme.success
-                            count: worktreeModel.total
+                            count: worktreesModel.total
                             expanded: page.expWorktree || refFilter.text !== ""
                             onToggled: page.expWorktree = !page.expWorktree
                         }
                         NavList {
-                            sectionModel: worktreeModel
-                            expanded: (page.expWorktree || refFilter.text !== "")
-                                      && worktreeModel.total > 0
-                            kindHint: "wt"
+                            sectionModel: worktreesModel
+                            expanded: page.expWorktree || refFilter.text !== ""
+                            kindHint: "worktree"
                             stretch: page.lastOpen === "worktree"
                             onFileActivated: (bucket, path, origPath) =>
-                                page.toggleDiff(bucket, path, origPath)
+                                tabsModel.openRepositoryPath(path)
                         }
 
                         NavHeader {
@@ -956,6 +966,7 @@ ApplicationWindow {
                                 }
                                 page.wipShown = false
                                 page.selectedOid = oidHex
+                                page.selectedStashRef = graphModel.stashRefOf(oidHex)
                                 detailsModel.request(oidHex)
                                 page.closeDiff()
                             }
@@ -1021,8 +1032,14 @@ ApplicationWindow {
                             // become unreachable, the bottom overshoots the
                             // truncation footer).
                             function clampY(y) {
-                                const minY = graphList.originY
-                                const maxY = minY + Math.max(0, graphList.contentHeight - graphList.height)
+                                // topMargin lives above the content origin —
+                                // forgetting it makes the top gap
+                                // unreachable by wheel after any scroll.
+                                const minY = graphList.originY - graphList.topMargin
+                                const maxY = Math.max(minY, graphList.originY
+                                                            + graphList.contentHeight
+                                                            - graphList.height
+                                                            + graphList.bottomMargin)
                                 return Math.max(minY, Math.min(y, maxY))
                             }
                             // Mouse wheels scroll a fixed number of rows per
@@ -1428,7 +1445,7 @@ ApplicationWindow {
                                 anchors.rightMargin: Theme.spaceXs
                                 spacing: Theme.spaceXs
                                 Label {
-                                    text: qsTr("WORKING TREE (%1)").arg(worktreeModel.total)
+                                    text: qsTr("UNCOMMITTED CHANGES (%1)").arg(worktreeModel.total)
                                     font.pixelSize: Theme.fontSm
                                     font.weight: Font.DemiBold
                                     color: Theme.textSecondary
@@ -1464,63 +1481,8 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        ListView {
-                            id: wipList
-                            visible: page.wipShown
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            clip: true
-                            model: worktreeModel
-                            reuseItems: true
-                            ScrollBar.vertical: ScrollBar {}
-                            // GitKraken layout: unstaged (incl. untracked)
-                            // above, staged below, editor at the bottom.
-                            section.property: "group"
-                            section.delegate: Rectangle {
-                                id: bucketHeader
-                                required property string section
-                                width: wipList.width
-                                height: Theme.rowHeight
-                                color: Theme.bgElevated
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: Theme.spaceSm
-                                    anchors.rightMargin: Theme.spaceXs
-                                    spacing: Theme.spaceXs
-                                    Label {
-                                        text: bucketHeader.section === "staged"
-                                              ? qsTr("STAGED FILES (%1)").arg(workTree.stagedCount)
-                                              : bucketHeader.section === "unstaged"
-                                              ? qsTr("UNSTAGED FILES (%1)")
-                                                .arg(workTree.unstagedCount + workTree.untrackedCount)
-                                              : qsTr("CONFLICTS")
-                                        font.pixelSize: Theme.fontSm
-                                        font.weight: Font.DemiBold
-                                        color: bucketHeader.section === "conflicts"
-                                               ? Theme.danger : Theme.textSecondary
-                                    }
-                                    Item { Layout.fillWidth: true }
-                                    ToolButton {
-                                        visible: bucketHeader.section !== "conflicts"
-                                        text: bucketHeader.section === "staged"
-                                              ? qsTr("Unstage all") : qsTr("Stage all")
-                                        font.pixelSize: Theme.fontSm
-                                        ToolTip.visible: hovered
-                                        ToolTip.delay: 300
-                                        ToolTip.text: qsTr("Staging arrives in Phase 2")
-                                        onClicked: {}
-                                    }
-                                }
-                            }
-                            delegate: NavItemDelegate {
-                                listWidth: wipList.width
-                                kindHint: "wt"
-                                showStage: true
-                                onFileClicked: (bucket, path, origPath) =>
-                                    page.toggleDiff(bucket, path, origPath)
-                                onFolderClicked: key => worktreeModel.toggleFolder(key)
-                            }
-                        }
+                        // Message editor pinned on top — identical shape in
+                        // commit details, amend and new-commit creation.
                         ColumnLayout {
                             visible: page.wipShown
                             Layout.fillWidth: true
@@ -1585,11 +1547,114 @@ ApplicationWindow {
                                 }
                             }
                         }
+                        ListView {
+                            id: wipList
+                            visible: page.wipShown
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            model: worktreeModel
+                            reuseItems: true
+                            ScrollBar.vertical: ScrollBar {}
+                            // GitKraken grouping: unstaged (incl. untracked)
+                            // above, staged below.
+                            section.property: "group"
+                            section.delegate: Rectangle {
+                                id: bucketHeader
+                                required property string section
+                                width: wipList.width
+                                height: Theme.rowHeight
+                                color: Theme.bgElevated
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Theme.spaceSm
+                                    anchors.rightMargin: Theme.spaceXs
+                                    spacing: Theme.spaceXs
+                                    Label {
+                                        text: bucketHeader.section === "staged"
+                                              ? qsTr("STAGED FILES (%1)").arg(workTree.stagedCount)
+                                              : bucketHeader.section === "unstaged"
+                                              ? qsTr("UNSTAGED FILES (%1)")
+                                                .arg(workTree.unstagedCount + workTree.untrackedCount)
+                                              : qsTr("CONFLICTS")
+                                        font.pixelSize: Theme.fontSm
+                                        font.weight: Font.DemiBold
+                                        color: bucketHeader.section === "conflicts"
+                                               ? Theme.danger : Theme.textSecondary
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                    ToolButton {
+                                        visible: bucketHeader.section !== "conflicts"
+                                        text: bucketHeader.section === "staged"
+                                              ? qsTr("Unstage all") : qsTr("Stage all")
+                                        font.pixelSize: Theme.fontSm
+                                        ToolTip.visible: hovered
+                                        ToolTip.delay: 300
+                                        ToolTip.text: qsTr("Staging arrives in Phase 2")
+                                        onClicked: {}
+                                    }
+                                }
+                            }
+                            delegate: NavItemDelegate {
+                                listWidth: wipList.width
+                                kindHint: "wt"
+                                showStage: true
+                                onFileClicked: (bucket, path, origPath) =>
+                                    page.toggleDiff(bucket, path, origPath)
+                                onFolderClicked: key => worktreeModel.toggleFolder(key)
+                            }
+                        }
 
                         // ---- commit-details mode ----
                         PaneHeader {
                             visible: !page.wipShown
                             text: qsTr("COMMIT")
+                        }
+                        // Stash actions when the selected row is a stash.
+                        Rectangle {
+                            visible: !page.wipShown && page.selectedStashRef !== ""
+                            Layout.fillWidth: true
+                            implicitHeight: Theme.headerHeight
+                            color: Theme.bgElevated
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: Theme.spaceSm
+                                anchors.rightMargin: Theme.spaceXs
+                                spacing: Theme.spaceXs
+                                NavIcon {
+                                    kind: "stash"
+                                    tint: Theme.textSecondary
+                                    width: Theme.iconSm + 2
+                                    height: Theme.iconSm + 2
+                                }
+                                Label {
+                                    text: page.selectedStashRef
+                                    font.family: Theme.monoFamily
+                                    font.pixelSize: Theme.fontSm
+                                    color: Theme.textSecondary
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                ToolButton {
+                                    text: qsTr("Apply")
+                                    font.pixelSize: Theme.fontSm
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 600
+                                    ToolTip.text: qsTr("Apply this stash, keeping it")
+                                    onClicked: repoTab.applyStash(page.selectedStashRef)
+                                }
+                                ToolButton {
+                                    text: qsTr("Pop")
+                                    font.pixelSize: Theme.fontSm
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 600
+                                    ToolTip.text: qsTr("Apply this stash and drop it")
+                                    onClicked: {
+                                        repoTab.popStash(page.selectedStashRef)
+                                        page.selectedStashRef = ""
+                                    }
+                                }
+                            }
                         }
                         ColumnLayout {
                             Layout.fillWidth: true
@@ -1814,6 +1879,7 @@ ApplicationWindow {
             // Details resolve even outside the window.
             page.wipShown = false
             page.selectedOid = oidHex
+            page.selectedStashRef = graphModel.stashRefOf(oidHex)
             detailsModel.request(oidHex)
             page.closeDiff()
         }
@@ -1835,6 +1901,7 @@ ApplicationWindow {
         required property int avatar
         required property string geometry
         required property string labels
+        required property string stash_ref
 
         width: ListView.view.width
         height: Theme.rowHeight
@@ -1974,6 +2041,25 @@ ApplicationWindow {
                         ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
                         ctx.stroke()
                         ctx.setLineDash([])
+                        return
+                    }
+                    // Stash rows draw the archive-box glyph instead of the
+                    // author identicon.
+                    if (rowItem.stash_ref !== "") {
+                        ctx.fillStyle = Theme.bgElevated
+                        ctx.beginPath()
+                        ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
+                        ctx.fill()
+                        ctx.strokeStyle = Theme.textSecondary
+                        ctx.lineWidth = root.iconStroke
+                        const bw = r * 1.2
+                        ctx.strokeRect(nodeX - bw / 2, midY - bw / 2, bw, bw * 0.36)
+                        ctx.strokeRect(nodeX - bw * 0.4, midY - bw * 0.1, bw * 0.8, bw * 0.58)
+                        ctx.strokeStyle = Theme.borderStrong
+                        ctx.lineWidth = Theme.borderWidth
+                        ctx.beginPath()
+                        ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
+                        ctx.stroke()
                         return
                     }
                     // The commit node is the author's identicon (5x5,
@@ -2305,6 +2391,15 @@ ApplicationWindow {
                        : navRow.is_head ? Theme.textLink : Theme.textPrimary
                 font.pixelSize: Theme.fontMd
             }
+            // Worktree rows: checked-out branch on the right.
+            Label {
+                visible: !navRow.folder && navRow.kindHint === "worktree"
+                text: navRow.bucket !== "" ? navRow.bucket : qsTr("detached")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+                elide: Text.ElideMiddle
+                Layout.maximumWidth: navRow.listWidth / 2
+            }
             // Current branch's ahead/behind, left of the state icon.
             Label {
                 visible: !navRow.folder && navRow.kindHint === "branch"
@@ -2345,6 +2440,8 @@ ApplicationWindow {
                     navRow.fileClicked(navRow.bucket,
                                        navRow.full !== "" ? navRow.full : navRow.name,
                                        navRow.orig_path)
+                else if (navRow.kindHint === "worktree")
+                    navRow.fileClicked("worktree", navRow.full, "")
                 else if (navRow.oid_hex !== "")
                     navRow.refClicked(navRow.oid_hex)
             }

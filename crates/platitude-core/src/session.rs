@@ -100,6 +100,9 @@ pub struct LogRow {
     pub width: u16,
     pub segments: Vec<Segment>,
     pub labels: Vec<RefLabel>,
+    /// Reflog selector (`stash@{n}`) when this row is a stash; empty for
+    /// ordinary commits and the WIP row.
+    pub stash_ref: String,
 }
 
 /// Sidebar-ready refs snapshot (sorted).
@@ -173,6 +176,9 @@ pub enum SessionEvent {
     StashesLoaded {
         stashes: Vec<StashEntry>,
     },
+    WorktreesLoaded {
+        worktrees: Vec<crate::worktrees::WorktreeEntry>,
+    },
     DetailsLoaded {
         details: CommitDetails,
     },
@@ -231,6 +237,7 @@ pub struct RepoSession {
     refs_gate: OpGate,
     status_gate: OpGate,
     stash_gate: OpGate,
+    worktrees_gate: OpGate,
 }
 
 impl RepoSession {
@@ -256,6 +263,7 @@ impl RepoSession {
             refs_gate: OpGate::default(),
             status_gate: OpGate::default(),
             stash_gate: OpGate::default(),
+            worktrees_gate: OpGate::default(),
         });
 
         let s = Arc::clone(&session);
@@ -457,12 +465,14 @@ impl RepoSession {
         });
     }
 
-    /// Refreshes refs, status(+op state) and stashes concurrently.
-    /// Cheap enough for window-focus and post-operation triggers.
+    /// Refreshes refs, status(+op state), stashes and worktrees
+    /// concurrently. Cheap enough for window-focus and post-operation
+    /// triggers.
     pub fn refresh_quick(self: &Arc<Self>) {
         self.refresh_refs();
         self.refresh_status();
         self.refresh_stashes();
+        self.refresh_worktrees();
     }
 
     pub fn refresh_refs(self: &Arc<Self>) {
@@ -530,6 +540,57 @@ impl RepoSession {
                     if s.stash_gate.is_current(op_gen) {
                         s.sink.event(SessionEvent::StashesLoaded { stashes });
                     }
+                }
+                Err(e) => s.fail("stash", e),
+            }
+        });
+    }
+
+    pub fn refresh_worktrees(self: &Arc<Self>) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        let op_gen = self.worktrees_gate.begin();
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            match crate::worktrees::load(&s.executor, &workdir, &cancel).await {
+                Ok(list) => {
+                    if s.worktrees_gate.is_current(op_gen) {
+                        s.sink
+                            .event(SessionEvent::WorktreesLoaded { worktrees: list });
+                    }
+                }
+                Err(e) => s.fail("worktrees", e),
+            }
+        });
+    }
+
+    /// `git stash pop <selector>` (drops the stash on success).
+    pub fn stash_pop(self: &Arc<Self>, selector: String) {
+        self.stash_op("pop", selector);
+    }
+
+    /// `git stash apply <selector>` (keeps the stash).
+    pub fn stash_apply(self: &Arc<Self>, selector: String) {
+        self.stash_op("apply", selector);
+    }
+
+    fn stash_op(self: &Arc<Self>, op: &'static str, selector: String) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            let cmd = GitCommand::new()
+                .cwd(&workdir)
+                .args(["stash", op, &selector]);
+            match s.executor.run(cmd, &cancel).await {
+                Ok(_) => {
+                    // Both the tree and the stash rows changed shape.
+                    s.refresh_quick();
+                    s.restart_log();
                 }
                 Err(e) => s.fail("stash", e),
             }
@@ -611,6 +672,13 @@ impl RepoSession {
             return Ok(0);
         }
 
+        // Stashes are part of the graph: their oids join the walk and the
+        // synthetic index/untracked parents are sifted out below.
+        let stash_refs: HashMap<Oid, String> = stash::load(&self.executor, workdir, cancel)
+            .await
+            .map(|list| list.into_iter().map(|s| (s.oid, s.name)).collect())
+            .unwrap_or_default();
+
         let mut cmd = GitCommand::new()
             .cwd(workdir)
             .args(["log", "-z", "--topo-order", LOG_FORMAT_ARG])
@@ -622,9 +690,17 @@ impl RepoSession {
         if let Some(limit) = options.limit {
             cmd = cmd.arg(format!("--max-count={limit}"));
         }
+        if !stash_refs.is_empty() {
+            // A stash may vanish between the listing and the walk.
+            cmd = cmd.arg("--ignore-missing");
+            for oid in stash_refs.keys() {
+                cmd = cmd.arg(oid.to_hex());
+            }
+        }
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
+        let mut stash_skip: std::collections::HashSet<Oid> = std::collections::HashSet::new();
         let mut first_sent = false;
         let mut parse_error: Option<String> = None;
         let mut total: u32 = 0;
@@ -656,9 +732,11 @@ impl RepoSession {
                 };
                 if pending.len() >= threshold {
                     let batch = std::mem::take(&mut pending);
-                    total += batch.len() as u32;
+                    let mut items = Vec::with_capacity(batch.len());
+                    sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
+                    total += items.len() as u32;
                     first_sent = true;
-                    self.emit_rows(generation, &batch, parser.pool());
+                    self.emit_rows(generation, &items, parser.pool());
                 }
             })
             .await;
@@ -684,8 +762,10 @@ impl RepoSession {
         }
         if !pending.is_empty() {
             let batch = std::mem::take(&mut pending);
-            total += batch.len() as u32;
-            self.emit_rows(generation, &batch, parser.pool());
+            let mut items = Vec::with_capacity(batch.len());
+            sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
+            total += items.len() as u32;
+            self.emit_rows(generation, &items, parser.pool());
         }
         Ok(total)
     }
@@ -707,6 +787,20 @@ impl RepoSession {
             return Ok(());
         }
 
+        // Dirty working tree: prepend the synthetic WIP row (mirrors
+        // stream_log).
+        if self.wip_dirty.load(Ordering::SeqCst)
+            && let Some(head_oid) = head.oid
+        {
+            out.push(wip_row(&head_oid, builder));
+        }
+
+        // Stashes join the walk here too (see stream_log).
+        let stash_refs: HashMap<Oid, String> = stash::load(&self.executor, workdir, cancel)
+            .await
+            .map(|list| list.into_iter().map(|s| (s.oid, s.name)).collect())
+            .unwrap_or_default();
+
         let mut cmd = GitCommand::new()
             .cwd(workdir)
             .args(["log", "-z", "--topo-order", LOG_FORMAT_ARG])
@@ -718,17 +812,16 @@ impl RepoSession {
         if let Some(limit) = options.limit {
             cmd = cmd.arg(format!("--max-count={limit}"));
         }
-
-        // Dirty working tree: prepend the synthetic WIP row (mirrors
-        // stream_log).
-        if self.wip_dirty.load(Ordering::SeqCst)
-            && let Some(head_oid) = head.oid
-        {
-            out.push(wip_row(&head_oid, builder));
+        if !stash_refs.is_empty() {
+            cmd = cmd.arg("--ignore-missing");
+            for oid in stash_refs.keys() {
+                cmd = cmd.arg(oid.to_hex());
+            }
         }
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
+        let mut stash_skip: std::collections::HashSet<Oid> = std::collections::HashSet::new();
         let mut parse_error: Option<String> = None;
 
         let result = self
@@ -742,8 +835,15 @@ impl RepoSession {
                     cancel.cancel();
                     return;
                 }
-                for commit in pending.drain(..) {
-                    out.push(make_row(&commit, parser.pool(), builder));
+                let batch = std::mem::take(&mut pending);
+                let mut items = Vec::with_capacity(batch.len());
+                sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
+                for item in items {
+                    let mut row = make_row(&item.meta, parser.pool(), builder);
+                    if let Some(r) = item.stash_ref {
+                        row.stash_ref = r;
+                    }
+                    out.push(row);
                 }
             })
             .await;
@@ -765,8 +865,15 @@ impl RepoSession {
                 message: e.to_string(),
             });
         }
-        for commit in pending.drain(..) {
-            out.push(make_row(&commit, parser.pool(), builder));
+        let batch = std::mem::take(&mut pending);
+        let mut items = Vec::with_capacity(batch.len());
+        sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
+        for item in items {
+            let mut row = make_row(&item.meta, parser.pool(), builder);
+            if let Some(r) = item.stash_ref {
+                row.stash_ref = r;
+            }
+            out.push(row);
         }
         Ok(())
     }
@@ -796,16 +903,19 @@ impl RepoSession {
 
     /// Builds graph rows for a batch and sends them (holding the shared
     /// lock so generations cannot interleave).
-    fn emit_rows(&self, generation: u64, batch: &[CommitMeta], pool: &crate::model::StrPool) {
+    fn emit_rows(&self, generation: u64, batch: &[StreamItem], pool: &crate::model::StrPool) {
         let mut guard = self.lock_shared();
         if self.log_gen.load(Ordering::SeqCst) != generation {
             return;
         }
         let shared = &mut *guard;
         let mut rows = Vec::with_capacity(batch.len());
-        for commit in batch {
-            let mut row = make_row(commit, pool, &mut shared.builder);
-            if let Some(labels) = shared.label_map.get(&commit.oid) {
+        for item in batch {
+            let mut row = make_row(&item.meta, pool, &mut shared.builder);
+            if let Some(r) = &item.stash_ref {
+                row.stash_ref = r.clone();
+            }
+            if let Some(labels) = shared.label_map.get(&item.meta.oid) {
                 row.labels = labels.clone();
                 shared.applied.insert(row.row, labels.clone());
             }
@@ -868,6 +978,38 @@ fn wip_row(head: &Oid, builder: &mut GraphBuilder) -> LogRow {
         width: g.width,
         segments: g.segments,
         labels: Vec::new(),
+        stash_ref: String::new(),
+    }
+}
+
+/// One sifted stream entry (stash rows carry their reflog selector).
+struct StreamItem {
+    meta: CommitMeta,
+    stash_ref: Option<String>,
+}
+
+/// Filters a parsed batch for display: stash commits keep only their
+/// first-parent edge (the base commit), and their synthetic index /
+/// untracked parent commits are recorded and dropped when they arrive
+/// later (topo order guarantees the stash row streams first).
+fn sift_batch(
+    batch: Vec<CommitMeta>,
+    stash_refs: &HashMap<Oid, String>,
+    skip: &mut std::collections::HashSet<Oid>,
+    out: &mut Vec<StreamItem>,
+) {
+    for mut meta in batch {
+        if skip.contains(&meta.oid) {
+            continue;
+        }
+        let stash_ref = stash_refs.get(&meta.oid).cloned();
+        if stash_ref.is_some() && meta.parents.len() > 1 {
+            for extra in &meta.parents[1..] {
+                skip.insert(*extra);
+            }
+            meta.parents = Box::from(&meta.parents[..1]);
+        }
+        out.push(StreamItem { meta, stash_ref });
     }
 }
 
@@ -890,6 +1032,7 @@ fn make_row(
         width: g.width,
         segments: g.segments,
         labels: Vec::new(),
+        stash_ref: String::new(),
     }
 }
 
