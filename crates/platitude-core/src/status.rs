@@ -88,6 +88,11 @@ impl WorkTreeStatus {
     pub fn has_conflicts(&self) -> bool {
         self.conflicted().next().is_some()
     }
+
+    /// True when anything is staged, modified, untracked or conflicted.
+    pub fn is_dirty(&self) -> bool {
+        !self.items.is_empty()
+    }
 }
 
 /// Fatal parse error (the stream shape is fixed; a mismatch means the

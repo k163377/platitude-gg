@@ -38,6 +38,15 @@ impl Oid {
         Self::from_hex(hex.as_bytes())
     }
 
+    /// The all-zero id of the same length as `other` (sentinel for
+    /// synthetic rows such as the uncommitted-changes node).
+    pub fn zero_like(other: &Oid) -> Self {
+        Self {
+            len: other.len,
+            bytes: [0u8; 32],
+        }
+    }
+
     /// Raw bytes of the id.
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes[..self.len as usize]

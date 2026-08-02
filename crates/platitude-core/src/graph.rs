@@ -36,6 +36,8 @@ pub struct Segment {
     pub lane: u16,
     /// Palette index (< [`GRAPH_PALETTE_SIZE`]).
     pub color: u8,
+    /// Drawn with a dashed stroke (the synthetic WIP edge).
+    pub dashed: bool,
 }
 
 /// Draw data for one commit row.
@@ -56,6 +58,8 @@ pub struct GraphRow {
 #[derive(Debug, Clone)]
 struct LaneState {
     color: u8,
+    /// The edge in this lane draws dashed (WIP → HEAD).
+    dashed: bool,
 }
 
 /// Incremental lane allocator.
@@ -128,6 +132,7 @@ impl GraphBuilder {
                 kind,
                 lane,
                 color: state.color,
+                dashed: state.dashed,
             });
         }
         debug_assert!(fresh || joins.contains(&node_lane));
@@ -144,11 +149,12 @@ impl GraphBuilder {
                 // Out-of-order stream: the edge cannot be drawn; leave the
                 // lane free rather than leaking it forever.
             } else {
-                self.occupy(node_lane, *p0, node_color);
+                self.occupy(node_lane, *p0, node_color, false);
                 segments.push(Segment {
                     kind: SegmentKind::OutOfNode,
                     lane: node_lane,
                     color: node_color,
+                    dashed: false,
                 });
             }
         }
@@ -165,17 +171,19 @@ impl GraphBuilder {
                     kind: SegmentKind::OutOfNode,
                     lane: existing,
                     color: self.lane_color(existing),
+                    dashed: self.lane_dashed(existing),
                 });
             } else if self.already_emitted(p, commit) {
                 // Out-of-order stream: skip, as above.
             } else {
                 let lane = self.find_free_lane_near(node_lane);
                 let color = self.take_color();
-                self.occupy(lane, *p, color);
+                self.occupy(lane, *p, color, false);
                 segments.push(Segment {
                     kind: SegmentKind::OutOfNode,
                     lane,
                     color,
+                    dashed: false,
                 });
             }
         }
@@ -201,11 +209,59 @@ impl GraphBuilder {
         }
     }
 
+    /// Emits the synthetic working-tree (WIP) row: a childless tip whose
+    /// only edge — drawn dashed — runs down to `parent` (HEAD). Feed it
+    /// before the first real commit so the current chain keeps lane 0 and
+    /// other tips shift right, exactly like a real commit would.
+    pub fn push_virtual(&mut self, oid: &Oid, parent: &Oid) -> GraphRow {
+        let row = self.next_row;
+        self.next_row += 1;
+        let lane = self.find_free_lane();
+        let color = self.take_color();
+        let mut segments = Vec::new();
+        for (i, state) in self.lanes.iter().enumerate() {
+            let Some(state) = state else { continue };
+            segments.push(Segment {
+                kind: SegmentKind::Through,
+                lane: i as u16,
+                color: state.color,
+                dashed: state.dashed,
+            });
+        }
+        self.occupy(lane, *parent, color, true);
+        segments.push(Segment {
+            kind: SegmentKind::OutOfNode,
+            lane,
+            color,
+            dashed: true,
+        });
+        self.rows.insert(*oid, row);
+        let mut width = lane + 1;
+        for s in &segments {
+            width = width.max(s.lane + 1);
+        }
+        self.max_width = self.max_width.max(width);
+        GraphRow {
+            row,
+            node_lane: lane,
+            node_color: color,
+            segments,
+            width,
+        }
+    }
+
     fn lane_color(&self, lane: u16) -> u8 {
         self.lanes
             .get(lane as usize)
             .and_then(|s| s.as_ref())
             .map_or(0, |s| s.color)
+    }
+
+    fn lane_dashed(&self, lane: u16) -> bool {
+        self.lanes
+            .get(lane as usize)
+            .and_then(|s| s.as_ref())
+            .is_some_and(|s| s.dashed)
     }
 
     fn take_color(&mut self) -> u8 {
@@ -243,12 +299,12 @@ impl GraphBuilder {
         }
     }
 
-    fn occupy(&mut self, lane: u16, expects: Oid, color: u8) {
+    fn occupy(&mut self, lane: u16, expects: Oid, color: u8, dashed: bool) {
         let idx = lane as usize;
         if idx >= self.lanes.len() {
             self.lanes.resize(idx + 1, None);
         }
-        self.lanes[idx] = Some(LaneState { color });
+        self.lanes[idx] = Some(LaneState { color, dashed });
         self.expects.entry(expects).or_default().push(lane);
     }
 
@@ -474,6 +530,39 @@ mod tests {
         // Root of the first chain frees lane 0 while chain 2 passes through.
         assert_eq!(rows[2].node_lane, 0);
         insta::assert_snapshot!(render(&rows));
+    }
+
+    #[test]
+    fn virtual_wip_row_takes_lane_zero_and_dashes_its_edge() {
+        let mut pool = StrPool::new();
+        let mut b = GraphBuilder::new();
+        let head = oid(1);
+        let wip = b.push_virtual(&Oid::zero_like(&head), &head);
+        assert_eq!((wip.row, wip.node_lane), (0, 0));
+        assert!(
+            wip.segments
+                .iter()
+                .all(|s| s.kind == SegmentKind::OutOfNode && s.dashed),
+            "the WIP edge draws dashed"
+        );
+        // Another tip streams next: it must shift right of the WIP chain.
+        let other = b.push(&commit(&mut pool, 9, &[2]));
+        assert_eq!(other.node_lane, 1);
+        // HEAD joins the dashed edge and continues the chain normally.
+        let head_row = b.push(&commit(&mut pool, 1, &[3]));
+        assert_eq!(head_row.node_lane, 0);
+        let into = head_row
+            .segments
+            .iter()
+            .find(|s| s.kind == SegmentKind::IntoNode && s.lane == 0)
+            .unwrap();
+        assert!(into.dashed);
+        let out = head_row
+            .segments
+            .iter()
+            .find(|s| s.kind == SegmentKind::OutOfNode && s.lane == 0)
+            .unwrap();
+        assert!(!out.dashed, "the chain below HEAD is a normal edge");
     }
 
     #[test]

@@ -668,6 +668,10 @@ pub struct NavItem {
     oid_hex: String,
     change: String,
     bucket: String,
+    /// Display grouping of worktree rows (GitKraken-style): untracked
+    /// files count as `unstaged` here while `bucket` keeps the real
+    /// routing for diffs and staging.
+    group: String,
     orig_path: String,
     is_head: bool,
     has_remote: bool,
@@ -725,18 +729,18 @@ impl QListModel for NavSectionModel {
         }
         self.items = match self.section.as_str() {
             "branches" | "remotes" => self.build_tree(),
-            // The worktree keeps its bucket runs (conflicts → staged →
-            // unstaged → untracked) and trees each run independently.
+            // The worktree keeps its group runs (conflicts → unstaged →
+            // staged) and trees each run independently.
             "worktree" if self.tree_view => {
                 let mut out = Vec::new();
                 let mut i = 0;
                 while i < self.all.len() {
-                    let bucket = self.all[i].bucket.clone();
+                    let group = self.all[i].group.clone();
                     let mut j = i + 1;
-                    while j < self.all.len() && self.all[j].bucket == bucket {
+                    while j < self.all.len() && self.all[j].group == group {
                         j += 1;
                     }
-                    wt_tree_into(&self.all[i..j], &bucket, &self.folder_overrides, &mut out);
+                    wt_tree_into(&self.all[i..j], &group, &self.folder_overrides, &mut out);
                     i = j;
                 }
                 out
@@ -826,12 +830,12 @@ fn branch_nav_items(list: &[platitude_core::session::BranchItem]) -> Vec<NavItem
         .collect()
 }
 
-/// Trees one bucket run of worktree entries: single-child directory
+/// Trees one group run of worktree entries: single-child directory
 /// chains compact into one `a/b/c` row; fold-toggle keys are
-/// bucket-prefixed so equal paths in different buckets fold apart.
+/// group-prefixed so equal paths in different groups fold apart.
 fn wt_tree_into(
     entries: &[NavItem],
-    bucket: &str,
+    group: &str,
     overrides: &HashMap<String, bool>,
     out: &mut Vec<NavItem>,
 ) {
@@ -854,7 +858,7 @@ fn wt_tree_into(
     }
     fn emit(
         node: &DirNode,
-        bucket: &str,
+        group: &str,
         prefix: &str,
         depth: i32,
         overrides: &HashMap<String, bool>,
@@ -872,12 +876,12 @@ fn wt_tree_into(
                 target = next;
             }
             let path = format!("{prefix}{label}");
-            let key = format!("{bucket}:{path}");
+            let key = format!("{group}:{path}");
             let expanded = overrides.get(&key).copied().unwrap_or(true);
             out.push(NavItem {
                 name: label,
                 full: key.clone(),
-                bucket: bucket.to_string(),
+                group: group.to_string(),
                 depth,
                 folder: true,
                 collapsed: !expanded,
@@ -886,7 +890,7 @@ fn wt_tree_into(
             if expanded {
                 emit(
                     target,
-                    bucket,
+                    group,
                     &format!("{path}/"),
                     depth + 1,
                     overrides,
@@ -900,19 +904,27 @@ fn wt_tree_into(
             out.push(item);
         }
     }
-    emit(&root, bucket, "", 0, overrides, out);
+    emit(&root, group, "", 0, overrides, out);
 }
 
-/// Working-tree entries in display order (conflicts → staged → unstaged →
-/// untracked). `full` always carries the real path (tree leaves rename
-/// `name` to their last segment).
+/// Working-tree entries in GitKraken display order: conflicts → unstaged
+/// (untracked files count as unstaged for display, via `group`, while
+/// `bucket` keeps the real diff/staging routing) → staged. `full` always
+/// carries the real path (tree leaves rename `name` to their last
+/// segment).
 fn status_nav_items(status: &platitude_core::status::WorkTreeStatus) -> Vec<NavItem> {
-    let push = |out: &mut Vec<NavItem>, bucket: &str, change: String, path: &str, orig: String| {
+    let push = |out: &mut Vec<NavItem>,
+                bucket: &str,
+                group: &str,
+                change: String,
+                path: &str,
+                orig: String| {
         out.push(NavItem {
             name: path.to_string(),
             full: path.to_string(),
             change,
             bucket: bucket.into(),
+            group: group.into(),
             orig_path: orig,
             ..Default::default()
         });
@@ -923,11 +935,34 @@ fn status_nav_items(status: &platitude_core::status::WorkTreeStatus) -> Vec<NavI
             push(
                 &mut rows,
                 "conflicts",
+                "conflicts",
                 format!("{ours}{theirs}"),
                 path,
                 String::new(),
             );
         }
+    }
+    for entry in status.unstaged() {
+        if let platitude_core::status::StatusItem::Tracked { unstaged, path, .. } = entry {
+            push(
+                &mut rows,
+                "unstaged",
+                "unstaged",
+                unstaged.to_string(),
+                path,
+                String::new(),
+            );
+        }
+    }
+    for entry in status.untracked() {
+        push(
+            &mut rows,
+            "untracked",
+            "unstaged",
+            "?".to_string(),
+            entry.path(),
+            String::new(),
+        );
     }
     for entry in status.staged() {
         if let platitude_core::status::StatusItem::Tracked {
@@ -940,31 +975,12 @@ fn status_nav_items(status: &platitude_core::status::WorkTreeStatus) -> Vec<NavI
             push(
                 &mut rows,
                 "staged",
+                "staged",
                 staged.to_string(),
                 path,
                 orig_path.clone().unwrap_or_default(),
             );
         }
-    }
-    for entry in status.unstaged() {
-        if let platitude_core::status::StatusItem::Tracked { unstaged, path, .. } = entry {
-            push(
-                &mut rows,
-                "unstaged",
-                unstaged.to_string(),
-                path,
-                String::new(),
-            );
-        }
-    }
-    for entry in status.untracked() {
-        push(
-            &mut rows,
-            "untracked",
-            "?".to_string(),
-            entry.path(),
-            String::new(),
-        );
     }
     rows
 }

@@ -226,6 +226,8 @@ pub struct RepoSession {
     log_options: Mutex<LogOptions>,
     log_gen: AtomicU64,
     log_cancel: Mutex<Option<CancellationToken>>,
+    /// Dirty working tree → the log stream prepends a synthetic WIP row.
+    wip_dirty: std::sync::atomic::AtomicBool,
     refs_gate: OpGate,
     status_gate: OpGate,
     stash_gate: OpGate,
@@ -250,6 +252,7 @@ impl RepoSession {
             log_options: Mutex::new(LogOptions::default()),
             log_gen: AtomicU64::new(0),
             log_cancel: Mutex::new(None),
+            wip_dirty: std::sync::atomic::AtomicBool::new(false),
             refs_gate: OpGate::default(),
             status_gate: OpGate::default(),
             stash_gate: OpGate::default(),
@@ -504,6 +507,7 @@ impl RepoSession {
             match (status, op) {
                 (Ok(status), Ok(op_state)) => {
                     if s.status_gate.is_current(op_gen) {
+                        s.update_wip(status.is_dirty());
                         s.sink
                             .event(SessionEvent::StatusLoaded { status, op_state });
                     }
@@ -625,6 +629,15 @@ impl RepoSession {
         let mut parse_error: Option<String> = None;
         let mut total: u32 = 0;
 
+        // Dirty working tree: prepend the synthetic WIP row so the current
+        // chain owns lane 0 from the very first paint.
+        if self.wip_dirty.load(Ordering::SeqCst)
+            && let Some(head_oid) = head.oid
+        {
+            self.emit_wip_row(generation, &head_oid);
+            total += 1;
+        }
+
         let result = self
             .executor
             .run_streaming(cmd, cancel, &mut |bytes| {
@@ -706,6 +719,14 @@ impl RepoSession {
             cmd = cmd.arg(format!("--max-count={limit}"));
         }
 
+        // Dirty working tree: prepend the synthetic WIP row (mirrors
+        // stream_log).
+        if self.wip_dirty.load(Ordering::SeqCst)
+            && let Some(head_oid) = head.oid
+        {
+            out.push(wip_row(&head_oid, builder));
+        }
+
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
         let mut parse_error: Option<String> = None;
@@ -748,6 +769,29 @@ impl RepoSession {
             out.push(make_row(&commit, parser.pool(), builder));
         }
         Ok(())
+    }
+
+    /// Records the working-tree dirtiness; an edge restarts the log so
+    /// the synthetic WIP row appears/disappears with proper lanes.
+    fn update_wip(self: &Arc<Self>, dirty: bool) {
+        if self.wip_dirty.swap(dirty, Ordering::SeqCst) != dirty {
+            self.restart_log();
+        }
+    }
+
+    /// Sends the synthetic WIP row (dirty working tree) as its own chunk.
+    fn emit_wip_row(&self, generation: u64, head: &Oid) {
+        let row = {
+            let mut guard = self.lock_shared();
+            if self.log_gen.load(Ordering::SeqCst) != generation {
+                return;
+            }
+            wip_row(head, &mut guard.builder)
+        };
+        self.sink.event(SessionEvent::LogChunk {
+            generation,
+            rows: vec![row],
+        });
     }
 
     /// Builds graph rows for a batch and sends them (holding the shared
@@ -803,6 +847,27 @@ impl RepoSession {
 impl Drop for RepoSession {
     fn drop(&mut self) {
         self.root_cancel.cancel();
+    }
+}
+
+/// Builds the synthetic row for uncommitted changes: zero id, no author,
+/// one dashed edge running down to HEAD. The UI recognizes the all-zero
+/// id and renders the dashed empty node and the WIP subject.
+fn wip_row(head: &Oid, builder: &mut GraphBuilder) -> LogRow {
+    let zero = Oid::zero_like(head);
+    let g = builder.push_virtual(&zero, head);
+    LogRow {
+        row: g.row,
+        oid_hex: zero.to_hex(),
+        short_sha: zero.short_hex(8),
+        author: String::new(),
+        time: 0,
+        subject: String::new(),
+        node_lane: g.node_lane,
+        node_color: g.node_color,
+        width: g.width,
+        segments: g.segments,
+        labels: Vec::new(),
     }
 }
 

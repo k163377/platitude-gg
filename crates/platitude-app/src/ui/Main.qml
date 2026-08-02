@@ -28,7 +28,7 @@ ApplicationWindow {
     // values follow the guideline principles (4px grid, token reuse) and
     // graduate into the document once they stabilize.
     readonly property int laneW: Theme.iconLg
-    readonly property int laneInset: Theme.spaceSm
+    readonly property int laneInset: Theme.spaceXs
     readonly property int nodeIcon: Theme.iconLg
     readonly property int laneStroke: 2
     readonly property real iconStroke: 1.5
@@ -181,6 +181,41 @@ ApplicationWindow {
                 anchors.fill: parent
                 anchors.rightMargin: Theme.spaceMd
                 spacing: Theme.spaceSm
+                // App menu (Claude-Desktop-style hamburger); most entries
+                // are placeholders until their phases land.
+                ToolButton {
+                    id: menuButton
+                    text: "☰"
+                    font.pixelSize: Theme.fontLg
+                    Layout.leftMargin: Theme.spaceXs
+                    onClicked: appMenu.open()
+                    Menu {
+                        id: appMenu
+                        y: menuButton.height
+                        MenuItem {
+                            text: qsTr("Open repository…")
+                            onTriggered: folderDialog.open()
+                        }
+                        MenuItem {
+                            text: qsTr("Clone repository…")
+                            enabled: false
+                        }
+                        MenuSeparator {}
+                        MenuItem {
+                            text: qsTr("Settings…")
+                            enabled: false
+                        }
+                        MenuItem {
+                            text: qsTr("About platitude-gg")
+                            enabled: false
+                        }
+                        MenuSeparator {}
+                        MenuItem {
+                            text: qsTr("Exit")
+                            onTriggered: Qt.quit()
+                        }
+                    }
+                }
                 TabBar {
                     id: tabBar
                     Layout.fillWidth: false
@@ -227,7 +262,11 @@ ApplicationWindow {
                                     elide: Text.ElideRight
                                     Layout.maximumWidth: 180
                                     Layout.fillHeight: true
-                                    verticalAlignment: Text.AlignVCenter
+                                    // Bottom-aligned toward the accent
+                                    // underline (the tall tab reads
+                                    // stretched with centered text).
+                                    verticalAlignment: Text.AlignBottom
+                                    bottomPadding: Theme.spaceXs + 2 * Theme.borderWidth
                                     leftPadding: Theme.spaceXs
                                     font.weight: tabButton.checked ? Font.DemiBold : Font.Normal
                                     color: tabButton.checked ? Theme.textPrimary
@@ -236,7 +275,8 @@ ApplicationWindow {
                                 ToolButton {
                                     text: "×"
                                     padding: 0
-                                    Layout.alignment: Qt.AlignVCenter
+                                    Layout.alignment: Qt.AlignBottom
+                                    Layout.bottomMargin: Theme.spaceXs
                                     implicitWidth: Theme.iconLg
                                     implicitHeight: Theme.iconLg
                                     onClicked: tabsModel.closeTab(tabButton.tab_id)
@@ -419,8 +459,6 @@ ApplicationWindow {
         function showWip() {
             page.wipShown = true
             page.expWorktree = true
-            // The WIP row is the selection now.
-            graphList.currentIndex = -1
             page.selectedOid = ""
             page.closeDiff()
         }
@@ -568,8 +606,10 @@ ApplicationWindow {
                     page.wipShown = false
                 // Smoke hook (PG_AUTO_WIP=1): open the WIP view once
                 // uncommitted changes are known.
-                if (AppBackend.autoWip && worktreeModel.total > 0 && !page.wipShown)
+                if (AppBackend.autoWip && worktreeModel.total > 0 && !page.wipShown) {
+                    graphList.currentIndex = 0
                     page.showWip()
+                }
             }
         }
 
@@ -899,78 +939,27 @@ ApplicationWindow {
                             maximumFlickVelocity: 9000
                             ScrollBar.vertical: ScrollBar {}
                             // A breath of air above the first row.
-                            topMargin: Theme.spaceSm
+                            topMargin: Theme.spaceLg
                             // Bridge into the page scope for the shared
                             // delegate (inline components cannot see page ids).
                             property real labelWidth: page.labelW
                             property real graphColWidth: page.graphColW
                             property real graphFullWidth: page.graphFullW
                             property real graphXOffset: page.graphX
+                            property int wipCount: worktreeModel.total
                             signal rowSelected(string oidHex)
                             onRowSelected: oidHex => {
+                                // The all-zero id is the synthetic WIP row.
+                                if (oidHex !== "" && !/[^0]/.test(oidHex)) {
+                                    page.showWip()
+                                    return
+                                }
                                 page.wipShown = false
                                 page.selectedOid = oidHex
                                 detailsModel.request(oidHex)
                                 page.closeDiff()
                             }
                             delegate: GraphRowDelegate {}
-                            // Uncommitted changes (WIP) row at the top of
-                            // the graph: a dashed, empty node — there is no
-                            // commit (and no author) yet. Click opens the
-                            // working-tree view in the right pane.
-                            header: Item {
-                                width: graphList.width
-                                height: worktreeModel.total > 0 ? Theme.rowHeight : 0
-                                visible: worktreeModel.total > 0
-                                Rectangle {
-                                    anchors.fill: parent
-                                    color: Theme.bgSelected
-                                    visible: page.wipShown
-                                }
-                                Rectangle {
-                                    anchors.fill: parent
-                                    color: Theme.bgHover
-                                    visible: wipMouse.containsMouse && !page.wipShown
-                                }
-                                Item {
-                                    x: graphList.labelWidth
-                                    width: graphList.graphColWidth
-                                    height: parent.height
-                                    clip: true
-                                    Canvas {
-                                        x: -graphList.graphXOffset
-                                        width: graphList.graphFullWidth
-                                        height: parent.height
-                                        onPaint: {
-                                            const ctx = getContext("2d")
-                                            ctx.clearRect(0, 0, width, height)
-                                            const cx = root.laneInset + root.laneW / 2
-                                            ctx.strokeStyle = Theme.textSecondary
-                                            ctx.lineWidth = root.laneStroke
-                                            ctx.setLineDash([3, 3])
-                                            ctx.beginPath()
-                                            ctx.arc(cx, height / 2, root.nodeIcon / 2 - 1,
-                                                    0, 2 * Math.PI)
-                                            ctx.stroke()
-                                            ctx.setLineDash([])
-                                        }
-                                    }
-                                }
-                                Label {
-                                    x: graphList.labelWidth + graphList.graphColWidth
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    leftPadding: Theme.spaceSm
-                                    text: qsTr("Uncommitted changes (%1)").arg(worktreeModel.total)
-                                    color: Theme.textSecondary
-                                    font.pixelSize: Theme.fontMd
-                                }
-                                MouseArea {
-                                    id: wipMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: page.showWip()
-                                }
-                            }
                             // Window cut: lanes keep running through the
                             // footer and the message sits where subjects go.
                             footer: Item {
@@ -1060,6 +1049,7 @@ ApplicationWindow {
                         property bool autoScrolling: false
                         property real autoAnchorX: 0
                         property real autoAnchorY: 0
+                        property real autoCurrentX: 0
                         property real autoCurrentY: 0
                         id: graphArea
                         MouseArea {
@@ -1068,6 +1058,7 @@ ApplicationWindow {
                             onClicked: mouse => {
                                 graphArea.autoAnchorX = mouse.x
                                 graphArea.autoAnchorY = mouse.y
+                                graphArea.autoCurrentX = mouse.x
                                 graphArea.autoCurrentY = mouse.y
                                 graphArea.autoScrolling = true
                             }
@@ -1077,8 +1068,11 @@ ApplicationWindow {
                             anchors.fill: parent
                             hoverEnabled: true
                             acceptedButtons: Qt.AllButtons
-                            cursorShape: Qt.SizeVerCursor
-                            onPositionChanged: mouse => graphArea.autoCurrentY = mouse.y
+                            cursorShape: Qt.SizeAllCursor
+                            onPositionChanged: mouse => {
+                                graphArea.autoCurrentX = mouse.x
+                                graphArea.autoCurrentY = mouse.y
+                            }
                             onPressed: mouse => {
                                 graphArea.autoScrolling = false
                                 mouse.accepted = true
@@ -1091,6 +1085,13 @@ ApplicationWindow {
                                     const delta = (graphArea.autoCurrentY - graphArea.autoAnchorY)
                                                 * root.middleScrollGain
                                     graphList.contentY = graphList.clampY(graphList.contentY + delta)
+                                    // Sideways drift pans the lanes.
+                                    if (page.graphXMax > 0) {
+                                        const dx = (graphArea.autoCurrentX - graphArea.autoAnchorX)
+                                                 * root.middleScrollGain
+                                        page.graphX = Math.max(0, Math.min(page.graphX + dx,
+                                                                           page.graphXMax))
+                                    }
                                 }
                             }
                             // Anchor marker
@@ -1112,6 +1113,46 @@ ApplicationWindow {
                                 }
                             }
                         }
+                        // Left-drag inside the lanes pans them horizontally
+                        // when they overflow; a motionless press-release
+                        // still selects the row underneath.
+                        MouseArea {
+                            id: lanePan
+                            x: page.labelW
+                            width: page.graphColW
+                            height: parent.height
+                            z: 1
+                            visible: page.graphXMax > 0
+                            acceptedButtons: Qt.LeftButton
+                            property real pressX: 0
+                            property real startGX: 0
+                            property bool panning: false
+                            onPressed: mouse => {
+                                pressX = mouse.x
+                                startGX = page.graphX
+                                panning = false
+                            }
+                            onPositionChanged: mouse => {
+                                if (!pressed)
+                                    return
+                                if (!panning && Math.abs(mouse.x - pressX) > Theme.spaceXs)
+                                    panning = true
+                                if (panning)
+                                    page.graphX = Math.max(0, Math.min(
+                                        startGX - (mouse.x - pressX), page.graphXMax))
+                            }
+                            onReleased: mouse => {
+                                if (panning)
+                                    return
+                                const idx = graphList.indexAt(page.labelW + 1,
+                                                              graphList.contentY + mouse.y)
+                                if (idx >= 0) {
+                                    graphList.currentIndex = idx
+                                    graphList.rowSelected(graphModel.oidAt(idx))
+                                }
+                            }
+                        }
+
                         // Draggable column dividers (labels | graph | message).
                         MouseArea {
                             id: labelDivider
@@ -1139,7 +1180,10 @@ ApplicationWindow {
                         }
                         MouseArea {
                             id: graphDivider
-                            x: page.labelW + page.graphColW - Theme.splitterWidth / 2
+                            // Sits behind the message tick column so the
+                            // hover line overlaps the ticks.
+                            x: page.labelW + page.graphColW + Theme.spaceSm
+                               + Theme.borderWidth - Theme.splitterWidth / 2
                             width: Theme.splitterWidth
                             height: parent.height
                             z: 2
@@ -1150,6 +1194,7 @@ ApplicationWindow {
                                 if (!pressed)
                                     return
                                 const nx = mapToItem(graphArea, mouse.x, 0).x
+                                              - Theme.spaceSm - Theme.borderWidth
                                 page.graphColWManual = Math.max(root.laneInset + root.laneW,
                                     Math.min(nx - page.labelW,
                                              graphArea.width - page.labelW - 2 * Theme.spaceXxl))
@@ -1419,6 +1464,63 @@ ApplicationWindow {
                                 }
                             }
                         }
+                        ListView {
+                            id: wipList
+                            visible: page.wipShown
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            model: worktreeModel
+                            reuseItems: true
+                            ScrollBar.vertical: ScrollBar {}
+                            // GitKraken layout: unstaged (incl. untracked)
+                            // above, staged below, editor at the bottom.
+                            section.property: "group"
+                            section.delegate: Rectangle {
+                                id: bucketHeader
+                                required property string section
+                                width: wipList.width
+                                height: Theme.rowHeight
+                                color: Theme.bgElevated
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Theme.spaceSm
+                                    anchors.rightMargin: Theme.spaceXs
+                                    spacing: Theme.spaceXs
+                                    Label {
+                                        text: bucketHeader.section === "staged"
+                                              ? qsTr("STAGED FILES (%1)").arg(workTree.stagedCount)
+                                              : bucketHeader.section === "unstaged"
+                                              ? qsTr("UNSTAGED FILES (%1)")
+                                                .arg(workTree.unstagedCount + workTree.untrackedCount)
+                                              : qsTr("CONFLICTS")
+                                        font.pixelSize: Theme.fontSm
+                                        font.weight: Font.DemiBold
+                                        color: bucketHeader.section === "conflicts"
+                                               ? Theme.danger : Theme.textSecondary
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                    ToolButton {
+                                        visible: bucketHeader.section !== "conflicts"
+                                        text: bucketHeader.section === "staged"
+                                              ? qsTr("Unstage all") : qsTr("Stage all")
+                                        font.pixelSize: Theme.fontSm
+                                        ToolTip.visible: hovered
+                                        ToolTip.delay: 300
+                                        ToolTip.text: qsTr("Staging arrives in Phase 2")
+                                        onClicked: {}
+                                    }
+                                }
+                            }
+                            delegate: NavItemDelegate {
+                                listWidth: wipList.width
+                                kindHint: "wt"
+                                showStage: true
+                                onFileClicked: (bucket, path, origPath) =>
+                                    page.toggleDiff(bucket, path, origPath)
+                                onFolderClicked: key => worktreeModel.toggleFolder(key)
+                            }
+                        }
                         ColumnLayout {
                             visible: page.wipShown
                             Layout.fillWidth: true
@@ -1467,82 +1569,20 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                            RowLayout {
-                                spacing: Theme.spaceSm
-                                Button {
-                                    text: qsTr("Commit")
-                                    enabled: false
-                                    ToolTip.visible: commitHover.containsMouse
-                                    ToolTip.delay: 300
-                                    ToolTip.text: qsTr("Committing arrives in Phase 2")
-                                    MouseArea {
-                                        id: commitHover
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        acceptedButtons: Qt.NoButton
-                                    }
-                                }
-                                Label {
-                                    text: qsTr("%1 staged").arg(workTree.stagedCount)
-                                    color: Theme.textSecondary
-                                    font.pixelSize: Theme.fontSm
-                                }
-                            }
-                        }
-                        ListView {
-                            id: wipList
-                            visible: page.wipShown
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            clip: true
-                            model: worktreeModel
-                            reuseItems: true
-                            ScrollBar.vertical: ScrollBar {}
-                            section.property: "bucket"
-                            section.delegate: Rectangle {
-                                id: bucketHeader
-                                required property string section
-                                width: wipList.width
-                                height: Theme.rowHeight
-                                color: Theme.bgElevated
-                                RowLayout {
+                            Button {
+                                Layout.fillWidth: true
+                                text: qsTr("Commit changes (%1 staged)")
+                                      .arg(workTree.stagedCount)
+                                enabled: false
+                                ToolTip.visible: commitHover.containsMouse
+                                ToolTip.delay: 300
+                                ToolTip.text: qsTr("Committing arrives in Phase 2")
+                                MouseArea {
+                                    id: commitHover
                                     anchors.fill: parent
-                                    anchors.leftMargin: Theme.spaceSm
-                                    anchors.rightMargin: Theme.spaceXs
-                                    spacing: Theme.spaceXs
-                                    Label {
-                                        text: bucketHeader.section === "staged"
-                                              ? qsTr("STAGED (%1)").arg(workTree.stagedCount)
-                                              : bucketHeader.section === "unstaged"
-                                              ? qsTr("UNSTAGED (%1)").arg(workTree.unstagedCount)
-                                              : bucketHeader.section === "untracked"
-                                              ? qsTr("UNTRACKED (%1)").arg(workTree.untrackedCount)
-                                              : qsTr("CONFLICTS")
-                                        font.pixelSize: Theme.fontSm
-                                        font.weight: Font.DemiBold
-                                        color: bucketHeader.section === "conflicts"
-                                               ? Theme.danger : Theme.textSecondary
-                                    }
-                                    Item { Layout.fillWidth: true }
-                                    ToolButton {
-                                        visible: bucketHeader.section !== "conflicts"
-                                        text: bucketHeader.section === "staged"
-                                              ? qsTr("Unstage all") : qsTr("Stage all")
-                                        font.pixelSize: Theme.fontSm
-                                        ToolTip.visible: hovered
-                                        ToolTip.delay: 300
-                                        ToolTip.text: qsTr("Staging arrives in Phase 2")
-                                        onClicked: {}
-                                    }
+                                    hoverEnabled: true
+                                    acceptedButtons: Qt.NoButton
                                 }
-                            }
-                            delegate: NavItemDelegate {
-                                listWidth: wipList.width
-                                kindHint: "wt"
-                                showStage: true
-                                onFileClicked: (bucket, path, origPath) =>
-                                    page.toggleDiff(bucket, path, origPath)
-                                onFolderClicked: key => worktreeModel.toggleFolder(key)
                             }
                         }
 
@@ -1800,6 +1840,8 @@ ApplicationWindow {
         height: Theme.rowHeight
 
         readonly property bool selected: ListView.isCurrentItem
+        // The all-zero id marks the synthetic uncommitted-changes row.
+        readonly property bool isWip: oid_hex !== "" && !/[^0]/.test(oid_hex)
         // Chip records are separated by U+001F (see encode.rs). Branch-like
         // records (HEAD / local / remote) and tags get separate chips.
         readonly property var labelRecords: labels === "" ? [] : labels.split(String.fromCharCode(31))
@@ -1894,19 +1936,22 @@ ApplicationWindow {
                     const midY = height / 2
                     const nodeX = cx(rowItem.node_lane)
                     // decode precomputed draw tokens: t/i/o + lane + color
+                    // (uppercase = dashed WIP edge)
                     if (rowItem.geometry !== "") {
                         const toks = rowItem.geometry.split(";")
                         for (let n = 0; n < toks.length; n++) {
                             const t = toks[n]
+                            const k = t[0].toLowerCase()
                             const dot = t.indexOf(".")
                             const lane = parseInt(t.substring(1, dot))
                             const x = cx(lane)
                             ctx.strokeStyle = Theme.graphLane[parseInt(t.substring(dot + 1)) % laneCount]
+                            ctx.setLineDash(t[0] === k ? [] : [3, 3])
                             ctx.beginPath()
-                            if (t[0] === "t") {
+                            if (k === "t") {
                                 ctx.moveTo(x, 0)
                                 ctx.lineTo(x, height)
-                            } else if (t[0] === "i") {
+                            } else if (k === "i") {
                                 ctx.moveTo(x, 0)
                                 ctx.bezierCurveTo(x, midY * 0.66, nodeX, midY * 0.34, nodeX, midY)
                             } else {
@@ -1916,12 +1961,25 @@ ApplicationWindow {
                             }
                             ctx.stroke()
                         }
+                        ctx.setLineDash([])
+                    }
+                    // The WIP row has no commit and no author: a dashed,
+                    // empty node instead of the identicon.
+                    const r = root.nodeIcon / 2
+                    if (rowItem.isWip) {
+                        ctx.strokeStyle = Theme.textSecondary
+                        ctx.lineWidth = root.laneStroke
+                        ctx.setLineDash([3, 3])
+                        ctx.beginPath()
+                        ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
+                        ctx.stroke()
+                        ctx.setLineDash([])
+                        return
                     }
                     // The commit node is the author's identicon (5x5,
                     // mirrored; local substitute for network avatars). The
                     // pattern uses only the inner part of the circle so the
                     // clip cuts less of it.
-                    const r = root.nodeIcon / 2
                     ctx.save()
                     ctx.beginPath()
                     ctx.arc(nodeX, midY, r, 0, 2 * Math.PI)
@@ -1970,10 +2028,13 @@ ApplicationWindow {
                 }
                 Label {
                     Layout.fillWidth: true
-                    text: rowItem.subject
+                    text: rowItem.isWip
+                          ? qsTr("Uncommitted changes (%1)")
+                            .arg(rowItem.ListView.view ? rowItem.ListView.view.wipCount : 0)
+                          : rowItem.subject
                     elide: Text.ElideRight
                     font.pixelSize: Theme.fontMd
-                    color: Theme.textPrimary
+                    color: rowItem.isWip ? Theme.textSecondary : Theme.textPrimary
                     rightPadding: Theme.spaceSm
                 }
             }
@@ -1992,9 +2053,11 @@ ApplicationWindow {
         // Hover details: what the row no longer shows as columns.
         ToolTip.visible: rowMouse.containsMouse
         ToolTip.delay: 700
-        ToolTip.text: rowItem.author + "\n"
-                      + Qt.formatDateTime(new Date(rowItem.atime * 1000), "yyyy-MM-dd HH:mm") + "\n"
-                      + rowItem.oid_hex.substring(0, 8)
+        ToolTip.text: rowItem.isWip
+                      ? qsTr("Working-tree changes — not committed yet")
+                      : rowItem.author + "\n"
+                        + Qt.formatDateTime(new Date(rowItem.atime * 1000), "yyyy-MM-dd HH:mm") + "\n"
+                        + rowItem.oid_hex.substring(0, 8)
     }
 
     // One aggregated chip: primary name + "+N". No icons — the kind reads
@@ -2615,7 +2678,7 @@ ApplicationWindow {
               : letter === "D" ? Theme.diffRemovedFg
               : letter === "R" ? Theme.textLink
               : letter === "C" ? Theme.textSecondary
-              : letter === "?" ? Theme.statusUntracked
+              : letter === "?" ? Theme.diffAddedFg
               : Theme.warning
     }
 
@@ -2662,8 +2725,8 @@ ApplicationWindow {
     // filter: thin frame, compact height.
     component SlimField: TextField {
         id: slim
-        implicitHeight: Theme.rowHeight
-        font.pixelSize: Theme.fontSm
+        implicitHeight: Theme.iconLg
+        font.pixelSize: Theme.fontMd
         leftPadding: Theme.spaceSm
         rightPadding: Theme.spaceSm
         topPadding: 0

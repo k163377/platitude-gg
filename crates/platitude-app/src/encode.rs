@@ -12,16 +12,22 @@ pub const LABEL_SEP: char = '\u{1f}';
 
 /// Segments → `;`-joined draw tokens: `t<lane>.<color>` (through),
 /// `i<lane>.<color>` (into node), `o<lane>.<color>` (out of node).
+/// Uppercase letters mark dashed segments (the WIP edge).
 pub fn encode_geometry(segments: &[Segment]) -> String {
     let mut out = String::with_capacity(segments.len() * 6);
     for (i, s) in segments.iter().enumerate() {
         if i > 0 {
             out.push(';');
         }
-        out.push(match s.kind {
+        let ch = match s.kind {
             SegmentKind::Through => 't',
             SegmentKind::IntoNode => 'i',
             SegmentKind::OutOfNode => 'o',
+        };
+        out.push(if s.dashed {
+            ch.to_ascii_uppercase()
+        } else {
+            ch
         });
         out.push_str(&s.lane.to_string());
         out.push('.');
@@ -79,7 +85,7 @@ pub fn tail_lanes(geometry: &str) -> String {
     let mut seen = std::collections::HashSet::new();
     let mut out = String::new();
     for token in geometry.split(';').filter(|t| t.len() > 1) {
-        let kind = token.as_bytes()[0];
+        let kind = token.as_bytes()[0].to_ascii_lowercase();
         if kind != b't' && kind != b'o' {
             continue;
         }
@@ -177,19 +183,26 @@ mod tests {
                 kind: SegmentKind::Through,
                 lane: 0,
                 color: 3,
+                dashed: false,
             },
             Segment {
                 kind: SegmentKind::IntoNode,
                 lane: 2,
                 color: 11,
+                dashed: false,
             },
             Segment {
                 kind: SegmentKind::OutOfNode,
                 lane: 1,
                 color: 0,
+                dashed: true,
             },
         ];
-        assert_eq!(encode_geometry(&segs), "t0.3;i2.11;o1.0");
+        assert_eq!(
+            encode_geometry(&segs),
+            "t0.3;i2.11;O1.0",
+            "dashed segments encode uppercase"
+        );
         assert_eq!(encode_geometry(&[]), "");
     }
 
@@ -198,6 +211,7 @@ mod tests {
         assert_eq!(tail_lanes("t0.3;i2.11;o1.0"), "0.3;1.0");
         assert_eq!(tail_lanes("i2.5"), "", "into-node stops at the node");
         assert_eq!(tail_lanes("t0.1;o0.2"), "0.1", "deduped by lane");
+        assert_eq!(tail_lanes("T0.4;O1.5"), "0.4;1.5", "dashed still counts");
         assert_eq!(tail_lanes(""), "");
     }
 
