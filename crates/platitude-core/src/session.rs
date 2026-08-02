@@ -36,9 +36,15 @@ use crate::status::{self, WorkTreeStatus};
 const FIRST_CHUNK_ROWS: usize = 512;
 const CHUNK_ROWS: usize = 4096;
 
-/// Revisions shown in the graph: everything reachable from HEAD, local
-/// branches, tags and remotes.
-const LOG_REVS: [&str; 4] = ["HEAD", "--branches", "--tags", "--remotes"];
+/// Revisions walked for the graph: HEAD, local branches and remotes.
+///
+/// `--tags` is deliberately absent: tag tips dominate the `--topo-order`
+/// frontier setup on tag-heavy repositories (measured on JetBrains/kotlin:
+/// 44k tags turn a 0.4s first-byte into 2.1s, blowing the 3s first-paint
+/// budget). Tag *labels* still appear — they are joined by commit id from
+/// the refs snapshot — only commits reachable exclusively through a tag
+/// have no row. A future setting can opt tags back into the walk.
+const LOG_REVS: [&str; 3] = ["HEAD", "--branches", "--remotes"];
 
 /// Kind of a row label chip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

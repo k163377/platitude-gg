@@ -88,6 +88,7 @@ pub struct AppBackend {
     shot_dir: String,
     auto_quit_ms: i32,
     auto_select: bool,
+    auto_scroll: bool,
     check_feed: Arc<Feed<GitCheckMsg>>,
 }
 
@@ -106,6 +107,7 @@ impl Default for AppBackend {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(0),
             auto_select: std::env::var("PG_AUTO_SELECT").as_deref() == Ok("1"),
+            auto_scroll: std::env::var("PG_AUTO_SCROLL").as_deref() == Ok("1"),
             check_feed: Arc::new(Feed::default()),
         }
     }
@@ -124,9 +126,16 @@ impl AppBackend {
     qproperty!("shotDir", Member = shot_dir, Constant);
     qproperty!("autoQuitMs", Member = auto_quit_ms, Constant);
     qproperty!("autoSelect", Member = auto_select, Constant);
+    qproperty!("autoScroll", Member = auto_scroll, Constant);
 
     #[qsignal]
     fn git_state_changed(&mut self);
+
+    /// Benchmark/automation reporting channel (QML → tracing).
+    #[qslot]
+    fn report(&self, message: String) {
+        tracing::info!(target: "bench", "{message}");
+    }
 
     /// Starts the git version check (call once from QML on startup).
     #[qslot]
@@ -384,10 +393,11 @@ qml_register!(RepoTab, "RepoTab", singleton = false);
 // GraphModel: the commit graph rows
 // ---------------------------------------------------------------------------
 
+// Kept lean: ~224k instances exist for the reference repository. The short
+// sha is derived in QML from `oid_hex` (mechanical substring).
 #[derive(QModelItem, Default, Clone)]
 pub struct GraphRowItem {
     oid_hex: String,
-    sha8: String,
     author: String,
     atime: i64,
     subject: String,
@@ -520,6 +530,8 @@ impl GraphModel {
                         self.loading = false;
                         self.total_ms = elapsed_ms as i32;
                         self.row_total = total as i32;
+                        // Release Vec growth slack (tens of MB at 200k rows).
+                        self.rows.shrink_to_fit();
                         tracing::info!(total, elapsed_ms, "graph stream finished");
                     }
                 }
@@ -561,7 +573,6 @@ qml_register!(GraphModel, "GraphModel", singleton = false);
 fn to_row_item(row: &LogRow) -> GraphRowItem {
     GraphRowItem {
         oid_hex: row.oid_hex.clone(),
-        sha8: row.short_sha.clone(),
         author: row.author.clone(),
         atime: row.time,
         subject: row.subject.clone(),
@@ -923,6 +934,7 @@ pub struct DetailsModel {
     message: String,
     loading: bool,
     requested: String,
+    requested_at: Option<Instant>,
     feed: Option<Arc<Feed<platitude_core::details::CommitDetails>>>,
     tab_id: i32,
 }
@@ -972,6 +984,7 @@ impl DetailsModel {
             return;
         };
         self.requested = oid_hex;
+        self.requested_at = Some(Instant::now());
         self.loading = true;
         self.changed();
         if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
@@ -990,6 +1003,13 @@ impl DetailsModel {
         let hex = details.oid.to_hex();
         if hex != self.requested {
             return; // stale response for a previous selection
+        }
+        if let Some(t0) = self.requested_at.take() {
+            // The 100ms interaction budget is measured here (click → data).
+            tracing::info!(
+                elapsed_ms = t0.elapsed().as_millis() as u64,
+                "details request round trip"
+            );
         }
         self.sha_hex = hex;
         self.sha8 = details.oid.short_hex(8);

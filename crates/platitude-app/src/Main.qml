@@ -67,6 +67,10 @@ ApplicationWindow {
     property int focusEpoch: 0
     onActiveChanged: if (active) focusEpoch++
 
+    // Frame counter for the scroll benchmark (PG_AUTO_SCROLL=1).
+    property int frameCounter: 0
+    onFrameSwapped: frameCounter++
+
     TabsModel {
         id: tabsModel
     }
@@ -287,6 +291,45 @@ ApplicationWindow {
             function onFocusEpochChanged() {
                 if (page.visible && repoTab.state === "open")
                     repoTab.refreshQuick()
+            }
+        }
+
+        // Scroll benchmark (PG_AUTO_SCROLL=1): after the stream finishes,
+        // animate 3000 rows over 12s and report the measured fps.
+        property bool benchStarted: false
+        Connections {
+            target: graphModel
+            enabled: AppBackend.autoScroll
+            function onStatsChanged() {
+                if (!page.benchStarted && !graphModel.loading && graphModel.rowTotal > 0) {
+                    page.benchStarted = true
+                    benchPrep.start()
+                }
+            }
+        }
+        Timer {
+            id: benchPrep
+            interval: 800
+            onTriggered: {
+                page.benchT0 = Date.now()
+                page.benchFrames0 = root.frameCounter
+                benchAnim.start()
+            }
+        }
+        property real benchT0: 0
+        property int benchFrames0: 0
+        NumberAnimation {
+            id: benchAnim
+            target: graphList
+            property: "contentY"
+            from: 0
+            to: Math.min(3000, graphModel.rowTotal - 40) * root.rowH
+            duration: 12000
+            onStopped: {
+                const secs = (Date.now() - page.benchT0) / 1000
+                const frames = root.frameCounter - page.benchFrames0
+                AppBackend.report("scroll_bench fps=" + (frames / secs).toFixed(1)
+                                  + " rows=" + graphModel.rowTotal)
             }
         }
 
@@ -818,7 +861,6 @@ ApplicationWindow {
         id: rowItem
         required property int index
         required property string oid_hex
-        required property string sha8
         required property string author
         required property double atime
         required property string subject
@@ -966,7 +1008,7 @@ ApplicationWindow {
             }
             Label {
                 Layout.preferredWidth: 64
-                text: rowItem.sha8
+                text: rowItem.oid_hex.substring(0, 8)
                 font.family: "Consolas"
                 font.pixelSize: 11
                 color: theme.dim
