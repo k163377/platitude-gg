@@ -7,8 +7,11 @@
 //! cheap and non-blocking (the app bridge posts queued invocations to the
 //! Qt main thread).
 //!
-//! Reads run concurrently. Write serialization arrives with Phase 2; the
-//! session is the natural place to add it.
+//! Reads run concurrently; writes take a session-wide lock so two commands
+//! can never touch one repository's index or refs at the same time
+//! (実装計画 §2.3). Every write refreshes afterwards — including a failed
+//! one, because a command that stops halfway (a conflicted merge, an
+//! interrupted rebase) has still changed the repository.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -18,6 +21,8 @@ use std::time::Instant;
 
 use tokio_util::sync::CancellationToken;
 
+use crate::branch::{self, CheckoutTarget};
+use crate::commit::{self, CommitOptions};
 use crate::details::{self, CommitDetails, DiffTarget};
 use crate::error::GitError;
 use crate::graph::{GraphBuilder, Segment};
@@ -26,9 +31,12 @@ use crate::oid::Oid;
 use crate::opstate::{self, OpState};
 use crate::parse::diff::FilePatch;
 use crate::parse::log::{LOG_FORMAT_ARG, LogParser};
+use crate::patch::HunkSelect;
 use crate::process::{GitCommand, GitExecutor};
 use crate::refs::{self, HeadState, RefEntry, RefKind};
+use crate::remote;
 use crate::repo::{self, RepoInfo};
+use crate::stage;
 use crate::stash::{self, StashEntry};
 use crate::status::{self, WorkTreeStatus};
 
@@ -191,6 +199,24 @@ pub enum SessionEvent {
         op: &'static str,
         error: GitError,
     },
+    /// A write operation started; the UI can show it as in flight.
+    WriteStarted {
+        op: &'static str,
+    },
+    /// A write operation ended. `error` carries git's own message.
+    WriteFinished {
+        op: &'static str,
+        error: Option<String>,
+    },
+}
+
+/// What a write invalidates once it succeeds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AfterWrite {
+    /// Working tree / index / stash only.
+    Snapshots,
+    /// History or refs moved, so the graph has to be rebuilt too.
+    Graph,
 }
 
 /// Receives session events; implementations must be non-blocking.
@@ -234,6 +260,9 @@ pub struct RepoSession {
     log_cancel: Mutex<Option<CancellationToken>>,
     /// Dirty working tree → the log stream prepends a synthetic WIP row.
     wip_dirty: std::sync::atomic::AtomicBool,
+    /// Serializes write commands within this repository (held across the
+    /// subprocess, hence tokio's mutex rather than std's).
+    write_lock: tokio::sync::Mutex<()>,
     refs_gate: OpGate,
     status_gate: OpGate,
     stash_gate: OpGate,
@@ -260,6 +289,7 @@ impl RepoSession {
             log_gen: AtomicU64::new(0),
             log_cancel: Mutex::new(None),
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
+            write_lock: tokio::sync::Mutex::new(()),
             refs_gate: OpGate::default(),
             status_gate: OpGate::default(),
             stash_gate: OpGate::default(),
@@ -289,6 +319,11 @@ impl RepoSession {
     /// Workdir of the opened repository (None until `Opened`).
     pub fn workdir(&self) -> Option<PathBuf> {
         self.lock_info().as_ref().map(|i| i.workdir.clone())
+    }
+
+    /// Resolved repository paths (None until `Opened`).
+    pub fn repo_info(&self) -> Option<RepoInfo> {
+        self.lock_info().clone()
     }
 
     /// Cancels everything this session is doing. Idempotent.
@@ -566,35 +601,282 @@ impl RepoSession {
         });
     }
 
-    /// `git stash pop <selector>` (drops the stash on success).
-    pub fn stash_pop(self: &Arc<Self>, selector: String) {
-        self.stash_op("pop", selector);
-    }
+    // --- writes ---------------------------------------------------------
 
-    /// `git stash apply <selector>` (keeps the stash).
-    pub fn stash_apply(self: &Arc<Self>, selector: String) {
-        self.stash_op("apply", selector);
-    }
-
-    fn stash_op(self: &Arc<Self>, op: &'static str, selector: String) {
-        let Some(workdir) = self.workdir() else {
+    /// Runs one write command under the session write lock, reports its
+    /// lifecycle and refreshes afterwards.
+    ///
+    /// The lock is released before refreshing so a queued write is not held
+    /// up by snapshot reads.
+    fn write<F, Fut>(self: &Arc<Self>, op: &'static str, after: AfterWrite, task: F)
+    where
+        F: FnOnce(GitExecutor, RepoInfo, CancellationToken) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<(), GitError>> + Send,
+    {
+        let Some(info) = self.repo_info() else {
             return;
         };
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let cancel = s.root_cancel.clone();
-            let cmd = GitCommand::new()
-                .cwd(&workdir)
-                .args(["stash", op, &selector]);
-            match s.executor.run(cmd, &cancel).await {
-                Ok(_) => {
-                    // Both the tree and the stash rows changed shape.
+            let result = {
+                let guard = s.write_lock.lock().await;
+                s.sink.event(SessionEvent::WriteStarted { op });
+                let result = task(s.executor.clone(), info, cancel).await;
+                drop(guard);
+                result
+            };
+            match result {
+                Ok(()) => {
+                    s.sink
+                        .event(SessionEvent::WriteFinished { op, error: None });
+                    if after == AfterWrite::Graph {
+                        s.restart_log();
+                    }
                     s.refresh_quick();
-                    s.restart_log();
                 }
-                Err(e) => s.fail("stash", e),
+                Err(error) if error.is_cancelled() => {}
+                Err(error) => {
+                    tracing::warn!(op, %error, "write failed");
+                    s.sink.event(SessionEvent::WriteFinished {
+                        op,
+                        error: Some(error.to_string()),
+                    });
+                    // A half-finished command still changed the repository
+                    // (conflicted merge, interrupted rebase, partial apply).
+                    s.refresh_quick();
+                }
             }
         });
+    }
+
+    /// `git add` for whole files.
+    pub fn stage_paths(self: &Arc<Self>, paths: Vec<String>) {
+        self.write(
+            "stage",
+            AfterWrite::Snapshots,
+            move |exec, repo, cancel| async move {
+                stage::stage_paths(&exec, &repo.workdir, &paths, &cancel).await
+            },
+        );
+    }
+
+    /// `git add -A` for the whole work tree.
+    pub fn stage_all(self: &Arc<Self>) {
+        self.write(
+            "stage",
+            AfterWrite::Snapshots,
+            move |exec, repo, cancel| async move {
+                stage::stage_all(&exec, &repo.workdir, &cancel).await
+            },
+        );
+    }
+
+    /// Empties the index back to HEAD.
+    pub fn unstage_all(self: &Arc<Self>) {
+        self.write(
+            "unstage",
+            AfterWrite::Snapshots,
+            move |exec, repo, cancel| async move {
+                stage::unstage_all(&exec, &repo.workdir, &cancel).await
+            },
+        );
+    }
+
+    /// Removes whole files from the index.
+    pub fn unstage_paths(self: &Arc<Self>, paths: Vec<String>) {
+        self.write(
+            "unstage",
+            AfterWrite::Snapshots,
+            move |exec, repo, cancel| async move {
+                stage::unstage_paths(&exec, &repo.workdir, &paths, &cancel).await
+            },
+        );
+    }
+
+    /// Throws away unstaged modifications of tracked files.
+    pub fn discard_paths(self: &Arc<Self>, paths: Vec<String>) {
+        self.write(
+            "discard",
+            AfterWrite::Snapshots,
+            move |exec, repo, cancel| async move {
+                stage::discard_worktree(&exec, &repo.workdir, &paths, &cancel).await
+            },
+        );
+    }
+
+    /// Deletes untracked files.
+    pub fn remove_untracked(self: &Arc<Self>, paths: Vec<String>) {
+        self.write(
+            "clean",
+            AfterWrite::Snapshots,
+            move |exec, repo, cancel| async move {
+                stage::remove_untracked(&exec, &repo.workdir, &paths, &cancel).await
+            },
+        );
+    }
+
+    /// Stages or unstages part of one file's diff (hunk / line level).
+    pub fn apply_partial(self: &Arc<Self>, target: DiffTarget, selects: Vec<HunkSelect>) {
+        self.write(
+            "stage",
+            AfterWrite::Snapshots,
+            move |exec, repo, cancel| async move {
+                stage::apply_partial(&exec, &repo, &target, &selects, &cancel).await
+            },
+        );
+    }
+
+    /// Commits the index (or amends HEAD).
+    pub fn commit(self: &Arc<Self>, message: String, options: CommitOptions) {
+        self.write(
+            "commit",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                commit::commit(&exec, &repo, &message, options, &cancel)
+                    .await
+                    .map(drop)
+            },
+        );
+    }
+
+    /// Moves HEAD.
+    pub fn checkout(self: &Arc<Self>, target: CheckoutTarget) {
+        self.write(
+            "checkout",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                branch::checkout(&exec, &repo.workdir, &target, &cancel).await
+            },
+        );
+    }
+
+    /// Creates a branch, optionally switching to it.
+    pub fn create_branch(
+        self: &Arc<Self>,
+        name: String,
+        start_point: Option<String>,
+        switch_to: bool,
+    ) {
+        self.write(
+            "branch",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                branch::create(
+                    &exec,
+                    &repo.workdir,
+                    &name,
+                    start_point.as_deref(),
+                    switch_to,
+                    &cancel,
+                )
+                .await
+            },
+        );
+    }
+
+    pub fn delete_branch(self: &Arc<Self>, name: String, force: bool) {
+        self.write(
+            "branch",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                branch::delete(&exec, &repo.workdir, &name, force, &cancel).await
+            },
+        );
+    }
+
+    pub fn rename_branch(self: &Arc<Self>, from: String, to: String, force: bool) {
+        self.write(
+            "branch",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                branch::rename(&exec, &repo.workdir, &from, &to, force, &cancel).await
+            },
+        );
+    }
+
+    /// `git stash push`.
+    pub fn stash_push(self: &Arc<Self>, message: String, options: stash::PushOptions) {
+        self.write(
+            "stash",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                stash::push(&exec, &repo.workdir, &message, options, &[], &cancel).await
+            },
+        );
+    }
+
+    /// `git stash pop <selector>` (drops the stash on success).
+    pub fn stash_pop(self: &Arc<Self>, selector: String) {
+        self.write(
+            "stash",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                stash::pop(&exec, &repo.workdir, &selector, &cancel).await
+            },
+        );
+    }
+
+    /// `git stash apply <selector>` (keeps the stash).
+    pub fn stash_apply(self: &Arc<Self>, selector: String) {
+        self.write(
+            "stash",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                stash::apply(&exec, &repo.workdir, &selector, &cancel).await
+            },
+        );
+    }
+
+    /// `git stash drop <selector>`.
+    pub fn stash_drop(self: &Arc<Self>, selector: String) {
+        self.write(
+            "stash",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                stash::drop(&exec, &repo.workdir, &selector, &cancel).await
+            },
+        );
+    }
+
+    /// `git fetch --prune`; `None` fetches every remote.
+    pub fn fetch(self: &Arc<Self>, remote: Option<String>) {
+        self.write(
+            "fetch",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                remote::fetch(&exec, &repo.workdir, remote.as_deref(), &cancel).await
+            },
+        );
+    }
+
+    /// `git push` for one branch.
+    pub fn push(self: &Arc<Self>, spec: remote::PushSpec) {
+        self.write(
+            "push",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                remote::push(&exec, &repo.workdir, &spec, &cancel).await
+            },
+        );
+    }
+
+    /// `git push <remote> --delete <branch>`.
+    pub fn delete_remote_branch(self: &Arc<Self>, remote_name: String, branch_name: String) {
+        self.write(
+            "push",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                remote::delete_remote_branch(
+                    &exec,
+                    &repo.workdir,
+                    &remote_name,
+                    &branch_name,
+                    &cancel,
+                )
+                .await
+            },
+        );
     }
 
     /// Loads full details of one commit (metadata + changed files).

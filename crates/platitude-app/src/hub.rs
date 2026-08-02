@@ -23,12 +23,25 @@ use platitude_core::stash::StashEntry;
 use platitude_core::status::WorkTreeStatus;
 use qtbridge::QmlMethodInvoker;
 
-/// Tab-level messages (open lifecycle + background errors).
+/// Tab-level messages (open lifecycle + background errors + write state).
 #[derive(Debug)]
 pub enum TabMsg {
-    Opened { title: String, path: String },
-    OpenFailed { message: String },
-    OpError { message: String },
+    Opened {
+        title: String,
+        path: String,
+    },
+    OpenFailed {
+        message: String,
+    },
+    OpError {
+        message: String,
+    },
+    /// A write command started / ended. A failed write also arrives as an
+    /// `OpError`, so the existing error surface needs no special case.
+    WriteState {
+        op: String,
+        running: bool,
+    },
 }
 
 /// Graph-model messages (log stream lifecycle).
@@ -238,6 +251,21 @@ impl SessionSink for BridgeSink {
             SessionEvent::OpFailed { op, error } => self.feeds.tab.push(TabMsg::OpError {
                 message: format!("{op}: {error}"),
             }),
+            SessionEvent::WriteStarted { op } => self.feeds.tab.push(TabMsg::WriteState {
+                op: op.to_string(),
+                running: true,
+            }),
+            SessionEvent::WriteFinished { op, error } => {
+                if let Some(message) = error {
+                    self.feeds.tab.push(TabMsg::OpError {
+                        message: format!("{op}: {message}"),
+                    });
+                }
+                self.feeds.tab.push(TabMsg::WriteState {
+                    op: op.to_string(),
+                    running: false,
+                });
+            }
         }
     }
 }

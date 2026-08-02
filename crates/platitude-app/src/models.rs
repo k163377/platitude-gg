@@ -321,6 +321,10 @@ pub struct RepoTab {
     error: String,
     last_error: String,
     tags_shown: bool,
+    /// Write commands currently in flight (they are serialized per session,
+    /// but requests can queue up).
+    busy_count: i32,
+    busy_op: String,
     feed: Option<Arc<Feed<TabMsg>>>,
 }
 
@@ -335,7 +339,18 @@ impl Default for RepoTab {
             last_error: String::new(),
             // Mirrors core LogOptions::default().
             tags_shown: true,
+            busy_count: 0,
+            busy_op: String::new(),
             feed: None,
+        }
+    }
+}
+
+impl RepoTab {
+    /// Runs `f` with this tab's session, if the tab is still open.
+    fn with_session(&self, f: impl FnOnce(&Arc<platitude_core::session::RepoSession>)) {
+        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
+            f(&session);
         }
     }
 }
@@ -348,6 +363,8 @@ impl RepoTab {
     qproperty!("error", Member = error, Notify = changed);
     qproperty!("lastError", Member = last_error, Notify = changed);
     qproperty!("tagsShown", Member = tags_shown, Notify = changed);
+    qproperty!("busyCount", Member = busy_count, Notify = changed);
+    qproperty!("busyOp", Member = busy_op, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -383,6 +400,17 @@ impl RepoTab {
                 TabMsg::OpError { message } => {
                     self.last_error = message;
                 }
+                TabMsg::WriteState { op, running } => {
+                    if running {
+                        self.busy_count += 1;
+                        self.busy_op = op;
+                    } else {
+                        self.busy_count = (self.busy_count - 1).max(0);
+                        if self.busy_count == 0 {
+                            self.busy_op = String::new();
+                        }
+                    }
+                }
             }
         }
         self.changed();
@@ -411,20 +439,181 @@ impl RepoTab {
         self.changed();
     }
 
+    // --- write operations -----------------------------------------------
+    //
+    // Every one of these is fire-and-forget: the session serializes them,
+    // reports progress through `busyCount` and routes git's own error text
+    // into `lastError`. Paths arrive one per call — a git path may contain
+    // anything except NUL, so there is no separator safe enough to pack a
+    // list into one string.
+
+    #[qslot]
+    fn stage_path(&mut self, path: String) {
+        self.with_session(|s| s.stage_paths(vec![path.clone()]));
+    }
+
+    #[qslot]
+    fn unstage_path(&mut self, path: String) {
+        self.with_session(|s| s.unstage_paths(vec![path.clone()]));
+    }
+
+    /// Throws away unstaged modifications of a tracked file (destructive).
+    #[qslot]
+    fn discard_path(&mut self, path: String) {
+        self.with_session(|s| s.discard_paths(vec![path.clone()]));
+    }
+
+    /// Deletes an untracked file or directory (destructive).
+    #[qslot]
+    fn remove_untracked(&mut self, path: String) {
+        self.with_session(|s| s.remove_untracked(vec![path.clone()]));
+    }
+
+    #[qslot]
+    fn stage_all(&mut self) {
+        self.with_session(|s| s.stage_all());
+    }
+
+    #[qslot]
+    fn unstage_all(&mut self) {
+        self.with_session(|s| s.unstage_all());
+    }
+
+    /// Stages (or unstages) part of one file's diff. `kind` is the diff-key
+    /// prefix (`unstaged` / `staged` / `untracked`) and `spec` is
+    /// `"<hunk>[:<line>,<line>...];..."` — see `encode::parse_hunk_selection`.
+    #[qslot]
+    fn stage_selection(&mut self, kind: String, path: String, orig_path: String, spec: String) {
+        let Some(target) = crate::encode::worktree_target(&kind, &path, &orig_path) else {
+            tracing::warn!(kind, "selection staging asked for a non-worktree diff");
+            return;
+        };
+        let selects = crate::encode::parse_hunk_selection(&spec);
+        if selects.is_empty() {
+            return;
+        }
+        self.with_session(|s| s.apply_partial(target.clone(), selects.clone()));
+    }
+
+    /// Commits the index. An empty message is only valid with `amend`,
+    /// where it keeps the existing one.
+    #[qslot]
+    fn commit(&mut self, message: String, amend: bool) {
+        let options = platitude_core::commit::CommitOptions {
+            amend,
+            ..Default::default()
+        };
+        self.with_session(|s| s.commit(message.clone(), options));
+    }
+
+    #[qslot]
+    fn checkout_branch(&mut self, name: String) {
+        let target = platitude_core::branch::CheckoutTarget::Branch { name };
+        self.with_session(|s| s.checkout(target.clone()));
+    }
+
+    /// Checks out any commit-ish, detaching HEAD.
+    #[qslot]
+    fn checkout_detached(&mut self, rev: String) {
+        let target = platitude_core::branch::CheckoutTarget::Detach { rev };
+        self.with_session(|s| s.checkout(target.clone()));
+    }
+
+    /// Creates a local branch tracking a remote-tracking ref and switches.
+    #[qslot]
+    fn checkout_remote(&mut self, remote_ref: String, local: String) {
+        let target = platitude_core::branch::CheckoutTarget::Track { remote_ref, local };
+        self.with_session(|s| s.checkout(target.clone()));
+    }
+
+    /// Creates a branch at `start_point` (HEAD when empty).
+    #[qslot]
+    fn create_branch(&mut self, name: String, start_point: String, switch_to: bool) {
+        let start = (!start_point.is_empty()).then_some(start_point);
+        self.with_session(|s| s.create_branch(name.clone(), start.clone(), switch_to));
+    }
+
+    /// Deletes a local branch. Without `force`, git refuses an unmerged one.
+    #[qslot]
+    fn delete_branch(&mut self, name: String, force: bool) {
+        self.with_session(|s| s.delete_branch(name.clone(), force));
+    }
+
+    #[qslot]
+    fn rename_branch(&mut self, from: String, to: String, force: bool) {
+        self.with_session(|s| s.rename_branch(from.clone(), to.clone(), force));
+    }
+
+    /// `git stash push`.
+    #[qslot]
+    fn push_stash(&mut self, message: String, include_untracked: bool, keep_index: bool) {
+        let options = platitude_core::stash::PushOptions {
+            include_untracked,
+            keep_index,
+            staged_only: false,
+        };
+        self.with_session(|s| s.stash_push(message.clone(), options));
+    }
+
     /// `git stash pop` on the given selector (stash-row action).
     #[qslot]
     fn pop_stash(&mut self, selector: String) {
-        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
-            session.stash_pop(selector);
-        }
+        self.with_session(|s| s.stash_pop(selector.clone()));
     }
 
     /// `git stash apply` on the given selector (keeps the stash).
     #[qslot]
     fn apply_stash(&mut self, selector: String) {
-        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
-            session.stash_apply(selector);
-        }
+        self.with_session(|s| s.stash_apply(selector.clone()));
+    }
+
+    /// `git stash drop` (destructive).
+    #[qslot]
+    fn drop_stash(&mut self, selector: String) {
+        self.with_session(|s| s.stash_drop(selector.clone()));
+    }
+
+    /// `git fetch --prune`; an empty remote fetches all of them.
+    #[qslot]
+    fn fetch(&mut self, remote: String) {
+        let remote = (!remote.is_empty()).then_some(remote);
+        self.with_session(|s| s.fetch(remote.clone()));
+    }
+
+    /// `git push`. `force` is `""` / `"lease"` / `"force"`; `lease_expect`
+    /// pins the remote commit the user saw (empty = bare lease).
+    #[qslot]
+    fn push_branch(
+        &mut self,
+        remote: String,
+        local: String,
+        remote_branch: String,
+        set_upstream: bool,
+        force: String,
+        lease_expect: String,
+    ) {
+        use platitude_core::remote::PushForce;
+        let force = match force.as_str() {
+            "lease" => PushForce::WithLease {
+                expect: (!lease_expect.is_empty()).then_some(lease_expect),
+            },
+            "force" => PushForce::Force,
+            _ => PushForce::None,
+        };
+        let spec = platitude_core::remote::PushSpec {
+            remote,
+            local,
+            remote_branch,
+            set_upstream,
+            force,
+        };
+        self.with_session(|s| s.push(spec.clone()));
+    }
+
+    /// `git push <remote> --delete <branch>` (destructive).
+    #[qslot]
+    fn delete_remote_branch(&mut self, remote: String, branch: String) {
+        self.with_session(|s| s.delete_remote_branch(remote.clone(), branch.clone()));
     }
 
     /// Shows/hides tags in the graph walk (restarts the stream).

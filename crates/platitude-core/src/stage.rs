@@ -33,6 +33,42 @@ pub async fn stage_paths(
     executor.run(cmd, cancel).await.map(drop)
 }
 
+/// `git add -A`: stages every change in the work tree, untracked included.
+pub async fn stage_all(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let cmd = GitCommand::new().cwd(workdir).args(["add", "--all"]);
+    executor.run(cmd, cancel).await.map(drop)
+}
+
+/// Empties the index back to HEAD, leaving the working tree alone.
+pub async fn unstage_all(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let unborn = refs::head_state(executor, workdir, cancel)
+        .await?
+        .oid
+        .is_none();
+    let cmd = if unborn {
+        // No HEAD to reset to; drop every entry instead.
+        GitCommand::new().cwd(workdir).args([
+            "rm",
+            "--cached",
+            "-r",
+            "--quiet",
+            "--",
+            ":(literal).",
+        ])
+    } else {
+        GitCommand::new().cwd(workdir).args(["reset", "--quiet"])
+    };
+    executor.run(cmd, cancel).await.map(drop)
+}
+
 /// Removes staged changes for `paths`, keeping the working tree as-is.
 ///
 /// `git restore --staged` needs a HEAD to restore from; on an unborn branch

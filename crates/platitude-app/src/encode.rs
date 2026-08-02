@@ -5,6 +5,7 @@
 use platitude_core::details::DiffTarget;
 use platitude_core::graph::{Segment, SegmentKind};
 use platitude_core::parse::diff::{DiffLineKind, FilePatch};
+use platitude_core::patch::HunkSelect;
 use platitude_core::session::{LabelKind, RefLabel};
 
 /// Record separator for label chips (cannot occur in refnames).
@@ -118,6 +119,58 @@ pub fn tail_lanes(geometry: &str) -> String {
 }
 
 /// Stable identity of a diff request (stale-response guard in the pane).
+/// Decodes a hunk/line selection from QML.
+///
+/// `"1;3:0,4"` selects all of hunk 1 and lines 0 and 4 of hunk 3 — the
+/// indices addressing the rows [`flatten_patches`] produced, which are the
+/// parser's own positions. Anything unparsable is dropped rather than
+/// guessed at: a wrong index would stage the wrong line.
+pub fn parse_hunk_selection(spec: &str) -> Vec<HunkSelect> {
+    let mut out = Vec::new();
+    for part in spec.split(';').filter(|p| !p.trim().is_empty()) {
+        let (hunk, lines) = match part.split_once(':') {
+            Some((h, l)) => (h, Some(l)),
+            None => (part, None),
+        };
+        let Ok(hunk) = hunk.trim().parse::<usize>() else {
+            continue;
+        };
+        match lines {
+            None => out.push(HunkSelect::whole(hunk)),
+            Some(list) => {
+                let selected: Vec<usize> = list
+                    .split(',')
+                    .filter_map(|n| n.trim().parse().ok())
+                    .collect();
+                if !selected.is_empty() {
+                    out.push(HunkSelect::lines(hunk, selected));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Rebuilds the diff target a working-tree selection refers to.
+/// `kind` is the prefix [`diff_key`] uses (`staged` / `unstaged` /
+/// `untracked`); a committed diff is not stageable and yields `None`.
+pub fn worktree_target(kind: &str, path: &str, orig_path: &str) -> Option<DiffTarget> {
+    let orig = (!orig_path.is_empty()).then(|| orig_path.to_string());
+    match kind {
+        "staged" => Some(DiffTarget::Staged {
+            path: path.to_string(),
+            orig_path: orig,
+        }),
+        "unstaged" => Some(DiffTarget::Unstaged {
+            path: path.to_string(),
+        }),
+        "untracked" => Some(DiffTarget::Untracked {
+            path: path.to_string(),
+        }),
+        _ => None,
+    }
+}
+
 pub fn diff_key(target: &DiffTarget) -> String {
     match target {
         DiffTarget::Commit { oid, path, .. } => format!("commit:{}:{path}", oid.to_hex()),
@@ -279,6 +332,43 @@ mod tests {
         assert_eq!((rows[2].old_no, rows[2].new_no), (2, -1));
         assert_eq!(rows[3].kind, "add");
         assert_eq!((rows[3].old_no, rows[3].new_no), (-1, 2));
+    }
+
+    #[test]
+    fn parses_hunk_and_line_selections() {
+        let sel = parse_hunk_selection("1;3:0,4");
+        assert_eq!(
+            sel,
+            vec![HunkSelect::whole(1), HunkSelect::lines(3, [0, 4])]
+        );
+    }
+
+    #[test]
+    fn unparsable_selection_parts_are_dropped() {
+        assert!(parse_hunk_selection("").is_empty());
+        assert!(parse_hunk_selection("x;2:").is_empty());
+        assert_eq!(
+            parse_hunk_selection("2:1,x"),
+            vec![HunkSelect::lines(2, [1])]
+        );
+    }
+
+    #[test]
+    fn worktree_targets_exclude_committed_diffs() {
+        assert_eq!(
+            worktree_target("unstaged", "f.txt", ""),
+            Some(DiffTarget::Unstaged {
+                path: "f.txt".into()
+            })
+        );
+        assert_eq!(
+            worktree_target("staged", "new.txt", "old.txt"),
+            Some(DiffTarget::Staged {
+                path: "new.txt".into(),
+                orig_path: Some("old.txt".into())
+            })
+        );
+        assert_eq!(worktree_target("commit", "f.txt", ""), None);
     }
 
     #[test]
