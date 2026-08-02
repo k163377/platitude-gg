@@ -58,6 +58,10 @@ crates/
 - QML モジュール名は Cargo パッケージ名になる
 - 全 QObject は `Rc<RefCell<_>>`(メインスレッド専有)。**QML からの呼び出し中に再入 borrow すると panic** — 借用は短く保つ
 - バックグラウンド → UI は `QObjectHolder::get_qml_method_invoker()` で得た `QmlMethodInvoker` をスレッドへ移動し `invoke_method*`(queued 実行)する。それ以外の経路で UI を触らない
+- `#[derive(QModelItem)]` は非衛生的展開 — 使用側ファイルに `use std::collections::HashMap;` が必須。ロール名はフィールド名そのまま(snake_case)。`display` という名前のフィールドは Qt の display ロールに割り当てられる
+- `QListModelBase` にバッチ挿入は無い(push/insert は 1 行ずつ)。大量追記は `try_get_rust_proxy_ptr()` + `base_begin_insert_rows(first, last)` + `Vec::extend` + `base_end_insert_rows` のレンジ挿入で行う(P0 スパイク `spike/src/main.rs` の `extend_notified` 参照)
+- `ConvertToCamelCase` はスロット/シグナルのメタ名を camel 化する — そのオブジェクトへの `invoke_method!` も camel 名で呼ぶこと(混在事故を防ぐため、invoker で呼ぶ対象には付けないのが安全)
+- QML モジュール名は既定で Cargo パッケージ名(ハイフン不可)だが、`#[qobject(NoQmlElement)]` + 手動 `impl QmlRegister`(URI 定数)で任意にできる
 - Qt Widgets 不可・C++ 混在不可。必要になった時点で CXX-Qt 移行を検討
 - 参照実装は公式 examples(`hello_world` / `minimal_app` / `host_monitor` = tokio 連携 / `color_palette`)
 
@@ -99,16 +103,12 @@ cargo fmt --all
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)、メッセージは英語
 - force push しない
 
-## 現在のフェーズ: 初期スパイク(完了したらこのセクションを書き換える)
+## 現在のフェーズ: Phase 1 — 読み取り専用ビューア(完了したらこのセクションを書き換える)
 
-Qt Bridges の実用性検証が最優先。検証観点:
-
-1. 日本語 IME 入力(コミットメッセージ編集で必須)
-2. コミットグラフ描画性能(QML Canvas / Shape 想定)
-3. macOS arm64 での動作(公式サポートは experimental)
-4. Qt ランタイム同梱の配布手順(**qtbridge 公式の配布手順は未整備** — windeployqt / macdeployqt を自前検証する)
-
-不合格なら CXX-Qt へ切替(QML と core は無変更で維持)。
+- ブリッジは **Qt Bridges 採用で確定**(Phase 0 スパイク合格: IME / 10万行グラフ描画 / ワーカースレッド通知 / logストリーミング / windeployqt 配布)。CXX-Qt へ差し替え可能な構成(ブリッジ薄層化・§ワークスペース構成のルール)は引き続き維持する
+- スパイクコードは `spike/`(使い捨て。qtbridge の使用例・バッチ挿入等の参照実装として残置)
+- ネットワーク非通信の baseline 実測: [ci/baseline/windows-x64.md](ci/baseline/windows-x64.md)。**Qt6Network は Qt6Qml のロード時依存として同梱が必須** — 「同梱しない」ではなく「アプリ自身の import table に通信系なし + ネットワーク系プラグイン除外」を主張する
+- mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ、実機検証は Phase 5 ゲート
 
 ## 本ファイルの運用
 
