@@ -647,13 +647,21 @@ fn to_row_item(row: &LogRow) -> GraphRowItem {
 
 #[derive(QModelItem, Default, Clone)]
 pub struct NavItem {
+    /// Display text: the last path segment in tree mode, the full name in
+    /// flat/filter mode.
     name: String,
+    /// Full ref/path (tooltips; folder rows carry their folder path here,
+    /// which doubles as the toggle key).
+    full: String,
     oid_hex: String,
     change: String,
     bucket: String,
     orig_path: String,
     is_head: bool,
     has_remote: bool,
+    depth: i32,
+    folder: bool,
+    collapsed: bool,
 }
 
 #[derive(Default)]
@@ -663,6 +671,9 @@ pub struct NavSectionModel {
     items: Vec<NavItem>,
     filter: String,
     total: i32,
+    /// Explicit folder open/close choices (key = folder path); anything
+    /// absent uses the section default.
+    folder_overrides: HashMap<String, bool>,
     refs_feed: Option<Arc<Feed<platitude_core::session::RefsSnapshot>>>,
     status_feed: Option<Arc<Feed<StatusMsg>>>,
     stash_feed: Option<Arc<Feed<Vec<platitude_core::stash::StashEntry>>>>,
@@ -680,12 +691,89 @@ impl QListModel for NavSectionModel {
     }
     fn reset_unnotified(&mut self) {
         let needle = self.filter.to_lowercase();
-        self.items = self
-            .all
-            .iter()
-            .filter(|i| needle.is_empty() || i.name.to_lowercase().contains(&needle))
-            .cloned()
-            .collect();
+        if !needle.is_empty() {
+            // Filtering shows flat full names (folders would hide context).
+            self.items = self
+                .all
+                .iter()
+                .filter(|i| i.name.to_lowercase().contains(&needle))
+                .cloned()
+                .collect();
+            return;
+        }
+        if matches!(self.section.as_str(), "branches" | "remotes") {
+            self.items = self.build_tree();
+        } else {
+            self.items = self.all.clone();
+        }
+    }
+}
+
+impl NavSectionModel {
+    /// Section default: remote roots (one per remote) start collapsed —
+    /// that is the per-repository fold — everything else starts open.
+    fn folder_expanded(&self, key: &str, depth: i32) -> bool {
+        self.folder_overrides
+            .get(key)
+            .copied()
+            .unwrap_or(!(self.section == "remotes" && depth == 0))
+    }
+
+    /// Turns the flat sorted name list into an indented tree with
+    /// collapsible folder rows for every `/` level.
+    fn build_tree(&self) -> Vec<NavItem> {
+        let mut out = Vec::new();
+        let mut open_path: Vec<String> = Vec::new();
+        // Depth at which a collapsed folder swallows its descendants.
+        let mut collapsed_at: Option<usize> = None;
+
+        for leaf in &self.all {
+            let segments: Vec<&str> = leaf.name.split('/').collect();
+            let folder_count = segments.len() - 1;
+
+            // Longest common folder prefix with the previous entry.
+            let mut common = 0;
+            while common < open_path.len()
+                && common < folder_count
+                && open_path[common] == segments[common]
+            {
+                common += 1;
+            }
+            open_path.truncate(common);
+            if let Some(depth) = collapsed_at
+                && depth >= open_path.len()
+            {
+                collapsed_at = None;
+            }
+
+            for (depth, segment) in segments.iter().enumerate().take(folder_count).skip(common) {
+                open_path.push((*segment).to_string());
+                if collapsed_at.is_some() {
+                    continue;
+                }
+                let key = open_path.join("/");
+                let expanded = self.folder_expanded(&key, depth as i32);
+                out.push(NavItem {
+                    name: (*segment).to_string(),
+                    full: key,
+                    depth: depth as i32,
+                    folder: true,
+                    collapsed: !expanded,
+                    ..Default::default()
+                });
+                if !expanded {
+                    collapsed_at = Some(depth);
+                }
+            }
+            if collapsed_at.is_none() {
+                let mut item = leaf.clone();
+                item.full = leaf.name.clone();
+                item.name = segments[folder_count].to_string();
+                item.depth = folder_count as i32;
+                out.push(item);
+            }
+        }
+        out
     }
 }
 
@@ -861,6 +949,15 @@ impl NavSectionModel {
             self.reset();
             self.changed();
         }
+    }
+
+    /// Opens/closes one folder row (key = its path, e.g. `origin/feature`).
+    #[qslot]
+    fn toggle_folder(&mut self, key: String) {
+        let depth = key.matches('/').count() as i32;
+        let current = self.folder_expanded(&key, depth);
+        self.folder_overrides.insert(key, !current);
+        self.reset();
     }
 
     /// Filtered row count (the header shows `shown/total` while filtering).

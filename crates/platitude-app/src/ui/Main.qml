@@ -27,13 +27,16 @@ ApplicationWindow {
     // is their single source of truth for now (デザイン規約.md §運用の例外);
     // values follow the guideline principles (4px grid, token reuse) and
     // graduate into the document once they stabilize.
-    readonly property int laneW: Theme.spaceLg
+    readonly property int laneW: Theme.iconLg
+    readonly property int laneInset: Theme.spaceSm
     readonly property int nodeIcon: Theme.iconLg
     readonly property int laneStroke: 2
     readonly property real iconStroke: 1.5
+    readonly property real identiconFill: 0.72
     readonly property int wheelRows: 6
     readonly property real middleScrollGain: 0.12
     readonly property int labelColW: 144
+    readonly property int detailsAvatar: 40
 
     palette {
         window: Theme.bgBase
@@ -270,7 +273,7 @@ ApplicationWindow {
         required property int tab_id
 
         readonly property int shownLanes: Math.max(1, Math.min(graphModel.maxLanes, 12))
-        readonly property int graphAreaW: shownLanes * root.laneW + Theme.spaceSm
+        readonly property int graphAreaW: root.laneInset + shownLanes * root.laneW + Theme.spaceSm
         property string selectedOid: ""
 
         // Center area switches between the graph and a file diff.
@@ -700,7 +703,7 @@ ApplicationWindow {
                                             const dot = toks[n].indexOf(".")
                                             const lane = parseInt(toks[n].substring(0, dot))
                                             const color = parseInt(toks[n].substring(dot + 1))
-                                            const x = lane * root.laneW + root.laneW / 2
+                                            const x = root.laneInset + lane * root.laneW + root.laneW / 2
                                             ctx.strokeStyle = Theme.graphLane[color % Theme.graphLane.length]
                                             ctx.beginPath()
                                             ctx.moveTo(x, 0)
@@ -930,63 +933,60 @@ ApplicationWindow {
                             spacing: Theme.spaceXs
                             visible: detailsModel.shaHex !== ""
 
-                            // -- author block --
+                            // -- author block: avatar with name over date --
                             RowLayout {
                                 spacing: Theme.spaceSm
-                                IdentIcon { code: detailsModel.avatar }
-                                Label {
-                                    id: authorLabel
-                                    text: detailsModel.authorName
-                                    elide: Text.ElideRight
+                                IdentIcon {
+                                    code: detailsModel.avatar
+                                    width: root.detailsAvatar
+                                    height: root.detailsAvatar
+                                }
+                                ColumnLayout {
+                                    spacing: 0
                                     Layout.fillWidth: true
-                                    color: Theme.textPrimary
-                                    font.pixelSize: Theme.fontMd
-                                    ToolTip.visible: authorHover.containsMouse
-                                    ToolTip.delay: 400
-                                    ToolTip.text: qsTr("Author: %1 <%2>\nCommitter: %3")
-                                                  .arg(detailsModel.authorName)
-                                                  .arg(detailsModel.authorEmail)
-                                                  .arg(detailsModel.committer)
-                                    MouseArea {
-                                        id: authorHover
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        acceptedButtons: Qt.NoButton
+                                    Label {
+                                        id: authorLabel
+                                        text: detailsModel.authorName
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                        color: Theme.textPrimary
+                                        font.pixelSize: Theme.fontMd
+                                        font.weight: Font.DemiBold
+                                        ToolTip.visible: authorHover.containsMouse
+                                        ToolTip.delay: 400
+                                        ToolTip.text: qsTr("Author: %1 <%2>\nCommitter: %3")
+                                                      .arg(detailsModel.authorName)
+                                                      .arg(detailsModel.authorEmail)
+                                                      .arg(detailsModel.committer)
+                                        MouseArea {
+                                            id: authorHover
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            acceptedButtons: Qt.NoButton
+                                        }
+                                    }
+                                    RowLayout {
+                                        spacing: Theme.spaceXs
+                                        Label {
+                                            id: detailsDate
+                                            text: Qt.formatDateTime(new Date(detailsModel.authorTime * 1000),
+                                                                    "yyyy-MM-dd HH:mm")
+                                            color: Theme.textSecondary
+                                            font.pixelSize: Theme.fontSm
+                                        }
+                                        ToolButton {
+                                            text: "⧉"
+                                            padding: 0
+                                            implicitWidth: Theme.iconMd
+                                            implicitHeight: Theme.iconMd
+                                            ToolTip.visible: hovered
+                                            ToolTip.delay: 600
+                                            ToolTip.text: qsTr("Copy date")
+                                            onClicked: root.copyText(detailsDate.text)
+                                        }
+                                        Item { Layout.fillWidth: true }
                                     }
                                 }
-                            }
-                            // -- date block --
-                            RowLayout {
-                                spacing: Theme.spaceSm
-                                NavIcon {
-                                    kind: "clock"
-                                    tint: Theme.textSecondary
-                                    width: Theme.iconLg
-                                    height: Theme.iconLg
-                                }
-                                Label {
-                                    id: detailsDate
-                                    text: Qt.formatDateTime(new Date(detailsModel.authorTime * 1000),
-                                                            "yyyy-MM-dd HH:mm")
-                                    color: Theme.textSecondary
-                                    font.pixelSize: Theme.fontMd
-                                }
-                                ToolButton {
-                                    text: "⧉"
-                                    padding: 0
-                                    implicitWidth: Theme.iconLg
-                                    implicitHeight: Theme.iconLg
-                                    ToolTip.visible: hovered
-                                    ToolTip.delay: 600
-                                    ToolTip.text: qsTr("Copy date")
-                                    onClicked: root.copyText(detailsDate.text)
-                                }
-                                Item { Layout.fillWidth: true }
-                            }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                implicitHeight: Theme.borderWidth
-                                color: Theme.borderSubtle
                             }
                             // -- hash block: own hash + first parent link --
                             RowLayout {
@@ -1034,23 +1034,29 @@ ApplicationWindow {
                                 }
                                 Item { Layout.fillWidth: true }
                             }
+                            // -- message: framed like the future commit
+                            // editor so viewing and writing feel identical
+                            // (Phase 2 makes this editable for new commits
+                            // and amend) --
                             Rectangle {
                                 Layout.fillWidth: true
-                                implicitHeight: Theme.borderWidth
-                                color: Theme.borderSubtle
-                            }
-                            // -- message --
-                            ScrollView {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: Math.min(messageArea.implicitHeight + Theme.spaceSm, 120)
-                                TextArea {
-                                    id: messageArea
-                                    readOnly: true
-                                    wrapMode: TextArea.Wrap
-                                    text: detailsModel.message
-                                    font.pixelSize: Theme.fontMd
-                                    color: Theme.textPrimary
-                                    background: null
+                                Layout.preferredHeight: Math.min(messageArea.implicitHeight + Theme.spaceSm, 140)
+                                color: Theme.bgBase
+                                radius: Theme.radiusMd
+                                border.color: Theme.borderDefault
+                                border.width: Theme.borderWidth
+                                ScrollView {
+                                    anchors.fill: parent
+                                    anchors.margins: Theme.spaceXs
+                                    TextArea {
+                                        id: messageArea
+                                        readOnly: true
+                                        wrapMode: TextArea.Wrap
+                                        text: detailsModel.message
+                                        font.pixelSize: Theme.fontMd
+                                        color: Theme.textPrimary
+                                        background: null
+                                    }
                                 }
                             }
                         }
@@ -1060,6 +1066,10 @@ ApplicationWindow {
                             text: qsTr("Select a commit to see its details")
                             color: Theme.textMuted
                             font.pixelSize: Theme.fontSm
+                        }
+                        PaneHeader {
+                            visible: detailsModel.shaHex !== ""
+                            text: qsTr("CHANGES (%1)").arg(fileList.count)
                         }
                         ListView {
                             id: fileList
@@ -1193,7 +1203,7 @@ ApplicationWindow {
                     ctx.clearRect(0, 0, width, height)
                     ctx.lineWidth = root.laneStroke
                     const laneCount = Theme.graphLane.length
-                    const cx = function (l) { return l * root.laneW + root.laneW / 2 }
+                    const cx = function (l) { return root.laneInset + l * root.laneW + root.laneW / 2 }
                     const midY = height / 2
                     const nodeX = cx(rowItem.node_lane)
                     // decode precomputed draw tokens: t/i/o + lane + color
@@ -1221,7 +1231,9 @@ ApplicationWindow {
                         }
                     }
                     // The commit node is the author's identicon (5x5,
-                    // mirrored; local substitute for network avatars).
+                    // mirrored; local substitute for network avatars). The
+                    // pattern uses only the inner part of the circle so the
+                    // clip cuts less of it.
                     const r = root.nodeIcon / 2
                     ctx.save()
                     ctx.beginPath()
@@ -1230,14 +1242,17 @@ ApplicationWindow {
                     ctx.fillStyle = Theme.bgElevated
                     ctx.fillRect(nodeX - r, midY - r, 2 * r, 2 * r)
                     ctx.fillStyle = Theme.graphLane[(rowItem.avatar >> 15) & 0x7]
-                    const cell = (2 * r) / 5
+                    const inner = 2 * r * root.identiconFill
+                    const cell = inner / 5
+                    const ox = nodeX - inner / 2
+                    const oy = midY - inner / 2
                     for (let row = 0; row < 5; row++) {
                         for (let col = 0; col < 3; col++) {
                             if ((rowItem.avatar >> (row * 3 + col)) & 1) {
-                                ctx.fillRect(nodeX - r + col * cell, midY - r + row * cell,
+                                ctx.fillRect(ox + col * cell, oy + row * cell,
                                              cell + 0.5, cell + 0.5)
                                 if (col < 2)
-                                    ctx.fillRect(nodeX - r + (4 - col) * cell, midY - r + row * cell,
+                                    ctx.fillRect(ox + (4 - col) * cell, oy + row * cell,
                                                  cell + 0.5, cell + 0.5)
                             }
                         }
@@ -1427,6 +1442,7 @@ ApplicationWindow {
             kindHint: navList.kindHint
             onRefClicked: oidHex => navList.refActivated(oidHex)
             onFileClicked: (bucket, path, origPath) => navList.fileActivated(bucket, path, origPath)
+            onFolderClicked: key => navList.sectionModel.toggleFolder(key)
         }
     }
 
@@ -1434,17 +1450,22 @@ ApplicationWindow {
         id: navRow
         required property int index
         required property string name
+        required property string full
         required property string oid_hex
         required property string change
         required property string bucket
         required property string orig_path
         required property bool is_head
         required property bool has_remote
+        required property int depth
+        required property bool folder
+        required property bool collapsed
         property string kindHint: "branch"
         property real listWidth: 200
 
         signal refClicked(string oidHex)
         signal fileClicked(string bucket, string path, string origPath)
+        signal folderClicked(string key)
 
         width: listWidth
         height: Theme.rowHeight
@@ -1456,11 +1477,24 @@ ApplicationWindow {
         }
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: Theme.spaceMd
+            anchors.leftMargin: Theme.spaceMd + navRow.depth * Theme.spaceMd
             anchors.rightMargin: Theme.spaceSm
             spacing: Theme.spaceXs
+            Label {
+                visible: navRow.folder
+                text: navRow.collapsed ? "▸" : "▾"
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+            }
             NavIcon {
-                visible: navRow.kindHint !== "wt"
+                visible: navRow.folder
+                kind: "folder"
+                tint: Theme.textSecondary
+                width: Theme.iconSm + 2
+                height: Theme.iconSm + 2
+            }
+            NavIcon {
+                visible: !navRow.folder && navRow.kindHint !== "wt"
                 kind: navRow.kindHint === "stash" ? "stash" : navRow.kindHint
                 tint: navRow.kindHint === "tag" ? Theme.warning
                       : navRow.kindHint === "branch" ? Theme.accent
@@ -1470,7 +1504,7 @@ ApplicationWindow {
             }
             Label {
                 id: wtLetter
-                visible: navRow.kindHint === "wt"
+                visible: !navRow.folder && navRow.kindHint === "wt"
                 text: navRow.change
                 font.family: Theme.monoFamily
                 font.pixelSize: Theme.fontSm
@@ -1511,13 +1545,14 @@ ApplicationWindow {
                 text: navRow.name
                 elide: Text.ElideMiddle
                 font.weight: navRow.is_head ? Font.DemiBold : Font.Normal
-                color: navRow.is_head ? Theme.textLink : Theme.textPrimary
+                color: navRow.folder ? Theme.textSecondary
+                       : navRow.is_head ? Theme.textLink : Theme.textPrimary
                 font.pixelSize: Theme.fontMd
             }
             // Branch state badge: filled = has remote, hollow = local only
             // (PR state joins in Phase 4 as a third look).
             Rectangle {
-                visible: navRow.kindHint === "branch"
+                visible: !navRow.folder && navRow.kindHint === "branch"
                 width: Theme.spaceSm
                 height: Theme.spaceSm
                 radius: Theme.spaceXs
@@ -1531,12 +1566,20 @@ ApplicationWindow {
             anchors.fill: parent
             hoverEnabled: true
             onClicked: {
-                if (navRow.kindHint === "wt")
+                if (navRow.folder)
+                    navRow.folderClicked(navRow.full)
+                else if (navRow.kindHint === "wt")
                     navRow.fileClicked(navRow.bucket, navRow.name, navRow.orig_path)
                 else if (navRow.oid_hex !== "")
                     navRow.refClicked(navRow.oid_hex)
             }
         }
+        // Nested leaves show only their last segment; hover reveals the
+        // full name.
+        ToolTip.visible: itemMouse.containsMouse && !navRow.folder
+                         && navRow.full !== "" && navRow.full !== navRow.name
+        ToolTip.delay: 700
+        ToolTip.text: navRow.full
     }
 
     // ======================================================================
@@ -1659,6 +1702,16 @@ ApplicationWindow {
                 ctx.moveTo(8 * s, 10.5 * s)
                 ctx.lineTo(8 * s, 14 * s)
                 ctx.stroke()
+            } else if (icon.kind === "folder") {
+                ctx.beginPath()
+                ctx.moveTo(2.5 * s, 12.5 * s)
+                ctx.lineTo(2.5 * s, 4.5 * s)
+                ctx.lineTo(6.5 * s, 4.5 * s)
+                ctx.lineTo(8 * s, 6 * s)
+                ctx.lineTo(13.5 * s, 6 * s)
+                ctx.lineTo(13.5 * s, 12.5 * s)
+                ctx.closePath()
+                ctx.stroke()
             } else if (icon.kind === "clock") {
                 ctx.beginPath()
                 ctx.arc(8 * s, 8 * s, 5.5 * s, 0, 2 * Math.PI)
@@ -1691,13 +1744,15 @@ ApplicationWindow {
             ctx.fillStyle = Theme.bgElevated
             ctx.fillRect(0, 0, width, height)
             ctx.fillStyle = Theme.graphLane[(ident.code >> 15) & 0x7]
-            const cell = width / 5
+            const inner = width * root.identiconFill
+            const cell = inner / 5
+            const o = (width - inner) / 2
             for (let row = 0; row < 5; row++) {
                 for (let col = 0; col < 3; col++) {
                     if ((ident.code >> (row * 3 + col)) & 1) {
-                        ctx.fillRect(col * cell, row * cell, cell + 0.5, cell + 0.5)
+                        ctx.fillRect(o + col * cell, o + row * cell, cell + 0.5, cell + 0.5)
                         if (col < 2)
-                            ctx.fillRect((4 - col) * cell, row * cell, cell + 0.5, cell + 0.5)
+                            ctx.fillRect(o + (4 - col) * cell, o + row * cell, cell + 0.5, cell + 0.5)
                     }
                 }
             }
