@@ -67,6 +67,14 @@ crates/
 - QML モジュール名は既定で Cargo パッケージ名(ハイフン不可)だが、`#[qobject(NoQmlElement)]` + 手動 `impl QmlRegister`(URI 定数)で任意にできる
 - Qt Widgets 不可・C++ 混在不可。必要になった時点で CXX-Qt 移行を検討
 - 参照実装は公式 examples(`hello_world` / `minimal_app` / `host_monitor` = tokio 連携 / `color_palette`)
+- `include_bytes_qml!("dir/file", "prefix")` は **prefix にファイルの相対パス全体を連結**する(qrc:/prefix/dir/file)。ソースのディレクトリ構造 = qrc 構造として設計する。qmldir も埋め込めるので QML singleton(`platitude.ui` の `Theme`)はこの方式で成立する
+- QML の font 値型に `families`(配列)は無い — フォールバックは `Qt.fontFamilies()` と照合して Theme 側で 1 家族に解決する
+- `grabToImage` は `Window.contentItem` には使えない("no QML engine")— QML 宣言したアイテムを対象にする
+
+## Windows での実行・デバッグの罠
+
+- Qt / QML のログ(console.*、QML ロードエラー含む)は既定で OutputDebugString 行き — **`QT_FORCE_STDERR_LOGGING=1` を付けないと stderr に出ず、QML の失敗が無音になる**
+- release ビルドは GUI サブシステム(`windows_subsystem`)のため PowerShell から直接起動すると**待機されない**(即座に制御が返り、プロセスが残って exe をロックする)。検証は `Start-Process -PassThru` + `WaitForExit` で行う
 
 ## ビルド・テスト
 
@@ -106,10 +114,12 @@ cargo fmt --all
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)、メッセージは英語
 - force push しない
 
-## 現在のフェーズ: Phase 1 — 読み取り専用ビューア(完了したらこのセクションを書き換える)
+## 現在のフェーズ: Phase 1 実装完了 → Phase 2 準備(完了したらこのセクションを書き換える)
 
-- ブリッジは **Qt Bridges 採用で確定**(Phase 0 スパイク合格: IME / 10万行グラフ描画 / ワーカースレッド通知 / logストリーミング / windeployqt 配布)。CXX-Qt へ差し替え可能な構成(ブリッジ薄層化・§ワークスペース構成のルール)は引き続き維持する
-- スパイクコードは `spike/`(使い捨て。qtbridge の使用例・バッチ挿入等の参照実装として残置)
+- Phase 1(読み取り専用ビューア)は実装済み・性能予算 4 項目を kotlin 実測でクリア: [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)。**グラフの walk からタグを除外する決定**(44k タグで topo フロンティア初期化が数秒化するため。ラベルは refs join で表示)は `platitude-core::session::LOG_REVS` 参照
+- ブリッジは **Qt Bridges 採用で確定**(Phase 0 スパイク合格)。CXX-Qt へ差し替え可能な構成(ブリッジ薄層化・§ワークスペース構成のルール)は引き続き維持する。スパイクコードは `spike/` に残置
+- UI の色・寸法は [internal-docs/デザイン規約.md](internal-docs/デザイン規約.md) のトークンのみを使う(写しは `crates/platitude-app/src/ui/Theme.qml`)。グラフ幾何 3 値(レーン間隔・ノード径・線幅)はトークン未定義のため Main.qml 冒頭に隔離済み — トークン追加は人間承認待ち
+- CI(3OS + 完全オフライン job)は記述済みだが **GitHub リモート未設定のため一度も実行されていない**(初回 push で要検証)
 - ネットワーク非通信の baseline 実測: [ci/baseline/windows-x64.md](ci/baseline/windows-x64.md)。**Qt6Network は Qt6Qml のロード時依存として同梱が必須** — 「同梱しない」ではなく「アプリ自身の import table に通信系なし + ネットワーク系プラグイン除外」を主張する
 - mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ、実機検証は Phase 5 ゲート
 
