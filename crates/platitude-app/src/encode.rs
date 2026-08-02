@@ -51,6 +51,27 @@ pub fn encode_labels(labels: &[RefLabel]) -> String {
     out
 }
 
+/// Deterministic identicon code for an author (GitHub-style 5x5 pattern,
+/// generated locally — fetching real avatars would violate the
+/// no-network-except-git constraint).
+///
+/// Layout: bits 0..15 = left 3 columns of a 5x5 grid (row-major, mirrored
+/// to the right by the renderer), bits 15..18 = palette index (0..8).
+pub fn avatar_code(author: &str) -> i32 {
+    // FNV-1a 32-bit.
+    let mut hash: u32 = 0x811c_9dc5;
+    for b in author.as_bytes() {
+        hash ^= u32::from(*b);
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    let mut pattern = hash & 0x7fff;
+    if pattern == 0 {
+        pattern = 0b00000_00100_00000; // center dot fallback
+    }
+    let color = (hash >> 15) % 8;
+    (pattern | (color << 15)) as i32
+}
+
 /// Stable identity of a diff request (stale-response guard in the pane).
 pub fn diff_key(target: &DiffTarget) -> String {
     match target {
@@ -145,6 +166,18 @@ mod tests {
         ];
         assert_eq!(encode_geometry(&segs), "t0.3;i2.11;o1.0");
         assert_eq!(encode_geometry(&[]), "");
+    }
+
+    #[test]
+    fn avatar_codes_are_deterministic_and_bounded() {
+        let a = avatar_code("Alice <a@example.com>");
+        assert_eq!(a, avatar_code("Alice <a@example.com>"), "stable");
+        assert_ne!(a, avatar_code("Bob <b@example.com>"));
+        assert!(a >= 0);
+        let color = (a >> 15) & 0x7;
+        assert!((0..8).contains(&color));
+        assert_ne!(a & 0x7fff, 0, "pattern is never empty");
+        assert_ne!(avatar_code("") & 0x7fff, 0, "empty author still draws");
     }
 
     #[test]

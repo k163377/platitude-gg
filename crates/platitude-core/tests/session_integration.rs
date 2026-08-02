@@ -321,6 +321,21 @@ async fn tag_only_commits_follow_the_include_tags_option() {
         })
         .await;
 
+    // Two-phase streaming: a fast tag-less pass must have painted first.
+    {
+        let events = sink.events.lock().unwrap();
+        let fast_pass = events.iter().find_map(|e| match e {
+            SessionEvent::LogFinished {
+                generation, total, ..
+            } if *total == 1 => Some(*generation),
+            _ => None,
+        });
+        assert!(
+            fast_pass.is_some_and(|g| g < first_gen),
+            "expected a tag-less fast pass before the tag-inclusive swap"
+        );
+    }
+
     session.set_include_tags(false);
     sink.wait_for("tags-off LogFinished", |evs| {
         evs.iter().find_map(|e| match e {

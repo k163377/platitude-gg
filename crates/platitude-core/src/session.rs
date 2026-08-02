@@ -126,6 +126,8 @@ pub struct TagItem {
     /// Peeled commit id (what the graph row is keyed on).
     pub oid_hex: String,
     pub annotated: bool,
+    /// Creator date (unix seconds); the sidebar sorts tags newest-first.
+    pub created_unix: i64,
 }
 
 /// Everything the session can tell the UI.
@@ -319,11 +321,15 @@ impl RepoSession {
     }
 
     /// Restarts the log → graph stream (used by manual full refresh).
+    ///
+    /// With tags enabled this runs **two passes**: a fast tag-less pass
+    /// paints immediately (tag tips make `--topo-order` frontier setup
+    /// cost seconds on tag-heavy repositories), then a tag-inclusive pass
+    /// rebuilds in the background and atomically replaces the graph.
     pub fn restart_log(self: &Arc<Self>) {
         let Some(workdir) = self.workdir() else {
             return;
         };
-        let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
 
         // Cancel the previous stream and install this run's child token.
         let run_cancel = self.root_cancel.child_token();
@@ -336,39 +342,115 @@ impl RepoSession {
             prev.cancel();
         }
 
+        let s = Arc::clone(self);
+        let options = self.log_options();
+        self.runtime.spawn(async move {
+            if options.include_tags {
+                let fast = LogOptions {
+                    include_tags: false,
+                    ..options
+                };
+                if s.run_direct_pass(&workdir, fast, &run_cancel).await.is_ok() {
+                    s.run_swap_pass(&workdir, options, &run_cancel).await;
+                }
+            } else {
+                let _completed = s.run_direct_pass(&workdir, options, &run_cancel).await;
+            }
+        });
+    }
+
+    /// Streams one pass straight to the UI (chunked, resets the graph).
+    /// Returns Err after reporting when the pass failed or was cancelled.
+    async fn run_direct_pass(
+        self: &Arc<Self>,
+        workdir: &std::path::Path,
+        options: LogOptions,
+        cancel: &CancellationToken,
+    ) -> Result<(), ()> {
+        let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
         {
             // Reset graph state for the new stream under one lock.
             let mut shared = self.lock_shared();
             shared.builder = GraphBuilder::new();
             shared.applied.clear();
         }
-
-        let s = Arc::clone(self);
-        let options = self.log_options();
-        self.runtime.spawn(async move {
-            s.sink.event(SessionEvent::LogStarted { generation });
-            let started = Instant::now();
-            match s
-                .stream_log(&workdir, generation, options, &run_cancel)
-                .await
-            {
-                Ok(total) => {
-                    s.sink.event(SessionEvent::LogFinished {
+        self.sink.event(SessionEvent::LogStarted { generation });
+        let started = Instant::now();
+        match self.stream_log(workdir, generation, options, cancel).await {
+            Ok(total) => {
+                self.sink.event(SessionEvent::LogFinished {
+                    generation,
+                    total,
+                    elapsed_ms: started.elapsed().as_millis() as u64,
+                    truncated: options.limit.is_some_and(|n| total >= n),
+                });
+                Ok(())
+            }
+            Err(error) => {
+                if !matches!(error, GitError::Cancelled { .. }) {
+                    self.sink.event(SessionEvent::LogFailed {
                         generation,
-                        total,
-                        elapsed_ms: started.elapsed().as_millis() as u64,
-                        truncated: options.limit.is_some_and(|n| total >= n),
+                        error: error.to_string(),
                     });
                 }
-                Err(error) => {
-                    if !matches!(error, GitError::Cancelled { .. }) {
-                        s.sink.event(SessionEvent::LogFailed {
-                            generation,
-                            error: error.to_string(),
-                        });
-                    }
+                Err(())
+            }
+        }
+    }
+
+    /// Builds a full pass off-screen, then swaps it in as one reset +
+    /// one chunk (the UI drains all three events in a single slot call,
+    /// so the replacement is flicker-free).
+    async fn run_swap_pass(
+        self: &Arc<Self>,
+        workdir: &std::path::Path,
+        options: LogOptions,
+        cancel: &CancellationToken,
+    ) {
+        let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
+        let started = Instant::now();
+        let mut builder = GraphBuilder::new();
+        let mut rows: Vec<LogRow> = Vec::new();
+
+        let result = self
+            .collect_log(workdir, options, cancel, &mut builder, &mut rows)
+            .await;
+        match result {
+            Ok(()) => {}
+            Err(error) => {
+                // The fast pass is already on screen; report quietly.
+                if !matches!(error, GitError::Cancelled { .. }) {
+                    self.fail("log", error);
+                }
+                return;
+            }
+        }
+
+        let total = rows.len() as u32;
+        {
+            let mut shared = self.lock_shared();
+            if self.log_gen.load(Ordering::SeqCst) != generation {
+                return; // superseded by a newer restart
+            }
+            let mut applied: HashMap<u32, Vec<RefLabel>> = HashMap::new();
+            for row in &mut rows {
+                if let Ok(oid) = Oid::from_hex_str(&row.oid_hex)
+                    && let Some(labels) = shared.label_map.get(&oid)
+                {
+                    row.labels = labels.clone();
+                    applied.insert(row.row, labels.clone());
                 }
             }
+            shared.builder = builder;
+            shared.applied = applied;
+        }
+        self.sink.event(SessionEvent::LogStarted { generation });
+        self.sink.event(SessionEvent::LogChunk { generation, rows });
+        self.sink.event(SessionEvent::LogFinished {
+            generation,
+            total,
+            elapsed_ms: started.elapsed().as_millis() as u64,
+            truncated: options.limit.is_some_and(|n| total >= n),
         });
     }
 
@@ -595,37 +677,95 @@ impl RepoSession {
         Ok(total)
     }
 
+    /// Buffered variant of [`RepoSession::stream_log`]: rows accumulate
+    /// into the caller's builder/vec without touching shared state or the
+    /// sink (used by the tag-inclusive swap pass).
+    async fn collect_log(
+        self: &Arc<Self>,
+        workdir: &std::path::Path,
+        options: LogOptions,
+        cancel: &CancellationToken,
+        builder: &mut GraphBuilder,
+        out: &mut Vec<LogRow>,
+    ) -> Result<(), GitError> {
+        // An unborn HEAD has nothing to log.
+        let head = refs::head_state(&self.executor, workdir, cancel).await?;
+        if head.oid.is_none() {
+            return Ok(());
+        }
+
+        let mut cmd = GitCommand::new()
+            .cwd(workdir)
+            .args(["log", "-z", "--topo-order", LOG_FORMAT_ARG])
+            .args(["HEAD", "--branches", "--remotes"])
+            .no_timeout();
+        if options.include_tags {
+            cmd = cmd.arg("--tags");
+        }
+        if let Some(limit) = options.limit {
+            cmd = cmd.arg(format!("--max-count={limit}"));
+        }
+
+        let mut parser = LogParser::new();
+        let mut pending: Vec<CommitMeta> = Vec::new();
+        let mut parse_error: Option<String> = None;
+
+        let result = self
+            .executor
+            .run_streaming(cmd, cancel, &mut |bytes| {
+                if parse_error.is_some() {
+                    return;
+                }
+                if let Err(e) = parser.feed(bytes, &mut pending) {
+                    parse_error = Some(e.to_string());
+                    cancel.cancel();
+                    return;
+                }
+                for commit in pending.drain(..) {
+                    out.push(make_row(&commit, parser.pool(), builder));
+                }
+            })
+            .await;
+        match result {
+            Ok(_) => {}
+            Err(e) => {
+                if let Some(msg) = parse_error {
+                    return Err(GitError::UnexpectedOutput {
+                        command: "git log".to_string(),
+                        message: msg,
+                    });
+                }
+                return Err(e);
+            }
+        }
+        if let Err(e) = parser.finish() {
+            return Err(GitError::UnexpectedOutput {
+                command: "git log".to_string(),
+                message: e.to_string(),
+            });
+        }
+        for commit in pending.drain(..) {
+            out.push(make_row(&commit, parser.pool(), builder));
+        }
+        Ok(())
+    }
+
     /// Builds graph rows for a batch and sends them (holding the shared
     /// lock so generations cannot interleave).
     fn emit_rows(&self, generation: u64, batch: &[CommitMeta], pool: &crate::model::StrPool) {
-        let mut shared = self.lock_shared();
+        let mut guard = self.lock_shared();
         if self.log_gen.load(Ordering::SeqCst) != generation {
             return;
         }
+        let shared = &mut *guard;
         let mut rows = Vec::with_capacity(batch.len());
         for commit in batch {
-            let g = shared.builder.push(commit);
-            let labels = shared
-                .label_map
-                .get(&commit.oid)
-                .cloned()
-                .unwrap_or_default();
-            if !labels.is_empty() {
-                shared.applied.insert(g.row, labels.clone());
+            let mut row = make_row(commit, pool, &mut shared.builder);
+            if let Some(labels) = shared.label_map.get(&commit.oid) {
+                row.labels = labels.clone();
+                shared.applied.insert(row.row, labels.clone());
             }
-            rows.push(LogRow {
-                row: g.row,
-                oid_hex: commit.oid.to_hex(),
-                short_sha: commit.oid.short_hex(8),
-                author: pool.get(commit.author).to_string(),
-                time: commit.time,
-                subject: commit.subject.to_string(),
-                node_lane: g.node_lane,
-                node_color: g.node_color,
-                width: g.width,
-                segments: g.segments,
-                labels,
-            });
+            rows.push(row);
         }
         self.sink.event(SessionEvent::LogChunk { generation, rows });
     }
@@ -663,6 +803,28 @@ impl RepoSession {
 impl Drop for RepoSession {
     fn drop(&mut self) {
         self.root_cancel.cancel();
+    }
+}
+
+/// Builds one display row from a commit (labels attached by the caller).
+fn make_row(
+    commit: &CommitMeta,
+    pool: &crate::model::StrPool,
+    builder: &mut GraphBuilder,
+) -> LogRow {
+    let g = builder.push(commit);
+    LogRow {
+        row: g.row,
+        oid_hex: commit.oid.to_hex(),
+        short_sha: commit.oid.short_hex(8),
+        author: pool.get(commit.author).to_string(),
+        time: commit.time,
+        subject: commit.subject.to_string(),
+        node_lane: g.node_lane,
+        node_color: g.node_color,
+        width: g.width,
+        segments: g.segments,
+        labels: Vec::new(),
     }
 }
 
@@ -728,11 +890,17 @@ fn build_snapshot(refs: &[RefEntry], head: &HeadState) -> RefsSnapshot {
                 short: r.short.clone(),
                 oid_hex: r.commit_oid().to_hex(),
                 annotated: r.peeled.is_some(),
+                created_unix: r.created_unix,
             }),
         }
     }
     snapshot.locals.sort_by(|a, b| a.short.cmp(&b.short));
     snapshot.remotes.sort_by(|a, b| a.short.cmp(&b.short));
-    snapshot.tags.sort_by(|a, b| a.short.cmp(&b.short));
+    // Tags newest-first (product decision), name as the tie-breaker.
+    snapshot.tags.sort_by(|a, b| {
+        b.created_unix
+            .cmp(&a.created_unix)
+            .then(a.short.cmp(&b.short))
+    });
     snapshot
 }

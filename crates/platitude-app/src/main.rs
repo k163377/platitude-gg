@@ -11,7 +11,7 @@ mod urlpath;
 
 use hub::Hub;
 use models::{
-    AppBackend, DetailsModel, DiffModel, GraphModel, RepoTab, SidebarModel, StashModel, TabsModel,
+    AppBackend, DetailsModel, DiffModel, GraphModel, RepoTab, SidebarModel, TabsModel,
     WorkTreeModel,
 };
 use qtbridge::QApp;
@@ -45,7 +45,6 @@ fn main() {
         .register::<GraphModel>()
         .register::<SidebarModel>()
         .register::<WorkTreeModel>()
-        .register::<StashModel>()
         .register::<DetailsModel>()
         .register::<DiffModel>()
         .add_import_path("qrc:/qt/qml")

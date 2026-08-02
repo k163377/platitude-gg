@@ -144,13 +144,17 @@ impl<T> Feed<T> {
 }
 
 /// All feeds of one tab. Each feed is independently `Arc`-shared with the
-/// QML object that consumes it.
+/// QML object that consumes it (one consumer per feed; status fans out to
+/// two consumers via a second feed).
 #[derive(Default)]
 pub struct Feeds {
     pub tab: Arc<Feed<TabMsg>>,
     pub graph: Arc<Feed<GraphMsg>>,
     pub refs: Arc<Feed<RefsSnapshot>>,
+    /// Status headline consumer (WorkTreeModel: header props/counts).
     pub status: Arc<Feed<StatusMsg>>,
+    /// Status list consumer (SidebarModel: working-tree section).
+    pub status_nav: Arc<Feed<StatusMsg>>,
     pub stash: Arc<Feed<Vec<StashEntry>>>,
     pub details: Arc<Feed<platitude_core::details::CommitDetails>>,
     pub diff: Arc<Feed<DiffMsg>>,
@@ -206,10 +210,15 @@ impl SessionSink for BridgeSink {
                 self.feeds.graph.push(GraphMsg::Labels { rows });
             }
             SessionEvent::RefsLoaded { snapshot } => self.feeds.refs.push_replace(snapshot),
-            SessionEvent::StatusLoaded { status, op_state } => self
-                .feeds
-                .status
-                .push_replace(StatusMsg { status, op_state }),
+            SessionEvent::StatusLoaded { status, op_state } => {
+                self.feeds.status_nav.push_replace(StatusMsg {
+                    status: status.clone(),
+                    op_state,
+                });
+                self.feeds
+                    .status
+                    .push_replace(StatusMsg { status, op_state });
+            }
             SessionEvent::StashesLoaded { stashes } => self.feeds.stash.push_replace(stashes),
             SessionEvent::DetailsLoaded { details } => self.feeds.details.push_replace(details),
             SessionEvent::DiffLoaded { target, patches } => {
