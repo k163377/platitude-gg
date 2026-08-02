@@ -60,16 +60,20 @@ ApplicationWindow {
     property int focusEpoch: 0
     onActiveChanged: if (active) focusEpoch++
 
-    // Identity setup screen: shown on startup when git has no name and
-    // email to put on a commit, and on demand from the app menu or the
-    // toolbar badge. "Not now" leaves the app fully usable — reading a
-    // repository needs no identity.
+    // Identity dialog: opens on startup when git has no name and email to
+    // put on a commit, and on demand from the app menu or the toolbar
+    // badge. "Not now" leaves the app fully usable — reading a repository
+    // needs no identity.
     property bool identityDismissed: false
     property bool identityEditing: false
     readonly property bool identityWanted: AppBackend.gitState === "ok"
                                            && (identityEditing
                                                || (AppBackend.identityState === "missing"
                                                    && !identityDismissed))
+    function dismissIdentity() {
+        identityEditing = false
+        identityDismissed = true
+    }
 
     // Frame counter for the scroll benchmark (PG_AUTO_SCROLL=1).
     property int frameCounter: 0
@@ -128,10 +132,10 @@ ApplicationWindow {
         interval: AppBackend.autoQuitMs > 800 ? AppBackend.autoQuitMs - 800 : 3500
         onTriggered: {
             const path = AppBackend.shotDir + "/app.png"
-            // Whatever is on screen: the identity screen takes the window
-            // over while it is up (a grab only sees its own subtree).
-            const target = identityScreen.visible ? identityScreen : mainUi
-            const ok = target.grabToImage(function (res) {
+            // Popups (the identity dialog) render in the window overlay,
+            // outside this subtree: capturing those needs a window-level
+            // screenshot from outside the process.
+            const ok = mainUi.grabToImage(function (res) {
                 const saved = res.saveToFile(path)
                 console.warn("screenshot saved=" + saved + " path=" + path)
                 if (AppBackend.autoQuitMs <= 0)
@@ -179,74 +183,85 @@ ApplicationWindow {
         }
     }
 
-    // ---- identity gate ---------------------------------------------------
-    Item {
-        id: identityScreen
-        anchors.fill: parent
-        visible: root.identityWanted
+    // ---- identity dialog -------------------------------------------------
+    // Opened and closed from the state above rather than by binding
+    // `visible`: Escape closes a popup imperatively, which would overwrite
+    // such a binding and leave the menu entry unable to open it again.
+    // Closing for any reason answers the state, so the two stay in step.
+    Dialog {
+        id: identityDialog
+        anchors.centerIn: parent
+        width: Math.min(640, root.width - 2 * Theme.spaceXxl)
+        modal: true
+        closePolicy: Popup.CloseOnEscape
+        focus: true
+        onClosed: root.dismissIdentity()
+        Connections {
+            target: root
+            function onIdentityWantedChanged() {
+                if (root.identityWanted)
+                    identityDialog.open()
+                else
+                    identityDialog.close()
+            }
+        }
+        padding: Theme.spaceXxl
+        header: null
+        footer: null
+        background: Rectangle {
+            color: Theme.bgElevated
+            radius: Theme.radiusMd
+            border.color: Theme.borderDefault
+            border.width: Theme.borderWidth
+        }
 
-        // A write is in flight that this screen asked for. Only then does
+        // A write is in flight that this dialog asked for. Only then does
         // a finished write close it — the notification is shared with the
-        // startup check, which must not close the screen under the user.
+        // startup check, which must not close the dialog under the user.
         property bool saving: false
 
         function submit() {
             if (!saveButton.enabled)
                 return
-            identityScreen.saving = true
+            identityDialog.saving = true
             AppBackend.saveIdentity(nameField.text, emailField.text)
         }
 
-        onVisibleChanged: {
-            if (!visible)
-                return
+        onOpened: {
             nameField.text = AppBackend.identityName
             emailField.text = AppBackend.identityEmail
             nameField.forceActiveFocus()
-            // Next tick: this handler runs inside the evaluation of the
-            // binding it would answer, and Qt reports that round trip as a
-            // binding loop.
             if (AppBackend.autoIdentity !== "")
-                Qt.callLater(identityScreen.applyAutoIdentity)
+                Qt.callLater(identityDialog.applyAutoIdentity)
         }
 
         // Screenshot hook: PG_AUTO_IDENTITY="<name>|<email>" fills the
         // fields, PG_AUTO_IDENTITY_SAVE=1 submits them, and "skip" answers
-        // "Not now" to show the state behind this screen.
+        // "Not now" to show the state behind the dialog.
         function applyAutoIdentity() {
             if (AppBackend.autoIdentity === "skip") {
-                root.identityEditing = false
-                root.identityDismissed = true
+                root.dismissIdentity()
                 return
             }
             const parts = AppBackend.autoIdentity.split("|")
             nameField.text = parts[0]
             emailField.text = parts.length > 1 ? parts[1] : ""
             if (AppBackend.autoIdentitySave)
-                identityScreen.submit()
+                identityDialog.submit()
         }
 
         Connections {
             target: AppBackend
             function onIdentityChanged() {
-                if (!identityScreen.saving || AppBackend.identityBusy)
+                if (!identityDialog.saving || AppBackend.identityBusy)
                     return
-                identityScreen.saving = false
+                identityDialog.saving = false
                 if (AppBackend.identityError === "")
                     root.identityEditing = false
             }
         }
 
-        // This is a screen rather than a panel over the app, so it brings
-        // its own background instead of dimming what is behind it.
-        Rectangle {
-            anchors.fill: parent
-            color: Theme.bgBase
-        }
-
-        Column {
-            anchors.centerIn: parent
-            width: Math.min(640, root.width - 2 * Theme.spaceXxl)
+        contentItem: ColumnLayout {
             spacing: Theme.spaceLg
 
             Label {
@@ -256,7 +271,7 @@ ApplicationWindow {
                 font.weight: Font.DemiBold
             }
             Label {
-                width: parent.width
+                Layout.fillWidth: true
                 wrapMode: Text.Wrap
                 color: Theme.textSecondary
                 text: qsTr("git records a name and an email address on every commit you "
@@ -264,8 +279,8 @@ ApplicationWindow {
                            + "platitude-gg keeps no copy of them.")
             }
 
-            Column {
-                width: parent.width
+            ColumnLayout {
+                Layout.fillWidth: true
                 spacing: Theme.spaceXs
                 Label {
                     text: qsTr("Name")
@@ -274,13 +289,13 @@ ApplicationWindow {
                 }
                 FormField {
                     id: nameField
-                    width: parent.width
+                    Layout.fillWidth: true
                     placeholderText: qsTr("Ada Lovelace")
-                    onAccepted: identityScreen.submit()
+                    onAccepted: identityDialog.submit()
                 }
             }
-            Column {
-                width: parent.width
+            ColumnLayout {
+                Layout.fillWidth: true
                 spacing: Theme.spaceXs
                 Label {
                     text: qsTr("Email address")
@@ -289,14 +304,14 @@ ApplicationWindow {
                 }
                 FormField {
                     id: emailField
-                    width: parent.width
+                    Layout.fillWidth: true
                     placeholderText: qsTr("ada@example.com")
-                    onAccepted: identityScreen.submit()
+                    onAccepted: identityDialog.submit()
                 }
             }
 
             Label {
-                width: parent.width
+                Layout.fillWidth: true
                 wrapMode: Text.Wrap
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSm
@@ -305,23 +320,20 @@ ApplicationWindow {
             }
             // git's own message, unedited.
             Label {
-                width: parent.width
+                Layout.fillWidth: true
                 visible: AppBackend.identityError !== ""
                 wrapMode: Text.Wrap
                 color: Theme.danger
                 text: AppBackend.identityError
             }
 
-            Row {
-                anchors.right: parent.right
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
                 spacing: Theme.spaceSm
                 Button {
                     implicitHeight: Theme.controlHeight
                     text: root.identityEditing ? qsTr("Cancel") : qsTr("Not now")
-                    onClicked: {
-                        root.identityEditing = false
-                        root.identityDismissed = true
-                    }
+                    onClicked: root.dismissIdentity()
                 }
                 Button {
                     id: saveButton
@@ -331,7 +343,7 @@ ApplicationWindow {
                     enabled: !AppBackend.identityBusy
                              && nameField.text.trim() !== ""
                              && emailField.text.trim() !== ""
-                    onClicked: identityScreen.submit()
+                    onClicked: identityDialog.submit()
                 }
             }
         }
@@ -342,7 +354,7 @@ ApplicationWindow {
         id: mainUi
         anchors.fill: parent
         spacing: 0
-        visible: AppBackend.gitState === "ok" && !root.identityWanted
+        visible: AppBackend.gitState === "ok"
 
         // Top toolbar: prominent tabs and the per-repository controls
         // share one row.
