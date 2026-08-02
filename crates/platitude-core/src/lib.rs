@@ -6,6 +6,7 @@
 //! implementation is swapped (Qt Bridges -> CXX-Qt).
 
 pub mod error;
+pub mod graph;
 pub mod model;
 pub mod oid;
 pub mod parse;

@@ -1,0 +1,8 @@
+---
+source: crates/platitude-core/src/graph.rs
+expression: render(&rows)
+---
+  0 * lane=0 color=0
+  1 |* lane=1 color=1
+  2 *| lane=0 color=0
+  3  * lane=1 color=1
