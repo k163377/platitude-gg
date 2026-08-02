@@ -364,6 +364,13 @@ ApplicationWindow {
             }
         }
 
+        // Divider under the tab toolbar — same look as the pane splitters.
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: Theme.splitterWidth
+            color: Theme.borderSubtle
+        }
+
         // Welcome page
         Item {
             Layout.fillWidth: true
@@ -405,12 +412,11 @@ ApplicationWindow {
             }
         }
 
-        // Bottom edge: a thin border line across the window; the git
-        // version floats above it bottom-right as faint bare text (no
-        // box), overlapping the content.
+        // Bottom edge: the same splitter-style divider closes the window;
+        // the git version floats above it bottom-right as faint bare text.
         Item {
             Layout.fillWidth: true
-            implicitHeight: Theme.borderWidth
+            implicitHeight: Theme.splitterWidth
             Rectangle {
                 anchors.fill: parent
                 color: Theme.borderSubtle
@@ -420,7 +426,7 @@ ApplicationWindow {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 anchors.rightMargin: Theme.spaceSm
-                anchors.bottomMargin: Theme.spaceXs
+                anchors.bottomMargin: Theme.splitterWidth + Theme.spaceXs
                 text: qsTr("git %1").arg(AppBackend.gitVersion)
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSm
