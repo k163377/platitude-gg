@@ -39,7 +39,7 @@ ApplicationWindow {
     readonly property int graphDefaultLanes: 12
     readonly property int detailsAvatar: 40
     readonly property int anchorDelayMs: 50
-    readonly property var laneDash: [2, 2]
+    readonly property var laneDash: [1, 1]
 
     palette {
         window: Theme.bgBase
@@ -2456,10 +2456,15 @@ ApplicationWindow {
             }
             // Branch remote state: nothing = local only, remote icon =
             // has a remote, PR icon = has a PR (real data in Phase 4;
-            // PG_FAKE_PR previews the look).
+            // PG_FAKE_PR previews the look). Remote-branch and worktree
+            // rows show the PR state too.
             NavIcon {
-                visible: !navRow.folder && navRow.kindHint === "branch"
-                         && (navRow.has_remote || navRow.has_pr)
+                visible: !navRow.folder
+                         && ((navRow.kindHint === "branch"
+                              && (navRow.has_remote || navRow.has_pr))
+                             || ((navRow.kindHint === "remote"
+                                  || navRow.kindHint === "worktree")
+                                 && navRow.has_pr))
                 kind: navRow.has_pr ? "pr" : "remote"
                 tint: navRow.has_pr ? Theme.success : Theme.textSecondary
                 width: Theme.iconSm + 2

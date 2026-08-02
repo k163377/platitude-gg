@@ -852,15 +852,24 @@ impl NavSectionModel {
     }
 }
 
-fn branch_nav_items(list: &[platitude_core::session::BranchItem]) -> Vec<NavItem> {
+/// `remote` strips the remote prefix before the PR lookup, so
+/// `origin/main` matches a PR on `main`.
+fn branch_nav_items(list: &[platitude_core::session::BranchItem], remote: bool) -> Vec<NavItem> {
     list.iter()
-        .map(|b| NavItem {
-            name: b.short.clone(),
-            oid_hex: b.oid_hex.clone(),
-            is_head: b.is_head,
-            has_remote: b.has_remote,
-            has_pr: crate::encode::fake_pr_set().contains(&b.short),
-            ..Default::default()
+        .map(|b| {
+            let pr_key = if remote {
+                b.short.split_once('/').map_or(b.short.as_str(), |(_, r)| r)
+            } else {
+                b.short.as_str()
+            };
+            NavItem {
+                name: b.short.clone(),
+                oid_hex: b.oid_hex.clone(),
+                is_head: b.is_head,
+                has_remote: b.has_remote,
+                has_pr: crate::encode::fake_pr_set().contains(pr_key),
+                ..Default::default()
+            }
         })
         .collect()
 }
@@ -1087,7 +1096,7 @@ impl NavSectionModel {
             self.refs_loaded = true;
             self.all = match self.section.as_str() {
                 "branches" => {
-                    let items = branch_nav_items(&snapshot.locals);
+                    let items = branch_nav_items(&snapshot.locals, false);
                     let head = items.iter().find(|b| b.is_head);
                     self.head_name = head.map(|b| b.name.clone()).unwrap_or_default();
                     self.head_oid = head.map(|b| b.oid_hex.clone()).unwrap_or_default();
@@ -1095,7 +1104,7 @@ impl NavSectionModel {
                     self.head_has_pr = head.is_some_and(|b| b.has_pr);
                     items
                 }
-                "remotes" => branch_nav_items(&snapshot.remotes),
+                "remotes" => branch_nav_items(&snapshot.remotes, true),
                 _ => snapshot
                     .tags
                     .iter()
@@ -1128,11 +1137,16 @@ impl NavSectionModel {
                 .map(|w| {
                     let norm = w.path.replace('\\', "/");
                     let name = norm.rsplit('/').next().unwrap_or(norm.as_str()).to_string();
+                    let has_pr = w
+                        .branch
+                        .as_deref()
+                        .is_some_and(|b| crate::encode::fake_pr_set().contains(b));
                     NavItem {
                         name,
                         is_head: norm.to_lowercase() == current,
                         full: w.path,
                         bucket: w.branch.unwrap_or_default(),
+                        has_pr,
                         ..Default::default()
                     }
                 })
