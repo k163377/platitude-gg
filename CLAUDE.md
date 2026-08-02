@@ -128,7 +128,7 @@ cargo fmt --all
 ## 現在のフェーズ: **Phase 2 / 3 のバックエンド完了(UI 未配線)**
 
 - Phase 1(読み取り専用ビューア)は**完了**。Done 条件の性能 4 項目は完了時点の最終確認でもクリア(first chunk 79ms / 詳細 75ms / 178fps / peak 269MB): [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)
-- **P2 / P3 の書き込み操作は core + セッション + ブリッジまで実装済み・QML は未変更**。残作業と要判断事項は [P2-確認事項.md](internal-docs/P2-確認事項.md) / [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読むこと**(破壊的操作の確認ダイアログ方針など未決定事項がある)
+- **P2 / P3 の書き込み操作は core + セッション + ブリッジまで実装済み・QML は identity 入力導線のみ配線済み**(起動 gate + メニュー + バッジ)。残作業と要判断事項は [P2-確認事項.md](internal-docs/P2-確認事項.md) / [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読むこと**(破壊的操作の確認ダイアログ方針など未決定事項がある)
 - 書き込みは `RepoSession` のキュー経由で直列化され、成功・失敗いずれでも refresh する。失敗は git の文言のまま `WriteFinished{error}` → 既存のエラー表示へ流れる
 - interactive rebase は `GIT_SEQUENCE_EDITOR` に**別実行ファイル `pg-todo-editor`** を差す方式。**配布物に同梱必須**(本体と同じディレクトリ)
 - グラフは **2 段ストリーミング**(タグ無し即描画→タグ込みを単一 drain で無フリッカー置換。44k タグの topo フロンティア初期化コスト対策)+ `--max-count=2000` ウィンドウ。**WIP(未コミット)を HEAD の子の仮想行**として、**stash を walk 参加の実行行**として描く(合成親コミットは sift で除去)— いずれも `platitude-core::session` 参照。dirty ⇄ clean の変化でストリームを再構築する
