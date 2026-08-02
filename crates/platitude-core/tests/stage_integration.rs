@@ -320,6 +320,25 @@ async fn stage_a_file_without_a_trailing_newline() {
     assert_eq!(repo.git_raw(&["show", ":f.txt"]), b"keep\nold\nnew");
 }
 
+/// Paths are pathspecs to git, and pathspecs glob by default. A file whose
+/// name contains glob characters must only ever stage itself.
+#[tokio::test]
+async fn a_glob_shaped_filename_stages_only_itself() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("seed.txt", "seed\n", "root");
+    repo.write_file("[ab].txt", "bracketed\n");
+    repo.write_file("a.txt", "plain\n");
+    let (exec, cancel) = env();
+
+    stage::stage_paths(&exec, &repo.path, &["[ab].txt".into()], &cancel)
+        .await
+        .expect("stage");
+
+    let (staged, _, untracked) = buckets(&repo).await;
+    assert_eq!(staged, vec!["[ab].txt"]);
+    assert_eq!(untracked, vec!["a.txt"], "the glob did not expand");
+}
+
 #[tokio::test]
 async fn staging_a_commit_diff_is_rejected() {
     let mut repo = TestRepo::init();

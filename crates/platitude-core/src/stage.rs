@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 use crate::details::{self, DiffTarget};
 use crate::error::GitError;
 use crate::patch::{self, HunkSelect, PatchSide};
-use crate::process::{GitCommand, GitExecutor};
+use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 use crate::refs;
 use crate::repo::RepoInfo;
 use crate::scratch::ScratchFile;
@@ -29,7 +29,7 @@ pub async fn stage_paths(
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["add", "--"])
-        .args(paths.iter().map(String::as_str));
+        .args(paths.iter().map(|p| literal_pathspec(p)));
     executor.run(cmd, cancel).await.map(drop)
 }
 
@@ -59,7 +59,7 @@ pub async fn unstage_paths(
             .cwd(workdir)
             .args(["restore", "--staged", "--"])
     };
-    let cmd = cmd.args(paths.iter().map(String::as_str));
+    let cmd = cmd.args(paths.iter().map(|p| literal_pathspec(p)));
     executor.run(cmd, cancel).await.map(drop)
 }
 
@@ -77,7 +77,7 @@ pub async fn discard_worktree(
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["restore", "--worktree", "--"])
-        .args(paths.iter().map(String::as_str));
+        .args(paths.iter().map(|p| literal_pathspec(p)));
     executor.run(cmd, cancel).await.map(drop)
 }
 
@@ -96,7 +96,7 @@ pub async fn remove_untracked(
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["clean", "-f", "-d", "--"])
-        .args(paths.iter().map(String::as_str));
+        .args(paths.iter().map(|p| literal_pathspec(p)));
     executor.run(cmd, cancel).await.map(drop)
 }
 
@@ -129,7 +129,7 @@ pub async fn apply_partial(
             let cmd = GitCommand::new()
                 .cwd(workdir)
                 .args(["add", "--intent-to-add", "--"])
-                .arg(path);
+                .arg(literal_pathspec(path));
             executor.run(cmd, cancel).await?;
             (
                 DiffTarget::Unstaged { path: path.clone() },

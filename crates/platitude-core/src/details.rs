@@ -13,7 +13,7 @@ use crate::error::GitError;
 use crate::oid::Oid;
 use crate::parse::diff::{FilePatch, parse_patch};
 use crate::parse::name_status::{FileChange, parse_name_status};
-use crate::process::{GitCommand, GitExecutor};
+use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 
 /// Fields: id, parents, author name/email/time, committer name/email/time,
 /// full message body. NUL-separated, record NUL-terminated via `-z`.
@@ -191,24 +191,27 @@ pub async fn file_diff_raw(
                 Some(p1) => c.args([p1.to_hex(), oid.to_hex()]),
                 None => c.args(["--root".to_string(), oid.to_hex()]),
             };
-            c = c.arg("--").arg(path);
+            c = c.arg("--").arg(literal_pathspec(path));
             if let Some(orig) = orig_path {
-                c = c.arg(orig);
+                c = c.arg(literal_pathspec(orig));
             }
             c
         }
         DiffTarget::Staged { path, orig_path } => {
             let mut c = base.args(["diff", "--cached", "--no-ext-diff", "--find-renames", "--"]);
-            c = c.arg(path);
+            c = c.arg(literal_pathspec(path));
             if let Some(orig) = orig_path {
-                c = c.arg(orig);
+                c = c.arg(literal_pathspec(orig));
             }
             c
         }
-        DiffTarget::Unstaged { path } => base.args(["diff", "--no-ext-diff", "--"]).arg(path),
+        DiffTarget::Unstaged { path } => base
+            .args(["diff", "--no-ext-diff", "--"])
+            .arg(literal_pathspec(path)),
         DiffTarget::Untracked { path } => {
             // `--no-index` renders file content as an all-additions patch;
             // it exits 1 when the sides differ, which is the normal case.
+            // Its arguments are filenames, not pathspecs — no magic prefix.
             let out = executor
                 .run_unchecked(
                     base.args(["diff", "--no-ext-diff", "--no-index", "--", "/dev/null"])

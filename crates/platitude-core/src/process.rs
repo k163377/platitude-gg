@@ -53,16 +53,28 @@ const FIXED_ARGS: [&str; 7] = [
 ///   delegated to credential helpers)
 /// - `GIT_OPTIONAL_LOCKS=0`: belt-and-suspenders with `--no-optional-locks`
 /// - `GIT_EDITOR=true`: an accidentally editor-spawning command exits
-///   immediately instead of hanging (Phase 3 overrides this per command)
-/// - `GIT_LITERAL_PATHSPECS=1`: paths we pass come from git output and must
-///   be treated literally (no glob/magic interpretation)
-const FIXED_ENV: [(&str, &str); 5] = [
+///   immediately instead of hanging (interactive rebase overrides this)
+///
+/// Deliberately absent: `GIT_LITERAL_PATHSPECS`. It disarms pathspec magic
+/// for git's *internal* use too — with it set, `git stash push -u` reports
+/// success and silently leaves untracked files in the working tree. Paths
+/// are quoted individually with [`literal_pathspec`] instead.
+const FIXED_ENV: [(&str, &str); 4] = [
     ("LC_ALL", "C"),
     ("GIT_TERMINAL_PROMPT", "0"),
     ("GIT_OPTIONAL_LOCKS", "0"),
     ("GIT_EDITOR", "true"),
-    ("GIT_LITERAL_PATHSPECS", "1"),
 ];
+
+/// Wraps a path from git's own output so git reads it back as that exact
+/// path, never as pathspec magic (a file really named `:(glob)x` has to
+/// round-trip).
+///
+/// Only for arguments git parses as pathspecs. `git diff --no-index` takes
+/// filenames, not pathspecs, and must not be given a prefix.
+pub fn literal_pathspec(path: &str) -> String {
+    format!(":(literal){path}")
+}
 
 /// One git invocation: arguments, working directory and time budget.
 #[derive(Debug, Clone)]
