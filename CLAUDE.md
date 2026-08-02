@@ -114,12 +114,15 @@ cargo fmt --all
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)、メッセージは英語
 - force push しない
 
-## 現在のフェーズ: Phase 1 実装完了 → Phase 2 準備(完了したらこのセクションを書き換える)
+## 現在のフェーズ: Phase 1 完了・UI 基準確定(2026-08-02)→ Phase 2 準備(完了したらこのセクションを書き換える)
 
-- Phase 1(読み取り専用ビューア)は実装済み・性能予算 4 項目を kotlin 実測でクリア: [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)。**グラフの walk からタグを除外する決定**(44k タグで topo フロンティア初期化が数秒化するため。ラベルは refs join で表示)は `platitude-core::session::LOG_REVS` 参照
-- ブリッジは **Qt Bridges 採用で確定**(Phase 0 スパイク合格)。CXX-Qt へ差し替え可能な構成(ブリッジ薄層化・§ワークスペース構成のルール)は引き続き維持する。スパイクコードは `spike/` に残置
-- UI の色・寸法は [internal-docs/デザイン規約.md](internal-docs/デザイン規約.md) のトークンのみを使う(写しは `crates/platitude-app/src/ui/Theme.qml`)。グラフ幾何 3 値(レーン間隔・ノード径・線幅)はトークン未定義のため Main.qml 冒頭に隔離済み — トークン追加は人間承認待ち
-- CI(3OS + 完全オフライン job)は記述済みだが **GitHub リモート未設定のため一度も実行されていない**(初回 push で要検証)
+- Phase 1(読み取り専用ビューア)+多数の UI フィードバック反復まで実装済み。性能予算 4 項目は UI 基準確定時点の再実測でクリア: [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)
+- グラフは **2 段ストリーミング**(タグ無し即描画→タグ込みを単一 drain で無フリッカー置換。44k タグの topo フロンティア初期化コスト対策)+ `--max-count=2000` ウィンドウ。**WIP(未コミット)を HEAD の子の仮想行**として、**stash を walk 参加の実行行**として描く(合成親コミットは sift で除去)— いずれも `platitude-core::session` 参照。dirty ⇄ clean の変化でストリームを再構築する
+- 実装済みの実操作: stash pop / apply(それ以外の書き込みは Phase 2)。staging・コミット・hunk/行ステージングは**見た目のみ実装済み**(配線が Phase 2)
+- ブリッジは **Qt Bridges 採用で確定**(Phase 0 スパイク合格)。CXX-Qt へ差し替え可能な構成を維持。スパイクコードは `spike/` に残置
+- UI は [internal-docs/デザイン規約.md](internal-docs/デザイン規約.md) が正本(Theme.qml と Main.qml 冒頭定数ブロックはその写し)。グラフ・インタラクション定数とレイアウト初期値は **2026-08-02 の UI 基準確定で規約へ昇格済み**
+- 開発は **main 直コミット**(ユーザー指示)。release ビルドしないと QML(exe 埋め込み)は反映されない — 起動確認前に必ず `cargo build --release`
+- CI(3OS + 完全オフライン job)は記述済みだが **GitHub リモート未設定のため一度も実行されていない**(push 開始時に要検証・ユーザー指示で後ろ倒し)
 - ネットワーク非通信の baseline 実測: [ci/baseline/windows-x64.md](ci/baseline/windows-x64.md)。**Qt6Network は Qt6Qml のロード時依存として同梱が必須** — 「同梱しない」ではなく「アプリ自身の import table に通信系なし + ネットワーク系プラグイン除外」を主張する
 - mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ、実機検証は Phase 5 ゲート
 
