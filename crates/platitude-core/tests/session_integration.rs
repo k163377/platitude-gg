@@ -1085,14 +1085,10 @@ async fn a_write_rebuilds_the_graph_once() {
         repo.path.clone(),
         sink.clone(),
     );
-    // Wait for the tree to be seen as dirty, so the WIP row is on screen
-    // and the commit below is the transition that removes it.
-    sink.wait_for("dirty tree", |evs| {
-        evs.iter()
-            .any(|e| matches!(e, SessionEvent::StatusLoaded { status, .. } if status.is_dirty()))
-            .then_some(())
-    })
-    .await;
+    // Wait until the WIP row is on screen (root + WIP = 2 rows) and the
+    // stream has settled, so the commit below is the transition that
+    // removes it and every later stream event is a reaction to a write.
+    sink.settled_stream_gen(2).await;
 
     session.stage_all();
     session.commit(
@@ -1102,33 +1098,107 @@ async fn a_write_rebuilds_the_graph_once() {
 
     // Counting from where each write finished ignores whatever the open
     // sequence was still doing, which a wall-clock delay would not.
-    let (during_stage, after_commit) = sink
-        .wait_for("the commit's rebuild finished", |evs| {
-            let stage_at = position_of(evs, "stage")?;
-            let commit_at = position_of(evs, "commit")?;
-            // One rebuild is a fast pass plus the tag-inclusive swap, so
-            // it is complete once two streams have finished.
-            let finished = evs[commit_at..]
-                .iter()
-                .filter(|e| matches!(e, SessionEvent::LogFinished { .. }))
-                .count();
-            (finished >= 2).then(|| {
-                (
-                    log_starts(&evs[stage_at..commit_at]),
-                    log_starts(&evs[commit_at..]),
-                )
-            })
-        })
-        .await;
+    sink.wait_for("the commit's rebuild finished", |evs| {
+        let commit_at = position_of(evs, "commit")?;
+        evs[commit_at..]
+            .iter()
+            .any(|e| matches!(e, SessionEvent::LogFinished { .. }))
+            .then_some(())
+    })
+    .await;
+    // Give a trailing second rebuild (the regression this guards against)
+    // time to show up before counting.
+    tokio::time::sleep(Duration::from_millis(400)).await;
 
+    let events = sink.events.lock().unwrap();
+    let stage_at = position_of(&events, "stage").expect("stage finished");
+    let commit_at = position_of(&events, "commit").expect("commit finished");
     assert_eq!(
-        during_stage, 0,
+        log_starts(&events[stage_at..commit_at]),
+        0,
         "staging left the tree dirty, so the graph did not change"
     );
     assert_eq!(
-        after_commit, 2,
-        "the commit rebuilt the graph once (fast pass + tag swap)"
+        log_starts(&events[commit_at..]),
+        1,
+        "the commit swapped the rebuilt graph in exactly once"
     );
+    drop(events);
+    session.close();
+}
+
+/// A background rebuild that finds nothing changed must stay silent — no
+/// reset, no chunk, no repaint. This is what keeps a quiet auto-fetch
+/// interval (or any other background refresh) from flickering the graph.
+#[tokio::test(flavor = "multi_thread")]
+async fn background_refresh_swaps_only_on_change() {
+    let (mut repo, _) = scenario();
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    sink.settled_stream_gen(5).await;
+
+    let stream_count = || {
+        sink.count(|e| {
+            matches!(
+                e,
+                SessionEvent::LogStarted { .. }
+                    | SessionEvent::LogChunk { .. }
+                    | SessionEvent::LogFinished { .. }
+                    | SessionEvent::LogFailed { .. }
+            )
+        })
+    };
+    let baseline = stream_count();
+
+    // Nothing changed since the last delivery, so the rebuild must not
+    // emit a single stream event. "Nothing happens" can only be observed
+    // by giving the pass ample time to run.
+    session.refresh_log();
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert_eq!(
+        stream_count(),
+        baseline,
+        "an unchanged rebuild stayed silent: {:?}",
+        sink.events.lock().unwrap()
+    );
+
+    // History moved outside the session: the same call now delivers one
+    // atomic replacement (a single Started, all rows in one chunk).
+    repo.commit_file("h.txt", "x\n", "outside commit");
+    session.refresh_log();
+    let swap_gen = sink.settled_stream_gen(6).await;
+    let events = sink.events.lock().unwrap();
+    let starts_after = events
+        .iter()
+        .filter(|e| {
+            matches!(
+                e,
+                SessionEvent::LogStarted { .. }
+                    | SessionEvent::LogChunk { .. }
+                    | SessionEvent::LogFinished { .. }
+                    | SessionEvent::LogFailed { .. }
+            )
+        })
+        .skip(baseline)
+        .filter(|e| matches!(e, SessionEvent::LogStarted { .. }))
+        .count();
+    assert_eq!(starts_after, 1, "one swap, not a reset-and-restream");
+    let swapped_rows: usize = events
+        .iter()
+        .filter_map(|e| match e {
+            SessionEvent::LogChunk { generation, rows } if *generation == swap_gen => {
+                Some(rows.len())
+            }
+            _ => None,
+        })
+        .sum();
+    assert_eq!(swapped_rows, 6, "the replacement carries the whole graph");
+    drop(events);
     session.close();
 }
 

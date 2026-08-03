@@ -296,6 +296,10 @@ struct Shared {
     label_map: HashMap<Oid, Vec<RefLabel>>,
     /// Labels currently shown per row (for diffing on refs refresh).
     applied: HashMap<u32, Vec<RefLabel>>,
+    /// Rows exactly as delivered to the UI (labels included), kept so a
+    /// background rebuild can tell "same picture" from "changed" and skip
+    /// the swap entirely — an unchanged repository must not repaint.
+    sent_rows: Vec<LogRow>,
 }
 
 /// Guards snapshot-replacing ops against out-of-order completion.
@@ -560,6 +564,33 @@ impl RepoSession {
         });
     }
 
+    /// Rebuilds the graph off-screen and swaps it in only when it differs
+    /// from what the UI already shows (see [`RepoSession::run_swap_pass`]).
+    ///
+    /// Background triggers (auto fetch, a finished write, an external
+    /// dirty/clean flip) go through here instead of [`RepoSession::restart_log`]:
+    /// a reset-and-restream repaints the pane even when history did not
+    /// move, which reads as idle flicker once a periodic fetch is on.
+    pub fn refresh_log(self: &Arc<Self>) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let run_cancel = self.root_cancel.child_token();
+        if let Some(prev) = self
+            .log_cancel
+            .lock()
+            .map(|mut g| g.replace(run_cancel.clone()))
+            .unwrap_or_default()
+        {
+            prev.cancel();
+        }
+        let s = Arc::clone(self);
+        let options = self.log_options();
+        self.runtime.spawn(async move {
+            s.run_swap_pass(&workdir, options, &run_cancel).await;
+        });
+    }
+
     /// Streams one pass straight to the UI (chunked, resets the graph).
     /// Returns Err after reporting when the pass failed or was cancelled.
     async fn run_direct_pass(
@@ -574,6 +605,7 @@ impl RepoSession {
             let mut shared = self.lock_shared();
             shared.builder = GraphBuilder::new();
             shared.applied.clear();
+            shared.sent_rows.clear();
         }
         self.sink.event(SessionEvent::LogStarted { generation });
         let started = Instant::now();
@@ -646,8 +678,18 @@ impl RepoSession {
                     applied.insert(row.row, labels.clone());
                 }
             }
+            let unchanged = shared.sent_rows == rows;
             shared.builder = builder;
             shared.applied = applied;
+            if unchanged {
+                // The UI already shows exactly this: swapping would only
+                // reset the view (scroll anchor, selection re-resolve) for
+                // an identical picture. Background refreshes land here on
+                // every quiet auto-fetch tick.
+                tracing::debug!(generation, total, "graph rebuild unchanged; swap skipped");
+                return;
+            }
+            shared.sent_rows = rows.clone();
         }
         self.sink.event(SessionEvent::LogStarted { generation });
         self.sink.event(SessionEvent::LogChunk { generation, rows });
@@ -712,7 +754,7 @@ impl RepoSession {
             // An external change (another tool, the terminal) can make the
             // tree dirty or clean, which adds or removes the WIP row.
             if s.publish_status().await {
-                s.restart_log();
+                s.refresh_log();
             }
         });
     }
@@ -935,7 +977,10 @@ impl RepoSession {
         // reacting to the status would rebuild twice for one write.
         let wip_flipped = self.publish_status().await;
         if rebuild_graph || wip_flipped {
-            self.restart_log();
+            // Off-screen rebuild: the pane keeps showing the old graph
+            // until the finished one swaps in (or nothing changed and
+            // nothing repaints — the auto-fetch common case).
+            self.refresh_log();
         }
         self.refresh_side_snapshots();
         if after == AfterWrite::Author {
@@ -1699,13 +1744,12 @@ impl RepoSession {
 
     /// Sends the synthetic WIP row (dirty working tree) as its own chunk.
     fn emit_wip_row(&self, generation: u64, head: &Oid) {
-        let row = {
-            let mut guard = self.lock_shared();
-            if self.log_gen.load(Ordering::SeqCst) != generation {
-                return;
-            }
-            wip_row(head, &mut guard.builder)
-        };
+        let mut guard = self.lock_shared();
+        if self.log_gen.load(Ordering::SeqCst) != generation {
+            return;
+        }
+        let row = wip_row(head, &mut guard.builder);
+        guard.sent_rows.push(row.clone());
         self.sink.event(SessionEvent::LogChunk {
             generation,
             rows: vec![row],
@@ -1737,6 +1781,7 @@ impl RepoSession {
             }
             rows.push(row);
         }
+        shared.sent_rows.extend(rows.iter().cloned());
         self.sink.event(SessionEvent::LogChunk { generation, rows });
     }
 
@@ -1766,6 +1811,14 @@ impl RepoSession {
         }
         shared.applied = fresh;
         changed.sort_by_key(|(row, _)| *row);
+        // Mirror the chip change into the delivered-rows record, or the
+        // next background rebuild would see a phantom difference and swap
+        // an identical graph.
+        for (row, labels) in &changed {
+            if let Some(sent) = shared.sent_rows.get_mut(*row as usize) {
+                sent.labels = labels.clone();
+            }
+        }
         changed
     }
 }
