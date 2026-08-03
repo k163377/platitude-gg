@@ -43,10 +43,14 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/AppDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AutoScrollBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ChangeIcon.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/ClipboardHelper.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ConfirmDialog.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/DetailsPane.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/DiffPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DirtySwitchDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FileRowDelegate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FormField.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/GraphPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphRowDelegate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HoverButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HoverToolButton.qml", "qt/qml/platitude");
@@ -59,9 +63,13 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/NavList.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/PaneHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefChip.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/RepoPage.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RewordDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsDialog.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SidebarPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SlimField.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/TopBar.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/WipPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/Main.qml", "qt/qml/platitude");
     let code = app
         .register::<AppBackend>()

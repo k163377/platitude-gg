@@ -5,10 +5,14 @@ ActionButton 1.0 ActionButton.qml
 AppDialog 1.0 AppDialog.qml
 AutoScrollBar 1.0 AutoScrollBar.qml
 ChangeIcon 1.0 ChangeIcon.qml
+ClipboardHelper 1.0 ClipboardHelper.qml
 ConfirmDialog 1.0 ConfirmDialog.qml
+DetailsPane 1.0 DetailsPane.qml
+DiffPane 1.0 DiffPane.qml
 DirtySwitchDialog 1.0 DirtySwitchDialog.qml
 FileRowDelegate 1.0 FileRowDelegate.qml
 FormField 1.0 FormField.qml
+GraphPane 1.0 GraphPane.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml
 HoverButton 1.0 HoverButton.qml
 HoverToolButton 1.0 HoverToolButton.qml
@@ -21,6 +25,10 @@ NavItemDelegate 1.0 NavItemDelegate.qml
 NavList 1.0 NavList.qml
 PaneHeader 1.0 PaneHeader.qml
 RefChip 1.0 RefChip.qml
+RepoPage 1.0 RepoPage.qml
 RewordDialog 1.0 RewordDialog.qml
 SettingsDialog 1.0 SettingsDialog.qml
+SidebarPane 1.0 SidebarPane.qml
 SlimField 1.0 SlimField.qml
+TopBar 1.0 TopBar.qml
+WipPane 1.0 WipPane.qml
