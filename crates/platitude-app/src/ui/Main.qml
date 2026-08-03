@@ -41,6 +41,22 @@ ApplicationWindow {
     readonly property int anchorDelayMs: 50
     readonly property var laneDash: [1, 1]
 
+    // Image-preview zoom steps: a small image draws at a fixed integer
+    // scale picked from its natural size (never from the window), then
+    // fit-to-frame shrinking still wins when space runs out. Small icons
+    // land in a readable 128-256px band.
+    function previewZoomFor(maxSide) {
+        if (maxSide <= 0)
+            return 1
+        if (maxSide < 32)
+            return 8
+        if (maxSide < 64)
+            return 4
+        if (maxSide < 128)
+            return 2
+        return 1
+    }
+
     palette {
         window: Theme.bgBase
         windowText: Theme.textPrimary
@@ -4140,6 +4156,11 @@ ApplicationWindow {
     // One side of the diff pane's image preview (Before / After). Absent
     // sides collapse (visible tracks sizeText), so an added image shows a
     // single full-width After cell and a deleted one a single Before.
+    //
+    // Scaling: 1:1 when the natural size fits, a fixed integer zoom for
+    // small images (previewZoomFor — independent of the window), and
+    // fit-to-frame shrinking as the final cap, so a tiny window never
+    // overflows and never picks a different zoom, it only shrinks.
     component ImagePreviewCell: ColumnLayout {
         id: previewCell
         required property string label
@@ -4147,6 +4168,9 @@ ApplicationWindow {
         required property string sizeText
         visible: sizeText !== ""
         spacing: Theme.spaceXs
+        // data: URLs carry the mime up front; SVG rasters scale smoothly,
+        // pixel rasters must not.
+        readonly property bool isVector: url.indexOf("data:image/svg") === 0
         Label {
             Layout.fillWidth: true
             text: previewCell.label
@@ -4155,23 +4179,45 @@ ApplicationWindow {
             elide: Text.ElideRight
         }
         Rectangle {
+            id: previewFrame
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: "transparent"
             border.color: Theme.borderSubtle
             border.width: Theme.borderWidth
+            clip: true
+            // Box the image may occupy.
+            readonly property real innerW: width - 2 * Theme.spaceXs
+            readonly property real innerH: height - 2 * Theme.spaceXs
+            // Decoded size (0 until the image is ready).
+            readonly property real naturalW: previewImage.implicitWidth
+            readonly property real naturalH: previewImage.implicitHeight
+            readonly property real fitScale:
+                naturalW > 0 && naturalH > 0 && innerW > 0 && innerH > 0
+                ? Math.min(innerW / naturalW, innerH / naturalH) : 1
+            // Shrink freely; enlarge only in whole steps, never past the
+            // frame and never more than the size-picked zoom.
+            readonly property real displayScale: fitScale < 1
+                ? fitScale
+                : Math.max(1, Math.min(
+                      root.previewZoomFor(Math.max(naturalW, naturalH)),
+                      Math.floor(fitScale)))
             Image {
                 id: previewImage
-                anchors.fill: parent
-                anchors.margins: Theme.spaceXs
+                anchors.centerIn: parent
+                width: previewFrame.naturalW * previewFrame.displayScale
+                height: previewFrame.naturalH * previewFrame.displayScale
                 fillMode: Image.PreserveAspectFit
                 source: previewCell.url
                 asynchronous: true
                 cache: false
-                // Decode cap only — never rasterize wider than the screen.
-                // One dimension keeps the aspect ratio intact.
-                sourceSize.width: Screen.width
-                smooth: true
+                // No sourceSize: it does not cap decoding, it *rescales*
+                // rasters to the given size (a 16px icon came back blurry
+                // at screen width). Decode memory is already bounded by
+                // the 16 MiB byte cap in platitude-core::preview.
+                // Integer upscales stay crisp (pixel art); shrinking and
+                // vector rasters smooth.
+                smooth: previewFrame.displayScale < 1 || previewCell.isVector
                 mipmap: true
                 visible: status === Image.Ready
             }
