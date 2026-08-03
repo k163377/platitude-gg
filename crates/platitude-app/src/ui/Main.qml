@@ -29,7 +29,7 @@ ApplicationWindow {
     // graduate into the document once they stabilize.
     readonly property int laneW: Theme.iconLg
     readonly property int laneInset: Theme.spaceXs
-    readonly property int nodeIcon: Theme.iconXl
+    readonly property int nodeIcon: Theme.iconLg
     readonly property int laneStroke: 2
     readonly property real iconStroke: 1.5
     readonly property real identiconFill: 0.72
@@ -2074,9 +2074,10 @@ ApplicationWindow {
                             maximumFlickVelocity: 9000
                             ScrollBar.vertical: ScrollBar {}
                             // The graph is the one pane with no header band;
-                            // its header-band-sized first row sits right
-                            // beside the neighbouring bands instead, which
-                            // is what makes the shared row grid readable.
+                            // this sliver of margin drops the first row so
+                            // its bottom line meets the neighbouring bands'
+                            // bottom edge when scrolled to the top.
+                            topMargin: Theme.headerHeight - Theme.graphRowHeight
                             // Bridge into the page scope for the shared
                             // delegate (inline components cannot see page ids).
                             property real labelWidth: page.labelW
@@ -2161,8 +2162,9 @@ ApplicationWindow {
                             // become unreachable, the bottom overshoots the
                             // truncation footer).
                             function clampY(y) {
-                                // originY minus topMargin is the true top
-                                // even while the margin is zero.
+                                // topMargin lives above the content origin —
+                                // forgetting it makes the top gap
+                                // unreachable by wheel after any scroll.
                                 const minY = graphList.originY - graphList.topMargin
                                 const maxY = Math.max(minY, graphList.originY
                                                             + graphList.contentHeight
@@ -3440,7 +3442,7 @@ ApplicationWindow {
                             .arg(rowItem.ListView.view ? rowItem.ListView.view.wipCount : 0)
                           : rowItem.subject
                     elide: Text.ElideRight
-                    font.pixelSize: Theme.fontLg
+                    font.pixelSize: Theme.fontMd
                     color: rowItem.isWip ? Theme.textSecondary : Theme.textPrimary
                     rightPadding: Theme.spaceSm
                 }
