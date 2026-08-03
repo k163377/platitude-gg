@@ -808,7 +808,8 @@ ApplicationWindow {
                     placeholderText: qsTr("Search")
                     implicitWidth: 160
                 }
-                ToolButton {
+                ActionButton {
+                    kind: "fetch"
                     text: qsTr("Fetch")
                     enabled: root.curPage !== null
                              && root.curPage.pageTab.remoteCount > 0
@@ -818,7 +819,8 @@ ApplicationWindow {
                                        + "they no longer have")
                     onClicked: root.curPage.pageTab.fetch("")
                 }
-                ToolButton {
+                ActionButton {
+                    kind: "push"
                     text: qsTr("Push")
                     enabled: root.curPage !== null && root.curPage.canPush
                     ToolTip.visible: hovered
@@ -3951,6 +3953,23 @@ ApplicationWindow {
                 ctx.moveTo(11.5 * s, 8 * s)
                 ctx.lineTo(8.8 * s, 10.8 * s)
                 ctx.stroke()
+            } else if (icon.kind === "fetch" || icon.kind === "push") {
+                // Network pair, drawn as one shape mirrored: the base line
+                // is this repository, and the arrow either lands on it
+                // (fetch) or leaves it (push).
+                const down = icon.kind === "fetch"
+                const tip = down ? 10 : 2.5
+                const tail = down ? 2.5 : 10
+                const barb = down ? tip - 3.2 : tip + 3.2
+                ctx.beginPath()
+                ctx.moveTo(8 * s, tail * s)
+                ctx.lineTo(8 * s, tip * s)
+                ctx.moveTo(4.8 * s, barb * s)
+                ctx.lineTo(8 * s, tip * s)
+                ctx.lineTo(11.2 * s, barb * s)
+                ctx.moveTo(3.5 * s, 13 * s)
+                ctx.lineTo(12.5 * s, 13 * s)
+                ctx.stroke()
             } else if (icon.kind === "copyicon") {
                 ctx.strokeRect(5.5 * s, 3.5 * s, 7 * s, 7 * s)
                 ctx.strokeRect(3.5 * s, 5.5 * s, 7 * s, 7 * s)
@@ -4071,6 +4090,55 @@ ApplicationWindow {
               : letter === "C" ? Theme.textSecondary
               : letter === "?" ? Theme.diffAddedFg
               : Theme.warning
+    }
+
+    // Fusion's built-in hover feedback is a few-percent tint that vanishes
+    // on this dark palette (and a checked ToolButton shows its panel all
+    // the time, hiding the hover entirely), so every clickable control
+    // layers the theme's hover wash on top instead (デザイン規約: ホバーは
+    // bgHover の重ね色). The wash lifts while pressed so Fusion's darker
+    // pressed face stays visible.
+    component HoverButton: Button {
+        id: hoverButtonSelf
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.radiusSm
+            color: Theme.bgHover
+            visible: hoverButtonSelf.enabled && hoverButtonSelf.hovered
+                     && !hoverButtonSelf.down
+        }
+    }
+    component HoverToolButton: ToolButton {
+        id: hoverToolButtonSelf
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.radiusSm
+            color: Theme.bgHover
+            visible: hoverToolButtonSelf.enabled && hoverToolButtonSelf.hovered
+                     && !hoverToolButtonSelf.down
+        }
+    }
+
+    // Toolbar action named twice over: an icon to find it by shape, the
+    // word to be sure of it. Both halves dim together when disabled.
+    component ActionButton: HoverToolButton {
+        id: actionBtn
+        property string kind: ""
+        readonly property color fg: enabled ? Theme.textPrimary : Theme.textMuted
+        contentItem: RowLayout {
+            spacing: Theme.spaceXs
+            NavIcon {
+                kind: actionBtn.kind
+                tint: actionBtn.fg
+                Layout.alignment: Qt.AlignVCenter
+            }
+            Label {
+                text: actionBtn.text
+                color: actionBtn.fg
+                font.pixelSize: Theme.fontMd
+                Layout.alignment: Qt.AlignVCenter
+            }
+        }
     }
 
     // Author identicon (same packed code as the graph nodes).
