@@ -38,6 +38,7 @@ use crate::opstate::{self, OpState};
 use crate::parse::diff::FilePatch;
 use crate::parse::log::{LOG_FORMAT_ARG, LogParser};
 use crate::patch::HunkSelect;
+use crate::preview::{self, FilePreview};
 use crate::process::{GitCommand, GitExecutor};
 use crate::publish;
 use crate::refs::{self, HeadState, RefEntry, RefKind};
@@ -232,6 +233,9 @@ pub enum SessionEvent {
     DiffLoaded {
         target: DiffTarget,
         patches: Vec<FilePatch>,
+        /// Image bytes / binary sizes when the text diff is not the whole
+        /// story (`None` for ordinary text files).
+        preview: Option<FilePreview>,
     },
     /// A background refresh/query failed (op is a stable identifier).
     OpFailed {
@@ -1412,7 +1416,17 @@ impl RepoSession {
         self.runtime.spawn(async move {
             let cancel = s.root_cancel.clone();
             match details::file_diff(&s.executor, &workdir, &target, &cancel).await {
-                Ok(patches) => s.sink.event(SessionEvent::DiffLoaded { target, patches }),
+                Ok(patches) => {
+                    let is_binary = patches.iter().any(|p| p.is_binary);
+                    let preview =
+                        preview::file_preview(&s.executor, &workdir, &target, is_binary, &cancel)
+                            .await;
+                    s.sink.event(SessionEvent::DiffLoaded {
+                        target,
+                        patches,
+                        preview,
+                    });
+                }
                 Err(e) => s.fail("diff", e),
             }
         });

@@ -849,29 +849,19 @@ ApplicationWindow {
             color: Theme.borderSubtle
         }
 
-        // Welcome page
-        Item {
+        // Nothing open: the window keeps its usual three-pane shape with
+        // every pane empty, and the way in sits where the graph goes.
+        // Built only while it is needed, so an app that starts with tabs
+        // never pays for it.
+        Loader {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            visible: tabsModel.currentIndex < 0
-            Column {
-                anchors.centerIn: parent
-                spacing: Theme.spaceLg
-                Label {
-                    text: qsTr("platitude-gg")
-                    font.pixelSize: Theme.fontXl
-                    font.weight: Font.DemiBold
-                    anchors.horizontalCenter: parent.horizontalCenter
-                }
-                Label {
-                    text: qsTr("A thin, fast GUI over your installed git.")
-                    color: Theme.textSecondary
-                    anchors.horizontalCenter: parent.horizontalCenter
-                }
-                Button {
-                    text: qsTr("Open repository…")
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    onClicked: folderDialog.open()
+            active: tabsModel.currentIndex < 0
+            visible: active
+            sourceComponent: Component {
+                RepoPage {
+                    index: -1
+                    tab_id: -1
                 }
             }
         }
@@ -919,6 +909,9 @@ ApplicationWindow {
         id: page
         required property int index
         required property int tab_id
+        // No repository behind this page (tab_id -1): the chrome renders
+        // with empty models and the graph column offers the way in.
+        readonly property bool blank: tab_id < 0
 
         property string selectedOid: ""
 
@@ -1458,6 +1451,12 @@ ApplicationWindow {
                 page.forcePushNow()
             } else if (act === "fetch") {
                 repoTab.fetch("")
+            } else if (act === "preview") {
+                page.toggleDiff("untracked", arg, "")
+            } else if (act === "preview-unstaged") {
+                page.toggleDiff("unstaged", arg, "")
+            } else if (act === "preview-staged") {
+                page.toggleDiff("staged", arg, "")
             } else if (act === "settings") {
                 settingsDialog.open()
                 AppBackend.setAutoFetchMinutes(Number(arg))
@@ -1571,6 +1570,8 @@ ApplicationWindow {
         NavSectionModel { id: tagsModel }
 
         Component.onCompleted: {
+            if (page.blank)
+                return // no session to attach to; every model stays empty
             repoTab.attach(page.tab_id)
             graphModel.attach(page.tab_id)
             workTree.attach(page.tab_id)
@@ -2258,6 +2259,7 @@ ApplicationWindow {
                             width: Theme.splitterWidth
                             height: parent.height
                             z: 2
+                            visible: !page.blank
                             hoverEnabled: true
                             cursorShape: Qt.SplitHCursor
                             preventStealing: true
@@ -2278,6 +2280,7 @@ ApplicationWindow {
                             width: Theme.splitterWidth
                             height: parent.height
                             z: 2
+                            visible: !page.blank
                             hoverEnabled: true
                             cursorShape: Qt.SplitHCursor
                             preventStealing: true
@@ -2320,6 +2323,29 @@ ApplicationWindow {
                             width: parent.width - 2 * Theme.spaceXl
                             wrapMode: Text.Wrap
                             horizontalAlignment: Text.AlignHCenter
+                        }
+                        // Empty window: the one thing worth doing sits in
+                        // the column that will hold the history.
+                        Column {
+                            anchors.centerIn: parent
+                            visible: page.blank
+                            spacing: Theme.spaceLg
+                            Label {
+                                text: qsTr("platitude-gg")
+                                font.pixelSize: Theme.fontXl
+                                font.weight: Font.DemiBold
+                                anchors.horizontalCenter: parent.horizontalCenter
+                            }
+                            Label {
+                                text: qsTr("A thin, fast GUI over your installed git.")
+                                color: Theme.textSecondary
+                                anchors.horizontalCenter: parent.horizontalCenter
+                            }
+                            Button {
+                                text: qsTr("Open repository…")
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                onClicked: folderDialog.open()
+                            }
                         }
                     }
 
@@ -2373,11 +2399,49 @@ ApplicationWindow {
                                     }
                                 }
                             }
+                            // -- content preview: binaries summarized by
+                            //    size, images rendered (added = After only,
+                            //    deleted = Before only, modified = both).
                             Label {
-                                visible: diffModel.isBinary
+                                visible: diffModel.previewKind === "binary"
+                                         || (diffModel.isBinary
+                                             && diffModel.previewKind === "")
                                 Layout.margins: Theme.spaceSm
-                                text: qsTr("Binary file — no text diff")
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                                text: {
+                                    const oldS = diffModel.previewOldSize
+                                    const newS = diffModel.previewNewSize
+                                    if (oldS !== "" && newS !== "")
+                                        return qsTr("Binary file · %1 → %2").arg(oldS).arg(newS)
+                                    if (newS !== "")
+                                        return qsTr("Binary file · %1").arg(newS)
+                                    if (oldS !== "")
+                                        return qsTr("Binary file removed · was %1").arg(oldS)
+                                    return qsTr("Binary file — no text diff")
+                                }
                                 color: Theme.textMuted
+                            }
+                            RowLayout {
+                                visible: diffModel.previewKind === "image"
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                Layout.margins: Theme.spaceSm
+                                spacing: Theme.spaceSm
+                                ImagePreviewCell {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    label: qsTr("Before · %1").arg(diffModel.previewOldSize)
+                                    url: diffModel.previewOldUrl
+                                    sizeText: diffModel.previewOldSize
+                                }
+                                ImagePreviewCell {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    label: qsTr("After · %1").arg(diffModel.previewNewSize)
+                                    url: diffModel.previewNewUrl
+                                    sizeText: diffModel.previewNewSize
+                                }
                             }
                             ListView {
                                 id: diffList
@@ -2388,6 +2452,10 @@ ApplicationWindow {
                                 reuseItems: true
                                 boundsBehavior: Flickable.StopAtBounds
                                 ScrollBar.vertical: ScrollBar {}
+                                // An image with no text rows hands its space
+                                // to the preview (SVG edits keep both).
+                                visible: diffModel.previewKind !== "image"
+                                         || count > 0
                                 delegate: Rectangle {
                                     id: diffRow
                                     required property string kind
@@ -4066,6 +4134,57 @@ ApplicationWindow {
             font.pixelSize: Theme.fontSm
             font.weight: Font.DemiBold
             color: Theme.textSecondary
+        }
+    }
+
+    // One side of the diff pane's image preview (Before / After). Absent
+    // sides collapse (visible tracks sizeText), so an added image shows a
+    // single full-width After cell and a deleted one a single Before.
+    component ImagePreviewCell: ColumnLayout {
+        id: previewCell
+        required property string label
+        required property string url
+        required property string sizeText
+        visible: sizeText !== ""
+        spacing: Theme.spaceXs
+        Label {
+            Layout.fillWidth: true
+            text: previewCell.label
+            font.pixelSize: Theme.fontSm
+            color: Theme.textSecondary
+            elide: Text.ElideRight
+        }
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            color: "transparent"
+            border.color: Theme.borderSubtle
+            border.width: Theme.borderWidth
+            Image {
+                id: previewImage
+                anchors.fill: parent
+                anchors.margins: Theme.spaceXs
+                fillMode: Image.PreserveAspectFit
+                source: previewCell.url
+                asynchronous: true
+                cache: false
+                // Decode cap only — never rasterize wider than the screen.
+                // One dimension keeps the aspect ratio intact.
+                sourceSize.width: Screen.width
+                smooth: true
+                mipmap: true
+                visible: status === Image.Ready
+            }
+            Label {
+                anchors.centerIn: parent
+                width: Math.min(implicitWidth, parent.width - 2 * Theme.spaceSm)
+                visible: previewCell.url === ""
+                         || previewImage.status === Image.Error
+                text: previewCell.url === "" ? qsTr("Too large to preview")
+                                             : qsTr("Preview unavailable")
+                elide: Text.ElideRight
+                color: Theme.textMuted
+            }
         }
     }
 }

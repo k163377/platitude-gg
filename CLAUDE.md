@@ -134,12 +134,12 @@ cargo fmt --all
 ## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
 
 - Phase 1(読み取り専用ビューア)は**完了**。Done 条件の性能 4 項目は完了時点の最終確認でもクリア(first chunk 79ms / 詳細 75ms / 178fps / peak 269MB): [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)
-- **配線済み**: ステージング(ファイル / hunk / 行)・commit / amend・switch(ローカル / リモート / detach、未コミット変更は「置いていく / 持っていく」を選ばせる)・fetch(手動 + auto)・push / force push・単体 cherry-pick・単体 squash・コミットメッセージ編集・identity・設定(auto fetch 間隔)
+- **配線済み**: ステージング(ファイル / hunk / 行)・commit / amend・switch(ローカル / リモート / detach、未コミット変更は「置いていく / 持っていく」を選ばせる)・fetch(手動 + auto)・push / force push・単体 cherry-pick・単体 squash・コミットメッセージ編集・identity・設定(auto fetch 間隔)・diff プレビュー(画像は Before/After 描画、非画像バイナリはサイズ表示 — `platitude-core::preview`)
 - **未配線**: merge / rebase / revert・conflict ペイン・フル interactive rebase 画面・ブランチ作成 / 削除 / リネーム・discard / clean・stash push・リモートブランチ削除
 - 残作業と要判断事項は [P2-確認事項.md](internal-docs/P2-確認事項.md) / [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読むこと**
 - **確認ダイアログは取り返しがつかない操作だけ**(force push / push 済みコミットの書き換え)。日常操作は尋ねない。実体は `Main.qml` の `root.confirm()`
 - **QML バインディングはプロパティにしか反応しない** — `#[qslot]` は呼び出し用。`enabled:` 等が値の変化を追う必要があるものは `qproperty!` にする(スロットのままだと初期値のまま固まる)
-- 書き込み操作の headless 検証は **`PG_AUTO_ACT` = 動詞 / `PG_AUTO_ACT_ARG`**(commit / amend / switch / switch-leave / switch-remote / squash / reword / cherry-pick / stage-hunk / stage-line / push / force-push / force-push-confirm / fetch / settings)。クリックと同じ経路を通る
+- 書き込み操作の headless 検証は **`PG_AUTO_ACT` = 動詞 / `PG_AUTO_ACT_ARG`**(commit / amend / switch / switch-leave / switch-remote / squash / reword / cherry-pick / stage-hunk / stage-line / push / force-push / force-push-confirm / fetch / settings / preview / preview-unstaged / preview-staged)。クリックと同じ経路を通る
 - **ダイアログ・メニューの見た目は現状未検証**(`grabToImage` に写らず、OS 側の `PrintWindow` は画面ロック中に git version gate で止まる)。機能は `PG_AUTO_ACT` で確認済み
 - 書き込みは `RepoSession` のキュー経由で直列化され、成功・失敗いずれでも refresh する。失敗は git の文言のまま `WriteFinished{error}` → 既存のエラー表示へ流れる
 - interactive rebase は `GIT_SEQUENCE_EDITOR` に**別実行ファイル `pg-todo-editor`** を差す方式。**配布物に同梱必須**(本体と同じディレクトリ)

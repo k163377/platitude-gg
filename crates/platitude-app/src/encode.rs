@@ -2,6 +2,7 @@
 //! mechanically (draw tokens / chip records). All *semantic* work already
 //! happened in platitude-core; QML only draws what these strings say.
 
+use base64::Engine as _;
 use platitude_core::details::DiffTarget;
 use platitude_core::graph::{Segment, SegmentKind};
 use platitude_core::parse::diff::{DiffLineKind, FilePatch};
@@ -163,6 +164,37 @@ pub fn diff_key(target: &DiffTarget) -> String {
     }
 }
 
+/// `data:` URL a QML `Image` loads directly — no temp files, no image
+/// providers, and blob content works the same as working-tree content.
+pub fn image_data_url(mime: &str, bytes: &[u8]) -> String {
+    let mut out = format!("data:{mime};base64,");
+    base64::engine::general_purpose::STANDARD.encode_string(bytes, &mut out);
+    out
+}
+
+/// Human-readable byte size ("67 B", "1.5 KB", "234 KB", "1.2 MB").
+/// 1024-based; one decimal below ten so small differences stay visible.
+pub fn human_size(bytes: u64) -> String {
+    const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
+    if bytes < 1024 {
+        return format!("{bytes} B");
+    }
+    let mut value = bytes as f64;
+    let mut unit = UNITS[0];
+    for u in UNITS {
+        value /= 1024.0;
+        unit = u;
+        if value < 1024.0 {
+            break;
+        }
+    }
+    if value < 10.0 {
+        format!("{value:.1} {unit}")
+    } else {
+        format!("{value:.0} {unit}")
+    }
+}
+
 /// One flattened row of the diff pane.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffRow {
@@ -181,18 +213,22 @@ pub struct DiffRow {
 }
 
 /// Flattens parsed patches into displayable rows (hunk headers inline).
-pub fn flatten_patches(patches: &[FilePatch]) -> Vec<DiffRow> {
+/// `binary_note` inserts the "(binary file)" meta row; the caller turns it
+/// off when a preview (image / size summary) already covers that file.
+pub fn flatten_patches(patches: &[FilePatch], binary_note: bool) -> Vec<DiffRow> {
     let mut rows = Vec::new();
     for patch in patches {
         if patch.is_binary {
-            rows.push(DiffRow {
-                kind: "meta",
-                old_no: -1,
-                new_no: -1,
-                text: String::from("(binary file)"),
-                hunk: -1,
-                line: -1,
-            });
+            if binary_note {
+                rows.push(DiffRow {
+                    kind: "meta",
+                    old_no: -1,
+                    new_no: -1,
+                    text: String::from("(binary file)"),
+                    hunk: -1,
+                    line: -1,
+                });
+            }
             continue;
         }
         for (hunk_index, hunk) in patch.hunks.iter().enumerate() {
@@ -319,7 +355,7 @@ mod tests {
 -old
 +new
 ";
-        let rows = flatten_patches(&parse_patch(patch.as_bytes()));
+        let rows = flatten_patches(&parse_patch(patch.as_bytes()), true);
         assert_eq!(rows[0].kind, "hunk");
         assert!(rows[0].text.contains("@@ -1,2 +1,2 @@ heading"));
         assert_eq!(rows[1].kind, "ctx");
@@ -356,7 +392,7 @@ mod tests {
 -removed
  tail
 ";
-        let rows = flatten_patches(&parse_patch(patch.as_bytes()));
+        let rows = flatten_patches(&parse_patch(patch.as_bytes()), true);
         // The header carries its hunk but no line; the lines that follow
         // are numbered from zero within that hunk — exactly what
         // `HunkSelect` addresses.
@@ -392,8 +428,30 @@ mod tests {
 diff --git a/x.png b/x.png
 Binary files a/x.png and b/x.png differ
 ";
-        let rows = flatten_patches(&parse_patch(patch.as_bytes()));
+        let rows = flatten_patches(&parse_patch(patch.as_bytes()), true);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].kind, "meta");
+        // With a preview covering the file, the note is dropped entirely.
+        assert!(flatten_patches(&parse_patch(patch.as_bytes()), false).is_empty());
+    }
+
+    #[test]
+    fn image_data_urls_are_base64_with_the_mime_up_front() {
+        assert_eq!(
+            image_data_url("image/png", b"abc"),
+            "data:image/png;base64,YWJj"
+        );
+        assert_eq!(image_data_url("image/gif", b""), "data:image/gif;base64,");
+    }
+
+    #[test]
+    fn human_sizes_step_through_units() {
+        assert_eq!(human_size(0), "0 B");
+        assert_eq!(human_size(1023), "1023 B");
+        assert_eq!(human_size(1024), "1.0 KB");
+        assert_eq!(human_size(1536), "1.5 KB");
+        assert_eq!(human_size(239_616), "234 KB");
+        assert_eq!(human_size(1_258_291), "1.2 MB");
+        assert_eq!(human_size(17 * 1024 * 1024 * 1024), "17 GB");
     }
 }

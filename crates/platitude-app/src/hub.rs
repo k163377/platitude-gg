@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use platitude_core::details::DiffTarget;
 use platitude_core::opstate::OpState;
 use platitude_core::parse::diff::FilePatch;
+use platitude_core::preview::FilePreview;
 use platitude_core::process::GitExecutor;
 use platitude_core::session::{
     AUTO_FETCH_OP, LogRow, RefLabel, RefsSnapshot, RepoSession, SessionEvent, SessionSink,
@@ -113,6 +114,7 @@ pub struct StatusMsg {
 pub struct DiffMsg {
     pub target: DiffTarget,
     pub patches: Vec<FilePatch>,
+    pub preview: Option<FilePreview>,
 }
 
 /// A queue whose consumer is one QML object on the Qt main thread.
@@ -289,8 +291,16 @@ impl SessionSink for BridgeSink {
                 self.feeds.worktrees.push_replace(worktrees)
             }
             SessionEvent::DetailsLoaded { details } => self.feeds.details.push_replace(details),
-            SessionEvent::DiffLoaded { target, patches } => {
-                self.feeds.diff.push_replace(DiffMsg { target, patches });
+            SessionEvent::DiffLoaded {
+                target,
+                patches,
+                preview,
+            } => {
+                self.feeds.diff.push_replace(DiffMsg {
+                    target,
+                    patches,
+                    preview,
+                });
             }
             SessionEvent::OpFailed { op, error } => self.feeds.tab.push(TabMsg::OpError {
                 message: format!("{op}: {error}"),

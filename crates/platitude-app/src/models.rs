@@ -13,12 +13,15 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use platitude_core::details::DiffTarget;
+use platitude_core::preview::{FilePreview, PreviewSide};
 use platitude_core::session::LogRow;
 use platitude_core::{Oid, version};
 use qtbridge::qtbridge_type_lib::QModelIndex;
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::encode::{DiffRow, diff_key, encode_geometry, encode_labels, flatten_patches};
+use crate::encode::{
+    DiffRow, diff_key, encode_geometry, encode_labels, flatten_patches, human_size, image_data_url,
+};
 use crate::hub::{Feed, GraphMsg, Hub, StatusMsg, TabMsg};
 use crate::urlpath::file_url_to_path;
 
@@ -467,10 +470,20 @@ pub struct TabItem {
     repo_path: String,
 }
 
-#[derive(Default)]
 pub struct TabsModel {
     items: Vec<TabItem>,
     current_index: i32,
+}
+
+impl Default for TabsModel {
+    fn default() -> Self {
+        Self {
+            items: Vec::new(),
+            // No tab selected. Deriving this (0) points at a tab that does
+            // not exist, and the UI reads "no repository open" as < 0.
+            current_index: -1,
+        }
+    }
 }
 
 impl QListModel for TabsModel {
@@ -2446,6 +2459,14 @@ pub struct DiffModel {
     title: String,
     is_binary: bool,
     loading: bool,
+    /// "" (text diff only) / "image" / "binary".
+    preview_kind: String,
+    /// data: URLs for the image sides ("" = no renderable image there).
+    preview_old_url: String,
+    preview_new_url: String,
+    /// Human-readable sizes ("" = the side does not exist).
+    preview_old_size: String,
+    preview_new_size: String,
     current_key: String,
     feed: Option<Arc<Feed<crate::hub::DiffMsg>>>,
     tab_id: i32,
@@ -2472,6 +2493,19 @@ impl DiffModel {
     qproperty!("title", Member = title, Notify = changed);
     qproperty!("isBinary", Member = is_binary, Notify = changed);
     qproperty!("loading", Member = loading, Notify = changed);
+    qproperty!("previewKind", Member = preview_kind, Notify = changed);
+    qproperty!("previewOldUrl", Member = preview_old_url, Notify = changed);
+    qproperty!("previewNewUrl", Member = preview_new_url, Notify = changed);
+    qproperty!(
+        "previewOldSize",
+        Member = preview_old_size,
+        Notify = changed
+    );
+    qproperty!(
+        "previewNewSize",
+        Member = preview_new_size,
+        Notify = changed
+    );
 
     #[qsignal]
     fn changed(&mut self);
@@ -2530,6 +2564,7 @@ impl DiffModel {
         self.title = String::new();
         self.is_binary = false;
         self.loading = false;
+        self.apply_preview(None);
         self.reset();
         self.changed();
     }
@@ -2547,8 +2582,9 @@ impl DiffModel {
         }
         self.loading = false;
         self.is_binary = msg.patches.iter().any(|p| p.is_binary);
+        self.apply_preview(msg.preview.as_ref());
         self.reset();
-        let rows = flatten_patches(&msg.patches)
+        let rows = flatten_patches(&msg.patches, msg.preview.is_none())
             .into_iter()
             .map(|r: DiffRow| DiffLineItem {
                 kind: r.kind.to_string(),
@@ -2571,10 +2607,46 @@ impl DiffModel {
         self.title = title;
         self.is_binary = false;
         self.loading = true;
+        self.apply_preview(None);
         self.reset();
         self.changed();
         if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
             session.load_diff(target);
         }
+    }
+
+    /// Maps the core preview onto the QML-facing strings. `None` resets.
+    fn apply_preview(&mut self, preview: Option<&FilePreview>) {
+        let Some(p) = preview else {
+            self.preview_kind.clear();
+            self.preview_old_url.clear();
+            self.preview_new_url.clear();
+            self.preview_old_size.clear();
+            self.preview_new_size.clear();
+            return;
+        };
+        self.preview_kind = if p.image_mime.is_some() {
+            "image".to_string()
+        } else {
+            "binary".to_string()
+        };
+        let url = |side: &Option<PreviewSide>| -> String {
+            let (Some(mime), Some(s)) = (p.image_mime, side.as_ref()) else {
+                return String::new();
+            };
+            s.bytes
+                .as_ref()
+                .map(|b| image_data_url(mime, b))
+                .unwrap_or_default()
+        };
+        let size = |side: &Option<PreviewSide>| -> String {
+            side.as_ref()
+                .map(|s| human_size(s.size))
+                .unwrap_or_default()
+        };
+        self.preview_old_url = url(&p.old);
+        self.preview_new_url = url(&p.new);
+        self.preview_old_size = size(&p.old);
+        self.preview_new_size = size(&p.new);
     }
 }

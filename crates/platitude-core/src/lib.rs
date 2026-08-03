@@ -18,6 +18,7 @@ pub mod oid;
 pub mod opstate;
 pub mod parse;
 pub mod patch;
+pub mod preview;
 pub mod process;
 pub mod publish;
 pub mod refs;
