@@ -2148,10 +2148,19 @@ ApplicationWindow {
                                         }
                                     }
                                 }
+                                // Bounded like a subject: the message is the
+                                // only thing that explains the cut, so it
+                                // wraps over the footer's two rows rather
+                                // than running under the next pane.
                                 Label {
                                     x: graphList.labelWidth + graphList.graphColWidth
-                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: graphList.width - x
+                                    height: parent.height
+                                    verticalAlignment: Text.AlignVCenter
                                     leftPadding: Theme.spaceSm
+                                    rightPadding: Theme.spaceSm
+                                    wrapMode: Text.Wrap
+                                    elide: Text.ElideRight
                                     text: qsTr("Showing the first %L1 commits — older history is not loaded")
                                           .arg(graphModel.rowTotal)
                                     color: Theme.warning
