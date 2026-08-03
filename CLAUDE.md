@@ -96,7 +96,9 @@ crates/
   ユーザーの操作中ウィンドウへ飛ぶ危険もある)。`PostMessage(hwnd, WM_KEYDOWN/UP)` を使う。
   クリックも `PostMessage(WM_LBUTTONDOWN/UP)` で確実に届くが、**hover は注入で検証不能**
   (`WM_MOUSEMOVE` 注入・`SetCursorPos` とも実マウスの動きに hover 状態を奪還され、
-  成功と失敗が再現不能に混ざる — 2026-08-03 実測)。hover の見た目は実操作で確認する
+  成功と失敗が再現不能に混ざる — 2026-08-03 実測)。hover の見た目は実操作で確認する。
+  **フォーカスも注入で検証不能** — 非アクティブウィンドウでは `activeFocusItem` が
+  null のままで、PostMessage はウィンドウをアクティブにしない(2026-08-04 実測)
 - exe の**起動**にも Qt の bin ディレクトリが PATH に要る(ビルド時だけではない)。無いと**約 10ms で無言終了**する — ログもエラーダイアログも出ないので死因が判らない。検証スクリプトは PATH 設定込みで書く
 
 ## ビルド・テスト
@@ -149,7 +151,7 @@ cargo fmt --all
 - ダイアログの見た目は**アンロック中の `PrintWindow` で検証可能**(設定ダイアログで実測済み。ロック中は git version gate で止まる)。メニューは未検証。機能は `PG_AUTO_ACT` で確認済み
 - 書き込みは `RepoSession` のキュー経由で直列化され、成功・失敗いずれでも refresh する。失敗は git の文言のまま `WriteFinished{error}` → 既存のエラー表示へ流れる
 - interactive rebase は `GIT_SEQUENCE_EDITOR` に**別実行ファイル `pg-todo-editor`** を差す方式。**配布物に同梱必須**(本体と同じディレクトリ)
-- グラフは **2 段ストリーミング**(タグ無し即描画→タグ込みを単一 drain で無フリッカー置換。44k タグの topo フロンティア初期化コスト対策)+ `--max-count=2000` ウィンドウ。**WIP(未コミット)を HEAD の子の仮想行**として、**stash を walk 参加の実行行**として描く(合成親コミットは sift で除去)— いずれも `platitude-core::session` 参照。dirty ⇄ clean の変化でストリームを再構築する
+- グラフは **2 段ストリーミング**(タグ無し即描画→タグ込みを単一 drain で無フリッカー置換。44k タグの topo フロンティア初期化コスト対策)+ `--max-count=2000` ウィンドウ。**WIP(未コミット)を HEAD の子の仮想行**として、**stash を walk 参加の実行行**として描く(合成親コミットは sift で除去)— いずれも `platitude-core::session` 参照。**バックグラウンド更新(auto fetch 後・write 後・dirty ⇄ clean 変化)は `refresh_log()`** = オフスクリーン構築→送信済み行と一致ならイベントを一切出さない(アイドル中のチラつき対策)。リセット→ストリーミングは open / Reload / タグ切替 / 件数変更のみ
 - ブリッジは **Qt Bridges 採用で確定**(Phase 0 スパイク合格)。CXX-Qt へ差し替え可能な構成を維持。スパイクコードは `spike/` に残置
 - UI は [internal-docs/デザイン規約.md](internal-docs/デザイン規約.md) が正本(Theme.qml と Main.qml 冒頭定数ブロックはその写し)。グラフ・インタラクション定数とレイアウト初期値は **2026-08-02 の UI 基準確定で規約へ昇格済み**
 - 開発は **main 直コミット**(ユーザー指示)。release ビルドしないと QML(exe 埋め込み)は反映されない — 起動確認前に必ず `cargo build --release`
