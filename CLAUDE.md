@@ -88,9 +88,13 @@ crates/
 - fps 計測(PG_AUTO_SCROLL)は offscreen でも完走するが、値は疑似フレームループの上限で表示性能ではない — **性能実測はアンロック状態の通常起動でのみ行う**
 - **ポップアップ(Popup / Dialog / Menu)は `grabToImage` に写らない** — ウィンドウの
   オーバーレイ層に描かれ、掴んだアイテムの部分木の外にいる。検証は OS 側から
-  `PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT=2)` で撮る(GPU 描画のため flags 必須)。
+  `PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT=2)` で撮る(GPU 描画のため flags 必須。
+  アンロック中はダイアログも写る — 2026-08-03 設定ダイアログで実測)。
   キー入力の注入は `SendKeys` が届かない(このシェルはフォアグラウンドを取れず、
-  ユーザーの操作中ウィンドウへ飛ぶ危険もある)。`PostMessage(hwnd, WM_KEYDOWN/UP)` を使う
+  ユーザーの操作中ウィンドウへ飛ぶ危険もある)。`PostMessage(hwnd, WM_KEYDOWN/UP)` を使う。
+  クリックも `PostMessage(WM_LBUTTONDOWN/UP)` で確実に届くが、**hover は注入で検証不能**
+  (`WM_MOUSEMOVE` 注入・`SetCursorPos` とも実マウスの動きに hover 状態を奪還され、
+  成功と失敗が再現不能に混ざる — 2026-08-03 実測)。hover の見た目は実操作で確認する
 - exe の**起動**にも Qt の bin ディレクトリが PATH に要る(ビルド時だけではない)。無いと**約 10ms で無言終了**する — ログもエラーダイアログも出ないので死因が判らない。検証スクリプトは PATH 設定込みで書く
 
 ## ビルド・テスト
@@ -140,7 +144,7 @@ cargo fmt --all
 - **確認ダイアログは取り返しがつかない操作だけ**(force push / push 済みコミットの書き換え)。日常操作は尋ねない。実体は `Main.qml` の `root.confirm()`
 - **QML バインディングはプロパティにしか反応しない** — `#[qslot]` は呼び出し用。`enabled:` 等が値の変化を追う必要があるものは `qproperty!` にする(スロットのままだと初期値のまま固まる)
 - 書き込み操作の headless 検証は **`PG_AUTO_ACT` = 動詞 / `PG_AUTO_ACT_ARG`**(commit / amend / switch / switch-leave / switch-remote / squash / reword / cherry-pick / stage-hunk / stage-line / push / force-push / force-push-confirm / fetch / settings / preview / preview-unstaged / preview-staged)。クリックと同じ経路を通る
-- **ダイアログ・メニューの見た目は現状未検証**(`grabToImage` に写らず、OS 側の `PrintWindow` は画面ロック中に git version gate で止まる)。機能は `PG_AUTO_ACT` で確認済み
+- ダイアログの見た目は**アンロック中の `PrintWindow` で検証可能**(設定ダイアログで実測済み。ロック中は git version gate で止まる)。メニューは未検証。機能は `PG_AUTO_ACT` で確認済み
 - 書き込みは `RepoSession` のキュー経由で直列化され、成功・失敗いずれでも refresh する。失敗は git の文言のまま `WriteFinished{error}` → 既存のエラー表示へ流れる
 - interactive rebase は `GIT_SEQUENCE_EDITOR` に**別実行ファイル `pg-todo-editor`** を差す方式。**配布物に同梱必須**(本体と同じディレクトリ)
 - グラフは **2 段ストリーミング**(タグ無し即描画→タグ込みを単一 drain で無フリッカー置換。44k タグの topo フロンティア初期化コスト対策)+ `--max-count=2000` ウィンドウ。**WIP(未コミット)を HEAD の子の仮想行**として、**stash を walk 参加の実行行**として描く(合成親コミットは sift で除去)— いずれも `platitude-core::session` 参照。dirty ⇄ clean の変化でストリームを再構築する
