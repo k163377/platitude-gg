@@ -2627,7 +2627,7 @@ ApplicationWindow {
                                     implicitHeight: Theme.iconLg
                                     ToolTip.visible: hovered
                                     ToolTip.delay: 600
-                                    ToolTip.text: qsTr("View as tree")
+                                    ToolTip.text: qsTr("Tree view")
                                     onClicked: worktreeModel.setTreeView(true)
                                     contentItem: NavIcon {
                                         kind: "hier"
@@ -2641,7 +2641,7 @@ ApplicationWindow {
                                     implicitHeight: Theme.iconLg
                                     ToolTip.visible: hovered
                                     ToolTip.delay: 600
-                                    ToolTip.text: qsTr("View as paths")
+                                    ToolTip.text: qsTr("Paths view")
                                     onClicked: worktreeModel.setTreeView(false)
                                     contentItem: NavIcon {
                                         kind: "list"
@@ -3064,7 +3064,7 @@ ApplicationWindow {
                                     implicitHeight: Theme.iconLg
                                     ToolTip.visible: hovered
                                     ToolTip.delay: 600
-                                    ToolTip.text: qsTr("View as tree")
+                                    ToolTip.text: qsTr("Tree view")
                                     onClicked: detailsModel.setTreeView(true)
                                     contentItem: NavIcon {
                                         kind: "hier"
@@ -3078,7 +3078,7 @@ ApplicationWindow {
                                     implicitHeight: Theme.iconLg
                                     ToolTip.visible: hovered
                                     ToolTip.delay: 600
-                                    ToolTip.text: qsTr("View as paths")
+                                    ToolTip.text: qsTr("Paths view")
                                     onClicked: detailsModel.setTreeView(false)
                                     contentItem: NavIcon {
                                         kind: "list"
