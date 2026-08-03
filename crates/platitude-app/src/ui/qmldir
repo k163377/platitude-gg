@@ -2,14 +2,18 @@ module platitude.ui
 singleton Theme 1.0 Theme.qml
 singleton Metrics 1.0 Metrics.qml
 ActionButton 1.0 ActionButton.qml
+AppDialog 1.0 AppDialog.qml
 AutoScrollBar 1.0 AutoScrollBar.qml
 ChangeIcon 1.0 ChangeIcon.qml
+ConfirmDialog 1.0 ConfirmDialog.qml
+DirtySwitchDialog 1.0 DirtySwitchDialog.qml
 FileRowDelegate 1.0 FileRowDelegate.qml
 FormField 1.0 FormField.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml
 HoverButton 1.0 HoverButton.qml
 HoverToolButton 1.0 HoverToolButton.qml
 IdentIcon 1.0 IdentIcon.qml
+IdentityDialog 1.0 IdentityDialog.qml
 ImagePreviewCell 1.0 ImagePreviewCell.qml
 NavHeader 1.0 NavHeader.qml
 NavIcon 1.0 NavIcon.qml
@@ -17,4 +21,6 @@ NavItemDelegate 1.0 NavItemDelegate.qml
 NavList 1.0 NavList.qml
 PaneHeader 1.0 PaneHeader.qml
 RefChip 1.0 RefChip.qml
+RewordDialog 1.0 RewordDialog.qml
+SettingsDialog 1.0 SettingsDialog.qml
 SlimField 1.0 SlimField.qml

@@ -207,14 +207,10 @@ ApplicationWindow {
     // `visible`: Escape closes a popup imperatively, which would overwrite
     // such a binding and leave the menu entry unable to open it again.
     // Closing for any reason answers the state, so the two stay in step.
-    Dialog {
+    IdentityDialog {
         id: identityDialog
-        anchors.centerIn: parent
-        width: Math.min(640, root.width - 2 * Theme.spaceXxl)
-        modal: true
-        closePolicy: Popup.CloseOnEscape
-        focus: true
-        onClosed: root.dismissIdentity()
+        editing: root.identityEditing
+        onDismissed: root.dismissIdentity()
         Connections {
             target: root
             function onIdentityWantedChanged() {
@@ -224,338 +220,19 @@ ApplicationWindow {
                     identityDialog.close()
             }
         }
-        padding: Theme.spaceXxl
-        header: null
-        footer: null
-        background: Rectangle {
-            color: Theme.bgElevated
-            radius: Theme.radiusMd
-            border.color: Theme.borderDefault
-            border.width: Theme.borderWidth
-        }
-
-        // A write is in flight that this dialog asked for. Only then does
-        // a finished write close it — the notification is shared with the
-        // startup check, which must not close the dialog under the user.
-        property bool saving: false
-
-        function submit() {
-            if (!saveButton.enabled)
-                return
-            identityDialog.saving = true
-            AppBackend.saveIdentity(nameField.text, emailField.text)
-        }
-
-        onOpened: {
-            nameField.text = AppBackend.identityName
-            emailField.text = AppBackend.identityEmail
-            nameField.forceActiveFocus()
-            if (AppBackend.autoIdentity !== "")
-                Qt.callLater(identityDialog.applyAutoIdentity)
-        }
-
-        // Screenshot hook: PG_AUTO_IDENTITY="<name>|<email>" fills the
-        // fields, PG_AUTO_IDENTITY_SAVE=1 submits them, "skip" answers
-        // "Not now" to show the state behind the dialog, and "edit" leaves
-        // an identity that is already set as it is.
-        function applyAutoIdentity() {
-            if (AppBackend.autoIdentity === "skip") {
-                root.dismissIdentity()
-                return
-            }
-            if (AppBackend.autoIdentity === "edit")
-                return
-            const parts = AppBackend.autoIdentity.split("|")
-            nameField.text = parts[0]
-            emailField.text = parts.length > 1 ? parts[1] : ""
-            if (AppBackend.autoIdentitySave)
-                identityDialog.submit()
-        }
-
-        Connections {
-            target: AppBackend
-            function onIdentityChanged() {
-                if (!identityDialog.saving || AppBackend.identityBusy)
-                    return
-                identityDialog.saving = false
-                if (AppBackend.identityError === "")
-                    root.identityEditing = false
-            }
-        }
-
-        contentItem: ColumnLayout {
-            spacing: Theme.spaceLg
-
-            Label {
-                text: AppBackend.identityState === "ready" ? qsTr("Your identity")
-                                                           : qsTr("Set up your identity")
-                font.pixelSize: Theme.fontXl
-                font.weight: Font.DemiBold
-            }
-            Label {
-                Layout.fillWidth: true
-                wrapMode: Text.Wrap
-                color: Theme.textSecondary
-                text: qsTr("git records a name and an email address on every commit you "
-                           + "make. They are stored in your git configuration — "
-                           + "platitude-gg keeps no copy of them.")
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spaceXs
-                Label {
-                    text: qsTr("Name")
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSm
-                }
-                FormField {
-                    id: nameField
-                    Layout.fillWidth: true
-                    placeholderText: qsTr("Ada Lovelace")
-                    onAccepted: identityDialog.submit()
-                    // Not validation — these are the characters git drops
-                    // when it builds an author line, and keeping them out
-                    // stops the configuration from disagreeing with what
-                    // commits show. Everything else is the user's business.
-                    validator: RegularExpressionValidator {
-                        regularExpression: /[^<>\r\n]*/
-                    }
-                }
-            }
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spaceXs
-                Label {
-                    text: qsTr("Email address")
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSm
-                }
-                FormField {
-                    id: emailField
-                    Layout.fillWidth: true
-                    placeholderText: qsTr("ada@example.com")
-                    onAccepted: identityDialog.submit()
-                    validator: RegularExpressionValidator {
-                        regularExpression: /[^<>\r\n]*/
-                    }
-                }
-            }
-
-            Label {
-                Layout.fillWidth: true
-                wrapMode: Text.Wrap
-                color: Theme.textMuted
-                font.pixelSize: Theme.fontSm
-                text: qsTr("Saved for every repository on this computer "
-                           + "(user.name and user.email).")
-            }
-            // git's own message, unedited.
-            Label {
-                Layout.fillWidth: true
-                visible: AppBackend.identityError !== ""
-                wrapMode: Text.Wrap
-                color: Theme.danger
-                text: AppBackend.identityError
-            }
-
-            RowLayout {
-                Layout.alignment: Qt.AlignRight
-                spacing: Theme.spaceSm
-                HoverButton {
-                    implicitHeight: Theme.controlHeight
-                    text: root.identityEditing ? qsTr("Cancel") : qsTr("Not now")
-                    onClicked: root.dismissIdentity()
-                }
-                HoverButton {
-                    id: saveButton
-                    implicitHeight: Theme.controlHeight
-                    highlighted: true
-                    text: AppBackend.identityBusy ? qsTr("Saving…") : qsTr("Save")
-                    enabled: !AppBackend.identityBusy
-                             && nameField.text.trim() !== ""
-                             && emailField.text.trim() !== ""
-                    onClicked: identityDialog.submit()
-                }
-            }
-        }
     }
 
     // ---- confirmation ----------------------------------------------------
-    // One dialog for every "this cannot be taken back" question: rewriting
-    // history a remote already has, or a push that overwrites one. The
-    // caller supplies the wording and what to run on yes, so the phrasing
-    // stays next to the operation it describes.
-    //
-    // Confirmation is reserved for the irreversible. Everyday operations
-    // (stage, commit, switch) ask nothing — a prompt on each of those
-    // teaches people to dismiss prompts.
     function confirm(heading, detail, acceptText, action) {
-        confirmDialog.heading = heading
-        confirmDialog.detail = detail
-        confirmDialog.acceptText = acceptText
-        confirmDialog.action = action
-        confirmDialog.open()
+        confirmDialog.ask(heading, detail, acceptText, action)
     }
-    Dialog {
+    ConfirmDialog {
         id: confirmDialog
-        anchors.centerIn: parent
-        width: Math.min(640, root.width - 2 * Theme.spaceXxl)
-        modal: true
-        closePolicy: Popup.CloseOnEscape
-        focus: true
-        padding: Theme.spaceXxl
-        header: null
-        footer: null
-        property string heading: ""
-        property string detail: ""
-        property string acceptText: ""
-        property var action: null
-        background: Rectangle {
-            color: Theme.bgElevated
-            radius: Theme.radiusMd
-            border.color: Theme.borderDefault
-            border.width: Theme.borderWidth
-        }
-        contentItem: ColumnLayout {
-            spacing: Theme.spaceLg
-            Label {
-                text: confirmDialog.heading
-                font.pixelSize: Theme.fontLg
-                font.weight: Font.DemiBold
-                wrapMode: Text.Wrap
-                Layout.fillWidth: true
-            }
-            Label {
-                text: confirmDialog.detail
-                color: Theme.textSecondary
-                wrapMode: Text.Wrap
-                Layout.fillWidth: true
-            }
-            RowLayout {
-                Layout.alignment: Qt.AlignRight
-                spacing: Theme.spaceSm
-                HoverButton {
-                    implicitHeight: Theme.controlHeight
-                    text: qsTr("Cancel")
-                    onClicked: confirmDialog.close()
-                }
-                HoverButton {
-                    implicitHeight: Theme.controlHeight
-                    highlighted: true
-                    text: confirmDialog.acceptText
-                    onClicked: {
-                        const run = confirmDialog.action
-                        confirmDialog.close()
-                        if (run)
-                            run()
-                    }
-                }
-            }
-        }
     }
 
     // ---- settings --------------------------------------------------------
-    // One setting so far. It applies to every open repository, because the
-    // question is how often this computer should talk to remotes at all.
-    Dialog {
+    SettingsDialog {
         id: settingsDialog
-        anchors.centerIn: parent
-        width: Math.min(640, root.width - 2 * Theme.spaceXxl)
-        modal: true
-        closePolicy: Popup.CloseOnEscape
-        focus: true
-        padding: Theme.spaceXxl
-        header: null
-        footer: null
-        background: Rectangle {
-            color: Theme.bgElevated
-            radius: Theme.radiusMd
-            border.color: Theme.borderDefault
-            border.width: Theme.borderWidth
-        }
-        onOpened: {
-            fetchField.text = AppBackend.autoFetchMinutes > 0
-                              ? String(AppBackend.autoFetchMinutes) : ""
-            fetchField.forceActiveFocus()
-        }
-        // An empty field is the off switch — nothing to type is the
-        // clearest way to say "do not do this".
-        function apply() {
-            AppBackend.setAutoFetchMinutes(fetchField.text === "" ? 0
-                                                                  : Number(fetchField.text))
-            settingsDialog.close()
-        }
-        contentItem: ColumnLayout {
-            spacing: Theme.spaceLg
-            Label {
-                text: qsTr("Settings")
-                font.pixelSize: Theme.fontXl
-                font.weight: Font.DemiBold
-            }
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spaceXs
-                Label {
-                    text: qsTr("Fetch automatically")
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSm
-                }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spaceSm
-                    FormField {
-                        id: fetchField
-                        implicitWidth: 160
-                        placeholderText: qsTr("off")
-                        inputMethodHints: Qt.ImhDigitsOnly
-                        validator: IntValidator {
-                            bottom: 1
-                            top: AppBackend.autoFetchMaxMinutes
-                        }
-                        onAccepted: settingsDialog.apply()
-                    }
-                    Label {
-                        text: qsTr("minutes")
-                        color: Theme.textSecondary
-                    }
-                    Item { Layout.fillWidth: true }
-                }
-                Label {
-                    Layout.fillWidth: true
-                    wrapMode: Text.Wrap
-                    color: Theme.textMuted
-                    font.pixelSize: Theme.fontSm
-                    text: qsTr("Runs git fetch --prune on every open repository, at "
-                               + "most once per interval. Leave it empty to switch it "
-                               + "off; %1 minutes is the longest interval offered.")
-                          .arg(AppBackend.autoFetchMaxMinutes)
-                }
-            }
-            Label {
-                Layout.fillWidth: true
-                wrapMode: Text.Wrap
-                color: Theme.textMuted
-                font.pixelSize: Theme.fontSm
-                text: qsTr("Settings are not stored yet, so this returns to its "
-                           + "default the next time platitude-gg starts.")
-            }
-            RowLayout {
-                Layout.alignment: Qt.AlignRight
-                spacing: Theme.spaceSm
-                HoverButton {
-                    implicitHeight: Theme.controlHeight
-                    text: qsTr("Cancel")
-                    onClicked: settingsDialog.close()
-                }
-                HoverButton {
-                    implicitHeight: Theme.controlHeight
-                    highlighted: true
-                    text: qsTr("Save")
-                    onClicked: settingsDialog.apply()
-                }
-            }
-        }
     }
 
     // ---- main ------------------------------------------------------------
@@ -1083,83 +760,11 @@ ApplicationWindow {
             page.moveKind = ""
         }
 
-        Dialog {
+        DirtySwitchDialog {
             id: dirtySwitchDialog
-            anchors.centerIn: parent
-            width: Math.min(640, root.width - 2 * Theme.spaceXxl)
-            modal: true
-            closePolicy: Popup.CloseOnEscape
-            focus: true
-            padding: Theme.spaceXxl
-            header: null
-            footer: null
-            background: Rectangle {
-                color: Theme.bgElevated
-                radius: Theme.radiusMd
-                border.color: Theme.borderDefault
-                border.width: Theme.borderWidth
-            }
-            contentItem: ColumnLayout {
-                spacing: Theme.spaceLg
-                Label {
-                    text: qsTr("You have uncommitted changes")
-                    font.pixelSize: Theme.fontLg
-                    font.weight: Font.DemiBold
-                }
-                Label {
-                    Layout.fillWidth: true
-                    wrapMode: Text.Wrap
-                    color: Theme.textSecondary
-                    text: qsTr("Switching to %1 can either leave them where they "
-                               + "are or take them with you.").arg(page.moveLabel)
-                }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spaceSm
-                    HoverButton {
-                        Layout.fillWidth: true
-                        implicitHeight: Theme.controlHeight
-                        highlighted: true
-                        text: qsTr("Leave my changes on %1")
-                              .arg(workTree.detached ? qsTr("this commit") : workTree.branch)
-                        onClicked: {
-                            dirtySwitchDialog.close()
-                            page.runSwitch(true)
-                        }
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        wrapMode: Text.Wrap
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fontSm
-                        text: qsTr("Stashes them first; they wait in STASHES until "
-                                   + "you apply them again.")
-                    }
-                    HoverButton {
-                        Layout.fillWidth: true
-                        implicitHeight: Theme.controlHeight
-                        text: qsTr("Bring my changes to %1").arg(page.moveLabel)
-                        onClicked: {
-                            dirtySwitchDialog.close()
-                            page.runSwitch(false)
-                        }
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        wrapMode: Text.Wrap
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fontSm
-                        text: qsTr("Carries them over; git refuses the switch if they "
-                                   + "would collide with what is there.")
-                    }
-                }
-                HoverButton {
-                    Layout.alignment: Qt.AlignRight
-                    implicitHeight: Theme.controlHeight
-                    text: qsTr("Cancel")
-                    onClicked: dirtySwitchDialog.close()
-                }
-            }
+            moveLabel: page.moveLabel
+            stayLabel: workTree.detached ? qsTr("this commit") : workTree.branch
+            onResolved: stashFirst => page.runSwitch(stashFirst)
         }
 
         // ---- push ------------------------------------------------------
@@ -1292,131 +897,17 @@ ApplicationWindow {
             messageDialog.open()
         }
 
-        Dialog {
+        RewordDialog {
             id: messageDialog
-            anchors.centerIn: parent
-            width: Math.min(640, root.width - 2 * Theme.spaceXxl)
-            modal: true
-            closePolicy: Popup.CloseOnEscape
-            focus: true
-            padding: Theme.spaceXxl
-            header: null
-            footer: null
-            property string oid: ""
-            property bool published: false
-            /// The current message has been copied in. Saving before that
-            /// would replace a real message with an empty editor.
-            property bool filled: false
-            background: Rectangle {
-                color: Theme.bgElevated
-                radius: Theme.radiusMd
-                border.color: Theme.borderDefault
-                border.width: Theme.borderWidth
-            }
-            // The row that opened the menu was selected by the same click,
-            // so its details are on their way; fill in when they land.
-            onOpened: {
-                messageDialog.filled = false
-                editSubject.text = ""
-                editBody.text = ""
-                messageDialog.fill()
-                editSubject.forceActiveFocus()
-            }
-            function fill() {
-                if (messageDialog.filled || !messageDialog.visible
-                        || detailsModel.shaHex !== messageDialog.oid)
-                    return
-                messageDialog.filled = true
-                editSubject.text = detailsModel.messageSubject
-                editBody.text = detailsModel.messageBody
-            }
-            Connections {
-                target: detailsModel
-                function onChanged() { messageDialog.fill() }
-            }
-            function submit() {
-                if (!messageDialog.filled || editSubject.text.trim() === "")
-                    return
+            details: detailsModel
+            onSubmitted: (oid, subject, body, published) => {
                 const run = function () {
-                    repoTab.rewordCommit(messageDialog.oid, editSubject.text, editBody.text)
+                    repoTab.rewordCommit(oid, subject, body)
                 }
-                messageDialog.close()
-                if (messageDialog.published)
+                if (published)
                     page.rewriteWarning(qsTr("Changing its message"), run)
                 else
                     run()
-            }
-            contentItem: ColumnLayout {
-                spacing: Theme.spaceLg
-                Label {
-                    text: qsTr("Edit commit message")
-                    font.pixelSize: Theme.fontXl
-                    font.weight: Font.DemiBold
-                }
-                Label {
-                    Layout.fillWidth: true
-                    wrapMode: Text.Wrap
-                    color: Theme.textSecondary
-                    text: qsTr("%1 — the newest commit is amended in place; an older "
-                               + "one is replayed, which gives every commit after it a "
-                               + "new identity.").arg(page.menuShort)
-                }
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: editSubject.implicitHeight + Theme.spaceSm
-                    color: Theme.bgBase
-                    radius: Theme.radiusMd
-                    border.color: Theme.borderDefault
-                    border.width: Theme.borderWidth
-                    TextArea {
-                        id: editSubject
-                        anchors.fill: parent
-                        anchors.margins: Theme.spaceXs
-                        wrapMode: TextArea.Wrap
-                        placeholderText: qsTr("Commit summary")
-                        font.pixelSize: Theme.fontLg
-                        font.weight: Font.DemiBold
-                        background: null
-                        padding: 0
-                    }
-                }
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 120
-                    color: Theme.bgBase
-                    radius: Theme.radiusMd
-                    border.color: Theme.borderSubtle
-                    border.width: Theme.borderWidth
-                    ScrollView {
-                        anchors.fill: parent
-                        anchors.margins: Theme.spaceXs
-                        TextArea {
-                            id: editBody
-                            wrapMode: TextArea.Wrap
-                            placeholderText: qsTr("Description")
-                            font.pixelSize: Theme.fontMd
-                            color: Theme.textSecondary
-                            background: null
-                            padding: 0
-                        }
-                    }
-                }
-                RowLayout {
-                    Layout.alignment: Qt.AlignRight
-                    spacing: Theme.spaceSm
-                    HoverButton {
-                        implicitHeight: Theme.controlHeight
-                        text: qsTr("Cancel")
-                        onClicked: messageDialog.close()
-                    }
-                    HoverButton {
-                        implicitHeight: Theme.controlHeight
-                        highlighted: true
-                        text: qsTr("Save message")
-                        enabled: messageDialog.filled && editSubject.text.trim() !== ""
-                        onClicked: messageDialog.submit()
-                    }
-                }
             }
         }
 
