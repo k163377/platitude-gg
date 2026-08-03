@@ -1821,10 +1821,13 @@ ApplicationWindow {
                         // Frameless, full-width filter: the sidebar is
                         // already enclosed by dividers, so the input only
                         // keeps a hairline underline (accent on focus).
+                        // It is this pane's header band, so it takes the
+                        // header height — the other panes' headers and the
+                        // first row under each of them line up with it.
                         TextField {
                             id: refFilter
                             Layout.fillWidth: true
-                            implicitHeight: Theme.rowHeight
+                            implicitHeight: Theme.headerHeight
                             font.pixelSize: Theme.fontMd
                             leftPadding: Theme.spaceSm
                             rightPadding: Theme.spaceSm
@@ -2044,8 +2047,11 @@ ApplicationWindow {
                             flickDeceleration: 8000
                             maximumFlickVelocity: 9000
                             ScrollBar.vertical: ScrollBar {}
-                            // A breath of air above the first row.
-                            topMargin: Theme.spaceLg
+                            // The graph is the one pane with no header band;
+                            // the gap stands in for one, so its first row
+                            // starts on the same line as the first row of
+                            // the sidebar and the details pane.
+                            topMargin: Theme.headerHeight
                             // Bridge into the page scope for the shared
                             // delegate (inline components cannot see page ids).
                             property real labelWidth: page.labelW
@@ -2647,10 +2653,13 @@ ApplicationWindow {
                         }
                         // Message editor pinned on top — identical shape in
                         // commit details, amend and new-commit creation.
+                        // Flush against the header band, like every other
+                        // pane's first row.
                         ColumnLayout {
                             visible: page.wipShown
                             Layout.fillWidth: true
                             Layout.margins: Theme.spaceSm
+                            Layout.topMargin: 0
                             spacing: Theme.spaceXs
                             Rectangle {
                                 Layout.fillWidth: true
@@ -2887,6 +2896,7 @@ ApplicationWindow {
                         ColumnLayout {
                             Layout.fillWidth: true
                             Layout.margins: Theme.spaceSm
+                            Layout.topMargin: 0
                             spacing: Theme.spaceXs
                             visible: !page.wipShown && detailsModel.shaHex !== ""
 
