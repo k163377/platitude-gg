@@ -2072,7 +2072,7 @@ ApplicationWindow {
                             boundsBehavior: Flickable.StopAtBounds
                             flickDeceleration: 8000
                             maximumFlickVelocity: 9000
-                            ScrollBar.vertical: ScrollBar {}
+                            ScrollBar.vertical: AutoScrollBar {}
                             // The graph is the one pane with no header band;
                             // this sliver of margin drops the first row so
                             // its bottom line meets the neighbouring bands'
@@ -2513,7 +2513,7 @@ ApplicationWindow {
                                 model: diffModel
                                 reuseItems: true
                                 boundsBehavior: Flickable.StopAtBounds
-                                ScrollBar.vertical: ScrollBar {}
+                                ScrollBar.vertical: AutoScrollBar {}
                                 // An image with no text rows hands its space
                                 // to the preview (SVG edits keep both).
                                 visible: diffModel.previewKind !== "image"
@@ -2825,7 +2825,7 @@ ApplicationWindow {
                             clip: true
                             model: worktreeModel
                             reuseItems: true
-                            ScrollBar.vertical: ScrollBar {}
+                            ScrollBar.vertical: AutoScrollBar {}
                             // GitKraken grouping: unstaged (incl. untracked)
                             // above, staged below.
                             section.property: "group"
@@ -3188,7 +3188,7 @@ ApplicationWindow {
                             clip: true
                             model: detailsModel
                             reuseItems: true
-                            ScrollBar.vertical: ScrollBar {}
+                            ScrollBar.vertical: AutoScrollBar {}
                             delegate: FileRowDelegate {
                                 listWidth: fileList.width
                                 onActivated: (bucket, path, origPath) =>
@@ -3664,7 +3664,7 @@ ApplicationWindow {
         clip: true
         model: sectionModel
         reuseItems: true
-        ScrollBar.vertical: ScrollBar {}
+        ScrollBar.vertical: AutoScrollBar {}
         delegate: NavItemDelegate {
             listWidth: navList.width
             kindHint: navList.kindHint
@@ -4200,6 +4200,18 @@ ApplicationWindow {
               : letter === "C" ? Theme.textSecondary
               : letter === "?" ? Theme.diffAddedFg
               : Theme.warning
+    }
+
+    // A scroll bar pinned visible while its view overflows. The default
+    // AsNeeded policy re-derives visibility from transient view state and
+    // has been seen dropping the bar entirely around model swaps, so the
+    // policy is computed from content size instead. Attached to a
+    // Flickable, the bar's parent is the view itself.
+    component AutoScrollBar: ScrollBar {
+        readonly property Flickable view: parent as Flickable
+        policy: view && view.contentHeight + view.topMargin + view.bottomMargin
+                        > view.height
+                ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
     }
 
     // Fusion's built-in hover feedback is a few-percent tint that vanishes
