@@ -34,9 +34,28 @@ fn main() {
 
     let mut app = QApp::new();
     app.application_name("platitude-gg");
-    // Embed the QML module (Theme singleton + Main) as qrc resources.
+    // Embed the QML module (singletons + components + Main) as qrc
+    // resources. Every file listed in ui/qmldir must be embedded here.
     qtbridge::include_bytes_qml!("ui/qmldir", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/Theme.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/Metrics.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/ActionButton.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/AutoScrollBar.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/ChangeIcon.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/FileRowDelegate.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/FormField.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/GraphRowDelegate.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/HoverButton.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/HoverToolButton.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/IdentIcon.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/ImagePreviewCell.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/NavHeader.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/NavIcon.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/NavItemDelegate.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/NavList.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/PaneHeader.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/RefChip.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SlimField.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/Main.qml", "qt/qml/platitude");
     let code = app
         .register::<AppBackend>()
