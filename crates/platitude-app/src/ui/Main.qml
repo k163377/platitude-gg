@@ -392,7 +392,7 @@ ApplicationWindow {
     Dialog {
         id: confirmDialog
         anchors.centerIn: parent
-        width: Math.min(560, root.width - 2 * Theme.spaceXxl)
+        width: Math.min(640, root.width - 2 * Theme.spaceXxl)
         modal: true
         closePolicy: Popup.CloseOnEscape
         focus: true
@@ -1064,7 +1064,7 @@ ApplicationWindow {
         Dialog {
             id: dirtySwitchDialog
             anchors.centerIn: parent
-            width: Math.min(560, root.width - 2 * Theme.spaceXxl)
+            width: Math.min(640, root.width - 2 * Theme.spaceXxl)
             modal: true
             closePolicy: Popup.CloseOnEscape
             focus: true
@@ -1198,11 +1198,9 @@ ApplicationWindow {
 
         // ---- context menu on a commit row ------------------------------
         property string menuOid: ""
-        property string menuSubject: ""
         readonly property string menuShort: page.menuOid.substring(0, 8)
-        function openCommitMenu(oidHex, subject) {
+        function openCommitMenu(oidHex) {
             page.menuOid = oidHex
-            page.menuSubject = subject
             // Asked as the menu opens so the rewrite warnings inside it
             // know whether this commit has already left the machine. The
             // rewriting entries stay disabled until the answer lands —
@@ -1440,10 +1438,10 @@ ApplicationWindow {
             } else if (act === "switch-remote") {
                 page.switchTo("remote", arg, arg)
             } else if (act === "squash") {
-                page.openCommitMenu(branchesModel.headOid, "")
+                page.openCommitMenu(branchesModel.headOid)
                 page.squashCommit(branchesModel.headOid)
             } else if (act === "reword") {
-                page.openCommitMenu(branchesModel.headOid, "")
+                page.openCommitMenu(branchesModel.headOid)
                 repoTab.rewordCommit(branchesModel.headOid, arg, "")
             } else if (act === "cherry-pick") {
                 repoTab.cherryPick(arg)
@@ -1454,8 +1452,15 @@ ApplicationWindow {
                 page.pushNow()
             } else if (act === "force-push") {
                 repoTab.pushCurrent("lease", page.upstreamOid())
+            } else if (act === "force-push-confirm") {
+                // Goes through the confirmation, so nothing should be
+                // pushed until someone answers it.
+                page.forcePushNow()
             } else if (act === "fetch") {
                 repoTab.fetch("")
+            } else if (act === "settings") {
+                settingsDialog.open()
+                AppBackend.setAutoFetchMinutes(Number(arg))
             }
             AppBackend.report("auto_act ran=" + act)
         }
@@ -2032,9 +2037,8 @@ ApplicationWindow {
                             property real graphXOffset: page.graphX
                             property int wipCount: worktreeModel.total
                             signal rowSelected(string oidHex)
-                            signal rowMenuRequested(string oidHex, string subject)
-                            onRowMenuRequested: (oidHex, subject) =>
-                                page.openCommitMenu(oidHex, subject)
+                            signal rowMenuRequested(string oidHex)
+                            onRowMenuRequested: oidHex => page.openCommitMenu(oidHex)
                             onRowSelected: oidHex => {
                                 // The all-zero id is the synthetic WIP row.
                                 if (oidHex !== "" && !/[^0]/.test(oidHex)) {
@@ -3284,7 +3288,7 @@ ApplicationWindow {
                 // The synthetic WIP row is not a commit, so nothing in the
                 // commit menu applies to it.
                 if (mouse.button === Qt.RightButton && !rowItem.isWip)
-                    rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.subject)
+                    rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex)
             }
         }
         // Hover details: what the row no longer shows as columns.

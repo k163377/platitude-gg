@@ -131,10 +131,16 @@ cargo fmt --all
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)、メッセージは英語
 - force push しない
 
-## 現在のフェーズ: **Phase 2 / 3 のバックエンド完了(UI 未配線)**
+## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
 
 - Phase 1(読み取り専用ビューア)は**完了**。Done 条件の性能 4 項目は完了時点の最終確認でもクリア(first chunk 79ms / 詳細 75ms / 178fps / peak 269MB): [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)
-- **P2 / P3 の書き込み操作は core + セッション + ブリッジまで実装済み・QML は identity 入力導線のみ配線済み**(起動 gate + メニュー + バッジ)。残作業と要判断事項は [P2-確認事項.md](internal-docs/P2-確認事項.md) / [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読むこと**(破壊的操作の確認ダイアログ方針など未決定事項がある)
+- **配線済み**: ステージング(ファイル / hunk / 行)・commit / amend・switch(ローカル / リモート / detach、未コミット変更は「置いていく / 持っていく」を選ばせる)・fetch(手動 + auto)・push / force push・単体 cherry-pick・単体 squash・コミットメッセージ編集・identity・設定(auto fetch 間隔)
+- **未配線**: merge / rebase / revert・conflict ペイン・フル interactive rebase 画面・ブランチ作成 / 削除 / リネーム・discard / clean・stash push・リモートブランチ削除
+- 残作業と要判断事項は [P2-確認事項.md](internal-docs/P2-確認事項.md) / [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読むこと**
+- **確認ダイアログは取り返しがつかない操作だけ**(force push / push 済みコミットの書き換え)。日常操作は尋ねない。実体は `Main.qml` の `root.confirm()`
+- **QML バインディングはプロパティにしか反応しない** — `#[qslot]` は呼び出し用。`enabled:` 等が値の変化を追う必要があるものは `qproperty!` にする(スロットのままだと初期値のまま固まる)
+- 書き込み操作の headless 検証は **`PG_AUTO_ACT` = 動詞 / `PG_AUTO_ACT_ARG`**(commit / amend / switch / switch-leave / switch-remote / squash / reword / cherry-pick / stage-hunk / stage-line / push / force-push / force-push-confirm / fetch / settings)。クリックと同じ経路を通る
+- **ダイアログ・メニューの見た目は現状未検証**(`grabToImage` に写らず、OS 側の `PrintWindow` は画面ロック中に git version gate で止まる)。機能は `PG_AUTO_ACT` で確認済み
 - 書き込みは `RepoSession` のキュー経由で直列化され、成功・失敗いずれでも refresh する。失敗は git の文言のまま `WriteFinished{error}` → 既存のエラー表示へ流れる
 - interactive rebase は `GIT_SEQUENCE_EDITOR` に**別実行ファイル `pg-todo-editor`** を差す方式。**配布物に同梱必須**(本体と同じディレクトリ)
 - グラフは **2 段ストリーミング**(タグ無し即描画→タグ込みを単一 drain で無フリッカー置換。44k タグの topo フロンティア初期化コスト対策)+ `--max-count=2000` ウィンドウ。**WIP(未コミット)を HEAD の子の仮想行**として、**stash を walk 参加の実行行**として描く(合成親コミットは sift で除去)— いずれも `platitude-core::session` 参照。dirty ⇄ clean の変化でストリームを再構築する
