@@ -3004,24 +3004,70 @@ ApplicationWindow {
                                 ColumnLayout {
                                     spacing: 0
                                     Layout.alignment: Qt.AlignRight
-                                    RowLayout {
-                                        spacing: Theme.spaceXs
+                                    // The hash is the button, not just the
+                                    // icon beside it — a 16px glyph was too
+                                    // small to aim at. Hovering underlines
+                                    // the hash and lights the icon so the
+                                    // whole plate reads as one control.
+                                    // Not a HoverToolButton: the style's panel
+                                    // would make the plate taller than one
+                                    // line and drop this hash out of step with
+                                    // the author name beside it, so it draws
+                                    // the same wash over its own flat face.
+                                    ToolButton {
+                                        id: hashCopy
                                         Layout.alignment: Qt.AlignRight
-                                        Label {
-                                            text: detailsModel.sha8
-                                            font.family: Theme.monoFamily
-                                            color: Theme.textPrimary
-                                            font.pixelSize: Theme.fontMd
+                                        text: detailsModel.sha8
+                                        leftPadding: Theme.spaceXs
+                                        rightPadding: Theme.spaceXs
+                                        topPadding: 0
+                                        bottomPadding: 0
+                                        readonly property bool lit: hovered || visualFocus
+                                        ToolTip.visible: hovered
+                                        ToolTip.delay: 600
+                                        ToolTip.text: qsTr("Copy full hash")
+                                        onClicked: root.copyText(detailsModel.shaHex)
+                                        background: Rectangle {
+                                            radius: Theme.radiusSm
+                                            color: hashCopy.down ? Theme.bgPressed
+                                                 : hashCopy.lit ? Theme.bgHover
+                                                 : "transparent"
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                acceptedButtons: Qt.NoButton
+                                                cursorShape: Qt.PointingHandCursor
+                                            }
+                                            // Drawn here rather than as the
+                                            // label's font underline so the
+                                            // rule runs under the icon too —
+                                            // the hash and the icon are one
+                                            // target, so they get one line.
+                                            Rectangle {
+                                                visible: hashCopy.lit
+                                                color: Theme.textPrimary
+                                                height: Theme.borderWidth
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.bottom: parent.bottom
+                                                anchors.leftMargin: hashCopy.leftPadding
+                                                anchors.rightMargin: hashCopy.rightPadding
+                                            }
                                         }
-                                        ToolButton {
-                                            text: "⧉"
-                                            padding: 0
-                                            implicitWidth: Theme.iconMd
-                                            implicitHeight: Theme.iconMd
-                                            ToolTip.visible: hovered
-                                            ToolTip.delay: 600
-                                            ToolTip.text: qsTr("Copy full hash")
-                                            onClicked: root.copyText(detailsModel.shaHex)
+                                        contentItem: RowLayout {
+                                            spacing: Theme.spaceXs
+                                            Label {
+                                                text: hashCopy.text
+                                                font.family: Theme.monoFamily
+                                                font.pixelSize: Theme.fontMd
+                                                color: Theme.textPrimary
+                                                Layout.alignment: Qt.AlignVCenter
+                                            }
+                                            NavIcon {
+                                                kind: "copyicon"
+                                                tint: hashCopy.lit ? Theme.textPrimary
+                                                                   : Theme.textSecondary
+                                                Layout.alignment: Qt.AlignVCenter
+                                            }
                                         }
                                     }
                                     Label {
