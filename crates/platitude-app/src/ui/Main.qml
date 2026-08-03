@@ -1498,6 +1498,11 @@ ApplicationWindow {
             }
             if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage")
                 page.reloadDiff()
+            // Moving HEAD rewrites the working tree under the diff pane:
+            // the file it holds may not even exist where the move landed,
+            // so the center goes back to the graph that was moved through.
+            if (repoTab.lastWriteOp === "checkout")
+                page.closeDiff()
             page.refreshHeadPublished()
         }
 
