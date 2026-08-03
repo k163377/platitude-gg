@@ -36,7 +36,8 @@ pub struct Segment {
     pub lane: u16,
     /// Palette index (< [`GRAPH_PALETTE_SIZE`]).
     pub color: u8,
-    /// Drawn with a dashed stroke (the synthetic WIP edge).
+    /// Drawn with a dashed stroke (a synthetic leash: WIP → HEAD or
+    /// stash → base). Real history always draws solid.
     pub dashed: bool,
 }
 
@@ -58,7 +59,8 @@ pub struct GraphRow {
 #[derive(Debug, Clone)]
 struct LaneState {
     color: u8,
-    /// The edge in this lane draws dashed (WIP → HEAD).
+    /// The lane carries only a synthetic leash (WIP → HEAD, stash → base)
+    /// and draws dashed. Cleared once a real edge merges into the lane.
     dashed: bool,
 }
 
@@ -126,6 +128,18 @@ impl GraphBuilder {
             }
         };
 
+        // A fork edge to an already-awaited parent hands that lane real
+        // committed history, so it stops drawing dashed from this row on —
+        // including the through segment, which the fork edge shares with
+        // the WIP / stash leash that opened the lane.
+        for p in commit.parents.iter().skip(1) {
+            if let Some(lane) = self.waiting_lane(p, node_lane)
+                && let Some(state) = self.lanes.get_mut(lane as usize).and_then(Option::as_mut)
+            {
+                state.dashed = false;
+            }
+        }
+
         let mut segments = Vec::new();
         for (i, state) in self.lanes.iter().enumerate() {
             let Some(state) = state else { continue };
@@ -166,19 +180,16 @@ impl GraphBuilder {
             }
         }
         for p in parents {
-            if let Some(existing) = self.expects.get(p).and_then(|v| {
-                // Another edge already waits for this parent: merge into
-                // the nearest waiting lane (keeps the graph narrow and the
-                // horizontal jog short).
-                v.iter()
-                    .min_by_key(|l| (l.abs_diff(node_lane), **l))
-                    .copied()
-            }) {
+            // Another edge already waits for this parent: merge into the
+            // nearest waiting lane (keeps the graph narrow and the
+            // horizontal jog short). The edge is real history, so it draws
+            // solid even when the lane was opened by a dashed leash.
+            if let Some(existing) = self.waiting_lane(p, node_lane) {
                 segments.push(Segment {
                     kind: SegmentKind::OutOfNode,
                     lane: existing,
                     color: self.lane_color(existing),
-                    dashed: self.lane_dashed(existing),
+                    dashed: false,
                 });
             } else if self.already_emitted(p, commit) {
                 // Out-of-order stream: skip, as above.
@@ -264,11 +275,14 @@ impl GraphBuilder {
             .map_or(0, |s| s.color)
     }
 
-    fn lane_dashed(&self, lane: u16) -> bool {
-        self.lanes
-            .get(lane as usize)
-            .and_then(|s| s.as_ref())
-            .is_some_and(|s| s.dashed)
+    /// Lane a fork edge to `parent` merges into: the lane already waiting
+    /// for it that sits nearest to `near` (ties prefer the left side).
+    fn waiting_lane(&self, parent: &Oid, near: u16) -> Option<u16> {
+        self.expects
+            .get(parent)?
+            .iter()
+            .min_by_key(|l| (l.abs_diff(near), **l))
+            .copied()
     }
 
     fn take_color(&mut self) -> u8 {
@@ -570,6 +584,34 @@ mod tests {
             .find(|s| s.kind == SegmentKind::OutOfNode && s.lane == 0)
             .unwrap();
         assert!(!out.dashed, "the chain below HEAD is a normal edge");
+    }
+
+    /// A merge whose second parent is HEAD lands on the lane the WIP leash
+    /// reserved. That lane now carries committed history, so neither the
+    /// merge's fork edge nor anything below it may draw dashed — only the
+    /// stub leaving the WIP node stays dotted.
+    #[test]
+    fn a_merge_reaching_head_undashes_the_wip_lane() {
+        let mut pool = StrPool::new();
+        let mut b = GraphBuilder::new();
+        let head = oid(2);
+        let wip = b.push_virtual(&Oid::zero_like(&head), &head);
+        assert!(wip.segments.iter().all(|s| s.dashed));
+
+        // Merge of the branch HEAD sits on: parents are the mainline (3)
+        // and HEAD itself, so its fork edge merges into the WIP lane.
+        let merge = b.push(&commit(&mut pool, 1, &[3, 2]));
+        assert_eq!(merge.node_lane, 1, "the WIP row keeps lane 0");
+        assert!(
+            merge.segments.iter().all(|s| !s.dashed),
+            "the merge row is committed history: {:?}",
+            merge.segments
+        );
+
+        // HEAD arrives on the same lane; the leash no longer owns it.
+        let head_row = b.push(&commit(&mut pool, 2, &[4]));
+        assert_eq!(head_row.node_lane, 0);
+        assert!(head_row.segments.iter().all(|s| !s.dashed));
     }
 
     #[test]
