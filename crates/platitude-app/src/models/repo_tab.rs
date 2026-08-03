@@ -1,0 +1,684 @@
+use std::sync::Arc;
+
+use qtbridge::{QObjectHolder, qobject};
+
+use crate::hub::{Feed, Hub, TabMsg};
+
+use super::qml_register;
+
+// ---------------------------------------------------------------------------
+// RepoTab: per-tab lifecycle + error surface + refresh entry points
+// ---------------------------------------------------------------------------
+
+pub struct RepoTab {
+    tab_id: i32,
+    state: String,
+    title: String,
+    repo_path: String,
+    error: String,
+    last_error: String,
+    tags_shown: bool,
+    /// Write commands currently in flight (they are serialized per session,
+    /// but requests can queue up).
+    busy_count: i32,
+    busy_op: String,
+    /// Last answer to `checkPublish`: how much of a range a remote has.
+    publish_range: String,
+    publish_total: i32,
+    publish_published: i32,
+    /// Author identity; `identityReady` false means git cannot commit yet
+    /// and the UI should ask for a name and address.
+    author_name: String,
+    author_email: String,
+    identity_ready: bool,
+    /// Whether this repository signs commits or tags, and how.
+    signing_active: bool,
+    signing_format: String,
+    /// Configured remote names — where a branch with no upstream can go.
+    remotes: Vec<String>,
+    /// Derived from `remotes` on arrival rather than computed on demand:
+    /// QML bindings only re-evaluate on a property change, so anything a
+    /// binding reads has to be a property.
+    remote_count: i32,
+    default_remote: String,
+    /// HEAD's message split into the editor's two fields, filled on
+    /// request so an amend starts from it.
+    head_subject: String,
+    head_body: String,
+    /// Bumped each time an answer arrives, so an editor waiting for one
+    /// can tell "not loaded yet" from "loaded, and it is empty".
+    head_message_seq: i32,
+    /// The most recently finished write: its name, git's message (empty on
+    /// success) and a counter QML compares against to spot a new one. A
+    /// signal with arguments would be the natural shape, but the bridge
+    /// only carries parameterless ones.
+    last_write_op: String,
+    last_write_error: String,
+    write_seq: i32,
+    /// Auto fetch, reported apart from the shared busy/error surface so an
+    /// offline machine does not raise a banner every interval.
+    auto_fetch_running: bool,
+    auto_fetch_error: String,
+    feed: Option<Arc<Feed<TabMsg>>>,
+}
+
+impl Default for RepoTab {
+    fn default() -> Self {
+        Self {
+            tab_id: 0,
+            state: String::new(),
+            title: String::new(),
+            repo_path: String::new(),
+            error: String::new(),
+            last_error: String::new(),
+            // Mirrors core LogOptions::default().
+            tags_shown: true,
+            busy_count: 0,
+            busy_op: String::new(),
+            publish_range: String::new(),
+            publish_total: 0,
+            publish_published: 0,
+            author_name: String::new(),
+            author_email: String::new(),
+            // Assumed fine until the check says otherwise, so nothing
+            // flashes a warning during startup.
+            identity_ready: true,
+            signing_active: false,
+            signing_format: String::new(),
+            remotes: Vec::new(),
+            remote_count: 0,
+            default_remote: String::new(),
+            head_subject: String::new(),
+            head_body: String::new(),
+            head_message_seq: 0,
+            last_write_op: String::new(),
+            last_write_error: String::new(),
+            write_seq: 0,
+            auto_fetch_running: false,
+            auto_fetch_error: String::new(),
+            feed: None,
+        }
+    }
+}
+
+impl RepoTab {
+    /// Runs `f` with this tab's session, if the tab is still open.
+    fn with_session(&self, f: impl FnOnce(&Arc<platitude_core::session::RepoSession>)) {
+        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
+            f(&session);
+        }
+    }
+
+    /// Decodes the push-force pair QML sends.
+    fn push_force(force: &str, lease_expect: &str) -> platitude_core::remote::PushForce {
+        use platitude_core::remote::PushForce;
+        match force {
+            "lease" => PushForce::WithLease {
+                expect: (!lease_expect.is_empty()).then(|| lease_expect.to_string()),
+            },
+            "force" => PushForce::Force,
+            _ => PushForce::None,
+        }
+    }
+
+    /// Moves HEAD, optionally stashing uncommitted work first.
+    fn move_head(&self, target: platitude_core::branch::CheckoutTarget, stash_first: bool) {
+        self.with_session(|s| {
+            if stash_first {
+                s.checkout_stashing(target.clone());
+            } else {
+                s.checkout(target.clone());
+            }
+        });
+    }
+}
+
+#[qobject(ConvertToCamelCase, NoQmlElement)]
+impl RepoTab {
+    qproperty!("state", Member = state, Notify = changed);
+    qproperty!("title", Member = title, Notify = changed);
+    qproperty!("repoPath", Member = repo_path, Notify = changed);
+    qproperty!("error", Member = error, Notify = changed);
+    qproperty!("lastError", Member = last_error, Notify = changed);
+    qproperty!("tagsShown", Member = tags_shown, Notify = changed);
+    qproperty!("busyCount", Member = busy_count, Notify = changed);
+    qproperty!("busyOp", Member = busy_op, Notify = changed);
+    qproperty!("publishRange", Member = publish_range, Notify = changed);
+    qproperty!("publishTotal", Member = publish_total, Notify = changed);
+    qproperty!(
+        "publishPublished",
+        Member = publish_published,
+        Notify = changed
+    );
+    qproperty!("authorName", Member = author_name, Notify = changed);
+    qproperty!("authorEmail", Member = author_email, Notify = changed);
+    qproperty!("identityReady", Member = identity_ready, Notify = changed);
+    qproperty!("signingActive", Member = signing_active, Notify = changed);
+    qproperty!("signingFormat", Member = signing_format, Notify = changed);
+    qproperty!("remoteCount", Member = remote_count, Notify = changed);
+    qproperty!("defaultRemote", Member = default_remote, Notify = changed);
+    qproperty!("headSubject", Member = head_subject, Notify = changed);
+    qproperty!("headBody", Member = head_body, Notify = changed);
+    qproperty!(
+        "headMessageSeq",
+        Member = head_message_seq,
+        Notify = changed
+    );
+    qproperty!("lastWriteOp", Member = last_write_op, Notify = changed);
+    qproperty!(
+        "lastWriteError",
+        Member = last_write_error,
+        Notify = changed
+    );
+    qproperty!("writeSeq", Member = write_seq, Notify = changed);
+    qproperty!(
+        "autoFetchRunning",
+        Member = auto_fetch_running,
+        Notify = changed
+    );
+    qproperty!(
+        "autoFetchError",
+        Member = auto_fetch_error,
+        Notify = changed
+    );
+
+    #[qsignal]
+    fn changed(&mut self);
+
+    /// Name of one remote (a list property would need a model of its own
+    /// for three strings).
+    #[qslot]
+    fn remote_at(&self, index: i32) -> String {
+        usize::try_from(index)
+            .ok()
+            .and_then(|i| self.remotes.get(i))
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Local branch name a remote-tracking ref would take: the ref with
+    /// its remote's prefix removed.
+    ///
+    /// Matched against the configured remotes rather than cut at the first
+    /// slash — a remote may be named `my/fork`, and the longest matching
+    /// prefix is the right one.
+    #[qslot]
+    fn local_name_for(&self, remote_ref: String) -> String {
+        let mut best: Option<&str> = None;
+        for remote in &self.remotes {
+            let Some(rest) = remote_ref.strip_prefix(&format!("{remote}/")) else {
+                continue;
+            };
+            if !rest.is_empty() && best.is_none_or(|found| rest.len() < found.len()) {
+                best = Some(rest);
+            }
+        }
+        best.unwrap_or(remote_ref.as_str()).to_string()
+    }
+
+    #[qslot]
+    fn attach(&mut self, tab_id: i32) {
+        self.tab_id = tab_id;
+        self.state = "loading".into();
+        self.changed();
+        if let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) {
+            let feed = Arc::clone(&feeds.tab);
+            feed.attach(self.get_qml_method_invoker());
+            self.feed = Some(feed);
+        }
+    }
+
+    #[qslot]
+    fn drain(&mut self) {
+        let Some(feed) = self.feed.clone() else {
+            return;
+        };
+        for msg in feed.drain() {
+            match msg {
+                TabMsg::Opened { title, path } => {
+                    self.state = "open".into();
+                    self.title = title;
+                    self.repo_path = path;
+                }
+                TabMsg::OpenFailed { message } => {
+                    self.state = "error".into();
+                    self.error = message;
+                }
+                TabMsg::OpError { message } => {
+                    self.last_error = message;
+                }
+                TabMsg::Author {
+                    name,
+                    email,
+                    complete,
+                    signing,
+                    signing_format,
+                } => {
+                    self.author_name = name;
+                    self.author_email = email;
+                    self.identity_ready = complete;
+                    self.signing_active = signing;
+                    self.signing_format = signing_format;
+                }
+                TabMsg::Remotes { names } => {
+                    // A push with no upstream goes to `origin` when there
+                    // is one, otherwise to whichever remote comes first.
+                    self.default_remote = names
+                        .iter()
+                        .find(|r| *r == "origin")
+                        .or_else(|| names.first())
+                        .cloned()
+                        .unwrap_or_default();
+                    self.remote_count = names.len() as i32;
+                    self.remotes = names;
+                }
+                TabMsg::HeadMessage { message } => {
+                    let (subject, body) = platitude_core::commit::split_message(&message);
+                    self.head_subject = subject;
+                    self.head_body = body;
+                    self.head_message_seq += 1;
+                }
+                TabMsg::AutoFetch { running, error } => {
+                    self.auto_fetch_running = running;
+                    // A finished fetch answers the previous failure, so a
+                    // recovered connection clears the warning by itself.
+                    if !running {
+                        self.auto_fetch_error = error;
+                    }
+                }
+                TabMsg::Publish {
+                    range,
+                    total,
+                    published,
+                } => {
+                    self.publish_range = range;
+                    self.publish_total = total;
+                    self.publish_published = published;
+                }
+                TabMsg::WriteState { op, running, error } => {
+                    if running {
+                        self.busy_count += 1;
+                        self.busy_op = op;
+                    } else {
+                        self.busy_count = (self.busy_count - 1).max(0);
+                        if self.busy_count == 0 {
+                            self.busy_op = String::new();
+                        }
+                        self.last_write_op = op;
+                        self.last_write_error = error;
+                        self.write_seq += 1;
+                    }
+                }
+            }
+        }
+        self.changed();
+    }
+
+    /// Cheap refresh: refs + status + stashes (window focus, post-op).
+    #[qslot]
+    fn refresh_quick(&mut self) {
+        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
+            session.refresh_quick();
+        }
+    }
+
+    /// Full refresh: restarts the log stream as well (manual refresh).
+    #[qslot]
+    fn refresh_all(&mut self) {
+        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
+            session.restart_log();
+            session.refresh_quick();
+        }
+    }
+
+    #[qslot]
+    fn clear_last_error(&mut self) {
+        self.last_error = String::new();
+        self.changed();
+    }
+
+    // --- write operations -----------------------------------------------
+    //
+    // Every one of these is fire-and-forget: the session serializes them,
+    // reports progress through `busyCount` and routes git's own error text
+    // into `lastError`. Paths arrive one per call — a git path may contain
+    // anything except NUL, so there is no separator safe enough to pack a
+    // list into one string.
+
+    #[qslot]
+    fn stage_path(&mut self, path: String) {
+        self.with_session(|s| s.stage_paths(vec![path.clone()]));
+    }
+
+    #[qslot]
+    fn unstage_path(&mut self, path: String) {
+        self.with_session(|s| s.unstage_paths(vec![path.clone()]));
+    }
+
+    /// Throws away unstaged modifications of a tracked file (destructive).
+    #[qslot]
+    fn discard_path(&mut self, path: String) {
+        self.with_session(|s| s.discard_paths(vec![path.clone()]));
+    }
+
+    /// Deletes an untracked file or directory (destructive).
+    #[qslot]
+    fn remove_untracked(&mut self, path: String) {
+        self.with_session(|s| s.remove_untracked(vec![path.clone()]));
+    }
+
+    #[qslot]
+    fn stage_all(&mut self) {
+        self.with_session(|s| s.stage_all());
+    }
+
+    #[qslot]
+    fn unstage_all(&mut self) {
+        self.with_session(|s| s.unstage_all());
+    }
+
+    /// Stages (or unstages) part of one file's diff, addressed by the row
+    /// the user clicked. `kind` is the diff-key prefix (`unstaged` /
+    /// `staged` / `untracked`); a negative `line` takes the whole hunk.
+    ///
+    /// A staged diff is unstaged by the same call — the direction follows
+    /// from which side the file is being looked at.
+    #[qslot]
+    fn stage_selection(
+        &mut self,
+        kind: String,
+        path: String,
+        orig_path: String,
+        hunk: i32,
+        line: i32,
+    ) {
+        let Some(target) = crate::encode::worktree_target(&kind, &path, &orig_path) else {
+            tracing::warn!(kind, "selection staging asked for a non-worktree diff");
+            return;
+        };
+        let selects = crate::encode::hunk_selection(hunk, line);
+        if selects.is_empty() {
+            return;
+        }
+        self.with_session(|s| s.apply_partial(target.clone(), selects.clone()));
+    }
+
+    /// Commits the index from the editor's two fields. Both empty is only
+    /// valid with `amend`, where it keeps the existing message.
+    #[qslot]
+    fn commit(&mut self, subject: String, body: String, amend: bool) {
+        let message = platitude_core::commit::join_message(&subject, &body);
+        let options = platitude_core::commit::CommitOptions {
+            amend,
+            ..Default::default()
+        };
+        self.with_session(|s| s.commit(message.clone(), options));
+    }
+
+    /// Reads HEAD's message into `headMessage` (amend starts from it).
+    #[qslot]
+    fn request_head_message(&mut self) {
+        self.with_session(|s| s.load_head_message());
+    }
+
+    // Moving HEAD comes in two flavours throughout: `stash_first` stashes
+    // uncommitted work before the switch ("leave my changes here"), which
+    // has to be one job so a failed stash does not switch anyway.
+
+    #[qslot]
+    fn checkout_branch(&mut self, name: String, stash_first: bool) {
+        let target = platitude_core::branch::CheckoutTarget::Branch { name };
+        self.move_head(target, stash_first);
+    }
+
+    /// Checks out any commit-ish, detaching HEAD.
+    #[qslot]
+    fn checkout_detached(&mut self, rev: String, stash_first: bool) {
+        let target = platitude_core::branch::CheckoutTarget::Detach { rev };
+        self.move_head(target, stash_first);
+    }
+
+    /// Creates a local branch tracking a remote-tracking ref and switches.
+    #[qslot]
+    fn checkout_remote(&mut self, remote_ref: String, local: String, stash_first: bool) {
+        let target = platitude_core::branch::CheckoutTarget::Track { remote_ref, local };
+        self.move_head(target, stash_first);
+    }
+
+    /// Creates a branch at `start_point` (HEAD when empty).
+    #[qslot]
+    fn create_branch(&mut self, name: String, start_point: String, switch_to: bool) {
+        let start = (!start_point.is_empty()).then_some(start_point);
+        self.with_session(|s| s.create_branch(name.clone(), start.clone(), switch_to));
+    }
+
+    /// Deletes a local branch. Without `force`, git refuses an unmerged one.
+    #[qslot]
+    fn delete_branch(&mut self, name: String, force: bool) {
+        self.with_session(|s| s.delete_branch(name.clone(), force));
+    }
+
+    #[qslot]
+    fn rename_branch(&mut self, from: String, to: String, force: bool) {
+        self.with_session(|s| s.rename_branch(from.clone(), to.clone(), force));
+    }
+
+    /// `git stash push`.
+    #[qslot]
+    fn push_stash(&mut self, message: String, include_untracked: bool, keep_index: bool) {
+        let options = platitude_core::stash::PushOptions {
+            include_untracked,
+            keep_index,
+            staged_only: false,
+        };
+        self.with_session(|s| s.stash_push(message.clone(), options));
+    }
+
+    /// `git stash pop` on the given selector (stash-row action).
+    #[qslot]
+    fn pop_stash(&mut self, selector: String) {
+        self.with_session(|s| s.stash_pop(selector.clone()));
+    }
+
+    /// `git stash apply` on the given selector (keeps the stash).
+    #[qslot]
+    fn apply_stash(&mut self, selector: String) {
+        self.with_session(|s| s.stash_apply(selector.clone()));
+    }
+
+    /// `git stash drop` (destructive).
+    #[qslot]
+    fn drop_stash(&mut self, selector: String) {
+        self.with_session(|s| s.stash_drop(selector.clone()));
+    }
+
+    /// `git fetch --prune`; an empty remote fetches all of them.
+    #[qslot]
+    fn fetch(&mut self, remote: String) {
+        let remote = (!remote.is_empty()).then_some(remote);
+        self.with_session(|s| s.fetch(remote.clone()));
+    }
+
+    /// Pushes the branch that is checked out to wherever it tracks, or to
+    /// the default remote when it tracks nothing yet. `force` is `""` /
+    /// `"lease"` / `"force"`; `lease_expect` pins the remote commit the
+    /// user actually saw.
+    #[qslot]
+    fn push_current(&mut self, force: String, lease_expect: String) {
+        let fallback = self.default_remote.clone();
+        let force = Self::push_force(&force, &lease_expect);
+        self.with_session(|s| s.push_current(fallback.clone(), force.clone()));
+    }
+
+    /// `git push`. `force` is `""` / `"lease"` / `"force"`; `lease_expect`
+    /// pins the remote commit the user saw (empty = bare lease).
+    #[qslot]
+    fn push_branch(
+        &mut self,
+        remote: String,
+        local: String,
+        remote_branch: String,
+        set_upstream: bool,
+        force: String,
+        lease_expect: String,
+    ) {
+        let force = Self::push_force(&force, &lease_expect);
+        let spec = platitude_core::remote::PushSpec {
+            remote,
+            local,
+            remote_branch,
+            set_upstream,
+            force,
+        };
+        self.with_session(|s| s.push(spec.clone()));
+    }
+
+    /// `git push <remote> --delete <branch>` (destructive).
+    #[qslot]
+    fn delete_remote_branch(&mut self, remote: String, branch: String) {
+        self.with_session(|s| s.delete_remote_branch(remote.clone(), branch.clone()));
+    }
+
+    /// `git merge <rev>`.
+    #[qslot]
+    fn merge(&mut self, rev: String, no_ff: bool, ff_only: bool, message: String) {
+        let options = platitude_core::integrate::MergeOptions {
+            no_ff,
+            ff_only,
+            squash: false,
+            message: (!message.trim().is_empty()).then_some(message),
+        };
+        self.with_session(|s| s.merge(rev.clone(), options.clone()));
+    }
+
+    /// `git rebase <upstream>`; an empty `onto` uses `upstream` as the base.
+    #[qslot]
+    fn rebase(&mut self, upstream: String, onto: String, autostash: bool, update_refs: bool) {
+        let options = platitude_core::integrate::RebaseOptions {
+            onto: (!onto.is_empty()).then_some(onto),
+            branch: None,
+            autostash,
+            update_refs,
+            root: false,
+        };
+        self.with_session(|s| s.rebase(upstream.clone(), options.clone()));
+    }
+
+    #[qslot]
+    fn cherry_pick(&mut self, rev: String) {
+        self.with_session(|s| s.cherry_pick(vec![rev.clone()]));
+    }
+
+    /// Folds a commit into its parent (one-commit interactive rebase).
+    #[qslot]
+    fn squash_into_parent(&mut self, oid: String) {
+        self.with_session(|s| s.squash_into_parent(oid.clone()));
+    }
+
+    /// Replaces one commit's message. HEAD is amended; anything older is
+    /// replayed, which rewrites every commit after it.
+    #[qslot]
+    fn reword_commit(&mut self, oid: String, subject: String, body: String) {
+        let message = platitude_core::commit::join_message(&subject, &body);
+        if message.is_empty() {
+            return;
+        }
+        self.with_session(|s| s.reword(oid.clone(), message.clone()));
+    }
+
+    #[qslot]
+    fn revert(&mut self, rev: String) {
+        self.with_session(|s| s.revert(vec![rev.clone()]));
+    }
+
+    /// Continues / aborts / skips whatever is in progress. `how` is
+    /// `"continue"` / `"abort"` / `"skip"` / `"quit"`.
+    #[qslot]
+    fn resolve_operation(&mut self, how: String) {
+        use platitude_core::integrate::Continuation;
+        let continuation = match how.as_str() {
+            "continue" => Continuation::Continue,
+            "abort" => Continuation::Abort,
+            "skip" => Continuation::Skip,
+            "quit" => Continuation::Quit,
+            other => {
+                tracing::warn!(how = other, "unknown continuation");
+                return;
+            }
+        };
+        self.with_session(|s| s.resolve_current(continuation));
+    }
+
+    /// Resolves one conflicted path by taking a side (`"ours"`/`"theirs"`).
+    ///
+    /// During a rebase the sides are reversed: the commits being replayed
+    /// are "theirs".
+    #[qslot]
+    fn take_side(&mut self, path: String, side: String) {
+        use platitude_core::conflict::Side;
+        let side = match side.as_str() {
+            "ours" => Side::Ours,
+            "theirs" => Side::Theirs,
+            other => {
+                tracing::warn!(side = other, "unknown conflict side");
+                return;
+            }
+        };
+        self.with_session(|s| s.take_side(vec![path.clone()], side));
+    }
+
+    /// Hands a conflicted path to `git mergetool` (empty = all of them).
+    #[qslot]
+    fn open_mergetool(&mut self, path: String) {
+        let paths = if path.is_empty() {
+            Vec::new()
+        } else {
+            vec![path]
+        };
+        self.with_session(|s| s.mergetool(paths.clone()));
+    }
+
+    /// Asks how much of `range` is already on a remote; the answer arrives
+    /// as `publishRange` / `publishTotal` / `publishPublished`.
+    #[qslot]
+    fn check_publish(&mut self, range: String) {
+        self.with_session(|s| s.check_publish(range.clone()));
+    }
+
+    /// Records `user.name` / `user.email`. `global` writes the user's own
+    /// configuration, which is the right default for a first-run prompt:
+    /// the answer is about the person, not the project.
+    #[qslot]
+    fn set_identity(&mut self, name: String, email: String, global: bool) {
+        let scope = if global {
+            platitude_core::identity::ConfigScope::Global
+        } else {
+            platitude_core::identity::ConfigScope::Local
+        };
+        self.with_session(|s| s.set_identity(name.clone(), email.clone(), scope));
+    }
+
+    /// Time budget for fetch / push, in seconds. Zero is ignored.
+    #[qslot]
+    fn set_network_timeout(&mut self, seconds: i32) {
+        if seconds <= 0 {
+            return;
+        }
+        let timeout = std::time::Duration::from_secs(seconds as u64);
+        self.with_session(|s| s.set_network_timeout(timeout));
+    }
+
+    /// Shows/hides tags in the graph walk (restarts the stream).
+    #[qslot]
+    fn set_tags_shown(&mut self, shown: bool) {
+        if self.tags_shown == shown {
+            return;
+        }
+        self.tags_shown = shown;
+        self.changed();
+        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
+            session.set_include_tags(shown);
+        }
+    }
+}
+qml_register!(RepoTab, "RepoTab", singleton = false);
