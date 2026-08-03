@@ -2078,11 +2078,11 @@ ApplicationWindow {
                             // its bottom line meets the neighbouring bands'
                             // bottom edge when scrolled to the top.
                             topMargin: Theme.headerHeight - Theme.graphRowHeight
-                            // An empty row's worth of run-out at the end:
-                            // without it the oldest row sits flush on the
-                            // pane edge and reads as clipped rather than as
-                            // the end of what is loaded.
-                            bottomMargin: Theme.graphRowHeight
+                            // A sliver of run-out at the end: without it the
+                            // oldest row sits flush on the pane edge and
+                            // reads as clipped rather than as the end of
+                            // what is loaded. Just enough to see the break.
+                            bottomMargin: Theme.spaceSm
                             // Bridge into the page scope for the shared
                             // delegate (inline components cannot see page ids).
                             property real labelWidth: page.labelW
