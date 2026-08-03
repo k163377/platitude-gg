@@ -297,38 +297,22 @@ pub enum ConfigScope {
     Global,
 }
 
-/// Rejected identity values.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum IdentityError {
-    #[error("the {field} must not be empty")]
-    Empty { field: &'static str },
-    /// A newline would end the line in the config file and let whatever
-    /// follows be read as another setting.
-    #[error("the {field} must not contain a line break")]
-    LineBreak { field: &'static str },
-    /// git itself refuses these in an author line.
-    #[error("the {field} must not contain `<`, `>` or a NUL")]
-    Reserved { field: &'static str },
-}
-
-fn validate(field: &'static str, value: &str) -> Result<(), IdentityError> {
-    if value.trim().is_empty() {
-        return Err(IdentityError::Empty { field });
-    }
-    if value.contains(['\n', '\r']) {
-        return Err(IdentityError::LineBreak { field });
-    }
-    if value.contains(['<', '>', '\0']) {
-        return Err(IdentityError::Reserved { field });
-    }
-    Ok(())
-}
-
 /// Records `user.name` and `user.email`.
 ///
-/// Values are validated first: git would reject some of them anyway, but a
-/// line break has to be stopped here — it would end the line in the config
-/// file and turn the rest into another setting.
+/// Only an empty name is refused, because that is the only thing git
+/// itself refuses — and it refuses it at commit time ("Author identity
+/// unknown"), long after the value was entered. Everything else git
+/// handles on its own, so nothing here second-guesses it (measured
+/// against git 2.51):
+///
+/// - `<`, `>` and newlines are dropped when git builds an author line, and
+///   leading/trailing spaces and punctuation are stripped
+/// - a newline in a value is escaped as `\n` when git writes the config
+///   file, so it cannot smuggle in another setting
+/// - an empty *email* is accepted; the author line simply carries `<>`
+///
+/// Values are trimmed, which only anticipates what git does to them
+/// anyway, and keeps the stored configuration equal to what commits show.
 pub async fn set_identity(
     executor: &GitExecutor,
     workdir: &Path,
@@ -337,11 +321,11 @@ pub async fn set_identity(
     scope: ConfigScope,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let invalid = |e: IdentityError| GitError::Rejected {
-        message: e.to_string(),
-    };
-    validate("name", name).map_err(invalid)?;
-    validate("email", email).map_err(invalid)?;
+    if name.trim().is_empty() {
+        return Err(GitError::Rejected {
+            message: "the name must not be empty".to_string(),
+        });
+    }
 
     for (key, value) in [("user.name", name.trim()), ("user.email", email.trim())] {
         let mut cmd = GitCommand::new().cwd(workdir).arg("config");
@@ -446,25 +430,5 @@ gpgsig -----BEGIN SSH SIGNATURE-----\n -----END SSH SIGNATURE-----\n\nsubject\n"
         // A body that talks about signing must not count as one.
         let liar = b"tree abc\nauthor A <a@x> 1 +0000\n\ngpgsig is not here\n";
         assert!(!header_has_signature(liar));
-    }
-
-    #[test]
-    fn identity_values_are_validated() {
-        assert_eq!(
-            validate("name", "  "),
-            Err(IdentityError::Empty { field: "name" })
-        );
-        assert_eq!(
-            validate("name", "Ada\n[core]\n\tpager = evil"),
-            Err(IdentityError::LineBreak { field: "name" })
-        );
-        assert_eq!(
-            validate("email", "a<b>@x"),
-            Err(IdentityError::Reserved { field: "email" })
-        );
-        assert!(validate("name", "Ada Lovelace").is_ok());
-        // Unicode and a leading dash are the user's business, not ours.
-        assert!(validate("name", "山田 太郎").is_ok());
-        assert!(validate("name", "-dash").is_ok());
     }
 }

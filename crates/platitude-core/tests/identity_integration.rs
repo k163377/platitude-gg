@@ -59,7 +59,7 @@ async fn reads_the_effective_identity_and_signing_state() {
 }
 
 #[tokio::test]
-async fn writes_the_identity_and_rejects_dangerous_values() {
+async fn writes_the_identity_and_leaves_sanitizing_to_git() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
     repo.git(&["config", "--unset", "user.name"]);
@@ -101,24 +101,68 @@ async fn writes_the_identity_and_rejects_dangerous_values() {
         "山田 太郎 <taro@example.com>"
     );
 
-    // A line break would end the line in the config file and let the rest
-    // be read as another setting.
-    let err = identity::set_identity(
+    // A newline cannot smuggle in another setting: git escapes it as `\n`
+    // when it writes the config file. Nothing has to guard against it.
+    let injection = "Evil\n[core]\n\tpager = touch /tmp/pwned";
+    identity::set_identity(
         &exec,
         &repo.path,
-        "Evil\n[core]\n\tpager = touch /tmp/pwned",
+        injection,
         "e@example.com",
         ConfigScope::Local,
         &cancel,
     )
     .await
-    .expect_err("line break refused");
-    assert!(err.to_string().contains("line break"), "{err}");
+    .expect("set identity");
+    assert_eq!(repo.git(&["config", "--get", "user.name"]), injection);
+    repo.git_expect_failure(&["config", "--get", "core.pager"]);
+
+    // What git dislikes it drops itself: `<` and `>` never reach an author
+    // line, and neither do surrounding spaces.
+    identity::set_identity(
+        &exec,
+        &repo.path,
+        "  Ada Lovelace  ",
+        "ada<at>example.com",
+        ConfigScope::Local,
+        &cancel,
+    )
+    .await
+    .expect("set identity");
     assert_eq!(
-        repo.git(&["config", "--get", "user.name"]),
-        "山田 太郎",
-        "the rejected write changed nothing"
+        repo.git(&["config", "--get", "user.email"]),
+        "ada<at>example.com",
+        "stored as typed"
     );
+    repo.write_file("c.txt", "three\n");
+    repo.git(&["add", "--", "c.txt"]);
+    commit::commit(
+        &exec,
+        &repo_info,
+        "with a sanitized identity",
+        CommitOptions::default(),
+        &cancel,
+    )
+    .await
+    .expect("commit");
+    assert_eq!(
+        repo.git(&["log", "-1", "--format=%an <%ae>"]),
+        "Ada Lovelace <adaatexample.com>"
+    );
+
+    // The one thing git does refuse, refused before commit time (where it
+    // would surface as "Author identity unknown").
+    let err = identity::set_identity(
+        &exec,
+        &repo.path,
+        "   ",
+        "e@example.com",
+        ConfigScope::Local,
+        &cancel,
+    )
+    .await
+    .expect_err("an empty name is refused");
+    assert!(err.to_string().contains("must not be empty"), "{err}");
 }
 
 /// A value starting with a dash must be stored as the value, not read as

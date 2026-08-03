@@ -74,6 +74,17 @@ ApplicationWindow {
         identityEditing = false
         identityDismissed = true
     }
+    // Screenshot hook: PG_AUTO_IDENTITY="edit" opens the dialog on an
+    // identity that is already set, which is otherwise a menu action.
+    Connections {
+        target: AppBackend
+        function onIdentityChanged() {
+            if (AppBackend.autoIdentity === "edit"
+                    && AppBackend.identityState === "ready"
+                    && !root.identityDismissed)
+                root.identityEditing = true
+        }
+    }
 
     // Frame counter for the scroll benchmark (PG_AUTO_SCROLL=1).
     property int frameCounter: 0
@@ -236,13 +247,16 @@ ApplicationWindow {
         }
 
         // Screenshot hook: PG_AUTO_IDENTITY="<name>|<email>" fills the
-        // fields, PG_AUTO_IDENTITY_SAVE=1 submits them, and "skip" answers
-        // "Not now" to show the state behind the dialog.
+        // fields, PG_AUTO_IDENTITY_SAVE=1 submits them, "skip" answers
+        // "Not now" to show the state behind the dialog, and "edit" leaves
+        // an identity that is already set as it is.
         function applyAutoIdentity() {
             if (AppBackend.autoIdentity === "skip") {
                 root.dismissIdentity()
                 return
             }
+            if (AppBackend.autoIdentity === "edit")
+                return
             const parts = AppBackend.autoIdentity.split("|")
             nameField.text = parts[0]
             emailField.text = parts.length > 1 ? parts[1] : ""
@@ -292,6 +306,13 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     placeholderText: qsTr("Ada Lovelace")
                     onAccepted: identityDialog.submit()
+                    // Not validation — these are the characters git drops
+                    // when it builds an author line, and keeping them out
+                    // stops the configuration from disagreeing with what
+                    // commits show. Everything else is the user's business.
+                    validator: RegularExpressionValidator {
+                        regularExpression: /[^<>\r\n]*/
+                    }
                 }
             }
             ColumnLayout {
@@ -307,6 +328,9 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     placeholderText: qsTr("ada@example.com")
                     onAccepted: identityDialog.submit()
+                    validator: RegularExpressionValidator {
+                        regularExpression: /[^<>\r\n]*/
+                    }
                 }
             }
 
