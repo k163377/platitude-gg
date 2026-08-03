@@ -123,6 +123,11 @@ pub struct AppBackend {
     /// Screenshot hook: submit that prefilled identity straight away.
     auto_identity_save: bool,
     scroll_to: String,
+    /// Smoke hook: one write operation to run once the repository is
+    /// loaded, and its argument. A bare verb rather than a script, so QML
+    /// dispatches on equality and parses nothing.
+    auto_act: String,
+    auto_act_arg: String,
     /// Auto-fetch interval in minutes; 0 is off. Application-wide, and not
     /// persisted yet — settings storage is Phase 4, so this starts at the
     /// default every launch.
@@ -165,6 +170,8 @@ impl Default for AppBackend {
             auto_identity_save: std::env::var("PG_AUTO_IDENTITY_SAVE").as_deref() == Ok("1"),
             // Smoke-test hook: "top" / "bottom" jumps the graph after load.
             scroll_to: std::env::var("PG_SCROLL_TO").unwrap_or_default(),
+            auto_act: std::env::var("PG_AUTO_ACT").unwrap_or_default(),
+            auto_act_arg: std::env::var("PG_AUTO_ACT_ARG").unwrap_or_default(),
             auto_fetch_minutes: platitude_core::session::AUTO_FETCH_DEFAULT_MINUTES as i32,
             auto_fetch_max: platitude_core::session::AUTO_FETCH_MAX_MINUTES as i32,
             check_feed: Arc::new(Feed::default()),
@@ -215,6 +222,8 @@ impl AppBackend {
     qproperty!("autoScroll", Member = auto_scroll, Constant);
     qproperty!("autoWip", Member = auto_wip, Constant);
     qproperty!("scrollTo", Member = scroll_to, Constant);
+    qproperty!("autoAct", Member = auto_act, Constant);
+    qproperty!("autoActArg", Member = auto_act_arg, Constant);
     qproperty!(
         "autoFetchMinutes",
         Member = auto_fetch_minutes,
@@ -577,8 +586,25 @@ pub struct RepoTab {
     signing_format: String,
     /// Configured remote names — where a branch with no upstream can go.
     remotes: Vec<String>,
-    /// HEAD's message, filled on request so an amend starts from it.
-    head_message: String,
+    /// Derived from `remotes` on arrival rather than computed on demand:
+    /// QML bindings only re-evaluate on a property change, so anything a
+    /// binding reads has to be a property.
+    remote_count: i32,
+    default_remote: String,
+    /// HEAD's message split into the editor's two fields, filled on
+    /// request so an amend starts from it.
+    head_subject: String,
+    head_body: String,
+    /// Bumped each time an answer arrives, so an editor waiting for one
+    /// can tell "not loaded yet" from "loaded, and it is empty".
+    head_message_seq: i32,
+    /// The most recently finished write: its name, git's message (empty on
+    /// success) and a counter QML compares against to spot a new one. A
+    /// signal with arguments would be the natural shape, but the bridge
+    /// only carries parameterless ones.
+    last_write_op: String,
+    last_write_error: String,
+    write_seq: i32,
     /// Auto fetch, reported apart from the shared busy/error surface so an
     /// offline machine does not raise a banner every interval.
     auto_fetch_running: bool,
@@ -610,7 +636,14 @@ impl Default for RepoTab {
             signing_active: false,
             signing_format: String::new(),
             remotes: Vec::new(),
-            head_message: String::new(),
+            remote_count: 0,
+            default_remote: String::new(),
+            head_subject: String::new(),
+            head_body: String::new(),
+            head_message_seq: 0,
+            last_write_op: String::new(),
+            last_write_error: String::new(),
+            write_seq: 0,
             auto_fetch_running: false,
             auto_fetch_error: String::new(),
             feed: None,
@@ -623,6 +656,18 @@ impl RepoTab {
     fn with_session(&self, f: impl FnOnce(&Arc<platitude_core::session::RepoSession>)) {
         if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
             f(&session);
+        }
+    }
+
+    /// Decodes the push-force pair QML sends.
+    fn push_force(force: &str, lease_expect: &str) -> platitude_core::remote::PushForce {
+        use platitude_core::remote::PushForce;
+        match force {
+            "lease" => PushForce::WithLease {
+                expect: (!lease_expect.is_empty()).then(|| lease_expect.to_string()),
+            },
+            "force" => PushForce::Force,
+            _ => PushForce::None,
         }
     }
 
@@ -660,7 +705,22 @@ impl RepoTab {
     qproperty!("identityReady", Member = identity_ready, Notify = changed);
     qproperty!("signingActive", Member = signing_active, Notify = changed);
     qproperty!("signingFormat", Member = signing_format, Notify = changed);
-    qproperty!("headMessage", Member = head_message, Notify = changed);
+    qproperty!("remoteCount", Member = remote_count, Notify = changed);
+    qproperty!("defaultRemote", Member = default_remote, Notify = changed);
+    qproperty!("headSubject", Member = head_subject, Notify = changed);
+    qproperty!("headBody", Member = head_body, Notify = changed);
+    qproperty!(
+        "headMessageSeq",
+        Member = head_message_seq,
+        Notify = changed
+    );
+    qproperty!("lastWriteOp", Member = last_write_op, Notify = changed);
+    qproperty!(
+        "lastWriteError",
+        Member = last_write_error,
+        Notify = changed
+    );
+    qproperty!("writeSeq", Member = write_seq, Notify = changed);
     qproperty!(
         "autoFetchRunning",
         Member = auto_fetch_running,
@@ -675,12 +735,6 @@ impl RepoTab {
     #[qsignal]
     fn changed(&mut self);
 
-    /// How many remotes this repository has.
-    #[qslot]
-    fn remote_count(&self) -> i32 {
-        self.remotes.len() as i32
-    }
-
     /// Name of one remote (a list property would need a model of its own
     /// for three strings).
     #[qslot]
@@ -692,16 +746,24 @@ impl RepoTab {
             .unwrap_or_default()
     }
 
-    /// Remote a push should default to: `origin` when it exists, otherwise
-    /// the first one configured. Empty when there are none.
+    /// Local branch name a remote-tracking ref would take: the ref with
+    /// its remote's prefix removed.
+    ///
+    /// Matched against the configured remotes rather than cut at the first
+    /// slash — a remote may be named `my/fork`, and the longest matching
+    /// prefix is the right one.
     #[qslot]
-    fn default_remote(&self) -> String {
-        self.remotes
-            .iter()
-            .find(|r| *r == "origin")
-            .or_else(|| self.remotes.first())
-            .cloned()
-            .unwrap_or_default()
+    fn local_name_for(&self, remote_ref: String) -> String {
+        let mut best: Option<&str> = None;
+        for remote in &self.remotes {
+            let Some(rest) = remote_ref.strip_prefix(&format!("{remote}/")) else {
+                continue;
+            };
+            if !rest.is_empty() && best.is_none_or(|found| rest.len() < found.len()) {
+                best = Some(rest);
+            }
+        }
+        best.unwrap_or(remote_ref.as_str()).to_string()
     }
 
     #[qslot]
@@ -748,8 +810,24 @@ impl RepoTab {
                     self.signing_active = signing;
                     self.signing_format = signing_format;
                 }
-                TabMsg::Remotes { names } => self.remotes = names,
-                TabMsg::HeadMessage { message } => self.head_message = message,
+                TabMsg::Remotes { names } => {
+                    // A push with no upstream goes to `origin` when there
+                    // is one, otherwise to whichever remote comes first.
+                    self.default_remote = names
+                        .iter()
+                        .find(|r| *r == "origin")
+                        .or_else(|| names.first())
+                        .cloned()
+                        .unwrap_or_default();
+                    self.remote_count = names.len() as i32;
+                    self.remotes = names;
+                }
+                TabMsg::HeadMessage { message } => {
+                    let (subject, body) = platitude_core::commit::split_message(&message);
+                    self.head_subject = subject;
+                    self.head_body = body;
+                    self.head_message_seq += 1;
+                }
                 TabMsg::AutoFetch { running, error } => {
                     self.auto_fetch_running = running;
                     // A finished fetch answers the previous failure, so a
@@ -767,7 +845,7 @@ impl RepoTab {
                     self.publish_total = total;
                     self.publish_published = published;
                 }
-                TabMsg::WriteState { op, running } => {
+                TabMsg::WriteState { op, running, error } => {
                     if running {
                         self.busy_count += 1;
                         self.busy_op = op;
@@ -776,6 +854,9 @@ impl RepoTab {
                         if self.busy_count == 0 {
                             self.busy_op = String::new();
                         }
+                        self.last_write_op = op;
+                        self.last_write_error = error;
+                        self.write_seq += 1;
                     }
                 }
             }
@@ -846,26 +927,37 @@ impl RepoTab {
         self.with_session(|s| s.unstage_all());
     }
 
-    /// Stages (or unstages) part of one file's diff. `kind` is the diff-key
-    /// prefix (`unstaged` / `staged` / `untracked`) and `spec` is
-    /// `"<hunk>[:<line>,<line>...];..."` — see `encode::parse_hunk_selection`.
+    /// Stages (or unstages) part of one file's diff, addressed by the row
+    /// the user clicked. `kind` is the diff-key prefix (`unstaged` /
+    /// `staged` / `untracked`); a negative `line` takes the whole hunk.
+    ///
+    /// A staged diff is unstaged by the same call — the direction follows
+    /// from which side the file is being looked at.
     #[qslot]
-    fn stage_selection(&mut self, kind: String, path: String, orig_path: String, spec: String) {
+    fn stage_selection(
+        &mut self,
+        kind: String,
+        path: String,
+        orig_path: String,
+        hunk: i32,
+        line: i32,
+    ) {
         let Some(target) = crate::encode::worktree_target(&kind, &path, &orig_path) else {
             tracing::warn!(kind, "selection staging asked for a non-worktree diff");
             return;
         };
-        let selects = crate::encode::parse_hunk_selection(&spec);
+        let selects = crate::encode::hunk_selection(hunk, line);
         if selects.is_empty() {
             return;
         }
         self.with_session(|s| s.apply_partial(target.clone(), selects.clone()));
     }
 
-    /// Commits the index. An empty message is only valid with `amend`,
-    /// where it keeps the existing one.
+    /// Commits the index from the editor's two fields. Both empty is only
+    /// valid with `amend`, where it keeps the existing message.
     #[qslot]
-    fn commit(&mut self, message: String, amend: bool) {
+    fn commit(&mut self, subject: String, body: String, amend: bool) {
+        let message = platitude_core::commit::join_message(&subject, &body);
         let options = platitude_core::commit::CommitOptions {
             amend,
             ..Default::default()
@@ -957,6 +1049,17 @@ impl RepoTab {
         self.with_session(|s| s.fetch(remote.clone()));
     }
 
+    /// Pushes the branch that is checked out to wherever it tracks, or to
+    /// the default remote when it tracks nothing yet. `force` is `""` /
+    /// `"lease"` / `"force"`; `lease_expect` pins the remote commit the
+    /// user actually saw.
+    #[qslot]
+    fn push_current(&mut self, force: String, lease_expect: String) {
+        let fallback = self.default_remote.clone();
+        let force = Self::push_force(&force, &lease_expect);
+        self.with_session(|s| s.push_current(fallback.clone(), force.clone()));
+    }
+
     /// `git push`. `force` is `""` / `"lease"` / `"force"`; `lease_expect`
     /// pins the remote commit the user saw (empty = bare lease).
     #[qslot]
@@ -969,14 +1072,7 @@ impl RepoTab {
         force: String,
         lease_expect: String,
     ) {
-        use platitude_core::remote::PushForce;
-        let force = match force.as_str() {
-            "lease" => PushForce::WithLease {
-                expect: (!lease_expect.is_empty()).then_some(lease_expect),
-            },
-            "force" => PushForce::Force,
-            _ => PushForce::None,
-        };
+        let force = Self::push_force(&force, &lease_expect);
         let spec = platitude_core::remote::PushSpec {
             remote,
             local,
@@ -1032,8 +1128,9 @@ impl RepoTab {
     /// Replaces one commit's message. HEAD is amended; anything older is
     /// replayed, which rewrites every commit after it.
     #[qslot]
-    fn reword_commit(&mut self, oid: String, message: String) {
-        if message.trim().is_empty() {
+    fn reword_commit(&mut self, oid: String, subject: String, body: String) {
+        let message = platitude_core::commit::join_message(&subject, &body);
+        if message.is_empty() {
             return;
         }
         self.with_session(|s| s.reword(oid.clone(), message.clone()));
@@ -1901,6 +1998,19 @@ impl NavSectionModel {
     fn shown(&self) -> i32 {
         self.items.len() as i32
     }
+
+    /// Commit id of the ref with this name; empty when there is none.
+    ///
+    /// Looks in the section's whole list rather than the visible rows, so
+    /// an active filter or a collapsed folder does not hide the answer.
+    #[qslot]
+    fn oid_of_name(&self, name: String) -> String {
+        self.all
+            .iter()
+            .find(|item| item.name == name)
+            .map(|item| item.oid_hex.clone())
+            .unwrap_or_default()
+    }
 }
 qml_register!(NavSectionModel, "NavSectionModel", singleton = false);
 
@@ -2325,6 +2435,9 @@ pub struct DiffLineItem {
     old_no: i32,
     new_no: i32,
     text: String,
+    /// Where this row sits in the patch, so staging it needs no lookup.
+    hunk: i32,
+    line: i32,
 }
 
 #[derive(Default)]
@@ -2442,6 +2555,8 @@ impl DiffModel {
                 old_no: r.old_no,
                 new_no: r.new_no,
                 text: r.text,
+                hunk: r.hunk,
+                line: r.line,
             })
             .collect();
         self.extend_notified(rows);

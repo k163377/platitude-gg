@@ -373,6 +373,183 @@ ApplicationWindow {
         }
     }
 
+    // ---- confirmation ----------------------------------------------------
+    // One dialog for every "this cannot be taken back" question: rewriting
+    // history a remote already has, or a push that overwrites one. The
+    // caller supplies the wording and what to run on yes, so the phrasing
+    // stays next to the operation it describes.
+    //
+    // Confirmation is reserved for the irreversible. Everyday operations
+    // (stage, commit, switch) ask nothing — a prompt on each of those
+    // teaches people to dismiss prompts.
+    function confirm(heading, detail, acceptText, action) {
+        confirmDialog.heading = heading
+        confirmDialog.detail = detail
+        confirmDialog.acceptText = acceptText
+        confirmDialog.action = action
+        confirmDialog.open()
+    }
+    Dialog {
+        id: confirmDialog
+        anchors.centerIn: parent
+        width: Math.min(560, root.width - 2 * Theme.spaceXxl)
+        modal: true
+        closePolicy: Popup.CloseOnEscape
+        focus: true
+        padding: Theme.spaceXxl
+        header: null
+        footer: null
+        property string heading: ""
+        property string detail: ""
+        property string acceptText: ""
+        property var action: null
+        background: Rectangle {
+            color: Theme.bgElevated
+            radius: Theme.radiusMd
+            border.color: Theme.borderDefault
+            border.width: Theme.borderWidth
+        }
+        contentItem: ColumnLayout {
+            spacing: Theme.spaceLg
+            Label {
+                text: confirmDialog.heading
+                font.pixelSize: Theme.fontLg
+                font.weight: Font.DemiBold
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+            Label {
+                text: confirmDialog.detail
+                color: Theme.textSecondary
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: Theme.spaceSm
+                Button {
+                    implicitHeight: Theme.controlHeight
+                    text: qsTr("Cancel")
+                    onClicked: confirmDialog.close()
+                }
+                Button {
+                    implicitHeight: Theme.controlHeight
+                    highlighted: true
+                    text: confirmDialog.acceptText
+                    onClicked: {
+                        const run = confirmDialog.action
+                        confirmDialog.close()
+                        if (run)
+                            run()
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- settings --------------------------------------------------------
+    // One setting so far. It applies to every open repository, because the
+    // question is how often this computer should talk to remotes at all.
+    Dialog {
+        id: settingsDialog
+        anchors.centerIn: parent
+        width: Math.min(640, root.width - 2 * Theme.spaceXxl)
+        modal: true
+        closePolicy: Popup.CloseOnEscape
+        focus: true
+        padding: Theme.spaceXxl
+        header: null
+        footer: null
+        background: Rectangle {
+            color: Theme.bgElevated
+            radius: Theme.radiusMd
+            border.color: Theme.borderDefault
+            border.width: Theme.borderWidth
+        }
+        onOpened: {
+            fetchField.text = AppBackend.autoFetchMinutes > 0
+                              ? String(AppBackend.autoFetchMinutes) : ""
+            fetchField.forceActiveFocus()
+        }
+        // An empty field is the off switch — nothing to type is the
+        // clearest way to say "do not do this".
+        function apply() {
+            AppBackend.setAutoFetchMinutes(fetchField.text === "" ? 0
+                                                                  : Number(fetchField.text))
+            settingsDialog.close()
+        }
+        contentItem: ColumnLayout {
+            spacing: Theme.spaceLg
+            Label {
+                text: qsTr("Settings")
+                font.pixelSize: Theme.fontXl
+                font.weight: Font.DemiBold
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spaceXs
+                Label {
+                    text: qsTr("Fetch automatically")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSm
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spaceSm
+                    FormField {
+                        id: fetchField
+                        implicitWidth: 160
+                        placeholderText: qsTr("off")
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        validator: IntValidator {
+                            bottom: 1
+                            top: AppBackend.autoFetchMaxMinutes
+                        }
+                        onAccepted: settingsDialog.apply()
+                    }
+                    Label {
+                        text: qsTr("minutes")
+                        color: Theme.textSecondary
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    color: Theme.textMuted
+                    font.pixelSize: Theme.fontSm
+                    text: qsTr("Runs git fetch --prune on every open repository, at "
+                               + "most once per interval. Leave it empty to switch it "
+                               + "off; %1 minutes is the longest interval offered.")
+                          .arg(AppBackend.autoFetchMaxMinutes)
+                }
+            }
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: Theme.textMuted
+                font.pixelSize: Theme.fontSm
+                text: qsTr("Settings are not stored yet, so this returns to its "
+                           + "default the next time platitude-gg starts.")
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: Theme.spaceSm
+                Button {
+                    implicitHeight: Theme.controlHeight
+                    text: qsTr("Cancel")
+                    onClicked: settingsDialog.close()
+                }
+                Button {
+                    implicitHeight: Theme.controlHeight
+                    highlighted: true
+                    text: qsTr("Save")
+                    onClicked: settingsDialog.apply()
+                }
+            }
+        }
+    }
+
     // ---- main ------------------------------------------------------------
     ColumnLayout {
         id: mainUi
@@ -420,7 +597,7 @@ ApplicationWindow {
                         }
                         MenuItem {
                             text: qsTr("Settings…")
-                            enabled: false
+                            onTriggered: settingsDialog.open()
                         }
                         MenuItem {
                             text: qsTr("About platitude-gg")
@@ -581,11 +758,32 @@ ApplicationWindow {
                         onClicked: if (root.curPage !== null) root.curPage.pageTab.clearLastError()
                     }
                 }
-                // Reserved: auto-fetch indicator (Phase 4)
+                // Auto fetch: quiet by design. A machine that is simply
+                // offline fails here once a minute, and that belongs in a
+                // tooltip rather than in the error line.
                 Label {
+                    readonly property bool failing: root.curPage !== null
+                                                    && root.curPage.pageTab.autoFetchError !== ""
                     text: "↻"
-                    color: Theme.borderDefault
+                    color: root.curPage !== null && root.curPage.pageTab.autoFetchRunning
+                           ? Theme.accent
+                           : failing ? Theme.warning
+                           : AppBackend.autoFetchMinutes > 0 ? Theme.textMuted
+                           : Theme.borderDefault
                     font.pixelSize: Theme.fontMd
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: settingsDialog.open()
+                        ToolTip.visible: containsMouse
+                        ToolTip.delay: 600
+                        ToolTip.text: parent.failing
+                                      ? root.curPage.pageTab.autoFetchError
+                                      : AppBackend.autoFetchMinutes > 0
+                                        ? qsTr("Fetching every %n minute(s)", "",
+                                               AppBackend.autoFetchMinutes)
+                                        : qsTr("Automatic fetching is off")
+                    }
                 }
                 // Reserved: search box (backlog)
                 SlimField {
@@ -594,8 +792,45 @@ ApplicationWindow {
                     placeholderText: qsTr("Search")
                     implicitWidth: 160
                 }
-                // Local re-read only (no network) — fetch arrives in
-                // Phase 4 as its own action.
+                ToolButton {
+                    text: qsTr("Fetch")
+                    enabled: root.curPage !== null
+                             && root.curPage.pageTab.remoteCount > 0
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 600
+                    ToolTip.text: qsTr("Fetch every remote now, pruning branches "
+                                       + "they no longer have")
+                    onClicked: root.curPage.pageTab.fetch("")
+                }
+                ToolButton {
+                    text: qsTr("Push")
+                    enabled: root.curPage !== null && root.curPage.canPush
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 600
+                    ToolTip.text: root.curPage === null ? ""
+                                  : root.curPage.pageWt.upstream !== ""
+                                    ? qsTr("Push this branch to %1")
+                                      .arg(root.curPage.pageWt.upstream)
+                                    : qsTr("Publish this branch as %1")
+                                      .arg(root.curPage.pushTargetLabel)
+                    onClicked: root.curPage.pushNow()
+                    // Overwriting a remote's history is the one push that
+                    // needs asking about, so it lives behind its own entry.
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.RightButton
+                        onClicked: pushMenu.popup()
+                    }
+                    Menu {
+                        id: pushMenu
+                        MenuItem {
+                            text: qsTr("Force push…")
+                            enabled: root.curPage !== null && root.curPage.canPush
+                            onTriggered: root.curPage.forcePushNow()
+                        }
+                    }
+                }
+                // Local re-read only (no network).
                 ToolButton {
                     text: qsTr("Reload")
                     enabled: root.curPage !== null
@@ -713,13 +948,548 @@ ApplicationWindow {
             page.selectedOid = ""
             page.selectedStashRef = ""
             page.closeDiff()
+            page.refreshHeadPublished()
         }
 
-        // Center area switches between the graph and a file diff.
+        // ---- commit editor -------------------------------------------
+        // `amending` mirrors the checkbox so the page can act on it
+        // without reaching into the delegate tree.
+        property bool amending: false
+        // Whether HEAD is already on a remote. Amending it rewrites
+        // something other people may have, so that gets confirmed.
+        property bool headPublished: false
+        readonly property string headRange: "HEAD^!"
+        function refreshHeadPublished() {
+            if (repoTab.state === "open")
+                repoTab.checkPublish(page.headRange)
+        }
+        Connections {
+            target: repoTab
+            function onChanged() {
+                // One shared answer slot, so each consumer only reads the
+                // reply to the range it asked about.
+                if (repoTab.publishRange === page.headRange) {
+                    page.headPublished = repoTab.publishPublished > 0
+                } else if (page.menuOid !== ""
+                           && repoTab.publishRange === page.menuOid + "^!") {
+                    page.menuPublished = repoTab.publishPublished > 0
+                    page.menuPublishKnown = true
+                }
+                page.absorbHeadMessage()
+                page.absorbWriteResult()
+            }
+        }
+
+        // Turning amend on starts the editor from HEAD's message; turning
+        // it off empties it again, since the text belonged to that commit.
+        property int seenHeadMessageSeq: 0
+        property bool wantHeadMessage: false
+        function amendToggled(on) {
+            page.amending = on
+            if (on) {
+                page.wantHeadMessage = true
+                repoTab.requestHeadMessage()
+            } else {
+                page.clearCommitEditor()
+            }
+        }
+        function absorbHeadMessage() {
+            if (repoTab.headMessageSeq === page.seenHeadMessageSeq)
+                return
+            page.seenHeadMessageSeq = repoTab.headMessageSeq
+            if (!page.wantHeadMessage)
+                return
+            page.wantHeadMessage = false
+            wipSubject.text = repoTab.headSubject
+            wipBody.text = repoTab.headBody
+        }
+        function clearCommitEditor() {
+            wipSubject.text = ""
+            wipBody.text = ""
+        }
+
+        function commitNow() {
+            if (page.amending && page.headPublished) {
+                root.confirm(
+                    qsTr("Rewrite a commit that is already on a remote?"),
+                    qsTr("The last commit has been pushed. Amending replaces it "
+                         + "with a different one, so anyone who already has it "
+                         + "will be out of step until they reset."),
+                    qsTr("Amend anyway"), page.doCommit)
+                return
+            }
+            page.doCommit()
+        }
+        function doCommit() {
+            repoTab.commit(wipSubject.text, wipBody.text, page.amending)
+        }
+
+        // ---- moving between branches and commits ----------------------
+        // Terminology is deliberate: git runs `switch` / `restore`, and
+        // the UI says "Switch to" (デザイン規約 §用語).
+        //
+        // A move with uncommitted changes asks what to do with them
+        // instead of silently carrying them along: "leave them here"
+        // stashes first (the default — arriving on another branch with
+        // unexplained changes is how accidents start), "bring them along"
+        // is git's own behaviour.
+        readonly property bool treeDirty: workTree.stagedCount > 0
+                                          || workTree.unstagedCount > 0
+                                          || workTree.untrackedCount > 0
+        // What the pending move is: kind is "branch" / "remote" / "commit".
+        property string moveKind: ""
+        property string moveTarget: ""
+        property string moveLabel: ""
+
+        function switchTo(kind, target, label) {
+            page.moveKind = kind
+            page.moveTarget = target
+            page.moveLabel = label
+            if (page.treeDirty)
+                dirtySwitchDialog.open()
+            else
+                page.runSwitch(false)
+        }
+        function runSwitch(stashFirst) {
+            if (page.moveKind === "branch")
+                repoTab.checkoutBranch(page.moveTarget, stashFirst)
+            else if (page.moveKind === "remote")
+                repoTab.checkoutRemote(page.moveTarget,
+                                       repoTab.localNameFor(page.moveTarget), stashFirst)
+            else if (page.moveKind === "commit")
+                repoTab.checkoutDetached(page.moveTarget, stashFirst)
+            page.moveKind = ""
+        }
+
+        Dialog {
+            id: dirtySwitchDialog
+            anchors.centerIn: parent
+            width: Math.min(560, root.width - 2 * Theme.spaceXxl)
+            modal: true
+            closePolicy: Popup.CloseOnEscape
+            focus: true
+            padding: Theme.spaceXxl
+            header: null
+            footer: null
+            background: Rectangle {
+                color: Theme.bgElevated
+                radius: Theme.radiusMd
+                border.color: Theme.borderDefault
+                border.width: Theme.borderWidth
+            }
+            contentItem: ColumnLayout {
+                spacing: Theme.spaceLg
+                Label {
+                    text: qsTr("You have uncommitted changes")
+                    font.pixelSize: Theme.fontLg
+                    font.weight: Font.DemiBold
+                }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    color: Theme.textSecondary
+                    text: qsTr("Switching to %1 can either leave them where they "
+                               + "are or take them with you.").arg(page.moveLabel)
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spaceSm
+                    Button {
+                        Layout.fillWidth: true
+                        implicitHeight: Theme.controlHeight
+                        highlighted: true
+                        text: qsTr("Leave my changes on %1")
+                              .arg(workTree.detached ? qsTr("this commit") : workTree.branch)
+                        onClicked: {
+                            dirtySwitchDialog.close()
+                            page.runSwitch(true)
+                        }
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        color: Theme.textMuted
+                        font.pixelSize: Theme.fontSm
+                        text: qsTr("Stashes them first; they wait in STASHES until "
+                                   + "you apply them again.")
+                    }
+                    Button {
+                        Layout.fillWidth: true
+                        implicitHeight: Theme.controlHeight
+                        text: qsTr("Bring my changes to %1").arg(page.moveLabel)
+                        onClicked: {
+                            dirtySwitchDialog.close()
+                            page.runSwitch(false)
+                        }
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        color: Theme.textMuted
+                        font.pixelSize: Theme.fontSm
+                        text: qsTr("Carries them over; git refuses the switch if they "
+                                   + "would collide with what is there.")
+                    }
+                }
+                Button {
+                    Layout.alignment: Qt.AlignRight
+                    implicitHeight: Theme.controlHeight
+                    text: qsTr("Cancel")
+                    onClicked: dirtySwitchDialog.close()
+                }
+            }
+        }
+
+        // ---- push ------------------------------------------------------
+        readonly property string pushTargetLabel:
+            workTree.upstream !== "" ? workTree.upstream
+                                     : repoTab.defaultRemote + "/" + workTree.branch
+        readonly property bool canPush: repoTab.state === "open"
+                                        && !workTree.detached
+                                        && workTree.branch !== ""
+                                        && repoTab.remoteCount > 0
+                                        && repoTab.busyCount === 0
+        function pushNow() {
+            repoTab.pushCurrent("", "")
+        }
+        function forcePushNow() {
+            root.confirm(
+                qsTr("Overwrite %1 with this branch?").arg(page.pushTargetLabel),
+                qsTr("A force push replaces the remote branch's history with "
+                     + "yours. Commits only the remote has are lost, and anyone "
+                     + "who already pulled them keeps a history that no longer "
+                     + "matches.\n\nThe push is refused if the remote moved since "
+                     + "this window last saw it."),
+                qsTr("Force push"),
+                // A lease pinned to the commit actually on screen: a
+                // background fetch must not turn this into a plain force.
+                function () { repoTab.pushCurrent("lease", page.upstreamOid()) })
+        }
+        /// Commit the remote-tracking branch points at, as shown here.
+        function upstreamOid() {
+            return workTree.upstream !== ""
+                   ? remotesModel.oidOfName(workTree.upstream) : ""
+        }
+
+        // ---- context menu on a branch row ------------------------------
+        property string menuRefName: ""
+        property string menuRefOid: ""
+        property bool menuRefRemote: false
+        function openRefMenu(name, oidHex, isRemote) {
+            page.menuRefName = name
+            page.menuRefOid = oidHex
+            page.menuRefRemote = isRemote
+            refMenu.popup()
+        }
+        Menu {
+            id: refMenu
+            MenuItem {
+                text: qsTr("Switch to %1").arg(page.menuRefName)
+                enabled: page.menuRefName !== workTree.branch
+                onTriggered: page.switchTo(page.menuRefRemote ? "remote" : "branch",
+                                           page.menuRefName, page.menuRefName)
+            }
+            MenuSeparator {}
+            MenuItem {
+                text: qsTr("Copy commit hash")
+                onTriggered: root.copyText(page.menuRefOid)
+            }
+        }
+
+        // ---- context menu on a commit row ------------------------------
+        property string menuOid: ""
+        property string menuSubject: ""
+        readonly property string menuShort: page.menuOid.substring(0, 8)
+        function openCommitMenu(oidHex, subject) {
+            page.menuOid = oidHex
+            page.menuSubject = subject
+            // Asked as the menu opens so the rewrite warnings inside it
+            // know whether this commit has already left the machine. The
+            // rewriting entries stay disabled until the answer lands —
+            // one `rev-list --count`, so within a frame or two.
+            page.menuPublished = false
+            page.menuPublishKnown = false
+            repoTab.checkPublish(oidHex + "^!")
+            commitMenu.popup()
+        }
+        // Whether the commit the menu is about is already on a remote.
+        property bool menuPublished: false
+        property bool menuPublishKnown: false
+
+        Menu {
+            id: commitMenu
+            MenuItem {
+                text: qsTr("Copy this commit onto the current branch")
+                enabled: repoTab.busyCount === 0
+                onTriggered: repoTab.cherryPick(page.menuOid)
+            }
+            MenuItem {
+                text: qsTr("Switch to this commit")
+                enabled: repoTab.busyCount === 0
+                onTriggered: page.switchTo("commit", page.menuOid, page.menuShort)
+            }
+            MenuSeparator {}
+            MenuItem {
+                text: qsTr("Edit message…")
+                enabled: repoTab.busyCount === 0 && page.menuPublishKnown
+                onTriggered: page.editMessage(page.menuOid)
+            }
+            MenuItem {
+                text: qsTr("Fold into the commit before it")
+                enabled: repoTab.busyCount === 0 && page.menuPublishKnown
+                onTriggered: page.squashCommit(page.menuOid)
+            }
+            MenuSeparator {}
+            MenuItem {
+                text: qsTr("Copy commit hash")
+                onTriggered: root.copyText(page.menuOid)
+            }
+        }
+
+        // ---- rewriting one commit --------------------------------------
+        // Both of these replay history when the commit is not the newest
+        // one, so both warn once the commit has been pushed.
+        function rewriteWarning(action, run) {
+            if (!page.menuPublished) {
+                run()
+                return
+            }
+            root.confirm(
+                qsTr("Rewrite a commit that is already on a remote?"),
+                qsTr("%1 has been pushed. %2 replaces it, and every commit after "
+                     + "it, with different ones — anyone who already has them will "
+                     + "be out of step until they reset.")
+                    .arg(page.menuShort).arg(action),
+                qsTr("Rewrite anyway"), run)
+        }
+        function squashCommit(oidHex) {
+            page.rewriteWarning(qsTr("Folding it in"),
+                                function () { repoTab.squashIntoParent(oidHex) })
+        }
+        function editMessage(oidHex) {
+            messageDialog.oid = oidHex
+            messageDialog.published = page.menuPublished
+            messageDialog.open()
+        }
+
+        Dialog {
+            id: messageDialog
+            anchors.centerIn: parent
+            width: Math.min(640, root.width - 2 * Theme.spaceXxl)
+            modal: true
+            closePolicy: Popup.CloseOnEscape
+            focus: true
+            padding: Theme.spaceXxl
+            header: null
+            footer: null
+            property string oid: ""
+            property bool published: false
+            /// The current message has been copied in. Saving before that
+            /// would replace a real message with an empty editor.
+            property bool filled: false
+            background: Rectangle {
+                color: Theme.bgElevated
+                radius: Theme.radiusMd
+                border.color: Theme.borderDefault
+                border.width: Theme.borderWidth
+            }
+            // The row that opened the menu was selected by the same click,
+            // so its details are on their way; fill in when they land.
+            onOpened: {
+                messageDialog.filled = false
+                editSubject.text = ""
+                editBody.text = ""
+                messageDialog.fill()
+                editSubject.forceActiveFocus()
+            }
+            function fill() {
+                if (messageDialog.filled || !messageDialog.visible
+                        || detailsModel.shaHex !== messageDialog.oid)
+                    return
+                messageDialog.filled = true
+                editSubject.text = detailsModel.messageSubject
+                editBody.text = detailsModel.messageBody
+            }
+            Connections {
+                target: detailsModel
+                function onChanged() { messageDialog.fill() }
+            }
+            function submit() {
+                if (!messageDialog.filled || editSubject.text.trim() === "")
+                    return
+                const run = function () {
+                    repoTab.rewordCommit(messageDialog.oid, editSubject.text, editBody.text)
+                }
+                messageDialog.close()
+                if (messageDialog.published)
+                    page.rewriteWarning(qsTr("Changing its message"), run)
+                else
+                    run()
+            }
+            contentItem: ColumnLayout {
+                spacing: Theme.spaceLg
+                Label {
+                    text: qsTr("Edit commit message")
+                    font.pixelSize: Theme.fontXl
+                    font.weight: Font.DemiBold
+                }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    color: Theme.textSecondary
+                    text: qsTr("%1 — the newest commit is amended in place; an older "
+                               + "one is replayed, which gives every commit after it a "
+                               + "new identity.").arg(page.menuShort)
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: editSubject.implicitHeight + Theme.spaceSm
+                    color: Theme.bgBase
+                    radius: Theme.radiusMd
+                    border.color: Theme.borderDefault
+                    border.width: Theme.borderWidth
+                    TextArea {
+                        id: editSubject
+                        anchors.fill: parent
+                        anchors.margins: Theme.spaceXs
+                        wrapMode: TextArea.Wrap
+                        placeholderText: qsTr("Commit summary")
+                        font.pixelSize: Theme.fontLg
+                        font.weight: Font.DemiBold
+                        background: null
+                        padding: 0
+                    }
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 120
+                    color: Theme.bgBase
+                    radius: Theme.radiusMd
+                    border.color: Theme.borderSubtle
+                    border.width: Theme.borderWidth
+                    ScrollView {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spaceXs
+                        TextArea {
+                            id: editBody
+                            wrapMode: TextArea.Wrap
+                            placeholderText: qsTr("Description")
+                            font.pixelSize: Theme.fontMd
+                            color: Theme.textSecondary
+                            background: null
+                            padding: 0
+                        }
+                    }
+                }
+                RowLayout {
+                    Layout.alignment: Qt.AlignRight
+                    spacing: Theme.spaceSm
+                    Button {
+                        implicitHeight: Theme.controlHeight
+                        text: qsTr("Cancel")
+                        onClicked: messageDialog.close()
+                    }
+                    Button {
+                        implicitHeight: Theme.controlHeight
+                        highlighted: true
+                        text: qsTr("Save message")
+                        enabled: messageDialog.filled && editSubject.text.trim() !== ""
+                        onClicked: messageDialog.submit()
+                    }
+                }
+            }
+        }
+
+        // ---- smoke hook ------------------------------------------------
+        // PG_AUTO_ACT runs one write operation through exactly the code
+        // path a click takes, so the wiring can be proven headlessly. The
+        // dispatch is equality on a bare verb; nothing here parses.
+        Timer {
+            id: autoActTimer
+            interval: 1200
+            onTriggered: page.runAutoAct()
+        }
+        // The diff has to arrive before a row of it can be staged.
+        Timer {
+            id: stageRowTimer
+            interval: 800
+            onTriggered: page.stageSelection(
+                0, AppBackend.autoAct === "stage-line" ? 0 : -1)
+        }
+        function runAutoAct() {
+            const act = AppBackend.autoAct
+            const arg = AppBackend.autoActArg
+            if (act === "commit") {
+                repoTab.stageAll()
+                wipSubject.text = arg
+                page.commitNow()
+            } else if (act === "amend") {
+                // The message is supplied, so skip the prefill request
+                // that would otherwise land on top of it.
+                amendBox.checked = true
+                page.amending = true
+                wipSubject.text = arg
+                page.commitNow()
+            } else if (act === "switch") {
+                page.switchTo("branch", arg, arg)
+            } else if (act === "switch-leave") {
+                // What the dirty-tree dialog's first button does.
+                page.moveKind = "branch"
+                page.moveTarget = arg
+                page.runSwitch(true)
+            } else if (act === "switch-remote") {
+                page.switchTo("remote", arg, arg)
+            } else if (act === "squash") {
+                page.openCommitMenu(branchesModel.headOid, "")
+                page.squashCommit(branchesModel.headOid)
+            } else if (act === "reword") {
+                page.openCommitMenu(branchesModel.headOid, "")
+                repoTab.rewordCommit(branchesModel.headOid, arg, "")
+            } else if (act === "cherry-pick") {
+                repoTab.cherryPick(arg)
+            } else if (act === "stage-hunk" || act === "stage-line") {
+                page.toggleDiff("unstaged", arg, "")
+                stageRowTimer.start()
+            } else if (act === "push") {
+                page.pushNow()
+            } else if (act === "force-push") {
+                repoTab.pushCurrent("lease", page.upstreamOid())
+            } else if (act === "fetch") {
+                repoTab.fetch("")
+            }
+            AppBackend.report("auto_act ran=" + act)
+        }
+
+        // A finished write the editor asked for: clear it only once git
+        // says the commit landed, so a rejected one keeps its text.
+        property int seenWriteSeq: 0
+        function absorbWriteResult() {
+            if (repoTab.writeSeq === page.seenWriteSeq)
+                return
+            page.seenWriteSeq = repoTab.writeSeq
+            if (repoTab.lastWriteError !== "")
+                return
+            if (repoTab.lastWriteOp === "commit") {
+                page.clearCommitEditor()
+                amendBox.checked = false
+                page.amending = false
+            }
+            if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage")
+                page.reloadDiff()
+            page.refreshHeadPublished()
+        }
+
+        // Center area switches between the graph and a file diff. The
+        // pieces are kept apart rather than parsed back out of the key:
+        // a path may contain anything, colons included.
         property bool diffShown: false
         property string diffKey: ""
-        // Whether the shown diff is a working-tree file (stage mock UI).
+        property string diffKind: ""
+        property string diffPath: ""
+        property string diffOrigPath: ""
+        // Whether the shown diff is a working-tree file (stageable).
         property bool diffFromWt: false
+        readonly property bool diffStaged: page.diffKind === "staged"
         function toggleDiff(kind, path, origPath) {
             const key = kind + ":" + path
             if (page.diffShown && page.diffKey === key) {
@@ -727,6 +1497,9 @@ ApplicationWindow {
                 return
             }
             page.diffKey = key
+            page.diffKind = kind
+            page.diffPath = path
+            page.diffOrigPath = origPath
             page.diffFromWt = kind !== "commit"
             if (kind === "commit")
                 diffModel.requestCommitFile(detailsModel.shaHex, detailsModel.parentHex,
@@ -735,9 +1508,27 @@ ApplicationWindow {
                 diffModel.requestWorkTree(kind, path, origPath)
             page.diffShown = true
         }
+        // Stages (or unstages) one hunk, or one line of it. The indices
+        // address the diff currently on screen, so the pane is reloaded
+        // afterwards: once the patch is applied the rows have moved.
+        function stageSelection(hunk, line) {
+            repoTab.stageSelection(page.diffKind, page.diffPath, page.diffOrigPath, hunk, line)
+            page.pendingDiffReload = true
+        }
+        property bool pendingDiffReload: false
+        function reloadDiff() {
+            if (!page.pendingDiffReload || !page.diffShown)
+                return
+            page.pendingDiffReload = false
+            diffModel.requestWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
+        }
+
         function closeDiff() {
             page.diffShown = false
             page.diffKey = ""
+            page.diffKind = ""
+            page.diffPath = ""
+            page.diffOrigPath = ""
             page.diffFromWt = false
             diffModel.clear()
         }
@@ -786,6 +1577,8 @@ ApplicationWindow {
             worktreesModel.attachSection(page.tab_id, "worktrees")
             stashesModel.attachSection(page.tab_id, "stashes")
             tagsModel.attachSection(page.tab_id, "tags")
+            if (AppBackend.autoAct !== "")
+                autoActTimer.start()
         }
 
         Connections {
@@ -1113,6 +1906,8 @@ ApplicationWindow {
                             headTrack: workTree.upstream !== ""
                                        ? "↑" + workTree.ahead + " ↓" + workTree.behind : ""
                             onRefActivated: oidHex => page.jumpToRef(oidHex)
+                            onRefMenuRequested: (name, oidHex) =>
+                                page.openRefMenu(name, oidHex, false)
                         }
 
                         NavHeader {
@@ -1129,6 +1924,8 @@ ApplicationWindow {
                             kindHint: "remote"
                             stretch: page.lastOpen === "remotes"
                             onRefActivated: oidHex => page.jumpToRef(oidHex)
+                            onRefMenuRequested: (name, oidHex) =>
+                                page.openRefMenu(name, oidHex, true)
                         }
 
                         // git worktrees (checkouts), GitKraken-style; the
@@ -1235,6 +2032,9 @@ ApplicationWindow {
                             property real graphXOffset: page.graphX
                             property int wipCount: worktreeModel.total
                             signal rowSelected(string oidHex)
+                            signal rowMenuRequested(string oidHex, string subject)
+                            onRowMenuRequested: (oidHex, subject) =>
+                                page.openCommitMenu(oidHex, subject)
                             onRowSelected: oidHex => {
                                 // The all-zero id is the synthetic WIP row.
                                 if (oidHex !== "" && !/[^0]/.test(oidHex)) {
@@ -1542,16 +2342,23 @@ ApplicationWindow {
                                         elide: Text.ElideMiddle
                                         Layout.fillWidth: true
                                     }
-                                    // File-level staging (visual until P2).
                                     ToolButton {
                                         visible: page.diffFromWt
-                                        text: page.diffKey.indexOf("staged:") === 0
-                                              ? qsTr("Unstage file") : qsTr("Stage file")
+                                        text: page.diffStaged ? qsTr("Unstage file")
+                                                              : qsTr("Stage file")
                                         font.pixelSize: Theme.fontSm
+                                        enabled: repoTab.busyCount === 0
                                         ToolTip.visible: hovered
                                         ToolTip.delay: 300
-                                        ToolTip.text: qsTr("Staging arrives in Phase 2")
-                                        onClicked: {}
+                                        ToolTip.text: page.diffStaged
+                                            ? qsTr("Take this whole file out of the next commit")
+                                            : qsTr("Put this whole file into the next commit")
+                                        onClicked: {
+                                            if (page.diffStaged)
+                                                repoTab.unstagePath(page.diffPath)
+                                            else
+                                                repoTab.stagePath(page.diffPath)
+                                        }
                                     }
                                     ToolButton {
                                         text: "×"
@@ -1583,6 +2390,8 @@ ApplicationWindow {
                                     required property int old_no
                                     required property int new_no
                                     required property string text
+                                    required property int hunk
+                                    required property int line
                                     width: diffList.width
                                     height: Theme.rowHeight
                                     color: kind === "add" ? Theme.diffAddedBg
@@ -1636,20 +2445,21 @@ ApplicationWindow {
                                         acceptedButtons: Qt.NoButton
                                         enabled: page.diffFromWt
                                     }
-                                    // Hunk-level staging (visual until P2).
+                                    // Hunk-level staging. The row carries the
+                                    // hunk index the patch builder needs, so
+                                    // what is staged is exactly what is shown.
                                     ToolButton {
                                         visible: page.diffFromWt && diffRow.kind === "hunk"
                                         anchors.right: parent.right
                                         anchors.rightMargin: Theme.spaceSm
                                         anchors.verticalCenter: parent.verticalCenter
-                                        text: qsTr("Stage hunk")
+                                        text: page.diffStaged ? qsTr("Unstage hunk")
+                                                              : qsTr("Stage hunk")
                                         font.pixelSize: Theme.fontSm
-                                        ToolTip.visible: hovered
-                                        ToolTip.delay: 300
-                                        ToolTip.text: qsTr("Staging arrives in Phase 2")
-                                        onClicked: {}
+                                        enabled: repoTab.busyCount === 0
+                                        onClicked: page.stageSelection(diffRow.hunk, -1)
                                     }
-                                    // Line-level staging (visual until P2).
+                                    // Line-level staging.
                                     Rectangle {
                                         visible: page.diffFromWt && lineHover.containsMouse
                                                  && (diffRow.kind === "add"
@@ -1664,7 +2474,8 @@ ApplicationWindow {
                                         border.width: Theme.borderWidth
                                         ToolTip.visible: stageLineHover.containsMouse
                                         ToolTip.delay: 300
-                                        ToolTip.text: qsTr("Line staging arrives in Phase 2")
+                                        ToolTip.text: page.diffStaged ? qsTr("Unstage this line")
+                                                                      : qsTr("Stage this line")
                                         NavIcon {
                                             anchors.centerIn: parent
                                             width: Theme.iconSm
@@ -1676,6 +2487,8 @@ ApplicationWindow {
                                             id: stageLineHover
                                             anchors.fill: parent
                                             hoverEnabled: true
+                                            onClicked: page.stageSelection(diffRow.hunk,
+                                                                           diffRow.line)
                                         }
                                     }
                                 }
@@ -1796,14 +2609,63 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                            Button {
+                            // Amend replaces the newest commit instead of
+                            // adding one, so it starts from that commit's
+                            // message rather than an empty editor.
+                            RowLayout {
                                 Layout.fillWidth: true
-                                text: qsTr("Commit changes (%1 staged)")
-                                      .arg(workTree.stagedCount)
-                                enabled: false
-                                ToolTip.visible: commitHover.containsMouse
+                                spacing: Theme.spaceXs
+                                CheckBox {
+                                    id: amendBox
+                                    text: qsTr("Amend the last commit")
+                                    font.pixelSize: Theme.fontSm
+                                    implicitHeight: Theme.controlHeight
+                                    onToggled: page.amendToggled(checked)
+                                }
+                                Item { Layout.fillWidth: true }
+                                // Warned about, not forbidden: git allows
+                                // it and the confirmation says what it costs.
+                                Label {
+                                    visible: page.amending && page.headPublished
+                                    text: qsTr("already pushed")
+                                    color: Theme.warning
+                                    font.pixelSize: Theme.fontSm
+                                    ToolTip.visible: amendPushedHover.containsMouse
+                                    ToolTip.delay: 400
+                                    ToolTip.text: qsTr("The last commit is on a remote. "
+                                                       + "Rewriting it would leave anyone "
+                                                       + "who already has it out of step.")
+                                    MouseArea {
+                                        id: amendPushedHover
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        acceptedButtons: Qt.NoButton
+                                    }
+                                }
+                            }
+                            Button {
+                                id: commitButton
+                                Layout.fillWidth: true
+                                highlighted: true
+                                text: page.amending
+                                      ? qsTr("Amend commit (%1 staged)").arg(workTree.stagedCount)
+                                      : qsTr("Commit changes (%1 staged)").arg(workTree.stagedCount)
+                                // An amend can stand on its own (message
+                                // only); a new commit needs staged content
+                                // and a summary, and git needs an identity
+                                // to attribute either one to.
+                                enabled: repoTab.busyCount === 0
+                                         && repoTab.identityReady
+                                         && wipSubject.text.trim() !== ""
+                                         && (page.amending || workTree.stagedCount > 0)
+                                onClicked: page.commitNow()
+                                ToolTip.visible: commitHover.containsMouse && !enabled
                                 ToolTip.delay: 300
-                                ToolTip.text: qsTr("Committing arrives in Phase 2")
+                                ToolTip.text: !repoTab.identityReady
+                                              ? qsTr("git has no name or email to record on commits")
+                                              : wipSubject.text.trim() === ""
+                                              ? qsTr("A commit needs a summary")
+                                              : qsTr("Stage something to commit")
                                 MouseArea {
                                     id: commitHover
                                     anchors.fill: parent
@@ -1855,8 +2717,15 @@ ApplicationWindow {
                                         font.pixelSize: Theme.fontSm
                                         ToolTip.visible: hovered
                                         ToolTip.delay: 300
-                                        ToolTip.text: qsTr("Staging arrives in Phase 2")
-                                        onClicked: {}
+                                        ToolTip.text: bucketHeader.section === "staged"
+                                            ? qsTr("Empty the staging area")
+                                            : qsTr("Stage every change, untracked files included")
+                                        onClicked: {
+                                            if (bucketHeader.section === "staged")
+                                                repoTab.unstageAll()
+                                            else
+                                                repoTab.stageAll()
+                                        }
                                     }
                                 }
                             }
@@ -1867,6 +2736,12 @@ ApplicationWindow {
                                 onFileClicked: (bucket, path, origPath) =>
                                     page.toggleDiff(bucket, path, origPath)
                                 onFolderClicked: key => worktreeModel.toggleFolder(key)
+                                onStageClicked: (bucket, path) => {
+                                    if (bucket === "staged")
+                                        repoTab.unstagePath(path)
+                                    else
+                                        repoTab.stagePath(path)
+                                }
                             }
                         }
 
@@ -2402,10 +3277,14 @@ ApplicationWindow {
             id: rowMouse
             anchors.fill: parent
             hoverEnabled: true
-            acceptedButtons: Qt.LeftButton
-            onClicked: {
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: mouse => {
                 rowItem.ListView.view.currentIndex = rowItem.index
                 rowItem.ListView.view.rowSelected(rowItem.oid_hex)
+                // The synthetic WIP row is not a commit, so nothing in the
+                // commit menu applies to it.
+                if (mouse.button === Qt.RightButton && !rowItem.isWip)
+                    rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.subject)
             }
         }
         // Hover details: what the row no longer shows as columns.
@@ -2564,6 +3443,7 @@ ApplicationWindow {
         property string headTrack: ""
         signal refActivated(string oidHex)
         signal fileActivated(string bucket, string path, string origPath)
+        signal refMenuRequested(string name, string oidHex)
 
         visible: expanded
         Layout.fillWidth: true
@@ -2582,6 +3462,7 @@ ApplicationWindow {
             onRefClicked: oidHex => navList.refActivated(oidHex)
             onFileClicked: (bucket, path, origPath) => navList.fileActivated(bucket, path, origPath)
             onFolderClicked: key => navList.sectionModel.toggleFolder(key)
+            onRefMenuRequested: (name, oidHex) => navList.refMenuRequested(name, oidHex)
         }
     }
 
@@ -2609,6 +3490,10 @@ ApplicationWindow {
         signal refClicked(string oidHex)
         signal fileClicked(string bucket, string path, string origPath)
         signal folderClicked(string key)
+        signal stageClicked(string bucket, string path)
+        /// Right-click on a ref row; the page owns the menu because
+        /// delegates are recycled out from under an open popup.
+        signal refMenuRequested(string name, string oidHex)
 
         width: listWidth
         height: Theme.rowHeight
@@ -2727,7 +3612,18 @@ ApplicationWindow {
             id: itemMouse
             anchors.fill: parent
             hoverEnabled: true
-            onClicked: {
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: mouse => {
+                if (mouse.button === Qt.RightButton) {
+                    // Only branch-like rows have operations behind them.
+                    if (!navRow.folder && navRow.oid_hex !== ""
+                            && (navRow.kindHint === "branch"
+                                || navRow.kindHint === "remote"))
+                        navRow.refMenuRequested(
+                            navRow.full !== "" ? navRow.full : navRow.name,
+                            navRow.oid_hex)
+                    return
+                }
                 if (navRow.folder)
                     navRow.folderClicked(navRow.full)
                 else if (navRow.kindHint === "wt")
@@ -2740,7 +3636,7 @@ ApplicationWindow {
                     navRow.refClicked(navRow.oid_hex)
             }
         }
-        // Hover stage/unstage affordance (visual only until Phase 2).
+        // Hover stage/unstage affordance.
         ToolButton {
             visible: navRow.showStage && !navRow.folder
                      && (itemMouse.containsMouse || hovered)
@@ -2752,10 +3648,10 @@ ApplicationWindow {
             implicitHeight: Theme.iconLg
             ToolTip.visible: hovered
             ToolTip.delay: 300
-            ToolTip.text: navRow.bucket === "staged"
-                          ? qsTr("Unstage file — arrives in Phase 2")
-                          : qsTr("Stage file — arrives in Phase 2")
-            onClicked: {}
+            ToolTip.text: navRow.bucket === "staged" ? qsTr("Unstage file")
+                                                     : qsTr("Stage file")
+            onClicked: navRow.stageClicked(
+                navRow.bucket, navRow.full !== "" ? navRow.full : navRow.name)
             contentItem: NavIcon {
                 kind: navRow.bucket === "staged" ? "minus" : "plus"
                 tint: navRow.bucket === "staged" ? Theme.diffRemovedFg

@@ -156,6 +156,100 @@ pub struct PushSpec {
     pub force: PushForce,
 }
 
+/// Works out where the branch that is checked out should be pushed.
+///
+/// A branch that already tracks something goes back to exactly that. One
+/// that tracks nothing goes to `fallback_remote` under its own name and
+/// records the upstream, so the next push needs no decision. A detached
+/// HEAD has no branch to push, and says so rather than guessing.
+///
+/// The upstream is read from configuration rather than parsed out of
+/// `origin/main`: a remote may be named `my/fork`, and a branch name may
+/// contain slashes, so splitting that string cannot be done reliably.
+pub async fn plan_current_push(
+    executor: &GitExecutor,
+    workdir: &Path,
+    fallback_remote: &str,
+    force: PushForce,
+    cancel: &CancellationToken,
+) -> Result<PushSpec, GitError> {
+    let branch = current_branch(executor, workdir, cancel).await?;
+    let remote = config_value(
+        executor,
+        workdir,
+        &format!("branch.{branch}.remote"),
+        cancel,
+    )
+    .await?;
+    let merge = config_value(executor, workdir, &format!("branch.{branch}.merge"), cancel).await?;
+
+    match (remote, merge) {
+        (Some(remote), Some(merge)) => Ok(PushSpec {
+            remote,
+            remote_branch: merge
+                .strip_prefix("refs/heads/")
+                .unwrap_or(&merge)
+                .to_string(),
+            local: branch,
+            set_upstream: false,
+            force,
+        }),
+        _ => {
+            if fallback_remote.is_empty() {
+                return Err(GitError::UnexpectedOutput {
+                    command: "git push".to_string(),
+                    message: "this repository has no remote to push to".to_string(),
+                });
+            }
+            Ok(PushSpec {
+                remote: fallback_remote.to_string(),
+                remote_branch: branch.clone(),
+                local: branch,
+                set_upstream: true,
+                force,
+            })
+        }
+    }
+}
+
+/// Short name of the checked-out branch; an error when HEAD is detached.
+async fn current_branch(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<String, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["symbolic-ref", "-q", "--short", "HEAD"]);
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    let name = out.stdout_utf8().trim().to_string();
+    if out.code != 0 || name.is_empty() {
+        return Err(GitError::UnexpectedOutput {
+            command: "git symbolic-ref --short HEAD".to_string(),
+            message: "HEAD is detached, so there is no branch to push".to_string(),
+        });
+    }
+    Ok(name)
+}
+
+/// One configuration value, or `None` when the key is unset.
+async fn config_value(
+    executor: &GitExecutor,
+    workdir: &Path,
+    key: &str,
+    cancel: &CancellationToken,
+) -> Result<Option<String>, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["config", "--get", "--", key]);
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    if out.code != 0 {
+        return Ok(None);
+    }
+    let value = out.stdout_utf8().trim().to_string();
+    Ok((!value.is_empty()).then_some(value))
+}
+
 /// `git push` for one branch.
 pub async fn push(
     executor: &GitExecutor,

@@ -37,10 +37,13 @@ pub enum TabMsg {
         message: String,
     },
     /// A write command started / ended. A failed write also arrives as an
-    /// `OpError`, so the existing error surface needs no special case.
+    /// `OpError`, so the existing error surface needs no special case;
+    /// `error` is here as well so an editor can tell whether the write it
+    /// asked for is the one that failed.
     WriteState {
         op: String,
         running: bool,
+        error: String,
     },
     /// How much of a range a remote already has (rewrite warning).
     Publish {
@@ -326,9 +329,10 @@ impl SessionSink for BridgeSink {
             SessionEvent::WriteStarted { op } => self.feeds.tab.push(TabMsg::WriteState {
                 op: op.to_string(),
                 running: true,
+                error: String::new(),
             }),
             SessionEvent::WriteFinished { op, error } => {
-                if let Some(message) = error {
+                if let Some(message) = &error {
                     self.feeds.tab.push(TabMsg::OpError {
                         message: format!("{op}: {message}"),
                     });
@@ -336,6 +340,7 @@ impl SessionSink for BridgeSink {
                 self.feeds.tab.push(TabMsg::WriteState {
                     op: op.to_string(),
                     running: false,
+                    error: error.unwrap_or_default(),
                 });
             }
         }

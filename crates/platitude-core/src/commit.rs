@@ -29,6 +29,39 @@ pub struct CommitOptions {
     pub reset_author: bool,
 }
 
+/// Joins the two fields of a message editor into one commit message.
+///
+/// The convention lives here rather than in the UI: a summary line, a
+/// blank line, then the description — the shape every git tool expects,
+/// and the shape [`split_message`] reads back.
+pub fn join_message(subject: &str, body: &str) -> String {
+    let subject = subject.trim();
+    let body = body.trim();
+    if body.is_empty() {
+        return subject.to_string();
+    }
+    if subject.is_empty() {
+        return body.to_string();
+    }
+    format!("{subject}\n\n{body}")
+}
+
+/// Splits a commit message back into the editor's two fields.
+///
+/// The summary is the first line; the description is what follows once the
+/// blank line separating them is gone.
+pub fn split_message(message: &str) -> (String, String) {
+    let message = message.replace("\r\n", "\n");
+    let (subject, rest) = match message.split_once('\n') {
+        Some((s, r)) => (s, r),
+        None => (message.as_str(), ""),
+    };
+    (
+        subject.trim().to_string(),
+        rest.trim_start_matches('\n').trim_end().to_string(),
+    )
+}
+
 /// Commits the staged content and returns the resulting commit id.
 ///
 /// An empty `message` is only valid together with [`CommitOptions::amend`],
@@ -135,6 +168,42 @@ fn normalized(message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_two_editor_fields_join_with_a_blank_line() {
+        assert_eq!(join_message("subject", "body"), "subject\n\nbody");
+        assert_eq!(join_message("  subject  ", "  "), "subject");
+        assert_eq!(join_message("", "body only"), "body only");
+        assert_eq!(join_message("", ""), "");
+    }
+
+    #[test]
+    fn a_message_splits_back_into_the_fields_it_came_from() {
+        assert_eq!(
+            split_message("subject\n\nbody\nmore"),
+            ("subject".to_string(), "body\nmore".to_string())
+        );
+        assert_eq!(
+            split_message("subject only\n"),
+            ("subject only".to_string(), String::new())
+        );
+        // git's own log output arrives with CRLF on Windows checkouts.
+        assert_eq!(
+            split_message("subject\r\n\r\nbody\r\n"),
+            ("subject".to_string(), "body".to_string())
+        );
+        // A message with no blank line keeps everything after line one.
+        assert_eq!(
+            split_message("subject\nrun-on"),
+            ("subject".to_string(), "run-on".to_string())
+        );
+    }
+
+    #[test]
+    fn join_and_split_round_trip() {
+        let (subject, body) = split_message(&join_message("s", "b1\nb2"));
+        assert_eq!((subject.as_str(), body.as_str()), ("s", "b1\nb2"));
+    }
 
     #[test]
     fn normalizes_line_endings_and_trailing_newline() {

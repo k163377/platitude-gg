@@ -118,37 +118,20 @@ pub fn tail_lanes(geometry: &str) -> String {
     out
 }
 
-/// Stable identity of a diff request (stale-response guard in the pane).
-/// Decodes a hunk/line selection from QML.
+/// One hunk or one line of it, as the diff pane addresses them.
 ///
-/// `"1;3:0,4"` selects all of hunk 1 and lines 0 and 4 of hunk 3 — the
-/// indices addressing the rows [`flatten_patches`] produced, which are the
-/// parser's own positions. Anything unparsable is dropped rather than
-/// guessed at: a wrong index would stage the wrong line.
-pub fn parse_hunk_selection(spec: &str) -> Vec<HunkSelect> {
-    let mut out = Vec::new();
-    for part in spec.split(';').filter(|p| !p.trim().is_empty()) {
-        let (hunk, lines) = match part.split_once(':') {
-            Some((h, l)) => (h, Some(l)),
-            None => (part, None),
-        };
-        let Ok(hunk) = hunk.trim().parse::<usize>() else {
-            continue;
-        };
-        match lines {
-            None => out.push(HunkSelect::whole(hunk)),
-            Some(list) => {
-                let selected: Vec<usize> = list
-                    .split(',')
-                    .filter_map(|n| n.trim().parse().ok())
-                    .collect();
-                if !selected.is_empty() {
-                    out.push(HunkSelect::lines(hunk, selected));
-                }
-            }
-        }
+/// The indices come straight off the row the user clicked, so nothing is
+/// parsed and nothing can drift: a wrong index would stage a different
+/// line than the one under the cursor. A negative line means the whole
+/// hunk.
+pub fn hunk_selection(hunk: i32, line: i32) -> Vec<HunkSelect> {
+    let Ok(hunk) = usize::try_from(hunk) else {
+        return Vec::new();
+    };
+    match usize::try_from(line) {
+        Ok(line) => vec![HunkSelect::lines(hunk, [line])],
+        Err(_) => vec![HunkSelect::whole(hunk)],
     }
-    out
 }
 
 /// Rebuilds the diff target a working-tree selection refers to.
@@ -189,6 +172,12 @@ pub struct DiffRow {
     pub old_no: i32,
     pub new_no: i32,
     pub text: String,
+    /// Which hunk of the file this row belongs to, and which line of that
+    /// hunk it is (-1 on the hunk header). These are the same indices
+    /// [`platitude_core::patch::HunkSelect`] addresses, so a row can be
+    /// staged straight from what the pane is showing.
+    pub hunk: i32,
+    pub line: i32,
 }
 
 /// Flattens parsed patches into displayable rows (hunk headers inline).
@@ -201,15 +190,18 @@ pub fn flatten_patches(patches: &[FilePatch]) -> Vec<DiffRow> {
                 old_no: -1,
                 new_no: -1,
                 text: String::from("(binary file)"),
+                hunk: -1,
+                line: -1,
             });
             continue;
         }
-        for hunk in &patch.hunks {
+        for (hunk_index, hunk) in patch.hunks.iter().enumerate() {
             let heading = if hunk.heading.is_empty() {
                 String::new()
             } else {
                 format!(" {}", hunk.heading)
             };
+            let hunk_index = i32::try_from(hunk_index).unwrap_or(-1);
             rows.push(DiffRow {
                 kind: "hunk",
                 old_no: -1,
@@ -218,8 +210,10 @@ pub fn flatten_patches(patches: &[FilePatch]) -> Vec<DiffRow> {
                     "@@ -{},{} +{},{} @@{heading}",
                     hunk.old_start, hunk.old_count, hunk.new_start, hunk.new_count
                 ),
+                hunk: hunk_index,
+                line: -1,
             });
-            for line in &hunk.lines {
+            for (line_index, line) in hunk.lines.iter().enumerate() {
                 let kind = match line.kind {
                     DiffLineKind::Context => "ctx",
                     DiffLineKind::Addition => "add",
@@ -231,6 +225,8 @@ pub fn flatten_patches(patches: &[FilePatch]) -> Vec<DiffRow> {
                     old_no: line.old_no.map_or(-1, |n| n as i32),
                     new_no: line.new_no.map_or(-1, |n| n as i32),
                     text: line.text.clone(),
+                    hunk: hunk_index,
+                    line: i32::try_from(line_index).unwrap_or(-1),
                 });
             }
         }
@@ -335,22 +331,41 @@ mod tests {
     }
 
     #[test]
-    fn parses_hunk_and_line_selections() {
-        let sel = parse_hunk_selection("1;3:0,4");
-        assert_eq!(
-            sel,
-            vec![HunkSelect::whole(1), HunkSelect::lines(3, [0, 4])]
-        );
+    fn a_negative_line_selects_the_whole_hunk() {
+        assert_eq!(hunk_selection(3, -1), vec![HunkSelect::whole(3)]);
+        assert_eq!(hunk_selection(3, 4), vec![HunkSelect::lines(3, [4])]);
     }
 
     #[test]
-    fn unparsable_selection_parts_are_dropped() {
-        assert!(parse_hunk_selection("").is_empty());
-        assert!(parse_hunk_selection("x;2:").is_empty());
-        assert_eq!(
-            parse_hunk_selection("2:1,x"),
-            vec![HunkSelect::lines(2, [1])]
-        );
+    fn a_row_with_no_hunk_selects_nothing() {
+        // Rows outside any hunk (the binary-file note) carry -1, and
+        // staging one of those must not fall back to hunk zero.
+        assert!(hunk_selection(-1, -1).is_empty());
+        assert!(hunk_selection(-1, 2).is_empty());
+    }
+
+    #[test]
+    fn flattened_rows_carry_the_indices_that_address_them() {
+        let patch = "\
+--- a/f
++++ b/f
+@@ -1,2 +1,3 @@
+ keep
++added
+@@ -10,2 +11,1 @@
+-removed
+ tail
+";
+        let rows = flatten_patches(&parse_patch(patch.as_bytes()));
+        // The header carries its hunk but no line; the lines that follow
+        // are numbered from zero within that hunk — exactly what
+        // `HunkSelect` addresses.
+        assert_eq!((rows[0].kind, rows[0].hunk, rows[0].line), ("hunk", 0, -1));
+        assert_eq!((rows[1].kind, rows[1].hunk, rows[1].line), ("ctx", 0, 0));
+        assert_eq!((rows[2].kind, rows[2].hunk, rows[2].line), ("add", 0, 1));
+        assert_eq!((rows[3].kind, rows[3].hunk, rows[3].line), ("hunk", 1, -1));
+        assert_eq!((rows[4].kind, rows[4].hunk, rows[4].line), ("del", 1, 0));
+        assert_eq!((rows[5].kind, rows[5].hunk, rows[5].line), ("ctx", 1, 1));
     }
 
     #[test]

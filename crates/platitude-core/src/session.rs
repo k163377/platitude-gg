@@ -1171,6 +1171,30 @@ impl RepoSession {
         );
     }
 
+    /// Pushes the branch that is checked out to wherever it belongs.
+    ///
+    /// Resolving the target is part of the job rather than something the
+    /// UI works out: which remote a branch tracks lives in configuration,
+    /// and a name like `origin/main` cannot be split back apart reliably.
+    pub fn push_current(self: &Arc<Self>, fallback_remote: String, force: remote::PushForce) {
+        let timeout = self.network_timeout();
+        self.write(
+            "push",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                let spec = remote::plan_current_push(
+                    &exec,
+                    &repo.workdir,
+                    &fallback_remote,
+                    force,
+                    &cancel,
+                )
+                .await?;
+                remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await
+            },
+        );
+    }
+
     /// `git push <remote> --delete <branch>`.
     pub fn delete_remote_branch(self: &Arc<Self>, remote_name: String, branch_name: String) {
         let timeout = self.network_timeout();
