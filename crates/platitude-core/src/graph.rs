@@ -128,18 +128,6 @@ impl GraphBuilder {
             }
         };
 
-        // A fork edge to an already-awaited parent hands that lane real
-        // committed history, so it stops drawing dashed from this row on —
-        // including the through segment, which the fork edge shares with
-        // the WIP / stash leash that opened the lane.
-        for p in commit.parents.iter().skip(1) {
-            if let Some(lane) = self.waiting_lane(p, node_lane)
-                && let Some(state) = self.lanes.get_mut(lane as usize).and_then(Option::as_mut)
-            {
-                state.dashed = false;
-            }
-        }
-
         let mut segments = Vec::new();
         for (i, state) in self.lanes.iter().enumerate() {
             let Some(state) = state else { continue };
@@ -182,9 +170,27 @@ impl GraphBuilder {
         for p in parents {
             // Another edge already waits for this parent: merge into the
             // nearest waiting lane (keeps the graph narrow and the
-            // horizontal jog short). The edge is real history, so it draws
-            // solid even when the lane was opened by a dashed leash.
+            // horizontal jog short). The edge is real history, so the lane
+            // stops drawing dashed from this row on — including this row's
+            // through segment built above, which the fork edge shares with
+            // the WIP / stash leash that opened the lane. Deciding this
+            // here, on the lane the edge actually lands on, keeps the
+            // un-dash in lockstep with the merge target (a duplicate
+            // parent lands on the node lane, not on a waiting lane).
             if let Some(existing) = self.waiting_lane(p, node_lane) {
+                if let Some(state) = self
+                    .lanes
+                    .get_mut(existing as usize)
+                    .and_then(Option::as_mut)
+                {
+                    state.dashed = false;
+                }
+                for s in segments
+                    .iter_mut()
+                    .filter(|s| s.lane == existing && s.kind == SegmentKind::Through)
+                {
+                    s.dashed = false;
+                }
                 segments.push(Segment {
                     kind: SegmentKind::OutOfNode,
                     lane: existing,
@@ -345,6 +351,8 @@ impl GraphBuilder {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
     use crate::model::StrPool;
 
@@ -614,6 +622,52 @@ mod tests {
         assert!(head_row.segments.iter().all(|s| !s.dashed));
     }
 
+    /// A duplicate-parent merge sends its extra edge onto the node's own
+    /// first-parent edge (distance zero beats every waiting lane), so a
+    /// WIP leash waiting for the same commit on another lane gets no real
+    /// history and must keep drawing dashed.
+    #[test]
+    fn duplicate_parent_merge_keeps_an_unrelated_leash_dashed() {
+        let mut pool = StrPool::new();
+        let mut b = GraphBuilder::new();
+        let head = oid(2);
+        b.push_virtual(&Oid::zero_like(&head), &head);
+
+        // Merge listing HEAD twice (git accepts duplicate parents).
+        let merge = b.push(&commit(&mut pool, 1, &[2, 2]));
+        assert_eq!(merge.node_lane, 1, "the WIP leash keeps lane 0");
+        assert!(
+            merge
+                .segments
+                .iter()
+                .filter(|s| s.kind == SegmentKind::OutOfNode)
+                .all(|s| s.lane == 1),
+            "both parent edges lie on the node lane: {:?}",
+            merge.segments
+        );
+        let through = merge
+            .segments
+            .iter()
+            .find(|s| s.kind == SegmentKind::Through && s.lane == 0)
+            .unwrap();
+        assert!(
+            through.dashed,
+            "no real edge joined the WIP lane: {:?}",
+            merge.segments
+        );
+
+        // HEAD gathers both the leash and the merge edges; the leash side
+        // still arrives dashed.
+        let head_row = b.push(&commit(&mut pool, 2, &[]));
+        assert_eq!(head_row.node_lane, 0);
+        let into = head_row
+            .segments
+            .iter()
+            .find(|s| s.kind == SegmentKind::IntoNode && s.lane == 0)
+            .unwrap();
+        assert!(into.dashed);
+    }
+
     #[test]
     fn fork_prefers_the_nearest_free_lane() {
         // Node at lane 2 forks its second parent while lane 0 is free:
@@ -696,5 +750,129 @@ mod tests {
         assert_eq!(b.row_of(&oid(1)), Some(1));
         assert_eq!(b.row_of(&oid(9)), None);
         assert_eq!(b.row_count(), 2);
+    }
+
+    /// Tiny deterministic PRNG (xorshift64*), keeping the test free of
+    /// dependencies.
+    struct Rng(u64);
+
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            let mut x = self.0;
+            x ^= x >> 12;
+            x ^= x << 25;
+            x ^= x >> 27;
+            self.0 = x;
+            x.wrapping_mul(0x2545_F491_4F6C_DD1D)
+        }
+
+        fn below(&mut self, n: u64) -> u64 {
+            self.next() % n
+        }
+    }
+
+    /// Lanes touching one horizontal edge of a row — its bottom (through
+    /// and out-of-node) or its top (through and into-node) — with the
+    /// color and dash of the segment drawn there. Two segments sharing a
+    /// lane must agree on color (a merge edge joining a through lane).
+    fn boundary_lanes(row: &GraphRow, bottom: bool) -> BTreeMap<u16, (u8, bool)> {
+        let mut lanes = BTreeMap::new();
+        for s in &row.segments {
+            let touches = match s.kind {
+                SegmentKind::Through => true,
+                SegmentKind::OutOfNode => bottom,
+                SegmentKind::IntoNode => !bottom,
+            };
+            if !touches {
+                continue;
+            }
+            if let Some((color, dashed)) = lanes.insert(s.lane, (s.color, s.dashed)) {
+                assert_eq!(
+                    color, s.color,
+                    "row {}: segments on lane {} disagree on color",
+                    row.row, s.lane
+                );
+                // A solid segment wins the boundary (drawn on top).
+                if !dashed {
+                    lanes.insert(s.lane, (s.color, false));
+                }
+            }
+        }
+        lanes
+    }
+
+    /// Every edge leaving a row's bottom must continue at the next row's
+    /// top on the same lane in the same color — across arbitrary DAGs
+    /// (merges, octopus and duplicate parents, extra roots, orphan tips)
+    /// with WIP and stash rows mixed in. Dashes may switch dashed→solid
+    /// between rows (a real edge merging into a leash lane), never
+    /// solid→dashed.
+    #[test]
+    fn edges_are_continuous_across_rows_on_random_dags() {
+        for seed in 1..=300u64 {
+            let mut rng = Rng(seed);
+            let mut pool = StrPool::new();
+            let n = 2 + rng.below(28) as u8;
+            // ids n..=1, children before parents (parents have smaller
+            // ids), so the stream is topo-ordered by construction.
+            let mut commits: Vec<CommitMeta> = Vec::new();
+            for id in (1..=n).rev() {
+                let mut parents: Vec<u8> = Vec::new();
+                if id > 1 && rng.below(12) != 0 {
+                    let extra = match rng.below(10) {
+                        0..=6 => 0,
+                        7..=8 => 1,
+                        _ => 2,
+                    };
+                    for _ in 0..=extra {
+                        parents.push(1 + rng.below(u64::from(id) - 1) as u8);
+                    }
+                }
+                commits.push(commit(&mut pool, id, &parents));
+            }
+
+            let mut b = GraphBuilder::new();
+            let mut rows: Vec<GraphRow> = Vec::new();
+            // Half the seeds open like a dirty repository with one stash:
+            // a WIP leash plus a dashed stash tip, both leading to HEAD.
+            if seed % 2 == 0 {
+                let head = oid(n);
+                rows.push(b.push_virtual(&Oid::zero_like(&head), &head));
+                let stash = commit(&mut pool, n + 1, &[n]);
+                rows.push(b.push_with_edge_style(&stash, true));
+            }
+            rows.extend(commits.iter().map(|c| b.push(c)));
+
+            for pair in rows.windows(2) {
+                let bottom = boundary_lanes(&pair[0], true);
+                let top = boundary_lanes(&pair[1], false);
+                assert_eq!(
+                    bottom.keys().collect::<Vec<_>>(),
+                    top.keys().collect::<Vec<_>>(),
+                    "seed {seed}: lanes must continue from row {} to row {}\n{}",
+                    pair[0].row,
+                    pair[1].row,
+                    render(&rows)
+                );
+                for (lane, (color, dashed)) in &bottom {
+                    let (top_color, top_dashed) = top[lane];
+                    assert_eq!(
+                        *color,
+                        top_color,
+                        "seed {seed}: lane {lane} changes color between rows {} and {}\n{}",
+                        pair[0].row,
+                        pair[1].row,
+                        render(&rows)
+                    );
+                    assert!(
+                        *dashed || !top_dashed,
+                        "seed {seed}: lane {lane} turns a solid edge dashed between rows {} and {}\n{}",
+                        pair[0].row,
+                        pair[1].row,
+                        render(&rows)
+                    );
+                }
+            }
+        }
     }
 }
