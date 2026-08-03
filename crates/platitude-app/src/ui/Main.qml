@@ -3224,6 +3224,12 @@ ApplicationWindow {
         height: Theme.graphRowHeight
 
         readonly property bool selected: ListView.isCurrentItem
+        // The top row's highlight and hit area bleed over the list's top
+        // margin: hovering or selecting the first commit shows one
+        // unbroken band level with the neighbouring header bands instead
+        // of leaving a dark sliver above the row.
+        readonly property real topBleed: index === 0 && ListView.view
+                                         ? ListView.view.topMargin : 0
         // The all-zero id marks the synthetic uncommitted-changes row.
         readonly property bool isWip: oid_hex !== "" && !/[^0]/.test(oid_hex)
         // Chip records are separated by U+001F (see encode.rs). Branch-like
@@ -3234,11 +3240,13 @@ ApplicationWindow {
 
         Rectangle {
             anchors.fill: parent
+            anchors.topMargin: -rowItem.topBleed
             color: Theme.bgSelected
             visible: rowItem.selected
         }
         Rectangle {
             anchors.fill: parent
+            anchors.topMargin: -rowItem.topBleed
             color: Theme.bgHover
             visible: rowMouse.containsMouse && !rowItem.selected
         }
@@ -3452,6 +3460,7 @@ ApplicationWindow {
         MouseArea {
             id: rowMouse
             anchors.fill: parent
+            anchors.topMargin: -rowItem.topBleed
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             onClicked: mouse => {
