@@ -76,6 +76,32 @@ ApplicationWindow {
     property int focusEpoch: 0
     onActiveChanged: if (active) focusEpoch++
 
+    // QML never drops a text input's focus on its own: once the sidebar
+    // filter or the commit editor was clicked, its caret kept blinking
+    // until some other editor took focus. This passive watcher (it grabs
+    // nothing, so every control underneath keeps working) hands focus
+    // back to the window whenever a press lands outside the focused
+    // editor. Judged on press, not on the tap: a tap is called off when
+    // any item accepts the click, and most of the window is clickable.
+    // Modal dialogs sit above the content item, so their own fields are
+    // unaffected.
+    TapHandler {
+        acceptedButtons: Qt.AllButtons
+        onPressedChanged: {
+            if (!pressed)
+                return
+            const item = root.activeFocusItem
+            // Only text editors hold a caret worth releasing; list views
+            // and buttons manage their own focus.
+            if (!item || !("cursorPosition" in item))
+                return
+            const local = item.mapFromItem(null, point.scenePressPosition)
+            if (local.x < 0 || local.y < 0
+                    || local.x >= item.width || local.y >= item.height)
+                root.contentItem.forceActiveFocus()
+        }
+    }
+
     // Identity dialog: opens on startup when git has no name and email to
     // put on a commit, and on demand from the app menu or the toolbar
     // badge. "Not now" leaves the app fully usable — reading a repository
