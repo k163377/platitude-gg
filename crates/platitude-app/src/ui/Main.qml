@@ -1756,7 +1756,7 @@ ApplicationWindow {
             target: graphList
             property: "contentY"
             from: 0
-            to: Math.min(3000, graphModel.rowTotal - 40) * Theme.rowHeight
+            to: Math.min(3000, graphModel.rowTotal - 40) * Theme.graphRowHeight
             duration: 12000
             onStopped: {
                 const secs = (Date.now() - page.benchT0) / 1000
@@ -2105,7 +2105,7 @@ ApplicationWindow {
                             // footer and the message sits where subjects go.
                             footer: Item {
                                 width: graphList.width
-                                height: graphModel.truncated ? 2 * Theme.rowHeight : 0
+                                height: graphModel.truncated ? 2 * Theme.graphRowHeight : 0
                                 visible: graphModel.truncated
                                 Item {
                                     x: graphList.labelWidth
@@ -2185,7 +2185,7 @@ ApplicationWindow {
                                         page.graphX = Math.max(0, Math.min(
                                             page.graphX - event.angleDelta.x / 2, page.graphXMax))
                                     const step = (event.angleDelta.y / 120)
-                                               * root.wheelRows * Theme.rowHeight
+                                               * root.wheelRows * Theme.graphRowHeight
                                     graphList.contentY = graphList.clampY(graphList.contentY - step)
                                 }
                             }
@@ -3221,7 +3221,7 @@ ApplicationWindow {
         required property string stash_ref
 
         width: ListView.view.width
-        height: Theme.rowHeight
+        height: Theme.graphRowHeight
 
         readonly property bool selected: ListView.isCurrentItem
         // The all-zero id marks the synthetic uncommitted-changes row.

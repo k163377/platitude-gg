@@ -96,6 +96,7 @@ QtObject {
 
     // ---- dimensions ----
     readonly property int rowHeight: 24
+    readonly property int graphRowHeight: 32
     readonly property int headerHeight: 32
     readonly property int toolbarHeight: 40
     readonly property int controlHeight: 28
