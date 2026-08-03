@@ -105,7 +105,8 @@ pub async fn head_is_merge(
     Ok(out.stdout_utf8().split_whitespace().count() > 1)
 }
 
-async fn head_oid(
+/// The commit HEAD points at.
+pub async fn head_oid(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,

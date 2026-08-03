@@ -123,6 +123,12 @@ pub struct AppBackend {
     /// Screenshot hook: submit that prefilled identity straight away.
     auto_identity_save: bool,
     scroll_to: String,
+    /// Auto-fetch interval in minutes; 0 is off. Application-wide, and not
+    /// persisted yet — settings storage is Phase 4, so this starts at the
+    /// default every launch.
+    auto_fetch_minutes: i32,
+    /// Ceiling the settings input enforces.
+    auto_fetch_max: i32,
     check_feed: Arc<Feed<AppMsg>>,
 }
 
@@ -159,6 +165,8 @@ impl Default for AppBackend {
             auto_identity_save: std::env::var("PG_AUTO_IDENTITY_SAVE").as_deref() == Ok("1"),
             // Smoke-test hook: "top" / "bottom" jumps the graph after load.
             scroll_to: std::env::var("PG_SCROLL_TO").unwrap_or_default(),
+            auto_fetch_minutes: platitude_core::session::AUTO_FETCH_DEFAULT_MINUTES as i32,
+            auto_fetch_max: platitude_core::session::AUTO_FETCH_MAX_MINUTES as i32,
             check_feed: Arc::new(Feed::default()),
         }
     }
@@ -207,12 +215,37 @@ impl AppBackend {
     qproperty!("autoScroll", Member = auto_scroll, Constant);
     qproperty!("autoWip", Member = auto_wip, Constant);
     qproperty!("scrollTo", Member = scroll_to, Constant);
+    qproperty!(
+        "autoFetchMinutes",
+        Member = auto_fetch_minutes,
+        Notify = settings_changed
+    );
+    qproperty!("autoFetchMaxMinutes", Member = auto_fetch_max, Constant);
 
     #[qsignal]
     fn git_state_changed(&mut self);
 
     #[qsignal]
     fn identity_changed(&mut self);
+
+    #[qsignal]
+    fn settings_changed(&mut self);
+
+    /// Sets how often every open repository fetches, in minutes. Zero (the
+    /// blank input) turns it off; anything above the ceiling is clamped,
+    /// because past an hour the automatic fetch has no point left.
+    #[qslot]
+    fn set_auto_fetch_minutes(&mut self, minutes: i32) {
+        let max = platitude_core::session::AUTO_FETCH_MAX_MINUTES as i32;
+        let minutes = minutes.clamp(0, max);
+        if self.auto_fetch_minutes == minutes {
+            return;
+        }
+        self.auto_fetch_minutes = minutes;
+        let interval = (minutes > 0).then(|| std::time::Duration::from_secs(minutes as u64 * 60));
+        Hub::with(|hub| hub.set_auto_fetch(interval));
+        self.settings_changed();
+    }
 
     /// Benchmark/automation reporting channel (QML → tracing).
     #[qslot]
@@ -542,6 +575,14 @@ pub struct RepoTab {
     /// Whether this repository signs commits or tags, and how.
     signing_active: bool,
     signing_format: String,
+    /// Configured remote names — where a branch with no upstream can go.
+    remotes: Vec<String>,
+    /// HEAD's message, filled on request so an amend starts from it.
+    head_message: String,
+    /// Auto fetch, reported apart from the shared busy/error surface so an
+    /// offline machine does not raise a banner every interval.
+    auto_fetch_running: bool,
+    auto_fetch_error: String,
     feed: Option<Arc<Feed<TabMsg>>>,
 }
 
@@ -568,6 +609,10 @@ impl Default for RepoTab {
             identity_ready: true,
             signing_active: false,
             signing_format: String::new(),
+            remotes: Vec::new(),
+            head_message: String::new(),
+            auto_fetch_running: false,
+            auto_fetch_error: String::new(),
             feed: None,
         }
     }
@@ -579,6 +624,17 @@ impl RepoTab {
         if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
             f(&session);
         }
+    }
+
+    /// Moves HEAD, optionally stashing uncommitted work first.
+    fn move_head(&self, target: platitude_core::branch::CheckoutTarget, stash_first: bool) {
+        self.with_session(|s| {
+            if stash_first {
+                s.checkout_stashing(target.clone());
+            } else {
+                s.checkout(target.clone());
+            }
+        });
     }
 }
 
@@ -604,9 +660,49 @@ impl RepoTab {
     qproperty!("identityReady", Member = identity_ready, Notify = changed);
     qproperty!("signingActive", Member = signing_active, Notify = changed);
     qproperty!("signingFormat", Member = signing_format, Notify = changed);
+    qproperty!("headMessage", Member = head_message, Notify = changed);
+    qproperty!(
+        "autoFetchRunning",
+        Member = auto_fetch_running,
+        Notify = changed
+    );
+    qproperty!(
+        "autoFetchError",
+        Member = auto_fetch_error,
+        Notify = changed
+    );
 
     #[qsignal]
     fn changed(&mut self);
+
+    /// How many remotes this repository has.
+    #[qslot]
+    fn remote_count(&self) -> i32 {
+        self.remotes.len() as i32
+    }
+
+    /// Name of one remote (a list property would need a model of its own
+    /// for three strings).
+    #[qslot]
+    fn remote_at(&self, index: i32) -> String {
+        usize::try_from(index)
+            .ok()
+            .and_then(|i| self.remotes.get(i))
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Remote a push should default to: `origin` when it exists, otherwise
+    /// the first one configured. Empty when there are none.
+    #[qslot]
+    fn default_remote(&self) -> String {
+        self.remotes
+            .iter()
+            .find(|r| *r == "origin")
+            .or_else(|| self.remotes.first())
+            .cloned()
+            .unwrap_or_default()
+    }
 
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
@@ -651,6 +747,16 @@ impl RepoTab {
                     self.identity_ready = complete;
                     self.signing_active = signing;
                     self.signing_format = signing_format;
+                }
+                TabMsg::Remotes { names } => self.remotes = names,
+                TabMsg::HeadMessage { message } => self.head_message = message,
+                TabMsg::AutoFetch { running, error } => {
+                    self.auto_fetch_running = running;
+                    // A finished fetch answers the previous failure, so a
+                    // recovered connection clears the warning by itself.
+                    if !running {
+                        self.auto_fetch_error = error;
+                    }
                 }
                 TabMsg::Publish {
                     range,
@@ -767,24 +873,34 @@ impl RepoTab {
         self.with_session(|s| s.commit(message.clone(), options));
     }
 
+    /// Reads HEAD's message into `headMessage` (amend starts from it).
     #[qslot]
-    fn checkout_branch(&mut self, name: String) {
+    fn request_head_message(&mut self) {
+        self.with_session(|s| s.load_head_message());
+    }
+
+    // Moving HEAD comes in two flavours throughout: `stash_first` stashes
+    // uncommitted work before the switch ("leave my changes here"), which
+    // has to be one job so a failed stash does not switch anyway.
+
+    #[qslot]
+    fn checkout_branch(&mut self, name: String, stash_first: bool) {
         let target = platitude_core::branch::CheckoutTarget::Branch { name };
-        self.with_session(|s| s.checkout(target.clone()));
+        self.move_head(target, stash_first);
     }
 
     /// Checks out any commit-ish, detaching HEAD.
     #[qslot]
-    fn checkout_detached(&mut self, rev: String) {
+    fn checkout_detached(&mut self, rev: String, stash_first: bool) {
         let target = platitude_core::branch::CheckoutTarget::Detach { rev };
-        self.with_session(|s| s.checkout(target.clone()));
+        self.move_head(target, stash_first);
     }
 
     /// Creates a local branch tracking a remote-tracking ref and switches.
     #[qslot]
-    fn checkout_remote(&mut self, remote_ref: String, local: String) {
+    fn checkout_remote(&mut self, remote_ref: String, local: String, stash_first: bool) {
         let target = platitude_core::branch::CheckoutTarget::Track { remote_ref, local };
-        self.with_session(|s| s.checkout(target.clone()));
+        self.move_head(target, stash_first);
     }
 
     /// Creates a branch at `start_point` (HEAD when empty).
@@ -897,6 +1013,7 @@ impl RepoTab {
             branch: None,
             autostash,
             update_refs,
+            root: false,
         };
         self.with_session(|s| s.rebase(upstream.clone(), options.clone()));
     }
@@ -904,6 +1021,22 @@ impl RepoTab {
     #[qslot]
     fn cherry_pick(&mut self, rev: String) {
         self.with_session(|s| s.cherry_pick(vec![rev.clone()]));
+    }
+
+    /// Folds a commit into its parent (one-commit interactive rebase).
+    #[qslot]
+    fn squash_into_parent(&mut self, oid: String) {
+        self.with_session(|s| s.squash_into_parent(oid.clone()));
+    }
+
+    /// Replaces one commit's message. HEAD is amended; anything older is
+    /// replayed, which rewrites every commit after it.
+    #[qslot]
+    fn reword_commit(&mut self, oid: String, message: String) {
+        if message.trim().is_empty() {
+            return;
+        }
+        self.with_session(|s| s.reword(oid.clone(), message.clone()));
     }
 
     #[qslot]

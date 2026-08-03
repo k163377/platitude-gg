@@ -52,6 +52,17 @@ use crate::status::{self, WorkTreeStatus};
 const FIRST_CHUNK_ROWS: usize = 512;
 const CHUNK_ROWS: usize = 4096;
 
+/// Op name of the interval-driven fetch. The UI keeps this one off the
+/// shared error surface, so both sides have to agree on the spelling.
+pub const AUTO_FETCH_OP: &str = "auto-fetch";
+
+/// Longest auto-fetch interval the UI offers, in minutes. Beyond an hour
+/// the point of an automatic fetch is gone; use the manual one.
+pub const AUTO_FETCH_MAX_MINUTES: u32 = 60;
+
+/// Interval auto fetch starts at when nothing says otherwise.
+pub const AUTO_FETCH_DEFAULT_MINUTES: u32 = 1;
+
 /// Default cap on the graph window (GitKraken-like initial view). Bounds
 /// memory and stream time on 100k+ commit repositories; the UI shows a
 /// truncation hint when the cap is hit.
@@ -128,6 +139,9 @@ pub struct RefsSnapshot {
     pub remotes: Vec<BranchItem>,
     pub tags: Vec<TagItem>,
     pub head: Option<HeadState>,
+    /// Names of the configured remotes, sorted. A branch with no upstream
+    /// has to be told where to go, and this is the list to offer.
+    pub remote_names: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -195,6 +209,11 @@ pub enum SessionEvent {
     PublishChecked {
         range: String,
         state: publish::PublishState,
+    },
+    /// Answer to [`RepoSession::load_head_message`] — what an amend starts
+    /// from. Empty on an unborn branch.
+    HeadMessageLoaded {
+        message: String,
     },
     /// Author identity and signing configuration. Emitted on open so the
     /// UI can ask for an identity before the first commit fails.
@@ -305,6 +324,12 @@ pub struct RepoSession {
     write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,
     /// Time budget for fetch / push (settings, Phase 4, persist this).
     network_timeout: Mutex<std::time::Duration>,
+    /// Cancels the running auto-fetch timer, if any.
+    auto_fetch: Mutex<Option<CancellationToken>>,
+    /// One permit: an auto fetch that is still queued or running holds it,
+    /// so a tick that arrives meanwhile is skipped instead of stacking up.
+    /// A permit moved into a dropped request is released with it.
+    auto_fetch_slot: Arc<tokio::sync::Semaphore>,
     refs_gate: OpGate,
     status_gate: OpGate,
     stash_gate: OpGate,
@@ -334,6 +359,8 @@ impl RepoSession {
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
             write_tx,
             network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
+            auto_fetch: Mutex::new(None),
+            auto_fetch_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             refs_gate: OpGate::default(),
             status_gate: OpGate::default(),
             stash_gate: OpGate::default(),
@@ -397,6 +424,62 @@ impl RepoSession {
     /// Cancels everything this session is doing. Idempotent.
     pub fn close(&self) {
         self.root_cancel.cancel();
+    }
+
+    /// Starts, restarts or stops the periodic `git fetch --prune`.
+    ///
+    /// `None` (or zero) turns it off. Only one fetch is ever outstanding:
+    /// on a slow link or a repository whose credential helper is taking its
+    /// time, a tick that finds the previous fetch unfinished is skipped
+    /// rather than queued behind it.
+    pub fn set_auto_fetch(self: &Arc<Self>, interval: Option<std::time::Duration>) {
+        let mut guard = match self.auto_fetch.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        if let Some(previous) = guard.take() {
+            previous.cancel();
+        }
+        let Some(interval) = interval.filter(|i| !i.is_zero()) else {
+            return;
+        };
+        let cancel = self.root_cancel.child_token();
+        *guard = Some(cancel.clone());
+        drop(guard);
+
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let mut ticker = tokio::time::interval(interval);
+            // tokio fires the first tick immediately; opening the
+            // repository has just read it, so wait out a full interval.
+            ticker.tick().await;
+            loop {
+                tokio::select! {
+                    _ = cancel.cancelled() => return,
+                    _ = ticker.tick() => s.auto_fetch_tick(),
+                }
+            }
+        });
+    }
+
+    /// Queues one automatic fetch, unless the previous one is still going.
+    ///
+    /// Reported under its own op name: a laptop that is simply offline must
+    /// not put a fresh error banner on screen every interval.
+    fn auto_fetch_tick(self: &Arc<Self>) {
+        let Ok(permit) = Arc::clone(&self.auto_fetch_slot).try_acquire_owned() else {
+            tracing::debug!("auto fetch skipped: the previous one has not finished");
+            return;
+        };
+        let timeout = self.network_timeout();
+        self.write(
+            AUTO_FETCH_OP,
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                let _permit = permit;
+                remote::fetch(&exec, &repo.workdir, None, timeout, &cancel).await
+            },
+        );
     }
 
     pub fn log_options(&self) -> LogOptions {
@@ -588,12 +671,18 @@ impl RepoSession {
             let cancel = s.root_cancel.clone();
             let refs = refs::load(&s.executor, &workdir, &cancel).await;
             let head = refs::head_state(&s.executor, &workdir, &cancel).await;
+            // A repository with no remotes is normal, and so is a failure
+            // to read the list; neither is a reason to lose the refs.
+            let remotes = remote::list(&s.executor, &workdir, &cancel)
+                .await
+                .unwrap_or_default();
             match (refs, head) {
                 (Ok(refs), Ok(head)) => {
                     if !s.refs_gate.is_current(op_gen) {
                         return;
                     }
-                    let snapshot = build_snapshot(&refs, &head);
+                    let mut snapshot = build_snapshot(&refs, &head);
+                    snapshot.remote_names = remotes.into_iter().map(|r| r.name).collect();
                     let label_updates = s.apply_refs(&refs, &head);
                     s.sink.event(SessionEvent::RefsLoaded { snapshot });
                     if !label_updates.is_empty() {
@@ -698,6 +787,28 @@ impl RepoSession {
                 identity::set_identity(&exec, &repo.workdir, &name, &email, scope, &cancel).await
             },
         );
+    }
+
+    /// Reads HEAD's message so an amend can start from it.
+    ///
+    /// On demand rather than with every refresh: only the amend path wants
+    /// it, and a repository refresh already runs several commands.
+    pub fn load_head_message(self: &Arc<Self>) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            match commit::head_message(&s.executor, &workdir, &cancel).await {
+                Ok(message) => s.sink.event(SessionEvent::HeadMessageLoaded { message }),
+                // An unborn branch has no HEAD to amend; that is a state,
+                // not a failure worth an error banner.
+                Err(_) => s.sink.event(SessionEvent::HeadMessageLoaded {
+                    message: String::new(),
+                }),
+            }
+        });
     }
 
     pub fn refresh_stashes(self: &Arc<Self>) {
@@ -923,6 +1034,31 @@ impl RepoSession {
         );
     }
 
+    /// Stashes the working tree, then moves HEAD — "leave my changes here"
+    /// (デザイン規約 §未コミット変更がある状態での移動).
+    ///
+    /// One job rather than two queued ones. If the stash fails there is
+    /// nothing left behind, and switching regardless would carry the
+    /// changes to the other branch — the opposite of what was asked.
+    ///
+    /// The stash keeps git's own message ("WIP on `<branch>`: …"), which
+    /// already names where the changes came from.
+    pub fn checkout_stashing(self: &Arc<Self>, target: CheckoutTarget) {
+        self.write(
+            "checkout",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                let options = stash::PushOptions {
+                    include_untracked: true,
+                    keep_index: false,
+                    staged_only: false,
+                };
+                stash::push(&exec, &repo.workdir, "", options, &[], &cancel).await?;
+                branch::checkout(&exec, &repo.workdir, &target, &cancel).await
+            },
+        );
+    }
+
     /// Creates a branch, optionally switching to it.
     pub fn create_branch(
         self: &Arc<Self>,
@@ -1097,6 +1233,57 @@ impl RepoSession {
                     &exec, &repo, &upstream, &steps, &options, &helper, &cancel,
                 )
                 .await
+            },
+        );
+    }
+
+    /// Folds one commit into its parent.
+    pub fn squash_into_parent(self: &Arc<Self>, oid: String) {
+        self.write(
+            "squash",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                let plan = sequencer::plan_edit(
+                    &exec,
+                    &repo.workdir,
+                    &oid,
+                    sequencer::Edit::SquashIntoParent,
+                    &cancel,
+                )
+                .await?;
+                run_plan(&exec, &repo, &plan, &cancel).await
+            },
+        );
+    }
+
+    /// Replaces one commit's message.
+    ///
+    /// The newest commit is amended instead of replayed: an amend touches
+    /// nothing else, while a rebase would rewrite every commit after it.
+    pub fn reword(self: &Arc<Self>, oid: String, message: String) {
+        self.write(
+            "reword",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                let head = commit::head_oid(&exec, &repo.workdir, &cancel).await?;
+                if head.to_hex() == oid {
+                    let options = CommitOptions {
+                        amend: true,
+                        ..Default::default()
+                    };
+                    return commit::commit(&exec, &repo, &message, options, &cancel)
+                        .await
+                        .map(drop);
+                }
+                let plan = sequencer::plan_edit(
+                    &exec,
+                    &repo.workdir,
+                    &oid,
+                    sequencer::Edit::Reword(message),
+                    &cancel,
+                )
+                .await?;
+                run_plan(&exec, &repo, &plan, &cancel).await
             },
         );
     }
@@ -1541,6 +1728,29 @@ impl Drop for RepoSession {
 /// Builds the synthetic row for uncommitted changes: zero id, no author,
 /// one dashed edge running down to HEAD. The UI recognizes the all-zero
 /// id and renders the dashed empty node and the WIP subject.
+/// Replays a one-commit edit plan through `git rebase --interactive`.
+async fn run_plan(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    plan: &sequencer::EditPlan,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let helper = sequencer::helper_path().map_err(|source| GitError::Io {
+        command: "git rebase --interactive".to_string(),
+        source,
+    })?;
+    sequencer::rebase_interactive(
+        executor,
+        repo,
+        &plan.upstream,
+        &plan.steps,
+        &plan.options(),
+        &helper,
+        cancel,
+    )
+    .await
+}
+
 fn wip_row(head: &Oid, builder: &mut GraphBuilder) -> LogRow {
     let zero = Oid::zero_like(head);
     let g = builder.push_virtual(&zero, head);

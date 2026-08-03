@@ -66,6 +66,10 @@ pub struct RebaseOptions {
     /// Move refs that pointed into the rewritten range along with it
     /// (git 2.38+; the minimum supported version is well past that).
     pub update_refs: bool,
+    /// `--root`: replay from the first commit, which has no parent to name
+    /// as upstream. The `upstream` argument is left off entirely — editing
+    /// the very first commit is impossible otherwise.
+    pub root: bool,
 }
 
 /// `git rebase <upstream>`.
@@ -103,7 +107,11 @@ pub(crate) fn rebase_command(
     if let Some(onto) = &options.onto {
         cmd = cmd.args(["--onto", onto]);
     }
-    cmd = cmd.args(["--", upstream]);
+    if options.root {
+        cmd = cmd.arg("--root");
+    } else {
+        cmd = cmd.args(["--", upstream]);
+    }
     if let Some(branch) = &options.branch {
         cmd = cmd.arg(branch);
     }

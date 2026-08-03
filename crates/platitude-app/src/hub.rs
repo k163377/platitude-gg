@@ -17,7 +17,7 @@ use platitude_core::opstate::OpState;
 use platitude_core::parse::diff::FilePatch;
 use platitude_core::process::GitExecutor;
 use platitude_core::session::{
-    LogRow, RefLabel, RefsSnapshot, RepoSession, SessionEvent, SessionSink,
+    AUTO_FETCH_OP, LogRow, RefLabel, RefsSnapshot, RepoSession, SessionEvent, SessionSink,
 };
 use platitude_core::stash::StashEntry;
 use platitude_core::status::WorkTreeStatus;
@@ -55,6 +55,21 @@ pub enum TabMsg {
         complete: bool,
         signing: bool,
         signing_format: String,
+    },
+    /// Configured remote names — where a branch with no upstream can go.
+    Remotes {
+        names: Vec<String>,
+    },
+    /// HEAD's message, for prefilling an amend.
+    HeadMessage {
+        message: String,
+    },
+    /// Auto fetch started or ended. Kept off the shared error surface: a
+    /// laptop that is simply offline must not raise a fresh banner every
+    /// interval, so the toolbar indicator carries this state instead.
+    AutoFetch {
+        running: bool,
+        error: String,
     },
 }
 
@@ -243,6 +258,9 @@ impl SessionSink for BridgeSink {
                 self.feeds.graph.push(GraphMsg::Labels { rows });
             }
             SessionEvent::RefsLoaded { snapshot } => {
+                self.feeds.tab.push(TabMsg::Remotes {
+                    names: snapshot.remote_names.clone(),
+                });
                 self.feeds.refs_branches.push_replace(snapshot.clone());
                 self.feeds.refs_remotes.push_replace(snapshot.clone());
                 self.feeds.refs_tags.push_replace(snapshot);
@@ -290,6 +308,21 @@ impl SessionSink for BridgeSink {
                     published: state.published() as i32,
                 });
             }
+            SessionEvent::HeadMessageLoaded { message } => {
+                self.feeds.tab.push(TabMsg::HeadMessage { message });
+            }
+            SessionEvent::WriteStarted { op } if op == AUTO_FETCH_OP => {
+                self.feeds.tab.push(TabMsg::AutoFetch {
+                    running: true,
+                    error: String::new(),
+                });
+            }
+            SessionEvent::WriteFinished { op, error } if op == AUTO_FETCH_OP => {
+                self.feeds.tab.push(TabMsg::AutoFetch {
+                    running: false,
+                    error: error.unwrap_or_default(),
+                });
+            }
             SessionEvent::WriteStarted { op } => self.feeds.tab.push(TabMsg::WriteState {
                 op: op.to_string(),
                 running: true,
@@ -320,6 +353,10 @@ pub struct Hub {
     executor: GitExecutor,
     tabs: HashMap<i32, Tab>,
     next_tab_id: i32,
+    /// Auto-fetch interval, applied to every session including tabs opened
+    /// later. `None` is off. Application-wide because the answer is about
+    /// how often this computer should talk to remotes at all.
+    auto_fetch: Option<std::time::Duration>,
 }
 
 thread_local! {
@@ -335,6 +372,9 @@ impl Hub {
                 executor: GitExecutor::new(),
                 tabs: HashMap::new(),
                 next_tab_id: 0,
+                auto_fetch: Some(std::time::Duration::from_secs(
+                    u64::from(platitude_core::session::AUTO_FETCH_DEFAULT_MINUTES) * 60,
+                )),
             });
         });
     }
@@ -385,9 +425,18 @@ impl Hub {
             feeds: Arc::clone(&feeds),
         });
         let session = RepoSession::open(self.executor.clone(), handle, path, sink);
+        session.set_auto_fetch(self.auto_fetch);
         self.tabs.insert(id, Tab { session, feeds });
         tracing::info!(tab = id, "opened repository tab");
         Some(id)
+    }
+
+    /// Changes the auto-fetch interval everywhere at once.
+    pub fn set_auto_fetch(&mut self, interval: Option<std::time::Duration>) {
+        self.auto_fetch = interval;
+        for tab in self.tabs.values() {
+            tab.session.set_auto_fetch(interval);
+        }
     }
 
     /// Closes a tab and cancels its session.

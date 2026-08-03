@@ -630,6 +630,178 @@ async fn stage_commit_and_branch_through_the_session() {
     session.close();
 }
 
+/// Opens a session and waits until the repository is loaded.
+async fn opened(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    sink.wait_for("Opened", |evs| {
+        evs.iter()
+            .any(|e| matches!(e, SessionEvent::Opened { .. }))
+            .then_some(())
+    })
+    .await;
+    (sink, session)
+}
+
+/// Waits for the write named `op` to finish and returns git's error, if any.
+async fn write_result(sink: &CaptureSink, op: &'static str) -> Option<String> {
+    sink.wait_for(op, |evs| {
+        evs.iter().find_map(|e| match e {
+            SessionEvent::WriteFinished { op: got, error } if *got == op => Some(error.clone()),
+            _ => None,
+        })
+    })
+    .await
+}
+
+/// "Leave my changes on this branch": the stash and the switch are one
+/// job, so the changes stay behind instead of coming along.
+#[tokio::test(flavor = "multi_thread")]
+async fn switching_can_stash_the_working_tree_first() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    repo.git(&["branch", "other"]);
+    repo.write_file("f.txt", "uncommitted\n");
+    repo.write_file("untracked.txt", "also mine\n");
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout_stashing(platitude_core::branch::CheckoutTarget::Branch {
+        name: "other".into(),
+    });
+    assert_eq!(write_result(&sink, "checkout").await, None);
+
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("f.txt")).unwrap(),
+        "0\n",
+        "the change stayed behind in the stash"
+    );
+    assert!(!repo.path.join("untracked.txt").exists(), "untracked too");
+    assert_eq!(repo.git(&["stash", "list"]).lines().count(), 1);
+    session.close();
+}
+
+/// A stash that cannot run must not let the switch happen anyway.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_switch_whose_stash_fails_does_not_move_head() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    repo.git(&["branch", "other"]);
+    // Nothing to stash: `git stash push` on a clean tree exits non-zero
+    // only with --staged/paths, so make the failure the switch's own.
+    repo.write_file("f.txt", "uncommitted\n");
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout_stashing(platitude_core::branch::CheckoutTarget::Branch {
+        name: "no-such-branch".into(),
+    });
+    assert!(
+        write_result(&sink, "checkout").await.is_some(),
+        "git rejected the branch name"
+    );
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+    session.close();
+}
+
+/// Puts the todo-editor helper where the session looks for it — beside the
+/// running executable, which for a test is the test binary's own directory.
+/// Packaging carries the same obligation for the application.
+fn install_todo_editor() {
+    let built = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pg-todo-editor"));
+    let name = format!(
+        "{}{}",
+        platitude_core::sequencer::HELPER_NAME,
+        std::env::consts::EXE_SUFFIX
+    );
+    let beside = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|d| d.join(name)));
+    if let Some(beside) = beside
+        && beside != built
+    {
+        // A previous run may have left one behind and Windows locks a
+        // running executable; either way the copy that is there will do.
+        let _ = std::fs::copy(&built, &beside);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn squash_and_reword_run_through_the_write_queue() {
+    install_todo_editor();
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.commit_file("b.txt", "two\n", "keep me");
+    let fold = repo.commit_file("c.txt", "three\n", "fold me in");
+
+    let (sink, session) = opened(&repo).await;
+    session.squash_into_parent(fold);
+    assert_eq!(write_result(&sink, "squash").await, None);
+    assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]), "2");
+
+    // Rewording HEAD takes the amend path: no replay, same parent.
+    let parent = repo.git(&["rev-parse", "HEAD~1"]);
+    let head = repo.git(&["rev-parse", "HEAD"]);
+    session.reword(head, "reworded head\n".into());
+    assert_eq!(write_result(&sink, "reword").await, None);
+    assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "reworded head");
+    assert_eq!(repo.git(&["rev-parse", "HEAD~1"]), parent);
+    session.close();
+}
+
+/// The auto-fetch timer runs the fetch it promises, and turns off again.
+#[tokio::test(flavor = "multi_thread")]
+async fn auto_fetch_runs_on_its_interval_and_stops() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("f.txt", "0\n", "root");
+    let mut clone = TestRepo::init();
+    let url = origin.file_url();
+    clone.git(&["remote", "add", "origin", &url]);
+
+    let (sink, session) = opened(&clone).await;
+    session.set_auto_fetch(Some(Duration::from_millis(120)));
+    let error = sink
+        .wait_for("an automatic fetch", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::WriteFinished { op, error }
+                    if *op == platitude_core::session::AUTO_FETCH_OP =>
+                {
+                    Some(error.clone())
+                }
+                _ => None,
+            })
+        })
+        .await;
+    assert_eq!(error, None, "the file:// remote fetched cleanly");
+    assert_eq!(
+        clone.git(&["rev-parse", "origin/main"]),
+        origin.git(&["rev-parse", "main"]),
+    );
+
+    session.set_auto_fetch(None);
+    let started = || {
+        sink.count(|e| {
+            matches!(e, SessionEvent::WriteStarted { op }
+                     if *op == platitude_core::session::AUTO_FETCH_OP)
+        })
+    };
+    // A fetch already queued when the timer stopped still runs; let the
+    // queue drain before taking the baseline.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let after_stop = started();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(
+        started(),
+        after_stop,
+        "no further fetch started once it was turned off"
+    );
+    session.close();
+}
+
 /// A conflicting rebase driven through the session: the failure is
 /// reported, the status refresh carries the step counter, and the abort
 /// lands through the same write path.

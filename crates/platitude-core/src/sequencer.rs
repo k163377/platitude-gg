@@ -198,6 +198,148 @@ pub fn parse_todo(text: &str) -> Vec<TodoLine> {
     out
 }
 
+/// A plan plus the range it rewrites.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditPlan {
+    /// Revision the rebase treats as upstream; empty when `root` is set.
+    pub upstream: String,
+    /// The plan reaches the first commit, so the rebase needs `--root`.
+    pub root: bool,
+    pub steps: Vec<RebaseStep>,
+}
+
+impl EditPlan {
+    /// Rebase options that replay exactly this plan's range.
+    pub fn options(&self) -> RebaseOptions {
+        RebaseOptions {
+            root: self.root,
+            ..Default::default()
+        }
+    }
+}
+
+/// A single-commit change to an existing history.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Edit {
+    /// Fold the commit into the one before it, combining the messages.
+    SquashIntoParent,
+    /// Replace the commit's message.
+    Reword(String),
+}
+
+impl Edit {
+    /// How many commits before the target the plan has to start at.
+    ///
+    /// `squash` folds into the line above it, so the parent must be in the
+    /// plan as well; a reword only needs the commit itself.
+    fn depth(&self) -> u32 {
+        match self {
+            Edit::SquashIntoParent => 2,
+            Edit::Reword(_) => 1,
+        }
+    }
+}
+
+/// Builds the plan that applies `edit` to `oid`.
+///
+/// Refuses a range containing a merge: a plain interactive rebase drops
+/// merge commits, so carrying on would silently flatten the history the
+/// user is looking at. `--rebase-merges` is a different operation, and the
+/// UI does not offer it here.
+pub async fn plan_edit(
+    executor: &GitExecutor,
+    workdir: &Path,
+    oid: &str,
+    edit: Edit,
+    cancel: &CancellationToken,
+) -> Result<EditPlan, GitError> {
+    let fail = |message: String| GitError::UnexpectedOutput {
+        command: "git rebase --interactive".to_string(),
+        message,
+    };
+
+    // History shorter than the plan needs means the range starts at the
+    // very first commit, which has no parent to name as upstream.
+    let start = format!("{oid}~{}", edit.depth());
+    let upstream: String = resolve(executor, workdir, &start, cancel)
+        .await?
+        .unwrap_or_default();
+    let root = upstream.is_empty();
+
+    if has_merges(executor, workdir, &upstream, root, cancel).await? {
+        return Err(fail(
+            "this range contains a merge commit, which a rebase would drop".to_string(),
+        ));
+    }
+
+    let mut steps = plan_for_range(executor, workdir, &upstream, root, cancel).await?;
+    let Some(index) = steps.iter().position(|s| s.oid == oid) else {
+        return Err(fail(format!(
+            "{} is not in the history of the current branch",
+            short(oid)
+        )));
+    };
+    match edit {
+        Edit::SquashIntoParent => {
+            if index == 0 {
+                return Err(fail(format!(
+                    "{} is the first commit, so it has nothing to fold into",
+                    short(oid)
+                )));
+            }
+            steps[index].action = TodoAction::Squash;
+        }
+        Edit::Reword(message) => {
+            steps[index].action = TodoAction::Reword;
+            steps[index].message = Some(message);
+        }
+    }
+    Ok(EditPlan {
+        upstream,
+        root,
+        steps,
+    })
+}
+
+fn short(oid: &str) -> &str {
+    oid.get(..8).unwrap_or(oid)
+}
+
+/// Resolves a revision, returning `None` when git does not know it.
+async fn resolve(
+    executor: &GitExecutor,
+    workdir: &Path,
+    rev: &str,
+    cancel: &CancellationToken,
+) -> Result<Option<String>, GitError> {
+    let cmd = crate::process::GitCommand::new()
+        .cwd(workdir)
+        .args(["rev-parse", "--verify", "--quiet", "--end-of-options"])
+        .arg(format!("{rev}^{{commit}}"));
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    if out.code != 0 {
+        return Ok(None);
+    }
+    let text = out.stdout_utf8().trim().to_string();
+    Ok((!text.is_empty()).then_some(text))
+}
+
+/// Whether the range holds any commit with more than one parent.
+async fn has_merges(
+    executor: &GitExecutor,
+    workdir: &Path,
+    upstream: &str,
+    root: bool,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let cmd = crate::process::GitCommand::new()
+        .cwd(workdir)
+        .args(["rev-list", "--merges", "--count"])
+        .arg(range_arg(upstream, root));
+    let out = executor.run(cmd, cancel).await?;
+    Ok(out.stdout_utf8().trim() != "0")
+}
+
 /// The commits `git rebase -i <upstream>` would offer, oldest first.
 pub async fn plan_for(
     executor: &GitExecutor,
@@ -205,10 +347,29 @@ pub async fn plan_for(
     upstream: &str,
     cancel: &CancellationToken,
 ) -> Result<Vec<RebaseStep>, GitError> {
+    plan_for_range(executor, workdir, upstream, false, cancel).await
+}
+
+/// `<upstream>..HEAD`, or all of `HEAD` when the range starts at the root.
+fn range_arg(upstream: &str, root: bool) -> String {
+    if root {
+        "HEAD".to_string()
+    } else {
+        format!("{upstream}..HEAD")
+    }
+}
+
+async fn plan_for_range(
+    executor: &GitExecutor,
+    workdir: &Path,
+    upstream: &str,
+    root: bool,
+    cancel: &CancellationToken,
+) -> Result<Vec<RebaseStep>, GitError> {
     let cmd = crate::process::GitCommand::new()
         .cwd(workdir)
         .args(["log", "--reverse", "--format=%H%x00%s", "-z"])
-        .arg(format!("{upstream}..HEAD"));
+        .arg(range_arg(upstream, root));
     let out = executor.run(cmd, cancel).await?;
     let mut steps = Vec::new();
     for record in out.stdout.split(|b| *b == 0).collect::<Vec<_>>().chunks(2) {
