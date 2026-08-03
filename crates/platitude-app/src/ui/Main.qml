@@ -370,12 +370,12 @@ ApplicationWindow {
             RowLayout {
                 Layout.alignment: Qt.AlignRight
                 spacing: Theme.spaceSm
-                Button {
+                HoverButton {
                     implicitHeight: Theme.controlHeight
                     text: root.identityEditing ? qsTr("Cancel") : qsTr("Not now")
                     onClicked: root.dismissIdentity()
                 }
-                Button {
+                HoverButton {
                     id: saveButton
                     implicitHeight: Theme.controlHeight
                     highlighted: true
@@ -443,12 +443,12 @@ ApplicationWindow {
             RowLayout {
                 Layout.alignment: Qt.AlignRight
                 spacing: Theme.spaceSm
-                Button {
+                HoverButton {
                     implicitHeight: Theme.controlHeight
                     text: qsTr("Cancel")
                     onClicked: confirmDialog.close()
                 }
-                Button {
+                HoverButton {
                     implicitHeight: Theme.controlHeight
                     highlighted: true
                     text: confirmDialog.acceptText
@@ -551,12 +551,12 @@ ApplicationWindow {
             RowLayout {
                 Layout.alignment: Qt.AlignRight
                 spacing: Theme.spaceSm
-                Button {
+                HoverButton {
                     implicitHeight: Theme.controlHeight
                     text: qsTr("Cancel")
                     onClicked: settingsDialog.close()
                 }
-                Button {
+                HoverButton {
                     implicitHeight: Theme.controlHeight
                     highlighted: true
                     text: qsTr("Save")
@@ -585,7 +585,7 @@ ApplicationWindow {
                 spacing: Theme.spaceSm
                 // App menu (Claude-Desktop-style hamburger); most entries
                 // are placeholders until their phases land.
-                ToolButton {
+                HoverToolButton {
                     id: menuButton
                     text: "☰"
                     font.pixelSize: Theme.fontLg
@@ -680,7 +680,7 @@ ApplicationWindow {
                                     color: tabItem.current ? Theme.textPrimary
                                                            : Theme.textSecondary
                                 }
-                                ToolButton {
+                                HoverToolButton {
                                     text: "×"
                                     padding: 0
                                     Layout.alignment: Qt.AlignVCenter
@@ -692,7 +692,7 @@ ApplicationWindow {
                         }
                     }
                 }
-                ToolButton {
+                HoverToolButton {
                     text: "+"
                     font.pixelSize: Theme.fontLg
                     onClicked: folderDialog.open()
@@ -745,6 +745,12 @@ ApplicationWindow {
                     radius: Theme.radiusSm
                     implicitHeight: Theme.iconLg
                     implicitWidth: identityBadge.implicitWidth + 2 * Theme.spaceXs
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: Theme.radiusSm
+                        color: Theme.bgHover
+                        visible: identityBadgeMouse.containsMouse
+                    }
                     Label {
                         id: identityBadge
                         anchors.centerIn: parent
@@ -754,6 +760,7 @@ ApplicationWindow {
                         font.weight: Font.DemiBold
                     }
                     MouseArea {
+                        id: identityBadgeMouse
                         anchors.fill: parent
                         hoverEnabled: true
                         onClicked: root.identityEditing = true
@@ -769,8 +776,14 @@ ApplicationWindow {
                     elide: Text.ElideRight
                     Layout.maximumWidth: 320
                     font.pixelSize: Theme.fontSm
+                    background: Rectangle {
+                        color: Theme.bgHover
+                        visible: errorClearMouse.containsMouse
+                    }
                     MouseArea {
+                        id: errorClearMouse
                         anchors.fill: parent
+                        hoverEnabled: true
                         onClicked: if (root.curPage !== null) root.curPage.pageTab.clearLastError()
                     }
                 }
@@ -787,7 +800,13 @@ ApplicationWindow {
                            : AppBackend.autoFetchMinutes > 0 ? Theme.textMuted
                            : Theme.borderDefault
                     font.pixelSize: Theme.fontMd
+                    background: Rectangle {
+                        radius: Theme.radiusSm
+                        color: Theme.bgHover
+                        visible: fetchIndicatorMouse.containsMouse
+                    }
                     MouseArea {
+                        id: fetchIndicatorMouse
                         anchors.fill: parent
                         hoverEnabled: true
                         onClicked: settingsDialog.open()
@@ -849,7 +868,7 @@ ApplicationWindow {
                     }
                 }
                 // Local re-read only (no network).
-                ToolButton {
+                HoverToolButton {
                     text: qsTr("Reload")
                     enabled: root.curPage !== null
                     ToolTip.visible: hovered
@@ -1105,7 +1124,7 @@ ApplicationWindow {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Theme.spaceSm
-                    Button {
+                    HoverButton {
                         Layout.fillWidth: true
                         implicitHeight: Theme.controlHeight
                         highlighted: true
@@ -1124,7 +1143,7 @@ ApplicationWindow {
                         text: qsTr("Stashes them first; they wait in STASHES until "
                                    + "you apply them again.")
                     }
-                    Button {
+                    HoverButton {
                         Layout.fillWidth: true
                         implicitHeight: Theme.controlHeight
                         text: qsTr("Bring my changes to %1").arg(page.moveLabel)
@@ -1142,7 +1161,7 @@ ApplicationWindow {
                                    + "would collide with what is there.")
                     }
                 }
-                Button {
+                HoverButton {
                     Layout.alignment: Qt.AlignRight
                     implicitHeight: Theme.controlHeight
                     text: qsTr("Cancel")
@@ -1393,12 +1412,12 @@ ApplicationWindow {
                 RowLayout {
                     Layout.alignment: Qt.AlignRight
                     spacing: Theme.spaceSm
-                    Button {
+                    HoverButton {
                         implicitHeight: Theme.controlHeight
                         text: qsTr("Cancel")
                         onClicked: messageDialog.close()
                     }
-                    Button {
+                    HoverButton {
                         implicitHeight: Theme.controlHeight
                         highlighted: true
                         text: qsTr("Save message")
@@ -1791,7 +1810,7 @@ ApplicationWindow {
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
             }
-            Button {
+            HoverButton {
                 text: qsTr("Close tab")
                 anchors.horizontalCenter: parent.horizontalCenter
                 onClicked: tabsModel.closeTab(page.tab_id)
@@ -2370,7 +2389,7 @@ ApplicationWindow {
                                 color: Theme.textSecondary
                                 anchors.horizontalCenter: parent.horizontalCenter
                             }
-                            Button {
+                            HoverButton {
                                 text: qsTr("Open repository…")
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 onClicked: folderDialog.open()
@@ -2401,7 +2420,7 @@ ApplicationWindow {
                                         elide: Text.ElideMiddle
                                         Layout.fillWidth: true
                                     }
-                                    ToolButton {
+                                    HoverToolButton {
                                         visible: page.diffFromWt
                                         text: page.diffStaged ? qsTr("Unstage file")
                                                               : qsTr("Stage file")
@@ -2419,7 +2438,7 @@ ApplicationWindow {
                                                 repoTab.stagePath(page.diffPath)
                                         }
                                     }
-                                    ToolButton {
+                                    HoverToolButton {
                                         text: "×"
                                         implicitWidth: Theme.iconLg
                                         implicitHeight: Theme.iconLg
@@ -2549,7 +2568,7 @@ ApplicationWindow {
                                     // Hunk-level staging. The row carries the
                                     // hunk index the patch builder needs, so
                                     // what is staged is exactly what is shown.
-                                    ToolButton {
+                                    HoverToolButton {
                                         visible: page.diffFromWt && diffRow.kind === "hunk"
                                         anchors.right: parent.right
                                         anchors.rightMargin: Theme.spaceSm
@@ -2577,6 +2596,12 @@ ApplicationWindow {
                                         ToolTip.delay: 300
                                         ToolTip.text: page.diffStaged ? qsTr("Unstage this line")
                                                                       : qsTr("Stage this line")
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: Theme.radiusSm
+                                            color: Theme.bgHover
+                                            visible: stageLineHover.containsMouse
+                                        }
                                         NavIcon {
                                             anchors.centerIn: parent
                                             width: Theme.iconSm
@@ -2628,7 +2653,7 @@ ApplicationWindow {
                                     color: Theme.textSecondary
                                 }
                                 Item { Layout.fillWidth: true }
-                                ToolButton {
+                                HoverToolButton {
                                     padding: 0
                                     implicitWidth: Theme.iconLg
                                     implicitHeight: Theme.iconLg
@@ -2642,7 +2667,7 @@ ApplicationWindow {
                                                                      : Theme.textMuted
                                     }
                                 }
-                                ToolButton {
+                                HoverToolButton {
                                     padding: 0
                                     implicitWidth: Theme.iconLg
                                     implicitHeight: Theme.iconLg
@@ -2747,7 +2772,7 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                            Button {
+                            HoverButton {
                                 id: commitButton
                                 Layout.fillWidth: true
                                 highlighted: true
@@ -2814,7 +2839,7 @@ ApplicationWindow {
                                                ? Theme.danger : Theme.textSecondary
                                     }
                                     Item { Layout.fillWidth: true }
-                                    ToolButton {
+                                    HoverToolButton {
                                         visible: bucketHeader.section !== "conflicts"
                                         text: bucketHeader.section === "staged"
                                               ? qsTr("Unstage all") : qsTr("Stage all")
@@ -2879,7 +2904,7 @@ ApplicationWindow {
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
                                 }
-                                ToolButton {
+                                HoverToolButton {
                                     text: qsTr("Apply")
                                     font.pixelSize: Theme.fontSm
                                     ToolTip.visible: hovered
@@ -2887,7 +2912,7 @@ ApplicationWindow {
                                     ToolTip.text: qsTr("Apply this stash, keeping it")
                                     onClicked: repoTab.applyStash(page.selectedStashRef)
                                 }
-                                ToolButton {
+                                HoverToolButton {
                                     text: qsTr("Pop")
                                     font.pixelSize: Theme.fontSm
                                     ToolTip.visible: hovered
@@ -3111,7 +3136,7 @@ ApplicationWindow {
                                     color: Theme.textSecondary
                                 }
                                 Item { Layout.fillWidth: true }
-                                ToolButton {
+                                HoverToolButton {
                                     padding: 0
                                     implicitWidth: Theme.iconLg
                                     implicitHeight: Theme.iconLg
@@ -3125,7 +3150,7 @@ ApplicationWindow {
                                                                     : Theme.textMuted
                                     }
                                 }
-                                ToolButton {
+                                HoverToolButton {
                                     padding: 0
                                     implicitWidth: Theme.iconLg
                                     implicitHeight: Theme.iconLg
@@ -3530,6 +3555,17 @@ ApplicationWindow {
         Layout.fillWidth: true
         implicitHeight: Theme.rowHeight
         color: Theme.bgElevated
+        // A HoverHandler rather than the MouseArea's hover: it also fires
+        // over the tag toggle, so the row highlight covers the header's
+        // full clickable surface.
+        HoverHandler {
+            id: headerHover
+        }
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.bgHover
+            visible: headerHover.hovered
+        }
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: Theme.spaceSm
@@ -3558,7 +3594,7 @@ ApplicationWindow {
                 font.pixelSize: Theme.fontSm
             }
             Item { Layout.fillWidth: true }
-            ToolButton {
+            HoverToolButton {
                 visible: header.showTagToggle
                 checkable: true
                 checked: header.tagsShown
@@ -3788,7 +3824,7 @@ ApplicationWindow {
             }
         }
         // Hover stage/unstage affordance.
-        ToolButton {
+        HoverToolButton {
             visible: navRow.showStage && !navRow.folder
                      && (itemMouse.containsMouse || hovered)
             anchors.right: parent.right
