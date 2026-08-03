@@ -578,12 +578,16 @@ impl RepoSession {
         self.sink.event(SessionEvent::LogStarted { generation });
         let started = Instant::now();
         match self.stream_log(workdir, generation, options, cancel).await {
-            Ok(total) => {
+            Ok(totals) => {
                 self.sink.event(SessionEvent::LogFinished {
                     generation,
-                    total,
+                    total: totals.shown,
                     elapsed_ms: started.elapsed().as_millis() as u64,
-                    truncated: options.limit.is_some_and(|n| total >= n),
+                    // Truncation is a property of the walk: the shown count
+                    // drifts from it in both directions (the WIP row adds
+                    // one, sifted stash parents subtract), so comparing it
+                    // against --max-count would flag the wrong streams.
+                    truncated: options.limit.is_some_and(|n| totals.walked >= n),
                 });
                 Ok(())
             }
@@ -616,8 +620,8 @@ impl RepoSession {
         let result = self
             .collect_log(workdir, options, cancel, &mut builder, &mut rows)
             .await;
-        match result {
-            Ok(()) => {}
+        let walked = match result {
+            Ok(walked) => walked,
             Err(error) => {
                 // The fast pass is already on screen; report quietly.
                 if !matches!(error, GitError::Cancelled { .. }) {
@@ -625,7 +629,7 @@ impl RepoSession {
                 }
                 return;
             }
-        }
+        };
 
         let total = rows.len() as u32;
         {
@@ -651,7 +655,9 @@ impl RepoSession {
             generation,
             total,
             elapsed_ms: started.elapsed().as_millis() as u64,
-            truncated: options.limit.is_some_and(|n| total >= n),
+            // See run_direct_pass: the walk decides truncation, not the
+            // shown row count.
+            truncated: options.limit.is_some_and(|n| walked >= n),
         });
     }
 
@@ -1470,11 +1476,11 @@ impl RepoSession {
         generation: u64,
         options: LogOptions,
         cancel: &CancellationToken,
-    ) -> Result<u32, GitError> {
+    ) -> Result<LogTotals, GitError> {
         // An unborn HEAD has nothing to log.
         let head = refs::head_state(&self.executor, workdir, cancel).await?;
         if head.oid.is_none() {
-            return Ok(0);
+            return Ok(LogTotals::default());
         }
 
         // Stashes are part of the graph: their oids join the walk and the
@@ -1508,7 +1514,7 @@ impl RepoSession {
         let mut stash_skip: std::collections::HashSet<Oid> = std::collections::HashSet::new();
         let mut first_sent = false;
         let mut parse_error: Option<String> = None;
-        let mut total: u32 = 0;
+        let mut totals = LogTotals::default();
 
         // Dirty working tree: prepend the synthetic WIP row so the current
         // chain owns lane 0 from the very first paint.
@@ -1516,7 +1522,7 @@ impl RepoSession {
             && let Some(head_oid) = head.oid
         {
             self.emit_wip_row(generation, &head_oid);
-            total += 1;
+            totals.shown += 1;
         }
 
         let result = self
@@ -1537,9 +1543,10 @@ impl RepoSession {
                 };
                 if pending.len() >= threshold {
                     let batch = std::mem::take(&mut pending);
+                    totals.walked += batch.len() as u32;
                     let mut items = Vec::with_capacity(batch.len());
                     sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
-                    total += items.len() as u32;
+                    totals.shown += items.len() as u32;
                     first_sent = true;
                     self.emit_rows(generation, &items, parser.pool());
                 }
@@ -1567,17 +1574,20 @@ impl RepoSession {
         }
         if !pending.is_empty() {
             let batch = std::mem::take(&mut pending);
+            totals.walked += batch.len() as u32;
             let mut items = Vec::with_capacity(batch.len());
             sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
-            total += items.len() as u32;
+            totals.shown += items.len() as u32;
             self.emit_rows(generation, &items, parser.pool());
         }
-        Ok(total)
+        Ok(totals)
     }
 
     /// Buffered variant of [`RepoSession::stream_log`]: rows accumulate
     /// into the caller's builder/vec without touching shared state or the
-    /// sink (used by the tag-inclusive swap pass).
+    /// sink (used by the tag-inclusive swap pass). Returns the number of
+    /// commits the walk emitted (what `--max-count` limits — the shown
+    /// row count is `out.len()`).
     async fn collect_log(
         self: &Arc<Self>,
         workdir: &std::path::Path,
@@ -1585,11 +1595,11 @@ impl RepoSession {
         cancel: &CancellationToken,
         builder: &mut GraphBuilder,
         out: &mut Vec<LogRow>,
-    ) -> Result<(), GitError> {
+    ) -> Result<u32, GitError> {
         // An unborn HEAD has nothing to log.
         let head = refs::head_state(&self.executor, workdir, cancel).await?;
         if head.oid.is_none() {
-            return Ok(());
+            return Ok(0);
         }
 
         // Dirty working tree: prepend the synthetic WIP row (mirrors
@@ -1628,6 +1638,7 @@ impl RepoSession {
         let mut pending: Vec<CommitMeta> = Vec::new();
         let mut stash_skip: std::collections::HashSet<Oid> = std::collections::HashSet::new();
         let mut parse_error: Option<String> = None;
+        let mut walked: u32 = 0;
 
         let result = self
             .executor
@@ -1641,6 +1652,7 @@ impl RepoSession {
                     return;
                 }
                 let batch = std::mem::take(&mut pending);
+                walked += batch.len() as u32;
                 let mut items = Vec::with_capacity(batch.len());
                 sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
                 for item in items {
@@ -1672,6 +1684,7 @@ impl RepoSession {
             });
         }
         let batch = std::mem::take(&mut pending);
+        walked += batch.len() as u32;
         let mut items = Vec::with_capacity(batch.len());
         sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
         for item in items {
@@ -1681,7 +1694,7 @@ impl RepoSession {
             }
             out.push(row);
         }
-        Ok(())
+        Ok(walked)
     }
 
     /// Sends the synthetic WIP row (dirty working tree) as its own chunk.
@@ -1806,6 +1819,18 @@ fn wip_row(head: &Oid, builder: &mut GraphBuilder) -> LogRow {
         labels: Vec::new(),
         stash_ref: String::new(),
     }
+}
+
+/// Row counts of one completed log pass. They differ in both directions:
+/// the synthetic WIP row is shown but never walked, and a stash's
+/// synthetic index/untracked parents are walked but never shown.
+#[derive(Clone, Copy, Default)]
+struct LogTotals {
+    /// Rows delivered to the UI.
+    shown: u32,
+    /// Commits the walk emitted — what `--max-count` limits, so this is
+    /// what decides `truncated`.
+    walked: u32,
 }
 
 /// One sifted stream entry (stash rows carry their reflog selector).

@@ -34,6 +34,60 @@ impl CaptureSink {
             .count()
     }
 
+    /// Waits until log streaming settles: a `LogFinished` with `total`
+    /// rows exists and no further stream event arrives for a beat, then
+    /// returns the newest matching generation. Acting on the *first*
+    /// matching pass instead would race the passes still in flight (the
+    /// tag swap, the dirty-flip restart), which finish afterwards with
+    /// higher generations and would be mistaken for the reaction to
+    /// whatever the test does next.
+    async fn settled_stream_gen(&self, total: u32) -> u64 {
+        fn stream_events(evs: &[SessionEvent]) -> usize {
+            evs.iter()
+                .filter(|e| {
+                    matches!(
+                        e,
+                        SessionEvent::LogStarted { .. }
+                            | SessionEvent::LogChunk { .. }
+                            | SessionEvent::LogFinished { .. }
+                            | SessionEvent::LogFailed { .. }
+                    )
+                })
+                .count()
+        }
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            let (newest, seen) = {
+                let evs = self.events.lock().unwrap();
+                let newest = evs
+                    .iter()
+                    .filter_map(|e| match e {
+                        SessionEvent::LogFinished {
+                            generation,
+                            total: t,
+                            ..
+                        } if *t == total => Some(*generation),
+                        _ => None,
+                    })
+                    .max();
+                (newest, stream_events(&evs))
+            };
+            if let Some(g) = newest {
+                tokio::time::sleep(Duration::from_millis(400)).await;
+                if stream_events(&self.events.lock().unwrap()) == seen {
+                    return g;
+                }
+            } else {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "stream never settled at {total} rows; events so far: {:?}",
+                self.events.lock().unwrap()
+            );
+        }
+    }
+
     /// Polls until `pred` over the event list returns `Some`.
     async fn wait_for<T>(&self, what: &str, pred: impl Fn(&[SessionEvent]) -> Option<T>) -> T {
         let deadline = Instant::now() + Duration::from_secs(20);
@@ -386,22 +440,19 @@ async fn log_limit_truncates_the_window() {
         sink.clone(),
     );
 
-    let first_gen = sink
-        .wait_for("full LogFinished", |evs| {
-            evs.iter().find_map(|e| match e {
-                SessionEvent::LogFinished {
-                    generation,
-                    total,
-                    truncated,
-                    ..
-                } if *total == 3 => {
-                    assert!(!truncated, "3 commits fit in the default window");
-                    Some(*generation)
-                }
-                _ => None,
-            })
+    sink.wait_for("full LogFinished", |evs| {
+        evs.iter().find_map(|e| match e {
+            SessionEvent::LogFinished {
+                total, truncated, ..
+            } if *total == 3 => {
+                assert!(!truncated, "3 commits fit in the default window");
+                Some(())
+            }
+            _ => None,
         })
-        .await;
+    })
+    .await;
+    let first_gen = sink.settled_stream_gen(3).await;
 
     session.set_log_limit(Some(2));
     sink.wait_for("limited LogFinished", |evs| {
@@ -414,6 +465,109 @@ async fn log_limit_truncates_the_window() {
             } if *generation > first_gen => {
                 assert_eq!(*total, 2);
                 assert!(truncated);
+                Some(())
+            }
+            _ => None,
+        })
+    })
+    .await;
+
+    session.close();
+}
+
+/// A stash's synthetic index parent is walked but sifted out of the
+/// shown rows, so the shown count sits below the window limit even when
+/// the walk was cut — truncation must follow the walk, not the rows.
+#[tokio::test(flavor = "multi_thread")]
+async fn truncation_follows_the_walk_not_the_shown_rows() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "1\n", "one");
+    repo.commit_file("f.txt", "2\n", "two");
+    repo.commit_file("f.txt", "3\n", "three");
+    repo.write_file("f.txt", "wip\n");
+    repo.git(&["stash", "push", "-m", "wip stash"]);
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+
+    // Full pass first: stash row + three commits, nothing truncated.
+    sink.wait_for("full LogFinished", |evs| {
+        evs.iter().find_map(|e| match e {
+            SessionEvent::LogFinished {
+                total, truncated, ..
+            } if *total == 4 => {
+                assert!(!truncated);
+                Some(())
+            }
+            _ => None,
+        })
+    })
+    .await;
+    let first_gen = sink.settled_stream_gen(4).await;
+
+    // The walk emits 4 rows (stash, its index parent, "three", "two") and
+    // is cut before "one"; the sifted index parent leaves 3 shown rows.
+    session.set_log_limit(Some(4));
+    sink.wait_for("limited LogFinished", |evs| {
+        evs.iter().find_map(|e| match e {
+            SessionEvent::LogFinished {
+                generation,
+                total,
+                truncated,
+                ..
+            } if *generation > first_gen => {
+                assert_eq!(*total, 3, "stash + three + two, index parent sifted");
+                assert!(truncated, "the walk was cut before the root commit");
+                Some(())
+            }
+            _ => None,
+        })
+    })
+    .await;
+
+    session.close();
+}
+
+/// The synthetic WIP row is shown but never walked: a window that holds
+/// the whole history must not report truncation just because the WIP row
+/// pushes the shown count up to the limit.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_wip_row_does_not_trigger_truncation() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "1\n", "one");
+    repo.commit_file("f.txt", "2\n", "two");
+    repo.write_file("f.txt", "wip\n"); // dirty → synthetic WIP row
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+
+    // Wait until the dirty state is reflected and the stream settles, so
+    // the next generation is the reaction to the limit change.
+    let first_gen = sink.settled_stream_gen(3).await;
+
+    // Two commits walk through a window of three; the WIP row makes three
+    // shown rows, which is not a truncated window.
+    session.set_log_limit(Some(3));
+    sink.wait_for("limited LogFinished", |evs| {
+        evs.iter().find_map(|e| match e {
+            SessionEvent::LogFinished {
+                generation,
+                total,
+                truncated,
+                ..
+            } if *generation > first_gen => {
+                assert_eq!(*total, 3, "WIP row + two commits");
+                assert!(!truncated, "the whole history fits the window");
                 Some(())
             }
             _ => None,
