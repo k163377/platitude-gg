@@ -80,6 +80,7 @@ crates/
 - コンポーネント配線規約: データは親→子へ property、操作・状態変更は子→親へ signal。タブのモデル群は `RepoPage` が所有しペインへ渡す(ペインはモデルのスロットを呼んでよいが、ページ状態は signal で上げて page が変更する)。ウィンドウ横断(確認ダイアログ・タブを開く・settings)は Main まで signal で上げる。`GraphPane.view` は自動化フック専用の露出
 - QML の font 値型に `families`(配列)は無い — フォールバックは `Qt.fontFamilies()` と照合して Theme 側で 1 家族に解決する
 - `grabToImage` は `Window.contentItem` には使えない("no QML engine")— QML 宣言したアイテムを対象にする
+- **画面全体の入力観測は最前面オーバーレイ + `PointHandler`**(passive grab のみが仕様保証)。TapHandler は DragThreshold でも press を消費して下のコントロールへ届かなくし、contentItem 直付けでは手前の MouseArea が accept した press が届かない(2026-08-04 実測)
 
 ## Windows での実行・デバッグの罠
 
@@ -97,8 +98,9 @@ crates/
   クリックも `PostMessage(WM_LBUTTONDOWN/UP)` で確実に届くが、**hover は注入で検証不能**
   (`WM_MOUSEMOVE` 注入・`SetCursorPos` とも実マウスの動きに hover 状態を奪還され、
   成功と失敗が再現不能に混ざる — 2026-08-03 実測)。hover の見た目は実操作で確認する。
-  **フォーカスも注入で検証不能** — 非アクティブウィンドウでは `activeFocusItem` が
-  null のままで、PostMessage はウィンドウをアクティブにしない(2026-08-04 実測)
+  **フォーカスは要アクティブ化**(非アクティブウィンドウでは `activeFocusItem` が
+  null のまま。PostMessage はアクティブにしないが、フォアグラウンドスレッドへ
+  `AttachThreadInput` してから `SetForegroundWindow` すれば奪えて検証可能 — 2026-08-04 実測)
 - exe の**起動**にも Qt の bin ディレクトリが PATH に要る(ビルド時だけではない)。無いと**約 10ms で無言終了**する — ログもエラーダイアログも出ないので死因が判らない。検証スクリプトは PATH 設定込みで書く
 
 ## ビルド・テスト
