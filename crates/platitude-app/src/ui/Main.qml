@@ -289,12 +289,23 @@ ApplicationWindow {
         visible: AppBackend.gitState === "ok"
 
         TopBar {
+            id: topBar
             Layout.fillWidth: true
             tabsModel: tabsModel
             curPage: root.curPage
             onOpenRepositoryRequested: folderDialog.open()
             onIdentityEditRequested: root.identityEditing = true
             onSettingsRequested: settingsDialog.open()
+        }
+        // Smoke hook (PG_AUTO_ACT=force-push-hold): the overwrite is only
+        // reachable by holding the toolbar's button, which is here rather
+        // than on the page where the other verbs live. Waits out the page's
+        // own auto-act beat so the branch's standing is settled first —
+        // the hold is armed only where the two histories have parted.
+        Timer {
+            interval: 2000
+            running: AppBackend.autoAct === "force-push-hold"
+            onTriggered: topBar.completePushHold()
         }
 
         // Divider under the tab toolbar — same look as the pane splitters.

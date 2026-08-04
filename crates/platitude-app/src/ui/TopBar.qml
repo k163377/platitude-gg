@@ -20,6 +20,13 @@ Rectangle {
     signal identityEditRequested()
     signal settingsRequested()
 
+    /// Automation: run the push button's hold to its end. Does nothing
+    /// unless the button is in the shape that arms it.
+    function completePushHold() {
+        pushButton.completeHold()
+        AppBackend.report("push_hold mode=" + pushButton.mode)
+    }
+
     implicitHeight: Theme.toolbarHeight
     color: Theme.bgElevated
 
@@ -320,8 +327,20 @@ Rectangle {
             text: mode === "publish" ? qsTr("Publish")
                   : mode === "ready"
                     ? qsTr("Push ↑%1").arg(topBar.curPage.pageWt.ahead)
+                  : mode === "diverged"
+                    ? qsTr("Hold to overwrite %1")
+                      .arg(topBar.curPage.pushTargetLabel)
                     : qsTr("Push")
-            enabled: topBar.curPage !== null && topBar.curPage.canPush
+            tone: mode === "diverged" ? Theme.warning : Theme.textPrimary
+            // Diverged, the button stays live for the hold that is its
+            // only gesture: a plain push cannot land there, so nothing
+            // else is waiting on a click to be mistaken for.
+            holdMs: mode === "diverged" ? Metrics.holdMs : 0
+            enabled: topBar.curPage !== null
+                     && (topBar.curPage.canPush
+                         || (mode === "diverged"
+                             && topBar.curPage.canForcePush))
+            onHeld: topBar.curPage.forcePush()
             ToolTip.visible: hovered
             ToolTip.delay: 600
             ToolTip.text: topBar.curPage === null ? ""

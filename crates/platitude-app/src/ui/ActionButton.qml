@@ -15,7 +15,55 @@ HoverToolButton {
     /// Hold the turn still (automation — a spinning icon photographs
     /// differently every time).
     property bool still: false
+    /// How long this button has to be held to fire `held()`; zero for an
+    /// ordinary button, where a click is the whole gesture (デザイン規約
+    /// §進行中・長押しの定数).
+    property int holdMs: 0
+    /// How far into the hold the press has got, 0 to 1.
+    property real holdProgress: 0
+    /// Held all the way down. Clicks are the caller's own business: a
+    /// button that means one thing held and another clicked is the shape
+    /// this is meant to avoid.
+    signal held()
     readonly property color fg: enabled ? tone : Theme.textMuted
+
+    /// Automation: run the hold to its end without a press behind it.
+    function completeHold() {
+        if (actionBtn.holdMs > 0)
+            holdAnim.restart()
+    }
+
+    onDownChanged: {
+        if (actionBtn.holdMs <= 0)
+            return
+        if (actionBtn.down)
+            holdAnim.restart()
+        else
+            holdAnim.stop()
+    }
+    NumberAnimation {
+        id: holdAnim
+        target: actionBtn
+        property: "holdProgress"
+        from: 0
+        to: 1
+        duration: Math.max(actionBtn.holdMs, 1)
+        // Letting go part way leaves nothing behind, so the next press
+        // starts the whole way from the beginning again.
+        onStopped: actionBtn.holdProgress = 0
+        onFinished: actionBtn.held()
+    }
+    background: Rectangle {
+        color: "transparent"
+        // The press overlay, filling in from the left as the hold runs.
+        Rectangle {
+            width: parent.width * actionBtn.holdProgress
+            height: parent.height
+            radius: Theme.radiusSm
+            color: Theme.bgPressed
+            visible: actionBtn.holdProgress > 0
+        }
+    }
     contentItem: RowLayout {
         spacing: Theme.spaceXs
         Item {
@@ -51,6 +99,8 @@ HoverToolButton {
             text: actionBtn.text
             color: actionBtn.fg
             font.pixelSize: Theme.fontMd
+            elide: Text.ElideRight
+            Layout.maximumWidth: 240
             Layout.alignment: Qt.AlignVCenter
         }
     }

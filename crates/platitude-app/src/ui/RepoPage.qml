@@ -194,6 +194,18 @@ Item {
     function pushNow() {
         repoTab.pushCurrent("", "")
     }
+    /// Replace what the remote holds with this branch.
+    ///
+    /// The lease is pinned to the commit this window has on screen rather
+    /// than left to compare against the tracking ref: a background fetch
+    /// must not turn this into a plain force. A remote that moved since is
+    /// refused, and the refusal is answered by a fetch (core).
+    function forcePush() {
+        repoTab.pushCurrent("lease", page.upstreamOid())
+    }
+    /// The menu's way to the same thing, for anyone who cannot hold a
+    /// button down. Here the asking is the dialog's job rather than the
+    /// press's (デザイン規約 §相手の履歴を置き換える).
     function forcePushNow() {
         page.confirmRequested(
             qsTr("Overwrite %1 with this branch?").arg(page.pushTargetLabel),
@@ -203,9 +215,7 @@ Item {
                  + "matches.\n\nThe push is refused if the remote moved since "
                  + "this window last saw it."),
             qsTr("Force push"),
-            // A lease pinned to the commit actually on screen: a
-            // background fetch must not turn this into a plain force.
-            function () { repoTab.pushCurrent("lease", page.upstreamOid()) })
+            function () { page.forcePush() })
     }
     /// Commit the remote-tracking branch points at, as shown here.
     function upstreamOid() {
@@ -594,7 +604,7 @@ Item {
         } else if (act === "push") {
             page.pushNow()
         } else if (act === "force-push") {
-            repoTab.pushCurrent("lease", page.upstreamOid())
+            page.forcePush()
         } else if (act === "force-push-confirm") {
             // Goes through the confirmation, so nothing should be
             // pushed until someone answers it.
