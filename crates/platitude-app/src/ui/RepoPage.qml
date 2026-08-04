@@ -516,6 +516,15 @@ Item {
         } else if (act === "stash-file") {
             page.openFileMenu("unstaged", arg)
             repoTab.stashPath(arg, "")
+        } else if (act === "stash-dialog") {
+            // Opened and left standing, for a look at it.
+            stashDialog.open()
+        } else if (act === "file-menu") {
+            page.openFileMenu("unstaged", arg)
+        } else if (act === "amend-author") {
+            // The amend editor with authorship on offer, left standing.
+            wipPane.setAmendChecked(true)
+            page.amendToggled(true)
         } else if (act === "switch") {
             page.switchTo("branch", arg, arg)
         } else if (act === "switch-leave" || act === "switch-merge") {
