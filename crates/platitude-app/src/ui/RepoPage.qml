@@ -430,18 +430,39 @@ Item {
             graphPane.startNaming(oidHex)
     }
 
-    // The refs one chip had to stack, unstacked under it.
+    // The refs one chip had to stack, unstacked under it. It opens and
+    // closes with the pointer, and the pointer is over exactly one of the
+    // two things that keep it up: the chip, or the list itself.
     RefListPopup {
         id: refList
         currentBranch: workTree.branch
         onPicked: record => page.activateRecord(record)
+        onClosed: page.refListWanted = false
+        onPointerInsideChanged: page.settleRefList()
     }
+    property bool refListWanted: false
     function openRefList(records, anchor) {
         const at = anchor.mapToItem(page, 0, anchor.height)
         refList.records = records
         refList.x = at.x
         refList.y = at.y
+        page.refListWanted = true
         refList.open()
+    }
+    function closeRefListUnlessEntered() {
+        page.refListWanted = false
+        page.settleRefList()
+    }
+    // The list opens flush under the chip, so walking into it takes the
+    // pointer off the chip on the way, and walking back out puts it on
+    // again. Both hovers change in the same frame and in no fixed order,
+    // so the answer waits for the end of this round of events, by which
+    // time whichever of the two now holds the pointer has said so.
+    function settleRefList() {
+        Qt.callLater(function () {
+            if (!refList.pointerInside && !page.refListWanted)
+                refList.close()
+        })
     }
     Connections {
         // The row it hangs off is a delegate, and delegates travel: once
@@ -1273,6 +1294,7 @@ Item {
                         page.rowDoubleClicked(oidHex, record)
                     onChipExpandRequested: (records, anchor) =>
                         page.openRefList(records, anchor)
+                    onChipCollapseRequested: page.closeRefListUnlessEntered()
                     onCreateBranchRequested: (oidHex, name) =>
                         repoTab.createBranch(name, oidHex, true)
                     onOpenRepositoryRequested: page.openRepositoryPicker()

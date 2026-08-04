@@ -24,8 +24,11 @@ Rectangle {
     /// A row was double-clicked. `record` is the chip it shows (kind +
     /// flags + name); empty when the row shows no branch at all.
     signal rowSwitchRequested(string oidHex, string record)
-    /// A stacked chip was hovered long enough to want unstacking.
+    /// A stacked chip was hovered: unstack it under the chip.
     signal chipExpandRequested(var records, var anchor)
+    /// The pointer left that chip — put it back, unless it went into the
+    /// list itself (only the owner can tell).
+    signal chipCollapseRequested()
     /// A name was typed into a row that had no branch on it.
     signal createBranchRequested(string oidHex, string name)
     /// The blank pane's "Open repository…" button.
@@ -180,6 +183,7 @@ Rectangle {
         signal rowMenuRequested(string oidHex)
         signal rowSwitchRequested(string oidHex, string record)
         signal chipExpandRequested(var records, var anchor)
+        signal chipCollapseRequested()
         signal namingSubmitted(string oidHex, string name)
         signal namingCancelled()
         onRowMenuRequested: oidHex => graphArea.commitMenuRequested(oidHex)
@@ -188,6 +192,7 @@ Rectangle {
             graphArea.rowSwitchRequested(oidHex, record)
         onChipExpandRequested: (records, anchor) =>
             graphArea.chipExpandRequested(records, anchor)
+        onChipCollapseRequested: graphArea.chipCollapseRequested()
         onNamingSubmitted: (oidHex, name) => {
             graphArea.stopNaming()
             // An empty box is the way out of the offer, not a branch

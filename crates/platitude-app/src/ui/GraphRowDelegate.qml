@@ -322,26 +322,18 @@ Item {
         const p = rowItem.mapToItem(branchChip, px, py)
         return branchChip.contains(Qt.point(p.x, p.y)) ? branchChip : null
     }
+    // Opens and closes with the pointer, with no wait either way: only a
+    // chip with something stacked behind it answers at all, so there is
+    // nothing to open by accident on the way past.
     function noteChipHover(px, py) {
         const chip = rowItem.naming ? null : rowItem.chipUnder(px, py)
-        if (chip === rowItem.hoveredChip)
+        if (chip === rowItem.hoveredChip || !rowItem.ListView.view)
             return
         rowItem.hoveredChip = chip
         if (chip)
-            chipTimer.restart()
+            rowItem.ListView.view.chipExpandRequested(chip.records, chip)
         else
-            chipTimer.stop()
-    }
-    // Long enough that crossing the column on the way somewhere else does
-    // not open it.
-    Timer {
-        id: chipTimer
-        interval: Metrics.chipExpandMs
-        onTriggered: {
-            if (rowItem.hoveredChip && rowItem.ListView.view)
-                rowItem.ListView.view.chipExpandRequested(
-                    rowItem.hoveredChip.records, rowItem.hoveredChip)
-        }
+            rowItem.ListView.view.chipCollapseRequested()
     }
 
     MouseArea {
