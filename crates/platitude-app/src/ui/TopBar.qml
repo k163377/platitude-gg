@@ -274,8 +274,12 @@ Rectangle {
         ActionButton {
             kind: "fetch"
             text: qsTr("Fetch")
+            busy: topBar.curPage !== null
+                  && topBar.curPage.pageTab.busyOp === "fetch"
+            still: AppBackend.shotDir !== ""
             enabled: topBar.curPage !== null
                      && topBar.curPage.pageTab.remoteCount > 0
+                     && topBar.curPage.pageTab.busyCount === 0
             ToolTip.visible: hovered
             ToolTip.delay: 600
             ToolTip.text: qsTr("Fetch every remote now, pruning branches "
@@ -310,6 +314,9 @@ Rectangle {
             readonly property string mode:
                 topBar.curPage !== null ? topBar.curPage.pushState : "closed"
             kind: "push"
+            busy: topBar.curPage !== null
+                  && topBar.curPage.pageTab.busyOp === "push"
+            still: AppBackend.shotDir !== ""
             text: mode === "publish" ? qsTr("Publish")
                   : mode === "ready"
                     ? qsTr("Push ↑%1").arg(topBar.curPage.pageWt.ahead)

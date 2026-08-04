@@ -115,6 +115,11 @@ Canvas {
             ctx.moveTo(3.5 * s, 13 * s)
             ctx.lineTo(12.5 * s, 13 * s)
             ctx.stroke()
+        } else if (icon.kind === "spinner") {
+            // Three quarters of a ring: the gap is what shows it turning.
+            ctx.beginPath()
+            ctx.arc(8 * s, 8 * s, 5 * s, -Math.PI / 2, Math.PI)
+            ctx.stroke()
         } else if (icon.kind === "copyicon") {
             ctx.strokeRect(5.5 * s, 3.5 * s, 7 * s, 7 * s)
             ctx.strokeRect(3.5 * s, 5.5 * s, 7 * s, 7 * s)
