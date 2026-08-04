@@ -39,6 +39,7 @@ Item {
     property string selectedStashRef: ""
     function showWip() {
         page.wipShown = true
+        page.pendingHeadSelect = false
         page.selectedOid = ""
         page.selectedStashRef = ""
         page.closeDiff()
@@ -759,6 +760,46 @@ Item {
         onTriggered: repoTab.refreshPoll()
     }
 
+    // Where the selection stands, kept so a commit that disappears from
+    // under it can be followed to whatever took its place.
+    property int selectedRow: -1
+
+    // The row the selection stood on is gone and this page owes it a
+    // landing. Deliberately not resolved on the spot: the status of the
+    // working tree, the refs and the walk arrive as three separate
+    // messages, and the two that come first still describe the repository
+    // as it was — reading the branch out of them lands on the commit that
+    // was just replaced. Resolved once the graph holds where the branch
+    // points, which is only true of the refreshed pair.
+    property bool pendingHeadSelect: false
+    function tryPendingHeadSelect() {
+        if (!page.pendingHeadSelect || !branchesModel.refsLoaded)
+            return
+        const row = branchesModel.headOid !== ""
+                    ? graphModel.rowOf(branchesModel.headOid) : -1
+        if (row < 0)
+            return
+        page.pendingHeadSelect = false
+        graphPane.setCurrentRow(row)
+        page.activateRow(graphModel.oidAt(row))
+    }
+
+    // The selected commit is gone from the graph and this page did not
+    // rewrite it: an amend or a rebase run in a terminal replaced it while
+    // the poll was watching. Whatever now stands where it stood is the
+    // closest thing to what was being read; failing that, fall back to the
+    // branch's own commit, which is never nothing.
+    function followVanishedCommit() {
+        const oidHex = graphModel.oidAt(page.selectedRow)
+        if (oidHex !== "" && /[^0]/.test(oidHex)) {
+            graphPane.setCurrentRow(page.selectedRow)
+            page.activateRow(oidHex)
+            return
+        }
+        page.selectedOid = ""
+        page.pendingHeadSelect = true
+    }
+
     // A reworded commit came back under a different hash: the one now
     // standing where it stood is it, since only the message changed.
     function followRewrittenCommit() {
@@ -779,14 +820,18 @@ Item {
         page.guardEdits(oidHex, function () { page.selectRow(oidHex) })
     }
     function selectRow(oidHex) {
-        // Any new selection settles where the last rewrite left off.
+        // Any new selection settles where the last rewrite left off, and
+        // answers any landing this page still owed.
         page.rewordRow = -1
+        page.pendingHeadSelect = false
         // A click moves the highlight itself, but one held back by the
         // unsaved-message question does not: the question put it back
         // where it was, so the answer has to move it again.
         const row = graphModel.rowOf(oidHex)
-        if (row >= 0)
+        if (row >= 0) {
             graphPane.setCurrentRow(row)
+            page.selectedRow = row
+        }
         if (oidHex !== "" && !/[^0]/.test(oidHex)) {
             page.showWip()
             return
@@ -803,8 +848,9 @@ Item {
     // to the current branch's newest commit on first load so the
     // details pane always shows something.
     function trySelectDefault() {
-        if (page.selectedOid !== "" || page.wipShown || AppBackend.autoSelect
-                || AppBackend.autoWip || graphModel.rowTotal === 0)
+        if (page.selectedOid !== "" || page.wipShown || page.pendingHeadSelect
+                || AppBackend.autoSelect || AppBackend.autoWip
+                || graphModel.rowTotal === 0)
             return
         // Refs decide which commit is "current" — wait for them
         // instead of guessing the newest row too early.
@@ -835,14 +881,19 @@ Item {
                 page.seenFinishCount = graphModel.finishCount
                 const resetHappened = graphModel.resetCount !== page.seenResetCount
                 page.seenResetCount = graphModel.resetCount
-                if (page.selectedOid !== "") {
+                if (page.pendingHeadSelect) {
+                    page.tryPendingHeadSelect()
+                } else if (page.selectedOid !== "") {
                     const row = graphModel.rowOf(page.selectedOid)
                     if (row >= 0) {
+                        page.selectedRow = row
                         graphPane.setCurrentRow(row)
                         if (resetHappened)
                             graphPane.anchorSoon()
                     } else if (page.rewordRow >= 0) {
                         page.followRewrittenCommit()
+                    } else {
+                        page.followVanishedCommit()
                     }
                 }
             }
@@ -851,13 +902,27 @@ Item {
     }
     Connections {
         target: branchesModel
-        function onChanged() { page.trySelectDefault() }
+        function onChanged() {
+            // Refs can be the half that was missing, when the walk had
+            // already delivered the commit they now point at.
+            page.tryPendingHeadSelect()
+            page.trySelectDefault()
+        }
     }
     Connections {
         target: worktreeModel
         function onChanged() {
-            if (worktreeModel.total === 0 && page.wipShown)
+            // The working tree emptied. After a commit of our own that is
+            // the end of the editor's job; when someone else committed
+            // these changes it happens with no warning, so a message being
+            // written stays on screen with its text — it is the one thing
+            // here that cannot be read back off disk. Otherwise land on the
+            // commit that now holds the changes rather than on nothing.
+            if (worktreeModel.total === 0 && page.wipShown
+                    && wipPane.subjectText === "" && wipPane.bodyText === "") {
                 page.wipShown = false
+                page.pendingHeadSelect = true
+            }
             // Smoke hook (PG_AUTO_WIP=1): open the WIP view once
             // uncommitted changes are known.
             if (AppBackend.autoWip && worktreeModel.total > 0 && !page.wipShown) {
