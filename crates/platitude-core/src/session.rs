@@ -227,10 +227,11 @@ pub enum SessionEvent {
         oid: String,
         in_history: bool,
     },
-    /// Answer to [`RepoSession::load_head_message`] — what an amend starts
-    /// from. Empty on an unborn branch.
-    HeadMessageLoaded {
-        message: String,
+    /// Answer to [`RepoSession::load_head_commit`] — what an amend starts
+    /// from: HEAD's message, and whose commit it is about to replace. All
+    /// empty on an unborn branch.
+    HeadCommitLoaded {
+        head: commit::HeadCommit,
     },
     /// Author identity and signing configuration. Emitted on open so the
     /// UI can ask for an identity before the first commit fails.
@@ -861,25 +862,23 @@ impl RepoSession {
         );
     }
 
-    /// Reads HEAD's message so an amend can start from it.
+    /// Reads HEAD's message and author so an amend can start from them.
     ///
     /// On demand rather than with every refresh: only the amend path wants
-    /// it, and a repository refresh already runs several commands.
-    pub fn load_head_message(self: &Arc<Self>) {
+    /// them, and a repository refresh already runs several commands.
+    pub fn load_head_commit(self: &Arc<Self>) {
         let Some(workdir) = self.workdir() else {
             return;
         };
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let cancel = s.root_cancel.clone();
-            match commit::head_message(&s.executor, &workdir, &cancel).await {
-                Ok(message) => s.sink.event(SessionEvent::HeadMessageLoaded { message }),
-                // An unborn branch has no HEAD to amend; that is a state,
-                // not a failure worth an error banner.
-                Err(_) => s.sink.event(SessionEvent::HeadMessageLoaded {
-                    message: String::new(),
-                }),
-            }
+            // An unborn branch has no HEAD to amend; that is a state, not a
+            // failure worth an error banner.
+            let head = commit::head_commit(&s.executor, &workdir, &cancel)
+                .await
+                .unwrap_or_default();
+            s.sink.event(SessionEvent::HeadCommitLoaded { head });
         });
     }
 
@@ -1276,13 +1275,18 @@ impl RepoSession {
         );
     }
 
-    /// `git stash push`.
-    pub fn stash_push(self: &Arc<Self>, message: String, options: stash::PushOptions) {
+    /// `git stash push`, over the whole working tree or only `paths`.
+    pub fn stash_push(
+        self: &Arc<Self>,
+        message: String,
+        options: stash::PushOptions,
+        paths: Vec<String>,
+    ) {
         self.write(
             "stash",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                stash::push(&exec, &repo.workdir, &message, options, &[], &cancel).await
+                stash::push(&exec, &repo.workdir, &message, options, &paths, &cancel).await
             },
         );
     }

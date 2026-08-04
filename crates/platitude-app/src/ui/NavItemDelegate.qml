@@ -36,6 +36,8 @@ Item {
     /// Right-click on a ref row; the page owns the menu because
     /// delegates are recycled out from under an open popup.
     signal refMenuRequested(string name, string oidHex)
+    /// Right-click on a working-tree file row, for the same reason.
+    signal fileMenuRequested(string bucket, string path)
 
     width: listWidth
     height: Theme.rowHeight
@@ -173,6 +175,10 @@ Item {
                     navRow.refMenuRequested(
                         navRow.full !== "" ? navRow.full : navRow.name,
                         navRow.oid_hex)
+                else if (!navRow.folder && navRow.kindHint === "wt")
+                    navRow.fileMenuRequested(
+                        navRow.bucket,
+                        navRow.full !== "" ? navRow.full : navRow.name)
                 return
             }
             if (navRow.folder)

@@ -49,9 +49,15 @@ pub struct RepoTab {
     /// request so an amend starts from it.
     head_subject: String,
     head_body: String,
+    /// Who HEAD is attributed to, and whether that is someone other than
+    /// the identity git would record now — the one case where taking over
+    /// authorship on an amend is worth offering.
+    head_author_name: String,
+    head_author_email: String,
+    head_author_differs: bool,
     /// Bumped each time an answer arrives, so an editor waiting for one
     /// can tell "not loaded yet" from "loaded, and it is empty".
-    head_message_seq: i32,
+    head_commit_seq: i32,
     /// The most recently finished write: its name, git's message (empty on
     /// success) and a counter QML compares against to spot a new one. A
     /// signal with arguments would be the natural shape, but the bridge
@@ -101,7 +107,10 @@ impl Default for RepoTab {
             default_remote: String::new(),
             head_subject: String::new(),
             head_body: String::new(),
-            head_message_seq: 0,
+            head_author_name: String::new(),
+            head_author_email: String::new(),
+            head_author_differs: false,
+            head_commit_seq: 0,
             last_write_op: String::new(),
             last_write_error: String::new(),
             write_seq: 0,
@@ -120,6 +129,18 @@ impl RepoTab {
         if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
             f(&session);
         }
+    }
+
+    /// Whether HEAD carries someone else's name — the only case where an
+    /// amend has authorship to take over (`--reset-author`).
+    ///
+    /// git refuses to commit with an empty `user.name`, so a HEAD that is
+    /// really there always has one: an empty name is "no HEAD read yet"
+    /// rather than an identity to compare against.
+    fn compare_head_author(&mut self) {
+        self.head_author_differs = !self.head_author_name.is_empty()
+            && (self.head_author_name != self.author_name
+                || self.head_author_email != self.author_email);
     }
 
     /// Decodes the push-force pair QML sends.
@@ -175,10 +196,21 @@ impl RepoTab {
     qproperty!("headSubject", Member = head_subject, Notify = changed);
     qproperty!("headBody", Member = head_body, Notify = changed);
     qproperty!(
-        "headMessageSeq",
-        Member = head_message_seq,
+        "headAuthorName",
+        Member = head_author_name,
         Notify = changed
     );
+    qproperty!(
+        "headAuthorEmail",
+        Member = head_author_email,
+        Notify = changed
+    );
+    qproperty!(
+        "headAuthorDiffers",
+        Member = head_author_differs,
+        Notify = changed
+    );
+    qproperty!("headCommitSeq", Member = head_commit_seq, Notify = changed);
     qproperty!("lastWriteOp", Member = last_write_op, Notify = changed);
     qproperty!(
         "lastWriteError",
@@ -276,6 +308,7 @@ impl RepoTab {
                     self.identity_ready = complete;
                     self.signing_active = signing;
                     self.signing_format = signing_format;
+                    self.compare_head_author();
                 }
                 TabMsg::Remotes { names } => {
                     // A push with no upstream goes to `origin` when there
@@ -289,11 +322,18 @@ impl RepoTab {
                     self.remote_count = names.len() as i32;
                     self.remotes = names;
                 }
-                TabMsg::HeadMessage { message } => {
+                TabMsg::HeadCommit {
+                    message,
+                    author_name,
+                    author_email,
+                } => {
                     let (subject, body) = platitude_core::commit::split_message(&message);
                     self.head_subject = subject;
                     self.head_body = body;
-                    self.head_message_seq += 1;
+                    self.head_author_name = author_name;
+                    self.head_author_email = author_email;
+                    self.compare_head_author();
+                    self.head_commit_seq += 1;
                 }
                 TabMsg::AutoFetch { running, error } => {
                     self.auto_fetch_running = running;
@@ -430,20 +470,24 @@ impl RepoTab {
 
     /// Commits the index from the editor's two fields. Both empty is only
     /// valid with `amend`, where it keeps the existing message.
+    ///
+    /// `reset_author` only means anything on an amend: it puts the current
+    /// identity on a commit written under another one.
     #[qslot]
-    fn commit(&mut self, subject: String, body: String, amend: bool) {
+    fn commit(&mut self, subject: String, body: String, amend: bool, reset_author: bool) {
         let message = platitude_core::commit::join_message(&subject, &body);
         let options = platitude_core::commit::CommitOptions {
             amend,
-            ..Default::default()
+            allow_empty: false,
+            reset_author: amend && reset_author,
         };
         self.with_session(|s| s.commit(message.clone(), options));
     }
 
-    /// Reads HEAD's message into `headMessage` (amend starts from it).
+    /// Reads HEAD's message and author (an amend starts from them).
     #[qslot]
-    fn request_head_message(&mut self) {
-        self.with_session(|s| s.load_head_message());
+    fn request_head_commit(&mut self) {
+        self.with_session(|s| s.load_head_commit());
     }
 
     // Every move carries the same `carry` word through: "carry" first, and
@@ -508,15 +552,41 @@ impl RepoTab {
         self.with_session(|s| s.rename_branch(from.clone(), to.clone(), force));
     }
 
-    /// `git stash push`.
+    /// `git stash push` over the whole working tree.
+    ///
+    /// `staged_only` takes the index alone. It is not offered while a file
+    /// is changed on both sides — git writes the stash entry and then
+    /// fails to clear the tree, leaving an entry behind with nothing else
+    /// done — so the caller checks `partiallyStagedCount` first.
     #[qslot]
-    fn push_stash(&mut self, message: String, include_untracked: bool, keep_index: bool) {
+    fn push_stash(
+        &mut self,
+        message: String,
+        include_untracked: bool,
+        keep_index: bool,
+        staged_only: bool,
+    ) {
         let options = platitude_core::stash::PushOptions {
             include_untracked,
             keep_index,
+            staged_only,
+        };
+        self.with_session(|s| s.stash_push(message.clone(), options, Vec::new()));
+    }
+
+    /// `git stash push -- <path>`: puts one file's changes away and leaves
+    /// the rest of the working tree as it is.
+    ///
+    /// Untracked files are included, since a path the user pointed at is
+    /// meant to go whether or not git is tracking it yet.
+    #[qslot]
+    fn stash_path(&mut self, path: String, message: String) {
+        let options = platitude_core::stash::PushOptions {
+            include_untracked: true,
+            keep_index: false,
             staged_only: false,
         };
-        self.with_session(|s| s.stash_push(message.clone(), options));
+        self.with_session(|s| s.stash_push(message.clone(), options, vec![path.clone()]));
     }
 
     /// `git stash pop` on the given selector (stash-row action).

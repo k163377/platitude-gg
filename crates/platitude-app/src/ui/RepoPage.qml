@@ -72,21 +72,21 @@ Item {
 
     // Turning amend on starts the editor from HEAD's message; turning
     // it off empties it again, since the text belonged to that commit.
-    property int seenHeadMessageSeq: 0
+    property int seenHeadCommitSeq: 0
     property bool wantHeadMessage: false
     function amendToggled(on) {
         page.amending = on
         if (on) {
             page.wantHeadMessage = true
-            repoTab.requestHeadMessage()
+            repoTab.requestHeadCommit()
         } else {
             page.clearCommitEditor()
         }
     }
     function absorbHeadMessage() {
-        if (repoTab.headMessageSeq === page.seenHeadMessageSeq)
+        if (repoTab.headCommitSeq === page.seenHeadCommitSeq)
             return
-        page.seenHeadMessageSeq = repoTab.headMessageSeq
+        page.seenHeadCommitSeq = repoTab.headCommitSeq
         if (!page.wantHeadMessage)
             return
         page.wantHeadMessage = false
@@ -100,7 +100,8 @@ Item {
     // rewrites nothing that a switch or a reset cannot bring back, and
     // the push that would spread it is asked about on its own.
     function commitNow() {
-        repoTab.commit(wipPane.subjectText, wipPane.bodyText, page.amending)
+        repoTab.commit(wipPane.subjectText, wipPane.bodyText,
+                       page.amending, wipPane.resetAuthor)
     }
 
     // ---- moving between branches and commits ----------------------
@@ -212,6 +213,42 @@ Item {
         MenuItem {
             text: qsTr("Copy commit hash")
             onTriggered: clipboard.copy(page.menuRefOid)
+        }
+    }
+
+    // ---- putting changes away --------------------------------------
+    // A stash takes nothing away — every change is in the entry, and the
+    // sidebar shows it — so neither the whole tree nor one file is asked
+    // about beyond the dialog that chooses what goes.
+    StashDialog {
+        id: stashDialog
+        partiallyStaged: workTree.partiallyStagedCount
+        busy: repoTab.busyCount > 0
+        onSubmitted: (message, untracked, keepIndex, stagedOnly) =>
+            repoTab.pushStash(message, untracked, keepIndex, stagedOnly)
+    }
+
+    // ---- context menu on a working-tree file row --------------------
+    property string menuFilePath: ""
+    property string menuFileBucket: ""
+    function openFileMenu(bucket, path) {
+        page.menuFileBucket = bucket
+        page.menuFilePath = path
+        fileMenu.popup()
+    }
+    Menu {
+        id: fileMenu
+        MenuItem {
+            text: qsTr("Stash this file")
+            // git will not stash a tree with unresolved conflicts in it.
+            enabled: repoTab.busyCount === 0
+                     && page.menuFileBucket !== "conflicts"
+            onTriggered: repoTab.stashPath(page.menuFilePath, "")
+        }
+        MenuSeparator {}
+        MenuItem {
+            text: qsTr("Copy path")
+            onTriggered: clipboard.copy(page.menuFilePath)
         }
     }
 
@@ -406,6 +443,20 @@ Item {
         interval: 1200
         onTriggered: page.runAutoAct()
     }
+    // HEAD's author has to arrive before the offer to take it over can
+    // be there to tick.
+    Timer {
+        id: resetAuthorTimer
+        interval: 800
+        onTriggered: {
+            AppBackend.report("head_author differs="
+                              + repoTab.headAuthorDiffers
+                              + " name=" + repoTab.headAuthorName)
+            wipPane.setResetAuthorChecked(true)
+            wipPane.setMessage(AppBackend.autoActArg, "")
+            page.commitNow()
+        }
+    }
     // The diff has to arrive before a row of it can be staged.
     Timer {
         id: stageRowTimer
@@ -448,6 +499,23 @@ Item {
             page.amending = true
             wipPane.setMessage(arg, "")
             page.commitNow()
+        } else if (act === "amend-reset-author") {
+            // Whether authorship is HEAD's to take over is only known
+            // once HEAD has been read, so this one goes the long way
+            // round: turn amend on and wait for the answer.
+            wipPane.setAmendChecked(true)
+            page.amendToggled(true)
+            resetAuthorTimer.start()
+        } else if (act === "stash" || act === "stash-staged") {
+            // Through the dialog, like the button: it is what decides
+            // which options the stash is made with.
+            stashDialog.open()
+            if (act === "stash-staged")
+                stashDialog.setOptions(false, false, true)
+            stashDialog.apply()
+        } else if (act === "stash-file") {
+            page.openFileMenu("unstaged", arg)
+            repoTab.stashPath(arg, "")
         } else if (act === "switch") {
             page.switchTo("branch", arg, arg)
         } else if (act === "switch-leave" || act === "switch-merge") {
@@ -964,6 +1032,9 @@ Item {
                     onCommitClicked: page.commitNow()
                     onFileActivated: (bucket, path, origPath) =>
                         page.toggleDiff(bucket, path, origPath)
+                    onStashRequested: stashDialog.open()
+                    onFileMenuRequested: (bucket, path) =>
+                        page.openFileMenu(bucket, path)
                 }
 
                 DetailsPane {

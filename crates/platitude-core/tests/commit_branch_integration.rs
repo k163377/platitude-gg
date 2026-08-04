@@ -155,12 +155,14 @@ async fn head_message_and_merge_detection() {
     repo.git(&["commit", "--amend", "-m", "subject\n\nbody line\n"]);
     let (exec, cancel) = env();
 
-    assert_eq!(
-        commit::head_message(&exec, &repo.path, &cancel)
-            .await
-            .expect("head message"),
-        "subject\n\nbody line"
-    );
+    let head = commit::head_commit(&exec, &repo.path, &cancel)
+        .await
+        .expect("head commit");
+    assert_eq!(head.message, "subject\n\nbody line");
+    // Author and message come out of one command, NUL-separated: a
+    // multi-line message may not be told apart by anything printable.
+    assert_eq!(head.author_name, "Test User");
+    assert_eq!(head.author_email, "test@example.com");
     assert!(
         !commit::head_is_merge(&exec, &repo.path, &cancel)
             .await
@@ -177,6 +179,63 @@ async fn head_message_and_merge_detection() {
             .await
             .expect("merge check")
     );
+}
+
+#[tokio::test]
+async fn amending_keeps_the_author_until_reset_author_is_asked_for() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.write_file("a.txt", "theirs\n");
+    repo.git(&["add", "--", "a.txt"]);
+    // `--author` rather than `-c user.name`: the harness pins the author
+    // through the environment, which config cannot outrank.
+    repo.git(&[
+        "commit",
+        "--author=Other Person <other@example.com>",
+        "-m",
+        "written by someone else",
+    ]);
+    let (exec, cancel) = env();
+    let info = info(&repo).await;
+
+    // A plain amend records this machine as the committer and leaves the
+    // author where it was — which is why taking over has to be asked for.
+    commit::commit(
+        &exec,
+        &info,
+        "reworded",
+        CommitOptions {
+            amend: true,
+            ..Default::default()
+        },
+        &cancel,
+    )
+    .await
+    .expect("amend");
+    let head = commit::head_commit(&exec, &repo.path, &cancel)
+        .await
+        .expect("head commit");
+    assert_eq!(head.author_name, "Other Person");
+    assert_eq!(head.author_email, "other@example.com");
+
+    commit::commit(
+        &exec,
+        &info,
+        "mine now",
+        CommitOptions {
+            amend: true,
+            reset_author: true,
+            ..Default::default()
+        },
+        &cancel,
+    )
+    .await
+    .expect("amend --reset-author");
+    let head = commit::head_commit(&exec, &repo.path, &cancel)
+        .await
+        .expect("head commit");
+    assert_eq!(head.author_name, "Test User");
+    assert_eq!(head.author_email, "test@example.com");
 }
 
 #[tokio::test]

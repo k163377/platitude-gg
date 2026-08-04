@@ -75,9 +75,11 @@ pub enum TabMsg {
     Remotes {
         names: Vec<String>,
     },
-    /// HEAD's message, for prefilling an amend.
-    HeadMessage {
+    /// HEAD's message and author, for prefilling an amend.
+    HeadCommit {
         message: String,
+        author_name: String,
+        author_email: String,
     },
     /// Auto fetch started or ended. Kept off the shared error surface: a
     /// laptop that is simply offline must not raise a fresh banner every
@@ -365,8 +367,12 @@ impl SessionSink for BridgeSink {
             SessionEvent::InHistoryChecked { oid, in_history } => {
                 self.feeds.tab.push(TabMsg::InHistory { oid, in_history });
             }
-            SessionEvent::HeadMessageLoaded { message } => {
-                self.feeds.tab.push(TabMsg::HeadMessage { message });
+            SessionEvent::HeadCommitLoaded { head } => {
+                self.feeds.tab.push(TabMsg::HeadCommit {
+                    message: head.message,
+                    author_name: head.author_name,
+                    author_email: head.author_email,
+                });
             }
             SessionEvent::WriteStarted { op } if op == AUTO_FETCH_OP => {
                 self.feeds.tab.push(TabMsg::AutoFetch {

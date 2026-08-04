@@ -166,6 +166,106 @@ async fn stash_keep_index_leaves_the_staged_part_alone() {
 }
 
 #[tokio::test]
+async fn stash_limited_to_one_path_leaves_the_rest_behind() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.commit_file("b.txt", "one\n", "second");
+    // The file that goes is changed on both sides at once, which the
+    // path form handles: unlike `--staged`, it takes the whole path.
+    repo.write_file("a.txt", "staged\n");
+    repo.git(&["add", "--", "a.txt"]);
+    repo.write_file("a.txt", "staged then edited\n");
+    repo.write_file("b.txt", "stays\n");
+    repo.write_file("new.txt", "untracked, stays\n");
+    let (exec, cancel) = env();
+
+    stash::push(
+        &exec,
+        &repo.path,
+        "just a.txt",
+        PushOptions {
+            include_untracked: true,
+            ..Default::default()
+        },
+        &["a.txt".to_string()],
+        &cancel,
+    )
+    .await
+    .expect("stash push -- a.txt");
+
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("a.txt")).unwrap(),
+        "one\n",
+        "the named path went"
+    );
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("b.txt")).unwrap(),
+        "stays\n",
+        "everything else stayed"
+    );
+    assert!(
+        repo.path.join("new.txt").exists(),
+        "an untracked file outside the path stays"
+    );
+
+    stash::pop_with_index(&exec, &repo.path, "stash@{0}", &cancel)
+        .await
+        .expect("pop --index");
+    let s = status::load(&exec, &repo.path, &cancel)
+        .await
+        .expect("status");
+    assert_eq!(
+        s.partially_staged().count(),
+        1,
+        "the staged/unstaged split of the stashed path came back"
+    );
+}
+
+#[tokio::test]
+async fn staged_only_stash_needs_a_tree_split_git_can_separate() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.commit_file("b.txt", "one\n", "second");
+    repo.write_file("a.txt", "staged\n");
+    repo.git(&["add", "--", "a.txt"]);
+    repo.write_file("b.txt", "unstaged\n");
+    let (exec, cancel) = env();
+
+    let staged_only = PushOptions {
+        staged_only: true,
+        ..Default::default()
+    };
+    stash::push(&exec, &repo.path, "index only", staged_only, &[], &cancel)
+        .await
+        .expect("stash --staged");
+    let s = status::load(&exec, &repo.path, &cancel)
+        .await
+        .expect("status");
+    assert_eq!(s.staged().count(), 0, "the index went");
+    assert_eq!(s.unstaged().count(), 1, "the rest of the tree stayed");
+
+    // Changed on both sides: git writes the entry and then fails to take
+    // the staged half out of the tree, leaving the entry behind with
+    // nothing else done. The UI refuses before reaching this (measured).
+    repo.git(&["add", "--", "b.txt"]);
+    repo.write_file("b.txt", "unstaged again\n");
+    let before = stash::load(&exec, &repo.path, &cancel).await.expect("list");
+    let err = stash::push(&exec, &repo.path, "doomed", staged_only, &[], &cancel)
+        .await
+        .expect_err("git cannot separate a file changed on both sides");
+    assert!(
+        err.to_string().contains("Cannot remove worktree changes"),
+        "git's own wording: {err}"
+    );
+    let after = stash::load(&exec, &repo.path, &cancel).await.expect("list");
+    assert_eq!(after.len(), before.len() + 1, "the entry is written anyway");
+    let s = status::load(&exec, &repo.path, &cancel)
+        .await
+        .expect("status");
+    assert_eq!(s.partially_staged().count(), 1, "and the tree is untouched");
+}
+
+#[tokio::test]
 async fn lists_remotes_from_config() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");

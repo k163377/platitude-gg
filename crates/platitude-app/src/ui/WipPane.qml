@@ -24,9 +24,17 @@ ColumnLayout {
     signal amendToggled(bool on)
     signal commitClicked()
     signal fileActivated(string bucket, string path, string origPath)
+    /// Put the whole working tree away (opens the stash dialog).
+    signal stashRequested()
+    /// Right-click on a file row; the page owns the menu because
+    /// delegates are recycled out from under an open popup.
+    signal fileMenuRequested(string bucket, string path)
 
     readonly property string subjectText: wipSubject.text
     readonly property string bodyText: wipBody.text
+    // Whether the amend should also put the current identity on the
+    // commit it replaces (git keeps the original author otherwise).
+    readonly property bool resetAuthor: authorBox.checked
     function setMessage(subject, body) {
         wipSubject.text = subject
         wipBody.text = body
@@ -37,6 +45,9 @@ ColumnLayout {
     }
     function setAmendChecked(on) {
         amendBox.checked = on
+    }
+    function setResetAuthorChecked(on) {
+        authorBox.checked = on
     }
 
     spacing: 0
@@ -57,6 +68,19 @@ ColumnLayout {
                 color: Theme.textSecondary
             }
             Item { Layout.fillWidth: true }
+            // Everything uncommitted, set aside in one entry. Nothing is
+            // thrown away, so it asks nothing beyond the dialog itself.
+            HoverToolButton {
+                text: qsTr("Stash…")
+                font.pixelSize: Theme.fontSm
+                enabled: wipPane.repoTab.busyCount === 0
+                         && wipPane.worktreeModel.total > 0
+                ToolTip.visible: hovered
+                ToolTip.delay: 600
+                ToolTip.text: qsTr("Put these changes away and come back to a "
+                                   + "clean working tree")
+                onClicked: wipPane.stashRequested()
+            }
             HoverToolButton {
                 padding: 0
                 implicitWidth: Theme.iconLg
@@ -156,6 +180,26 @@ ColumnLayout {
                 font.pixelSize: Theme.fontSm
                 implicitHeight: Theme.controlHeight
                 onToggled: wipPane.amendToggled(checked)
+            }
+            // git records who committed, but leaves the author alone: an
+            // amend of someone else's commit — or of one's own made under
+            // a different name — keeps the name it had. Offered only
+            // where the two identities actually differ, and unchecked
+            // again whenever it goes away.
+            CheckBox {
+                id: authorBox
+                visible: wipPane.amending && wipPane.repoTab.headAuthorDiffers
+                text: qsTr("Make me the author")
+                font.pixelSize: Theme.fontSm
+                implicitHeight: Theme.controlHeight
+                onVisibleChanged: if (!visible) checked = false
+                ToolTip.visible: hovered
+                ToolTip.delay: 400
+                ToolTip.text: qsTr("The last commit is by %1 <%2>. Amending it "
+                                   + "keeps that name unless this is checked, "
+                                   + "which also dates it now.")
+                              .arg(wipPane.repoTab.headAuthorName)
+                              .arg(wipPane.repoTab.headAuthorEmail)
             }
             Item { Layout.fillWidth: true }
             // Said, not asked: rewriting a pushed commit is undone by a
@@ -270,6 +314,8 @@ ColumnLayout {
             showStage: true
             onFileClicked: (bucket, path, origPath) =>
                 wipPane.fileActivated(bucket, path, origPath)
+            onFileMenuRequested: (bucket, path) =>
+                wipPane.fileMenuRequested(bucket, path)
             onFolderClicked: key => wipPane.worktreeModel.toggleFolder(key)
             onStageClicked: (bucket, path) => {
                 if (bucket === "staged")

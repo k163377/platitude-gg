@@ -111,17 +111,40 @@ pub async fn commit(
     head_oid(executor, &repo.workdir, cancel).await
 }
 
-/// Message of the current HEAD commit, for prefilling an amend editor.
-pub async fn head_message(
+/// What an amend starts from: HEAD's message and the identity recorded
+/// as its author.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HeadCommit {
+    pub message: String,
+    pub author_name: String,
+    pub author_email: String,
+}
+
+/// Reads HEAD's message and author, for prefilling an amend editor.
+///
+/// One command for both, NUL-separated: a message spans lines, so it has
+/// to come last and no printable separator would be safe in front of it.
+pub async fn head_commit(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
-) -> Result<String, GitError> {
+) -> Result<HeadCommit, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .args(["log", "-1", "--format=%B"]);
+        .args(["log", "-1", "--format=%an%x00%ae%x00%B"]);
     let out = executor.run(cmd, cancel).await?;
-    Ok(out.stdout_utf8().trim_end_matches('\n').to_string())
+    let text = out.stdout_utf8();
+    let unexpected = || GitError::UnexpectedOutput {
+        command: "git log -1".to_string(),
+        message: "author and message are not NUL-separated".to_string(),
+    };
+    let (author_name, rest) = text.split_once('\0').ok_or_else(unexpected)?;
+    let (author_email, message) = rest.split_once('\0').ok_or_else(unexpected)?;
+    Ok(HeadCommit {
+        message: message.trim_end_matches('\n').to_string(),
+        author_name: author_name.to_string(),
+        author_email: author_email.to_string(),
+    })
 }
 
 /// True when HEAD exists and is a merge commit (amending one is a

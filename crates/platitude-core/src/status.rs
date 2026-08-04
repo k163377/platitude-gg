@@ -73,6 +73,20 @@ impl WorkTreeStatus {
             .filter(|i| matches!(i, StatusItem::Tracked { unstaged, .. } if *unstaged != '.'))
     }
 
+    /// Entries whose change is split across the index and the working
+    /// tree (`MM` and friends).
+    ///
+    /// `git stash push --staged` cannot take these apart: it writes the
+    /// stash entry and then fails to remove the staged half from the
+    /// working tree, leaving the entry behind with nothing else changed.
+    /// Knowing they are there is what lets the UI refuse first.
+    pub fn partially_staged(&self) -> impl Iterator<Item = &StatusItem> {
+        self.items.iter().filter(|i| {
+            matches!(i, StatusItem::Tracked { staged, unstaged, .. }
+                     if *staged != '.' && *unstaged != '.')
+        })
+    }
+
     pub fn untracked(&self) -> impl Iterator<Item = &StatusItem> {
         self.items
             .iter()
