@@ -46,7 +46,6 @@ Rectangle {
         graphList.namingOid = ""
         graphList.namingText = ""
     }
-    readonly property alias namingOid: graphList.namingOid
 
     /// The list itself — for automation hooks (bench / scroll-to /
     /// screenshot flows) only; app code goes through the functions.

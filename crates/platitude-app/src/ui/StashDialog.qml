@@ -27,13 +27,6 @@ AppDialog {
         stagedOnlyBox.checked = false
         messageField.forceActiveFocus()
     }
-    /// Ticks the boxes a click would tick (the page's smoke hook). Only
-    /// meaningful between `open()` and `apply()` — opening resets them.
-    function setOptions(untracked, keepIndex, stagedOnly) {
-        untrackedBox.checked = untracked
-        keepIndexBox.checked = keepIndex
-        stagedOnlyBox.checked = stagedOnly
-    }
     /// The click path onto "Only the staged changes" (the page's smoke
     /// hook): setting `checked` skips `toggled`, a click does not.
     function clickStagedOnly() {
