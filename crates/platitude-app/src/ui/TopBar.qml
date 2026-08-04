@@ -58,6 +58,17 @@ Rectangle {
                     enabled: false
                 }
                 AppMenuSeparator {}
+                // A local re-read (no network). The page re-reads itself
+                // on a tick while it is on screen, so this is here for
+                // where that cannot reach — a repository on a share that
+                // reads slowly, or a read that failed — rather than for
+                // everyday use, and it costs no toolbar room to keep.
+                AppMenuItem {
+                    text: qsTr("Reload")
+                    enabled: topBar.curPage !== null
+                    onTriggered: topBar.curPage.pageTab.refreshAll()
+                }
+                AppMenuSeparator {}
                 AppMenuItem {
                     text: qsTr("Identity…")
                     onTriggered: topBar.identityEditRequested()
@@ -327,9 +338,6 @@ Rectangle {
             text: mode === "publish" ? qsTr("Publish")
                   : mode === "ready"
                     ? qsTr("Push ↑%1").arg(topBar.curPage.pageWt.ahead)
-                  : mode === "diverged"
-                    ? qsTr("Hold to overwrite %1")
-                      .arg(topBar.curPage.pushTargetLabel)
                     : qsTr("Push")
             tone: mode === "diverged" ? Theme.warning : Theme.textPrimary
             // Diverged, the button stays live for the hold that is its
@@ -360,7 +368,8 @@ Rectangle {
                           : mode === "diverged"
                             ? qsTr("%1 has commits this branch does not, as "
                                    + "seen at the last fetch, so only an "
-                                   + "overwrite can put this branch there")
+                                   + "overwrite can put this branch there. "
+                                   + "Hold this button to overwrite it.")
                               .arg(topBar.curPage.pushTargetLabel)
                           : ""
             onClicked: topBar.curPage.pushNow()
@@ -380,15 +389,6 @@ Rectangle {
                     onTriggered: topBar.curPage.forcePushNow()
                 }
             }
-        }
-        // Local re-read only (no network).
-        HoverToolButton {
-            text: qsTr("Reload")
-            enabled: topBar.curPage !== null
-            ToolTip.visible: hovered
-            ToolTip.delay: 600
-            ToolTip.text: qsTr("Re-read this repository from disk (does not fetch)")
-            onClicked: topBar.curPage.pageTab.refreshAll()
         }
     }
 }
