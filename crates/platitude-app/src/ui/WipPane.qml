@@ -158,8 +158,9 @@ ColumnLayout {
                 onToggled: wipPane.amendToggled(checked)
             }
             Item { Layout.fillWidth: true }
-            // Warned about, not forbidden: git allows it and the
-            // confirmation says what it costs.
+            // Said, not asked: rewriting a pushed commit is undone by a
+            // switch or a reset, so the amend goes ahead and this tag
+            // is all the warning it gets.
             Label {
                 visible: wipPane.amending && wipPane.headPublished
                 text: qsTr("already pushed")

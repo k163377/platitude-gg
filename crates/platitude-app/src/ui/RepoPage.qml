@@ -50,7 +50,7 @@ Item {
     // without reaching into the pane.
     property bool amending: false
     // Whether HEAD is already on a remote. Amending it rewrites
-    // something other people may have, so that gets confirmed.
+    // something other people may have, so the editor says so.
     property bool headPublished: false
     readonly property string headRange: "HEAD^!"
     function refreshHeadPublished() {
@@ -60,15 +60,10 @@ Item {
     Connections {
         target: repoTab
         function onChanged() {
-            // One shared answer slot, so each consumer only reads the
-            // reply to the range it asked about.
-            if (repoTab.publishRange === page.headRange) {
+            // One shared answer slot, so only the reply to the range
+            // this page asked about is read.
+            if (repoTab.publishRange === page.headRange)
                 page.headPublished = repoTab.publishPublished > 0
-            } else if (page.menuOid !== ""
-                       && repoTab.publishRange === page.menuOid + "^!") {
-                page.menuPublished = repoTab.publishPublished > 0
-                page.menuPublishKnown = true
-            }
             page.absorbHeadMessage()
             page.absorbMoveBlock()
             page.absorbWriteResult()
@@ -101,19 +96,10 @@ Item {
         wipPane.clearMessage()
     }
 
+    // Not confirmed even when HEAD is already on a remote: amending
+    // rewrites nothing that a switch or a reset cannot bring back, and
+    // the push that would spread it is asked about on its own.
     function commitNow() {
-        if (page.amending && page.headPublished) {
-            page.confirmRequested(
-                qsTr("Rewrite a commit that is already on a remote?"),
-                qsTr("The last commit has been pushed. Amending replaces it "
-                     + "with a different one, so anyone who already has it "
-                     + "will be out of step until they reset."),
-                qsTr("Amend anyway"), page.doCommit)
-            return
-        }
-        page.doCommit()
-    }
-    function doCommit() {
         repoTab.commit(wipPane.subjectText, wipPane.bodyText, page.amending)
     }
 
@@ -234,18 +220,8 @@ Item {
     readonly property string menuShort: page.menuOid.substring(0, 8)
     function openCommitMenu(oidHex) {
         page.menuOid = oidHex
-        // Asked as the menu opens so the rewrite warnings inside it
-        // know whether this commit has already left the machine. The
-        // rewriting entries stay disabled until the answer lands —
-        // one `rev-list --count`, so within a frame or two.
-        page.menuPublished = false
-        page.menuPublishKnown = false
-        repoTab.checkPublish(oidHex + "^!")
         commitMenu.popup()
     }
-    // Whether the commit the menu is about is already on a remote.
-    property bool menuPublished: false
-    property bool menuPublishKnown: false
 
     Menu {
         id: commitMenu
@@ -272,7 +248,7 @@ Item {
         }
         MenuItem {
             text: qsTr("Fold into the commit before it")
-            enabled: repoTab.busyCount === 0 && page.menuPublishKnown
+            enabled: repoTab.busyCount === 0
             onTriggered: page.squashCommit(page.menuOid)
         }
         MenuSeparator {}
@@ -287,25 +263,11 @@ Item {
     }
 
     // ---- rewriting one commit --------------------------------------
-    // Both of these replay history when the commit is not the newest
-    // one, so both warn once the commit has been pushed.
-    function rewriteWarning(shortSha, published, action, run) {
-        if (!published) {
-            run()
-            return
-        }
-        page.confirmRequested(
-            qsTr("Rewrite a commit that is already on a remote?"),
-            qsTr("%1 has been pushed. %2 replaces it, and every commit after "
-                 + "it, with different ones — anyone who already has them will "
-                 + "be out of step until they reset.")
-                .arg(shortSha).arg(action),
-            qsTr("Rewrite anyway"), run)
-    }
+    // Not confirmed even for a commit a remote already has: nothing
+    // here leaves the machine, and the push that would spread it is
+    // asked about on its own.
     function squashCommit(oidHex) {
-        page.rewriteWarning(page.menuShort, page.menuPublished,
-                            qsTr("Folding it in"),
-                            function () { repoTab.squashIntoParent(oidHex) })
+        repoTab.squashIntoParent(oidHex)
     }
 
     // ---- editing the selected commit's message ---------------------
