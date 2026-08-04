@@ -21,11 +21,23 @@ HoverToolButton {
     property int holdMs: 0
     /// How far into the hold the press has got, 0 to 1.
     property real holdProgress: 0
-    /// Held all the way down. Clicks are the caller's own business: a
-    /// button that means one thing held and another clicked is the shape
-    /// this is meant to avoid.
+    /// Frame drawn around the button, and the colour the hold fills it
+    /// with. Transparent leaves the button bare.
+    property color frameColor: "transparent"
+    /// Text the label's box is measured for. A button whose wording
+    /// changes with its state would otherwise move everything beside it
+    /// in the toolbar every time the state changed.
+    property string widestText: ""
+    /// Held all the way down.
     signal held()
-    readonly property color fg: enabled ? tone : Theme.textMuted
+    /// Pressed and let go, meaning the button's ordinary action.
+    ///
+    /// A hold button never emits this: neither the release that completes
+    /// a hold nor the one that gives up on it part way may fall through
+    /// to what this button does when it is not a hold button.
+    signal activated()
+    readonly property color fg: holdProgress > 0 ? Theme.textOnAccent
+                                : enabled ? tone : Theme.textMuted
 
     /// Automation: run the hold to its end without a press behind it.
     function completeHold() {
@@ -33,6 +45,7 @@ HoverToolButton {
             holdAnim.restart()
     }
 
+    onClicked: if (actionBtn.holdMs <= 0) actionBtn.activated()
     onDownChanged: {
         if (actionBtn.holdMs <= 0)
             return
@@ -55,12 +68,18 @@ HoverToolButton {
     }
     background: Rectangle {
         color: "transparent"
-        // The press overlay, filling in from the left as the hold runs.
+        border.color: actionBtn.frameColor
+        border.width: Theme.borderWidth
+        radius: Theme.radiusSm
+        // The hold, filling the frame from the left. Inset by the border
+        // so the frame stays a frame while it fills.
         Rectangle {
-            width: parent.width * actionBtn.holdProgress
-            height: parent.height
-            radius: Theme.radiusSm
-            color: Theme.bgPressed
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.margins: Theme.borderWidth
+            width: (parent.width - 2 * Theme.borderWidth) * actionBtn.holdProgress
+            color: actionBtn.frameColor
             visible: actionBtn.holdProgress > 0
         }
     }
@@ -95,12 +114,24 @@ HoverToolButton {
                 }
             }
         }
+        // Measured, never drawn: a hidden item is left out of the layout,
+        // and a Label measures the way the visible one does — TextMetrics
+        // reports a few pixels tighter, which is enough of a difference
+        // to shift the toolbar it is here to hold still.
         Label {
+            id: widest
+            visible: false
+            text: actionBtn.widestText
+            font: btnLabel.font
+        }
+        Label {
+            id: btnLabel
             text: actionBtn.text
             color: actionBtn.fg
             font.pixelSize: Theme.fontMd
             elide: Text.ElideRight
             Layout.maximumWidth: 240
+            Layout.preferredWidth: Math.max(implicitWidth, widest.implicitWidth)
             Layout.alignment: Qt.AlignVCenter
         }
     }

@@ -302,7 +302,7 @@ Rectangle {
             ToolTip.delay: 600
             ToolTip.text: qsTr("Fetch every remote now, pruning branches "
                                + "they no longer have")
-            onClicked: topBar.curPage.pageTab.fetch("")
+            onActivated: topBar.curPage.pageTab.fetch("")
         }
         // Push, in whichever shape this branch's standing with its remote
         // allows (デザイン規約 §リモートへ送る). The counts behind it are
@@ -318,8 +318,14 @@ Rectangle {
             text: mode === "publish" ? qsTr("Publish")
                   : mode === "ready"
                     ? qsTr("Push ↑%1").arg(topBar.curPage.pageWt.ahead)
+                  : mode === "diverged" ? qsTr("Force push")
                     : qsTr("Push")
+            // Sized for the longest thing it ever says, so the toolbar's
+            // right-hand end sits still while the branch's standing with
+            // its remote changes under it.
+            widestText: qsTr("Force push")
             tone: mode === "diverged" ? Theme.warning : Theme.textPrimary
+            frameColor: mode === "diverged" ? Theme.warning : "transparent"
             // Diverged, the button stays live for the hold that is its
             // only gesture: a plain push cannot land there, so nothing
             // else is waiting on a click to be mistaken for.
@@ -352,7 +358,7 @@ Rectangle {
                                    + "Hold this button to overwrite it.")
                               .arg(topBar.curPage.pushTargetLabel)
                           : ""
-            onClicked: topBar.curPage.pushNow()
+            onActivated: topBar.curPage.pushNow()
             // Overwriting a remote's history is the one push that needs
             // asking about, so it lives behind its own entry.
             MouseArea {
