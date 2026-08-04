@@ -1129,6 +1129,68 @@ async fn auto_fetch_runs_on_its_interval_and_stops() {
     session.close();
 }
 
+/// A push refused for looking at an older remote is followed by a fetch,
+/// so what the remote actually holds is on screen before anything else is
+/// decided. The push itself still fails and nothing is retried.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("f.txt", "0\n", "root");
+    origin.git(&["config", "core.bare", "true"]);
+
+    let mut clone = TestRepo::init();
+    clone.git(&["remote", "add", "origin", &origin.file_url()]);
+    clone.git(&["fetch", "origin"]);
+    clone.git(&["reset", "--hard", "origin/main"]);
+    clone.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+    let known = clone.git(&["rev-parse", "origin/main"]);
+
+    // Someone else pushes while this clone is not looking.
+    let mut other = TestRepo::init();
+    other.git(&["remote", "add", "origin", &origin.file_url()]);
+    other.git(&["fetch", "origin"]);
+    other.git(&["checkout", "-B", "main", "origin/main"]);
+    other.commit_file("theirs.txt", "t\n", "their work");
+    other.git(&["push", "origin", "main"]);
+
+    // Ours goes its own way, still believing the remote is where it was.
+    clone.commit_file("mine.txt", "m\n", "my work");
+
+    let (sink, session) = opened(&clone).await;
+    session.push_current(String::new(), platitude_core::remote::PushForce::None);
+
+    let error = sink
+        .wait_for("the push to be refused", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::WriteFinished { op, error } if *op == "push" => Some(error.clone()),
+                _ => None,
+            })
+        })
+        .await;
+    assert!(
+        error.is_some_and(|e| e.contains("rejected")),
+        "the refusal is reported as it stands"
+    );
+
+    sink.wait_for("the fetch that answers it", |evs| {
+        evs.iter()
+            .any(|e| matches!(e, SessionEvent::WriteFinished { op, error: None } if *op == "fetch"))
+            .then_some(())
+    })
+    .await;
+    assert_ne!(
+        clone.git(&["rev-parse", "origin/main"]),
+        known,
+        "the tracking ref caught up, so the graph can show what would be overwritten"
+    );
+    assert_eq!(
+        origin.git(&["log", "-1", "--format=%s", "main"]),
+        "their work",
+        "nothing was retried: the remote still holds only their commit"
+    );
+    session.close();
+}
+
 /// A conflicting rebase driven through the session: the failure is
 /// reported, the status refresh carries the step counter, and the abort
 /// lands through the same write path.

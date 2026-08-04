@@ -1407,13 +1407,35 @@ impl RepoSession {
     /// `git push` for one branch.
     pub fn push(self: &Arc<Self>, spec: remote::PushSpec) {
         let timeout = self.network_timeout();
+        let s = Arc::clone(self);
         self.write(
             "push",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await
+                let target = spec.remote.clone();
+                let result = remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await;
+                s.catch_up_after(&result, target);
+                result
             },
         );
+    }
+
+    /// Fetches when a push was refused for knowing the remote only as it
+    /// used to be, and does nothing otherwise.
+    ///
+    /// It is the one refusal with an answer: the fetch is what shows which
+    /// commits the remote actually holds — the graph then draws both sides,
+    /// so what an overwrite would remove can be seen rather than described —
+    /// and it is also what re-arms the lease, which is pinned to a commit
+    /// the remote has left and would be turned down again as it stands.
+    ///
+    /// Queued rather than run here, so it reports and refreshes like any
+    /// other fetch. The push still fails: nothing is retried, and the next
+    /// move is whoever is looking at it to make.
+    fn catch_up_after(self: &Arc<Self>, result: &Result<(), GitError>, remote: String) {
+        if matches!(result, Err(GitError::PushOutdated { .. })) {
+            self.fetch(Some(remote));
+        }
     }
 
     /// Pushes the branch that is checked out to wherever it belongs.
@@ -1423,6 +1445,7 @@ impl RepoSession {
     /// and a name like `origin/main` cannot be split back apart reliably.
     pub fn push_current(self: &Arc<Self>, fallback_remote: String, force: remote::PushForce) {
         let timeout = self.network_timeout();
+        let s = Arc::clone(self);
         self.write(
             "push",
             AfterWrite::Graph,
@@ -1435,7 +1458,10 @@ impl RepoSession {
                     &cancel,
                 )
                 .await?;
-                remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await
+                let target = spec.remote.clone();
+                let result = remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await;
+                s.catch_up_after(&result, target);
+                result
             },
         );
     }

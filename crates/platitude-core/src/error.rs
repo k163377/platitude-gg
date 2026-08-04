@@ -38,6 +38,21 @@ pub enum GitError {
         stderr: String,
     },
 
+    /// A push git refused because what this window knows about the remote is
+    /// older than the remote itself (`fetch first` on a plain push, `stale
+    /// info` on a lease pinned to a commit the remote has left). Fetching is
+    /// what unblocks it, so it is told apart from a refusal nothing can be
+    /// done about — a hook, a protected branch, an unreachable host.
+    ///
+    /// Reads the same as [`GitError::Failed`]: it is the same failure to
+    /// whoever is looking at it, only actionable.
+    #[error("`{command}` exited with code {code}: {stderr}")]
+    PushOutdated {
+        command: String,
+        code: i32,
+        stderr: String,
+    },
+
     /// The command exceeded its time budget and was killed.
     #[error("`{command}` timed out after {timeout:?}")]
     TimedOut { command: String, timeout: Duration },

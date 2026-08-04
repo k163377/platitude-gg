@@ -6,6 +6,7 @@
 
 mod support;
 
+use platitude_core::GitError;
 use platitude_core::process::GitExecutor;
 use platitude_core::remote::{self, PushForce, PushSpec};
 use platitude_core::stash::{self, PushOptions};
@@ -367,8 +368,13 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
         err.to_string().contains("rejected") || err.to_string().contains("non-fast-forward"),
         "git's own rejection is passed through: {err}"
     );
+    assert!(
+        matches!(err, GitError::PushOutdated { .. }),
+        "a refusal a fetch would answer is told apart from one it would not: {err}"
+    );
 
-    // A lease pinned to a commit the remote has moved past also fails.
+    // A lease pinned to a commit the remote has moved past also fails, and
+    // for the same reason: this window is looking at an older remote.
     let stale = work.git(&["rev-parse", "origin/main"]);
     let leased = PushSpec {
         force: PushForce::WithLease {
@@ -376,9 +382,10 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
         },
         ..spec.clone()
     };
-    remote::push(&exec, &work.path, &leased, NET, &cancel)
+    let err = remote::push(&exec, &work.path, &leased, NET, &cancel)
         .await
         .expect_err("stale lease");
+    assert!(matches!(err, GitError::PushOutdated { .. }), "{err}");
 
     // Plain force wins.
     let forced = PushSpec {

@@ -251,6 +251,10 @@ async fn config_value(
 }
 
 /// `git push` for one branch.
+///
+/// A refusal that a fetch would answer comes back as
+/// [`GitError::PushOutdated`] rather than a plain failure, so the caller can
+/// go and find out what the remote actually holds.
 pub async fn push(
     executor: &GitExecutor,
     workdir: &Path,
@@ -258,7 +262,13 @@ pub async fn push(
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let mut cmd = GitCommand::new().cwd(workdir).arg("push").timeout(timeout);
+    // `--porcelain` puts a fixed per-ref result on stdout. Which kind of
+    // refusal this was has to be read from somewhere, and the sentence that
+    // says so on stderr is prose written for a terminal.
+    let mut cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["push", "--porcelain"])
+        .timeout(timeout);
     if spec.set_upstream {
         cmd = cmd.arg("--set-upstream");
     }
@@ -272,7 +282,49 @@ pub async fn push(
     }
     let refspec = format!("{}:refs/heads/{}", spec.local, spec.remote_branch);
     cmd = cmd.args(["--", &spec.remote, &refspec]);
-    executor.run(cmd, cancel).await.map(|_| ())
+
+    let command = cmd.describe();
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    if out.code == 0 {
+        return Ok(());
+    }
+    let stderr = out.failure_message();
+    if is_outdated(&out.stdout_utf8()) {
+        return Err(GitError::PushOutdated {
+            command,
+            code: out.code,
+            stderr,
+        });
+    }
+    Err(GitError::Failed {
+        command,
+        code: out.code,
+        stderr,
+    })
+}
+
+/// Whether a `--porcelain` push result refused a ref for knowing the remote
+/// only as it used to be.
+///
+/// The lines are `<flag>\t<from>:<to>\t<summary>`, where `!` is a refusal.
+/// Three summaries say the same thing: a plain push found commits it would
+/// drop (`fetch first`, or `non-fast-forward` for a ref that is not the
+/// current branch's upstream), or a lease was pinned to a commit the remote
+/// has since left (`stale info`). All three are answered by fetching.
+///
+/// Anything else — a hook, a protected branch, an unreachable host — is a
+/// refusal to pass on as it is. A host that could not be reached at all
+/// prints no ref lines, so it cannot be mistaken for one of these.
+fn is_outdated(porcelain: &str) -> bool {
+    porcelain.lines().any(|line| {
+        let mut fields = line.split('\t');
+        fields.next() == Some("!")
+            && fields.nth(1).is_some_and(|summary| {
+                summary.contains("(fetch first)")
+                    || summary.contains("(stale info)")
+                    || summary.contains("(non-fast-forward)")
+            })
+    })
 }
 
 /// `git push <remote> --delete <branch>`: removes a branch on the remote.
@@ -334,5 +386,46 @@ mod tests {
     #[test]
     fn empty_config_yields_no_remotes() {
         assert!(parse_remote_config(b"").is_empty());
+    }
+
+    /// Recorded from git 2.51 pushing to a local bare repository (the
+    /// refusals from a second clone pushing first, from a lease pinned to
+    /// what it had left, and from a `pre-receive` hook exiting non-zero).
+    /// Every line here is `--porcelain` output as git wrote it.
+    const REFUSED_FETCH_FIRST: &str = "To C:/tmp/remote.git\n\
+         !\trefs/heads/main:refs/heads/main\t[rejected] (fetch first)\nDone\n";
+    const REFUSED_STALE_LEASE: &str = "To C:/tmp/remote.git\n\
+         !\trefs/heads/main:refs/heads/main\t[rejected] (stale info)\nDone\n";
+    const FORCED_UPDATE: &str = "To C:/tmp/remote.git\n\
+         +\trefs/heads/main:refs/heads/main\t34158f1...6e03ce6 (forced update)\nDone\n";
+    const UP_TO_DATE: &str = "To C:/tmp/remote.git\n\
+         =\trefs/heads/main:refs/heads/main\t[up to date]\nDone\n";
+    const NEW_BRANCH: &str = "To C:/tmp/remote.git\n\
+         *\trefs/heads/side:refs/heads/side\t[new branch]\nDone\n";
+
+    #[test]
+    fn a_refusal_a_fetch_would_answer_is_recognised() {
+        assert!(is_outdated(REFUSED_FETCH_FIRST));
+        assert!(is_outdated(REFUSED_STALE_LEASE));
+    }
+
+    #[test]
+    fn pushes_that_landed_are_not_refusals() {
+        assert!(!is_outdated(FORCED_UPDATE));
+        assert!(!is_outdated(UP_TO_DATE));
+        assert!(!is_outdated(NEW_BRANCH));
+    }
+
+    /// A refusal the remote decided on its own terms. Fetching tells us
+    /// nothing about it, so it must not be dressed up as something to
+    /// retry — and neither must a host that never answered, which prints
+    /// no ref lines at all.
+    #[test]
+    fn refusals_a_fetch_cannot_help_with_are_left_alone() {
+        assert!(!is_outdated(
+            "To C:/tmp/remote.git\n\
+             !\trefs/heads/main:refs/heads/main\t[remote rejected] (pre-receive hook declined)\nDone\n"
+        ));
+        assert!(!is_outdated(""));
     }
 }

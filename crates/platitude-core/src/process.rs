@@ -136,7 +136,7 @@ impl GitCommand {
     }
 
     /// Human-readable form for logs and error messages.
-    fn describe(&self) -> String {
+    pub(crate) fn describe(&self) -> String {
         let mut s = String::from("git");
         for a in &self.args {
             s.push(' ');
