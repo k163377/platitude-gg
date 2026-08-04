@@ -575,12 +575,17 @@ Item {
         }
     }
 
-    // Smoke hook (PG_SCROLL_TO=top|bottom): jump the graph after the
-    // final pass settles, using the same clamped math as the wheel.
+    // Smoke hook (PG_SCROLL_TO=top|bottom|nav-bottom): jump the graph —
+    // or the sidebar's branch list — after the final pass settles, using
+    // the same clamped math as the wheel.
     Timer {
         id: scrollToTimer
         interval: 600
         onTriggered: {
+            if (AppBackend.scrollTo === "nav-bottom") {
+                sidebarPane.scrollBranchesToEnd()
+                return
+            }
             graphPane.view.contentY = graphPane.view.clampY(
                 AppBackend.scrollTo === "bottom" ? 1e12 : -1e12)
         }
@@ -707,6 +712,7 @@ Item {
             }
 
             SidebarPane {
+                id: sidebarPane
                 repoTab: repoTab
                 workTree: workTree
                 branchesModel: branchesModel

@@ -47,12 +47,16 @@ pub struct NavSectionModel {
     items: Vec<NavItem>,
     filter: String,
     total: i32,
-    /// Current branch (branches section only) — feeds the pinned row
-    /// shown under the section header.
+    /// Current branch (branches section only) — feeds the sticky row
+    /// that stands in for it while its own row is scrolled off.
     head_name: String,
     head_oid: String,
     head_has_remote: bool,
     head_has_pr: bool,
+    /// Visible row of the current entry, or -1 when it has none (a
+    /// filter or a collapsed folder hides it, or HEAD is detached). The
+    /// sticky row needs it to tell whether the real row is on screen.
+    head_row: i32,
     /// True once a refs snapshot arrived (distinguishes "no head yet"
     /// from "detached / no local branches" for the default selection).
     refs_loaded: bool,
@@ -79,36 +83,40 @@ impl QListModel for NavSectionModel {
     }
     fn reset_unnotified(&mut self) {
         let needle = self.filter.to_lowercase();
-        if !needle.is_empty() {
+        self.items = if needle.is_empty() {
+            match self.section.as_str() {
+                "branches" | "remotes" => self.build_tree(),
+                // The worktree keeps its group runs (conflicts → unstaged →
+                // staged) and trees each run independently.
+                "worktree" if self.tree_view => {
+                    let mut out = Vec::new();
+                    let mut i = 0;
+                    while i < self.all.len() {
+                        let group = self.all[i].group.clone();
+                        let mut j = i + 1;
+                        while j < self.all.len() && self.all[j].group == group {
+                            j += 1;
+                        }
+                        wt_tree_into(&self.all[i..j], &group, &self.folder_overrides, &mut out);
+                        i = j;
+                    }
+                    out
+                }
+                _ => self.all.clone(),
+            }
+        } else {
             // Filtering shows flat full names (folders would hide context).
-            self.items = self
-                .all
+            self.all
                 .iter()
                 .filter(|i| i.name.to_lowercase().contains(&needle))
                 .cloned()
-                .collect();
-            return;
-        }
-        self.items = match self.section.as_str() {
-            "branches" | "remotes" => self.build_tree(),
-            // The worktree keeps its group runs (conflicts → unstaged →
-            // staged) and trees each run independently.
-            "worktree" if self.tree_view => {
-                let mut out = Vec::new();
-                let mut i = 0;
-                while i < self.all.len() {
-                    let group = self.all[i].group.clone();
-                    let mut j = i + 1;
-                    while j < self.all.len() && self.all[j].group == group {
-                        j += 1;
-                    }
-                    wt_tree_into(&self.all[i..j], &group, &self.folder_overrides, &mut out);
-                    i = j;
-                }
-                out
-            }
-            _ => self.all.clone(),
+                .collect()
         };
+        self.head_row = self
+            .items
+            .iter()
+            .position(|i| i.is_head && !i.folder)
+            .map_or(-1, |row| row as i32);
     }
 }
 
@@ -364,6 +372,7 @@ impl NavSectionModel {
     qproperty!("headOid", Member = head_oid, Notify = changed);
     qproperty!("headHasRemote", Member = head_has_remote, Notify = changed);
     qproperty!("headHasPr", Member = head_has_pr, Notify = changed);
+    qproperty!("headRow", Member = head_row, Notify = changed);
     qproperty!("refsLoaded", Member = refs_loaded, Notify = changed);
     qproperty!("treeView", Member = tree_view, Notify = changed);
 
@@ -517,6 +526,8 @@ impl NavSectionModel {
         let current = self.folder_expanded(&key, depth);
         self.folder_overrides.insert(key, !current);
         self.reset();
+        // Folding moves rows around (and can swallow the current one).
+        self.changed();
     }
 
     /// Switches the worktree list between tree and flat-path display.

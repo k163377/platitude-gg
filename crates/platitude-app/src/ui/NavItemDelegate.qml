@@ -40,8 +40,8 @@ Item {
     width: listWidth
     height: Theme.rowHeight
 
-    // The current branch stays highlighted inside the list (it is
-    // also pinned under the section header).
+    // The current branch stays highlighted inside the list (the sidebar's
+    // sticky row only stands in for it while this row is scrolled off).
     Rectangle {
         anchors.fill: parent
         color: Theme.accentMuted

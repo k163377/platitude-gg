@@ -21,6 +21,14 @@ Rectangle {
     signal refMenuRequested(string name, string oidHex, bool isRemote)
     signal worktreeActivated(string path)
 
+    /// Smoke hook (PG_SCROLL_TO=nav-bottom): jump the branches list to
+    /// its end. The current branch's sticky row only changes edges
+    /// under scroll, which a headless run cannot produce otherwise.
+    function scrollBranchesToEnd() {
+        branchList.contentY = Math.max(
+            0, branchList.contentHeight - branchList.height)
+    }
+
     SplitView.preferredWidth: 260
     SplitView.minimumWidth: 180
     color: Theme.bgSurface
@@ -87,68 +95,8 @@ Rectangle {
             expanded: sidebar.expBranches || refFilter.text !== ""
             onToggled: sidebar.expBranches = !sidebar.expBranches
         }
-        // Current branch pinned under the header (it stays in the list
-        // too, highlighted). Replaces the old top-left branch display.
-        Rectangle {
-            visible: (sidebar.expBranches || refFilter.text !== "")
-                     && (sidebar.branchesModel.headName !== ""
-                         || sidebar.workTree.detached)
-            Layout.fillWidth: true
-            implicitHeight: Theme.rowHeight
-            color: Theme.bgElevated
-            Rectangle {
-                anchors.fill: parent
-                color: Theme.bgHover
-                visible: headRowMouse.containsMouse
-            }
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: Theme.spaceMd
-                anchors.rightMargin: Theme.spaceSm
-                spacing: Theme.spaceXs
-                // "You are here" marker, sharing the fold arrows'
-                // column so the sidebar lines up.
-                NavIcon {
-                    kind: "check"
-                    tint: Theme.accent
-                    width: Theme.iconSm + 2
-                    height: Theme.iconSm + 2
-                }
-                Label {
-                    Layout.fillWidth: true
-                    text: sidebar.workTree.detached ? qsTr("DETACHED HEAD")
-                                                    : sidebar.branchesModel.headName
-                    color: sidebar.workTree.detached ? Theme.warning : Theme.textLink
-                    font.weight: Font.DemiBold
-                    font.pixelSize: Theme.fontMd
-                    elide: Text.ElideMiddle
-                }
-                Label {
-                    visible: !sidebar.workTree.detached && sidebar.workTree.upstream !== ""
-                    text: "↑" + sidebar.workTree.ahead + " ↓" + sidebar.workTree.behind
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSm
-                }
-                NavIcon {
-                    visible: !sidebar.workTree.detached
-                             && (sidebar.branchesModel.headHasRemote
-                                 || sidebar.branchesModel.headHasPr)
-                    kind: sidebar.branchesModel.headHasPr ? "pr" : "remote"
-                    tint: sidebar.branchesModel.headHasPr ? Theme.success
-                                                          : Theme.textSecondary
-                    width: Theme.iconSm + 2
-                    height: Theme.iconSm + 2
-                }
-            }
-            MouseArea {
-                id: headRowMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                enabled: sidebar.branchesModel.headOid !== ""
-                onClicked: sidebar.refActivated(sidebar.branchesModel.headOid)
-            }
-        }
         NavList {
+            id: branchList
             sectionModel: sidebar.branchesModel
             expanded: sidebar.expBranches || refFilter.text !== ""
             kindHint: "branch"
@@ -158,6 +106,96 @@ Rectangle {
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
             onRefMenuRequested: (name, oidHex) =>
                 sidebar.refMenuRequested(name, oidHex, false)
+
+            // The current branch never leaves the viewport: while its own
+            // row is scrolled off, this stand-in rides the edge the row
+            // went out of, and it steps aside the moment the row itself
+            // is on screen — so the sidebar never shows the branch twice.
+            // A detached HEAD (and a branch a filter or a folded folder
+            // hides) has no row at all, so the stand-in stays on top.
+            Rectangle {
+                id: headPin
+                // The list is a Flickable: children declared in one are
+                // adopted by its content item and scroll away with it.
+                // Parenting to the list itself is what keeps this still.
+                parent: branchList
+
+                readonly property real rowTop:
+                    sidebar.branchesModel.headRow * Theme.rowHeight
+                readonly property bool rowAbove:
+                    sidebar.branchesModel.headRow < 0
+                    || rowTop < branchList.contentY
+                readonly property bool rowBelow:
+                    rowTop + Theme.rowHeight
+                        > branchList.contentY + branchList.height
+
+                visible: (sidebar.branchesModel.headName !== ""
+                          || sidebar.workTree.detached)
+                         && (rowAbove || rowBelow)
+                width: branchList.width
+                height: Theme.rowHeight
+                y: rowAbove ? 0 : branchList.height - height
+                color: Theme.bgElevated
+                Rectangle {
+                    anchors.fill: parent
+                    color: Theme.bgHover
+                    visible: headRowMouse.containsMouse
+                }
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: Theme.spaceMd
+                    anchors.rightMargin: Theme.spaceSm
+                    spacing: Theme.spaceXs
+                    // "You are here" marker, sharing the fold arrows'
+                    // column so the sidebar lines up.
+                    NavIcon {
+                        kind: "check"
+                        tint: Theme.accent
+                        width: Theme.iconSm + 2
+                        height: Theme.iconSm + 2
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: sidebar.workTree.detached ? qsTr("DETACHED HEAD")
+                                                        : sidebar.branchesModel.headName
+                        color: sidebar.workTree.detached ? Theme.warning : Theme.textLink
+                        font.weight: Font.DemiBold
+                        font.pixelSize: Theme.fontMd
+                        elide: Text.ElideMiddle
+                    }
+                    Label {
+                        visible: !sidebar.workTree.detached && sidebar.workTree.upstream !== ""
+                        text: "↑" + sidebar.workTree.ahead + " ↓" + sidebar.workTree.behind
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSm
+                    }
+                    NavIcon {
+                        visible: !sidebar.workTree.detached
+                                 && (sidebar.branchesModel.headHasRemote
+                                     || sidebar.branchesModel.headHasPr)
+                        kind: sidebar.branchesModel.headHasPr ? "pr" : "remote"
+                        tint: sidebar.branchesModel.headHasPr ? Theme.success
+                                                              : Theme.textSecondary
+                        width: Theme.iconSm + 2
+                        height: Theme.iconSm + 2
+                    }
+                }
+                // Hairline on the side the scrolled rows pass under.
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    y: headPin.rowAbove ? parent.height - height : 0
+                    height: Theme.borderWidth
+                    color: Theme.borderSubtle
+                }
+                MouseArea {
+                    id: headRowMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    enabled: sidebar.branchesModel.headOid !== ""
+                    onClicked: sidebar.refActivated(sidebar.branchesModel.headOid)
+                }
+            }
         }
 
         NavHeader {
