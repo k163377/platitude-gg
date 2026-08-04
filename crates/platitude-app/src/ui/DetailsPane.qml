@@ -32,6 +32,9 @@ ColumnLayout {
     // half-written. The question belongs to the text, so it is asked
     // where the text is: the row under the boxes turns into it.
     property bool asking: false
+    // A remote already has this commit. Rewriting is not asked about,
+    // but 要望.md wants it said, so the save row carries the warning.
+    property bool published: false
 
     signal fileActivated(string path, string origPath)
     signal parentClicked(string oidHex)
@@ -240,6 +243,17 @@ ColumnLayout {
                 text: qsTr("Saving replays this commit, so every commit after "
                            + "it gets a new identity.")
                 color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+            }
+            // Said, not asked, like the amend editor's tag: the save
+            // still goes ahead, and this line is the warning it gets.
+            Label {
+                Layout.fillWidth: true
+                visible: !detailsPane.asking && detailsPane.published
+                wrapMode: Text.Wrap
+                text: qsTr("This commit is on a remote. Rewriting it leaves "
+                           + "anyone who already has it out of step.")
+                color: Theme.warning
                 font.pixelSize: Theme.fontSm
             }
             Label {

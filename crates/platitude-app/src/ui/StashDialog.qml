@@ -34,9 +34,21 @@ AppDialog {
         keepIndexBox.checked = keepIndex
         stagedOnlyBox.checked = stagedOnly
     }
+    /// The click path onto "Only the staged changes" (the page's smoke
+    /// hook): setting `checked` skips `toggled`, a click does not.
+    function clickStagedOnly() {
+        stagedOnlyBox.toggle()
+        stagedOnlyBox.toggled()
+    }
     function apply() {
-        stashDialog.submitted(messageField.text, untrackedBox.checked,
-                              keepIndexBox.checked, stagedOnlyBox.checked)
+        // What is sent is what the boxes show — a box ruled out by the
+        // staged-only choice does not smuggle its old tick through
+        // (git refuses --staged together with --include-untracked).
+        const stagedOnly = stagedOnlyBox.checked
+        stashDialog.submitted(messageField.text,
+                              !stagedOnly && untrackedBox.checked,
+                              !stagedOnly && keepIndexBox.checked,
+                              stagedOnly)
         stashDialog.close()
     }
 
@@ -93,6 +105,16 @@ AppDialog {
                 // entry behind with nothing else done (measured). Refusing
                 // first is the only way that does not surprise.
                 enabled: stashDialog.partiallyStaged === 0
+                // A disabled box keeps its tick, and what is sent is what
+                // the boxes show — so the boxes the tick rules out are
+                // unticked, not just greyed with their ticks still live
+                // (git refuses --staged with --include-untracked).
+                onToggled: {
+                    if (checked) {
+                        untrackedBox.checked = false
+                        keepIndexBox.checked = false
+                    }
+                }
             }
             Label {
                 Layout.fillWidth: true

@@ -65,6 +65,12 @@ Item {
             // this page asked about is read.
             if (repoTab.publishRange === page.headRange)
                 page.headPublished = repoTab.publishPublished > 0
+            if (page.menuOid !== ""
+                    && repoTab.publishRange === page.menuOid + "^!")
+                page.menuPublished = repoTab.publishPublished > 0
+            if (page.selectedOid !== ""
+                    && repoTab.publishRange === page.selectedOid + "^!")
+                page.selectedPublished = repoTab.publishPublished > 0
             page.absorbHeadMessage()
             page.absorbMoveBlock()
             page.absorbWriteResult()
@@ -265,15 +271,25 @@ Item {
     }
     /// The menu's way to the same thing, for anyone who cannot hold a
     /// button down. Here the asking is the dialog's job rather than the
-    /// press's (デザイン規約 §相手の履歴を置き換える).
+    /// press's, and its one remaining job is to say what the overwrite
+    /// costs: status's behind count is exactly the commits the remote
+    /// loses, dated to the fetch it came from (デザイン規約 §相手の履歴を
+    /// 置き換える).
     function forcePushNow() {
+        const lost = workTree.behind > 0
+            ? qsTr("%1 has %n commit(s) this branch does not, as seen at "
+                   + "the last fetch. Overwriting removes them, and anyone "
+                   + "who already pulled them keeps a history that no "
+                   + "longer matches.", "", workTree.behind)
+              .arg(page.pushTargetLabel)
+            : qsTr("As seen at the last fetch, %1 has no commits of its "
+                   + "own, so overwriting it removes nothing.")
+              .arg(page.pushTargetLabel)
         page.confirmRequested(
             qsTr("Overwrite %1 with this branch?").arg(page.pushTargetLabel),
-            qsTr("A force push replaces the remote branch's history with "
-                 + "yours. Commits only the remote has are lost, and anyone "
-                 + "who already pulled them keeps a history that no longer "
-                 + "matches.\n\nThe push is refused if the remote moved since "
-                 + "this window last saw it."),
+            lost + "\n\n"
+            + qsTr("The push is refused if the remote moved since this "
+                   + "window last saw it."),
             qsTr("Force push"),
             function () { page.forcePush() })
     }
@@ -350,8 +366,16 @@ Item {
     // ---- context menu on a commit row ------------------------------
     property string menuOid: ""
     readonly property string menuShort: page.menuOid.substring(0, 8)
+    // Whether a remote already has the menu's commit. Rewriting it is
+    // not asked about — nothing here leaves the machine — but 要望.md
+    // wants it said, so the squash row carries a tag the way the amend
+    // editor does. The answer lands a frame after the menu opens.
+    property bool menuPublished: false
     function openCommitMenu(oidHex) {
         page.menuOid = oidHex
+        page.menuPublished = false
+        if (repoTab.state === "open")
+            repoTab.checkPublish(oidHex + "^!")
         commitMenu.popup()
     }
 
@@ -374,6 +398,9 @@ Item {
         // thing twice, and every row here costs the ones still to come.
         AppMenuItem {
             text: qsTr("Fold into the commit before it")
+            // Said, not asked (要望: rewriting a pushed commit shows a
+            // warning): the fold goes ahead, and this tag is the warning.
+            note: page.menuPublished ? qsTr("already pushed") : ""
             enabled: repoTab.busyCount === 0
             onTriggered: page.squashCommit(page.menuOid)
         }
@@ -545,6 +572,17 @@ Item {
             repoTab.checkInHistory(oidHex)
     }
 
+    // Whether a remote already has the selected commit — what the save
+    // row's warning rests on. Asked only once its message is touched:
+    // that is the first moment the answer can matter, and it spares a
+    // rev-list on every selection click.
+    property bool selectedPublished: false
+    function askSelectedPublished() {
+        if (page.selectedOid !== "" && repoTab.state === "open")
+            repoTab.checkPublish(page.selectedOid + "^!")
+    }
+    onSelectedOidChanged: page.selectedPublished = false
+
     // Moving off a half-written message would drop it. Hold the move
     // and let the editor ask — the question is about the text, so it is
     // asked where the text is rather than over the whole window. The
@@ -574,6 +612,8 @@ Item {
         function onMessageDirtyChanged() {
             if (!detailsPane.messageDirty)
                 page.pendingMove = null
+            else
+                page.askSelectedPublished()
         }
     }
 
@@ -651,17 +691,23 @@ Item {
             resetAuthorTimer.start()
         } else if (act === "stash" || act === "stash-staged") {
             // Through the dialog, like the button: it is what decides
-            // which options the stash is made with.
+            // which options the stash is made with. "stash-staged"
+            // clicks the staged-only box the way a person would, so the
+            // run proves the ticks it clears really clear.
             stashDialog.open()
             if (act === "stash-staged")
-                stashDialog.setOptions(false, false, true)
+                stashDialog.clickStagedOnly()
             stashDialog.apply()
         } else if (act === "stash-file") {
             page.openFileMenu("unstaged", arg)
             repoTab.stashPath(arg, "")
         } else if (act === "stash-dialog") {
-            // Opened and left standing, for a look at it.
+            // Opened and left standing, for a look at it. With the
+            // argument "staged-only" the staged-only box is clicked
+            // first, so the shot shows what that click clears.
             stashDialog.open()
+            if (arg === "staged-only")
+                stashDialog.clickStagedOnly()
         } else if (act === "file-menu") {
             page.openFileMenu("unstaged", arg)
         } else if (act === "amend-author") {
@@ -1361,6 +1407,7 @@ Item {
                            : "")
                     busy: repoTab.busyCount > 0
                     asking: page.pendingMove !== null
+                    published: page.selectedPublished
                     // HEAD's own commit, not the current branch's tip:
                     // detached, there is no branch to ask.
                     headOid: workTree.headOid

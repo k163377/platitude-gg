@@ -361,10 +361,12 @@ Rectangle {
                                    + "nothing to add to it")
                               .arg(topBar.curPage.pushTargetLabel)
                           : mode === "diverged"
-                            ? qsTr("%1 has commits this branch does not, as "
-                                   + "seen at the last fetch, so only an "
-                                   + "overwrite can put this branch there. "
-                                   + "Hold this button to overwrite it.")
+                            ? qsTr("%1 has %n commit(s) this branch does "
+                                   + "not, as seen at the last fetch, so "
+                                   + "only an overwrite can put this branch "
+                                   + "there. Hold this button to overwrite "
+                                   + "it, which removes them.", "",
+                                   topBar.curPage.pageWt.behind)
                               .arg(topBar.curPage.pushTargetLabel)
                           : ""
             onActivated: topBar.curPage.pushNow()

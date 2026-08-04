@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Fusion
+import QtQuick.Layouts
 import platitude.ui
 
 // One AppMenu row: the list row height and body size used everywhere
@@ -8,11 +9,19 @@ import platitude.ui
 // the whole line.
 MenuItem {
     id: menuItem
+
+    /// A short warning said after the row's words ("already pushed").
+    /// The row still runs on click — this is the tag that says what it
+    /// costs, the same shape the amend editor uses.
+    property string note: ""
+
     padding: Theme.spaceSm
     topPadding: 0
     bottomPadding: 0
     implicitHeight: Theme.rowHeight
     implicitWidth: itemLabel.implicitWidth
+                   + (menuItem.note !== ""
+                      ? noteLabel.implicitWidth + Theme.spaceSm : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
 
@@ -20,18 +29,33 @@ MenuItem {
     ToolTip.delay: 600
     ToolTip.text: menuItem.text
 
-    contentItem: Label {
-        id: itemLabel
-        text: menuItem.text
-        font: menuItem.font
-        elide: Text.ElideRight
-        verticalAlignment: Text.AlignVCenter
-        // Clear of the arrow the style paints over the row's right
-        // edge on a row that opens a submenu.
-        rightPadding: menuItem.subMenu && menuItem.arrow
-                      ? menuItem.arrow.width + Theme.spaceXs : 0
-        color: !menuItem.enabled ? Theme.textMuted
-             : menuItem.highlighted ? Theme.textOnAccent : Theme.textPrimary
+    contentItem: RowLayout {
+        spacing: Theme.spaceSm
+        Label {
+            id: itemLabel
+            Layout.fillWidth: true
+            text: menuItem.text
+            font: menuItem.font
+            elide: Text.ElideRight
+            verticalAlignment: Text.AlignVCenter
+            // Clear of the arrow the style paints over the row's right
+            // edge on a row that opens a submenu (the note, when there
+            // is one, is what sits last instead).
+            rightPadding: !noteLabel.visible && menuItem.subMenu && menuItem.arrow
+                          ? menuItem.arrow.width + Theme.spaceXs : 0
+            color: !menuItem.enabled ? Theme.textMuted
+                 : menuItem.highlighted ? Theme.textOnAccent : Theme.textPrimary
+        }
+        Label {
+            id: noteLabel
+            visible: menuItem.note !== ""
+            text: menuItem.note
+            verticalAlignment: Text.AlignVCenter
+            rightPadding: menuItem.subMenu && menuItem.arrow
+                          ? menuItem.arrow.width + Theme.spaceXs : 0
+            color: Theme.warning
+            font.pixelSize: Theme.fontSm
+        }
     }
 
     background: Rectangle {
