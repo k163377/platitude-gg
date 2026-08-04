@@ -386,7 +386,10 @@ Item {
             // Through the pane, like typing: selecting the commit puts
             // its message in the boxes, and the boxes are what saves.
             // "edit-message" leaves it unsaved, for the editing state.
-            page.jumpToRef(branchesModel.headOid)
+            // Detached there is no branch tip to name, so the newest
+            // row stands in — which is a commit other than HEAD.
+            page.jumpToRef(branchesModel.headOid !== ""
+                           ? branchesModel.headOid : graphModel.oidAt(0))
             rewordTimer.start()
         } else if (act === "cherry-pick") {
             repoTab.cherryPick(arg)
@@ -856,7 +859,9 @@ Item {
                     busy: repoTab.busyCount > 0
                     saveReady: page.editPublishKnown
                                && page.editOid === detailsModel.shaHex
-                    headOid: branchesModel.headOid
+                    // HEAD's own commit, not the current branch's tip:
+                    // detached, there is no branch to ask.
+                    headOid: workTree.headOid
                     onMessageEditStarted: oidHex => page.beginMessageEdit(oidHex)
                     onMessageSubmitted: (oidHex, subject, body) =>
                         page.saveMessage(oidHex, subject, body)

@@ -14,6 +14,8 @@ use super::qml_register;
 #[derive(Default)]
 pub struct WorkTreeModel {
     branch: String,
+    /// Commit HEAD is on, branch or not (empty before the first commit).
+    head_oid: String,
     detached: bool,
     upstream: String,
     ahead: i32,
@@ -34,6 +36,7 @@ pub struct WorkTreeModel {
 #[qobject(ConvertToCamelCase, NoQmlElement)]
 impl WorkTreeModel {
     qproperty!("branch", Member = branch, Notify = changed);
+    qproperty!("headOid", Member = head_oid, Notify = changed);
     qproperty!("detached", Member = detached, Notify = changed);
     qproperty!("upstream", Member = upstream, Notify = changed);
     qproperty!("ahead", Member = ahead, Notify = changed);
@@ -75,6 +78,11 @@ impl WorkTreeModel {
         };
 
         self.branch = status.branch_head.clone().unwrap_or_default();
+        self.head_oid = status
+            .branch_oid
+            .as_ref()
+            .map(|oid| oid.to_hex())
+            .unwrap_or_default();
         self.detached = status.branch_head.is_none() && status.branch_oid.is_some();
         self.upstream = status.upstream.clone().unwrap_or_default();
         self.ahead = status.ahead;
