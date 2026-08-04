@@ -70,11 +70,15 @@ ColumnLayout {
     }
     // Inset on all four sides — the message box carries its own frame,
     // and flush against the header band the two borders read as one
-    // welded block. Same inset as the pane edges, so the card sits
-    // square in its well.
+    // welded block. Vertically the inset is the same step the rows
+    // inside use, so band → summary → description → author → band is
+    // one even rhythm; horizontally it is the pane inset, which puts
+    // the card's edge under the header labels.
     ColumnLayout {
         Layout.fillWidth: true
         Layout.margins: Theme.spaceSm
+        Layout.topMargin: Theme.spaceXs
+        Layout.bottomMargin: Theme.spaceXs
         spacing: Theme.spaceXs
         visible: detailsPane.details.shaHex !== ""
 
