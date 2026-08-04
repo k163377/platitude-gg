@@ -13,6 +13,8 @@
 //! reverse case (unstaging, applied with `git apply -R`) is the mirror
 //! image.
 
+use std::borrow::Cow;
+
 /// Which side a rebuilt patch will be applied to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PatchSide {
@@ -211,6 +213,160 @@ fn classify(line: &[u8]) -> Option<Body> {
     }
 }
 
+/// A body line of the source hunk with the `\ No newline` marker that
+/// followed it. The marker describes the line above it, so it travels with
+/// that line rather than with a position in the output.
+struct SourceLine<'a> {
+    bytes: &'a [u8],
+    kind: Body,
+    selected: bool,
+    marker: Option<&'a [u8]>,
+}
+
+/// A line to write out, with what it costs each side.
+struct Emitted<'a> {
+    bytes: Cow<'a, [u8]>,
+    old: bool,
+    new: bool,
+    changed: bool,
+    /// Written with its original marker byte; a demoted line is not.
+    verbatim: bool,
+    marker: Option<&'a [u8]>,
+}
+
+/// Reads a hunk body into indexed lines, folding each `\ No newline` marker
+/// into the line it describes. Marker lines still consume an index so that
+/// selections stay aligned with [`crate::parse::diff`].
+fn source_lines<'a>(hunk: &RawHunk<'a>, select: &HunkSelect) -> Vec<SourceLine<'a>> {
+    let mut out: Vec<SourceLine<'a>> = Vec::new();
+    let mut index = 0usize;
+    for &line in &hunk.body {
+        let Some(kind) = classify(line) else {
+            // Unclassifiable lines are skipped by the parser too, so the
+            // index stays aligned by not counting them.
+            continue;
+        };
+        let this = index;
+        index += 1;
+        if kind == Body::NoNewline {
+            if let Some(previous) = out.last_mut() {
+                previous.marker = Some(line);
+            }
+            continue;
+        }
+        out.push(SourceLine {
+            bytes: line,
+            kind,
+            selected: select.includes(this),
+            marker: None,
+        });
+    }
+    out
+}
+
+/// Writes a line exactly as the source has it.
+fn keep_line<'a>(src: &SourceLine<'a>) -> Emitted<'a> {
+    Emitted {
+        bytes: Cow::Borrowed(src.bytes),
+        old: matches!(src.kind, Body::Deletion | Body::Context),
+        new: matches!(src.kind, Body::Addition | Body::Context),
+        changed: src.kind != Body::Context,
+        verbatim: true,
+        marker: src.marker,
+    }
+}
+
+/// Writes a line the patch leaves alone: it belongs to both sides now.
+fn demote_line<'a>(src: &SourceLine<'a>) -> Emitted<'a> {
+    Emitted {
+        bytes: Cow::Owned(to_context(src.bytes)),
+        old: true,
+        new: true,
+        changed: false,
+        verbatim: false,
+        marker: src.marker,
+    }
+}
+
+/// Emits one run of changed lines.
+///
+/// The side being applied to owns the lines that survive unselected: a
+/// forward patch keeps every old-side line (an unselected deletion becomes
+/// context), a reverse patch keeps every new-side line. A kept line now
+/// belongs to both sides, so where it sits decides the order of the result
+/// — left in the source's own place it would sort ahead of the lines that
+/// replace the lines above it. Pairing each selected kept line with a
+/// selected counterpart puts it back where the reader expects it.
+fn render_block<'a>(block: &[SourceLine<'a>], side: PatchSide, out: &mut Vec<Emitted<'a>>) {
+    let (kept, counterpart) = match side {
+        PatchSide::Forward => (Body::Deletion, Body::Addition),
+        PatchSide::Reverse => (Body::Addition, Body::Deletion),
+    };
+
+    // With nothing demoted, every line keeps its marker byte and the source
+    // order already holds, so the run goes out byte for byte.
+    if !block.iter().any(|l| l.kind == kept && !l.selected) {
+        out.extend(block.iter().filter(|l| l.selected).map(keep_line));
+        return;
+    }
+
+    let keeps: Vec<&SourceLine<'a>> = block.iter().filter(|l| l.kind == kept).collect();
+    let mates: Vec<&SourceLine<'a>> = block
+        .iter()
+        .filter(|l| l.kind == counterpart && l.selected)
+        .collect();
+    let last_selected = keeps.iter().rposition(|l| l.selected);
+
+    let mut body: Vec<Emitted<'a>> = Vec::new();
+    let mut taken = 0usize;
+    for (i, line) in keeps.iter().copied().enumerate() {
+        if !line.selected {
+            body.push(demote_line(line));
+            continue;
+        }
+        // One counterpart per selected line, and whatever is left over on
+        // the last of them.
+        let take = if Some(i) == last_selected {
+            mates.len() - taken
+        } else {
+            (mates.len() - taken).min(1)
+        };
+        let pair = mates[taken..taken + take].iter().copied().map(keep_line);
+        taken += take;
+        // A hunk reads its old side before its new one, so the counterpart
+        // trails a forward patch's deletion and leads a reverse patch's
+        // addition.
+        match side {
+            PatchSide::Forward => {
+                body.push(keep_line(line));
+                body.extend(pair);
+            }
+            PatchSide::Reverse => {
+                body.extend(pair);
+                body.push(keep_line(line));
+            }
+        }
+    }
+
+    if last_selected.is_none() {
+        // Nothing to pair with: the counterparts keep the source's own
+        // order against the run.
+        let rest = mates.iter().copied().map(keep_line);
+        match side {
+            PatchSide::Forward => {
+                out.append(&mut body);
+                out.extend(rest);
+            }
+            PatchSide::Reverse => {
+                out.extend(rest);
+                out.append(&mut body);
+            }
+        }
+        return;
+    }
+    out.append(&mut body);
+}
+
 /// Rewrites one hunk for the selection, updating the running side offset.
 /// Returns `None` when nothing changed remains.
 fn render_hunk(
@@ -221,86 +377,41 @@ fn render_hunk(
 ) -> Option<Vec<u8>> {
     let (old_start, new_start, heading) = parse_header(hunk.header)?;
 
+    let source = source_lines(hunk, select);
+    let mut emitted: Vec<Emitted<'_>> = Vec::new();
+    let mut at = 0usize;
+    while at < source.len() {
+        if source[at].kind == Body::Context {
+            emitted.push(keep_line(&source[at]));
+            at += 1;
+            continue;
+        }
+        let end = source[at..]
+            .iter()
+            .position(|l| l.kind == Body::Context)
+            .map_or(source.len(), |p| at + p);
+        render_block(&source[at..end], side, &mut emitted);
+        at = end;
+    }
+
     let mut body: Vec<u8> = Vec::new();
     let mut old_count: u32 = 0;
     let mut new_count: u32 = 0;
     let mut changes = 0usize;
-    // Parser-aligned index of the current body line.
-    let mut index = 0usize;
-    // A `\ No newline` marker only survives when the line above it was
-    // emitted with its original marker byte. A line demoted to context is
-    // no longer the last line of both sides, so claiming "no newline here"
-    // would contradict the lines that follow it.
-    let mut previous_verbatim = false;
-
-    for line in &hunk.body {
-        let Some(kind) = classify(line) else {
-            // Unclassifiable lines are skipped by the parser too, so the
-            // index stays aligned by not counting them.
-            continue;
-        };
-        let this = index;
-        index += 1;
-
-        match kind {
-            Body::NoNewline => {
-                if previous_verbatim {
-                    push_line(&mut body, line);
-                }
-                continue;
-            }
-            Body::Context => {
-                push_line(&mut body, line);
-                old_count += 1;
-                new_count += 1;
-                previous_verbatim = true;
-            }
-            Body::Addition => {
-                let selected = select.includes(this);
-                match (side, selected) {
-                    // Selected either way: the line is what the patch acts
-                    // on, so it keeps its marker.
-                    (PatchSide::Forward, true) | (PatchSide::Reverse, true) => {
-                        push_line(&mut body, line);
-                        new_count += 1;
-                        changes += 1;
-                        previous_verbatim = true;
-                    }
-                    (PatchSide::Forward, false) => {
-                        // Not staging this line: absent from the pre-image
-                        // (the index) and unwanted in the post-image.
-                        previous_verbatim = false;
-                    }
-                    (PatchSide::Reverse, false) => {
-                        // Staying staged: present in the pre-image (the
-                        // index) and kept in the post-image.
-                        push_line(&mut body, &to_context(line));
-                        old_count += 1;
-                        new_count += 1;
-                        previous_verbatim = false;
-                    }
-                }
-            }
-            Body::Deletion => {
-                let selected = select.includes(this);
-                match (side, selected) {
-                    (PatchSide::Forward, true) | (PatchSide::Reverse, true) => {
-                        push_line(&mut body, line);
-                        old_count += 1;
-                        changes += 1;
-                        previous_verbatim = true;
-                    }
-                    (PatchSide::Forward, false) => {
-                        push_line(&mut body, &to_context(line));
-                        old_count += 1;
-                        new_count += 1;
-                        previous_verbatim = false;
-                    }
-                    (PatchSide::Reverse, false) => {
-                        previous_verbatim = false;
-                    }
-                }
-            }
+    let last = emitted.len().saturating_sub(1);
+    for (i, line) in emitted.iter().enumerate() {
+        push_line(&mut body, &line.bytes);
+        old_count += u32::from(line.old);
+        new_count += u32::from(line.new);
+        changes += usize::from(line.changed);
+        // The marker describes the line above it. It holds on a line
+        // written with its original marker byte, and on a demoted line only
+        // while nothing follows: a line after it would contradict the claim
+        // that the content ends here.
+        if let Some(marker) = line.marker
+            && (line.verbatim || i == last)
+        {
+            push_line(&mut body, marker);
         }
     }
 
@@ -536,6 +647,86 @@ index 1111111..2222222 100644
         );
         assert_eq!(out.matches("\\ No newline").count(), 1, "got: {out}");
         assert!(out.contains(" old\n"), "deletion demoted to context: {out}");
+    }
+
+    #[test]
+    fn a_kept_last_line_keeps_its_no_newline_marker() {
+        let raw = "\
+--- a/f
++++ b/f
+@@ -1,2 +1,2 @@
+-one
+-two
+\\ No newline at end of file
++ONE
++TWO
+\\ No newline at end of file
+";
+        // Body indices: 0 "-one", 1 "-two", 2 marker, 3 "+ONE", 4 "+TWO".
+        // Staging one -> ONE leaves "two" as the last line of both sides,
+        // so the file still ends where it did.
+        let out = text(
+            build_partial(
+                raw.as_bytes(),
+                &[HunkSelect::lines(0, [0, 3])],
+                PatchSide::Forward,
+            )
+            .expect("patch"),
+        );
+        assert_eq!(
+            out, "@@ -1,2 +1,2 @@\n-one\n+ONE\n two\n\\ No newline at end of file\n",
+            "got: {out}"
+        );
+    }
+
+    /// A replacement lists all of its deletions before its additions, so a
+    /// line left unselected has to move past the additions that replace the
+    /// lines above it.
+    const REPLACED_PAIR: &str = "\
+--- a/f
++++ b/f
+@@ -1,3 +1,3 @@
+-one
+-two
++ONE
++TWO
+ tail
+";
+
+    #[test]
+    fn forward_line_selection_keeps_an_unselected_line_in_place() {
+        // Body indices: 0 "-one", 1 "-two", 2 "+ONE", 3 "+TWO".
+        // Stage one -> ONE only: the result has to read ONE, two, tail.
+        let out = text(
+            build_partial(
+                REPLACED_PAIR.as_bytes(),
+                &[HunkSelect::lines(0, [0, 2])],
+                PatchSide::Forward,
+            )
+            .expect("patch"),
+        );
+        assert_eq!(
+            out, "@@ -1,3 +1,3 @@\n-one\n+ONE\n two\n tail\n",
+            "got: {out}"
+        );
+    }
+
+    #[test]
+    fn reverse_line_selection_keeps_an_unselected_line_in_place() {
+        // Unstaging two -> TWO: applied with -R the new side is the
+        // pre-image, so ONE has to stay above the line being restored.
+        let out = text(
+            build_partial(
+                REPLACED_PAIR.as_bytes(),
+                &[HunkSelect::lines(0, [1, 3])],
+                PatchSide::Reverse,
+            )
+            .expect("patch"),
+        );
+        assert_eq!(
+            out, "@@ -1,3 +1,3 @@\n ONE\n-two\n+TWO\n tail\n",
+            "got: {out}"
+        );
     }
 
     #[test]

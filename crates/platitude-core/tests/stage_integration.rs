@@ -212,6 +212,91 @@ async fn stage_only_a_deletion() {
     assert_eq!(indexed(&mut repo, "f.txt"), "a\nc");
 }
 
+/// Two adjacent lines replaced at once: a diff lists both deletions before
+/// both additions, so staging only the first must not float the untouched
+/// line above its own replacement.
+#[tokio::test]
+async fn stage_the_first_line_of_a_two_line_replacement() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\ntwo\ntail\n", "root");
+    repo.write_file("f.txt", "ONE\nTWO\ntail\n");
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+
+    // Body: 0 "-one", 1 "-two", 2 "+ONE", 3 "+TWO".
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &DiffTarget::Unstaged {
+            path: "f.txt".into(),
+        },
+        &[HunkSelect::lines(0, [0, 2])],
+        &cancel,
+    )
+    .await
+    .expect("stage the first replacement");
+
+    assert_eq!(indexed(&mut repo, "f.txt"), "ONE\ntwo\ntail");
+}
+
+/// The mirror case: unstaging the second line of a staged replacement.
+#[tokio::test]
+async fn unstage_the_second_line_of_a_two_line_replacement() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\ntwo\ntail\n", "root");
+    repo.write_file("f.txt", "ONE\nTWO\ntail\n");
+    repo.git(&["add", "--", "f.txt"]);
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+
+    // Body: 0 "-one", 1 "-two", 2 "+ONE", 3 "+TWO".
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &DiffTarget::Staged {
+            path: "f.txt".into(),
+            orig_path: None,
+        },
+        &[HunkSelect::lines(0, [1, 3])],
+        &cancel,
+    )
+    .await
+    .expect("unstage the second replacement");
+
+    assert_eq!(indexed(&mut repo, "f.txt"), "ONE\ntwo\ntail");
+}
+
+/// A file whose last line has no newline. Staging the line above it leaves
+/// that last line as context, and the patch only applies while the context
+/// line keeps the `\ No newline at end of file` marker that described it.
+#[tokio::test]
+async fn stage_a_line_above_a_missing_trailing_newline() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\ntwo", "root");
+    repo.write_file("f.txt", "ONE\nTWO");
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+
+    // Body: 0 "-one", 1 "-two", 2 marker, 3 "+ONE", 4 "+TWO", 5 marker.
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &DiffTarget::Unstaged {
+            path: "f.txt".into(),
+        },
+        &[HunkSelect::lines(0, [0, 3])],
+        &cancel,
+    )
+    .await
+    .expect("stage the first line");
+
+    assert_eq!(
+        repo.git_raw(&["show", ":f.txt"]),
+        b"ONE\ntwo",
+        "the line left alone still ends the file without a newline"
+    );
+}
+
 /// Unstaging one line of a fully staged change (`git apply -R`).
 #[tokio::test]
 async fn unstage_a_single_line() {
