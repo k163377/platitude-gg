@@ -8,10 +8,12 @@ use crate::hub::{Feed, Hub, StatusMsg};
 use super::qml_register;
 
 // ---------------------------------------------------------------------------
-// NavSectionModel: one sidebar section (branches / remotes / worktree /
-// stashes / tags). Five QML instances share this type; each attaches to its
-// section's feed and owns its inner scrolling list, so section headers can
-// stay fixed in the sidebar while contents scroll.
+// NavSectionModel: one section list (branches / remotes / worktree /
+// worktrees / stashes / tags). Six QML instances share this type; each
+// attaches to its section's feed and owns its inner scrolling list, so
+// section headers can stay fixed while contents scroll. All render in the
+// sidebar except `worktree` (the changed files), which the right pane's
+// WIP view shows.
 // ---------------------------------------------------------------------------
 
 #[derive(QModelItem, Default, Clone)]
@@ -379,8 +381,9 @@ impl NavSectionModel {
     #[qsignal]
     fn changed(&mut self);
 
-    /// Wires this instance to one section's data feed.
-    /// `section`: `branches` / `remotes` / `worktree` / `stashes` / `tags`.
+    /// Wires this instance to one section's data feed. `section`:
+    /// `branches` / `remotes` / `worktree` / `worktrees` / `stashes` /
+    /// `tags`.
     #[qslot]
     fn attach_section(&mut self, tab_id: i32, section: String) {
         self.tab_id = tab_id;
@@ -541,7 +544,8 @@ impl NavSectionModel {
         self.changed();
     }
 
-    /// Filtered row count (the header shows `shown/total` while filtering).
+    /// Filtered row count (`total` counts all rows; this counts what the
+    /// filter lets through).
     #[qslot]
     fn shown(&self) -> i32 {
         self.items.len() as i32

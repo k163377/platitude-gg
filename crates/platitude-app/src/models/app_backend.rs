@@ -61,9 +61,10 @@ pub struct AppBackend {
     /// Screenshot hook: submit that prefilled identity straight away.
     auto_identity_save: bool,
     scroll_to: String,
-    /// Smoke hook: one write operation to run once the repository is
-    /// loaded, and its argument. A bare verb rather than a script, so QML
-    /// dispatches on equality and parses nothing.
+    /// Smoke hook: one operation to run once the repository is loaded —
+    /// a write, or a surface left standing for the overlay shot — and
+    /// its argument. A bare verb rather than a script, so QML dispatches
+    /// on equality; the argument passes through as the verb needs it.
     auto_act: String,
     auto_act_arg: String,
     /// Auto-fetch interval in minutes; 0 is off. Application-wide, and not
@@ -106,7 +107,8 @@ impl Default for AppBackend {
             auto_wip: std::env::var("PG_AUTO_WIP").as_deref() == Ok("1"),
             auto_identity: std::env::var("PG_AUTO_IDENTITY").unwrap_or_default(),
             auto_identity_save: std::env::var("PG_AUTO_IDENTITY_SAVE").as_deref() == Ok("1"),
-            // Smoke-test hook: "top" / "bottom" jumps the graph after load.
+            // Smoke-test hook: "top" / "bottom" jumps the graph after
+            // load; "nav-bottom" jumps the sidebar's branch list instead.
             scroll_to: std::env::var("PG_SCROLL_TO").unwrap_or_default(),
             auto_act: std::env::var("PG_AUTO_ACT").unwrap_or_default(),
             auto_act_arg: std::env::var("PG_AUTO_ACT_ARG").unwrap_or_default(),

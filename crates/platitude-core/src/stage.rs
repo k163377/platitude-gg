@@ -1,8 +1,8 @@
 //! Staging: whole files, and hunk/line subsets via rebuilt partial patches.
 //!
 //! Path arguments always come from git's own output and are passed after
-//! `--` with `GIT_LITERAL_PATHSPECS=1` (set by the process layer), so a file
-//! literally named `:(glob)x` cannot turn into a pathspec.
+//! `--`, each wrapped as `:(literal)` ([`crate::process::literal_pathspec`]),
+//! so a file literally named `:(glob)x` cannot turn into a pathspec.
 
 use std::path::Path;
 

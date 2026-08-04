@@ -2,10 +2,11 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// One aggregated chip: primary name + "+N". No icons — the kind reads
-// through color alone, matching the sidebar header tints (local =
-// accent, remote = light blue, detached HEAD = red, tag = amber);
-// tags are additionally filled while branches stay outlined.
+// One aggregated chip: primary name + "+N". The kind reads through
+// color alone, matching the sidebar header tints (local = accent,
+// remote = secondary grey, detached HEAD = red, tag = amber); tags are
+// additionally filled while branches stay outlined. The one icon is
+// the PR badge, same as the sidebar rows.
 Rectangle {
     id: chip
     property var records: []

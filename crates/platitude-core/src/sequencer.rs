@@ -2,9 +2,9 @@
 //!
 //! git asks an editor to write the todo list; this module supplies that
 //! editor. The plan the user assembled is written to a file, and
-//! `GIT_SEQUENCE_EDITOR` is pointed at the application binary in
-//! `--todo-editor` mode, which copies the plan over git's todo file and
-//! exits (実装計画 §6).
+//! `GIT_SEQUENCE_EDITOR` is pointed at the `pg-todo-editor` helper that
+//! ships beside the application, which copies the plan over git's todo
+//! file and exits (実装計画 §6, P3-確認事項 §1).
 //!
 //! Rewording is expressed as `pick` plus an `exec git commit --amend
 //! --file`, not as a `reword` line. A `reword` would open `GIT_EDITOR`,
@@ -389,8 +389,8 @@ async fn plan_for_range(
 
 /// Runs `git rebase --interactive` with `steps` as the todo list.
 ///
-/// `helper` is the executable that understands [`TODO_EDITOR_FLAG`] — in
-/// the application that is its own binary (`std::env::current_exe`).
+/// `helper` is the executable that understands [`TODO_EDITOR_FLAG`] —
+/// normally [`HELPER_NAME`] found by [`helper_path`] beside the app.
 pub async fn rebase_interactive(
     executor: &GitExecutor,
     repo: &RepoInfo,

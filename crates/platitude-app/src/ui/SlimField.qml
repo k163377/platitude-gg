@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// Slim single-line input shared by the toolbar search and the sidebar
-// filter: thin frame, compact height.
+// Slim single-line input shared by the toolbar search and the graph's
+// branch-name box: thin frame, compact height.
 TextField {
     id: slim
     implicitHeight: Theme.iconLg

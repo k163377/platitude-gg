@@ -338,7 +338,8 @@ impl GraphModel {
             .unwrap_or_default()
     }
 
-    /// Full commit id at a row (selection / keyboard navigation).
+    /// Full commit id at a row (selection, its recovery after a rewrite,
+    /// and the smoke hooks).
     #[qslot]
     fn oid_at(&self, row: i32) -> String {
         usize::try_from(row)

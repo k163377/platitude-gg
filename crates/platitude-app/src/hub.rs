@@ -227,7 +227,8 @@ pub struct Feeds {
     pub refs_tags: Arc<Feed<RefsSnapshot>>,
     /// Status headline consumer (WorkTreeModel: header props/counts).
     pub status: Arc<Feed<StatusMsg>>,
-    /// Status list consumer (working-tree sidebar section).
+    /// Status list consumer (the `worktree` NavSectionModel — the changed
+    /// files the right pane's WIP view lists).
     pub status_nav: Arc<Feed<StatusMsg>>,
     pub stash: Arc<Feed<Vec<StashEntry>>>,
     pub worktrees: Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>,

@@ -1865,8 +1865,9 @@ impl RepoSession {
 
     /// Buffered variant of [`RepoSession::stream_log`]: rows accumulate
     /// into the caller's builder/vec without touching shared state or the
-    /// sink (used by the tag-inclusive swap pass). Returns the number of
-    /// commits the walk emitted (what `--max-count` limits — the shown
+    /// sink (used by every offscreen rebuild — the tag-inclusive swap
+    /// pass and `refresh_log`'s background refreshes). Returns the number
+    /// of commits the walk emitted (what `--max-count` limits — the shown
     /// row count is `out.len()`).
     async fn collect_log(
         self: &Arc<Self>,
@@ -2064,9 +2065,6 @@ impl Drop for RepoSession {
     }
 }
 
-/// Builds the synthetic row for uncommitted changes: zero id, no author,
-/// one dashed edge running down to HEAD. The UI recognizes the all-zero
-/// id and renders the dashed empty node and the WIP subject.
 /// Replays a one-commit edit plan through `git rebase --interactive`.
 async fn run_plan(
     executor: &GitExecutor,
@@ -2090,6 +2088,9 @@ async fn run_plan(
     .await
 }
 
+/// Builds the synthetic row for uncommitted changes: zero id, no author,
+/// one dashed edge running down to HEAD. The UI recognizes the all-zero
+/// id and renders the dashed empty node and the WIP subject.
 fn wip_row(head: &Oid, builder: &mut GraphBuilder) -> LogRow {
     let zero = Oid::zero_like(head);
     let g = builder.push_virtual(&zero, head);

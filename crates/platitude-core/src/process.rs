@@ -20,8 +20,10 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::GitError;
 
-/// Default time budget for short-lived commands. Streaming commands
-/// (`log`, later `fetch`) opt out via [`GitCommand::no_timeout`].
+/// Default time budget for short-lived commands. The streaming log walks
+/// and `mergetool` (open-ended, user-paced) opt out via
+/// [`GitCommand::no_timeout`]; network commands set their own, longer
+/// budget instead (`remote`).
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Keep at most this much stderr; git error messages are short, and a

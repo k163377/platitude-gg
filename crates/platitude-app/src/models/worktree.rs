@@ -8,7 +8,8 @@ use super::qml_register;
 
 // ---------------------------------------------------------------------------
 // WorkTreeModel: always-on header state (branch / ops / conflicts / counts).
-// The working-tree file list itself lives in the sidebar (NavSectionModel).
+// The working-tree file list itself is a NavSectionModel rendered by the
+// right pane's WIP view.
 // ---------------------------------------------------------------------------
 
 #[derive(Default)]

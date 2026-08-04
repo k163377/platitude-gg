@@ -39,7 +39,7 @@ pub struct RefEntry {
     /// Peeled commit for annotated tags.
     pub peeled: Option<Oid>,
     /// Configured upstream refname (`refs/remotes/origin/main`), if any.
-    /// May point at a deleted remote branch; see [`has_remote_counterpart`].
+    /// May point at a deleted remote branch; see [`branches_with_remote`].
     pub upstream: Option<String>,
     /// True for the branch HEAD is on (never true when detached).
     pub is_head: bool,

@@ -198,8 +198,8 @@ Item {
                  + "would on any move.").arg(local),
             qsTr("Move %1 here").arg(local),
             function () { page.switchTo("force", local, local, remoteRef) })
-        // A dialog draws in the window overlay, where a screenshot cannot
-        // reach it; say so where a smoke run can read it instead.
+        // Say it in words too: a smoke run asserts on the report line
+        // without having to look at the overlay shot.
         if (AppBackend.autoAct !== "")
             AppBackend.report("move_branch_asked local=" + local)
     }
@@ -214,8 +214,8 @@ Item {
         page.moveRefused = true
         dirtySwitchDialog.blockKind = repoTab.moveBlock
         dirtySwitchDialog.open()
-        // A dialog is invisible to a screenshot (popups draw in the
-        // window overlay), so say so where the smoke run can read it.
+        // Say it in words too: a smoke run asserts on the report line
+        // without having to look at the overlay shot.
         if (AppBackend.autoAct !== "")
             AppBackend.report("move_blocked kind=" + repoTab.moveBlock)
     }
@@ -618,9 +618,11 @@ Item {
     }
 
     // ---- smoke hook ------------------------------------------------
-    // PG_AUTO_ACT runs one write operation through exactly the code
-    // path a click takes, so the wiring can be proven headlessly. The
-    // dispatch is equality on a bare verb; nothing here parses.
+    // PG_AUTO_ACT runs one operation — a write, or a surface left
+    // standing for the overlay shot — through exactly the code path a
+    // click takes, so the wiring can be proven headlessly. The dispatch
+    // is equality on a bare verb; the argument passes through as
+    // whatever the verb needs (a name, an oid, a row number).
     Timer {
         id: autoActTimer
         interval: 1200
@@ -779,11 +781,9 @@ Item {
             // Past the question, for the discarding write itself.
             repoTab.resetTo(arg, "hard")
         } else if (act === "commit-menu" || act === "reset-menu") {
-            // Nothing written: the menu is left standing so its wording
-            // can be photographed from outside (a popup draws in the
-            // window overlay, where grabToImage cannot reach it). Which
-            // rows are offered is said in words as well — a greyed row
-            // is not something a screenshot can be trusted on.
+            // Nothing written: the menu is left standing for the overlay
+            // shot. Which rows are offered is said in words as well — a
+            // greyed row is not something a screenshot can be trusted on.
             page.openCommitMenu(arg)
             if (act === "reset-menu")
                 resetMenu.popup()
@@ -1296,8 +1296,8 @@ Item {
         visible: repoTab.state !== "error"
 
         // ---- three-pane layout --------------------------------------
-        // (repository state / search / reload live in the window
-        // toolbar, next to the tabs)
+        // (repository state / search / fetch / push live in the window
+        // toolbar, next to the tabs; Reload is the app menu and F5)
         SplitView {
             Layout.fillWidth: true
             Layout.fillHeight: true

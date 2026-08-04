@@ -1,9 +1,10 @@
 //! Commit details (metadata + changed files) and on-demand file diffs.
 //!
 //! Merge commits are diffed against their **first parent** (the common GUI
-//! convention). All diff runs pin `--no-ext-diff` and the standard `a/ b/`
-//! prefixes so the patch parser sees a stable shape regardless of user
-//! config.
+//! convention). Patch-producing diff runs pin `--no-ext-diff` and the
+//! standard `a/ b/` prefixes so the patch parser sees a stable shape
+//! regardless of user config (the `--name-status` file list emits no
+//! patch and needs neither).
 
 use std::path::Path;
 

@@ -1,4 +1,4 @@
-//! Working-tree status: `git status --porcelain=v2 -z --branch`.
+//! Working-tree status: `git status --porcelain=v2 -z --branch -uall`.
 
 use std::path::Path;
 
