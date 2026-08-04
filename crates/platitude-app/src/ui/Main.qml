@@ -150,6 +150,16 @@ ApplicationWindow {
         }
     }
 
+    // Re-read the open repository from disk. The page keeps itself
+    // current on a tick, so this is the way out of the cases a tick
+    // cannot cover rather than a thing to reach for — a key and a menu
+    // row, not a button holding down toolbar room.
+    Shortcut {
+        sequence: "F5"
+        enabled: root.curPage !== null
+        onActivated: root.curPage.pageTab.refreshAll()
+    }
+
     // Frame counter for the scroll benchmark (PG_AUTO_SCROLL=1); the
     // page's bench reads it through Window.window.
     property int frameCounter: 0
