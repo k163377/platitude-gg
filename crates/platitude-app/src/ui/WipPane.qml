@@ -77,8 +77,7 @@ ColumnLayout {
                          && wipPane.worktreeModel.total > 0
                 ToolTip.visible: hovered
                 ToolTip.delay: 600
-                ToolTip.text: qsTr("Put these changes away and come back to a "
-                                   + "clean working tree")
+                ToolTip.text: qsTr("Set these changes aside for later")
                 onClicked: wipPane.stashRequested()
             }
             HoverToolButton {
@@ -195,9 +194,8 @@ ColumnLayout {
                 onVisibleChanged: if (!visible) checked = false
                 ToolTip.visible: hovered
                 ToolTip.delay: 400
-                ToolTip.text: qsTr("The last commit is by %1 <%2>. Amending it "
-                                   + "keeps that name unless this is checked, "
-                                   + "which also dates it now.")
+                ToolTip.text: qsTr("Replaces the author %1 <%2> with you, "
+                                   + "dated now")
                               .arg(wipPane.repoTab.headAuthorName)
                               .arg(wipPane.repoTab.headAuthorEmail)
             }
@@ -212,9 +210,8 @@ ColumnLayout {
                 font.pixelSize: Theme.fontSm
                 ToolTip.visible: amendPushedHover.containsMouse
                 ToolTip.delay: 400
-                ToolTip.text: qsTr("The last commit is on a remote. "
-                                   + "Rewriting it would leave anyone "
-                                   + "who already has it out of step.")
+                ToolTip.text: qsTr("Already on a remote — anyone who has it "
+                                   + "will be out of step")
                 MouseArea {
                     id: amendPushedHover
                     anchors.fill: parent
@@ -241,7 +238,7 @@ ColumnLayout {
             ToolTip.visible: commitHover.containsMouse && !enabled
             ToolTip.delay: 300
             ToolTip.text: !wipPane.repoTab.identityReady
-                          ? qsTr("git has no name or email to record on commits")
+                          ? qsTr("No name or email set for commits")
                           : wipSubject.text.trim() === ""
                           ? qsTr("A commit needs a summary")
                           : qsTr("Stage something to commit")
@@ -297,8 +294,8 @@ ColumnLayout {
                     ToolTip.visible: hovered
                     ToolTip.delay: 300
                     ToolTip.text: bucketHeader.section === "staged"
-                        ? qsTr("Empty the staging area")
-                        : qsTr("Stage every change, untracked files included")
+                        ? qsTr("Unstage everything")
+                        : qsTr("Stage everything, untracked included")
                     onClicked: {
                         if (bucketHeader.section === "staged")
                             wipPane.repoTab.unstageAll()

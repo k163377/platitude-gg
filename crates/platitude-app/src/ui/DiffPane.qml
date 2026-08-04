@@ -56,8 +56,8 @@ Rectangle {
                     ToolTip.visible: hovered
                     ToolTip.delay: 300
                     ToolTip.text: diffPane.staged
-                        ? qsTr("Take this whole file out of the next commit")
-                        : qsTr("Put this whole file into the next commit")
+                        ? qsTr("Unstage the whole file at once")
+                        : qsTr("Stage the whole file at once")
                     onClicked: diffPane.stageFileRequested()
                 }
                 HoverToolButton {

@@ -1399,11 +1399,10 @@ Item {
                               && page.selectedStashRef === ""
                               && page.selectedInHistory
                     editBlocked: page.selectedStashRef !== ""
-                        ? qsTr("A stash keeps the message it was made with.")
+                        ? qsTr("A stash message cannot be changed")
                         : (detailsModel.shaHex !== "" && !page.selectedInHistory
-                           ? qsTr("This commit is not in the history you are on. "
-                                  + "Switch to a branch that has it to edit its "
-                                  + "message.")
+                           ? qsTr("Not in the current history — switch to a "
+                                  + "branch that has it")
                            : "")
                     busy: repoTab.busyCount > 0
                     asking: page.pendingMove !== null

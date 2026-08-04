@@ -228,7 +228,7 @@ Rectangle {
                 onClicked: topBar.identityEditRequested()
                 ToolTip.visible: containsMouse
                 ToolTip.delay: 600
-                ToolTip.text: qsTr("git has no name or email to record on commits")
+                ToolTip.text: qsTr("No name or email set for commits")
             }
         }
         Label {
@@ -300,8 +300,7 @@ Rectangle {
                      && topBar.curPage.pageTab.busyCount === 0
             ToolTip.visible: hovered
             ToolTip.delay: 600
-            ToolTip.text: qsTr("Fetch every remote now, pruning branches "
-                               + "they no longer have")
+            ToolTip.text: qsTr("Fetch all remotes and prune deleted branches")
             onActivated: topBar.curPage.pageTab.fetch("")
         }
         // Push, in whichever shape this branch's standing with its remote
@@ -354,18 +353,15 @@ Rectangle {
                                    topBar.curPage.pageWt.ahead)
                               .arg(topBar.curPage.pushTargetLabel)
                           : mode === "clean"
-                            ? qsTr("%1 already has every commit on this branch")
+                            ? qsTr("Nothing to push — %1 is up to date")
                               .arg(topBar.curPage.pushTargetLabel)
                           : mode === "behind"
-                            ? qsTr("%1 has moved on, and this branch has "
-                                   + "nothing to add to it")
+                            ? qsTr("Nothing to push — %1 has moved ahead")
                               .arg(topBar.curPage.pushTargetLabel)
                           : mode === "diverged"
-                            ? qsTr("%1 has %n commit(s) this branch does "
-                                   + "not, as seen at the last fetch, so "
-                                   + "only an overwrite can put this branch "
-                                   + "there. Hold this button to overwrite "
-                                   + "it, which removes them.", "",
+                            ? qsTr("Hold to overwrite %1, dropping %n "
+                                   + "commit(s) it has (as of the last "
+                                   + "fetch)", "",
                                    topBar.curPage.pageWt.behind)
                               .arg(topBar.curPage.pushTargetLabel)
                           : ""
