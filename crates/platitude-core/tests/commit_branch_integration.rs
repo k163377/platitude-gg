@@ -532,3 +532,63 @@ async fn checkout_of_a_remote_branch_creates_a_tracking_branch() {
         "origin/published"
     );
 }
+
+/// Landing on a remote branch whose local counterpart already exists.
+///
+/// `Track` cannot do it — `--create` refuses a name that is taken — which
+/// is the whole reason `ForceCreate` exists: it moves the local branch to
+/// the remote's commit and lands there in one command.
+#[tokio::test]
+async fn a_diverged_local_branch_is_moved_onto_the_remote_one() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("a.txt", "one\n", "root");
+    origin.commit_file("b.txt", "two\n", "what the remote has");
+
+    let mut clone = TestRepo::init();
+    let url = origin.file_url();
+    clone.git(&["remote", "add", "origin", &url]);
+    clone.git(&["fetch", "origin"]);
+    clone.git(&["checkout", "-b", "main", "origin/main~1"]);
+    clone.commit_file("c.txt", "local\n", "only mine");
+    let only_mine = clone.git(&["rev-parse", "HEAD"]);
+    let (exec, cancel) = env();
+
+    let err = branch::checkout(
+        &exec,
+        &clone.path,
+        &CheckoutTarget::Track {
+            remote_ref: "origin/main".into(),
+            local: "main".into(),
+        },
+        &cancel,
+    )
+    .await
+    .expect_err("--create cannot take a name that exists");
+    assert!(err.to_string().contains("already exists"), "{err}");
+
+    let outcome = branch::checkout(
+        &exec,
+        &clone.path,
+        &CheckoutTarget::ForceCreate {
+            local: "main".into(),
+            start: "origin/main".into(),
+        },
+        &cancel,
+    )
+    .await
+    .expect("force-create");
+
+    assert_eq!(outcome, CheckoutOutcome::Moved);
+    assert_eq!(clone.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+    assert_eq!(
+        clone.git(&["rev-parse", "HEAD"]),
+        clone.git(&["rev-parse", "origin/main"]),
+        "the branch now stands where the remote one does"
+    );
+    assert!(
+        !branch::is_merged_into(&exec, &clone.path, &only_mine, "main", &cancel)
+            .await
+            .expect("merge check"),
+        "the commit only the local branch had is no longer on it"
+    );
+}

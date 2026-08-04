@@ -525,6 +525,14 @@ impl RepoTab {
         self.move_head(target, &carry);
     }
 
+    /// Moves an existing local branch to `start` and lands on it. What the
+    /// branch alone had is left unreferenced, so the UI asks first.
+    #[qslot]
+    fn checkout_force_create(&mut self, local: String, start: String, carry: String) {
+        let target = platitude_core::branch::CheckoutTarget::ForceCreate { local, start };
+        self.move_head(target, &carry);
+    }
+
     /// Moves the current branch to `rev`. `mode` says what becomes of the
     /// index and the working tree: `"soft"` leaves both alone (the skipped
     /// commits end up staged), `"mixed"` clears the index, `"hard"` throws

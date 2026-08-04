@@ -22,6 +22,13 @@ pub enum CheckoutTarget {
     Detach { rev: String },
     /// A remote-tracking branch: creates `local` tracking it and switches.
     Track { remote_ref: String, local: String },
+    /// An existing local branch, moved to `start` before landing on it.
+    ///
+    /// Commits only that branch had are left unreferenced, so the UI asks
+    /// before running this one. The move and the landing are one command
+    /// (`switch --force-create`): git either does both or neither, and a
+    /// working tree in the way still refuses the whole thing.
+    ForceCreate { local: String, start: String },
 }
 
 /// Why git refused a move: uncommitted work stands in the way. git aborts
@@ -104,6 +111,9 @@ pub async fn checkout(
         CheckoutTarget::Track { remote_ref, local } => {
             cmd.args(["--create", local, "--track", remote_ref])
         }
+        // No `--track`: a branch that already exists keeps whatever
+        // upstream it was given, and moving it says nothing about that.
+        CheckoutTarget::ForceCreate { local, start } => cmd.args(["--force-create", local, start]),
     };
     match executor.run(cmd, cancel).await {
         Ok(_) => Ok(CheckoutOutcome::Moved),
