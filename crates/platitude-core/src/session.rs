@@ -193,6 +193,17 @@ pub enum SessionEvent {
         generation: u64,
         error: String,
     },
+    /// A background rebuild finished and replaces the whole graph in one
+    /// step. Deliberately one event rather than Started/Chunk/Finished:
+    /// those travel as separate queued messages, and a consumer that
+    /// drains between them paints an empty model for a frame — visible
+    /// as a white flash whenever a background refresh finds changes.
+    LogReplaced {
+        generation: u64,
+        rows: Vec<LogRow>,
+        elapsed_ms: u64,
+        truncated: bool,
+    },
     /// Labels of already-delivered rows changed (refs arrived/refreshed).
     LabelsChanged {
         rows: Vec<(u32, Vec<RefLabel>)>,
@@ -691,11 +702,9 @@ impl RepoSession {
             }
             shared.sent_rows = rows.clone();
         }
-        self.sink.event(SessionEvent::LogStarted { generation });
-        self.sink.event(SessionEvent::LogChunk { generation, rows });
-        self.sink.event(SessionEvent::LogFinished {
+        self.sink.event(SessionEvent::LogReplaced {
             generation,
-            total,
+            rows,
             elapsed_ms: started.elapsed().as_millis() as u64,
             // See run_direct_pass: the walk decides truncation, not the
             // shown row count.

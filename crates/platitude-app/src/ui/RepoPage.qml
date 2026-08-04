@@ -531,20 +531,26 @@ Item {
         graphPane.anchorSoon()
         page.activateRow(graphModel.oidAt(row))
     }
-    // Each finished pass ends in one drain (the swap never shows a
-    // loading edge), so watch the pass counter instead: re-resolve the
-    // selection by oid and re-anchor the viewport on it.
+    // Each finished pass bumps finishCount: re-resolve the selection by
+    // oid, since row numbers may have shifted. Only a streaming restart
+    // bumps resetCount — that is the only case where the viewport lost
+    // its scroll position and needs re-anchoring. In-place replacements
+    // keep the position, and re-centering would yank the view around.
     property int seenFinishCount: 0
+    property int seenResetCount: 0
     Connections {
         target: graphModel
         function onStatsChanged() {
             if (graphModel.finishCount !== page.seenFinishCount) {
                 page.seenFinishCount = graphModel.finishCount
+                const resetHappened = graphModel.resetCount !== page.seenResetCount
+                page.seenResetCount = graphModel.resetCount
                 if (page.selectedOid !== "") {
                     const row = graphModel.rowOf(page.selectedOid)
                     if (row >= 0) {
                         graphPane.setCurrentRow(row)
-                        graphPane.anchorSoon()
+                        if (resetHappened)
+                            graphPane.anchorSoon()
                     }
                 }
             }

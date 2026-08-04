@@ -16,8 +16,9 @@ use super::{impl_extend_notified, qml_register};
 
 // Kept lean: one instance per commit in the window. The short sha is
 // derived in QML from `oid_hex` (mechanical substring); `avatar` is a
-// packed local identicon code (see encode::avatar_code).
-#[derive(QModelItem, Default, Clone)]
+// packed local identicon code (see encode::avatar_code). PartialEq
+// feeds the in-place replacement: unchanged rows emit no dataChanged.
+#[derive(QModelItem, Default, Clone, PartialEq)]
 pub struct GraphRowItem {
     oid_hex: String,
     author: String,
@@ -43,9 +44,13 @@ pub struct GraphModel {
     first_chunk_ms: i32,
     total_ms: i32,
     truncated: bool,
-    /// Completed stream passes (direct + tag swap + reloads). QML watches
-    /// this edge to re-anchor the viewport after each model reset.
+    /// Completed stream passes (direct + replacements + reloads). QML
+    /// watches this edge to re-resolve the selection by oid.
     finish_count: i32,
+    /// Model resets (streaming restarts only — in-place replacements do
+    /// not reset). QML re-anchors the viewport only when this moves,
+    /// because only a reset zeroes the scroll position.
+    reset_count: i32,
     /// Lanes running off the end of the window (`lane.color;...`), drawn
     /// by the truncation footer.
     tail_geometry: String,
@@ -80,6 +85,78 @@ impl QListModel for GraphModel {
 
 impl_extend_notified!(GraphModel, rows, GraphRowItem);
 
+impl GraphModel {
+    /// Replaces the whole list in place: unchanged rows stay untouched,
+    /// contiguous runs of changed rows emit one ranged dataChanged, and
+    /// only the length delta inserts or removes rows. No model reset —
+    /// the view keeps its scroll position and never shows an empty list.
+    #[expect(unsafe_code)]
+    fn splice_notified(&mut self, new_rows: Vec<GraphRowItem>) {
+        let old_len = self.rows.len();
+        let new_len = new_rows.len();
+        let common = old_len.min(new_len);
+        let mut head = new_rows;
+        let extra = head.split_off(common);
+
+        // In-place writes first (no Qt runs between here and the
+        // notifications below — everything happens inside one slot).
+        let mut ranges: Vec<(usize, usize)> = Vec::new();
+        for (i, item) in head.into_iter().enumerate() {
+            if self.rows[i] != item {
+                self.rows[i] = item;
+                match ranges.last_mut() {
+                    Some((_, last)) if *last + 1 == i => *last = i,
+                    _ => ranges.push((i, i)),
+                }
+            }
+        }
+
+        if old_len > new_len {
+            if let Some(proxy) = self.try_get_rust_proxy_ptr() {
+                // SAFETY: same pattern as QListModelBase::remove — the
+                // proxy pointer stays valid while the QObject side is
+                // attached, and we are on the Qt main thread in a slot.
+                unsafe { &mut *proxy }.base_begin_remove_rows(
+                    &mut *self,
+                    &qtbridge::qtbridge_type_lib::QModelIndex::default(),
+                    new_len as i32,
+                    old_len as i32 - 1,
+                );
+                self.rows.truncate(new_len);
+                // SAFETY: see above.
+                unsafe { &mut *proxy }.base_end_remove_rows(&mut *self);
+            } else {
+                self.rows.truncate(new_len);
+            }
+        }
+
+        if let Some(proxy) = self.try_get_rust_proxy_ptr() {
+            for (first, last) in ranges {
+                // SAFETY: see above; base_index only builds an index.
+                let top_left = unsafe { &*proxy }.base_index(
+                    &*self,
+                    first as i32,
+                    0,
+                    &qtbridge::qtbridge_type_lib::QModelIndex::default(),
+                );
+                // SAFETY: see above; base_index only builds an index.
+                let bottom_right = unsafe { &*proxy }.base_index(
+                    &*self,
+                    last as i32,
+                    0,
+                    &qtbridge::qtbridge_type_lib::QModelIndex::default(),
+                );
+                // SAFETY: see above.
+                unsafe { &mut *proxy }.base_data_changed(&mut *self, &top_left, &bottom_right);
+            }
+        }
+
+        if !extra.is_empty() {
+            self.extend_notified(extra);
+        }
+    }
+}
+
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
 impl GraphModel {
     qproperty!("loading", Member = loading, Notify = stats_changed);
@@ -93,6 +170,7 @@ impl GraphModel {
     qproperty!("totalMs", Member = total_ms, Notify = stats_changed);
     qproperty!("truncated", Member = truncated, Notify = stats_changed);
     qproperty!("finishCount", Member = finish_count, Notify = stats_changed);
+    qproperty!("resetCount", Member = reset_count, Notify = stats_changed);
     qproperty!(
         "tailGeometry",
         Member = tail_geometry,
@@ -124,6 +202,7 @@ impl GraphModel {
                     if generation > self.generation {
                         self.generation = generation;
                         self.reset();
+                        self.reset_count += 1;
                         self.loading = true;
                         self.row_total = 0;
                         self.max_lanes = 1;
@@ -185,6 +264,46 @@ impl GraphModel {
                         self.rows.shrink_to_fit();
                         tracing::info!(total, elapsed_ms, truncated, "graph stream finished");
                     }
+                }
+                GraphMsg::Replaced {
+                    generation,
+                    rows,
+                    elapsed_ms,
+                    truncated,
+                } => {
+                    if generation <= self.generation {
+                        continue; // superseded by a newer stream
+                    }
+                    self.generation = generation;
+                    let items: Vec<GraphRowItem> = rows.iter().map(to_row_item).collect();
+                    self.max_lanes = items
+                        .iter()
+                        .map(|item| item.row_width)
+                        .max()
+                        .unwrap_or(1)
+                        .max(1);
+                    self.splice_notified(items);
+                    self.loading = false;
+                    self.first_chunk_ms = 0;
+                    self.total_ms = elapsed_ms as i32;
+                    self.row_total = self.rows.len() as i32;
+                    self.truncated = truncated;
+                    self.finish_count += 1;
+                    self.tail_geometry = if truncated {
+                        self.rows
+                            .last()
+                            .map(|r| crate::encode::tail_lanes(&r.geometry))
+                            .unwrap_or_default()
+                    } else {
+                        String::new()
+                    };
+                    self.error = String::new();
+                    tracing::info!(
+                        total = self.row_total,
+                        elapsed_ms,
+                        truncated,
+                        "graph replaced in place"
+                    );
                 }
                 GraphMsg::Failed {
                     generation,

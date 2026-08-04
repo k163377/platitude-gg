@@ -96,6 +96,15 @@ pub enum GraphMsg {
         elapsed_ms: u64,
         truncated: bool,
     },
+    /// Whole-graph replacement in one message (see
+    /// [`SessionEvent::LogReplaced`]): applied in place so no empty
+    /// model is ever visible.
+    Replaced {
+        generation: u64,
+        rows: Vec<LogRow>,
+        elapsed_ms: u64,
+        truncated: bool,
+    },
     Failed {
         generation: u64,
         message: String,
@@ -259,6 +268,17 @@ impl SessionSink for BridgeSink {
                     message: error,
                 })
             }
+            SessionEvent::LogReplaced {
+                generation,
+                rows,
+                elapsed_ms,
+                truncated,
+            } => self.feeds.graph.push(GraphMsg::Replaced {
+                generation,
+                rows,
+                elapsed_ms,
+                truncated,
+            }),
             SessionEvent::LabelsChanged { rows } => {
                 self.feeds.graph.push(GraphMsg::Labels { rows });
             }

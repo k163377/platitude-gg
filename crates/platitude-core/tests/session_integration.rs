@@ -34,13 +34,14 @@ impl CaptureSink {
             .count()
     }
 
-    /// Waits until log streaming settles: a `LogFinished` with `total`
-    /// rows exists and no further stream event arrives for a beat, then
-    /// returns the newest matching generation. Acting on the *first*
-    /// matching pass instead would race the passes still in flight (the
-    /// tag swap, the dirty-flip restart), which finish afterwards with
-    /// higher generations and would be mistaken for the reaction to
-    /// whatever the test does next.
+    /// Waits until log streaming settles: a pass ending with `total`
+    /// rows (a `LogFinished`, or a `LogReplaced` carrying that many
+    /// rows) exists and no further stream event arrives for a beat,
+    /// then returns the newest matching generation. Acting on the
+    /// *first* matching pass instead would race the passes still in
+    /// flight (the tag swap, the dirty-flip replacement), which finish
+    /// afterwards with higher generations and would be mistaken for the
+    /// reaction to whatever the test does next.
     async fn settled_stream_gen(&self, total: u32) -> u64 {
         fn stream_events(evs: &[SessionEvent]) -> usize {
             evs.iter()
@@ -50,6 +51,7 @@ impl CaptureSink {
                         SessionEvent::LogStarted { .. }
                             | SessionEvent::LogChunk { .. }
                             | SessionEvent::LogFinished { .. }
+                            | SessionEvent::LogReplaced { .. }
                             | SessionEvent::LogFailed { .. }
                     )
                 })
@@ -67,6 +69,9 @@ impl CaptureSink {
                             total: t,
                             ..
                         } if *t == total => Some(*generation),
+                        SessionEvent::LogReplaced {
+                            generation, rows, ..
+                        } if rows.len() as u32 == total => Some(*generation),
                         _ => None,
                     })
                     .max();
@@ -384,13 +389,15 @@ async fn tag_only_commits_follow_the_include_tags_option() {
         sink.clone(),
     );
 
-    // Tags are walked by default → the tag-only commit has a row.
+    // Tags are walked by default → the tag-only commit has a row. The
+    // tag-inclusive pass differs from the fast pass here, so it arrives
+    // as an atomic replacement.
     let first_gen = sink
-        .wait_for("tags-on LogFinished", |evs| {
+        .wait_for("tags-on LogReplaced", |evs| {
             evs.iter().find_map(|e| match e {
-                SessionEvent::LogFinished {
-                    generation, total, ..
-                } if *total == 2 => Some(*generation),
+                SessionEvent::LogReplaced {
+                    generation, rows, ..
+                } if rows.len() == 2 => Some(*generation),
                 _ => None,
             })
         })
@@ -1102,7 +1109,7 @@ async fn a_write_rebuilds_the_graph_once() {
         let commit_at = position_of(evs, "commit")?;
         evs[commit_at..]
             .iter()
-            .any(|e| matches!(e, SessionEvent::LogFinished { .. }))
+            .any(|e| matches!(e, SessionEvent::LogReplaced { .. }))
             .then_some(())
     })
     .await;
@@ -1120,8 +1127,16 @@ async fn a_write_rebuilds_the_graph_once() {
     );
     assert_eq!(
         log_starts(&events[commit_at..]),
+        0,
+        "the rebuild replaces atomically; it never resets and re-streams"
+    );
+    assert_eq!(
+        events[commit_at..]
+            .iter()
+            .filter(|e| matches!(e, SessionEvent::LogReplaced { .. }))
+            .count(),
         1,
-        "the commit swapped the rebuilt graph in exactly once"
+        "the commit replaced the rebuilt graph in exactly once"
     );
     drop(events);
     session.close();
@@ -1149,6 +1164,7 @@ async fn background_refresh_swaps_only_on_change() {
                 SessionEvent::LogStarted { .. }
                     | SessionEvent::LogChunk { .. }
                     | SessionEvent::LogFinished { .. }
+                    | SessionEvent::LogReplaced { .. }
                     | SessionEvent::LogFailed { .. }
             )
         })
@@ -1168,12 +1184,13 @@ async fn background_refresh_swaps_only_on_change() {
     );
 
     // History moved outside the session: the same call now delivers one
-    // atomic replacement (a single Started, all rows in one chunk).
+    // atomic replacement — a single LogReplaced carrying every row, so
+    // the consumer never holds an empty model in between.
     repo.commit_file("h.txt", "x\n", "outside commit");
     session.refresh_log();
     let swap_gen = sink.settled_stream_gen(6).await;
     let events = sink.events.lock().unwrap();
-    let starts_after = events
+    let after: Vec<&SessionEvent> = events
         .iter()
         .filter(|e| {
             matches!(
@@ -1181,23 +1198,22 @@ async fn background_refresh_swaps_only_on_change() {
                 SessionEvent::LogStarted { .. }
                     | SessionEvent::LogChunk { .. }
                     | SessionEvent::LogFinished { .. }
+                    | SessionEvent::LogReplaced { .. }
                     | SessionEvent::LogFailed { .. }
             )
         })
         .skip(baseline)
-        .filter(|e| matches!(e, SessionEvent::LogStarted { .. }))
-        .count();
-    assert_eq!(starts_after, 1, "one swap, not a reset-and-restream");
-    let swapped_rows: usize = events
-        .iter()
-        .filter_map(|e| match e {
-            SessionEvent::LogChunk { generation, rows } if *generation == swap_gen => {
-                Some(rows.len())
-            }
-            _ => None,
-        })
-        .sum();
-    assert_eq!(swapped_rows, 6, "the replacement carries the whole graph");
+        .collect();
+    assert_eq!(after.len(), 1, "one event for the whole change: {after:?}");
+    match after[0] {
+        SessionEvent::LogReplaced {
+            generation, rows, ..
+        } => {
+            assert_eq!(*generation, swap_gen);
+            assert_eq!(rows.len(), 6, "the replacement carries the whole graph");
+        }
+        other => panic!("expected LogReplaced, got {other:?}"),
+    }
     drop(events);
     session.close();
 }
