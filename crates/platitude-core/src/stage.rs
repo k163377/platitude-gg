@@ -117,9 +117,12 @@ pub async fn discard_worktree(
     executor.run(cmd, cancel).await.map(drop)
 }
 
-/// `git clean -f -d -- <paths>`: deletes untracked files. `-d` is required
-/// because `status -unormal` reports an untracked directory as one entry.
-/// Destructive — the caller confirms first.
+/// `git clean -f -d -- <paths>`: deletes untracked files. `status -uall`
+/// hands us one path per file, and `-f` alone already deletes a file inside
+/// an untracked directory; `-d` is kept so a directory pathspec still takes
+/// the whole tree. An emptied parent directory stays on disk — git does not
+/// track directories, so status stays clean. Destructive — the caller
+/// confirms first.
 pub async fn remove_untracked(
     executor: &GitExecutor,
     workdir: &Path,

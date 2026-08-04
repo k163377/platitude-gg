@@ -220,13 +220,15 @@ pub async fn load(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<WorkTreeStatus, GitError> {
-    // `-unormal` pins untracked listing against user config.
+    // `-uall` pins untracked listing against user config and expands a new
+    // directory into its files; `-unormal` would collapse it to one `dir/`
+    // entry, which has no per-file diff to stage hunks or lines from.
     let cmd = GitCommand::new().cwd(workdir).args([
         "status",
         "--porcelain=v2",
         "-z",
         "--branch",
-        "-unormal",
+        "-uall",
     ]);
     let out = executor.run(cmd, cancel).await?;
     parse_status(&out.stdout).map_err(|e| GitError::UnexpectedOutput {

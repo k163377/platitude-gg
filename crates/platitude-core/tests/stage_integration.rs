@@ -357,6 +357,34 @@ async fn stage_part_of_an_untracked_file() {
     assert_eq!(unstaged, vec!["new.txt"], "the rest stays unstaged");
 }
 
+/// A file in a brand-new directory reaches staging like any other untracked
+/// file: `status -uall` names it per file, so it has a diff to select from.
+#[tokio::test]
+async fn stage_part_of_a_file_in_an_untracked_dir() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("seed.txt", "seed\n", "root");
+    repo.write_file("newdir/new.txt", "keep\ndrop\n");
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+
+    let (_, _, untracked) = buckets(&repo).await;
+    assert_eq!(untracked, vec!["newdir/new.txt"]);
+
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &DiffTarget::Untracked {
+            path: "newdir/new.txt".into(),
+        },
+        &[HunkSelect::lines(0, [0])],
+        &cancel,
+    )
+    .await
+    .expect("stage part of a file in a new dir");
+
+    assert_eq!(indexed(&mut repo, "newdir/new.txt"), "keep");
+}
+
 /// CRLF content must round-trip byte-for-byte through the rebuilt patch.
 #[tokio::test]
 async fn stage_a_hunk_of_a_crlf_file() {

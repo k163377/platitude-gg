@@ -65,8 +65,8 @@ async fn status_buckets_reflect_the_working_tree() {
     let untracked: Vec<&str> = s.untracked().map(StatusItem::path).collect();
     assert_eq!(
         untracked,
-        vec!["untracked dir/"],
-        "-unormal keeps dirs collapsed"
+        vec!["untracked dir/inner.txt"],
+        "-uall expands a new directory into its files"
     );
 }
 
@@ -205,7 +205,7 @@ fn fixture_dir() -> std::path::PathBuf {
 #[ignore = "regenerates committed fixtures; run explicitly and review the diff"]
 async fn capture_fixtures() {
     let mut repo = dirty_scenario();
-    let status_bytes = repo.git_raw(&["status", "--porcelain=v2", "-z", "--branch", "-unormal"]);
+    let status_bytes = repo.git_raw(&["status", "--porcelain=v2", "-z", "--branch", "-uall"]);
     std::fs::create_dir_all(fixture_dir()).unwrap();
     std::fs::write(fixture_dir().join("status_v2.bin"), &status_bytes).unwrap();
 
@@ -237,7 +237,7 @@ fn committed_status_fixture_parses() {
     assert_eq!(s.branch_head.as_deref(), Some("main"));
     assert!(s.staged().any(|i| i.path() == "staged.txt"));
     assert!(s.unstaged().any(|i| i.path() == "a.txt"));
-    assert!(s.untracked().any(|i| i.path() == "untracked dir/"));
+    assert!(s.untracked().any(|i| i.path() == "untracked dir/inner.txt"));
     assert!(
         s.items.iter().any(|i| matches!(
             i,
