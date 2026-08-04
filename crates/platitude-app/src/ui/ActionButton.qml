@@ -126,12 +126,18 @@ HoverToolButton {
         }
         Label {
             id: btnLabel
+            // The box is the widest wording plus one gap, so the last
+            // letter stands off the frame the way the first stands off
+            // the icon. Without it the words sit hard against the border
+            // (measured: 8px of air on the left, 5 on the right).
+            readonly property real box: widest.implicitWidth > 0
+                                        ? widest.implicitWidth + Theme.spaceXs : 0
             text: actionBtn.text
             color: actionBtn.fg
             font.pixelSize: Theme.fontMd
             elide: Text.ElideRight
             Layout.maximumWidth: 240
-            Layout.preferredWidth: Math.max(implicitWidth, widest.implicitWidth)
+            Layout.preferredWidth: Math.max(implicitWidth, box)
             Layout.alignment: Qt.AlignVCenter
         }
     }
