@@ -774,6 +774,32 @@ Item {
     // under it can be followed to whatever took its place.
     property int selectedRow: -1
 
+    // The commit the viewport is measured against between passes, so the
+    // rows a reader is on can be put back under them when new ones arrive
+    // above. The WIP row is no use for that — it comes and goes with the
+    // working tree — so the newest *real* commit carries the measurement.
+    property string anchorOid: ""
+    property int anchorRow: -1
+    function rememberAnchor() {
+        let row = 0
+        let oidHex = graphModel.oidAt(0)
+        if (oidHex !== "" && !/[^0]/.test(oidHex)) {
+            row = 1
+            oidHex = graphModel.oidAt(1)
+        }
+        page.anchorOid = oidHex
+        page.anchorRow = oidHex === "" ? -1 : row
+    }
+    // How far the graph slid under the viewport. Zero when the anchor is
+    // gone: a rewrite deep in the history moves rows by different amounts
+    // and there is no single answer, so the view is left alone.
+    function anchorShift() {
+        if (page.anchorRow < 0 || page.anchorOid === "")
+            return 0
+        const now = graphModel.rowOf(page.anchorOid)
+        return now < 0 ? 0 : now - page.anchorRow
+    }
+
     // The row the selection stood on is gone and this page owes it a
     // landing. Deliberately not resolved on the spot: the status of the
     // working tree, the refs and the walk arrive as three separate
@@ -891,6 +917,11 @@ Item {
                 page.seenFinishCount = graphModel.finishCount
                 const resetHappened = graphModel.resetCount !== page.seenResetCount
                 page.seenResetCount = graphModel.resetCount
+                // A reset starts the viewport over anyway; only in-place
+                // replacements leave it pointing at rows that moved.
+                if (!resetHappened)
+                    graphPane.shiftRows(page.anchorShift())
+                page.rememberAnchor()
                 if (page.pendingHeadSelect) {
                     page.tryPendingHeadSelect()
                 } else if (page.selectedOid !== "") {
@@ -945,10 +976,15 @@ Item {
     // Smoke hook (PG_SCROLL_TO=top|bottom|nav-bottom): jump the graph —
     // or the sidebar's branch list — after the final pass settles, using
     // the same clamped math as the wheel.
+    // Parks the view once and then stays out of the way: re-running on
+    // every pass would drag a background refresh back to the edge, which
+    // is the one thing a scrolled view must not do on its own.
+    property bool scrolledTo: false
     Timer {
         id: scrollToTimer
         interval: 600
         onTriggered: {
+            page.scrolledTo = true
             if (AppBackend.scrollTo === "nav-bottom") {
                 sidebarPane.scrollBranchesToEnd()
                 return
@@ -959,7 +995,7 @@ Item {
     }
     Connections {
         target: graphModel
-        enabled: AppBackend.scrollTo !== ""
+        enabled: AppBackend.scrollTo !== "" && !page.scrolledTo
         function onStatsChanged() {
             if (graphModel.finishCount > 0)
                 scrollToTimer.restart()

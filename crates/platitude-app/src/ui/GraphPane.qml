@@ -44,6 +44,37 @@ Rectangle {
     function anchorSoon() {
         anchorTimer.restart()
     }
+    /// Puts the viewport back over the rows it was reading after `rows`
+    /// commits arrived above them. A background rebuild replaces the graph
+    /// by writing over the rows in place, so newcomers at the top slide
+    /// everything below them down while the view stays where it is and
+    /// quietly shows different commits — the further down someone is
+    /// reading, the more that costs them.
+    ///
+    /// At the top of the list there is nothing to preserve: the newest
+    /// commits are exactly what belongs there, so it stays pinned.
+    /// Applied a beat later, for the same reason as the anchor above: the
+    /// list has not laid the new rows out yet, so its content is still the
+    /// old height and clamping against it would swallow the correction.
+    function shiftRows(rows) {
+        if (rows === 0)
+            return
+        if (graphList.contentY <= graphList.originY - graphList.topMargin)
+            return
+        shiftTimer.pending += rows
+        shiftTimer.restart()
+    }
+    Timer {
+        id: shiftTimer
+        property int pending: 0
+        interval: Metrics.anchorDelayMs
+        onTriggered: {
+            const rows = shiftTimer.pending
+            shiftTimer.pending = 0
+            graphList.contentY = graphList.clampY(
+                graphList.contentY + rows * Theme.graphRowHeight)
+        }
+    }
     Timer {
         id: anchorTimer
         interval: Metrics.anchorDelayMs
@@ -94,6 +125,12 @@ Rectangle {
         clip: true
         model: graphArea.graphModel
         reuseItems: true
+        // Nothing but this pane's own functions move the view. Left on,
+        // the list chases its current item: a background rebuild that
+        // re-resolves the selection onto a row one further down drags a
+        // reader parked in the history to wherever the selection is. The
+        // graph has no key navigation to want the chase for.
+        highlightFollowsCurrentItem: false
         boundsBehavior: Flickable.StopAtBounds
         flickDeceleration: 8000
         maximumFlickVelocity: 9000
