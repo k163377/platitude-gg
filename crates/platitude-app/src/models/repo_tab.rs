@@ -26,6 +26,10 @@ pub struct RepoTab {
     publish_range: String,
     publish_total: i32,
     publish_published: i32,
+    /// Last answer to `checkInHistory`: the commit asked about, and whether
+    /// HEAD can reach it. Empty oid means nothing has been asked yet.
+    history_oid: String,
+    history_in: bool,
     /// Author identity; `identityReady` false means git cannot commit yet
     /// and the UI should ask for a name and address.
     author_name: String,
@@ -83,6 +87,8 @@ impl Default for RepoTab {
             publish_range: String::new(),
             publish_total: 0,
             publish_published: 0,
+            history_oid: String::new(),
+            history_in: false,
             author_name: String::new(),
             author_email: String::new(),
             // Assumed fine until the check says otherwise, so nothing
@@ -157,6 +163,8 @@ impl RepoTab {
         Member = publish_published,
         Notify = changed
     );
+    qproperty!("historyOid", Member = history_oid, Notify = changed);
+    qproperty!("historyIn", Member = history_in, Notify = changed);
     qproperty!("authorName", Member = author_name, Notify = changed);
     qproperty!("authorEmail", Member = author_email, Notify = changed);
     qproperty!("identityReady", Member = identity_ready, Notify = changed);
@@ -303,6 +311,10 @@ impl RepoTab {
                     self.publish_range = range;
                     self.publish_total = total;
                     self.publish_published = published;
+                }
+                TabMsg::InHistory { oid, in_history } => {
+                    self.history_oid = oid;
+                    self.history_in = in_history;
                 }
                 TabMsg::MoveBlocked { kind } => {
                     self.move_block = kind;
@@ -657,6 +669,17 @@ impl RepoTab {
     #[qslot]
     fn check_publish(&mut self, range: String) {
         self.with_session(|s| s.check_publish(range.clone()));
+    }
+
+    /// Asks whether HEAD can reach `oid_hex` — whether a rewrite may start
+    /// there; the answer arrives as `historyOid` / `historyIn`.
+    #[qslot]
+    fn check_in_history(&mut self, oid_hex: String) {
+        let Ok(oid) = platitude_core::oid::Oid::from_hex_str(oid_hex.trim()) else {
+            tracing::warn!(oid_hex, "invalid oid in history check");
+            return;
+        };
+        self.with_session(|s| s.check_in_history(oid));
     }
 
     /// Records `user.name` / `user.email`. `global` writes the user's own

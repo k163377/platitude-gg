@@ -17,26 +17,24 @@ ColumnLayout {
     // Reflog selector when the selected row is a stash ("" otherwise).
     property string stashRef: ""
     // Whether this commit's message may be rewritten from here. The
-    // page decides: a stash is a commit too, but not one this pane can
-    // replay.
+    // page decides: only commits the working tree stands on can be
+    // amended or replayed, and a stash is a commit but not one of those.
     property bool editable: false
     // A write is already running, so nothing new starts.
     property bool busy: false
-    // The page has answered whether this commit is on a remote. Saving
-    // waits for it, so the warning cannot be outrun by a fast click.
-    property bool saveReady: false
-    // The current branch's newest commit: anything older is replayed
-    // instead of amended, which the editor says out loud.
+    // HEAD's own commit: anything older is replayed instead of amended,
+    // which the editor says out loud.
     property string headOid: ""
+    // Why the boxes are read-only, in one line ("" when they are not).
+    // A box that refuses typing without saying why reads as broken.
+    property string editBlocked: ""
 
     signal fileActivated(string path, string origPath)
     signal parentClicked(string oidHex)
     signal copyRequested(string text)
     signal applyStashRequested(string selector)
     signal popStashRequested(string selector)
-    /// The boxes now hold something other than the commit's message.
-    signal messageEditStarted(string oidHex)
-    /// Save was pressed (the owner adds the rewrite warning).
+    /// Save was pressed.
     signal messageSubmitted(string oidHex, string subject, string body)
 
     // ---- message editor state --------------------------------------
@@ -76,7 +74,7 @@ ColumnLayout {
         detailsPane.baseBody = bodyArea.text
     }
     function submitMessage() {
-        if (subjectArea.text.trim() === "")
+        if (!detailsPane.editable || subjectArea.text.trim() === "")
             return
         detailsPane.messageSubmitted(detailsPane.details.shaHex,
                                      subjectArea.text, bodyArea.text)
@@ -86,16 +84,15 @@ ColumnLayout {
         subjectArea.forceActiveFocus()
         subjectArea.cursorPosition = subjectArea.length
     }
-    /// Smoke hook: type into the boxes the way a keystroke would.
+    /// Smoke hook: type into the boxes the way a keystroke would —
+    /// including not at all when they are read-only.
     function setMessageText(subject, body) {
+        if (!detailsPane.editable)
+            return
         subjectArea.text = subject
         bodyArea.text = body
     }
 
-    onMessageDirtyChanged: {
-        if (detailsPane.messageDirty)
-            detailsPane.messageEditStarted(detailsPane.details.shaHex)
-    }
     Connections {
         target: detailsPane.details
         function onChanged() { detailsPane.syncMessage() }
@@ -180,6 +177,9 @@ ColumnLayout {
                 readOnly: !detailsPane.editable
                 wrapMode: TextArea.Wrap
                 placeholderText: detailsPane.editable ? qsTr("Commit summary") : ""
+                ToolTip.visible: hovered && detailsPane.editBlocked !== ""
+                ToolTip.delay: 600
+                ToolTip.text: detailsPane.editBlocked
                 font.pixelSize: Theme.fontLg
                 font.weight: Font.DemiBold
                 color: Theme.textPrimary
@@ -249,8 +249,7 @@ ColumnLayout {
                     implicitHeight: Theme.controlHeight
                     highlighted: true
                     text: qsTr("Save message")
-                    enabled: !detailsPane.busy && detailsPane.saveReady
-                             && subjectArea.text.trim() !== ""
+                    enabled: !detailsPane.busy && subjectArea.text.trim() !== ""
                     onClicked: detailsPane.submitMessage()
                 }
             }

@@ -154,6 +154,28 @@ pub async fn head_oid(
     })
 }
 
+/// Whether HEAD can reach `oid` — the commit is HEAD itself or something
+/// it was built on.
+///
+/// What history a rewrite may touch: only this line of commits can be
+/// amended or replayed from where the working tree stands. `--is-ancestor`
+/// answers by exit code, so a refusal (1) is an answer and not a failure;
+/// anything else is treated as "no", which is the harmless direction.
+pub async fn is_in_head_history(
+    executor: &GitExecutor,
+    workdir: &Path,
+    oid: &Oid,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["merge-base", "--is-ancestor"])
+        .arg(oid.to_hex())
+        .arg("HEAD");
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    Ok(out.code == 0)
+}
+
 /// Normalizes editor text for git: CRLF to LF and exactly one trailing
 /// newline. `--cleanup=whitespace` handles the rest.
 fn normalized(message: &str) -> String {

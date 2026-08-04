@@ -58,6 +58,11 @@ pub enum TabMsg {
         total: i32,
         published: i32,
     },
+    /// Whether HEAD can reach a commit — whether a rewrite may start there.
+    InHistory {
+        oid: String,
+        in_history: bool,
+    },
     /// Author identity and signing state.
     Author {
         name: String,
@@ -356,6 +361,9 @@ impl SessionSink for BridgeSink {
                     total: state.total as i32,
                     published: state.published() as i32,
                 });
+            }
+            SessionEvent::InHistoryChecked { oid, in_history } => {
+                self.feeds.tab.push(TabMsg::InHistory { oid, in_history });
             }
             SessionEvent::HeadMessageLoaded { message } => {
                 self.feeds.tab.push(TabMsg::HeadMessage { message });

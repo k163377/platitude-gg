@@ -222,6 +222,11 @@ pub enum SessionEvent {
         range: String,
         state: publish::PublishState,
     },
+    /// Answer to [`RepoSession::check_in_history`].
+    InHistoryChecked {
+        oid: String,
+        in_history: bool,
+    },
     /// Answer to [`RepoSession::load_head_message`] — what an amend starts
     /// from. Empty on an unborn branch.
     HeadMessageLoaded {
@@ -1514,6 +1519,25 @@ impl RepoSession {
             match publish::state_of(&s.executor, &workdir, &range, &cancel).await {
                 Ok(state) => s.sink.event(SessionEvent::PublishChecked { range, state }),
                 Err(e) => s.fail("publish", e),
+            }
+        });
+    }
+
+    /// Asks whether HEAD can reach `oid`, so the UI can tell which commits
+    /// a rewrite may start from. A read, not a write.
+    pub fn check_in_history(self: &Arc<Self>, oid: Oid) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            match commit::is_in_head_history(&s.executor, &workdir, &oid, &cancel).await {
+                Ok(in_history) => s.sink.event(SessionEvent::InHistoryChecked {
+                    oid: oid.to_hex(),
+                    in_history,
+                }),
+                Err(e) => s.fail("history", e),
             }
         });
     }
