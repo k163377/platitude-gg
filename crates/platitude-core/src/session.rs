@@ -253,6 +253,12 @@ pub enum SessionEvent {
         op: &'static str,
         error: GitError,
     },
+    /// A move was refused because uncommitted work stands in the way.
+    /// Nothing changed; the UI asks how to get past it (デザイン規約
+    /// §未コミット変更がある状態での移動).
+    MoveBlocked {
+        block: branch::CheckoutBlock,
+    },
     /// A write operation started; the UI can show it as in flight.
     WriteStarted {
         op: &'static str,
@@ -1087,19 +1093,31 @@ impl RepoSession {
         );
     }
 
-    /// Moves HEAD.
+    /// Moves HEAD, taking uncommitted work along as far as git will carry
+    /// it (デザイン規約 §未コミット変更がある状態での移動).
+    ///
+    /// The everyday case needs no question asked: git carries the changes
+    /// wherever they do not stand in the way. Where they do, it refuses
+    /// and touches nothing — that refusal becomes
+    /// [`SessionEvent::MoveBlocked`], and the answer comes back as
+    /// [`RepoSession::checkout_stashing`] or
+    /// [`RepoSession::checkout_merging`].
     pub fn checkout(self: &Arc<Self>, target: CheckoutTarget) {
+        let session = Arc::clone(self);
         self.write(
             "checkout",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                branch::checkout(&exec, &repo.workdir, &target, &cancel).await
+                let outcome =
+                    branch::checkout(&exec, &repo.workdir, &target, branch::Carry::AsIs, &cancel)
+                        .await?;
+                session.report_move(outcome);
+                Ok(())
             },
         );
     }
 
-    /// Stashes the working tree, then moves HEAD — "leave my changes here"
-    /// (デザイン規約 §未コミット変更がある状態での移動).
+    /// Stashes the working tree, then moves HEAD — "leave my changes here".
     ///
     /// One job rather than two queued ones. If the stash fails there is
     /// nothing left behind, and switching regardless would carry the
@@ -1108,6 +1126,7 @@ impl RepoSession {
     /// The stash keeps git's own message ("WIP on `<branch>`: …"), which
     /// already names where the changes came from.
     pub fn checkout_stashing(self: &Arc<Self>, target: CheckoutTarget) {
+        let session = Arc::clone(self);
         self.write(
             "checkout",
             AfterWrite::Graph,
@@ -1118,9 +1137,56 @@ impl RepoSession {
                     staged_only: false,
                 };
                 stash::push(&exec, &repo.workdir, "", options, &[], &cancel).await?;
-                branch::checkout(&exec, &repo.workdir, &target, &cancel).await
+                let outcome =
+                    branch::checkout(&exec, &repo.workdir, &target, branch::Carry::AsIs, &cancel)
+                        .await?;
+                session.report_move(outcome);
+                Ok(())
             },
         );
+    }
+
+    /// Merges the working tree into the target while moving — "bring my
+    /// changes and let me sort out the overlap".
+    ///
+    /// The index is emptied first because git demands it here: with
+    /// anything staged it refuses this path outright, colliding file or
+    /// not. Nothing is lost by that — the staged content is the content in
+    /// the working tree, and what the merge produces would land unstaged
+    /// anyway — but the split between staged and unstaged does not survive.
+    ///
+    /// A conflicted result is still a *successful* move: git leaves the
+    /// markers in place, exits zero, and the conflict shows up in the next
+    /// status refresh. There is no merge to abort afterwards, which is
+    /// exactly why the choice is offered before this runs and not after.
+    pub fn checkout_merging(self: &Arc<Self>, target: CheckoutTarget) {
+        let session = Arc::clone(self);
+        self.write(
+            "checkout",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                stage::unstage_all(&exec, &repo.workdir, &cancel).await?;
+                let outcome = branch::checkout(
+                    &exec,
+                    &repo.workdir,
+                    &target,
+                    branch::Carry::Merging,
+                    &cancel,
+                )
+                .await?;
+                session.report_move(outcome);
+                Ok(())
+            },
+        );
+    }
+
+    /// Passes a refused move on to the UI. A move that happened says
+    /// nothing extra: the refresh that follows every write shows it.
+    fn report_move(&self, outcome: branch::CheckoutOutcome) {
+        if let branch::CheckoutOutcome::Blocked(block) = outcome {
+            tracing::info!(?block, "move refused: uncommitted work in the way");
+            self.sink.event(SessionEvent::MoveBlocked { block });
+        }
     }
 
     /// Creates a branch, optionally switching to it.

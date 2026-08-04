@@ -3,10 +3,15 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// A move with uncommitted changes asks what to do with them instead of
-// silently carrying them along: "leave them here" stashes first (the
-// default — arriving on another branch with unexplained changes is how
-// accidents start), "bring them along" is git's own behaviour.
+// Uncommitted changes come along by default, and this only appears when
+// git refuses to carry them: the file changed on both sides, or an
+// untracked file stands where the target keeps a tracked one. Two ways
+// past it — leave them behind (stashed where they are), or bring them
+// merged into what is there.
+//
+// The question comes before the merge rather than after it because a
+// merged move cannot be taken back: git leaves the markers in the files
+// and no merge to abort (デザイン規約 §未コミット変更がある状態での移動).
 AppDialog {
     id: dirtySwitchDialog
 
@@ -14,13 +19,20 @@ AppDialog {
     property string moveLabel: ""
     // Where the changes are now ("this commit" when detached).
     property string stayLabel: ""
-    /// stashFirst: true = leave them here (stash first), false = bring.
-    signal resolved(bool stashFirst)
+    // What stands in the way: "changes" (tracked files that differ on both
+    // sides) or "untracked" (files git never recorded, which nothing but
+    // stashing clears out of the way).
+    property string blockKind: "changes"
+    readonly property bool mergeable: dirtySwitchDialog.blockKind === "changes"
+    /// carry: "stash" = leave them here, "merge" = bring them merged.
+    signal resolved(string carry)
 
     contentItem: ColumnLayout {
         spacing: Theme.spaceLg
         Label {
-            text: qsTr("You have uncommitted changes")
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            text: qsTr("Your changes cannot come along as they are")
             font.pixelSize: Theme.fontLg
             font.weight: Font.DemiBold
         }
@@ -28,8 +40,13 @@ AppDialog {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             color: Theme.textSecondary
-            text: qsTr("Switching to %1 can either leave them where they "
-                       + "are or take them with you.").arg(dirtySwitchDialog.moveLabel)
+            text: dirtySwitchDialog.mergeable
+                  ? qsTr("Some of the files you changed look different on %1, "
+                         + "so your version cannot simply travel with you.")
+                    .arg(dirtySwitchDialog.moveLabel)
+                  : qsTr("%1 keeps files of its own where you have new ones "
+                         + "here, and git will not write over a file it never "
+                         + "recorded.").arg(dirtySwitchDialog.moveLabel)
         }
         ColumnLayout {
             Layout.fillWidth: true
@@ -41,7 +58,7 @@ AppDialog {
                 text: qsTr("Leave my changes on %1").arg(dirtySwitchDialog.stayLabel)
                 onClicked: {
                     dirtySwitchDialog.close()
-                    dirtySwitchDialog.resolved(true)
+                    dirtySwitchDialog.resolved("stash")
                 }
             }
             Label {
@@ -55,19 +72,23 @@ AppDialog {
             HoverButton {
                 Layout.fillWidth: true
                 implicitHeight: Theme.controlHeight
+                visible: dirtySwitchDialog.mergeable
                 text: qsTr("Bring my changes to %1").arg(dirtySwitchDialog.moveLabel)
                 onClicked: {
                     dirtySwitchDialog.close()
-                    dirtySwitchDialog.resolved(false)
+                    dirtySwitchDialog.resolved("merge")
                 }
             }
             Label {
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
+                visible: dirtySwitchDialog.mergeable
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSm
-                text: qsTr("Carries them over; git refuses the switch if they "
-                           + "would collide with what is there.")
+                text: qsTr("Merges them into the files there; whatever git "
+                           + "cannot combine on its own is left marked up for "
+                           + "you to settle. What you staged comes across "
+                           + "unstaged.")
             }
         }
         HoverButton {

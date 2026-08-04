@@ -55,6 +55,11 @@ pub struct RepoTab {
     last_write_op: String,
     last_write_error: String,
     write_seq: i32,
+    /// The last move git refused for want of a clean tree ("changes" /
+    /// "untracked"), with a counter of its own: the answer is a dialog, and
+    /// a second refusal of the same kind still has to raise it again.
+    move_block: String,
+    move_block_seq: i32,
     /// Auto fetch, reported apart from the shared busy/error surface so an
     /// offline machine does not raise a banner every interval.
     auto_fetch_running: bool,
@@ -94,6 +99,8 @@ impl Default for RepoTab {
             last_write_op: String::new(),
             last_write_error: String::new(),
             write_seq: 0,
+            move_block: String::new(),
+            move_block_seq: 0,
             auto_fetch_running: false,
             auto_fetch_error: String::new(),
             feed: None,
@@ -121,14 +128,14 @@ impl RepoTab {
         }
     }
 
-    /// Moves HEAD, optionally stashing uncommitted work first.
-    fn move_head(&self, target: platitude_core::branch::CheckoutTarget, stash_first: bool) {
-        self.with_session(|s| {
-            if stash_first {
-                s.checkout_stashing(target.clone());
-            } else {
-                s.checkout(target.clone());
-            }
+    /// Moves HEAD, deciding what becomes of uncommitted work: "carry" lets
+    /// git take it along (and report back when it cannot), "stash" leaves
+    /// it where it is, "merge" brings it across merged.
+    fn move_head(&self, target: platitude_core::branch::CheckoutTarget, carry: &str) {
+        self.with_session(|s| match carry {
+            "stash" => s.checkout_stashing(target.clone()),
+            "merge" => s.checkout_merging(target.clone()),
+            _ => s.checkout(target.clone()),
         });
     }
 }
@@ -171,6 +178,8 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!("writeSeq", Member = write_seq, Notify = changed);
+    qproperty!("moveBlock", Member = move_block, Notify = changed);
+    qproperty!("moveBlockSeq", Member = move_block_seq, Notify = changed);
     qproperty!(
         "autoFetchRunning",
         Member = auto_fetch_running,
@@ -294,6 +303,10 @@ impl RepoTab {
                     self.publish_range = range;
                     self.publish_total = total;
                     self.publish_published = published;
+                }
+                TabMsg::MoveBlocked { kind } => {
+                    self.move_block = kind;
+                    self.move_block_seq += 1;
                 }
                 TabMsg::WriteState { op, running, error } => {
                     if running {
@@ -421,28 +434,29 @@ impl RepoTab {
         self.with_session(|s| s.load_head_message());
     }
 
-    // Moving HEAD comes in two flavours throughout: `stash_first` stashes
-    // uncommitted work before the switch ("leave my changes here"), which
-    // has to be one job so a failed stash does not switch anyway.
+    // Every move carries the same `carry` word through: "carry" first, and
+    // then "stash" or "merge" if git says the changes are in the way. The
+    // stash and the merge each have to be one job, so a failed first half
+    // cannot let the switch happen regardless.
 
     #[qslot]
-    fn checkout_branch(&mut self, name: String, stash_first: bool) {
+    fn checkout_branch(&mut self, name: String, carry: String) {
         let target = platitude_core::branch::CheckoutTarget::Branch { name };
-        self.move_head(target, stash_first);
+        self.move_head(target, &carry);
     }
 
     /// Checks out any commit-ish, detaching HEAD.
     #[qslot]
-    fn checkout_detached(&mut self, rev: String, stash_first: bool) {
+    fn checkout_detached(&mut self, rev: String, carry: String) {
         let target = platitude_core::branch::CheckoutTarget::Detach { rev };
-        self.move_head(target, stash_first);
+        self.move_head(target, &carry);
     }
 
     /// Creates a local branch tracking a remote-tracking ref and switches.
     #[qslot]
-    fn checkout_remote(&mut self, remote_ref: String, local: String, stash_first: bool) {
+    fn checkout_remote(&mut self, remote_ref: String, local: String, carry: String) {
         let target = platitude_core::branch::CheckoutTarget::Track { remote_ref, local };
-        self.move_head(target, stash_first);
+        self.move_head(target, &carry);
     }
 
     /// Creates a branch at `start_point` (HEAD when empty).

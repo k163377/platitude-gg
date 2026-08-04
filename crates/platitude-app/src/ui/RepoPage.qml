@@ -75,6 +75,7 @@ Item {
                 page.editPublishKnown = true
             }
             page.absorbHeadMessage()
+            page.absorbMoveBlock()
             page.absorbWriteResult()
         }
     }
@@ -124,39 +125,57 @@ Item {
     // ---- moving between branches and commits ----------------------
     // Terminology is deliberate: git runs `switch` / `restore`, and
     // the UI says "Switch to" (デザイン規約 §用語).
-    readonly property bool treeDirty: workTree.stagedCount > 0
-                                      || workTree.unstagedCount > 0
-                                      || workTree.untrackedCount > 0
+    //
+    // Uncommitted changes are asked about only when they get in the way:
+    // the move goes ahead carrying them, and git refuses — changing
+    // nothing — when it cannot. That refusal comes back as `moveBlock`
+    // and raises the dialog, which re-runs the same move a different way.
     // What the pending move is: kind is "branch" / "remote" / "commit".
     property string moveKind: ""
     property string moveTarget: ""
     property string moveLabel: ""
+    // Set while the last move sits refused, so the panes are left as they
+    // were: nothing moved, so nothing about them is stale.
+    property bool moveRefused: false
 
     function switchTo(kind, target, label) {
         page.moveKind = kind
         page.moveTarget = target
         page.moveLabel = label
-        if (page.treeDirty)
-            dirtySwitchDialog.open()
-        else
-            page.runSwitch(false)
+        page.runSwitch("carry")
     }
-    function runSwitch(stashFirst) {
+    function runSwitch(carry) {
+        page.moveRefused = false
         if (page.moveKind === "branch")
-            repoTab.checkoutBranch(page.moveTarget, stashFirst)
+            repoTab.checkoutBranch(page.moveTarget, carry)
         else if (page.moveKind === "remote")
             repoTab.checkoutRemote(page.moveTarget,
-                                   repoTab.localNameFor(page.moveTarget), stashFirst)
+                                   repoTab.localNameFor(page.moveTarget), carry)
         else if (page.moveKind === "commit")
-            repoTab.checkoutDetached(page.moveTarget, stashFirst)
-        page.moveKind = ""
+            repoTab.checkoutDetached(page.moveTarget, carry)
+    }
+
+    // A refusal arrives on its own counter: the same answer can be needed
+    // twice in a row, and only a fresh one may raise the dialog.
+    property int seenMoveBlockSeq: 0
+    function absorbMoveBlock() {
+        if (repoTab.moveBlockSeq === page.seenMoveBlockSeq)
+            return
+        page.seenMoveBlockSeq = repoTab.moveBlockSeq
+        page.moveRefused = true
+        dirtySwitchDialog.blockKind = repoTab.moveBlock
+        dirtySwitchDialog.open()
+        // A dialog is invisible to a screenshot (popups draw in the
+        // window overlay), so say so where the smoke run can read it.
+        if (AppBackend.autoAct !== "")
+            AppBackend.report("move_blocked kind=" + repoTab.moveBlock)
     }
 
     DirtySwitchDialog {
         id: dirtySwitchDialog
         moveLabel: page.moveLabel
         stayLabel: workTree.detached ? qsTr("this commit") : workTree.branch
-        onResolved: stashFirst => page.runSwitch(stashFirst)
+        onResolved: carry => page.runSwitch(carry)
     }
 
     // ---- push ------------------------------------------------------
@@ -372,11 +391,12 @@ Item {
             page.commitNow()
         } else if (act === "switch") {
             page.switchTo("branch", arg, arg)
-        } else if (act === "switch-leave") {
-            // What the dirty-tree dialog's first button does.
+        } else if (act === "switch-leave" || act === "switch-merge") {
+            // What each button of the in-the-way dialog does, reached
+            // the way the dialog reaches it.
             page.moveKind = "branch"
             page.moveTarget = arg
-            page.runSwitch(true)
+            page.runSwitch(act === "switch-leave" ? "stash" : "merge")
         } else if (act === "switch-remote") {
             page.switchTo("remote", arg, arg)
         } else if (act === "squash") {
@@ -443,7 +463,8 @@ Item {
         // Moving HEAD rewrites the working tree under the diff pane:
         // the file it holds may not even exist where the move landed,
         // so the center goes back to the graph that was moved through.
-        if (repoTab.lastWriteOp === "checkout")
+        // A refused move rewrote nothing, so it keeps its view.
+        if (repoTab.lastWriteOp === "checkout" && !page.moveRefused)
             page.closeDiff()
         page.refreshHeadPublished()
     }

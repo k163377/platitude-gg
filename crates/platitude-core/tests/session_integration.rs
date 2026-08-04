@@ -869,6 +869,76 @@ async fn a_switch_whose_stash_fails_does_not_move_head() {
     session.close();
 }
 
+/// Two branches that disagree about `both.txt`, HEAD on `main`.
+fn colliding_branches() -> TestRepo {
+    let mut repo = TestRepo::init();
+    repo.commit_file("both.txt", "base\n", "root");
+    repo.git(&["switch", "-c", "other"]);
+    repo.commit_file("both.txt", "theirs\n", "other");
+    repo.git(&["switch", "main"]);
+    repo
+}
+
+/// The default move carries uncommitted work along, and asks only when git
+/// will not have it: a refusal is reported as its own event, not as an
+/// error, because nothing went wrong and nothing changed.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_move_that_cannot_carry_changes_asks_instead_of_failing() {
+    let mut repo = colliding_branches();
+    repo.write_file("both.txt", "mine\n");
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
+        name: "other".into(),
+    });
+    assert_eq!(write_result(&sink, "checkout").await, None, "not an error");
+    sink.wait_for("MoveBlocked", |evs| {
+        evs.iter()
+            .any(|e| {
+                matches!(
+                    e,
+                    SessionEvent::MoveBlocked {
+                        block: platitude_core::branch::CheckoutBlock::LocalChanges
+                    }
+                )
+            })
+            .then_some(())
+    })
+    .await;
+
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("both.txt")).unwrap(),
+        "mine\n"
+    );
+    session.close();
+}
+
+/// "Bring my changes": the staged index is emptied first — git will not
+/// merge a move otherwise — and the conflict is left in the file to settle.
+#[tokio::test(flavor = "multi_thread")]
+async fn bringing_changes_along_merges_them_into_the_target() {
+    let mut repo = colliding_branches();
+    repo.write_file("both.txt", "mine\n");
+    repo.git(&["add", "--", "both.txt"]);
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout_merging(platitude_core::branch::CheckoutTarget::Branch {
+        name: "other".into(),
+    });
+    assert_eq!(write_result(&sink, "checkout").await, None);
+
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
+    let both = std::fs::read_to_string(repo.path.join("both.txt")).unwrap();
+    assert!(both.contains("<<<<<<<") && both.contains("mine"), "{both}");
+    assert!(
+        repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
+        "left unmerged for the merge tool"
+    );
+    assert!(repo.git(&["stash", "list"]).is_empty(), "nothing stashed");
+    session.close();
+}
+
 /// Puts the todo-editor helper where the session looks for it — beside the
 /// running executable, which for a test is the test binary's own directory.
 /// Packaging carries the same obligation for the application.

@@ -46,6 +46,12 @@ pub enum TabMsg {
         running: bool,
         error: String,
     },
+    /// A move was refused: uncommitted work stands in the way and nothing
+    /// happened. `kind` says which way out is on offer — "changes" can be
+    /// merged across, "untracked" can only be stashed aside.
+    MoveBlocked {
+        kind: String,
+    },
     /// How much of a range a remote already has (rewrite warning).
     Publish {
         range: String,
@@ -325,6 +331,16 @@ impl SessionSink for BridgeSink {
             SessionEvent::OpFailed { op, error } => self.feeds.tab.push(TabMsg::OpError {
                 message: format!("{op}: {error}"),
             }),
+            SessionEvent::MoveBlocked { block } => {
+                use platitude_core::branch::CheckoutBlock;
+                self.feeds.tab.push(TabMsg::MoveBlocked {
+                    kind: match block {
+                        CheckoutBlock::LocalChanges => "changes",
+                        CheckoutBlock::UntrackedFiles => "untracked",
+                    }
+                    .to_string(),
+                });
+            }
             SessionEvent::AuthorLoaded { config } => {
                 self.feeds.tab.push(TabMsg::Author {
                     complete: config.identity.is_complete(),

@@ -5,7 +5,7 @@
 
 mod support;
 
-use platitude_core::branch::{self, CheckoutTarget};
+use platitude_core::branch::{self, Carry, CheckoutBlock, CheckoutOutcome, CheckoutTarget};
 use platitude_core::commit::{self, CommitOptions};
 use platitude_core::process::GitExecutor;
 use platitude_core::repo::RepoInfo;
@@ -196,6 +196,7 @@ async fn branch_create_switch_rename_delete() {
         &CheckoutTarget::Branch {
             name: "feature".into(),
         },
+        Carry::AsIs,
         &cancel,
     )
     .await
@@ -213,6 +214,7 @@ async fn branch_create_switch_rename_delete() {
         &CheckoutTarget::Branch {
             name: "main".into(),
         },
+        Carry::AsIs,
         &cancel,
     )
     .await
@@ -234,12 +236,156 @@ async fn detached_checkout_is_explicit() {
         &exec,
         &repo.path,
         &CheckoutTarget::Detach { rev: root.clone() },
+        Carry::AsIs,
         &cancel,
     )
     .await
     .expect("detach");
     assert_eq!(repo.git(&["rev-parse", "HEAD"]), root);
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "HEAD");
+}
+
+/// `main` and `other` differ in `both.txt` and agree on `same.txt`;
+/// `theirs.txt` exists only on `other`. HEAD is left on `main`.
+fn two_branches() -> TestRepo {
+    let mut repo = TestRepo::init();
+    repo.write_file("both.txt", "base\n");
+    repo.write_file("same.txt", "shared\n");
+    repo.git(&["add", "--all"]);
+    repo.git(&["commit", "-m", "root"]);
+    repo.git(&["switch", "-c", "other"]);
+    repo.write_file("both.txt", "theirs\n");
+    repo.write_file("theirs.txt", "only over there\n");
+    repo.git(&["add", "--all"]);
+    repo.git(&["commit", "-m", "other"]);
+    repo.git(&["switch", "main"]);
+    repo
+}
+
+async fn move_to_other(repo: &TestRepo, carry: Carry) -> CheckoutOutcome {
+    let (exec, cancel) = env();
+    branch::checkout(
+        &exec,
+        &repo.path,
+        &CheckoutTarget::Branch {
+            name: "other".into(),
+        },
+        carry,
+        &cancel,
+    )
+    .await
+    .expect("switch")
+}
+
+/// The everyday case: work that is not in the way travels with the move,
+/// and nothing has to be asked (デザイン規約 §未コミット変更がある状態での移動).
+#[tokio::test]
+async fn a_move_carries_uncommitted_work_along() {
+    let mut repo = two_branches();
+    repo.write_file("same.txt", "mine\n");
+
+    assert_eq!(
+        move_to_other(&repo, Carry::AsIs).await,
+        CheckoutOutcome::Moved
+    );
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("same.txt")).unwrap(),
+        "mine\n",
+        "the change came along"
+    );
+}
+
+/// Work that *is* in the way stops the move dead — git changes nothing,
+/// which is what makes it safe to ask the question afterwards.
+#[tokio::test]
+async fn a_move_is_refused_when_the_changes_are_in_the_way() {
+    let mut repo = two_branches();
+    repo.write_file("both.txt", "mine\n");
+
+    assert_eq!(
+        move_to_other(&repo, Carry::AsIs).await,
+        CheckoutOutcome::Blocked(CheckoutBlock::LocalChanges)
+    );
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("both.txt")).unwrap(),
+        "mine\n",
+        "the refusal left the working tree alone"
+    );
+}
+
+/// Untracked files are the case a merge cannot rescue: git will not write
+/// over a file it never recorded, so the dialog only offers to stash them.
+#[tokio::test]
+async fn untracked_files_in_the_way_cannot_be_merged_past() {
+    let mut repo = two_branches();
+    repo.write_file("theirs.txt", "mine, uncommitted\n");
+
+    assert_eq!(
+        move_to_other(&repo, Carry::AsIs).await,
+        CheckoutOutcome::Blocked(CheckoutBlock::UntrackedFiles)
+    );
+    assert_eq!(
+        move_to_other(&repo, Carry::Merging).await,
+        CheckoutOutcome::Blocked(CheckoutBlock::UntrackedFiles),
+        "merging is refused the same way"
+    );
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+}
+
+/// "Bring my changes": what fits comes across untouched, what does not is
+/// left marked up. Note that git calls this a success — a conflicted move
+/// exits zero and leaves no merge to abort, so the choice cannot be
+/// revisited afterwards.
+#[tokio::test]
+async fn merging_carries_changes_across_and_marks_what_it_cannot_combine() {
+    let mut repo = two_branches();
+    repo.write_file("both.txt", "mine\n");
+    repo.write_file("same.txt", "mine too\n");
+
+    assert_eq!(
+        move_to_other(&repo, Carry::Merging).await,
+        CheckoutOutcome::Moved
+    );
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
+    let both = std::fs::read_to_string(repo.path.join("both.txt")).unwrap();
+    assert!(both.contains("<<<<<<<"), "left for resolving: {both}");
+    assert!(both.contains("mine"), "with the local side in it: {both}");
+    assert!(
+        repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
+        "and unmerged in the index"
+    );
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("same.txt")).unwrap(),
+        "mine too\n",
+        "the change that fit came along untouched"
+    );
+}
+
+/// Why the session empties the index before merging a move: git refuses
+/// this path while anything at all is staged, colliding or not.
+#[tokio::test]
+async fn merging_a_move_needs_an_empty_index() {
+    let mut repo = two_branches();
+    repo.write_file("both.txt", "mine\n");
+    repo.write_file("same.txt", "staged elsewhere\n");
+    repo.git(&["add", "--", "same.txt"]);
+    let (exec, cancel) = env();
+
+    let err = branch::checkout(
+        &exec,
+        &repo.path,
+        &CheckoutTarget::Branch {
+            name: "other".into(),
+        },
+        Carry::Merging,
+        &cancel,
+    )
+    .await
+    .expect_err("git refuses to merge with a dirty index");
+    assert!(err.to_string().contains("staged changes"), "{err}");
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
 }
 
 #[tokio::test]
@@ -291,6 +437,7 @@ async fn checkout_of_a_remote_branch_creates_a_tracking_branch() {
             remote_ref: "origin/published".into(),
             local: "published".into(),
         },
+        Carry::AsIs,
         &cancel,
     )
     .await
