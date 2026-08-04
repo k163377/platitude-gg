@@ -202,14 +202,32 @@ ApplicationWindow {
         interval: Math.max(AppBackend.autoQuitMs, 1)
         onTriggered: Qt.quit()
     }
+    // Popups (dialogs, menus) render in the window overlay, whose
+    // C++-created items grabToImage refuses ("no QML engine"). This
+    // QML-declared mirror of the overlay is grabbable, which makes
+    // popups photographable on the offscreen platform, where no OS
+    // window exists to shoot from outside. Loaded only while a shot
+    // directory is set, so ordinary runs pay nothing for it.
+    Loader {
+        id: overlayMirror
+        active: AppBackend.shotDir !== ""
+        anchors.fill: parent
+        z: -10000
+        sourceComponent: ShaderEffectSource {
+            sourceItem: root.Overlay.overlay
+            live: true
+        }
+    }
     Timer {
         id: shotTimer
         interval: AppBackend.autoQuitMs > 800 ? AppBackend.autoQuitMs - 800 : 3500
         onTriggered: {
             const path = AppBackend.shotDir + "/app.png"
-            // Popups (the identity dialog) render in the window overlay,
-            // outside this subtree: capturing those needs a window-level
-            // screenshot from outside the process.
+            if (overlayMirror.item)
+                overlayMirror.item.grabToImage(function (res) {
+                    const saved = res.saveToFile(AppBackend.shotDir + "/overlay.png")
+                    console.warn("overlay saved=" + saved)
+                })
             const ok = mainUi.grabToImage(function (res) {
                 const saved = res.saveToFile(path)
                 console.warn("screenshot saved=" + saved + " path=" + path)
