@@ -115,6 +115,10 @@ ColumnLayout {
             ScrollView {
                 anchors.fill: parent
                 anchors.margins: Theme.spaceXs
+                // ScrollView keeps its Flickable private -- reach it
+                // once it exists.
+                Component.onCompleted:
+                    contentItem.boundsBehavior = Flickable.StopAtBounds
                 TextArea {
                     id: bodyArea
                     readOnly: true
@@ -312,6 +316,7 @@ ColumnLayout {
         clip: true
         model: detailsPane.details
         reuseItems: true
+        boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: AutoScrollBar {}
         delegate: FileRowDelegate {
             listWidth: fileList.width

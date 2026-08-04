@@ -128,6 +128,10 @@ ColumnLayout {
             ScrollView {
                 anchors.fill: parent
                 anchors.margins: Theme.spaceXs
+                // ScrollView keeps its Flickable private -- reach it
+                // once it exists.
+                Component.onCompleted:
+                    contentItem.boundsBehavior = Flickable.StopAtBounds
                 TextArea {
                     id: wipBody
                     wrapMode: TextArea.Wrap
@@ -209,6 +213,7 @@ ColumnLayout {
         clip: true
         model: wipPane.worktreeModel
         reuseItems: true
+        boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: AutoScrollBar {}
         // GitKraken grouping: unstaged (incl. untracked) above, staged
         // below.

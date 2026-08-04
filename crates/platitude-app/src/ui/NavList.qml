@@ -29,6 +29,7 @@ ListView {
     clip: true
     model: sectionModel
     reuseItems: true
+    boundsBehavior: Flickable.StopAtBounds
     ScrollBar.vertical: AutoScrollBar {}
     delegate: NavItemDelegate {
         listWidth: navList.width

@@ -95,6 +95,10 @@ AppDialog {
             ScrollView {
                 anchors.fill: parent
                 anchors.margins: Theme.spaceXs
+                // ScrollView keeps its Flickable private -- reach it
+                // once it exists.
+                Component.onCompleted:
+                    contentItem.boundsBehavior = Flickable.StopAtBounds
                 TextArea {
                     id: editBody
                     wrapMode: TextArea.Wrap
