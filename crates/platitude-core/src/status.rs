@@ -53,6 +53,11 @@ pub struct WorkTreeStatus {
     /// Current branch name; `None` when detached.
     pub branch_head: Option<String>,
     pub upstream: Option<String>,
+    /// Whether git could compare against the upstream at all. False when the
+    /// branch names one that has no remote-tracking ref yet (never fetched,
+    /// or the remote branch is gone): `ahead` / `behind` then say nothing
+    /// rather than zero, and the branch still has somewhere to be published.
+    pub upstream_tracked: bool,
     pub ahead: i32,
     pub behind: i32,
     pub items: Vec<StatusItem>,
@@ -216,6 +221,7 @@ fn parse_header(header: &str, status: &mut WorkTreeStatus) {
         }
         "branch.upstream" => status.upstream = Some(value.trim().to_string()),
         "branch.ab" => {
+            status.upstream_tracked = true;
             for part in value.split_whitespace() {
                 if let Some(n) = part.strip_prefix('+') {
                     status.ahead = n.parse().unwrap_or(0);
@@ -291,6 +297,24 @@ mod tests {
             "un staged with spaces.txt"
         );
         assert!(!s.has_conflicts());
+        assert!(s.upstream_tracked);
+    }
+
+    /// A branch can name an upstream that has no remote-tracking ref: git
+    /// then leaves out `branch.ab` entirely. Zero ahead and zero behind
+    /// would read as "the remote already has this", which is the opposite
+    /// of the truth — nothing has ever been sent there.
+    #[test]
+    fn upstream_without_a_tracking_ref_reports_no_counts() {
+        let bytes = z(&[
+            &format!("# branch.oid {SHA}"),
+            "# branch.head main",
+            "# branch.upstream origin/main",
+        ]);
+        let s = parse_status(&bytes).unwrap();
+        assert_eq!(s.upstream.as_deref(), Some("origin/main"));
+        assert!(!s.upstream_tracked);
+        assert_eq!((s.ahead, s.behind), (0, 0));
     }
 
     #[test]

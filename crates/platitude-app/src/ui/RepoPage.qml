@@ -164,11 +164,32 @@ Item {
     readonly property string pushTargetLabel:
         workTree.upstream !== "" ? workTree.upstream
                                  : repoTab.defaultRemote + "/" + workTree.branch
-    readonly property bool canPush: repoTab.state === "open"
-                                    && !workTree.detached
-                                    && workTree.branch !== ""
-                                    && repoTab.remoteCount > 0
+    /// What the branch can do with its remote, worked out before anything
+    /// is sent (デザイン規約 §リモートへ送る):
+    ///
+    /// - `closed`   — nothing here has a remote to go to
+    /// - `publish`  — the branch is not on a remote yet
+    /// - `ready`    — commits of ours to add, and nothing in the way
+    /// - `clean`    — the remote already has them all
+    /// - `behind`   — the remote moved on; we have nothing to add
+    /// - `diverged` — both moved; only an overwrite can land
+    ///
+    /// The counts behind this come from the last fetch, so they prove the
+    /// negative only: a push may still be refused when they say it fits.
+    readonly property string pushState:
+        repoTab.state !== "open" || workTree.detached
+        || workTree.branch === "" || repoTab.remoteCount === 0 ? "closed"
+        : workTree.upstream === "" || !workTree.upstreamTracked ? "publish"
+        : workTree.behind > 0 ? (workTree.ahead > 0 ? "diverged" : "behind")
+        : workTree.ahead > 0 ? "ready" : "clean"
+    readonly property bool canPush: (pushState === "publish"
+                                     || pushState === "ready")
                                     && repoTab.busyCount === 0
+    /// Whether there is anything of ours to put on the remote by force.
+    /// Nothing to add means nothing to overwrite with.
+    readonly property bool canForcePush: (pushState === "ready"
+                                          || pushState === "diverged")
+                                         && repoTab.busyCount === 0
     function pushNow() {
         repoTab.pushCurrent("", "")
     }

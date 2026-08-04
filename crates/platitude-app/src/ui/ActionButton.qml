@@ -8,7 +8,9 @@ import platitude.ui
 HoverToolButton {
     id: actionBtn
     property string kind: ""
-    readonly property color fg: enabled ? Theme.textPrimary : Theme.textMuted
+    /// Colour of both halves while the button is live.
+    property color tone: Theme.textPrimary
+    readonly property color fg: enabled ? tone : Theme.textMuted
     contentItem: RowLayout {
         spacing: Theme.spaceXs
         NavIcon {

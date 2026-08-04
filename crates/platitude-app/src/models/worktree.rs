@@ -18,6 +18,10 @@ pub struct WorkTreeModel {
     head_oid: String,
     detached: bool,
     upstream: String,
+    /// Whether `ahead` / `behind` mean anything: a branch whose upstream has
+    /// no remote-tracking ref yet compares against nothing, and zeroes there
+    /// would read as "already sent".
+    upstream_tracked: bool,
     ahead: i32,
     behind: i32,
     op_text: String,
@@ -42,6 +46,11 @@ impl WorkTreeModel {
     qproperty!("headOid", Member = head_oid, Notify = changed);
     qproperty!("detached", Member = detached, Notify = changed);
     qproperty!("upstream", Member = upstream, Notify = changed);
+    qproperty!(
+        "upstreamTracked",
+        Member = upstream_tracked,
+        Notify = changed
+    );
     qproperty!("ahead", Member = ahead, Notify = changed);
     qproperty!("behind", Member = behind, Notify = changed);
     qproperty!("opText", Member = op_text, Notify = changed);
@@ -93,6 +102,7 @@ impl WorkTreeModel {
             .unwrap_or_default();
         self.detached = status.branch_head.is_none() && status.branch_oid.is_some();
         self.upstream = status.upstream.clone().unwrap_or_default();
+        self.upstream_tracked = status.upstream_tracked;
         self.ahead = status.ahead;
         self.behind = status.behind;
         self.has_conflicts = status.has_conflicts();
