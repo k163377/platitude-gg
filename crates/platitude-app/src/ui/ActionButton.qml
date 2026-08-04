@@ -122,7 +122,7 @@ HoverToolButton {
             id: widest
             visible: false
             text: actionBtn.widestText
-            font: btnLabel.font
+            font.pixelSize: Theme.fontMd
         }
         Label {
             id: btnLabel

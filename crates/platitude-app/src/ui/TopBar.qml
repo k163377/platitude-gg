@@ -315,15 +315,23 @@ Rectangle {
             busy: topBar.curPage !== null
                   && topBar.curPage.pageTab.busyOp === "push"
             still: AppBackend.shotDir !== ""
+            // Three fixed words, no counts: how far ahead the branch is
+            // stands in the sidebar and in this button's own tooltip, and
+            // a number here would make the button a different width for
+            // every value it took (デザイン規約 §リモートへ送る).
+            //
+            // `-f` rather than the word: it is git's own mark for this, it
+            // is the only wording short enough to sit in the same box as
+            // the others, and the frame and the colour are what say this
+            // one is different anyway.
             text: mode === "publish" ? qsTr("Publish")
-                  : mode === "ready"
-                    ? qsTr("Push ↑%1").arg(topBar.curPage.pageWt.ahead)
-                  : mode === "diverged" ? qsTr("Force push")
+                  : mode === "diverged" ? qsTr("Push -f")
                     : qsTr("Push")
-            // Sized for the longest thing it ever says, so the toolbar's
-            // right-hand end sits still while the branch's standing with
-            // its remote changes under it.
-            widestText: qsTr("Force push")
+            // Every shape measured against the longest of them — this one,
+            // by a hair over Publish — so the toolbar's right-hand end sits
+            // still while the branch's standing with its remote changes
+            // under it.
+            widestText: qsTr("Push -f")
             tone: mode === "diverged" ? Theme.warning : Theme.textPrimary
             frameColor: mode === "diverged" ? Theme.warning : "transparent"
             // Diverged, the button stays live for the hold that is its
@@ -342,7 +350,8 @@ Rectangle {
                             ? qsTr("Publish this branch as %1")
                               .arg(topBar.curPage.pushTargetLabel)
                           : mode === "ready"
-                            ? qsTr("Push this branch to %1")
+                            ? qsTr("Push %n commit(s) to %1", "",
+                                   topBar.curPage.pageWt.ahead)
                               .arg(topBar.curPage.pushTargetLabel)
                           : mode === "clean"
                             ? qsTr("%1 already has every commit on this branch")
