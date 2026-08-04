@@ -39,32 +39,32 @@ Rectangle {
             implicitWidth: Theme.spaceXl
             implicitHeight: Theme.spaceXl
             onClicked: appMenu.open()
-            Menu {
+            AppMenu {
                 id: appMenu
                 y: menuButton.height
-                MenuItem {
+                AppMenuItem {
                     text: qsTr("Open repository…")
                     onTriggered: topBar.openRepositoryRequested()
                 }
-                MenuItem {
+                AppMenuItem {
                     text: qsTr("Clone repository…")
                     enabled: false
                 }
-                MenuSeparator {}
-                MenuItem {
+                AppMenuSeparator {}
+                AppMenuItem {
                     text: qsTr("Identity…")
                     onTriggered: topBar.identityEditRequested()
                 }
-                MenuItem {
+                AppMenuItem {
                     text: qsTr("Settings…")
                     onTriggered: topBar.settingsRequested()
                 }
-                MenuItem {
+                AppMenuItem {
                     text: qsTr("About platitude-gg")
                     enabled: false
                 }
-                MenuSeparator {}
-                MenuItem {
+                AppMenuSeparator {}
+                AppMenuItem {
                     text: qsTr("Exit")
                     onTriggered: Qt.quit()
                 }
@@ -302,9 +302,9 @@ Rectangle {
                 acceptedButtons: Qt.RightButton
                 onClicked: pushMenu.popup()
             }
-            Menu {
+            AppMenu {
                 id: pushMenu
-                MenuItem {
+                AppMenuItem {
                     text: qsTr("Force push…")
                     enabled: topBar.curPage !== null && topBar.curPage.canPush
                     onTriggered: topBar.curPage.forcePushNow()

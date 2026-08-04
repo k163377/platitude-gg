@@ -3,6 +3,9 @@ singleton Theme 1.0 Theme.qml
 singleton Metrics 1.0 Metrics.qml
 ActionButton 1.0 ActionButton.qml
 AppDialog 1.0 AppDialog.qml
+AppMenu 1.0 AppMenu.qml
+AppMenuItem 1.0 AppMenuItem.qml
+AppMenuSeparator 1.0 AppMenuSeparator.qml
 AutoScrollBar 1.0 AutoScrollBar.qml
 ChangeIcon 1.0 ChangeIcon.qml
 ClipboardHelper 1.0 ClipboardHelper.qml

@@ -201,16 +201,16 @@ Item {
         page.menuRefRemote = isRemote
         refMenu.popup()
     }
-    Menu {
+    AppMenu {
         id: refMenu
-        MenuItem {
+        AppMenuItem {
             text: qsTr("Switch to %1").arg(page.menuRefName)
             enabled: page.menuRefName !== workTree.branch
             onTriggered: page.switchTo(page.menuRefRemote ? "remote" : "branch",
                                        page.menuRefName, page.menuRefName)
         }
-        MenuSeparator {}
-        MenuItem {
+        AppMenuSeparator {}
+        AppMenuItem {
             text: qsTr("Copy commit hash")
             onTriggered: clipboard.copy(page.menuRefOid)
         }
@@ -236,17 +236,17 @@ Item {
         page.menuFilePath = path
         fileMenu.popup()
     }
-    Menu {
+    AppMenu {
         id: fileMenu
-        MenuItem {
+        AppMenuItem {
             text: qsTr("Stash this file")
             // git will not stash a tree with unresolved conflicts in it.
             enabled: repoTab.busyCount === 0
                      && page.menuFileBucket !== "conflicts"
             onTriggered: repoTab.stashPath(page.menuFilePath, "")
         }
-        MenuSeparator {}
-        MenuItem {
+        AppMenuSeparator {}
+        AppMenuItem {
             text: qsTr("Copy path")
             onTriggered: clipboard.copy(page.menuFilePath)
         }
@@ -260,30 +260,30 @@ Item {
         commitMenu.popup()
     }
 
-    Menu {
+    AppMenu {
         id: commitMenu
-        MenuItem {
+        AppMenuItem {
             text: qsTr("Copy this commit onto the current branch")
             enabled: repoTab.busyCount === 0
             onTriggered: repoTab.cherryPick(page.menuOid)
         }
-        MenuItem {
+        AppMenuItem {
             text: qsTr("Switch to this commit")
             enabled: repoTab.busyCount === 0
             onTriggered: page.switchTo("commit", page.menuOid, page.menuShort)
         }
-        MenuSeparator {}
+        AppMenuSeparator {}
         // The click that opened this menu selected the row too, so the
         // message is already in the details pane's boxes: this just
         // puts the caret there.
-        MenuItem {
+        AppMenuItem {
             text: qsTr("Edit message")
             enabled: repoTab.busyCount === 0 && page.selectedStashRef === ""
                      && page.menuOid === detailsModel.shaHex
                      && page.selectedInHistory
             onTriggered: detailsPane.focusMessage()
         }
-        MenuItem {
+        AppMenuItem {
             text: qsTr("Fold into the commit before it")
             enabled: repoTab.busyCount === 0
             onTriggered: page.squashCommit(page.menuOid)
@@ -294,7 +294,7 @@ Item {
         // of the way until it is asked for; disabling the submenu itself
         // greys the row that opens it (its items are never reachable
         // while it is off).
-        Menu {
+        AppMenu {
             id: resetMenu
             // "here" rather than "to this commit": a Fusion menu is 200px
             // wide whatever is in it, and the arrow of a submenu row eats
@@ -304,21 +304,21 @@ Item {
                    ? qsTr("Move %1 here").arg(workTree.branch)
                    : qsTr("Move the branch here")
             enabled: page.canMoveBranchHere
-            MenuItem {
+            AppMenuItem {
                 text: qsTr("Keep everything, staged")
                 onTriggered: page.moveBranchHere("soft")
             }
-            MenuItem {
+            AppMenuItem {
                 text: qsTr("Keep everything, unstaged")
                 onTriggered: page.moveBranchHere("mixed")
             }
-            MenuItem {
+            AppMenuItem {
                 text: qsTr("Discard everything after it")
                 onTriggered: page.moveBranchHere("hard")
             }
         }
-        MenuSeparator {}
-        MenuItem {
+        AppMenuSeparator {}
+        AppMenuItem {
             text: qsTr("Copy commit hash")
             onTriggered: clipboard.copy(page.menuOid)
         }
