@@ -273,16 +273,10 @@ Item {
             onTriggered: page.switchTo("commit", page.menuOid, page.menuShort)
         }
         AppMenuSeparator {}
-        // The click that opened this menu selected the row too, so the
-        // message is already in the details pane's boxes: this just
-        // puts the caret there.
-        AppMenuItem {
-            text: qsTr("Edit message")
-            enabled: repoTab.busyCount === 0 && page.selectedStashRef === ""
-                     && page.menuOid === detailsModel.shaHex
-                     && page.selectedInHistory
-            onTriggered: detailsPane.focusMessage()
-        }
+        // No entry for editing the message: the click that opens this
+        // menu selects the row, which puts the message in the details
+        // pane's own editable boxes. A second way in would say the same
+        // thing twice, and every row here costs the ones still to come.
         AppMenuItem {
             text: qsTr("Fold into the commit before it")
             enabled: repoTab.busyCount === 0
@@ -296,10 +290,9 @@ Item {
         // while it is off).
         AppMenu {
             id: resetMenu
-            // "here" rather than "to this commit": a Fusion menu is 200px
-            // wide whatever is in it, and the arrow of a submenu row eats
-            // another 26 — the longer wording elides, and what elides
-            // first should be the branch name, not the operation.
+            // "here" rather than "to this commit": the commit it means
+            // is the row this menu was opened on, and the row already
+            // says which one that is.
             title: workTree.branch !== ""
                    ? qsTr("Move %1 here").arg(workTree.branch)
                    : qsTr("Move the branch here")

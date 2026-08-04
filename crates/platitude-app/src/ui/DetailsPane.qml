@@ -86,11 +86,6 @@ ColumnLayout {
         detailsPane.messageSubmitted(detailsPane.details.shaHex,
                                      subjectArea.text, bodyArea.text)
     }
-    /// Put the caret in the summary box (the commit menu's entry).
-    function focusMessage() {
-        subjectArea.forceActiveFocus()
-        subjectArea.cursorPosition = subjectArea.length
-    }
     /// Smoke hook: type into the boxes the way a keystroke would —
     /// including not at all when they are read-only.
     function setMessageText(subject, body) {
