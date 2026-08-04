@@ -33,6 +33,5 @@ RepoPage 1.0 RepoPage.qml
 SettingsDialog 1.0 SettingsDialog.qml
 SidebarPane 1.0 SidebarPane.qml
 SlimField 1.0 SlimField.qml
-StashDialog 1.0 StashDialog.qml
 TopBar 1.0 TopBar.qml
 WipPane 1.0 WipPane.qml

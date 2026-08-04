@@ -39,6 +39,7 @@ Rectangle {
     // start and hears back only when there is a name to act on.
     /// Puts the chip column of one row into a branch-name box.
     function startNaming(oidHex) {
+        graphList.askOid = ""
         graphList.namingText = ""
         graphList.namingOid = oidHex
     }
@@ -46,6 +47,26 @@ Rectangle {
         graphList.namingOid = ""
         graphList.namingText = ""
     }
+
+    /// Puts the chip column of one row into a yes-strip: the question
+    /// stands where its subject is, clicking the strip is the answer,
+    /// and Escape or any other click walks away (デザイン規約
+    /// §可否・警告の出し場所).
+    function startAsking(oidHex, label, detail, danger) {
+        graphList.namingOid = ""
+        graphList.namingText = ""
+        graphList.askOid = oidHex
+        graphList.askLabel = label
+        graphList.askDetail = detail
+        graphList.askDanger = danger
+    }
+    function stopAsking() {
+        graphList.askOid = ""
+    }
+    /// The strip was clicked; the page runs what it guarded.
+    signal rowAskConfirmed(string oidHex)
+    /// The strip was walked away from.
+    signal rowAskCancelled()
 
     /// The list itself — for automation hooks (bench / scroll-to /
     /// screenshot flows) only; app code goes through the functions.
@@ -178,6 +199,12 @@ Rectangle {
         // recycled the moment its row scrolls off.
         property string namingOid: ""
         property string namingText: ""
+        // Which row's chip column is a yes-strip, and its words — held
+        // here for the same recycling reason.
+        property string askOid: ""
+        property string askLabel: ""
+        property string askDetail: ""
+        property bool askDanger: false
         signal rowSelected(string oidHex)
         signal rowMenuRequested(string oidHex)
         signal rowSwitchRequested(string oidHex, string record)
@@ -185,6 +212,8 @@ Rectangle {
         signal chipCollapseRequested()
         signal namingSubmitted(string oidHex, string name)
         signal namingCancelled()
+        signal askConfirmed(string oidHex)
+        signal askCancelled()
         onRowMenuRequested: oidHex => graphArea.commitMenuRequested(oidHex)
         onRowSelected: oidHex => graphArea.rowActivated(oidHex)
         onRowSwitchRequested: (oidHex, record) =>
@@ -200,6 +229,8 @@ Rectangle {
                 graphArea.createBranchRequested(oidHex, name)
         }
         onNamingCancelled: graphArea.stopNaming()
+        onAskConfirmed: oidHex => graphArea.rowAskConfirmed(oidHex)
+        onAskCancelled: graphArea.rowAskCancelled()
         delegate: GraphRowDelegate {}
         // Window cut: lanes keep running through the footer and the
         // message sits where subjects go.

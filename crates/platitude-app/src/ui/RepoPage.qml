@@ -188,7 +188,8 @@ Item {
     // moving the local one onto it, which is the one thing here that can
     // leave work with nothing pointing at it.
     function askMoveBranchOnto(local, remoteRef) {
-        page.confirmRequested(
+        page.startRowAsk(
+            remotesModel.oidOfName(remoteRef),
             qsTr("Move %1 here?").arg(local),
             qsTr("%1 stands somewhere else. Moving it here and landing on it "
                  + "leaves whatever only %1 had with nothing pointing at it: "
@@ -196,12 +197,34 @@ Item {
                  + "cleans up, but nothing in this window reaches them any "
                  + "more.\n\nWhat you have not committed comes along, as it "
                  + "would on any move.").arg(local),
+            false,
             qsTr("Move %1 here").arg(local),
             function () { page.switchTo("force", local, local, remoteRef) })
         // Say it in words too: a smoke run asserts on the report line
-        // without having to look at the overlay shot.
+        // without having to look at the shot.
         if (AppBackend.autoAct !== "")
             AppBackend.report("move_branch_asked local=" + local)
+    }
+
+    // ---- inline row questions --------------------------------------
+    // One question at a time, asked on the row it is about: the chip
+    // column turns into a strip whose click is the answer (デザイン規約
+    // §可否・警告の出し場所). The run waits here; Escape, another ask or
+    // a click anywhere else walks away from it. Only when the subject's
+    // row is outside the loaded window — where the near-the-operation
+    // place does not exist — does the window dialog stand in.
+    property var rowAskRun: null
+    function startRowAsk(oidHex, label, detail, danger, acceptText, run) {
+        if (oidHex !== "" && graphModel.rowOf(oidHex) >= 0) {
+            page.rowAskRun = run
+            graphPane.startAsking(oidHex, label, detail, danger)
+        } else {
+            page.confirmRequested(label, detail, acceptText, run)
+        }
+    }
+    function stopRowAsk() {
+        page.rowAskRun = null
+        graphPane.stopAsking()
     }
 
     // A refusal arrives on its own counter: the same answer can be needed
@@ -325,18 +348,6 @@ Item {
             text: qsTr("Copy commit hash")
             onTriggered: clipboard.copy(page.menuRefOid)
         }
-    }
-
-    // ---- putting changes away --------------------------------------
-    // A stash takes nothing away — every change is in the entry, and the
-    // sidebar shows it — so neither the whole tree nor one file is asked
-    // about beyond the dialog that chooses what goes.
-    StashDialog {
-        id: stashDialog
-        partiallyStaged: workTree.partiallyStagedCount
-        busy: repoTab.busyCount > 0
-        onSubmitted: (message, untracked, keepIndex, stagedOnly) =>
-            repoTab.pushStash(message, untracked, keepIndex, stagedOnly)
     }
 
     // ---- context menu on a working-tree file row --------------------
@@ -534,8 +545,11 @@ Item {
             repoTab.resetTo(oid, mode)
             return
         }
-        page.confirmRequested(
-            qsTr("Discard everything after %1?").arg(page.menuShort),
+        // "after it": the strip stands on the very commit the branch
+        // would go back to, so the row names itself.
+        page.startRowAsk(
+            oid,
+            qsTr("Discard everything after it?"),
             qsTr("%1 goes back to this commit, and the working tree with "
                  + "it: changes to tracked files are thrown away whether "
                  + "they are staged or not, and nothing here keeps a copy "
@@ -543,6 +557,7 @@ Item {
                  + "commits after this one stay in the repository until "
                  + "git next cleans up, but nothing in this window points "
                  + "at them any more.").arg(workTree.branch),
+            true,
             qsTr("Discard changes"),
             function () { repoTab.resetTo(oid, "hard") })
     }
@@ -692,14 +707,16 @@ Item {
             page.amendToggled(true)
             resetAuthorTimer.start()
         } else if (act === "stash" || act === "stash-staged") {
-            // Through the dialog, like the button: it is what decides
-            // which options the stash is made with. "stash-staged"
-            // clicks the staged-only box the way a person would, so the
-            // run proves the ticks it clears really clear.
-            stashDialog.open()
+            // Through the pane's card, like the button: it is what
+            // decides which options the stash is made with.
+            // "stash-staged" clicks the staged-only box the way a
+            // person would, so the run proves the ticks it clears
+            // really clear.
+            page.showWip()
+            wipPane.openStashPanel()
             if (act === "stash-staged")
-                stashDialog.clickStagedOnly()
-            stashDialog.apply()
+                wipPane.stashClickStagedOnly()
+            wipPane.stashApply()
         } else if (act === "stash-file") {
             page.openFileMenu("unstaged", arg)
             repoTab.stashPath(arg, "")
@@ -707,9 +724,10 @@ Item {
             // Opened and left standing, for a look at it. With the
             // argument "staged-only" the staged-only box is clicked
             // first, so the shot shows what that click clears.
-            stashDialog.open()
+            page.showWip()
+            wipPane.openStashPanel()
             if (arg === "staged-only")
-                stashDialog.clickStagedOnly()
+                wipPane.stashClickStagedOnly()
         } else if (act === "file-menu") {
             page.openFileMenu("unstaged", arg)
         } else if (act === "amend-author") {
@@ -1050,10 +1068,10 @@ Item {
         // answers any landing this page still owed.
         page.rewordRow = -1
         page.pendingHeadSelect = false
-        // Clicking anywhere is the way out of the name box: it is an
-        // offer, not work in progress, and the chip column itself stays
-        // the box's own while it is up.
+        // Clicking anywhere is the way out of the name box and of a
+        // standing row question: both are offers, not work in progress.
         graphPane.stopNaming()
+        page.stopRowAsk()
         // A click moves the highlight itself, but one held back by the
         // unsaved-message question does not: the question put it back
         // where it was, so the answer has to move it again.
@@ -1344,6 +1362,13 @@ Item {
                     onCreateBranchRequested: (oidHex, name) =>
                         repoTab.createBranch(name, oidHex, true)
                     onOpenRepositoryRequested: page.openRepositoryPicker()
+                    onRowAskConfirmed: oidHex => {
+                        const run = page.rowAskRun
+                        page.stopRowAsk()
+                        if (run)
+                            run()
+                    }
+                    onRowAskCancelled: page.stopRowAsk()
                 }
 
                 DiffPane {
@@ -1381,7 +1406,8 @@ Item {
                     onCommitClicked: page.commitNow()
                     onFileActivated: (bucket, path, origPath) =>
                         page.toggleDiff(bucket, path, origPath)
-                    onStashRequested: stashDialog.open()
+                    onStashSubmitted: (message, untracked, keepIndex, stagedOnly) =>
+                        repoTab.pushStash(message, untracked, keepIndex, stagedOnly)
                     onFileMenuRequested: (bucket, path) =>
                         page.openFileMenu(bucket, path)
                 }

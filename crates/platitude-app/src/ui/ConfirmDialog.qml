@@ -3,10 +3,13 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// One dialog for every "this cannot be taken back" question — the menu
-// route to a force push, a hard reset, moving a branch onto a remote
-// one. The caller supplies the wording and what to run on yes, so the
-// phrasing stays next to the operation it describes.
+// The window-level "this cannot be taken back" question, kept for the
+// two places an inline answer cannot reach: the menu route to a force
+// push (the hold's no-hold alternative), and a row question whose row
+// is outside the loaded graph window. Everything else asks where it
+// acts (デザイン規約 §可否・警告の出し場所). The caller supplies the
+// wording and what to run on yes, so the phrasing stays next to the
+// operation it describes.
 //
 // Confirmation is reserved for the irreversible. Everyday operations
 // (stage, commit, switch) ask nothing — a prompt on each of those
