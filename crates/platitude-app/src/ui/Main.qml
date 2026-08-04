@@ -44,27 +44,37 @@ ApplicationWindow {
 
     // QML never drops a text input's focus on its own: once the sidebar
     // filter or the commit editor was clicked, its caret kept blinking
-    // until some other editor took focus. This passive watcher (it grabs
-    // nothing, so every control underneath keeps working) hands focus
-    // back to the window whenever a press lands outside the focused
-    // editor. Judged on press, not on the tap: a tap is called off when
-    // any item accepts the click, and most of the window is clickable.
-    // Modal dialogs sit above the content item, so their own fields are
-    // unaffected.
-    TapHandler {
-        acceptedButtons: Qt.AllButtons
-        onPressedChanged: {
-            if (!pressed)
-                return
-            const item = root.activeFocusItem
-            // Only text editors hold a caret worth releasing; list views
-            // and buttons manage their own focus.
-            if (!item || !("cursorPosition" in item))
-                return
-            const local = item.mapFromItem(null, point.scenePressPosition)
-            if (local.x < 0 || local.y < 0
-                    || local.x >= item.width || local.y >= item.height)
-                root.contentItem.forceActiveFocus()
+    // until some other editor took focus. This watcher hands focus back
+    // to the window whenever a press lands outside the focused editor.
+    //
+    // It must sit *above* every pane: press delivery visits items front
+    // to back and stops at the first one that accepts, so a handler on
+    // the window's own content item never hears clicks that land on a
+    // row's MouseArea (measured: focus survived a graph click). And it
+    // must be a PointHandler — a fronted TapHandler swallowed the press
+    // and the control underneath never received it (measured: the
+    // filter field stopped taking focus at all). PointHandler is the
+    // one handler specified to take only passive grabs and accept
+    // nothing, so everything below keeps working. Modal dialogs live in
+    // the window overlay above this item and are unaffected.
+    Item {
+        anchors.fill: parent
+        z: 10000
+        PointHandler {
+            acceptedButtons: Qt.AllButtons
+            onActiveChanged: {
+                if (!active)
+                    return
+                const item = root.activeFocusItem
+                // Only text editors hold a caret worth releasing; list
+                // views and buttons manage their own focus.
+                if (!item || item.cursorPosition === undefined)
+                    return
+                const local = item.mapFromItem(null, point.scenePressPosition)
+                if (local.x < 0 || local.y < 0
+                        || local.x >= item.width || local.y >= item.height)
+                    root.contentItem.forceActiveFocus()
+            }
         }
     }
 
