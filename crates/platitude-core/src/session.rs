@@ -1113,9 +1113,7 @@ impl RepoSession {
             "checkout",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let outcome =
-                    branch::checkout(&exec, &repo.workdir, &target, branch::Carry::AsIs, &cancel)
-                        .await?;
+                let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
                 session.report_move(outcome);
                 Ok(())
             },
@@ -1142,45 +1140,72 @@ impl RepoSession {
                     staged_only: false,
                 };
                 stash::push(&exec, &repo.workdir, "", options, &[], &cancel).await?;
-                let outcome =
-                    branch::checkout(&exec, &repo.workdir, &target, branch::Carry::AsIs, &cancel)
-                        .await?;
+                let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
                 session.report_move(outcome);
                 Ok(())
             },
         );
     }
 
-    /// Merges the working tree into the target while moving — "bring my
-    /// changes and let me sort out the overlap".
+    /// Carries the working tree across the move — "bring my changes and
+    /// let me sort out the overlap".
     ///
-    /// The index is emptied first because git demands it here: with
-    /// anything staged it refuses this path outright, colliding file or
-    /// not. Nothing is lost by that — the staged content is the content in
-    /// the working tree, and what the merge produces would land unstaged
-    /// anyway — but the split between staged and unstaged does not survive.
+    /// Stash, move, put back: the restore is a merge, so the changes land
+    /// on top of what the target has and only the parts git cannot combine
+    /// need settling. Going through the stash rather than `switch --merge`
+    /// buys two things that flag cannot give — **the staged/unstaged split
+    /// survives** (`--index`), and a conflict **keeps the stash entry**, so
+    /// the work still exists somewhere other than a marked-up file.
     ///
-    /// A conflicted result is still a *successful* move: git leaves the
-    /// markers in place, exits zero, and the conflict shows up in the next
-    /// status refresh. There is no merge to abort afterwards, which is
-    /// exactly why the choice is offered before this runs and not after.
+    /// A conflicting restore exits non-zero while having done exactly what
+    /// was asked, so the exit code alone cannot judge it: the working tree
+    /// decides. Unmerged paths mean the merge landed and is waiting to be
+    /// settled; a clean tree means the restore did nothing, and then the
+    /// split has to be given up on (see below) or git's message goes
+    /// through.
     pub fn checkout_merging(self: &Arc<Self>, target: CheckoutTarget) {
         let session = Arc::clone(self);
         self.write(
             "checkout",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                stage::unstage_all(&exec, &repo.workdir, &cancel).await?;
-                let outcome = branch::checkout(
-                    &exec,
-                    &repo.workdir,
-                    &target,
-                    branch::Carry::Merging,
-                    &cancel,
-                )
-                .await?;
-                session.report_move(outcome);
-                Ok(())
+                const TOP: &str = "stash@{0}";
+                let options = stash::PushOptions {
+                    include_untracked: true,
+                    keep_index: false,
+                    staged_only: false,
+                };
+                stash::push(&exec, &repo.workdir, "", options, &[], &cancel).await?;
+                let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
+                if let branch::CheckoutOutcome::Blocked(_) = outcome {
+                    // Nothing should stand in the way of a tree that was
+                    // just emptied; put the work back rather than leave it
+                    // stashed behind a refusal.
+                    stash::pop(&exec, &repo.workdir, TOP, &cancel).await?;
+                    session.report_move(outcome);
+                    return Ok(());
+                }
+
+                let kept_index = stash::pop_with_index(&exec, &repo.workdir, TOP, &cancel).await;
+                if kept_index.is_ok() || conflicts_now(&exec, &repo, &cancel).await? {
+                    return Ok(());
+                }
+                // git refuses `--index` outright when the staged half is
+                // what collides ("conflicts in index. Try without
+                // --index.") and leaves everything where it was. Its own
+                // advice is the fallback: restore without the index, which
+                // brings the changes across merged and gives up only on
+                // the staged/unstaged split.
+                match stash::pop(&exec, &repo.workdir, TOP, &cancel).await {
+                    Ok(()) => Ok(()),
+                    Err(error) => {
+                        if conflicts_now(&exec, &repo, &cancel).await? {
+                            Ok(())
+                        } else {
+                            Err(error)
+                        }
+                    }
+                }
             },
         );
     }
@@ -1983,6 +2008,21 @@ struct LogTotals {
     /// Commits the walk emitted — what `--max-count` limits, so this is
     /// what decides `truncated`.
     walked: u32,
+}
+
+/// Whether the working tree has unmerged paths right now.
+///
+/// What a restore leaves behind is the only honest answer to "did that
+/// non-zero exit do anything": `git stash pop` reports a conflict and a
+/// refusal the same way.
+async fn conflicts_now(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    Ok(status::load(executor, &repo.workdir, cancel)
+        .await?
+        .has_conflicts())
 }
 
 /// One sifted stream entry (stash rows carry their reflog selector).

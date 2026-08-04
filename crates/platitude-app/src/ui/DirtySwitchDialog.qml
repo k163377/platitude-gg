@@ -6,12 +6,9 @@ import platitude.ui
 // Uncommitted changes come along by default, and this only appears when
 // git refuses to carry them: the file changed on both sides, or an
 // untracked file stands where the target keeps a tracked one. Two ways
-// past it — leave them behind (stashed where they are), or bring them
-// merged into what is there.
-//
-// The question comes before the merge rather than after it because a
-// merged move cannot be taken back: git leaves the markers in the files
-// and no merge to abort (デザイン規約 §未コミット変更がある状態での移動).
+// past it — leave them behind, or take them across merged. Both go
+// through a stash, and differ only in whether it is restored on the
+// other side (デザイン規約 §未コミット変更がある状態での移動).
 AppDialog {
     id: dirtySwitchDialog
 
@@ -85,10 +82,10 @@ AppDialog {
                 visible: dirtySwitchDialog.mergeable
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSm
-                text: qsTr("Merges them into the files there; whatever git "
-                           + "cannot combine on its own is left marked up for "
-                           + "you to settle. What you staged comes across "
-                           + "unstaged.")
+                text: qsTr("Merges them into the files there, staged and "
+                           + "unstaged as they are now. Whatever git cannot "
+                           + "combine on its own is left marked up for you to "
+                           + "settle, and waits in STASHES as well.")
             }
         }
         HoverButton {

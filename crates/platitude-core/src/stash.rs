@@ -136,6 +136,26 @@ pub async fn pop(
     run_selector(executor, workdir, "pop", selector, cancel).await
 }
 
+/// `git stash pop --index`: restores the entry *and* the split between
+/// what was staged in it and what was not.
+///
+/// Non-zero exit does not mean nothing happened. When the restore
+/// conflicts git gives up on the index part ("Index was not unstashed"),
+/// leaves the markers in the files and **keeps the entry** — which is what
+/// leaves a way back. Callers decide what that is worth by looking at the
+/// working tree afterwards, not at the exit code.
+pub async fn pop_with_index(
+    executor: &GitExecutor,
+    workdir: &Path,
+    selector: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["stash", "pop", "--index", selector]);
+    executor.run(cmd, cancel).await.map(|_| ())
+}
+
 /// `git stash apply <selector>`: restores and keeps the entry.
 pub async fn apply(
     executor: &GitExecutor,

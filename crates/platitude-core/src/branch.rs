@@ -24,42 +24,26 @@ pub enum CheckoutTarget {
     Track { remote_ref: String, local: String },
 }
 
-/// How uncommitted work travels with a move.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Carry {
-    /// Plain `git switch`: git takes the changes along wherever they do
-    /// not stand in the way, and refuses the whole move — touching
-    /// nothing — wherever they do.
-    AsIs,
-    /// `git switch --merge`: three-way merges the changes into the target,
-    /// leaving conflict markers wherever git cannot decide by itself.
-    ///
-    /// Only reached once [`Carry::AsIs`] has been refused, and only with an
-    /// empty index: git aborts this path outright while anything is staged
-    /// (`fatal: cannot continue with staged changes`), whether or not that
-    /// file is one of the colliding ones — so unstage first (see
-    /// [`crate::stage::unstage_all`]).
-    Merging,
-}
-
 /// Why git refused a move: uncommitted work stands in the way. git aborts
 /// before touching anything, so the repository is exactly as it was.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheckoutBlock {
-    /// Tracked files are modified here and different there. Nothing has
-    /// been merged yet, so [`Carry::Merging`] can still carry them across.
+    /// Tracked files are modified here and different there. Stashing them
+    /// over the move and restoring them on the other side still gets them
+    /// across (`RepoSession::checkout_merging`).
     LocalChanges,
-    /// Untracked files sit where the target keeps tracked ones. Merging
-    /// does not help — git refuses to overwrite a file it never recorded —
-    /// so the only way through is to stash them out of the way.
+    /// Untracked files sit where the target keeps tracked ones. Nothing
+    /// carries those across — git refuses to write over a file it never
+    /// recorded, and a stash cannot be restored onto one either — so the
+    /// only way through is to leave them behind.
     UntrackedFiles,
 }
 
 /// What a move did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheckoutOutcome {
-    /// HEAD moved. Uncommitted work either came along or, with
-    /// [`Carry::Merging`], came along merged — conflicts included.
+    /// HEAD moved, carrying whatever uncommitted work did not stand in
+    /// the way.
     Moved,
     /// git refused; nothing changed.
     Blocked(CheckoutBlock),
@@ -78,14 +62,12 @@ impl CheckoutBlock {
     ///
     /// Anything unrecognised is `None` and travels on as an ordinary
     /// error: a reworded message costs the follow-up dialog, never
-    /// correctness. Note that only the plain path yields
-    /// [`CheckoutBlock::LocalChanges`] — the merging one says "by merge",
-    /// and offering a merge that just failed would be a loop.
+    /// correctness.
     fn from_message(text: &str) -> Option<Self> {
         let text = text.to_ascii_lowercase();
         // "The following untracked working tree files would be overwritten
-        // by checkout:", and from the merging path the singular "Untracked
-        // working tree file 'x' would be overwritten by merge."
+        // by checkout:", and the singular "Untracked working tree file 'x'
+        // would be overwritten by merge." a restore runs into.
         if text.contains("untracked working tree file")
             || text.contains("would lose untracked files")
         {
@@ -100,19 +82,22 @@ impl CheckoutBlock {
     }
 }
 
-/// Moves HEAD to `target`, taking uncommitted work along as `carry` says.
+/// Moves HEAD to `target`, taking uncommitted work along where git will
+/// have it.
+///
+/// Deliberately never `--merge`: that flag would three-way merge the
+/// changes in, but it reports a conflicted result as a *success* with no
+/// merge left to abort, and refuses to run at all while anything is
+/// staged. Carrying changes over a collision is done by stashing across
+/// the move instead (`RepoSession::checkout_merging`), which keeps both
+/// the staged/unstaged split and a way back.
 pub async fn checkout(
     executor: &GitExecutor,
     workdir: &Path,
     target: &CheckoutTarget,
-    carry: Carry,
     cancel: &CancellationToken,
 ) -> Result<CheckoutOutcome, GitError> {
     let cmd = GitCommand::new().cwd(workdir).arg("switch");
-    let cmd = match carry {
-        Carry::AsIs => cmd,
-        Carry::Merging => cmd.arg("--merge"),
-    };
     let cmd = match target {
         CheckoutTarget::Branch { name } => cmd.args(["--", name.as_str()]),
         CheckoutTarget::Detach { rev } => cmd.args(["--detach", "--", rev.as_str()]),
