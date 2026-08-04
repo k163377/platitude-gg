@@ -23,19 +23,56 @@ ApplicationWindow {
     font.family: Theme.uiFamily
     font.pixelSize: Theme.fontMd
 
+    // Every control asks its palette for a role (`text`, `buttonText`,
+    // …) and is handed the group that matches its own state, so this one
+    // block is what tells menus, buttons and check boxes alike how being
+    // switched off looks.
+    //
+    // A color written here without a group lands in *all three* groups —
+    // and, being a binding, it settles after the groups' own bindings and
+    // overwrites them (measured: with `windowText` set both group-less
+    // and under `disabled`, the disabled group kept the group-less
+    // color). So a role either never changes and is written once, or it
+    // changes and is written out in every group. Never both.
     palette {
+        // Same whatever state a control is in.
         window: Theme.bgBase
-        windowText: Theme.textPrimary
         base: Theme.bgBase
-        text: Theme.textPrimary
         button: Theme.bgElevated
-        buttonText: Theme.textPrimary
-        highlight: Theme.accent
-        highlightedText: Theme.textOnAccent
         placeholderText: Theme.textMuted
         mid: Theme.borderDefault
         dark: Theme.bgBase
         light: Theme.borderDefault
+
+        active {
+            windowText: Theme.textPrimary
+            text: Theme.textPrimary
+            buttonText: Theme.textPrimary
+            brightText: Theme.textOnAccent
+            highlight: Theme.accent
+            highlightedText: Theme.textOnAccent
+        }
+        // Losing the window's focus is not a state worth showing: the
+        // same colors as active.
+        inactive {
+            windowText: Theme.textPrimary
+            text: Theme.textPrimary
+            buttonText: Theme.textPrimary
+            brightText: Theme.textOnAccent
+            highlight: Theme.accent
+            highlightedText: Theme.textOnAccent
+        }
+        // What cannot be pressed says so: labels drop to the muted text,
+        // and the accent face of a highlighted button (Commit, Save)
+        // drops with them so it stops reading as the one thing to press.
+        disabled {
+            windowText: Theme.textMuted
+            text: Theme.textMuted
+            buttonText: Theme.textMuted
+            brightText: Theme.textMuted
+            highlight: Theme.accentMuted
+            highlightedText: Theme.textMuted
+        }
     }
 
     // Window focus is a refresh trigger (refs/status/stash only).
