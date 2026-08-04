@@ -42,6 +42,19 @@ Item {
     readonly property var labelRecords: labels === "" ? [] : labels.split(String.fromCharCode(31))
     readonly property var branchRecords: labelRecords.filter(r => r[0] !== "T")
     readonly property var tagRecords: labelRecords.filter(r => r[0] === "T")
+    // Whether this row is somewhere HEAD could stand: the working-tree
+    // row is not a commit, and a stash sits on no branch's history.
+    readonly property bool movable: !rowItem.isWip && rowItem.stash_ref === ""
+    // Where a double-click on this row goes: the branch chip's own first
+    // record, so what is on screen is what is moved to. Empty means the
+    // row shows no branch, which is the offer to put one there.
+    readonly property string primaryRecord:
+        rowItem.movable && rowItem.branchRecords.length > 0 ? rowItem.branchRecords[0] : ""
+    // The branch chip itself — what a stacked one is unstacked under.
+    readonly property alias branchChipItem: branchChip
+    // This row's chip column is a branch-name box right now.
+    readonly property bool naming:
+        rowItem.ListView.view ? rowItem.ListView.view.namingOid === rowItem.oid_hex : false
 
     Rectangle {
         anchors.fill: parent
@@ -67,7 +80,8 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // Branch / tag chips, right-aligned against the graph.
+        // Branch / tag chips, right-aligned against the graph — or, on a
+        // row with no branch to move to, the box that names one here.
         Item {
             Layout.preferredWidth: rowItem.labelsW
             Layout.fillHeight: true
@@ -76,7 +90,9 @@ Item {
                 anchors.rightMargin: Theme.spaceXs
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Theme.spaceXs
+                visible: !rowItem.naming
                 RefChip {
+                    id: branchChip
                     records: rowItem.branchRecords
                     tagStyle: false
                     maxWidth: rowItem.tagRecords.length > 0
@@ -90,6 +106,27 @@ Item {
                               ? (rowItem.labelsW - Theme.spaceSm) / 2
                               : rowItem.labelsW - Theme.spaceSm
                 }
+            }
+            // A row with nothing to move to answers the double-click with
+            // the one thing that would give it something: a name. The
+            // question is asked where the chips would be, not over the
+            // window (デザイン規約: 表示の切り替えで足りるならダイアログを出さない).
+            SlimField {
+                id: nameField
+                visible: rowItem.naming
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.spaceXs
+                anchors.verticalCenter: parent.verticalCenter
+                width: rowItem.labelsW - 2 * Theme.spaceXs
+                font.pixelSize: Theme.fontSm
+                placeholderText: qsTr("Create branch here?")
+                onAccepted: rowItem.ListView.view.namingSubmitted(
+                    rowItem.oid_hex, nameField.text.trim())
+                // Held on the view, not here: this delegate is recycled
+                // the moment the row scrolls off, and half a name is
+                // still worth not losing.
+                onTextEdited: rowItem.ListView.view.namingText = nameField.text
+                Keys.onEscapePressed: rowItem.ListView.view.namingCancelled()
             }
             MouseArea {
                 id: labelHover
@@ -262,10 +299,59 @@ Item {
         }
     }
 
+    // The box carries on from wherever the last delegate to hold it left
+    // off — including a fresh one, when the row is scrolled back into
+    // view mid-name.
+    onNamingChanged: rowItem.takeNamingFocus()
+    Component.onCompleted: rowItem.takeNamingFocus()
+    function takeNamingFocus() {
+        if (!rowItem.naming || !rowItem.ListView.view)
+            return
+        nameField.text = rowItem.ListView.view.namingText
+        nameField.forceActiveFocus()
+    }
+
+    // Which stacked chip the pointer is over, if it is over one that has
+    // something to unstack. Worked out from the row's own coordinates
+    // rather than a hover area inside the chip: this one is on top, so it
+    // is the one that hears about the pointer at all.
+    property Item hoveredChip: null
+    function chipUnder(px, py) {
+        if (!branchChip.visible || branchChip.records.length < 2)
+            return null
+        const p = rowItem.mapToItem(branchChip, px, py)
+        return branchChip.contains(Qt.point(p.x, p.y)) ? branchChip : null
+    }
+    function noteChipHover(px, py) {
+        const chip = rowItem.naming ? null : rowItem.chipUnder(px, py)
+        if (chip === rowItem.hoveredChip)
+            return
+        rowItem.hoveredChip = chip
+        if (chip)
+            chipTimer.restart()
+        else
+            chipTimer.stop()
+    }
+    // Long enough that crossing the column on the way somewhere else does
+    // not open it.
+    Timer {
+        id: chipTimer
+        interval: Metrics.chipExpandMs
+        onTriggered: {
+            if (rowItem.hoveredChip && rowItem.ListView.view)
+                rowItem.ListView.view.chipExpandRequested(
+                    rowItem.hoveredChip.records, rowItem.hoveredChip)
+        }
+    }
+
     MouseArea {
         id: rowMouse
         anchors.fill: parent
         anchors.topMargin: -rowItem.topBleed
+        // While the box is open the chip column belongs to it: this area
+        // is painted over everything in the row, so anything under it
+        // would never see a click of its own.
+        anchors.leftMargin: rowItem.naming ? rowItem.labelsW : 0
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         onClicked: mouse => {
@@ -275,6 +361,19 @@ Item {
             // commit menu applies to it.
             if (mouse.button === Qt.RightButton && !rowItem.isWip)
                 rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex)
+        }
+        // Where the row leads: the chip it shows, or — with no branch on
+        // it — the offer to put one there. The page decides which.
+        onDoubleClicked: mouse => {
+            if (mouse.button !== Qt.LeftButton || !rowItem.movable)
+                return
+            rowItem.ListView.view.rowSwitchRequested(
+                rowItem.oid_hex, rowItem.primaryRecord)
+        }
+        onPositionChanged: mouse => rowItem.noteChipHover(mouse.x, mouse.y)
+        onContainsMouseChanged: {
+            if (!rowMouse.containsMouse)
+                rowItem.noteChipHover(-1, -1)
         }
     }
     // Hover details: what the row no longer shows as columns.

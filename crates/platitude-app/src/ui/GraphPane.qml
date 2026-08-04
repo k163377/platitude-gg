@@ -21,8 +21,29 @@ Rectangle {
     signal rowActivated(string oidHex)
     /// Right-click on a commit row.
     signal commitMenuRequested(string oidHex)
+    /// A row was double-clicked. `record` is the chip it shows (kind +
+    /// flags + name); empty when the row shows no branch at all.
+    signal rowSwitchRequested(string oidHex, string record)
+    /// A stacked chip was hovered long enough to want unstacking.
+    signal chipExpandRequested(var records, var anchor)
+    /// A name was typed into a row that had no branch on it.
+    signal createBranchRequested(string oidHex, string name)
     /// The blank pane's "Open repository…" button.
     signal openRepositoryRequested()
+
+    // ---- naming a branch on a row that has none --------------------
+    // In-pane state, like the column widths: the page says where to
+    // start and hears back only when there is a name to act on.
+    /// Puts the chip column of one row into a branch-name box.
+    function startNaming(oidHex) {
+        graphList.namingText = ""
+        graphList.namingOid = oidHex
+    }
+    function stopNaming() {
+        graphList.namingOid = ""
+        graphList.namingText = ""
+    }
+    readonly property alias namingOid: graphList.namingOid
 
     /// The list itself — for automation hooks (bench / scroll-to /
     /// screenshot flows) only; app code goes through the functions.
@@ -150,10 +171,31 @@ Rectangle {
         property real graphFullWidth: graphArea.graphFullW
         property real graphXOffset: graphArea.graphX
         property int wipCount: graphArea.worktreeModel.total
+        // Which row's chip column is a name box, and what has been typed
+        // into it. Held here rather than in the delegate: the delegate is
+        // recycled the moment its row scrolls off.
+        property string namingOid: ""
+        property string namingText: ""
         signal rowSelected(string oidHex)
         signal rowMenuRequested(string oidHex)
+        signal rowSwitchRequested(string oidHex, string record)
+        signal chipExpandRequested(var records, var anchor)
+        signal namingSubmitted(string oidHex, string name)
+        signal namingCancelled()
         onRowMenuRequested: oidHex => graphArea.commitMenuRequested(oidHex)
         onRowSelected: oidHex => graphArea.rowActivated(oidHex)
+        onRowSwitchRequested: (oidHex, record) =>
+            graphArea.rowSwitchRequested(oidHex, record)
+        onChipExpandRequested: (records, anchor) =>
+            graphArea.chipExpandRequested(records, anchor)
+        onNamingSubmitted: (oidHex, name) => {
+            graphArea.stopNaming()
+            // An empty box is the way out of the offer, not a branch
+            // called nothing.
+            if (name !== "")
+                graphArea.createBranchRequested(oidHex, name)
+        }
+        onNamingCancelled: graphArea.stopNaming()
         delegate: GraphRowDelegate {}
         // Window cut: lanes keep running through the footer and the
         // message sits where subjects go.
@@ -345,6 +387,22 @@ Rectangle {
             if (panning)
                 graphArea.graphX = Math.max(0, Math.min(
                     startGX - (mouse.x - pressX), graphArea.graphXMax))
+        }
+        // The lanes are part of the row, so a double-click on them means
+        // what it means anywhere else on it. Without this the gesture
+        // would die in exactly the repositories wide enough to need
+        // panning, and nothing on screen would say why.
+        onDoubleClicked: mouse => {
+            const idx = graphList.indexAt(graphArea.labelW + 1,
+                                          graphList.contentY + mouse.y)
+            if (idx < 0)
+                return
+            // Asked of the row itself, so which chip a row leads to is
+            // worked out in exactly one place.
+            const row = graphList.itemAtIndex(idx)
+            if (row && row.movable)
+                graphList.rowSwitchRequested(graphArea.graphModel.oidAt(idx),
+                                             row.primaryRecord)
         }
         onReleased: mouse => {
             if (panning)

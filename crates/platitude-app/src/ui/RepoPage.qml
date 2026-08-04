@@ -113,18 +113,21 @@ Item {
     // the move goes ahead carrying them, and git refuses — changing
     // nothing — when it cannot. That refusal comes back as `moveBlock`
     // and raises the dialog, which re-runs the same move a different way.
-    // What the pending move is: kind is "branch" / "remote" / "commit".
+    // What the pending move is: kind is "branch" / "remote" / "commit" /
+    // "force" (a local branch moved to `moveStart` before landing on it).
     property string moveKind: ""
     property string moveTarget: ""
     property string moveLabel: ""
+    property string moveStart: ""
     // Set while the last move sits refused, so the panes are left as they
     // were: nothing moved, so nothing about them is stale.
     property bool moveRefused: false
 
-    function switchTo(kind, target, label) {
+    function switchTo(kind, target, label, start) {
         page.moveKind = kind
         page.moveTarget = target
         page.moveLabel = label
+        page.moveStart = start === undefined ? "" : start
         page.runSwitch("carry")
     }
     function runSwitch(carry) {
@@ -136,6 +139,63 @@ Item {
                                    repoTab.localNameFor(page.moveTarget), carry)
         else if (page.moveKind === "commit")
             repoTab.checkoutDetached(page.moveTarget, carry)
+        else if (page.moveKind === "force")
+            repoTab.checkoutForceCreate(page.moveTarget, page.moveStart, carry)
+    }
+
+    // ---- what a chip leads to --------------------------------------
+    // One dispatcher for every way of asking to move to a named ref: the
+    // graph's chips, the list the stacked ones open into, and the
+    // sidebar's menu. `record` is the chip as it is drawn — kind letter,
+    // three flags, then the name (see encode.rs).
+    function activateRecord(record) {
+        if (record !== "")
+            page.switchToRef(record[0], record.substring(4))
+    }
+    function switchToRef(kind, name) {
+        if (repoTab.state !== "open" || repoTab.busyCount > 0)
+            return
+        if (kind === "L") {
+            // Already standing there.
+            if (name !== workTree.branch)
+                page.switchTo("branch", name, name, "")
+            return
+        }
+        // The detached-HEAD marker names no branch, and a tag is a
+        // standing mark rather than somewhere to carry on from — moving
+        // onto one can only detach, which stays an explicit choice
+        // (the commit menu's "Switch to this commit").
+        if (kind !== "R")
+            return
+        const local = repoTab.localNameFor(name)
+        // With no local branch of that name, landing on the remote one
+        // means making it: one branch, tracking, nothing to lose, so
+        // nothing to ask about.
+        if (branchesModel.oidOfName(local) === "")
+            page.switchTo("remote", name, local, "")
+        else
+            page.askMoveBranchOnto(local, name)
+    }
+
+    // A local branch of that name exists, and it is not here — its own
+    // row is elsewhere in the graph. Landing on the remote branch means
+    // moving the local one onto it, which is the one thing here that can
+    // leave work with nothing pointing at it.
+    function askMoveBranchOnto(local, remoteRef) {
+        page.confirmRequested(
+            qsTr("Move %1 here?").arg(local),
+            qsTr("%1 stands somewhere else. Moving it here and landing on it "
+                 + "leaves whatever only %1 had with nothing pointing at it: "
+                 + "those commits stay in the repository until git next "
+                 + "cleans up, but nothing in this window reaches them any "
+                 + "more.\n\nWhat you have not committed comes along, as it "
+                 + "would on any move.").arg(local),
+            qsTr("Move %1 here").arg(local),
+            function () { page.switchTo("force", local, local, remoteRef) })
+        // A dialog draws in the window overlay, where a screenshot cannot
+        // reach it; say so where a smoke run can read it instead.
+        if (AppBackend.autoAct !== "")
+            AppBackend.report("move_branch_asked local=" + local)
     }
 
     // A refusal arrives on its own counter: the same answer can be needed
@@ -238,8 +298,11 @@ Item {
         AppMenuItem {
             text: qsTr("Switch to %1").arg(page.menuRefName)
             enabled: page.menuRefName !== workTree.branch
-            onTriggered: page.switchTo(page.menuRefRemote ? "remote" : "branch",
-                                       page.menuRefName, page.menuRefName)
+            // Through the same dispatcher the graph's chips use: a remote
+            // branch whose local one already exists cannot simply be
+            // created, and that answer belongs in one place.
+            onTriggered: page.switchToRef(page.menuRefRemote ? "R" : "L",
+                                          page.menuRefName)
         }
         AppMenuSeparator {}
         AppMenuItem {
@@ -351,6 +414,40 @@ Item {
 
     ClipboardHelper {
         id: clipboard
+    }
+
+    // ---- double-click on a graph row -------------------------------
+    // The row leads where its chip says, and a row with no chip is
+    // offered one instead of doing nothing: the gesture always answers.
+    function rowDoubleClicked(oidHex, record) {
+        if (repoTab.state !== "open")
+            return
+        if (record !== "") {
+            page.activateRecord(record)
+            return
+        }
+        if (repoTab.busyCount === 0)
+            graphPane.startNaming(oidHex)
+    }
+
+    // The refs one chip had to stack, unstacked under it.
+    RefListPopup {
+        id: refList
+        currentBranch: workTree.branch
+        onPicked: record => page.activateRecord(record)
+    }
+    function openRefList(records, anchor) {
+        const at = anchor.mapToItem(page, 0, anchor.height)
+        refList.records = records
+        refList.x = at.x
+        refList.y = at.y
+        refList.open()
+    }
+    Connections {
+        // The row it hangs off is a delegate, and delegates travel: once
+        // the graph moves under it the list is pointing at nothing.
+        target: graphPane.view
+        function onContentYChanged() { refList.close() }
     }
 
     // ---- rewriting one commit --------------------------------------
@@ -559,7 +656,33 @@ Item {
             page.moveTarget = arg
             page.runSwitch(act === "switch-leave" ? "stash" : "merge")
         } else if (act === "switch-remote") {
-            page.switchTo("remote", arg, arg)
+            page.switchTo("remote", arg, arg, "")
+        } else if (act === "dbl-local" || act === "dbl-remote") {
+            // What a double-click on a chip does, entered where the
+            // delegate enters it: the record is the chip as it is drawn
+            // (kind letter, three flags, name).
+            page.activateRecord((act === "dbl-local" ? "L000" : "R000") + arg)
+        } else if (act === "move-branch") {
+            // Past the question, for the write it guards: the local
+            // branch of that name is moved onto the remote one.
+            page.switchTo("force", repoTab.localNameFor(arg),
+                          repoTab.localNameFor(arg), arg)
+        } else if (act === "name-branch") {
+            // From the box's own accept onward — the page never sees the
+            // typing, only a name and the row it belongs to.
+            graphPane.view.namingSubmitted(graphModel.oidAt(0), arg)
+        } else if (act === "ref-list") {
+            // The unstacked chips, left standing. Hover cannot be
+            // injected on Windows, so this enters where the hover timer
+            // would; the argument is the row whose chip is stacked.
+            const stacked = graphPane.view.itemAtIndex(Number(arg))
+            if (stacked)
+                graphPane.view.chipExpandRequested(
+                    stacked.branchChipItem.records, stacked.branchChipItem)
+        } else if (act === "name-box") {
+            // Opened and left standing, for a look at it. The argument is
+            // the row, since the box only belongs on one with no chips.
+            graphPane.startNaming(graphModel.oidAt(Number(arg)))
         } else if (act === "squash") {
             page.openCommitMenu(branchesModel.headOid)
             page.squashCommit(branchesModel.headOid)
@@ -860,6 +983,10 @@ Item {
         // answers any landing this page still owed.
         page.rewordRow = -1
         page.pendingHeadSelect = false
+        // Clicking anywhere is the way out of the name box: it is an
+        // offer, not work in progress, and the chip column itself stays
+        // the box's own while it is up.
+        graphPane.stopNaming()
         // A click moves the highlight itself, but one held back by the
         // unsaved-message question does not: the question put it back
         // where it was, so the answer has to move it again.
@@ -1142,6 +1269,12 @@ Item {
                     blank: page.blank
                     onRowActivated: oidHex => page.activateRow(oidHex)
                     onCommitMenuRequested: oidHex => page.openCommitMenu(oidHex)
+                    onRowSwitchRequested: (oidHex, record) =>
+                        page.rowDoubleClicked(oidHex, record)
+                    onChipExpandRequested: (records, anchor) =>
+                        page.openRefList(records, anchor)
+                    onCreateBranchRequested: (oidHex, name) =>
+                        repoTab.createBranch(name, oidHex, true)
                     onOpenRepositoryRequested: page.openRepositoryPicker()
                 }
 

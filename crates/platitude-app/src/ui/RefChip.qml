@@ -11,6 +11,10 @@ Rectangle {
     property var records: []
     property bool tagStyle: false
     property real maxWidth: 140
+    // Nowhere to go from here (the branch already under the working
+    // tree): §無効 — the words drop to the muted colour, frame included,
+    // since the frame is how a branch chip is read at all.
+    property bool muted: false
 
     visible: records.length > 0
     height: Theme.fontSmLine
@@ -22,7 +26,8 @@ Rectangle {
     readonly property string recKind: rec[0]
     readonly property bool recHead: rec[1] === "1"
     readonly property bool recPr: rec.length > 3 && rec[3] === "1"
-    readonly property color chipColor: tagStyle ? Theme.warning
+    readonly property color chipColor: muted ? Theme.textMuted
+                                      : tagStyle ? Theme.warning
                                       : recKind === "R" ? Theme.textSecondary
                                       : recKind === "H" ? Theme.danger
                                       : Theme.accent
