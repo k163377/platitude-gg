@@ -251,6 +251,35 @@ Item {
             enabled: repoTab.busyCount === 0
             onTriggered: page.squashCommit(page.menuOid)
         }
+        // Three ways to take the branch back to this commit, told apart
+        // by what becomes of the work they skip over rather than by
+        // git's own words for the modes. A submenu keeps the choice out
+        // of the way until it is asked for; disabling the submenu itself
+        // greys the row that opens it (its items are never reachable
+        // while it is off).
+        Menu {
+            id: resetMenu
+            // "here" rather than "to this commit": a Fusion menu is 200px
+            // wide whatever is in it, and the arrow of a submenu row eats
+            // another 26 — the longer wording elides, and what elides
+            // first should be the branch name, not the operation.
+            title: workTree.branch !== ""
+                   ? qsTr("Move %1 here").arg(workTree.branch)
+                   : qsTr("Move the branch here")
+            enabled: page.canMoveBranchHere
+            MenuItem {
+                text: qsTr("Keep everything, staged")
+                onTriggered: page.moveBranchHere("soft")
+            }
+            MenuItem {
+                text: qsTr("Keep everything, unstaged")
+                onTriggered: page.moveBranchHere("mixed")
+            }
+            MenuItem {
+                text: qsTr("Discard everything after it")
+                onTriggered: page.moveBranchHere("hard")
+            }
+        }
         MenuSeparator {}
         MenuItem {
             text: qsTr("Copy commit hash")
@@ -268,6 +297,47 @@ Item {
     // asked about on its own.
     function squashCommit(oidHex) {
         repoTab.squashIntoParent(oidHex)
+    }
+
+    // ---- taking the branch back to an earlier commit ----------------
+    // git calls this a reset; the menu says what it does, which is move
+    // the branch. Offered only where there is a branch to move and
+    // somewhere to move it to: detached HEAD has none, a stash sits on
+    // no branch's history, an operation in progress is left through
+    // Continue / Abort instead (mid-merge a soft reset refuses outright
+    // and the other two abandon the merge without a word), and the
+    // commit the branch already stands on is not a move at all.
+    readonly property bool canMoveBranchHere:
+        repoTab.state === "open" && repoTab.busyCount === 0
+        && !workTree.detached && workTree.branch !== ""
+        && workTree.opText === ""
+        && page.menuOid !== "" && page.menuOid !== workTree.headOid
+        && graphModel.stashRefOf(page.menuOid) === ""
+
+    // Only the discarding one is asked about. Keeping the work staged or
+    // unstaged leaves every byte where it is — the branch moves, and a
+    // commit puts back what it skipped — while discarding is the one
+    // that leaves nothing to put back.
+    function moveBranchHere(mode) {
+        // Held apart from the menu's own oid: the question outlives the
+        // menu, and the answer must still act on the row it was asked
+        // about.
+        const oid = page.menuOid
+        if (mode !== "hard") {
+            repoTab.resetTo(oid, mode)
+            return
+        }
+        page.confirmRequested(
+            qsTr("Discard everything after %1?").arg(page.menuShort),
+            qsTr("%1 goes back to this commit, and the working tree with "
+                 + "it: changes to tracked files are thrown away whether "
+                 + "they are staged or not, and nothing here keeps a copy "
+                 + "of them.\n\nUntracked files are left alone. The "
+                 + "commits after this one stay in the repository until "
+                 + "git next cleans up, but nothing in this window points "
+                 + "at them any more.").arg(workTree.branch),
+            qsTr("Discard changes"),
+            function () { repoTab.resetTo(oid, "hard") })
     }
 
     // ---- editing the selected commit's message ---------------------
@@ -404,6 +474,28 @@ Item {
             rewordTimer.start()
         } else if (act === "cherry-pick") {
             repoTab.cherryPick(arg)
+        } else if (act === "reset-soft" || act === "reset-mixed"
+                   || act === "reset-hard-confirm") {
+            // Through the menu, like clicking it: the row the menu was
+            // opened on is where the branch lands. "-confirm" stops at
+            // the question, so nothing should have moved until it is
+            // answered.
+            page.openCommitMenu(arg)
+            page.moveBranchHere(act === "reset-soft" ? "soft"
+                                : act === "reset-mixed" ? "mixed" : "hard")
+        } else if (act === "reset-hard") {
+            // Past the question, for the discarding write itself.
+            repoTab.resetTo(arg, "hard")
+        } else if (act === "commit-menu" || act === "reset-menu") {
+            // Nothing written: the menu is left standing so its wording
+            // can be photographed from outside (a popup draws in the
+            // window overlay, where grabToImage cannot reach it). Which
+            // rows are offered is said in words as well — a greyed row
+            // is not something a screenshot can be trusted on.
+            page.openCommitMenu(arg)
+            if (act === "reset-menu")
+                resetMenu.popup()
+            AppBackend.report("commit_menu can_move=" + page.canMoveBranchHere)
         } else if (act === "stage-hunk" || act === "stage-line") {
             page.toggleDiff("unstaged", arg, "")
             stageRowTimer.start()
@@ -454,8 +546,11 @@ Item {
         // Moving HEAD rewrites the working tree under the diff pane:
         // the file it holds may not even exist where the move landed,
         // so the center goes back to the graph that was moved through.
-        // A refused move rewrote nothing, so it keeps its view.
-        if (repoTab.lastWriteOp === "checkout" && !page.moveRefused)
+        // A refused move rewrote nothing, so it keeps its view. Taking
+        // the branch back does the same to the file, and to which side
+        // of the index it sits on.
+        if ((repoTab.lastWriteOp === "checkout" && !page.moveRefused)
+                || repoTab.lastWriteOp === "reset")
             page.closeDiff()
         page.refreshHeadPublished()
         // HEAD may have moved: what the selected commit is to it — and

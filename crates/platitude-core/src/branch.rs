@@ -123,6 +123,58 @@ pub async fn checkout(
     }
 }
 
+/// What a reset does to the index and the working tree once the branch
+/// itself has moved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResetMode {
+    /// Branch only. Whatever the commits left behind changed stays in the
+    /// index, on top of anything staged already.
+    Soft,
+    /// Branch and index. Every file keeps the content it has on disk;
+    /// none of it is staged any more.
+    Mixed,
+    /// Branch, index and working tree. Uncommitted work is destroyed —
+    /// git kept no copy of it to restore.
+    Hard,
+}
+
+impl ResetMode {
+    fn flag(self) -> &'static str {
+        match self {
+            ResetMode::Soft => "--soft",
+            ResetMode::Mixed => "--mixed",
+            ResetMode::Hard => "--hard",
+        }
+    }
+}
+
+/// Moves the ref HEAD is on (the current branch) to `rev`.
+///
+/// `rev` is a commit, never a path, so it goes *before* any `--`: to
+/// `git reset` a `--` opens the pathspec form, which takes no mode flag
+/// at all. `--end-of-options` does the guarding a `--` does elsewhere.
+///
+/// Not a way out of an operation in progress, and the UI does not offer
+/// it as one: mid-merge, `Soft` refuses outright ("Cannot do a soft reset
+/// in the middle of a merge") while the other two drop `MERGE_HEAD`
+/// without a word, abandoning the merge as a side effect (実測).
+pub async fn reset(
+    executor: &GitExecutor,
+    workdir: &Path,
+    rev: &str,
+    mode: ResetMode,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let cmd = GitCommand::new().cwd(workdir).args([
+        "reset",
+        "--quiet",
+        mode.flag(),
+        "--end-of-options",
+        rev,
+    ]);
+    executor.run(cmd, cancel).await.map(drop)
+}
+
 /// Creates a branch at `start_point` (HEAD when `None`), optionally
 /// switching to it.
 pub async fn create(

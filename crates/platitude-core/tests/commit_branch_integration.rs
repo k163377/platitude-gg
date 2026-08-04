@@ -5,7 +5,7 @@
 
 mod support;
 
-use platitude_core::branch::{self, CheckoutBlock, CheckoutOutcome, CheckoutTarget};
+use platitude_core::branch::{self, CheckoutBlock, CheckoutOutcome, CheckoutTarget, ResetMode};
 use platitude_core::commit::{self, CommitOptions};
 use platitude_core::process::GitExecutor;
 use platitude_core::repo::RepoInfo;
@@ -240,6 +240,93 @@ async fn detached_checkout_is_explicit() {
     .expect("detach");
     assert_eq!(repo.git(&["rev-parse", "HEAD"]), root);
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "HEAD");
+}
+
+/// Two commits on `main`; the returned id is the first of them, which is
+/// where each reset takes the branch back to.
+fn one_commit_back() -> (TestRepo, String) {
+    let mut repo = TestRepo::init();
+    let root = repo.commit_file("a.txt", "one\n", "root");
+    repo.commit_file("a.txt", "two\n", "second");
+    (repo, root)
+}
+
+/// The keeping-it-staged move: the branch goes back, the files do not,
+/// and what the dropped commit wrote is ready to be committed again.
+#[tokio::test]
+async fn a_soft_reset_moves_the_branch_and_leaves_the_work_staged() {
+    let (mut repo, root) = one_commit_back();
+    let (exec, cancel) = env();
+
+    branch::reset(&exec, &repo.path, &root, ResetMode::Soft, &cancel)
+        .await
+        .expect("soft reset");
+
+    assert_eq!(repo.git(&["rev-parse", "HEAD"]), root);
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("a.txt")).unwrap(),
+        "two\n",
+        "the working tree kept what the commit left behind wrote"
+    );
+    assert_eq!(
+        repo.git(&["diff", "--cached", "--name-only"]),
+        "a.txt",
+        "and the difference is staged"
+    );
+}
+
+/// The same move with the index cleared: the content is still on disk,
+/// but nothing of it is staged.
+#[tokio::test]
+async fn a_mixed_reset_moves_the_branch_and_unstages_the_work() {
+    let (mut repo, root) = one_commit_back();
+    let (exec, cancel) = env();
+
+    branch::reset(&exec, &repo.path, &root, ResetMode::Mixed, &cancel)
+        .await
+        .expect("mixed reset");
+
+    assert_eq!(repo.git(&["rev-parse", "HEAD"]), root);
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("a.txt")).unwrap(),
+        "two\n"
+    );
+    assert_eq!(repo.git(&["diff", "--cached", "--name-only"]), "");
+    assert_eq!(
+        repo.git(&["diff", "--name-only"]),
+        "a.txt",
+        "the difference is there to stage again"
+    );
+}
+
+/// The discarding move — the one the UI asks about. Tracked work goes,
+/// staged or not; untracked files are none of a reset's business.
+#[tokio::test]
+async fn a_hard_reset_throws_tracked_work_away_and_leaves_untracked_files() {
+    let (mut repo, root) = one_commit_back();
+    repo.write_file("a.txt", "uncommitted\n");
+    repo.write_file("staged.txt", "also mine\n");
+    repo.git(&["add", "--", "staged.txt"]);
+    repo.write_file("untracked.txt", "never recorded\n");
+    let (exec, cancel) = env();
+
+    branch::reset(&exec, &repo.path, &root, ResetMode::Hard, &cancel)
+        .await
+        .expect("hard reset");
+
+    assert_eq!(repo.git(&["rev-parse", "HEAD"]), root);
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("a.txt")).unwrap(),
+        "one\n",
+        "back to the content of the commit it landed on"
+    );
+    assert_eq!(repo.git(&["status", "--porcelain"]), "?? untracked.txt");
+    assert!(
+        !repo.path.join("staged.txt").exists(),
+        "a staged new file is tracked work: it goes with the rest"
+    );
+    assert!(repo.path.join("untracked.txt").exists());
 }
 
 /// `main` and `other` differ in `both.txt` and agree on `same.txt`;

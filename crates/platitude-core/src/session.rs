@@ -1219,6 +1219,19 @@ impl RepoSession {
         }
     }
 
+    /// Moves the current branch to `rev`, carrying the index and the
+    /// working tree as far as `mode` says. `ResetMode::Hard` destroys
+    /// uncommitted work, so the UI asks before sending that one.
+    pub fn reset(self: &Arc<Self>, rev: String, mode: branch::ResetMode) {
+        self.write(
+            "reset",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                branch::reset(&exec, &repo.workdir, &rev, mode, &cancel).await
+            },
+        );
+    }
+
     /// Creates a branch, optionally switching to it.
     pub fn create_branch(
         self: &Arc<Self>,

@@ -1058,6 +1058,28 @@ async fn squash_and_reword_run_through_the_write_queue() {
     session.close();
 }
 
+/// Taking the branch back a commit runs as a queued write of its own,
+/// under the name the page keys its follow-up off: a reset rewrites the
+/// working tree the diff on screen was read from.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_reset_moves_the_branch_through_the_write_queue() {
+    let mut repo = TestRepo::init();
+    let root = repo.commit_file("f.txt", "0\n", "root");
+    repo.commit_file("f.txt", "1\n", "second");
+
+    let (sink, session) = opened(&repo).await;
+    session.reset(root.clone(), platitude_core::branch::ResetMode::Mixed);
+    assert_eq!(write_result(&sink, "reset").await, None);
+
+    assert_eq!(repo.git(&["rev-parse", "HEAD"]), root);
+    assert_eq!(
+        repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]),
+        "main",
+        "the branch moved, not just HEAD"
+    );
+    session.close();
+}
+
 /// The auto-fetch timer runs the fetch it promises, and turns off again.
 #[tokio::test(flavor = "multi_thread")]
 async fn auto_fetch_runs_on_its_interval_and_stops() {

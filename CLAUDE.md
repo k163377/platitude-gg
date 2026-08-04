@@ -147,13 +147,15 @@ cargo fmt --all
 ## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
 
 - Phase 1(読み取り専用ビューア)は**完了**。Done 条件の性能 4 項目は完了時点の最終確認でもクリア(first chunk 79ms / 詳細 75ms / 178fps / peak 269MB): [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)
-- **配線済み**: ステージング(ファイル / hunk / 行)・commit / amend・switch(ローカル / リモート / detach。未コミット変更は**まず持っていき**、git が拒否した時だけ「置いていく / merge して持っていく」を選ばせる)・fetch(手動 + auto)・push / force push・単体 cherry-pick・単体 squash・コミットメッセージ編集・identity・設定(auto fetch 間隔)・diff プレビュー(画像は Before/After 描画、非画像バイナリはサイズ表示 — `platitude-core::preview`)
+- **配線済み**: ステージング(ファイル / hunk / 行)・commit / amend・switch(ローカル / リモート / detach。未コミット変更は**まず持っていき**、git が拒否した時だけ「置いていく / merge して持っていく」を選ばせる)・fetch(手動 + auto)・push / force push・単体 cherry-pick・単体 squash・コミットメッセージ編集・reset(soft / mixed / hard。ブランチがある時だけ・進行中操作なしの時だけ出す)・identity・設定(auto fetch 間隔)・diff プレビュー(画像は Before/After 描画、非画像バイナリはサイズ表示 — `platitude-core::preview`)
 - **未配線**: merge / rebase / revert・conflict ペイン・フル interactive rebase 画面・ブランチ作成 / 削除 / リネーム・discard / clean・stash push・リモートブランチ削除
 - 残作業と要判断事項は [P2-確認事項.md](internal-docs/P2-確認事項.md) / [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読むこと**。配布準備期に検証する項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
 - **確認ダイアログは取り返しがつかない操作だけ**(force push)。**ローカルの履歴書き換え(amend / squash / メッセージ編集)は push 済みでも尋ねない** — switch / reset で戻せるし、広めるのは push 側が尋ねる。**未保存の入力を捨てる時は尋ねるが、ダイアログではなく編集枠の中で聞く**(編集中のメッセージを残して別コミットへ移動 → 保存行が質問に切り替わる。`DetailsPane.asking`)。日常操作は尋ねない。ダイアログの実体は `Main.qml` の `root.confirm()`
 - **QML バインディングはプロパティにしか反応しない** — `#[qslot]` は呼び出し用。`enabled:` 等が値の変化を追う必要があるものは `qproperty!` にする(スロットのままだと初期値のまま固まる)
-- 書き込み操作の headless 検証は **`PG_AUTO_ACT` = 動詞 / `PG_AUTO_ACT_ARG`**(commit / amend / switch / switch-leave / switch-merge / switch-remote / squash / reword / edit-message / edit-message-leave / edit-message-discard / cherry-pick / stage-hunk / stage-line / push / force-push / force-push-confirm / fetch / settings / preview / preview-unstaged / preview-staged)。クリックと同じ経路を通る
-- ダイアログの見た目は**アンロック中の `PrintWindow` で検証可能**(設定ダイアログで実測済み。ロック中は git version gate で止まる)。メニューは未検証。機能は `PG_AUTO_ACT` で確認済み
+- 書き込み操作の headless 検証は **`PG_AUTO_ACT` = 動詞 / `PG_AUTO_ACT_ARG`**(commit / amend / switch / switch-leave / switch-merge / switch-remote / squash / reword / edit-message / edit-message-leave / edit-message-discard / cherry-pick / stage-hunk / stage-line / push / force-push / force-push-confirm / reset-soft / reset-mixed / reset-hard / reset-hard-confirm / commit-menu / reset-menu / fetch / settings / preview / preview-unstaged / preview-staged)。クリックと同じ経路を通る
+- ダイアログとメニューの見た目は**アンロック中の `PrintWindow` で検証可能**(設定ダイアログ・コミットメニュー・サブメニューで実測済み。ロック中は git version gate で止まる)。機能は `PG_AUTO_ACT` で確認済み
+- **`enabled: false` は見た目に出ない** — `Main.qml` の `palette { … }` はグループ無し代入で disabled グループにも同じ色が入る。グレーアウトを screenshot で判定しない(`commit-menu` は `can_move=` を `PG_LOG=info` のログに出す)
+- **Fusion のメニュー幅は中身によらず 200px 固定**(背景 Rectangle の implicitWidth。contentItem の ListView は implicitWidth を持たない)。サブメニュー行は矢印に 26px 取られる。長い文言は無言で省略されるので、文言は測ってから決める
 - 書き込みは `RepoSession` のキュー経由で直列化され、成功・失敗いずれでも refresh する。失敗は git の文言のまま `WriteFinished{error}` → 既存のエラー表示へ流れる
 - interactive rebase は `GIT_SEQUENCE_EDITOR` に**別実行ファイル `pg-todo-editor`** を差す方式。**配布物に同梱必須**(本体と同じディレクトリ)
 - グラフは **2 段ストリーミング**(タグ無し即描画→タグ込みを単一 drain で無フリッカー置換。44k タグの topo フロンティア初期化コスト対策)+ `--max-count=2000` ウィンドウ。**WIP(未コミット)を HEAD の子の仮想行**として、**stash を walk 参加の実行行**として描く(合成親コミットは sift で除去)— いずれも `platitude-core::session` 参照。**バックグラウンド更新(auto fetch 後・write 後・dirty ⇄ clean 変化)は `refresh_log()`** = オフスクリーン構築→送信済み行と一致ならイベントを一切出さない(アイドル中のチラつき対策)。リセット→ストリーミングは open / Reload / タグ切替 / 件数変更のみ

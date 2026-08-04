@@ -471,6 +471,25 @@ impl RepoTab {
         self.move_head(target, &carry);
     }
 
+    /// Moves the current branch to `rev`. `mode` says what becomes of the
+    /// index and the working tree: `"soft"` leaves both alone (the skipped
+    /// commits end up staged), `"mixed"` clears the index, `"hard"` throws
+    /// away everything uncommitted.
+    #[qslot]
+    fn reset_to(&mut self, rev: String, mode: String) {
+        use platitude_core::branch::ResetMode;
+        let mode = match mode.as_str() {
+            "soft" => ResetMode::Soft,
+            "mixed" => ResetMode::Mixed,
+            "hard" => ResetMode::Hard,
+            other => {
+                tracing::warn!(mode = other, "unknown reset mode");
+                return;
+            }
+        };
+        self.with_session(|s| s.reset(rev.clone(), mode));
+    }
+
     /// Creates a branch at `start_point` (HEAD when empty).
     #[qslot]
     fn create_branch(&mut self, name: String, start_point: String, switch_to: bool) {
