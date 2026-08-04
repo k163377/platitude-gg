@@ -96,6 +96,28 @@ pub struct PushOptions {
     pub staged_only: bool,
 }
 
+/// Commit `refs/stash` points at, or `None` with no stash at all.
+///
+/// Taken before and after a [`push`] to tell whether an entry was really
+/// made: on a clean tree `git stash push` exits 0 having created nothing,
+/// and `stash@{0}` then names whatever entry was already there.
+pub async fn tip(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<Option<String>, GitError> {
+    let cmd =
+        GitCommand::new()
+            .cwd(workdir)
+            .args(["rev-parse", "--verify", "--quiet", "refs/stash"]);
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    if out.code != 0 {
+        return Ok(None);
+    }
+    let text = out.stdout_utf8().trim().to_string();
+    Ok((!text.is_empty()).then_some(text))
+}
+
 /// `git stash push`: saves the working tree, optionally limited to `paths`.
 pub async fn push(
     executor: &GitExecutor,

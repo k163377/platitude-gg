@@ -1242,7 +1242,18 @@ impl RepoSession {
                     keep_index: false,
                     staged_only: false,
                 };
+                let before = stash::tip(&exec, &repo.workdir, &cancel).await?;
                 stash::push(&exec, &repo.workdir, "", options, &[], &cancel).await?;
+                // A clean tree stashes nothing while exiting 0 — the
+                // refusal that raised this choice can go stale when the
+                // tree is cleaned from a terminal in between. With no
+                // entry of ours, `stash@{0}` is someone else's work and
+                // must not be popped; the move alone is the whole job.
+                if stash::tip(&exec, &repo.workdir, &cancel).await? == before {
+                    let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
+                    session.report_move(outcome);
+                    return Ok(());
+                }
                 let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
                 if let branch::CheckoutOutcome::Blocked(_) = outcome {
                     // Nothing should stand in the way of a tree that was

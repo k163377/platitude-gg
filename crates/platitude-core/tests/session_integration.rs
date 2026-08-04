@@ -988,6 +988,41 @@ async fn a_conflicting_carry_leaves_the_stash_as_the_way_back() {
     session.close();
 }
 
+/// "Bring my changes" raced against a tree that was cleaned in between:
+/// `git stash push` saves nothing while exiting 0, so there is nothing of
+/// ours to restore — and the entry somebody parked earlier must not be
+/// popped in its place.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_carry_with_nothing_to_carry_leaves_other_stashes_alone() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("seed.txt", "seed\n", "root");
+    repo.git(&["switch", "-c", "other"]);
+    repo.commit_file("theirs.txt", "only over there\n", "other");
+    repo.git(&["switch", "main"]);
+    // Somebody's earlier work, sitting at stash@{0}.
+    repo.write_file("seed.txt", "parked work\n");
+    repo.git(&["stash", "push", "-m", "parked"]);
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout_merging(platitude_core::branch::CheckoutTarget::Branch {
+        name: "other".into(),
+    });
+    assert_eq!(write_result(&sink, "checkout").await, None);
+
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
+    assert_eq!(
+        repo.git(&["stash", "list"]).lines().count(),
+        1,
+        "the parked entry was not ours to pop"
+    );
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("seed.txt")).unwrap(),
+        "seed\n",
+        "the parked work stays parked"
+    );
+    session.close();
+}
+
 /// A restore that really fails still reports: the untracked file the
 /// target tracks has nowhere to go, and saying nothing would leave the
 /// changes sitting in a stash the user never asked for.
