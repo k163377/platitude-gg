@@ -99,6 +99,12 @@ impl TabsModel {
         Hub::with(|hub| hub.close_tab(tab_id));
         if let Some(pos) = self.items.iter().position(|t| t.tab_id == tab_id) {
             self.remove(pos);
+            // Closing a tab left of the active one shifts the active row
+            // down; the index has to follow it, or the visible repository
+            // silently becomes its right-hand neighbour.
+            if (pos as i32) < self.current_index {
+                self.current_index -= 1;
+            }
             let len = self.items.len() as i32;
             if self.current_index >= len {
                 self.current_index = len - 1;
