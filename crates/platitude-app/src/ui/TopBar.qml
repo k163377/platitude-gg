@@ -304,26 +304,6 @@ Rectangle {
                                + "they no longer have")
             onClicked: topBar.curPage.pageTab.fetch("")
         }
-        // The remote moved past this branch, so a plain push cannot land.
-        // The button itself only greys out, and a disabled button says
-        // nothing on this palette — the state is announced beside it.
-        Rectangle {
-            visible: pushButton.mode === "diverged"
-            color: "transparent"
-            border.color: Theme.warning
-            border.width: Theme.borderWidth
-            radius: Theme.radiusSm
-            implicitHeight: Theme.iconLg
-            implicitWidth: divergedBadge.implicitWidth + 2 * Theme.spaceXs
-            Label {
-                id: divergedBadge
-                anchors.centerIn: parent
-                text: qsTr("REMOTE MOVED")
-                color: Theme.warning
-                font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
-            }
-        }
         // Push, in whichever shape this branch's standing with its remote
         // allows (デザイン規約 §リモートへ送る). The counts behind it are
         // from the last fetch, so they are believed only where they refuse.
