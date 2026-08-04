@@ -57,8 +57,8 @@ Item {
         anchors.leftMargin: Theme.spaceMd + navRow.depth * Theme.spaceMd
         anchors.rightMargin: Theme.spaceSm
         spacing: Theme.spaceXs
-        // Fixed-width slot so the arrow column lines up with the
-        // pinned-branch check icon.
+        // Fixed-width slot so every folder's arrow starts its depth's
+        // column.
         Label {
             visible: navRow.folder
             text: navRow.collapsed ? "▸" : "▾"

@@ -135,7 +135,9 @@ Rectangle {
                 width: branchList.width
                 height: Theme.rowHeight
                 y: rowAbove ? 0 : branchList.height - height
-                color: Theme.bgElevated
+                // Dressed as the row it stands for, down to the margins:
+                // the current branch's own highlight, not a header band.
+                color: Theme.accentMuted
                 Rectangle {
                     anchors.fill: parent
                     color: Theme.bgHover
@@ -146,14 +148,6 @@ Rectangle {
                     anchors.leftMargin: Theme.spaceMd
                     anchors.rightMargin: Theme.spaceSm
                     spacing: Theme.spaceXs
-                    // "You are here" marker, sharing the fold arrows'
-                    // column so the sidebar lines up.
-                    NavIcon {
-                        kind: "check"
-                        tint: Theme.accent
-                        width: Theme.iconSm + 2
-                        height: Theme.iconSm + 2
-                    }
                     Label {
                         Layout.fillWidth: true
                         text: sidebar.workTree.detached ? qsTr("DETACHED HEAD")
