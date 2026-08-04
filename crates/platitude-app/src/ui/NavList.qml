@@ -23,9 +23,12 @@ ListView {
     visible: expanded
     Layout.fillWidth: true
     Layout.fillHeight: expanded
+    // A section closes on a hairline of ground — just enough to keep its
+    // last row off the next header band. Anything thicker reads as a
+    // blank row belonging to the section.
     Layout.maximumHeight: !expanded ? 0
                           : stretch ? Number.POSITIVE_INFINITY
-                          : count * Theme.rowHeight + Theme.spaceXs
+                          : count * Theme.rowHeight + Theme.borderWidth
     clip: true
     model: sectionModel
     reuseItems: true
