@@ -1043,7 +1043,17 @@ impl RepoSession {
                     .event(SessionEvent::WriteFinished { op, error: None });
                 after == AfterWrite::Graph
             }
-            Err(error) if error.is_cancelled() => return,
+            // Cancelled means the session is closing, but the event pair
+            // must still balance: the UI counts Started/Finished to know
+            // whether a write is in flight, and an unmatched start would
+            // pin that count for good.
+            Err(error) if error.is_cancelled() => {
+                self.sink.event(SessionEvent::WriteFinished {
+                    op,
+                    error: Some(error.to_string()),
+                });
+                return;
+            }
             Err(error) => {
                 tracing::warn!(op, %error, "write failed");
                 self.sink.event(SessionEvent::WriteFinished {
