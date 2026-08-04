@@ -295,27 +295,36 @@ Item {
             repoTab.checkInHistory(oidHex)
     }
 
-    // Moving off a half-written message would drop it. Ask first, and
-    // leave the selection where it is while the question stands —
-    // nothing has moved yet.
-    function guardEdits(proceed) {
-        if (!detailsPane.messageDirty) {
+    // Moving off a half-written message would drop it. Hold the move
+    // and let the editor ask — the question is about the text, so it is
+    // asked where the text is rather than over the whole window. The
+    // selection stays where it is while it stands: nothing has moved.
+    property var pendingMove: null
+    function guardEdits(targetOid, proceed) {
+        // Landing where it already is takes nothing away.
+        if (!detailsPane.messageDirty || targetOid === page.selectedOid) {
             proceed()
             return
         }
         const back = graphModel.rowOf(page.selectedOid)
         if (back >= 0)
             graphPane.setCurrentRow(back)
-        page.confirmRequested(
-            qsTr("Discard the edits to this message?"),
-            qsTr("%1's message has been changed but not saved. Moving to "
-                 + "another commit leaves that text behind.")
-                .arg(page.selectedOid.substring(0, 8)),
-            qsTr("Discard edits"), proceed)
-        // A dialog is invisible to a screenshot (popups draw in the
-        // window overlay), so say so where the smoke run can read it.
-        if (AppBackend.autoAct !== "")
-            AppBackend.report("edits_guarded oid=" + page.selectedOid.substring(0, 8))
+        page.pendingMove = proceed
+    }
+    function resolveLeave(discard) {
+        const go = page.pendingMove
+        page.pendingMove = null
+        if (discard && go)
+            go()
+    }
+    Connections {
+        target: detailsPane
+        // Reverted or saved by hand while the question stood: there is
+        // nothing left to lose, so it answers itself.
+        function onMessageDirtyChanged() {
+            if (!detailsPane.messageDirty)
+                page.pendingMove = null
+        }
     }
 
     // ---- smoke hook ------------------------------------------------
@@ -345,9 +354,14 @@ Item {
             if (AppBackend.autoAct === "reword")
                 detailsPane.submitMessage()
             // "edit-message-leave" walks away from the unsaved text,
-            // which is what raises the question about dropping it.
-            else if (AppBackend.autoAct === "edit-message-leave")
+            // which is what raises the question about dropping it;
+            // "-discard" then answers it, which lets the move through.
+            else if (AppBackend.autoAct === "edit-message-leave"
+                     || AppBackend.autoAct === "edit-message-discard") {
                 page.activateRow(graphModel.oidAt(graphModel.rowOf(page.selectedOid) + 1))
+                if (AppBackend.autoAct === "edit-message-discard")
+                    detailsPane.leaveResolved(true)
+            }
         }
     }
     function runAutoAct() {
@@ -378,7 +392,8 @@ Item {
             page.openCommitMenu(branchesModel.headOid)
             page.squashCommit(branchesModel.headOid)
         } else if (act === "reword" || act === "edit-message"
-                   || act === "edit-message-leave") {
+                   || act === "edit-message-leave"
+                   || act === "edit-message-discard") {
             // Through the pane, like typing: selecting the commit puts
             // its message in the boxes, and the boxes are what saves.
             // "edit-message" leaves it unsaved, for the editing state.
@@ -561,11 +576,17 @@ Item {
     // What a row click means: the synthetic WIP row (all-zero id)
     // opens the working-tree view, anything else selects the commit.
     function activateRow(oidHex) {
-        page.guardEdits(function () { page.selectRow(oidHex) })
+        page.guardEdits(oidHex, function () { page.selectRow(oidHex) })
     }
     function selectRow(oidHex) {
         // Any new selection settles where the last rewrite left off.
         page.rewordRow = -1
+        // A click moves the highlight itself, but one held back by the
+        // unsaved-message question does not: the question put it back
+        // where it was, so the answer has to move it again.
+        const row = graphModel.rowOf(oidHex)
+        if (row >= 0)
+            graphPane.setCurrentRow(row)
         if (oidHex !== "" && !/[^0]/.test(oidHex)) {
             page.showWip()
             return
@@ -870,9 +891,11 @@ Item {
                                   + "message.")
                            : "")
                     busy: repoTab.busyCount > 0
+                    asking: page.pendingMove !== null
                     // HEAD's own commit, not the current branch's tip:
                     // detached, there is no branch to ask.
                     headOid: workTree.headOid
+                    onLeaveResolved: discard => page.resolveLeave(discard)
                     onMessageSubmitted: (oidHex, subject, body) =>
                         page.saveMessage(oidHex, subject, body)
                     onFileActivated: (path, origPath) =>
@@ -890,7 +913,7 @@ Item {
     }
 
     function jumpToRef(oidHex) {
-        page.guardEdits(function () {
+        page.guardEdits(oidHex, function () {
             const row = graphModel.rowOf(oidHex)
             if (row >= 0)
                 graphPane.jumpToRow(row)

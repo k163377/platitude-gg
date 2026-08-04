@@ -28,6 +28,10 @@ ColumnLayout {
     // Why the boxes are read-only, in one line ("" when they are not).
     // A box that refuses typing without saying why reads as broken.
     property string editBlocked: ""
+    // Something wants to move off this commit while the message is
+    // half-written. The question belongs to the text, so it is asked
+    // where the text is: the row under the boxes turns into it.
+    property bool asking: false
 
     signal fileActivated(string path, string origPath)
     signal parentClicked(string oidHex)
@@ -36,6 +40,9 @@ ColumnLayout {
     signal popStashRequested(string selector)
     /// Save was pressed.
     signal messageSubmitted(string oidHex, string subject, string body)
+    /// The leaving question was answered: true drops the edits and lets
+    /// the move through, false stays on this commit.
+    signal leaveResolved(bool discard)
 
     // ---- message editor state --------------------------------------
     // The boxes are filled by hand rather than bound: typing would
@@ -168,7 +175,10 @@ ColumnLayout {
             Layout.preferredHeight: subjectArea.implicitHeight + Theme.spaceSm
             color: Theme.bgBase
             radius: Theme.radiusMd
-            border.color: Theme.borderDefault
+            // While the question stands, the boxes it is about carry it:
+            // the click that asked it happened over on the graph, and
+            // nothing else would draw the eye back here.
+            border.color: detailsPane.asking ? Theme.warning : Theme.borderDefault
             border.width: Theme.borderWidth
             TextArea {
                 id: subjectArea
@@ -196,7 +206,7 @@ ColumnLayout {
                                              + Theme.spaceSm, 120)
             color: Theme.bgBase
             radius: Theme.radiusMd
-            border.color: Theme.borderSubtle
+            border.color: detailsPane.asking ? Theme.warning : Theme.borderSubtle
             border.width: Theme.borderWidth
             ScrollView {
                 anchors.fill: parent
@@ -229,11 +239,20 @@ ColumnLayout {
             // worth a line.
             Label {
                 Layout.fillWidth: true
-                visible: detailsPane.details.shaHex !== detailsPane.headOid
+                visible: !detailsPane.asking
+                         && detailsPane.details.shaHex !== detailsPane.headOid
                 wrapMode: Text.Wrap
                 text: qsTr("Saving replays this commit, so every commit after "
                            + "it gets a new identity.")
                 color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+            }
+            Label {
+                Layout.fillWidth: true
+                visible: detailsPane.asking
+                wrapMode: Text.Wrap
+                text: qsTr("Moving to another commit leaves this text behind.")
+                color: Theme.warning
                 font.pixelSize: Theme.fontSm
             }
             RowLayout {
@@ -241,16 +260,33 @@ ColumnLayout {
                 spacing: Theme.spaceSm
                 Item { Layout.fillWidth: true }
                 HoverToolButton {
+                    visible: !detailsPane.asking
                     text: qsTr("Cancel")
                     font.pixelSize: Theme.fontSm
                     onClicked: detailsPane.revertMessage()
                 }
                 HoverButton {
+                    visible: !detailsPane.asking
                     implicitHeight: Theme.controlHeight
                     highlighted: true
                     text: qsTr("Save message")
                     enabled: !detailsPane.busy && subjectArea.text.trim() !== ""
                     onClicked: detailsPane.submitMessage()
+                }
+                // The two ways out of the question. Staying is the
+                // highlighted one: it is the answer that loses nothing.
+                HoverToolButton {
+                    visible: detailsPane.asking
+                    text: qsTr("Discard edits")
+                    font.pixelSize: Theme.fontSm
+                    onClicked: detailsPane.leaveResolved(true)
+                }
+                HoverButton {
+                    visible: detailsPane.asking
+                    implicitHeight: Theme.controlHeight
+                    highlighted: true
+                    text: qsTr("Keep editing")
+                    onClicked: detailsPane.leaveResolved(false)
                 }
             }
         }
