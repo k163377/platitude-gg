@@ -148,6 +148,14 @@ Rectangle {
                     anchors.leftMargin: Theme.spaceMd
                     anchors.rightMargin: Theme.spaceSm
                     spacing: Theme.spaceXs
+                    // The rows' mark slot, left empty: the stand-in has
+                    // no mark of its own, but its name has to begin in
+                    // the same column as the rows it rides above.
+                    Item {
+                        Layout.preferredWidth: Theme.iconSm + 2
+                        Layout.preferredHeight: Theme.iconSm + 2
+                        Layout.alignment: Qt.AlignVCenter
+                    }
                     Label {
                         Layout.fillWidth: true
                         text: sidebar.workTree.detached ? qsTr("DETACHED HEAD")

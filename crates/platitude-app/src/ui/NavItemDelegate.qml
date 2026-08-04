@@ -57,44 +57,53 @@ Item {
         anchors.leftMargin: Theme.spaceMd + navRow.depth * Theme.spaceMd
         anchors.rightMargin: Theme.spaceSm
         spacing: Theme.spaceXs
-        // Fixed-width slot so every folder's arrow starts its depth's
-        // column.
-        Label {
-            visible: navRow.folder
-            text: navRow.collapsed ? "▸" : "▾"
-            color: Theme.textSecondary
-            font.pixelSize: Theme.fontSm
+        // Every row opens with this slot, held open even when empty, so
+        // that at a given depth all names begin in the same column: a
+        // folder's fold arrow, a worktree file's change icon, and later
+        // the mark for a hidden branch all live here. Letting the slot
+        // collapse is what put a leaf's name to the *left* of the folder
+        // it sits under (layouts drop invisible children entirely).
+        Item {
             Layout.preferredWidth: Theme.iconSm + 2
-            horizontalAlignment: Text.AlignHCenter
-        }
-        ChangeIcon {
-            visible: !navRow.folder && navRow.kindHint === "wt"
-            change: navRow.change
-            width: Theme.iconSm + 2
-            height: Theme.iconSm + 2
-            ToolTip.visible: wtHover.containsMouse
-            ToolTip.delay: 600
-            ToolTip.text: {
-                const c = navRow.change.length > 0 ? navRow.change[0] : ""
-                const what = navRow.change.length === 2 ? qsTr("Conflicted")
-                           : c === "M" ? qsTr("Modified")
-                           : c === "A" ? qsTr("Added")
-                           : c === "D" ? qsTr("Deleted")
-                           : c === "R" ? qsTr("Renamed")
-                           : c === "C" ? qsTr("Copied")
-                           : c === "T" ? qsTr("Type changed")
-                           : c === "?" ? qsTr("Untracked") : navRow.change
-                const where = navRow.bucket === "staged" ? qsTr("staged")
-                            : navRow.bucket === "unstaged" ? qsTr("unstaged")
-                            : navRow.bucket === "untracked" ? qsTr("untracked")
-                            : qsTr("conflict")
-                return what + " · " + where
-            }
-            MouseArea {
-                id: wtHover
+            Layout.preferredHeight: Theme.iconSm + 2
+            Layout.alignment: Qt.AlignVCenter
+            Label {
                 anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.NoButton
+                visible: navRow.folder
+                text: navRow.collapsed ? "▸" : "▾"
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+            ChangeIcon {
+                anchors.fill: parent
+                visible: !navRow.folder && navRow.kindHint === "wt"
+                change: navRow.change
+                ToolTip.visible: wtHover.containsMouse
+                ToolTip.delay: 600
+                ToolTip.text: {
+                    const c = navRow.change.length > 0 ? navRow.change[0] : ""
+                    const what = navRow.change.length === 2 ? qsTr("Conflicted")
+                               : c === "M" ? qsTr("Modified")
+                               : c === "A" ? qsTr("Added")
+                               : c === "D" ? qsTr("Deleted")
+                               : c === "R" ? qsTr("Renamed")
+                               : c === "C" ? qsTr("Copied")
+                               : c === "T" ? qsTr("Type changed")
+                               : c === "?" ? qsTr("Untracked") : navRow.change
+                    const where = navRow.bucket === "staged" ? qsTr("staged")
+                                : navRow.bucket === "unstaged" ? qsTr("unstaged")
+                                : navRow.bucket === "untracked" ? qsTr("untracked")
+                                : qsTr("conflict")
+                    return what + " · " + where
+                }
+                MouseArea {
+                    id: wtHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                }
             }
         }
         Label {
