@@ -20,6 +20,7 @@ QtObject {
     readonly property int graphDefaultLanes: 12
     readonly property int detailsAvatar: 40
     readonly property int anchorDelayMs: 50
+    readonly property int pollIntervalMs: 10000
     readonly property int spinMs: 1000
     readonly property var laneDash: [1, 1]
 }

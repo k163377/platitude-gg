@@ -387,6 +387,16 @@ impl RepoTab {
         }
     }
 
+    /// The tick the page runs while it is on screen: refs + status, and a
+    /// graph rebuild only when one of them moved. Ticks that arrive while
+    /// the session is busy are dropped there, not queued.
+    #[qslot]
+    fn refresh_poll(&mut self) {
+        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
+            session.refresh_poll();
+        }
+    }
+
     /// Full refresh: restarts the log stream as well (manual refresh).
     #[qslot]
     fn refresh_all(&mut self) {

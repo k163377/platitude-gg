@@ -745,6 +745,20 @@ Item {
             repoTab.refreshQuick()
     }
 
+    /// True while the window is on screen (see Main.qml): the page shown
+    /// there re-reads its repository on a tick, so a commit made in a
+    /// terminal or by an agent turns up on its own.
+    property bool onScreen: false
+    Timer {
+        interval: Metrics.pollIntervalMs
+        repeat: true
+        // Only the tab in front — the others catch up when switched to,
+        // and reading every open repository on every tick is what makes
+        // polling expensive elsewhere.
+        running: page.onScreen && page.visible && repoTab.state === "open"
+        onTriggered: repoTab.refreshPoll()
+    }
+
     // A reworded commit came back under a different hash: the one now
     // standing where it stood is it, since only the message changed.
     function followRewrittenCommit() {

@@ -10,6 +10,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import QtQuick.Dialogs
+import QtQuick.Window
 import platitude
 import platitude.ui
 
@@ -78,6 +79,14 @@ ApplicationWindow {
     // Window focus is a refresh trigger (refs/status/stash only).
     property int focusEpoch: 0
     onActiveChanged: if (active) focusEpoch++
+
+    // Being on screen — not being focused — is what drives the periodic
+    // re-read. This window is usually the one sitting beside the editor,
+    // terminal or agent that moves the repository, and a window that only
+    // catches up when clicked hides exactly what it is kept open to show.
+    readonly property bool onScreen: root.visible
+                                     && root.visibility !== Window.Minimized
+                                     && root.visibility !== Window.Hidden
 
     // QML never drops a text input's focus on its own: once the sidebar
     // filter or the commit editor was clicked, its caret kept blinking
@@ -325,6 +334,7 @@ ApplicationWindow {
                 model: tabsModel
                 RepoPage {
                     focusEpoch: root.focusEpoch
+                    onScreen: root.onScreen
                     onConfirmRequested: (heading, detail, acceptText, action) =>
                         root.confirm(heading, detail, acceptText, action)
                     onOpenRepositoryPicker: folderDialog.open()
