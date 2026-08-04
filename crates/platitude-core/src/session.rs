@@ -351,6 +351,16 @@ pub struct RepoSession {
     log_cancel: Mutex<Option<CancellationToken>>,
     /// Dirty working tree → the log stream prepends a synthetic WIP row.
     wip_dirty: std::sync::atomic::AtomicBool,
+    /// Fingerprint of the last refs read (see [`refs_key`]), so a refresh
+    /// can tell an external commit / fetch / switch from a quiet re-read.
+    /// `None` until the first read: opening already streams the graph.
+    refs_key: Mutex<Option<u64>>,
+    /// Set while the write queue runs a request, so the poll can stay out
+    /// of a repository that is mid-operation.
+    write_busy: std::sync::atomic::AtomicBool,
+    /// One permit, held by a running poll: a tick that arrives while the
+    /// previous one is still reading is dropped rather than queued.
+    poll_slot: Arc<tokio::sync::Semaphore>,
     /// Submission end of the write queue (see the module docs).
     write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,
     /// Time budget for fetch / push (settings, Phase 4, persist this).
@@ -388,6 +398,9 @@ impl RepoSession {
             log_gen: AtomicU64::new(0),
             log_cancel: Mutex::new(None),
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
+            refs_key: Mutex::new(None),
+            write_busy: std::sync::atomic::AtomicBool::new(false),
+            poll_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             write_tx,
             network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
             auto_fetch: Mutex::new(None),
@@ -734,39 +747,95 @@ impl RepoSession {
         self.refresh_worktrees();
     }
 
-    pub fn refresh_refs(self: &Arc<Self>) {
-        let Some(workdir) = self.workdir() else {
+    /// The periodic re-read that runs while the repository is on screen:
+    /// refs and status only. Stashes and worktrees ride the focus and
+    /// post-write refreshes instead — two more processes every tick to
+    /// catch what a poll practically never sees move on its own.
+    ///
+    /// Skipped while a write runs (that repository is mid-operation, and
+    /// the write refreshes when it lands) and while the previous poll is
+    /// still going, so a slow repository polls less often instead of
+    /// stacking reads up.
+    pub fn refresh_poll(self: &Arc<Self>) {
+        if self.write_busy.load(Ordering::SeqCst) {
+            tracing::trace!("poll skipped: a write is running");
+            return;
+        }
+        let Ok(permit) = Arc::clone(&self.poll_slot).try_acquire_owned() else {
+            tracing::trace!("poll skipped: the previous one has not finished");
             return;
         };
         let s = Arc::clone(self);
-        let op_gen = self.refs_gate.begin();
         self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            let refs = refs::load(&s.executor, &workdir, &cancel).await;
-            let head = refs::head_state(&s.executor, &workdir, &cancel).await;
-            // A repository with no remotes is normal, and so is a failure
-            // to read the list; neither is a reason to lose the refs.
-            let remotes = remote::list(&s.executor, &workdir, &cancel)
-                .await
-                .unwrap_or_default();
-            match (refs, head) {
-                (Ok(refs), Ok(head)) => {
-                    if !s.refs_gate.is_current(op_gen) {
-                        return;
-                    }
-                    let mut snapshot = build_snapshot(&refs, &head);
-                    snapshot.remote_names = remotes.into_iter().map(|r| r.name).collect();
-                    let label_updates = s.apply_refs(&refs, &head);
-                    s.sink.event(SessionEvent::RefsLoaded { snapshot });
-                    if !label_updates.is_empty() {
-                        s.sink.event(SessionEvent::LabelsChanged {
-                            rows: label_updates,
-                        });
-                    }
-                }
-                (Err(e), _) | (_, Err(e)) => s.fail("refs", e),
+            let _permit = permit;
+            // Both reads can call for a rebuild, but the graph is one
+            // picture: an external commit moves a ref *and* cleans the
+            // tree, and walking twice would throw one pass away.
+            let (refs_moved, wip_flipped) = tokio::join!(s.publish_refs(), s.publish_status());
+            if refs_moved || wip_flipped {
+                s.refresh_log();
             }
         });
+    }
+
+    pub fn refresh_refs(self: &Arc<Self>) {
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            if s.publish_refs().await {
+                s.refresh_log();
+            }
+        });
+    }
+
+    /// Reads refs and HEAD, publishes the snapshot and the label diff, and
+    /// reports whether the ref layout moved since the last read.
+    ///
+    /// Chips alone are applied without rebuilding, but a moved ref means
+    /// commits the graph has never seen (an external commit, a fetch, a
+    /// switch), and those only appear if the walk runs again.
+    ///
+    /// Does not rebuild the graph itself: a caller that reads status in the
+    /// same pass rebuilds once for both (see [`RepoSession::refresh_poll`]).
+    async fn publish_refs(self: &Arc<Self>) -> bool {
+        let Some(workdir) = self.workdir() else {
+            return false;
+        };
+        let op_gen = self.refs_gate.begin();
+        let cancel = self.root_cancel.clone();
+        let refs = refs::load(&self.executor, &workdir, &cancel).await;
+        let head = refs::head_state(&self.executor, &workdir, &cancel).await;
+        // A repository with no remotes is normal, and so is a failure
+        // to read the list; neither is a reason to lose the refs.
+        let remotes = remote::list(&self.executor, &workdir, &cancel)
+            .await
+            .unwrap_or_default();
+        match (refs, head) {
+            (Ok(refs), Ok(head)) => {
+                if !self.refs_gate.is_current(op_gen) {
+                    return false;
+                }
+                let key = refs_key(&refs, &head);
+                let previous = self
+                    .refs_key
+                    .lock()
+                    .map(|mut slot| slot.replace(key))
+                    .unwrap_or_default();
+                let mut snapshot = build_snapshot(&refs, &head);
+                snapshot.remote_names = remotes.into_iter().map(|r| r.name).collect();
+                let label_updates = self.apply_refs(&refs, &head);
+                self.sink.event(SessionEvent::RefsLoaded { snapshot });
+                if !label_updates.is_empty() {
+                    self.sink.event(SessionEvent::LabelsChanged {
+                        rows: label_updates,
+                    });
+                }
+                previous.is_some_and(|previous| previous != key)
+            }
+            (Err(e), _) | (_, Err(e)) => {
+                self.fail("refs", e);
+                false
+            }
+        }
     }
 
     pub fn refresh_status(self: &Arc<Self>) {
@@ -822,13 +891,6 @@ impl RepoSession {
                 false
             }
         }
-    }
-
-    /// Everything [`RepoSession::refresh_quick`] covers except status.
-    fn refresh_side_snapshots(self: &Arc<Self>) {
-        self.refresh_refs();
-        self.refresh_stashes();
-        self.refresh_worktrees();
     }
 
     /// Re-reads the author identity and signing configuration.
@@ -958,7 +1020,11 @@ impl RepoSession {
                     None => return,
                 },
             };
+            // Set around the whole request, refreshes included, so the
+            // poll keeps out until the write's own refresh has landed.
+            self.write_busy.store(true, Ordering::SeqCst);
             self.run_write(request).await;
+            self.write_busy.store(false, Ordering::SeqCst);
         }
     }
 
@@ -991,17 +1057,19 @@ impl RepoSession {
             }
         };
 
-        // Settle the working tree before touching the graph: the WIP row
-        // exists only while the tree is dirty, so rebuilding first and then
-        // reacting to the status would rebuild twice for one write.
-        let wip_flipped = self.publish_status().await;
-        if rebuild_graph || wip_flipped {
+        // Settle the working tree and the refs before touching the graph:
+        // the WIP row exists only while the tree is dirty and a write that
+        // lands a commit moves a ref, so rebuilding first and then reacting
+        // to either would walk the whole history twice for one write.
+        let (wip_flipped, refs_moved) = tokio::join!(self.publish_status(), self.publish_refs());
+        if rebuild_graph || wip_flipped || refs_moved {
             // Off-screen rebuild: the pane keeps showing the old graph
             // until the finished one swaps in (or nothing changed and
             // nothing repaints — the auto-fetch common case).
             self.refresh_log();
         }
-        self.refresh_side_snapshots();
+        self.refresh_stashes();
+        self.refresh_worktrees();
         if after == AfterWrite::Author {
             self.refresh_author();
         }
@@ -2131,6 +2199,27 @@ fn build_label_map(refs: &[RefEntry], head: &HeadState) -> HashMap<Oid, Vec<RefL
         });
     }
     map
+}
+
+/// Fingerprints where every ref points, so two reads can be compared
+/// without keeping the listing around.
+///
+/// Only what moves the walk counts: a renamed upstream or a changed sort
+/// date redraws chips through the label diff, and rebuilding for those
+/// would repaint the graph over nothing. `git for-each-ref` lists in
+/// refname order, so equal layouts hash equal.
+fn refs_key(refs: &[RefEntry], head: &HeadState) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for entry in refs {
+        entry.name.hash(&mut hasher);
+        entry.target.hash(&mut hasher);
+        entry.peeled.hash(&mut hasher);
+    }
+    head.branch.hash(&mut hasher);
+    head.oid.hash(&mut hasher);
+    head.detached.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Builds the sorted sidebar snapshot.

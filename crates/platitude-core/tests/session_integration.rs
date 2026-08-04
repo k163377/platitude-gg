@@ -1384,6 +1384,136 @@ async fn background_refresh_swaps_only_on_change() {
     session.close();
 }
 
+/// A ref that moved outside the session (a commit in a terminal, a fetch,
+/// a switch by another tool) points at commits this graph has never
+/// walked, so re-reading the refs has to rebuild — chips alone cannot show
+/// them. A re-read that finds every ref where it left it stays silent.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_external_ref_move_rebuilds_the_graph() {
+    let (mut repo, _) = scenario();
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    sink.settled_stream_gen(5).await;
+
+    let stream_count = || {
+        sink.count(|e| {
+            matches!(
+                e,
+                SessionEvent::LogStarted { .. }
+                    | SessionEvent::LogChunk { .. }
+                    | SessionEvent::LogFinished { .. }
+                    | SessionEvent::LogReplaced { .. }
+                    | SessionEvent::LogFailed { .. }
+            )
+        })
+    };
+    let baseline = stream_count();
+
+    // The quiet case is the common one: on an idle repository every poll
+    // re-reads the same refs, and rebuilding for those would repaint the
+    // graph over nothing.
+    session.refresh_refs();
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert_eq!(
+        stream_count(),
+        baseline,
+        "an unmoved ref layout rebuilt nothing: {:?}",
+        sink.events.lock().unwrap()
+    );
+
+    // Now main moves under the session, with the working tree clean on
+    // both sides: nothing but the refs can report this.
+    repo.commit_file("outside.txt", "x\n", "outside commit");
+    session.refresh_refs();
+    sink.settled_stream_gen(6).await;
+    let events = sink.events.lock().unwrap();
+    let replacements = events[..]
+        .iter()
+        .skip_while(|e| !matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 6))
+        .filter(|e| matches!(e, SessionEvent::LogReplaced { .. }))
+        .count();
+    assert_eq!(
+        replacements,
+        1,
+        "the moved ref rebuilt once: {:?}",
+        events[..].iter().collect::<Vec<_>>()
+    );
+    assert_eq!(
+        log_starts(&events[..]),
+        1,
+        "the rebuild replaced in place; only opening resets and streams"
+    );
+    drop(events);
+    session.close();
+}
+
+/// One tick, one rebuild. A commit made outside the session moves a ref
+/// *and* turns the tree clean, and the poll reads both: walking the
+/// history once per reader would throw a whole pass away every time
+/// someone else commits.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_poll_rebuilds_the_graph_once() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("root.txt", "0\n", "root");
+    repo.write_file("new.txt", "content\n");
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    // root + WIP row.
+    sink.settled_stream_gen(2).await;
+
+    let replacements = || sink.count(|e| matches!(e, SessionEvent::LogReplaced { .. }));
+    let starts = || sink.count(|e| matches!(e, SessionEvent::LogStarted { .. }));
+    let (quiet_replacements, quiet_starts) = (replacements(), starts());
+
+    // An idle repository is what the poll spends nearly all its ticks on.
+    session.refresh_poll();
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert_eq!(
+        (replacements(), starts()),
+        (quiet_replacements, quiet_starts),
+        "a poll over an unchanged repository stayed silent: {:?}",
+        sink.events.lock().unwrap()
+    );
+
+    // Both signals move at once: `new.txt` becomes a commit, so the ref
+    // advances and the WIP row goes away.
+    repo.commit_file("new.txt", "content\n", "outside commit");
+    session.refresh_poll();
+    sink.wait_for("the poll's rebuild", |evs| {
+        evs.iter()
+            .filter(|e| matches!(e, SessionEvent::LogReplaced { .. }))
+            .count()
+            .gt(&quiet_replacements)
+            .then_some(())
+    })
+    .await;
+    // Give the second rebuild this guards against time to show up.
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert_eq!(
+        replacements(),
+        quiet_replacements + 1,
+        "the moved ref and the cleaned tree rebuilt once between them: {:?}",
+        sink.events.lock().unwrap()
+    );
+    assert_eq!(
+        starts(),
+        quiet_starts,
+        "the rebuild replaced in place; a poll never resets the graph"
+    );
+    session.close();
+}
+
 /// Index of the `WriteFinished` for one operation.
 fn position_of(events: &[SessionEvent], op: &str) -> Option<usize> {
     events
