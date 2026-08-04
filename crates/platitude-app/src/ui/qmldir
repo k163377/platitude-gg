@@ -26,7 +26,6 @@ NavList 1.0 NavList.qml
 PaneHeader 1.0 PaneHeader.qml
 RefChip 1.0 RefChip.qml
 RepoPage 1.0 RepoPage.qml
-RewordDialog 1.0 RewordDialog.qml
 SettingsDialog 1.0 SettingsDialog.qml
 SidebarPane 1.0 SidebarPane.qml
 SlimField 1.0 SlimField.qml

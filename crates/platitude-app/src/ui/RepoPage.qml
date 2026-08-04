@@ -69,6 +69,11 @@ Item {
                 page.menuPublished = repoTab.publishPublished > 0
                 page.menuPublishKnown = true
             }
+            if (page.editOid !== ""
+                    && repoTab.publishRange === page.editOid + "^!") {
+                page.editPublished = repoTab.publishPublished > 0
+                page.editPublishKnown = true
+            }
             page.absorbHeadMessage()
             page.absorbWriteResult()
         }
@@ -241,10 +246,14 @@ Item {
             onTriggered: page.switchTo("commit", page.menuOid, page.menuShort)
         }
         MenuSeparator {}
+        // The click that opened this menu selected the row too, so the
+        // message is already in the details pane's boxes: this just
+        // puts the caret there.
         MenuItem {
-            text: qsTr("Edit message…")
-            enabled: repoTab.busyCount === 0 && page.menuPublishKnown
-            onTriggered: page.editMessage(page.menuOid)
+            text: qsTr("Edit message")
+            enabled: repoTab.busyCount === 0 && page.selectedStashRef === ""
+                     && page.menuOid === detailsModel.shaHex
+            onTriggered: detailsPane.focusMessage()
         }
         MenuItem {
             text: qsTr("Fold into the commit before it")
@@ -265,8 +274,8 @@ Item {
     // ---- rewriting one commit --------------------------------------
     // Both of these replay history when the commit is not the newest
     // one, so both warn once the commit has been pushed.
-    function rewriteWarning(action, run) {
-        if (!page.menuPublished) {
+    function rewriteWarning(shortSha, published, action, run) {
+        if (!published) {
             run()
             return
         }
@@ -275,32 +284,44 @@ Item {
             qsTr("%1 has been pushed. %2 replaces it, and every commit after "
                  + "it, with different ones — anyone who already has them will "
                  + "be out of step until they reset.")
-                .arg(page.menuShort).arg(action),
+                .arg(shortSha).arg(action),
             qsTr("Rewrite anyway"), run)
     }
     function squashCommit(oidHex) {
-        page.rewriteWarning(qsTr("Folding it in"),
+        page.rewriteWarning(page.menuShort, page.menuPublished,
+                            qsTr("Folding it in"),
                             function () { repoTab.squashIntoParent(oidHex) })
     }
-    function editMessage(oidHex) {
-        messageDialog.oid = oidHex
-        messageDialog.published = page.menuPublished
-        messageDialog.open()
-    }
 
-    RewordDialog {
-        id: messageDialog
-        details: detailsModel
-        onSubmitted: (oid, subject, body, published) => {
-            const run = function () {
-                repoTab.rewordCommit(oid, subject, body)
-            }
-            if (published)
-                page.rewriteWarning(qsTr("Changing its message"), run)
-            else
-                run()
-        }
+    // ---- editing the selected commit's message ---------------------
+    // The details pane edits in place; the page answers "has it left
+    // this machine?" while the typing is still going on, so the save
+    // already knows whether to warn.
+    property string editOid: ""
+    property bool editPublished: false
+    property bool editPublishKnown: false
+    function beginMessageEdit(oidHex) {
+        if (page.editOid === oidHex && page.editPublishKnown)
+            return
+        page.editOid = oidHex
+        page.editPublished = false
+        page.editPublishKnown = false
+        repoTab.checkPublish(oidHex + "^!")
     }
+    function saveMessage(oidHex, subject, body) {
+        page.rewriteWarning(
+            oidHex.substring(0, 8), page.editPublished,
+            qsTr("Changing its message"),
+            function () {
+                // Where the row sits now. A reword leaves the shape of
+                // the history alone, so the rewritten commit lands on
+                // the same row and the selection can follow it there.
+                page.rewordRow = graphModel.rowOf(oidHex)
+                repoTab.rewordCommit(oidHex, subject, body)
+            })
+    }
+    // Row to re-select once the rewritten graph arrives (-1 = none).
+    property int rewordRow: -1
 
     // ---- smoke hook ------------------------------------------------
     // PG_AUTO_ACT runs one write operation through exactly the code
@@ -317,6 +338,23 @@ Item {
         interval: 800
         onTriggered: page.stageSelection(
             0, AppBackend.autoAct === "stage-line" ? 0 : -1)
+    }
+    // The message has to arrive before it can be typed over, and the
+    // "already pushed?" answer before the save may act on it.
+    Timer {
+        id: rewordTimer
+        interval: 800
+        onTriggered: {
+            detailsPane.setMessageText(AppBackend.autoActArg, "")
+            // "edit-message" stops here, with the save row on screen.
+            if (AppBackend.autoAct === "reword")
+                rewordSaveTimer.start()
+        }
+    }
+    Timer {
+        id: rewordSaveTimer
+        interval: 400
+        onTriggered: detailsPane.submitMessage()
     }
     function runAutoAct() {
         const act = AppBackend.autoAct
@@ -344,9 +382,12 @@ Item {
         } else if (act === "squash") {
             page.openCommitMenu(branchesModel.headOid)
             page.squashCommit(branchesModel.headOid)
-        } else if (act === "reword") {
-            page.openCommitMenu(branchesModel.headOid)
-            repoTab.rewordCommit(branchesModel.headOid, arg, "")
+        } else if (act === "reword" || act === "edit-message") {
+            // Through the pane, like typing: selecting the commit puts
+            // its message in the boxes, and the boxes are what saves.
+            // "edit-message" leaves it unsaved, for the editing state.
+            page.jumpToRef(branchesModel.headOid)
+            rewordTimer.start()
         } else if (act === "cherry-pick") {
             repoTab.cherryPick(arg)
         } else if (act === "stage-hunk" || act === "stage-line") {
@@ -391,6 +432,11 @@ Item {
         }
         if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage")
             page.reloadDiff()
+        // The message landed: the editor stops offering to save it, and
+        // keeps what was written until the selection catches up with
+        // the commit that now carries it.
+        if (repoTab.lastWriteOp === "reword")
+            detailsPane.noteMessageSaved()
         // Moving HEAD rewrites the working tree under the diff pane:
         // the file it holds may not even exist where the move landed,
         // so the center goes back to the graph that was moved through.
@@ -495,9 +541,25 @@ Item {
             repoTab.refreshQuick()
     }
 
+    // A reworded commit came back under a different hash: the one now
+    // standing where it stood is it, since only the message changed.
+    function followRewrittenCommit() {
+        const row = page.rewordRow
+        const oidHex = graphModel.oidAt(row)
+        // Nothing there, or the working-tree row moved under it.
+        if (oidHex === "" || !/[^0]/.test(oidHex)) {
+            page.rewordRow = -1
+            return
+        }
+        graphPane.setCurrentRow(row)
+        page.activateRow(oidHex)
+    }
+
     // What a row click means: the synthetic WIP row (all-zero id)
     // opens the working-tree view, anything else selects the commit.
     function activateRow(oidHex) {
+        // Any new selection settles where the last rewrite left off.
+        page.rewordRow = -1
         if (oidHex !== "" && !/[^0]/.test(oidHex)) {
             page.showWip()
             return
@@ -551,6 +613,8 @@ Item {
                         graphPane.setCurrentRow(row)
                         if (resetHappened)
                             graphPane.anchorSoon()
+                    } else if (page.rewordRow >= 0) {
+                        page.followRewrittenCommit()
                     }
                 }
             }
@@ -780,10 +844,22 @@ Item {
                 }
 
                 DetailsPane {
+                    id: detailsPane
                     anchors.fill: parent
                     visible: !page.wipShown
                     details: detailsModel
                     stashRef: page.selectedStashRef
+                    // A stash is a commit, but not one on this branch:
+                    // replaying it is not what its message means.
+                    editable: !page.blank && repoTab.state === "open"
+                              && page.selectedStashRef === ""
+                    busy: repoTab.busyCount > 0
+                    saveReady: page.editPublishKnown
+                               && page.editOid === detailsModel.shaHex
+                    headOid: branchesModel.headOid
+                    onMessageEditStarted: oidHex => page.beginMessageEdit(oidHex)
+                    onMessageSubmitted: (oidHex, subject, body) =>
+                        page.saveMessage(oidHex, subject, body)
                     onFileActivated: (path, origPath) =>
                         page.toggleDiff("commit", path, origPath)
                     onParentClicked: oidHex => page.jumpToRef(oidHex)

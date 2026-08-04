@@ -7,18 +7,100 @@ import platitude.ui
 
 // Right pane, commit-details mode: message, author card, stash
 // actions when the selected row is a stash, and the changed-file list.
+// The message boxes are the editor for that commit's message — the
+// same pair the working-tree pane commits with, so a message is
+// written and rewritten in the same place.
 ColumnLayout {
     id: detailsPane
 
     required property var details
     // Reflog selector when the selected row is a stash ("" otherwise).
     property string stashRef: ""
+    // Whether this commit's message may be rewritten from here. The
+    // page decides: a stash is a commit too, but not one this pane can
+    // replay.
+    property bool editable: false
+    // A write is already running, so nothing new starts.
+    property bool busy: false
+    // The page has answered whether this commit is on a remote. Saving
+    // waits for it, so the warning cannot be outrun by a fast click.
+    property bool saveReady: false
+    // The current branch's newest commit: anything older is replayed
+    // instead of amended, which the editor says out loud.
+    property string headOid: ""
 
     signal fileActivated(string path, string origPath)
     signal parentClicked(string oidHex)
     signal copyRequested(string text)
     signal applyStashRequested(string selector)
     signal popStashRequested(string selector)
+    /// The boxes now hold something other than the commit's message.
+    signal messageEditStarted(string oidHex)
+    /// Save was pressed (the owner adds the rewrite warning).
+    signal messageSubmitted(string oidHex, string subject, string body)
+
+    // ---- message editor state --------------------------------------
+    // The boxes are filled by hand rather than bound: typing would
+    // break a binding for good, and the next commit would arrive in a
+    // box that no longer listens.
+    property string baseOid: ""
+    property string baseSubject: ""
+    property string baseBody: ""
+    readonly property bool messageDirty:
+        detailsPane.editable
+        && (subjectArea.text !== detailsPane.baseSubject
+            || bodyArea.text !== detailsPane.baseBody)
+
+    /// Adopt the model's message whenever it moves to another commit.
+    /// Nothing else can change a message in place — a different message
+    /// is a different commit — so an untouched box needs no other cue.
+    function syncMessage() {
+        if (detailsPane.details.shaHex === detailsPane.baseOid)
+            return
+        detailsPane.baseOid = detailsPane.details.shaHex
+        detailsPane.baseSubject = detailsPane.details.messageSubject
+        detailsPane.baseBody = detailsPane.details.messageBody
+        subjectArea.text = detailsPane.baseSubject
+        bodyArea.text = detailsPane.baseBody
+    }
+    /// Put the commit's own message back.
+    function revertMessage() {
+        subjectArea.text = detailsPane.baseSubject
+        bodyArea.text = detailsPane.baseBody
+    }
+    /// git took the new message. What was written becomes the resting
+    /// text: the commit it belonged to is gone under that hash, and the
+    /// model still holds the old one until the selection follows.
+    function noteMessageSaved() {
+        detailsPane.baseSubject = subjectArea.text
+        detailsPane.baseBody = bodyArea.text
+    }
+    function submitMessage() {
+        if (subjectArea.text.trim() === "")
+            return
+        detailsPane.messageSubmitted(detailsPane.details.shaHex,
+                                     subjectArea.text, bodyArea.text)
+    }
+    /// Put the caret in the summary box (the commit menu's entry).
+    function focusMessage() {
+        subjectArea.forceActiveFocus()
+        subjectArea.cursorPosition = subjectArea.length
+    }
+    /// Smoke hook: type into the boxes the way a keystroke would.
+    function setMessageText(subject, body) {
+        subjectArea.text = subject
+        bodyArea.text = body
+    }
+
+    onMessageDirtyChanged: {
+        if (detailsPane.messageDirty)
+            detailsPane.messageEditStarted(detailsPane.details.shaHex)
+    }
+    Connections {
+        target: detailsPane.details
+        function onChanged() { detailsPane.syncMessage() }
+    }
+    Component.onCompleted: detailsPane.syncMessage()
 
     spacing: 0
 
@@ -95,9 +177,9 @@ ColumnLayout {
                 id: subjectArea
                 anchors.fill: parent
                 anchors.margins: Theme.spaceXs
-                readOnly: true
+                readOnly: !detailsPane.editable
                 wrapMode: TextArea.Wrap
-                text: detailsPane.details.messageSubject
+                placeholderText: detailsPane.editable ? qsTr("Commit summary") : ""
                 font.pixelSize: Theme.fontLg
                 font.weight: Font.DemiBold
                 color: Theme.textPrimary
@@ -125,13 +207,51 @@ ColumnLayout {
                     contentItem.boundsBehavior = Flickable.StopAtBounds
                 TextArea {
                     id: bodyArea
-                    readOnly: true
+                    readOnly: !detailsPane.editable
                     wrapMode: TextArea.Wrap
-                    text: detailsPane.details.messageBody
+                    placeholderText: detailsPane.editable ? qsTr("Description") : ""
                     font.pixelSize: Theme.fontMd
                     color: Theme.textSecondary
                     background: null
                     padding: 0
+                }
+            }
+        }
+        // Only once something is actually changed: until then the pane
+        // keeps its resting shape and nothing invites a rewrite.
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spaceXs
+            visible: detailsPane.messageDirty
+            // The newest commit is amended in place and costs nothing;
+            // an older one is replayed, and everything built on it
+            // comes back as different commits. Only the second case is
+            // worth a line.
+            Label {
+                Layout.fillWidth: true
+                visible: detailsPane.details.shaHex !== detailsPane.headOid
+                wrapMode: Text.Wrap
+                text: qsTr("Saving replays this commit, so every commit after "
+                           + "it gets a new identity.")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spaceSm
+                Item { Layout.fillWidth: true }
+                HoverToolButton {
+                    text: qsTr("Cancel")
+                    font.pixelSize: Theme.fontSm
+                    onClicked: detailsPane.revertMessage()
+                }
+                HoverButton {
+                    implicitHeight: Theme.controlHeight
+                    highlighted: true
+                    text: qsTr("Save message")
+                    enabled: !detailsPane.busy && detailsPane.saveReady
+                             && subjectArea.text.trim() !== ""
+                    onClicked: detailsPane.submitMessage()
                 }
             }
         }
