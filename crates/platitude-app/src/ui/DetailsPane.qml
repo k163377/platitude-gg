@@ -68,10 +68,13 @@ ColumnLayout {
             }
         }
     }
+    // Inset on all four sides — the message box carries its own frame,
+    // and flush against the header band the two borders read as one
+    // welded block. Same inset as the pane edges, so the card sits
+    // square in its well.
     ColumnLayout {
         Layout.fillWidth: true
         Layout.margins: Theme.spaceSm
-        Layout.topMargin: 0
         spacing: Theme.spaceXs
         visible: detailsPane.details.shaHex !== ""
 

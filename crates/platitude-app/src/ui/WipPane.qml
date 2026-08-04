@@ -88,12 +88,11 @@ ColumnLayout {
         }
     }
     // Message editor pinned on top — identical shape in commit details,
-    // amend and new-commit creation. Flush against the header band,
-    // like every other pane's first row.
+    // amend and new-commit creation, inset the same on all four sides
+    // (see DetailsPane) so switching modes doesn't move the box.
     ColumnLayout {
         Layout.fillWidth: true
         Layout.margins: Theme.spaceSm
-        Layout.topMargin: 0
         spacing: Theme.spaceXs
         Rectangle {
             Layout.fillWidth: true
