@@ -391,9 +391,16 @@ Item {
     /// such refusal in git, and both can take something with them, so they
     /// are asked about up front.
     property string pendingDeleteBranch: ""
+    /// Refusals this page already has an answer for. The question bar
+    /// explains them, so the command log stays where it was rather than
+    /// raising itself over the same news (デザイン規約 §git が言ったこと
+    /// を読む場所). Counted rather than flagged because the refusal and
+    /// the write result arrive on separate paths, in no fixed order.
+    property int expectedRefusals: 0
     function deleteRow(kind, id, name, oidHex) {
         if (kind === "branch") {
             page.pendingDeleteBranch = id
+            page.expectedRefusals++
             repoTab.deleteBranch(id, false)
         } else if (kind === "tag") {
             page.startRowAsk(
@@ -979,7 +986,11 @@ Item {
             }
             return
         }
-        page.pendingDeleteBranch = ""
+        // Landed: no refusal is coming for it after all.
+        if (page.pendingDeleteBranch !== "") {
+            page.pendingDeleteBranch = ""
+            page.expectedRefusals = Math.max(0, page.expectedRefusals - 1)
+        }
         if (repoTab.lastWriteOp === "commit") {
             page.clearCommitEditor()
             wipPane.setAmendChecked(false)
@@ -1650,10 +1661,17 @@ Item {
 
     // A command the user asked for failed. Nothing else on screen says
     // what git said, so the log comes up by itself and stays up — closing
-    // it is the reader's call, not the next success's.
+    // it is the reader's call, not the next success's. Unless this page
+    // asked for the refusal and turned it into a question: then the bar
+    // is already saying it, and the log would say it twice while pushing
+    // the graph out of the way.
     Connections {
         target: commandsModel
         function onFailure() {
+            if (page.expectedRefusals > 0) {
+                page.expectedRefusals--
+                return
+            }
             page.commandsOpen = true
             commandsPane.showLatest()
         }
