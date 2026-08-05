@@ -1115,7 +1115,32 @@ async fn a_reset_moves_the_branch_through_the_write_queue() {
     session.close();
 }
 
+/// Waits for the `nth` automatic fetch to finish and returns git's error,
+/// if any. Telling them apart is the point: only the second one can be laid
+/// at the clock's door.
+async fn auto_fetch_done(sink: &CaptureSink, nth: usize) -> Option<String> {
+    sink.wait_for("an automatic fetch", |evs| {
+        evs.iter()
+            .filter_map(|e| match e {
+                SessionEvent::WriteFinished { op, error }
+                    if *op == platitude_core::session::AUTO_FETCH_OP =>
+                {
+                    Some(error.clone())
+                }
+                _ => None,
+            })
+            .nth(nth - 1)
+    })
+    .await
+}
+
 /// The auto-fetch timer runs the fetch it promises, and turns off again.
+///
+/// Both halves are read off the timer — a tick it takes, a tick it refuses
+/// once stopped — rather than off a stretch of quiet clock: a fetch queued
+/// a moment before the stop starts whenever the write queue reaches it,
+/// which on a loaded machine is long after any margin worth waiting, so no
+/// amount of silence tells "stopped" from "slow".
 #[tokio::test(flavor = "multi_thread")]
 async fn auto_fetch_runs_on_its_interval_and_stops() {
     let mut origin = TestRepo::init();
@@ -1125,41 +1150,39 @@ async fn auto_fetch_runs_on_its_interval_and_stops() {
     clone.git(&["remote", "add", "origin", &url]);
 
     let (sink, session) = opened(&clone).await;
-    session.set_auto_fetch(Some(Duration::from_millis(120)));
-    let error = sink
-        .wait_for("an automatic fetch", |evs| {
-            evs.iter().find_map(|e| match e {
-                SessionEvent::WriteFinished { op, error }
-                    if *op == platitude_core::session::AUTO_FETCH_OP =>
-                {
-                    Some(error.clone())
-                }
-                _ => None,
-            })
-        })
-        .await;
-    assert_eq!(error, None, "the file:// remote fetched cleanly");
+    // An hour, so nothing but the tick below can fire this one and the
+    // fetch that follows is that tick's doing and nothing else's.
+    session.set_auto_fetch(Some(Duration::from_secs(3600)));
+    let hourly = session.auto_fetch_ticker().expect("auto fetch is on");
+    assert!(hourly.tick().await, "the running timer took the tick");
+    assert_eq!(
+        auto_fetch_done(&sink, 1).await,
+        None,
+        "the file:// remote fetched cleanly"
+    );
     assert_eq!(
         clone.git(&["rev-parse", "origin/main"]),
         origin.git(&["rev-parse", "main"]),
     );
 
-    session.set_auto_fetch(None);
-    let started = || {
-        sink.count(|e| {
-            matches!(e, SessionEvent::WriteStarted { op }
-                     if *op == platitude_core::session::AUTO_FETCH_OP)
-        })
-    };
-    // A fetch already queued when the timer stopped still runs; let the
-    // queue drain before taking the baseline.
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    let after_stop = started();
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Now hand it to the clock. The hourly timer is replaced, so a second
+    // fetch can only be the new interval's.
+    session.set_auto_fetch(Some(Duration::from_millis(120)));
+    assert!(
+        !hourly.tick().await,
+        "setting an interval stops the timer it replaces"
+    );
+    let ticking = session.auto_fetch_ticker().expect("auto fetch is on");
     assert_eq!(
-        started(),
-        after_stop,
-        "no further fetch started once it was turned off"
+        auto_fetch_done(&sink, 2).await,
+        None,
+        "the interval came round and fetched on its own"
+    );
+
+    session.set_auto_fetch(None);
+    assert!(
+        !ticking.tick().await,
+        "turning it off stops the timer, so no further fetch can start"
     );
     session.close();
 }

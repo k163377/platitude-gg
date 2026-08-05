@@ -372,6 +372,45 @@ pub trait SessionSink: Send + Sync + 'static {
     fn event(&self, event: SessionEvent);
 }
 
+/// One tick handed to the timer by hand rather than by the clock; the
+/// timer answers on it once it has acted (see [`AutoFetchTicker`]).
+type AutoFetchTick = tokio::sync::oneshot::Sender<()>;
+
+/// The auto-fetch timer that is running: what stops it, and the way in for
+/// a tick that does not come from the clock.
+struct AutoFetch {
+    cancel: CancellationToken,
+    ticks: tokio::sync::mpsc::UnboundedSender<AutoFetchTick>,
+}
+
+/// Steps one auto-fetch timer by hand, in place of waiting out its
+/// interval.
+///
+/// Handed out by [`RepoSession::auto_fetch_ticker`] and bound to the timer
+/// that was running when it was taken, so a tick reports back whether that
+/// timer is still there to take it. That is what makes "this timer fetches
+/// nothing any more" something to wait for rather than a wall-clock margin
+/// to guess at, which is all the tests have to go on otherwise: a fetch
+/// queued a moment before the stop can start much later on a loaded
+/// machine, and no length of quiet proves the next one is not coming. The
+/// app only ever sets an interval.
+pub struct AutoFetchTicker(tokio::sync::mpsc::UnboundedSender<AutoFetchTick>);
+
+impl AutoFetchTicker {
+    /// Fires one tick and resolves once the timer has acted on it: `true`
+    /// when it took the tick, `false` once that timer has stopped — turned
+    /// off, replaced by another interval, or gone with the session. A
+    /// stopped timer never takes a tick, not even one that raced its own
+    /// cancellation, so `false` is the last word on it.
+    pub async fn tick(&self) -> bool {
+        let (ack, taken) = tokio::sync::oneshot::channel();
+        if self.0.send(ack).is_err() {
+            return false;
+        }
+        taken.await.is_ok()
+    }
+}
+
 /// A queued write: what to run, what it invalidates, what to call it.
 struct WriteRequest {
     op: &'static str,
@@ -451,8 +490,8 @@ pub struct RepoSession {
     write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,
     /// Time budget for fetch / push (settings, Phase 4, persist this).
     network_timeout: Mutex<std::time::Duration>,
-    /// Cancels the running auto-fetch timer, if any.
-    auto_fetch: Mutex<Option<CancellationToken>>,
+    /// The running auto-fetch timer, if any.
+    auto_fetch: Mutex<Option<AutoFetch>>,
     /// One permit: an auto fetch that is still queued or running holds it,
     /// so a tick that arrives meanwhile is skipped instead of stacking up.
     /// A permit moved into a dropped request is released with it.
@@ -574,19 +613,26 @@ impl RepoSession {
     /// fetch is ever outstanding: on a slow link or a repository whose
     /// credential helper is taking its time, a tick that finds the previous
     /// fetch unfinished is skipped rather than queued behind it.
+    ///
+    /// The clock is not the only way in: [`Self::auto_fetch_ticker`] steps
+    /// the timer this starts.
     pub fn set_auto_fetch(self: &Arc<Self>, interval: Option<std::time::Duration>) {
         let mut guard = match self.auto_fetch.lock() {
             Ok(g) => g,
             Err(e) => e.into_inner(),
         };
         if let Some(previous) = guard.take() {
-            previous.cancel();
+            previous.cancel.cancel();
         }
         let Some(interval) = interval.filter(|i| !i.is_zero()) else {
             return;
         };
         let cancel = self.root_cancel.child_token();
-        *guard = Some(cancel.clone());
+        let (ticks, mut by_hand) = tokio::sync::mpsc::unbounded_channel();
+        *guard = Some(AutoFetch {
+            cancel: cancel.clone(),
+            ticks,
+        });
         drop(guard);
 
         let s = Arc::clone(self);
@@ -607,9 +653,29 @@ impl RepoSession {
                             return;
                         }
                     }
+                    Some(ack) = by_hand.recv() => {
+                        // Answered only once the tick has been acted on,
+                        // and never by a timer that has been stopped.
+                        if !s.auto_fetch_tick(&cancel) {
+                            return;
+                        }
+                        if ack.send(()).is_err() {
+                            tracing::debug!("auto fetch tick: nobody waiting for it");
+                        }
+                    }
                 }
             }
         });
+    }
+
+    /// Handle for stepping the running timer, in place of waiting out its
+    /// interval — see [`AutoFetchTicker`]. `None` while auto fetch is off.
+    pub fn auto_fetch_ticker(&self) -> Option<AutoFetchTicker> {
+        let guard = match self.auto_fetch.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        guard.as_ref().map(|a| AutoFetchTicker(a.ticks.clone()))
     }
 
     /// Queues one automatic fetch, unless the previous one is still going.
