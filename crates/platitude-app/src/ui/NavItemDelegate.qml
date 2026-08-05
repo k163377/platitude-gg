@@ -220,9 +220,17 @@ Item {
         }
     }
     // Nested leaves show only their last segment; hover reveals the
-    // full name.
+    // full name — in the row's own colour, so the branch the working
+    // tree stands on reads the same here as it does in the row.
+    // Colouring it means rich text, so the name is escaped first (a
+    // refname may hold & and <).
     ToolTip.visible: itemMouse.containsMouse && !navRow.folder
                      && navRow.full !== "" && navRow.full !== navRow.name
     ToolTip.delay: 700
-    ToolTip.text: navRow.full
+    ToolTip.text: navRow.is_head
+                  ? "<font color=\"" + Theme.textLink + "\">"
+                    + navRow.full.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+                                 .replace(/>/g, "&gt;")
+                    + "</font>"
+                  : navRow.full
 }

@@ -52,9 +52,12 @@ Rectangle {
     // claim it cannot be reached, and a double-click on that row goes
     // there (§無効 is for what is actually unavailable). The detached
     // HEAD marker keeps its state colour in the name too: it is the one
-    // chip whose colour is not a kind.
+    // chip whose colour is not a kind. The branch the working tree
+    // stands on is the nearest answer this colour has — "here" — and the
+    // sidebar already writes it that way, so the chip does too.
     readonly property color nameColor: muted ? Theme.textMuted
                                        : recKind === "H" ? Theme.warning
+                                       : recHead ? Theme.textLink
                                        : recKind === "R" ? Theme.textSecondary
                                        : Theme.textPrimary
 

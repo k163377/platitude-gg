@@ -60,18 +60,21 @@ Popup {
             delegate: Rectangle {
                 id: refRow
                 required property string modelData
-                // Where the working tree already is, and the detached-HEAD
-                // marker, are not places to go — and being unavailable is
-                // what they are, so they go muted, frame included.
-                readonly property bool unavailable:
-                    refRow.modelData[0] === "H"
-                    || (refRow.modelData[0] === "L"
-                        && refRow.modelData.substring(4) === refList.currentBranch)
-                // A tag leads nowhere either (§タグでは detach しない), but
-                // it is not unavailable — it is what this row is here to
-                // show, so it keeps its colour and its badge.
+                // The branch the working tree already stands on is not a
+                // place to go, but it is not unavailable either — it is
+                // where the reader is, and it says so in the colour the
+                // sidebar says it in (§ref の種別). Only the hover and the
+                // click come off. A tag leads nowhere for its own reason
+                // (§タグでは detach しない) and keeps its colour too.
+                readonly property bool current:
+                    refRow.modelData[0] === "L"
+                    && refRow.modelData.substring(4) === refList.currentBranch
+                // The detached-HEAD marker is the one row that is only a
+                // marker: nowhere to go and no ref to read, so it mutes.
+                readonly property bool unavailable: refRow.modelData[0] === "H"
                 readonly property bool leadsNowhere:
-                    refRow.unavailable || refRow.modelData[0] === "T"
+                    refRow.unavailable || refRow.current
+                    || refRow.modelData[0] === "T"
 
                 implicitWidth: rowChip.width + 2 * Theme.spaceSm
                 width: rows.rowWidth

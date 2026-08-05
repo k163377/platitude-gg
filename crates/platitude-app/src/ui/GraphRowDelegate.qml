@@ -61,6 +61,19 @@ Item {
     readonly property bool asking:
         rowItem.ListView.view ? rowItem.ListView.view.askOid === rowItem.oid_hex : false
 
+    /// The record for the branch the working tree is on. The head flag
+    /// rides on the detached-HEAD marker as well, and that one is a state
+    /// rather than a branch, so it keeps its own colour.
+    function isCurrentRecord(record) {
+        return record[1] === "1" && record[0] !== "H"
+    }
+    /// Rich-text escaping, for names that share a tooltip with a coloured
+    /// line.
+    function escapeMarkup(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+                   .replace(/>/g, "&gt;")
+    }
+
     Rectangle {
         anchors.fill: parent
         anchors.topMargin: -rowItem.topBleed
@@ -177,17 +190,30 @@ Item {
             ToolTip.visible: labelHover.containsMouse && !rowItem.asking
                              && rowItem.labelRecords.length > 0
             ToolTip.delay: 300
+            // The branch the working tree stands on is written here the
+            // way the sidebar and the chips write it (textLink): the same
+            // name must not read as "here" in one place and as any other
+            // branch in the next. Colouring one line puts the whole
+            // tooltip through rich text, so in that case every name is
+            // escaped first — a refname may hold & and <.
             ToolTip.text: {
                 let lines = []
+                const colour = rowItem.labelRecords.some(rowItem.isCurrentRecord)
                 for (let i = 0; i < rowItem.labelRecords.length; i++) {
                     const r = rowItem.labelRecords[i]
                     const icon = r[0] === "T" ? "⚑" : r[0] === "R" ? "☁"
                                : r[0] === "H" ? "HEAD" : "⎇"
                     // Aggregated records keep their PR mark visible here.
                     const pr = r.length > 3 && r[3] === "1" ? qsTr(" · PR") : ""
-                    lines.push(icon + " " + r.substring(4) + pr)
+                    const name = colour ? rowItem.escapeMarkup(r.substring(4))
+                                        : r.substring(4)
+                    const line = icon + " " + name + pr
+                    lines.push(rowItem.isCurrentRecord(r)
+                               ? "<font color=\"" + Theme.textLink + "\">"
+                                 + line + "</font>"
+                               : line)
                 }
-                return lines.join("\n")
+                return lines.join(colour ? "<br>" : "\n")
             }
         }
 
