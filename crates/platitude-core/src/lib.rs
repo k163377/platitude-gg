@@ -36,6 +36,8 @@ pub mod worktrees;
 pub use error::GitError;
 pub use model::{CommitMeta, StrPool};
 pub use oid::Oid;
-pub use process::{DEFAULT_TIMEOUT, GitCommand, GitExecutor, GitOutput};
+pub use process::{
+    CommandEnd, CommandObserver, DEFAULT_TIMEOUT, GitCommand, GitExecutor, GitOutput,
+};
 pub use repo::{ObjectFormat, RepoInfo};
 pub use version::{GitVersion, MINIMUM_GIT};

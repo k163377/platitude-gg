@@ -11,8 +11,8 @@ mod urlpath;
 
 use hub::Hub;
 use models::{
-    AppBackend, DetailsModel, DiffModel, GraphModel, NavSectionModel, RepoTab, TabsModel,
-    WorkTreeModel,
+    AppBackend, CommandsModel, DetailsModel, DiffModel, GraphModel, NavSectionModel, RepoTab,
+    TabsModel, WorkTreeModel,
 };
 use qtbridge::QApp;
 
@@ -47,6 +47,8 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/AutoScrollBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ChangeIcon.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ClipboardHelper.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/CommandRowDelegate.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/CommandsPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ConfirmDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DetailsPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffPane.qml", "qt/qml/platitude");
@@ -84,6 +86,7 @@ fn main() {
         .register::<WorkTreeModel>()
         .register::<DetailsModel>()
         .register::<DiffModel>()
+        .register::<CommandsModel>()
         .add_import_path("qrc:/qt/qml")
         .load_qml_from_file("qrc:/qt/qml/platitude/ui/Main.qml")
         .run();

@@ -39,7 +39,7 @@ use crate::parse::diff::FilePatch;
 use crate::parse::log::{LOG_FORMAT_ARG, LogParser};
 use crate::patch::HunkSelect;
 use crate::preview::{self, FilePreview};
-use crate::process::{GitCommand, GitExecutor};
+use crate::process::{CommandEnd, GitCommand, GitExecutor};
 use crate::publish;
 use crate::refs::{self, HeadState, RefEntry, RefKind};
 use crate::remote;
@@ -274,6 +274,86 @@ pub enum SessionEvent {
         op: &'static str,
         error: Option<String>,
     },
+    /// A git subprocess was spawned (command log). Only what the user
+    /// asked for, unless background reads were switched on.
+    CommandStarted {
+        id: u64,
+        /// The command as a log line shows it.
+        display: String,
+        /// The same command with the always-applied configuration and
+        /// environment spelled out, for copying.
+        full: String,
+        /// Wall clock at the spawn, milliseconds since the epoch.
+        at_ms: i64,
+    },
+    /// The command with this id ended.
+    CommandFinished {
+        id: u64,
+        end: CommandEnd,
+        elapsed_ms: u64,
+        /// git's own output on the way out (stderr), or the reason it
+        /// never ran. Empty when it said nothing.
+        message: String,
+    },
+}
+
+/// Turns invocations into session events, so the command log travels the
+/// same path as everything else the UI shows.
+struct CommandFeed {
+    sink: Arc<dyn SessionSink>,
+    next_id: AtomicU64,
+    /// Off by default: a poll tick runs five commands and would bury the
+    /// operations the user actually performed.
+    record_background: std::sync::atomic::AtomicBool,
+}
+
+/// Id of a command that is not being recorded; its end is dropped too.
+const UNRECORDED: u64 = 0;
+
+impl CommandFeed {
+    fn new(sink: Arc<dyn SessionSink>) -> Self {
+        Self {
+            sink,
+            next_id: AtomicU64::new(UNRECORDED + 1),
+            record_background: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+}
+
+impl crate::process::CommandObserver for CommandFeed {
+    fn records(&self, user: bool) -> bool {
+        user || self.record_background.load(Ordering::Relaxed)
+    }
+
+    fn started(&self, display: &str, full: &str, user: bool) -> u64 {
+        if !self.records(user) {
+            return UNRECORDED;
+        }
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let at_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or_default();
+        self.sink.event(SessionEvent::CommandStarted {
+            id,
+            display: display.to_string(),
+            full: full.to_string(),
+            at_ms,
+        });
+        id
+    }
+
+    fn finished(&self, id: u64, end: CommandEnd, elapsed_ms: u64, message: &str) {
+        if id == UNRECORDED {
+            return;
+        }
+        self.sink.event(SessionEvent::CommandFinished {
+            id,
+            end,
+            elapsed_ms,
+            message: message.to_string(),
+        });
+    }
 }
 
 /// What a write invalidates once it succeeds.
@@ -339,7 +419,13 @@ impl OpGate {
 }
 
 pub struct RepoSession {
+    /// Reads and refreshes: recorded in the command log only while
+    /// background recording is on.
     executor: GitExecutor,
+    /// The queue's handle: everything run through it is something the
+    /// user asked for, and is always recorded.
+    exec_user: GitExecutor,
+    commands: Arc<CommandFeed>,
     runtime: tokio::runtime::Handle,
     sink: Arc<dyn SessionSink>,
     /// Cancelled when the session closes; all ops derive from it.
@@ -387,8 +473,12 @@ impl RepoSession {
         sink: Arc<dyn SessionSink>,
     ) -> Arc<Self> {
         let (write_tx, write_rx) = tokio::sync::mpsc::unbounded_channel();
+        let commands = Arc::new(CommandFeed::new(Arc::clone(&sink)));
+        let observer: Arc<dyn crate::process::CommandObserver> = Arc::clone(&commands) as _;
         let session = Arc::new(Self {
-            executor,
+            executor: executor.observed(Arc::clone(&observer), false),
+            exec_user: executor.observed(observer, true),
+            commands,
             runtime: runtime.clone(),
             sink,
             root_cancel: CancellationToken::new(),
@@ -463,6 +553,13 @@ impl RepoSession {
         if let Ok(mut guard) = self.network_timeout.lock() {
             *guard = timeout;
         }
+    }
+
+    /// Whether the command log also records the reads this session makes
+    /// on its own (polling, refreshes, details). Off by default; it
+    /// applies to commands spawned from here on, not retroactively.
+    pub fn set_record_background(&self, on: bool) {
+        self.commands.record_background.store(on, Ordering::Relaxed);
     }
 
     /// Cancels everything this session is doing. Idempotent.
@@ -1036,7 +1133,16 @@ impl RepoSession {
         };
         let cancel = self.root_cancel.clone();
         self.sink.event(SessionEvent::WriteStarted { op });
-        let result = run(self.executor.clone(), info, cancel).await;
+        // Auto fetch travels this queue too, but nobody asked for it: it
+        // stays out of the command log unless background reads are on,
+        // and so cannot make an offline laptop raise the panel every
+        // interval.
+        let exec = if op == AUTO_FETCH_OP {
+            self.executor.clone()
+        } else {
+            self.exec_user.clone()
+        };
+        let result = run(exec, info, cancel).await;
         let rebuild_graph = match result {
             Ok(()) => {
                 self.sink

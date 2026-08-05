@@ -231,22 +231,53 @@ Rectangle {
                 ToolTip.text: qsTr("No name or email set for commits")
             }
         }
-        Label {
-            visible: topBar.curPage !== null && topBar.curPage.pageTab.lastError !== ""
-            text: topBar.curPage !== null ? topBar.curPage.pageTab.lastError : ""
-            color: Theme.danger
-            elide: Text.ElideRight
-            Layout.maximumWidth: 320
-            font.pixelSize: Theme.fontSm
-            background: Rectangle {
-                color: Theme.bgHover
-                visible: errorClearMouse.containsMouse
+        // The git commands this tab ran. Closed, this mark is the whole
+        // of the feature on screen; it is also where the state of the
+        // last one shows, so the toolbar says something failed without
+        // spending a line on a message nobody can read in 320px.
+        Rectangle {
+            id: commandsToggle
+            readonly property var log: topBar.curPage !== null
+                                       ? topBar.curPage.pageCommands : null
+            readonly property bool wrong:
+                topBar.curPage !== null
+                && (commandsToggle.log.failed
+                    || topBar.curPage.pageTab.lastError !== "")
+            readonly property bool open: topBar.curPage !== null
+                                         && topBar.curPage.commandsOpen
+
+            visible: topBar.curPage !== null
+            implicitWidth: Theme.spaceXl
+            implicitHeight: Theme.iconLg
+            radius: Theme.radiusSm
+            color: open ? Theme.bgSelected
+                   : commandsMouse.containsMouse ? Theme.bgHover
+                   : "transparent"
+            border.width: commandsToggle.wrong ? Theme.borderWidth : 0
+            border.color: Theme.danger
+            Label {
+                anchors.centerIn: parent
+                text: ">_"
+                font.family: Theme.monoFamily
+                font.pixelSize: Theme.fontMd
+                color: commandsToggle.wrong ? Theme.danger
+                       : commandsToggle.log !== null && commandsToggle.log.running
+                         ? Theme.accent
+                       : commandsToggle.open ? Theme.textPrimary
+                       : Theme.textMuted
             }
             MouseArea {
-                id: errorClearMouse
+                id: commandsMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                onClicked: if (topBar.curPage !== null) topBar.curPage.pageTab.clearLastError()
+                onClicked: topBar.curPage.toggleCommands()
+                ToolTip.visible: containsMouse
+                ToolTip.delay: 600
+                ToolTip.text: commandsToggle.open
+                              ? qsTr("Hide the git commands this window ran")
+                              : commandsToggle.wrong
+                                ? qsTr("The last command failed — read it here")
+                                : qsTr("Show the git commands this window ran")
             }
         }
         // Auto fetch: quiet by design. A machine that is simply offline

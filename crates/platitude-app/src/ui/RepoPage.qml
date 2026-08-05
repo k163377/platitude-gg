@@ -828,6 +828,16 @@ Item {
         } else if (act === "settings") {
             page.settingsDialogRequested()
             AppBackend.setAutoFetchMinutes(Number(arg))
+        } else if (act === "commands") {
+            // Stage and unstage so the log has something in it, then
+            // open it the way the toolbar does.
+            repoTab.stageAll()
+            repoTab.unstageAll()
+            page.toggleCommands()
+        } else if (act === "commands-fail") {
+            // A move to a branch that is not there: a real refusal, in
+            // git's own words, that raises the panel by itself.
+            repoTab.checkoutBranch("pg-no-such-branch", "carry")
         }
         AppBackend.report("auto_act ran=" + act)
     }
@@ -925,8 +935,19 @@ Item {
     // Exposed for the window toolbar (acts on the active tab).
     readonly property var pageTab: repoTab
     readonly property var pageWt: workTree
+    readonly property var pageCommands: commandsModel
+
+    /// Whether the command log is up. Closed is the resting state: the
+    /// toolbar's `>_` opens it, and a failed command raises it.
+    property bool commandsOpen: false
+    function toggleCommands() {
+        page.commandsOpen = !page.commandsOpen
+        if (page.commandsOpen)
+            commandsPane.showLatest()
+    }
 
     RepoTab { id: repoTab }
+    CommandsModel { id: commandsModel }
     GraphModel { id: graphModel }
     WorkTreeModel { id: workTree }
     DetailsModel { id: detailsModel }
@@ -942,6 +963,7 @@ Item {
         if (page.blank)
             return // no session to attach to; every model stays empty
         repoTab.attach(page.tab_id)
+        commandsModel.attach(page.tab_id)
         graphModel.attach(page.tab_id)
         workTree.attach(page.tab_id)
         detailsModel.attach(page.tab_id)
@@ -1313,143 +1335,197 @@ Item {
         spacing: 0
         visible: repoTab.state !== "error"
 
-        // ---- three-pane layout --------------------------------------
-        // (repository state / search / fetch / push live in the window
-        // toolbar, next to the tabs; Reload is the app menu and F5)
+        // The panes sit above the command log, which is closed until it
+        // is asked for. Splitting them vertically keeps the log's height
+        // in the reader's hands and out of the panes' business.
         SplitView {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            orientation: Qt.Horizontal
+            orientation: Qt.Vertical
             handle: Rectangle {
                 implicitWidth: Theme.splitterWidth
                 implicitHeight: Theme.splitterWidth
                 color: Theme.borderSubtle
             }
 
-            SidebarPane {
-                id: sidebarPane
-                repoTab: repoTab
-                workTree: workTree
-                branchesModel: branchesModel
-                remotesModel: remotesModel
-                worktreesModel: worktreesModel
-                stashesModel: stashesModel
-                tagsModel: tagsModel
-                onRefActivated: oidHex => page.jumpToRef(oidHex)
-                onRefMenuRequested: (name, oidHex, isRemote) =>
-                    page.openRefMenu(name, oidHex, isRemote)
-                onWorktreeActivated: path => page.openRepositoryPathRequested(path)
-            }
-
-            // Center: commit graph ⇄ file diff
-            StackLayout {
-                SplitView.fillWidth: true
-                SplitView.minimumWidth: 420
-                currentIndex: page.diffShown ? 1 : 0
-
-                GraphPane {
-                    id: graphPane
-                    graphModel: graphModel
-                    worktreeModel: worktreeModel
-                    blank: page.blank
-                    onRowActivated: oidHex => page.activateRow(oidHex)
-                    onCommitMenuRequested: oidHex => page.openCommitMenu(oidHex)
-                    onRowSwitchRequested: (oidHex, record) =>
-                        page.rowDoubleClicked(oidHex, record)
-                    onChipExpandRequested: (records, anchor) =>
-                        page.openRefList(records, anchor)
-                    onChipCollapseRequested: page.closeRefListUnlessEntered()
-                    onCreateBranchRequested: (oidHex, name) =>
-                        repoTab.createBranch(name, oidHex, true)
-                    onOpenRepositoryRequested: page.openRepositoryPicker()
-                    onRowAskConfirmed: oidHex => {
-                        const run = page.rowAskRun
-                        page.stopRowAsk()
-                        if (run)
-                            run()
-                    }
-                    onRowAskCancelled: page.stopRowAsk()
+            // ---- three-pane layout --------------------------------------
+            // (repository state / search / fetch / push live in the window
+            // toolbar, next to the tabs; Reload is the app menu and F5)
+            SplitView {
+                SplitView.fillHeight: true
+                SplitView.minimumHeight: 200
+                orientation: Qt.Horizontal
+                handle: Rectangle {
+                    implicitWidth: Theme.splitterWidth
+                    implicitHeight: Theme.splitterWidth
+                    color: Theme.borderSubtle
                 }
 
-                DiffPane {
-                    diffModel: diffModel
-                    fromWorkTree: page.diffFromWt
-                    staged: page.diffStaged
-                    busy: repoTab.busyCount > 0
-                    onCloseRequested: page.closeDiff()
-                    onStageFileRequested: {
-                        if (page.diffStaged)
-                            repoTab.unstagePath(page.diffPath)
-                        else
-                            repoTab.stagePath(page.diffPath)
-                    }
-                    onStageSelectionRequested: (hunk, line) => page.stageSelection(hunk, line)
-                }
-            }
-
-            // Right side: working tree ⇄ commit details
-            Rectangle {
-                SplitView.preferredWidth: 400
-                SplitView.minimumWidth: 300
-                color: Theme.bgSurface
-
-                WipPane {
-                    id: wipPane
-                    anchors.fill: parent
-                    visible: page.wipShown
+                SidebarPane {
+                    id: sidebarPane
                     repoTab: repoTab
                     workTree: workTree
-                    worktreeModel: worktreeModel
-                    amending: page.amending
-                    headPublished: page.headPublished
-                    onAmendToggled: on => page.amendToggled(on)
-                    onCommitClicked: page.commitNow()
-                    onFileActivated: (bucket, path, origPath) =>
-                        page.toggleDiff(bucket, path, origPath)
-                    onStashSubmitted: (message, untracked, keepIndex, stagedOnly) =>
-                        repoTab.pushStash(message, untracked, keepIndex, stagedOnly)
-                    onFileMenuRequested: (bucket, path) =>
-                        page.openFileMenu(bucket, path)
+                    branchesModel: branchesModel
+                    remotesModel: remotesModel
+                    worktreesModel: worktreesModel
+                    stashesModel: stashesModel
+                    tagsModel: tagsModel
+                    onRefActivated: oidHex => page.jumpToRef(oidHex)
+                    onRefMenuRequested: (name, oidHex, isRemote) =>
+                        page.openRefMenu(name, oidHex, isRemote)
+                    onWorktreeActivated: path => page.openRepositoryPathRequested(path)
                 }
 
-                DetailsPane {
-                    id: detailsPane
-                    anchors.fill: parent
-                    visible: !page.wipShown
-                    details: detailsModel
-                    stashRef: page.selectedStashRef
-                    // Only what the working tree stands on: a commit off
-                    // this line cannot be amended or replayed from here,
-                    // and a stash is a commit but never one of them.
-                    editable: !page.blank && repoTab.state === "open"
-                              && page.selectedStashRef === ""
-                              && page.selectedInHistory
-                    editBlocked: page.selectedStashRef !== ""
-                        ? qsTr("A stash message cannot be changed")
-                        : (detailsModel.shaHex !== "" && !page.selectedInHistory
-                           ? qsTr("Not in the current history — switch to a "
-                                  + "branch that has it")
-                           : "")
-                    busy: repoTab.busyCount > 0
-                    asking: page.pendingMove !== null
-                    published: page.selectedPublished
-                    // HEAD's own commit, not the current branch's tip:
-                    // detached, there is no branch to ask.
-                    headOid: workTree.headOid
-                    onLeaveResolved: discard => page.resolveLeave(discard)
-                    onMessageSubmitted: (oidHex, subject, body) =>
-                        page.saveMessage(oidHex, subject, body)
-                    onFileActivated: (path, origPath) =>
-                        page.toggleDiff("commit", path, origPath)
-                    onParentClicked: oidHex => page.jumpToRef(oidHex)
-                    onCopyRequested: text => clipboard.copy(text)
-                    onApplyStashRequested: selector => repoTab.applyStash(selector)
-                    onPopStashRequested: selector => {
-                        repoTab.popStash(selector)
-                        page.selectedStashRef = ""
+                // Center: commit graph ⇄ file diff
+                StackLayout {
+                    SplitView.fillWidth: true
+                    SplitView.minimumWidth: 420
+                    currentIndex: page.diffShown ? 1 : 0
+
+                    GraphPane {
+                        id: graphPane
+                        graphModel: graphModel
+                        worktreeModel: worktreeModel
+                        blank: page.blank
+                        onRowActivated: oidHex => page.activateRow(oidHex)
+                        onCommitMenuRequested: oidHex => page.openCommitMenu(oidHex)
+                        onRowSwitchRequested: (oidHex, record) =>
+                            page.rowDoubleClicked(oidHex, record)
+                        onChipExpandRequested: (records, anchor) =>
+                            page.openRefList(records, anchor)
+                        onChipCollapseRequested: page.closeRefListUnlessEntered()
+                        onCreateBranchRequested: (oidHex, name) =>
+                            repoTab.createBranch(name, oidHex, true)
+                        onOpenRepositoryRequested: page.openRepositoryPicker()
+                        onRowAskConfirmed: oidHex => {
+                            const run = page.rowAskRun
+                            page.stopRowAsk()
+                            if (run)
+                                run()
+                        }
+                        onRowAskCancelled: page.stopRowAsk()
+                    }
+
+                    DiffPane {
+                        diffModel: diffModel
+                        fromWorkTree: page.diffFromWt
+                        staged: page.diffStaged
+                        busy: repoTab.busyCount > 0
+                        onCloseRequested: page.closeDiff()
+                        onStageFileRequested: {
+                            if (page.diffStaged)
+                                repoTab.unstagePath(page.diffPath)
+                            else
+                                repoTab.stagePath(page.diffPath)
+                        }
+                        onStageSelectionRequested: (hunk, line) => page.stageSelection(hunk, line)
+                    }
+                }
+
+                // Right side: working tree ⇄ commit details
+                Rectangle {
+                    SplitView.preferredWidth: 400
+                    SplitView.minimumWidth: 300
+                    color: Theme.bgSurface
+
+                    // Which git is doing all this, as faint bare text in
+                    // the corner of the pane that has room to spare. It
+                    // sits here rather than at the window's edge so the
+                    // command log can open without landing on top of it.
+                    Label {
+                        visible: AppBackend.gitVersion !== ""
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.rightMargin: Theme.spaceSm
+                        anchors.bottomMargin: Theme.spaceXs
+                        text: qsTr("git %1").arg(AppBackend.gitVersion)
+                        color: Theme.textMuted
+                        font.pixelSize: Theme.fontSm
+                    }
+
+                    WipPane {
+                        id: wipPane
+                        anchors.fill: parent
+                        visible: page.wipShown
+                        repoTab: repoTab
+                        workTree: workTree
+                        worktreeModel: worktreeModel
+                        amending: page.amending
+                        headPublished: page.headPublished
+                        onAmendToggled: on => page.amendToggled(on)
+                        onCommitClicked: page.commitNow()
+                        onFileActivated: (bucket, path, origPath) =>
+                            page.toggleDiff(bucket, path, origPath)
+                        onStashSubmitted: (message, untracked, keepIndex, stagedOnly) =>
+                            repoTab.pushStash(message, untracked, keepIndex, stagedOnly)
+                        onFileMenuRequested: (bucket, path) =>
+                            page.openFileMenu(bucket, path)
+                    }
+
+                    DetailsPane {
+                        id: detailsPane
+                        anchors.fill: parent
+                        visible: !page.wipShown
+                        details: detailsModel
+                        stashRef: page.selectedStashRef
+                        // Only what the working tree stands on: a commit off
+                        // this line cannot be amended or replayed from here,
+                        // and a stash is a commit but never one of them.
+                        editable: !page.blank && repoTab.state === "open"
+                                  && page.selectedStashRef === ""
+                                  && page.selectedInHistory
+                        editBlocked: page.selectedStashRef !== ""
+                            ? qsTr("A stash message cannot be changed")
+                            : (detailsModel.shaHex !== "" && !page.selectedInHistory
+                               ? qsTr("Not in the current history — switch to a "
+                                      + "branch that has it")
+                               : "")
+                        busy: repoTab.busyCount > 0
+                        asking: page.pendingMove !== null
+                        published: page.selectedPublished
+                        // HEAD's own commit, not the current branch's tip:
+                        // detached, there is no branch to ask.
+                        headOid: workTree.headOid
+                        onLeaveResolved: discard => page.resolveLeave(discard)
+                        onMessageSubmitted: (oidHex, subject, body) =>
+                            page.saveMessage(oidHex, subject, body)
+                        onFileActivated: (path, origPath) =>
+                            page.toggleDiff("commit", path, origPath)
+                        onParentClicked: oidHex => page.jumpToRef(oidHex)
+                        onCopyRequested: text => clipboard.copy(text)
+                        onApplyStashRequested: selector => repoTab.applyStash(selector)
+                        onPopStashRequested: selector => {
+                            repoTab.popStash(selector)
+                            page.selectedStashRef = ""
+                        }
                     }
                 }
             }
+
+            // ---- command log ------------------------------------------
+            // Hidden until asked for, and raised by a failure.
+            CommandsPane {
+                id: commandsPane
+                visible: page.commandsOpen
+                commandsModel: commandsModel
+                errorText: repoTab.lastError
+                SplitView.preferredHeight: 280
+                SplitView.minimumHeight: 120
+                onCloseRequested: page.commandsOpen = false
+                onErrorCleared: repoTab.clearLastError()
+                onCopyRequested: text => clipboard.copy(text)
+            }
+        }
+    }
+
+    // A command the user asked for failed. Nothing else on screen says
+    // what git said, so the log comes up by itself and stays up — closing
+    // it is the reader's call, not the next success's.
+    Connections {
+        target: commandsModel
+        function onFailure() {
+            page.commandsOpen = true
+            commandsPane.showLatest()
         }
     }
 

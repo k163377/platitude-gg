@@ -384,25 +384,13 @@ ApplicationWindow {
             }
         }
 
-        // Bottom edge: the same splitter-style divider closes the window;
-        // the git version floats above it bottom-right as faint bare text.
-        Item {
+        // Bottom edge: the same splitter-style divider closes the window.
+        // The git version used to float here; it moved into the page's
+        // right pane, where the command log cannot open underneath it.
+        Rectangle {
             Layout.fillWidth: true
             implicitHeight: Theme.splitterWidth
-            Rectangle {
-                anchors.fill: parent
-                color: Theme.borderSubtle
-            }
-            Label {
-                visible: AppBackend.gitVersion !== ""
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                anchors.rightMargin: Theme.spaceSm
-                anchors.bottomMargin: Theme.splitterWidth + Theme.spaceXs
-                text: qsTr("git %1").arg(AppBackend.gitVersion)
-                color: Theme.textMuted
-                font.pixelSize: Theme.fontSm
-            }
+            color: Theme.borderSubtle
         }
     }
 }

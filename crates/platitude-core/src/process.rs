@@ -78,6 +78,51 @@ pub fn literal_pathspec(path: &str) -> String {
     format!(":(literal){path}")
 }
 
+/// Quotes an argument the way a POSIX shell would need it, so a command
+/// read out of a log can be pasted back unchanged.
+fn shell_quote(arg: &str) -> std::borrow::Cow<'_, str> {
+    let plain = !arg.is_empty()
+        && arg.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'/' | b'.' | b'=' | b':' | b'+')
+        });
+    if plain {
+        std::borrow::Cow::Borrowed(arg)
+    } else {
+        std::borrow::Cow::Owned(format!("'{}'", arg.replace('\'', r"'\''")))
+    }
+}
+
+/// How a git invocation ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandEnd {
+    /// The process ran and returned this code (`-1` = killed by a signal).
+    Exited(i32),
+    TimedOut,
+    Cancelled,
+    /// git never started, or the pipes died under it. The reported message
+    /// is the reason rather than git's own output.
+    Failed,
+}
+
+/// Watches every git invocation, for the command log.
+///
+/// Called from tokio worker threads, on the hot path of every command:
+/// implementations must not block.
+pub trait CommandObserver: Send + Sync + 'static {
+    /// Whether this handle's invocations are being kept at all. Asked
+    /// before the strings are built, so the reads a repository page makes
+    /// on a timer cost nothing while nobody is recording them.
+    fn records(&self, user: bool) -> bool;
+
+    /// A command is about to be spawned; the returned id is what its end
+    /// is reported under. `display` is the log line, `full` the same
+    /// command with the fixed configuration and environment spelled out,
+    /// so it can be pasted into a terminal and do the same thing.
+    fn started(&self, display: &str, full: &str, user: bool) -> u64;
+
+    fn finished(&self, id: u64, end: CommandEnd, elapsed_ms: u64, message: &str);
+}
+
 /// One git invocation: arguments, working directory and time budget.
 #[derive(Debug, Clone)]
 pub struct GitCommand {
@@ -140,11 +185,15 @@ impl GitCommand {
     /// Human-readable form for logs and error messages.
     pub(crate) fn describe(&self) -> String {
         let mut s = String::from("git");
-        for a in &self.args {
-            s.push(' ');
-            s.push_str(&a.to_string_lossy());
-        }
+        self.append_args(&mut s);
         s
+    }
+
+    fn append_args(&self, out: &mut String) {
+        for a in &self.args {
+            out.push(' ');
+            out.push_str(&shell_quote(&a.to_string_lossy()));
+        }
     }
 }
 
@@ -190,9 +239,25 @@ impl GitOutput {
 }
 
 /// Spawns git subprocesses. Cheap to clone; shared across sessions.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GitExecutor {
     program: Arc<OsString>,
+    observer: Option<Arc<dyn CommandObserver>>,
+    /// Whether invocations made through this handle are ones the user
+    /// asked for, as opposed to background reads. Carried here rather
+    /// than on the command so the callers stay unaware of it: the
+    /// session hands out a different handle for each.
+    user: bool,
+}
+
+impl std::fmt::Debug for GitExecutor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GitExecutor")
+            .field("program", &self.program)
+            .field("observed", &self.observer.is_some())
+            .field("user", &self.user)
+            .finish()
+    }
 }
 
 impl Default for GitExecutor {
@@ -204,16 +269,55 @@ impl Default for GitExecutor {
 impl GitExecutor {
     /// Uses `git` resolved from `PATH`.
     pub fn new() -> Self {
-        Self {
-            program: Arc::new(OsString::from("git")),
-        }
+        Self::of(OsString::from("git"))
     }
 
     /// Uses an explicit git binary (tests, portable installs).
     pub fn with_program(program: impl Into<OsString>) -> Self {
+        Self::of(program.into())
+    }
+
+    fn of(program: OsString) -> Self {
         Self {
-            program: Arc::new(program.into()),
+            program: Arc::new(program),
+            observer: None,
+            user: false,
         }
+    }
+
+    /// Returns a handle that reports its invocations to `observer`.
+    /// `user` marks the commands the user asked for.
+    pub fn observed(&self, observer: Arc<dyn CommandObserver>, user: bool) -> Self {
+        Self {
+            program: Arc::clone(&self.program),
+            observer: Some(observer),
+            user,
+        }
+    }
+
+    /// The command as it would have to be typed to do the same thing:
+    /// the fixed environment and configuration are part of what ran.
+    fn describe_full(&self, cmd: &GitCommand) -> String {
+        let mut s = String::new();
+        for (k, v) in FIXED_ENV {
+            s.push_str(k);
+            s.push('=');
+            s.push_str(&shell_quote(v));
+            s.push(' ');
+        }
+        for (k, v) in &cmd.env {
+            s.push_str(&k.to_string_lossy());
+            s.push('=');
+            s.push_str(&shell_quote(&v.to_string_lossy()));
+            s.push(' ');
+        }
+        s.push_str(&shell_quote(&self.program.to_string_lossy()));
+        for a in FIXED_ARGS {
+            s.push(' ');
+            s.push_str(&shell_quote(a));
+        }
+        cmd.append_args(&mut s);
+        s
     }
 
     /// Runs to completion and fails on non-zero exit.
@@ -298,8 +402,21 @@ impl GitExecutor {
 
         tracing::debug!(command = %described, "spawning git");
         let started = Instant::now();
+        let watch = match self.observer.as_ref() {
+            Some(o) if o.records(self.user) => Some((
+                o,
+                o.started(&described, &self.describe_full(cmd), self.user),
+            )),
+            _ => None,
+        };
+        let report = |end: CommandEnd, message: &str| {
+            if let Some((observer, id)) = &watch {
+                observer.finished(*id, end, started.elapsed().as_millis() as u64, message);
+            }
+        };
 
         let mut child = command.spawn().map_err(|source| {
+            report(CommandEnd::Failed, &source.to_string());
             if source.kind() == std::io::ErrorKind::NotFound
                 && cmd.cwd.as_ref().is_none_or(|d| d.is_dir())
             {
@@ -314,9 +431,12 @@ impl GitExecutor {
 
         let outcome = run_child(&mut child, cmd.timeout, cancel, on_stdout)
             .await
-            .map_err(|source| GitError::Io {
-                command: described.clone(),
-                source,
+            .map_err(|source| {
+                report(CommandEnd::Failed, &source.to_string());
+                GitError::Io {
+                    command: described.clone(),
+                    source,
+                }
             })?;
 
         match outcome {
@@ -327,6 +447,10 @@ impl GitExecutor {
                     elapsed_ms = started.elapsed().as_millis() as u64,
                     "git finished"
                 );
+                report(
+                    CommandEnd::Exited(code),
+                    String::from_utf8_lossy(&stderr).trim_end(),
+                );
                 Ok(GitOutput {
                     code,
                     stdout: Vec::new(),
@@ -335,6 +459,7 @@ impl GitExecutor {
             }
             ChildOutcome::TimedOut => {
                 tracing::warn!(command = %described, "git timed out; killed");
+                report(CommandEnd::TimedOut, "");
                 Err(GitError::TimedOut {
                     command: described,
                     // `unwrap_or` only for the error message: TimedOut cannot
@@ -344,6 +469,7 @@ impl GitExecutor {
             }
             ChildOutcome::Cancelled => {
                 tracing::debug!(command = %described, "git cancelled; killed");
+                report(CommandEnd::Cancelled, "");
                 Err(GitError::Cancelled { command: described })
             }
         }
@@ -442,6 +568,8 @@ async fn kill_and_reap(child: &mut Child) {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Mutex;
+
     use super::*;
 
     /// A cross-platform command that sleeps for ~30s, used to exercise the
@@ -512,5 +640,79 @@ mod tests {
     fn describe_joins_arguments() {
         let cmd = GitCommand::new().args(["log", "--topo-order"]);
         assert_eq!(cmd.describe(), "git log --topo-order");
+    }
+
+    #[test]
+    fn describe_quotes_what_a_shell_would_split_or_read() {
+        let cmd = GitCommand::new().args(["stash", "push", "-m", "work in progress"]);
+        assert_eq!(cmd.describe(), "git stash push -m 'work in progress'");
+        let cmd = GitCommand::new().args(["add", "--", &literal_pathspec("a b.txt")]);
+        assert_eq!(cmd.describe(), "git add -- ':(literal)a b.txt'");
+    }
+
+    #[test]
+    fn the_full_form_spells_out_what_is_always_applied() {
+        let exec = GitExecutor::new();
+        let full = exec.describe_full(&GitCommand::new().args(["status", "--porcelain=v2"]));
+        assert!(full.starts_with("LC_ALL=C "), "{full}");
+        assert!(full.contains("GIT_TERMINAL_PROMPT=0"), "{full}");
+        assert!(
+            full.contains("git -c color.ui=false"),
+            "the fixed configuration is part of what ran: {full}"
+        );
+        assert!(full.ends_with(" status --porcelain=v2"), "{full}");
+    }
+
+    #[test]
+    fn a_per_command_environment_override_shows_up_in_the_full_form() {
+        let exec = GitExecutor::new();
+        let full = exec.describe_full(
+            &GitCommand::new()
+                .env("GIT_EDITOR", "pg-todo-editor")
+                .arg("rebase"),
+        );
+        assert!(full.contains("GIT_EDITOR=pg-todo-editor"), "{full}");
+    }
+
+    #[derive(Default)]
+    struct Recorder {
+        seen: Mutex<Vec<(u64, String, CommandEnd, String)>>,
+    }
+
+    impl CommandObserver for Recorder {
+        fn records(&self, _user: bool) -> bool {
+            true
+        }
+
+        fn started(&self, display: &str, _full: &str, _user: bool) -> u64 {
+            let mut seen = self.seen.lock().unwrap();
+            let id = seen.len() as u64;
+            seen.push((id, display.to_string(), CommandEnd::Failed, String::new()));
+            id
+        }
+
+        fn finished(&self, id: u64, end: CommandEnd, _elapsed_ms: u64, message: &str) {
+            let mut seen = self.seen.lock().unwrap();
+            if let Some(entry) = seen.get_mut(id as usize) {
+                entry.2 = end;
+                entry.3 = message.to_string();
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn the_observer_hears_about_a_command_that_never_started() {
+        let recorder = Arc::new(Recorder::default());
+        let exec = GitExecutor::with_program("pg-no-such-program")
+            .observed(Arc::clone(&recorder) as Arc<dyn CommandObserver>, true);
+        let out = exec
+            .run_unchecked(GitCommand::new().arg("status"), &CancellationToken::new())
+            .await;
+        assert!(out.is_err());
+        let seen = recorder.seen.lock().unwrap();
+        assert_eq!(seen.len(), 1);
+        assert_eq!(seen[0].1, "git status");
+        assert_eq!(seen[0].2, CommandEnd::Failed);
+        assert!(!seen[0].3.is_empty(), "the reason is reported");
     }
 }

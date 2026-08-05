@@ -16,7 +16,7 @@ use platitude_core::details::DiffTarget;
 use platitude_core::opstate::OpState;
 use platitude_core::parse::diff::FilePatch;
 use platitude_core::preview::FilePreview;
-use platitude_core::process::GitExecutor;
+use platitude_core::process::{CommandEnd, GitExecutor};
 use platitude_core::session::{
     AUTO_FETCH_OP, LogRow, RefLabel, RefsSnapshot, RepoSession, SessionEvent, SessionSink,
 };
@@ -120,6 +120,27 @@ pub enum GraphMsg {
     },
     Failed {
         generation: u64,
+        message: String,
+    },
+}
+
+/// Command-log messages: one git invocation, start and end.
+#[derive(Debug)]
+pub enum CommandMsg {
+    Started {
+        id: u64,
+        display: String,
+        full: String,
+        at_ms: i64,
+    },
+    Finished {
+        id: u64,
+        /// Exit code, or `None` when git never ran to a code of its own
+        /// (killed by the timeout, cancelled, failed to start).
+        code: Option<i32>,
+        /// Why there is no code, for the row to say instead.
+        note: String,
+        elapsed_ms: i64,
         message: String,
     },
 }
@@ -234,6 +255,7 @@ pub struct Feeds {
     pub worktrees: Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>,
     pub details: Arc<Feed<platitude_core::details::CommitDetails>>,
     pub diff: Arc<Feed<DiffMsg>>,
+    pub commands: Arc<Feed<CommandMsg>>,
 }
 
 /// Routes core session events into the per-tab feeds. Runs on background
@@ -334,6 +356,37 @@ impl SessionSink for BridgeSink {
                     target,
                     patches,
                     preview,
+                });
+            }
+            SessionEvent::CommandStarted {
+                id,
+                display,
+                full,
+                at_ms,
+            } => self.feeds.commands.push(CommandMsg::Started {
+                id,
+                display,
+                full,
+                at_ms,
+            }),
+            SessionEvent::CommandFinished {
+                id,
+                end,
+                elapsed_ms,
+                message,
+            } => {
+                let (code, note) = match end {
+                    CommandEnd::Exited(code) => (Some(code), String::new()),
+                    CommandEnd::TimedOut => (None, "timed out".to_string()),
+                    CommandEnd::Cancelled => (None, "cancelled".to_string()),
+                    CommandEnd::Failed => (None, "did not run".to_string()),
+                };
+                self.feeds.commands.push(CommandMsg::Finished {
+                    id,
+                    code,
+                    note,
+                    elapsed_ms: elapsed_ms as i64,
+                    message,
                 });
             }
             SessionEvent::OpFailed { op, error } => self.feeds.tab.push(TabMsg::OpError {
