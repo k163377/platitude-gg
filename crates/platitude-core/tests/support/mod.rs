@@ -62,6 +62,13 @@ impl TestRepo {
         out.stdout
     }
 
+    /// Runs git and reports only whether it succeeded — for the commands
+    /// whose exit code *is* the answer (`check-ref-format`).
+    pub fn git_ok(&mut self, args: &[&str]) -> bool {
+        let dir = self.path.clone();
+        self.run(&dir, args).status.success()
+    }
+
     /// Runs git expecting a non-zero exit (e.g. a conflicting merge).
     pub fn git_expect_failure(&mut self, args: &[&str]) {
         let dir = self.path.clone();

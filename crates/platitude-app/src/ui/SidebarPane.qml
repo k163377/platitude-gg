@@ -18,8 +18,99 @@ Rectangle {
     required property var tagsModel
 
     signal refActivated(string oidHex)
-    signal refMenuRequested(string name, string oidHex, bool isRemote)
+    /// Right-click on a row. `kind` is the section it came from, `name`
+    /// what the row shows and `full` what git knows it by.
+    signal refMenuRequested(string kind, string name, string full, string oidHex)
     signal worktreeActivated(string path)
+    /// Double-click on a branch row: `kind` is the chip letter the page's
+    /// dispatcher reads ("L" local / "R" remote).
+    signal refSwitchRequested(string kind, string name)
+    /// A name was typed for a new branch on a tag's commit.
+    signal branchAtRequested(string oidHex, string name)
+    /// A row was renamed. `kind` is the section ("branch" / "tag" /
+    /// "stash"), `id` what git knows the row by.
+    signal renameSubmitted(string kind, string id, string name)
+
+    // ---- the row gestures ------------------------------------------
+    // Held here rather than in a list or a delegate: only one row at a
+    // time is the clicked one or the one being typed into, and both have
+    // to outlive the delegates that show them (デザイン規約 §左メニューの
+    // 所作).
+    property string activeKey: ""
+    property string editKey: ""
+    property string editKind: ""
+    property string editMode: ""
+    property string editId: ""
+    property string editOid: ""
+    property string editText: ""
+    /// What is typed cannot be accepted. The rules are git's own, asked of
+    /// core (a stash's label is free text, not a ref name).
+    readonly property bool editRefused: sidebar.editKey !== ""
+        && !(sidebar.editKind === "stash"
+             ? sidebar.repoTab.validStashMessage(sidebar.editText)
+             : sidebar.repoTab.validRefName(sidebar.editText))
+    readonly property string editRefusedWhy: !sidebar.editRefused ? ""
+        : sidebar.editText.trim() === ""
+          ? qsTr("A name is needed")
+          : sidebar.editKind === "stash"
+            ? qsTr("One line, and nothing invisible in it")
+            : qsTr("git will not take this as a name")
+
+    function startEdit(kind, key, mode, id, oid, text) {
+        sidebar.editKind = kind
+        sidebar.editMode = mode
+        sidebar.editId = id
+        sidebar.editOid = oid
+        sidebar.editText = text
+        sidebar.editKey = key
+    }
+    function stopEdit() {
+        sidebar.editKey = ""
+        sidebar.editText = ""
+        sidebar.editMode = ""
+    }
+    function submitEdit(text) {
+        const kind = sidebar.editKind
+        const id = sidebar.editId
+        const oid = sidebar.editOid
+        const mode = sidebar.editMode
+        sidebar.stopEdit()
+        if (mode === "branch")
+            sidebar.branchAtRequested(oid, text.trim())
+        else if (text.trim() !== id)
+            sidebar.renameSubmitted(kind, id, text.trim())
+    }
+    /// A click landed somewhere: the row it landed on becomes the one a
+    /// second click would name, and any box open elsewhere is walked away
+    /// from (nothing is asked — what it costs is the typing).
+    function noteClick(key) {
+        if (sidebar.editKey !== "" && sidebar.editKey !== key)
+            sidebar.stopEdit()
+        sidebar.activeKey = key
+    }
+    /// Double-click: where the row leads (デザイン規約 §左メニューの所作).
+    function activateRow(kind, name, full, oidHex) {
+        const id = full !== "" ? full : name
+        if (kind === "branch")
+            sidebar.refSwitchRequested("L", id)
+        else if (kind === "remote")
+            sidebar.refSwitchRequested("R", id)
+        else if (kind === "worktree")
+            sidebar.worktreeActivated(full)
+        else if (kind === "tag")
+            // A tag is a mark, not somewhere to carry on from: the row
+            // offers the one thing that would make it one.
+            sidebar.startEdit(kind, "tag:" + id, "branch", id, oidHex, "")
+        // A stash is not a place to stand, and a folder is not a row.
+    }
+    /// The menu's way into the same box, for anyone who does not know the
+    /// gesture or cannot aim two separate clicks at one row.
+    function beginRename(kind, id, text) {
+        sidebar.startEdit(kind, kind + ":" + id, "rename", id, "", text)
+    }
+    function beginBranchAt(id, oidHex) {
+        sidebar.startEdit("tag", "tag:" + id, "branch", id, oidHex, "")
+    }
 
     /// Smoke hook (PG_SCROLL_TO=nav-bottom): jump the branches list to
     /// its end. The current branch's sticky row only changes edges
@@ -100,12 +191,13 @@ Rectangle {
             sectionModel: sidebar.branchesModel
             expanded: sidebar.expBranches || refFilter.text !== ""
             kindHint: "branch"
+            gestures: sidebar
             stretch: sidebar.lastOpen === "branches"
             headTrack: sidebar.workTree.upstream !== ""
                        ? "↑" + sidebar.workTree.ahead + " ↓" + sidebar.workTree.behind : ""
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
-            onRefMenuRequested: (name, oidHex) =>
-                sidebar.refMenuRequested(name, oidHex, false)
+            onRefMenuRequested: (kind, name, full, oidHex) =>
+                sidebar.refMenuRequested(kind, name, full, oidHex)
 
             // The current branch never leaves the viewport: while its own
             // row is scrolled off, this stand-in rides the edge the row
@@ -212,10 +304,11 @@ Rectangle {
             sectionModel: sidebar.remotesModel
             expanded: sidebar.expRemotes || refFilter.text !== ""
             kindHint: "remote"
+            gestures: sidebar
             stretch: sidebar.lastOpen === "remotes"
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
-            onRefMenuRequested: (name, oidHex) =>
-                sidebar.refMenuRequested(name, oidHex, true)
+            onRefMenuRequested: (kind, name, full, oidHex) =>
+                sidebar.refMenuRequested(kind, name, full, oidHex)
         }
 
         // git worktrees (checkouts), GitKraken-style; the changed-file
@@ -233,9 +326,8 @@ Rectangle {
             sectionModel: sidebar.worktreesModel
             expanded: sidebar.expWorktree || refFilter.text !== ""
             kindHint: "worktree"
+            gestures: sidebar
             stretch: sidebar.lastOpen === "worktree"
-            onFileActivated: (bucket, path, origPath) =>
-                sidebar.worktreeActivated(path)
         }
 
         NavHeader {
@@ -250,10 +342,13 @@ Rectangle {
             sectionModel: sidebar.stashesModel
             expanded: sidebar.expStashes || refFilter.text !== ""
             kindHint: "stash"
+            gestures: sidebar
             stretch: sidebar.lastOpen === "stashes"
             // A stash is a commit: clicking shows its stashed changes
             // in the details pane.
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
+            onRefMenuRequested: (kind, name, full, oidHex) =>
+                sidebar.refMenuRequested(kind, name, full, oidHex)
         }
 
         NavHeader {
@@ -271,8 +366,11 @@ Rectangle {
             sectionModel: sidebar.tagsModel
             expanded: sidebar.expTags || refFilter.text !== ""
             kindHint: "tag"
+            gestures: sidebar
             stretch: sidebar.lastOpen === "tags"
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
+            onRefMenuRequested: (kind, name, full, oidHex) =>
+                sidebar.refMenuRequested(kind, name, full, oidHex)
         }
     }
 }

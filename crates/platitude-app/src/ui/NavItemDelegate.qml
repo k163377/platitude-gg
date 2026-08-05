@@ -29,13 +29,46 @@ Item {
     // Shows the hover stage/unstage affordance (WIP view).
     property bool showStage: false
 
+    // ---- the two-click gestures ------------------------------------
+    // Which row was clicked last, and which is being typed into, are held
+    // by the sidebar: delegates are recycled the moment a row scrolls off
+    // (デザイン規約 §左メニューの所作).
+    property string rowKey: ""
+    property string activeKey: ""
+    property string editKey: ""
+    /// "rename" (the name is in the box) or "branch" (a name for a new
+    /// branch on this row's commit).
+    property string editMode: ""
+    /// What has been typed so far, held by the sidebar so a row that
+    /// scrolls off and comes back does not lose it.
+    property string editText: ""
+    property bool editRefused: false
+    property string editRefusedWhy: ""
+    readonly property bool editing: navRow.editKey !== ""
+                                    && navRow.editKey === navRow.rowKey
+    /// The name git knows this row by.
+    readonly property string fullName: navRow.full !== "" ? navRow.full : navRow.name
+
     signal refClicked(string oidHex)
     signal fileClicked(string bucket, string path, string origPath)
     signal folderClicked(string key)
     signal stageClicked(string bucket, string path)
+    /// A left click landed on this row, whatever it then meant.
+    signal rowClicked()
+    /// Double-click: go where this row leads.
+    signal activateRequested()
+    /// A second click, once the double-click window has passed: put this
+    /// row's name in a box.
+    signal renameRequested()
+    /// The box: typed into, accepted, walked away from.
+    signal editTyped(string text)
+    signal editAccepted(string text)
+    signal editCancelled()
     /// Right-click on a ref row; the page owns the menu because
-    /// delegates are recycled out from under an open popup.
-    signal refMenuRequested(string name, string oidHex)
+    /// delegates are recycled out from under an open popup. `name` is
+    /// what the row shows, `full` what git knows it by (a stash shows a
+    /// message and answers to a selector).
+    signal refMenuRequested(string name, string full, string oidHex)
     /// Right-click on a working-tree file row, for the same reason.
     signal fileMenuRequested(string bucket, string path)
 
@@ -48,6 +81,15 @@ Item {
         anchors.fill: parent
         color: Theme.accentMuted
         visible: navRow.is_head && !navRow.folder
+    }
+    // The row a click last landed on. Without it the second click of the
+    // rename gesture would be aimed at nothing, and a click on a worktree
+    // row — which has nowhere to jump to — would look like it missed.
+    Rectangle {
+        anchors.fill: parent
+        color: Theme.bgSelected
+        visible: !navRow.folder && navRow.rowKey !== ""
+                 && navRow.activeKey === navRow.rowKey
     }
     Rectangle {
         anchors.fill: parent
@@ -109,6 +151,7 @@ Item {
             }
         }
         Label {
+            visible: !navRow.editing
             Layout.fillWidth: true
             text: navRow.name
             elide: Text.ElideMiddle
@@ -116,6 +159,30 @@ Item {
             color: navRow.folder ? Theme.textSecondary
                    : navRow.is_head ? Theme.textLink : Theme.textPrimary
             font.pixelSize: Theme.fontMd
+        }
+        // The name, in a box, where the name was. Nothing is asked before
+        // it opens or when it is walked away from: what it costs is the
+        // typing (デザイン規約 §可否・警告の出し場所).
+        SlimField {
+            id: editField
+            visible: navRow.editing
+            Layout.fillWidth: true
+            font.pixelSize: Theme.fontMd
+            refused: navRow.editRefused
+            placeholderText: navRow.editMode === "branch"
+                             ? qsTr("Create branch here?") : ""
+            onTextEdited: navRow.editTyped(editField.text)
+            // Refused text stays in the box: Enter that does nothing is
+            // the answer, and the frame and its tooltip say why.
+            onAccepted: {
+                if (!navRow.editRefused)
+                    navRow.editAccepted(editField.text)
+            }
+            Keys.onEscapePressed: navRow.editCancelled()
+            ToolTip.visible: navRow.editRefused && editField.activeFocus
+                             && navRow.editRefusedWhy !== ""
+            ToolTip.delay: 300
+            ToolTip.text: navRow.editRefusedWhy
         }
         // Worktree rows: checked-out branch on the right.
         Label {
@@ -165,36 +232,88 @@ Item {
             }
         }
     }
+    // Rows whose name is the repository's to change. A remote branch is
+    // not one of them (git has no rename over there), and neither is a
+    // folder — it is the shape of the names below it, not a name.
+    readonly property bool nameable: !navRow.folder
+        && (navRow.kindHint === "branch" || navRow.kindHint === "tag"
+            || navRow.kindHint === "stash")
+    // Long enough that the second click of a double-click falls inside
+    // it; the system's own setting, since it is the system that decides
+    // what counts as a double-click.
+    Timer {
+        id: doubleGuard
+        interval: Application.styleHints.mouseDoubleClickInterval
+    }
+    // A second click on a row already clicked means the name, but only
+    // once a double-click can be ruled out — the same wait Explorer makes
+    // (デザイン規約 §左メニューの所作).
+    Timer {
+        id: renameTimer
+        interval: Application.styleHints.mouseDoubleClickInterval
+        onTriggered: navRow.renameRequested()
+    }
+    // The box has to carry the name into itself when it opens, and again
+    // when a scrolled-off row is built anew (the delegate is recycled; the
+    // text is not this row's to keep).
+    onEditingChanged: navRow.takeEditFocus()
+    Component.onCompleted: navRow.takeEditFocus()
+    function takeEditFocus() {
+        if (!navRow.editing)
+            return
+        editField.text = navRow.editText
+        editField.selectAll()
+        editField.forceActiveFocus()
+    }
+    function ordinaryClick() {
+        if (navRow.folder) {
+            navRow.folderClicked(navRow.full)
+        } else if (navRow.kindHint === "wt") {
+            navRow.fileClicked(navRow.bucket, navRow.fullName, navRow.orig_path)
+        } else if (navRow.kindHint === "worktree") {
+            // Another repository: nothing here to jump to, so a click only
+            // takes the row (the double-click opens it as a tab).
+        } else if (navRow.oid_hex !== "") {
+            navRow.refClicked(navRow.oid_hex)
+        }
+    }
     MouseArea {
         id: itemMouse
         anchors.fill: parent
         hoverEnabled: true
+        // While the box is open the row belongs to it.
+        visible: !navRow.editing
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         onClicked: mouse => {
             if (mouse.button === Qt.RightButton) {
-                // Only branch-like rows have operations behind them.
+                // Only rows with operations behind them open a menu.
                 if (!navRow.folder && navRow.oid_hex !== ""
                         && (navRow.kindHint === "branch"
-                            || navRow.kindHint === "remote"))
-                    navRow.refMenuRequested(
-                        navRow.full !== "" ? navRow.full : navRow.name,
-                        navRow.oid_hex)
+                            || navRow.kindHint === "remote"
+                            || navRow.kindHint === "tag"
+                            || navRow.kindHint === "stash"))
+                    navRow.refMenuRequested(navRow.name, navRow.fullName,
+                                            navRow.oid_hex)
                 else if (!navRow.folder && navRow.kindHint === "wt")
-                    navRow.fileMenuRequested(
-                        navRow.bucket,
-                        navRow.full !== "" ? navRow.full : navRow.name)
+                    navRow.fileMenuRequested(navRow.bucket, navRow.fullName)
                 return
             }
-            if (navRow.folder)
-                navRow.folderClicked(navRow.full)
-            else if (navRow.kindHint === "wt")
-                navRow.fileClicked(navRow.bucket,
-                                   navRow.full !== "" ? navRow.full : navRow.name,
-                                   navRow.orig_path)
-            else if (navRow.kindHint === "worktree")
-                navRow.fileClicked("worktree", navRow.full, "")
-            else if (navRow.oid_hex !== "")
-                navRow.refClicked(navRow.oid_hex)
+            // The second click of a double-click: the first one already
+            // did what a click does, and the gesture is the double.
+            if (doubleGuard.running)
+                return
+            const wasActive = navRow.activeKey === navRow.rowKey
+            doubleGuard.restart()
+            navRow.rowClicked()
+            navRow.ordinaryClick()
+            if (wasActive && navRow.nameable)
+                renameTimer.restart()
+        }
+        onDoubleClicked: mouse => {
+            if (mouse.button !== Qt.LeftButton || navRow.folder)
+                return
+            renameTimer.stop()
+            navRow.activateRequested()
         }
     }
     // Hover stage/unstage affordance.
@@ -219,18 +338,43 @@ Item {
                                              : Theme.diffAddedFg
         }
     }
-    // Nested leaves show only their last segment; hover reveals the
-    // full name — in the row's own colour, so the branch the working
-    // tree stands on reads the same here as it does in the row.
-    // Colouring it means rich text, so the name is escaped first (a
-    // refname may hold & and <).
-    ToolTip.visible: itemMouse.containsMouse && !navRow.folder
-                     && navRow.full !== "" && navRow.full !== navRow.name
+    // Hover says where this row leads — the one thing the row itself
+    // cannot show (デザイン規約 §hover のツールチップ). A name that the
+    // sentence carries doubles as the full name of a nested leaf, which
+    // is why the wording always spells the row out; where there is no
+    // sentence to write, the full name stands on its own. The branch the
+    // working tree is on keeps its colour here too, and colouring means
+    // rich text, so the name is escaped (a refname may hold & and <).
+    readonly property string hoverText: {
+        const full = navRow.fullName
+        if (navRow.folder)
+            return ""
+        if (navRow.kindHint === "branch") {
+            // Standing on it already: nowhere to announce, so the tooltip
+            // is only there when the row is showing a shortened name.
+            if (navRow.is_head)
+                return full === navRow.name ? ""
+                       : "<font color=\"" + Theme.textLink + "\">"
+                         + navRow.escapeMarkup(full) + "</font>"
+            return qsTr("Switch to %1").arg(full)
+        }
+        if (navRow.kindHint === "remote")
+            return qsTr("Switch to %1").arg(full)
+        if (navRow.kindHint === "tag")
+            return qsTr("Create a branch at %1").arg(navRow.name)
+        if (navRow.kindHint === "worktree")
+            return qsTr("Open %1 in a new tab").arg(full)
+        // A stash is named by a message that the row has to cut short.
+        if (navRow.kindHint === "stash")
+            return navRow.name
+        return full !== navRow.name ? full : ""
+    }
+    function escapeMarkup(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+                   .replace(/>/g, "&gt;")
+    }
+    ToolTip.visible: itemMouse.containsMouse && !navRow.editing
+                     && navRow.hoverText !== ""
     ToolTip.delay: 700
-    ToolTip.text: navRow.is_head
-                  ? "<font color=\"" + Theme.textLink + "\">"
-                    + navRow.full.replace(/&/g, "&amp;").replace(/</g, "&lt;")
-                                 .replace(/>/g, "&gt;")
-                    + "</font>"
-                  : navRow.full
+    ToolTip.text: navRow.hoverText
 }

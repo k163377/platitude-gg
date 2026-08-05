@@ -48,6 +48,7 @@ use crate::sequencer;
 use crate::stage;
 use crate::stash::{self, StashEntry};
 use crate::status::{self, WorkTreeStatus};
+use crate::tag;
 
 /// First chunk is small so the first paint happens as early as possible.
 const FIRST_CHUNK_ROWS: usize = 512;
@@ -1555,6 +1556,30 @@ impl RepoSession {
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 branch::rename(&exec, &repo.workdir, &from, &to, force, &cancel).await
+            },
+        );
+    }
+
+    /// Renames a tag: a new name on the same object, then the old name
+    /// dropped (git has no rename of its own — see [`crate::tag`]).
+    pub fn rename_tag(self: &Arc<Self>, from: String, to: String) {
+        self.write(
+            "tag",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                tag::rename(&exec, &repo.workdir, &from, &to, &cancel).await
+            },
+        );
+    }
+
+    /// Renames a stash entry — stored again under the new label, old entry
+    /// dropped (git has no rename for one — see [`crate::stash::rename`]).
+    pub fn rename_stash(self: &Arc<Self>, selector: String, message: String) {
+        self.write(
+            "stash",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                stash::rename(&exec, &repo.workdir, &selector, &message, &cancel).await
             },
         );
     }

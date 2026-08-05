@@ -319,32 +319,70 @@ Item {
                ? remotesModel.oidOfName(workTree.upstream) : ""
     }
 
-    // ---- context menu on a branch row ------------------------------
+    // ---- context menu on a sidebar row ------------------------------
+    // `menuRefName` is what the row shows, `menuRefId` what git knows it
+    // by (they differ for a stash: a message and a selector).
+    property string menuRefKind: ""
     property string menuRefName: ""
+    property string menuRefId: ""
     property string menuRefOid: ""
-    property bool menuRefRemote: false
-    function openRefMenu(name, oidHex, isRemote) {
+    function openRefMenu(kind, name, full, oidHex) {
+        page.menuRefKind = kind
         page.menuRefName = name
+        page.menuRefId = full
         page.menuRefOid = oidHex
-        page.menuRefRemote = isRemote
         refMenu.popup()
     }
     AppMenu {
         id: refMenu
         AppMenuItem {
-            text: qsTr("Switch to %1").arg(page.menuRefName)
-            enabled: page.menuRefName !== workTree.branch
+            text: qsTr("Switch to %1").arg(page.menuRefId)
+            visible: page.menuRefKind === "branch" || page.menuRefKind === "remote"
+            enabled: page.menuRefId !== workTree.branch
             // Through the same dispatcher the graph's chips use: a remote
             // branch whose local one already exists cannot simply be
             // created, and that answer belongs in one place.
-            onTriggered: page.switchToRef(page.menuRefRemote ? "R" : "L",
-                                          page.menuRefName)
+            onTriggered: page.switchToRef(page.menuRefKind === "remote" ? "R" : "L",
+                                          page.menuRefId)
+        }
+        // A tag is not somewhere to carry on from, so the row offers the
+        // thing that would make it one (デザイン規約 §タグでは detach しない).
+        AppMenuItem {
+            text: qsTr("Create a branch here")
+            visible: page.menuRefKind === "tag"
+            enabled: repoTab.busyCount === 0
+            onTriggered: sidebarPane.beginBranchAt(page.menuRefId, page.menuRefOid)
+        }
+        // The same box the second click opens — the row says which row it
+        // is about, so the wording does not repeat it.
+        AppMenuItem {
+            text: qsTr("Rename…")
+            visible: page.menuRefKind === "branch" || page.menuRefKind === "tag"
+                     || page.menuRefKind === "stash"
+            enabled: repoTab.busyCount === 0
+            onTriggered: sidebarPane.beginRename(
+                page.menuRefKind, page.menuRefId,
+                page.menuRefKind === "stash" ? page.menuRefName : page.menuRefId)
         }
         AppMenuSeparator {}
         AppMenuItem {
             text: qsTr("Copy commit hash")
             onTriggered: clipboard.copy(page.menuRefOid)
         }
+    }
+
+    // ---- what the sidebar's rows ask for ---------------------------
+    /// A row was renamed in place. Nothing is confirmed: a name is not
+    /// history, and the one it replaces is a switch away (a tag and a
+    /// stash are re-made under the new name by core, which is the only
+    /// rename git has for them).
+    function renameRow(kind, id, name) {
+        if (kind === "branch")
+            repoTab.renameBranch(id, name, false)
+        else if (kind === "tag")
+            repoTab.renameTag(id, name)
+        else if (kind === "stash")
+            repoTab.renameStash(id, name)
     }
 
     // ---- context menu on a working-tree file row --------------------
@@ -735,6 +773,36 @@ Item {
             page.runSwitch(act === "switch-leave" ? "stash" : "merge")
         } else if (act === "switch-remote") {
             page.switchTo("remote", arg, arg, "")
+        } else if (act === "nav-dbl") {
+            // A double-click in the left menu, entered where the row
+            // enters it. The argument is `<section>:<name>`.
+            const cut = arg.indexOf(":")
+            const section = arg.substring(0, cut)
+            const rowName = arg.substring(cut + 1)
+            const model = section === "tag" ? tagsModel
+                        : section === "remote" ? remotesModel : branchesModel
+            sidebarPane.activateRow(section, rowName, rowName,
+                                    model.oidOfName(rowName))
+        } else if (act === "nav-rename" || act === "rename-branch"
+                   || act === "rename-tag" || act === "rename-stash") {
+            // The box the second click opens, entered at the same place.
+            // "nav-rename" leaves it standing for the shot; the others
+            // type the argument into it and accept. Which row: the
+            // current branch, the first tag, the first stash.
+            const kind = act === "rename-tag" ? "tag"
+                       : act === "rename-stash" ? "stash" : "branch"
+            const id = kind === "branch" ? workTree.branch
+                     : kind === "tag" ? tagsModel.nameAt(0) : stashesModel.fullAt(0)
+            const shown = kind === "stash" ? stashesModel.nameAt(0) : id
+            sidebarPane.beginRename(kind, id, shown)
+            if (act !== "nav-rename")
+                sidebarPane.submitEdit(arg)
+        } else if (act === "branch-at-tag") {
+            // The box a double-click puts on a tag row, accepted with the
+            // argument as the new branch's name.
+            sidebarPane.beginBranchAt(tagsModel.nameAt(0),
+                                      tagsModel.oidOfName(tagsModel.nameAt(0)))
+            sidebarPane.submitEdit(arg)
         } else if (act === "dbl-local" || act === "dbl-remote") {
             // What a double-click on a chip does, entered where the
             // delegate enters it: the record is the chip as it is drawn
@@ -1362,9 +1430,15 @@ Item {
                     stashesModel: stashesModel
                     tagsModel: tagsModel
                     onRefActivated: oidHex => page.jumpToRef(oidHex)
-                    onRefMenuRequested: (name, oidHex, isRemote) =>
-                        page.openRefMenu(name, oidHex, isRemote)
+                    onRefMenuRequested: (kind, name, full, oidHex) =>
+                        page.openRefMenu(kind, name, full, oidHex)
                     onWorktreeActivated: path => page.openRepositoryPathRequested(path)
+                    onRefSwitchRequested: (kind, name) => page.switchToRef(kind, name)
+                    onBranchAtRequested: (oidHex, name) => {
+                        if (name !== "")
+                            repoTab.createBranch(name, oidHex, true)
+                    }
+                    onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
                 }
 
                 // Center: commit graph ⇄ file diff
@@ -1461,7 +1535,7 @@ Item {
                                   && page.selectedStashRef === ""
                                   && page.selectedInHistory
                         editBlocked: page.selectedStashRef !== ""
-                            ? qsTr("A stash message cannot be changed")
+                            ? qsTr("Rename a stash in the list on the left")
                             : (detailsModel.shaHex !== "" && !page.selectedInHistory
                                ? qsTr("Not in the current history — switch to a "
                                       + "branch that has it")

@@ -570,6 +570,34 @@ impl RepoTab {
         self.with_session(|s| s.rename_branch(from.clone(), to.clone(), force));
     }
 
+    /// Renames a tag. git has none, so core builds it out of a new name on
+    /// the same object and a delete of the old one.
+    #[qslot]
+    fn rename_tag(&mut self, from: String, to: String) {
+        self.with_session(|s| s.rename_tag(from.clone(), to.clone()));
+    }
+
+    /// Renames a stash entry. Built the same way, out of a re-store and a
+    /// drop — so the entry moves to the top of the list.
+    #[qslot]
+    fn rename_stash(&mut self, selector: String, message: String) {
+        self.with_session(|s| s.rename_stash(selector.clone(), message.clone()));
+    }
+
+    /// Whether a name is one git would take for a branch or a tag — asked
+    /// per keystroke by the rename box, so it never runs git.
+    #[qslot]
+    fn valid_ref_name(&self, name: String) -> bool {
+        platitude_core::tag::is_valid_name(&name)
+    }
+
+    /// The same question for a stash's label, which is free text on one
+    /// line rather than a ref name.
+    #[qslot]
+    fn valid_stash_message(&self, message: String) -> bool {
+        platitude_core::stash::is_valid_message(&message)
+    }
+
     /// `git stash push` over the whole working tree.
     ///
     /// `staged_only` takes the index alone. It is not offered while a file

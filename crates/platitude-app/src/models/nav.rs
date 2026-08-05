@@ -499,14 +499,17 @@ impl NavSectionModel {
         if let Some(feed) = self.stash_feed.clone()
             && let Some(stashes) = feed.drain().pop()
         {
-            // Message only — the reflog selector (stash@{0}) stays hidden
-            // by request (Phase 2 stash ops will resolve it internally).
+            // The message is the whole of what a stash shows: the reflog
+            // selector (stash@{0}) stays out of sight by request, but it
+            // rides along in `full` because it is what names the entry to
+            // git — renaming one takes the selector, not the message.
             // The commit id makes rows clickable: the details pane then
             // shows the stashed changes.
             self.all = stashes
                 .into_iter()
                 .map(|s| NavItem {
                     name: s.message,
+                    full: s.name,
                     oid_hex: s.oid.to_hex(),
                     ..Default::default()
                 })
@@ -565,6 +568,28 @@ impl NavSectionModel {
             .iter()
             .find(|item| item.name == name)
             .map(|item| item.oid_hex.clone())
+            .unwrap_or_default()
+    }
+
+    /// What one row shows, and what git knows it by (empty out of range).
+    ///
+    /// Roles are only visible to a delegate, so this is how automation
+    /// reaches a row it has to act on.
+    #[qslot]
+    fn name_at(&self, row: i32) -> String {
+        usize::try_from(row)
+            .ok()
+            .and_then(|row| self.items.get(row))
+            .map(|item| item.name.clone())
+            .unwrap_or_default()
+    }
+
+    #[qslot]
+    fn full_at(&self, row: i32) -> String {
+        usize::try_from(row)
+            .ok()
+            .and_then(|row| self.items.get(row))
+            .map(|item| item.full.clone())
             .unwrap_or_default()
     }
 }
