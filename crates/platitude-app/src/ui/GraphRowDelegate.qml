@@ -253,27 +253,27 @@ Item {
                         ctx.setLineDash([])
                         return
                     }
-                    // Stash rows draw the archive-box glyph instead of the
-                    // author identicon.
+                    // Stash rows draw the bare archive box of the STASHES
+                    // section (NavIcon "stash", same 16-unit grid) instead
+                    // of the author identicon — no ring around it, so the
+                    // node reads as the icon and nothing else. The glyph is
+                    // centered on the node point (its own middle, 8.5 of the
+                    // grid, not the grid's), and its footprint is cleared
+                    // first so the dashed leash comes out from under the box
+                    // instead of running through it.
                     if (rowItem.stash_ref !== "") {
-                        ctx.fillStyle = Theme.bgElevated
-                        ctx.beginPath()
-                        ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
-                        ctx.fill()
+                        const s = Metrics.nodeIcon / 16
+                        const gx = nodeX - 8 * s
+                        const gy = midY - 8.5 * s
+                        ctx.clearRect(gx + 3 * s, gy + 4 * s, 10 * s, 9 * s)
                         ctx.strokeStyle = Theme.textSecondary
                         ctx.lineWidth = Metrics.iconStroke
-                        const bw = r * 1.2
-                        ctx.strokeRect(nodeX - bw / 2, midY - bw / 2, bw, bw * 0.36)
-                        ctx.strokeRect(nodeX - bw * 0.4, midY - bw * 0.1, bw * 0.8, bw * 0.58)
-                        // Dashed ring like the WIP node: not part of the
-                        // committed history proper.
-                        ctx.strokeStyle = Theme.textSecondary
-                        ctx.lineWidth = Metrics.laneStroke
-                        ctx.setLineDash(Metrics.laneDash)
+                        ctx.strokeRect(gx + 3 * s, gy + 4 * s, 10 * s, 3 * s)
+                        ctx.strokeRect(gx + 4 * s, gy + 7 * s, 8 * s, 6 * s)
                         ctx.beginPath()
-                        ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
+                        ctx.moveTo(gx + 6.5 * s, gy + 9.5 * s)
+                        ctx.lineTo(gx + 9.5 * s, gy + 9.5 * s)
                         ctx.stroke()
-                        ctx.setLineDash([])
                         return
                     }
                     // The commit node is the author's identicon (5x5,
