@@ -178,21 +178,15 @@ ColumnLayout {
             // nothing else would draw the eye back here.
             border.color: detailsPane.asking ? Theme.warning : Theme.borderDefault
             border.width: Theme.borderWidth
-            TextArea {
+            SummaryArea {
                 id: subjectArea
                 anchors.fill: parent
                 anchors.margins: Theme.spaceXs
                 readOnly: !detailsPane.editable
-                wrapMode: TextArea.Wrap
                 placeholderText: detailsPane.editable ? qsTr("Commit summary") : ""
                 ToolTip.visible: hovered && detailsPane.editBlocked !== ""
                 ToolTip.delay: 600
                 ToolTip.text: detailsPane.editBlocked
-                font.pixelSize: Theme.fontLg
-                font.weight: Font.DemiBold
-                color: Theme.textPrimary
-                background: null
-                padding: 0
             }
         }
         // Always shown, even empty, and two lines tall from the start —

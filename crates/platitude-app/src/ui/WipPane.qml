@@ -260,17 +260,11 @@ ColumnLayout {
             radius: Theme.radiusMd
             border.color: Theme.borderDefault
             border.width: Theme.borderWidth
-            TextArea {
+            SummaryArea {
                 id: wipSubject
                 anchors.fill: parent
                 anchors.margins: Theme.spaceXs
-                wrapMode: TextArea.Wrap
                 placeholderText: qsTr("Commit summary")
-                font.pixelSize: Theme.fontLg
-                font.weight: Font.DemiBold
-                color: Theme.textPrimary
-                background: null
-                padding: 0
             }
         }
         // Two lines tall from the start (matches the details pane's
