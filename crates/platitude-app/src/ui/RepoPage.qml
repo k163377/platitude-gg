@@ -765,7 +765,7 @@ Item {
             const stacked = graphPane.view.itemAtIndex(Number(arg))
             if (stacked)
                 graphPane.view.chipExpandRequested(
-                    stacked.branchChipItem.records, stacked.branchChipItem)
+                    stacked.chipItem.records, stacked.chipItem)
         } else if (act === "name-box") {
             // Opened and left standing, for a look at it. The argument is
             // the row, since the box only belongs on one with no chips.

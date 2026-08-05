@@ -38,20 +38,37 @@ pub fn encode_geometry(segments: &[Segment]) -> String {
     out
 }
 
+/// A comma-separated env var as a name set (empty when unset).
+fn env_name_set(var: &str) -> std::collections::HashSet<String> {
+    std::env::var(var)
+        .map(|v| v.split(',').map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
 /// Branch names previewing the PR badge (`PG_FAKE_PR=a,b`). Real PR data
 /// joins in Phase 4; this hook exists so the design can be reviewed.
 pub(crate) fn fake_pr_set() -> &'static std::collections::HashSet<String> {
     static SET: std::sync::OnceLock<std::collections::HashSet<String>> = std::sync::OnceLock::new();
-    SET.get_or_init(|| {
-        std::env::var("PG_FAKE_PR")
-            .map(|v| v.split(',').map(str::to_string).collect())
-            .unwrap_or_default()
-    })
+    SET.get_or_init(|| env_name_set("PG_FAKE_PR"))
+}
+
+/// Tag names previewing the remote badge (`PG_FAKE_REMOTE_TAGS=a,b`).
+/// Unlike a branch, whether a tag is also on a remote cannot be read off
+/// local refs — it takes `ls-remote --tags`, which joins in Phase 4 with
+/// the fetch cycle; this hook exists so the design can be reviewed.
+pub(crate) fn fake_remote_tag_set() -> &'static std::collections::HashSet<String> {
+    static SET: std::sync::OnceLock<std::collections::HashSet<String>> = std::sync::OnceLock::new();
+    SET.get_or_init(|| env_name_set("PG_FAKE_REMOTE_TAGS"))
 }
 
 /// Labels → `\u{1f}`-joined chip records `KHRP` + text:
-/// K = `H`ead / `L`ocal / `R`emote / `T`ag, H = head?, R = has-remote?,
-/// P = has-PR? (preview via [`fake_pr_set`] until Phase 4).
+/// K = `H`ead / `L`ocal / `R`emote / `T`ag, H = head?, R = has-remote?
+/// (local branches from core; tags preview via [`fake_remote_tag_set`]
+/// until Phase 4), P = has-PR? (preview via [`fake_pr_set`], same).
+///
+/// Records arrive sorted HEAD → local → remote → tag, and stay that way:
+/// the row's one chip shows the first of them, so a branch is what a
+/// commit that is also tagged reads as.
 pub fn encode_labels(labels: &[RefLabel]) -> String {
     let mut out = String::new();
     for (i, l) in labels.iter().enumerate() {
@@ -65,7 +82,9 @@ pub fn encode_labels(labels: &[RefLabel]) -> String {
             LabelKind::Tag => 'T',
         });
         out.push(if l.is_head { '1' } else { '0' });
-        out.push(if l.has_remote { '1' } else { '0' });
+        let remote = l.has_remote
+            || (matches!(l.kind, LabelKind::Tag) && fake_remote_tag_set().contains(&l.text));
+        out.push(if remote { '1' } else { '0' });
         let pr = matches!(l.kind, LabelKind::LocalBranch) && fake_pr_set().contains(&l.text);
         out.push(if pr { '1' } else { '0' });
         out.push_str(&l.text);
@@ -343,6 +362,19 @@ mod tests {
             },
         ];
         assert_eq!(encode_labels(&labels), "L110main\u{1f}T000v1.0");
+    }
+
+    #[test]
+    fn a_tag_carries_the_remote_bit_like_a_branch() {
+        // What the fetch cycle will set in Phase 4; until then the same
+        // bit comes from PG_FAKE_REMOTE_TAGS.
+        let labels = [RefLabel {
+            text: "v1.0".into(),
+            kind: LabelKind::Tag,
+            has_remote: true,
+            is_head: false,
+        }];
+        assert_eq!(encode_labels(&labels), "T010v1.0");
     }
 
     #[test]

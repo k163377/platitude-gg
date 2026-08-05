@@ -451,6 +451,10 @@ impl NavSectionModel {
                     .map(|t| NavItem {
                         name: t.short.clone(),
                         oid_hex: t.oid_hex.clone(),
+                        // Same badge as a branch: nothing means this tag
+                        // is only here. Real data needs ls-remote (Phase
+                        // 4); PG_FAKE_REMOTE_TAGS previews the look.
+                        has_remote: crate::encode::fake_remote_tag_set().contains(&t.short),
                         ..Default::default()
                     })
                     .collect(),

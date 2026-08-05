@@ -5,8 +5,9 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // The refs a graph row could only stack: one chip and a "+N". Hovering
-// that chip opens this under it, with every ref on a row of its own so
-// one of them can be moved to.
+// that chip opens this under it, with every ref on a row of its own —
+// branches first, then the tags the chip had no room for. The branches
+// are what can be moved to; the tags are read here and nowhere else.
 //
 // Owned by the page, not by the delegate that raised it — delegates are
 // recycled out from under an open popup, which is why the context menus
@@ -60,25 +61,31 @@ Popup {
                 id: refRow
                 required property string modelData
                 // Where the working tree already is, and the detached-HEAD
-                // marker, are not places to go.
-                readonly property bool dead:
+                // marker, are not places to go — and being unavailable is
+                // what they are, so they go muted, frame included.
+                readonly property bool unavailable:
                     refRow.modelData[0] === "H"
                     || (refRow.modelData[0] === "L"
                         && refRow.modelData.substring(4) === refList.currentBranch)
+                // A tag leads nowhere either (§タグでは detach しない), but
+                // it is not unavailable — it is what this row is here to
+                // show, so it keeps its colour and its badge.
+                readonly property bool leadsNowhere:
+                    refRow.unavailable || refRow.modelData[0] === "T"
 
                 implicitWidth: rowChip.width + 2 * Theme.spaceSm
                 width: rows.rowWidth
                 height: Theme.rowHeight
                 radius: Theme.radiusSm
-                color: rowHover.hovered && !refRow.dead ? Theme.bgHover : "transparent"
+                color: rowHover.hovered && !refRow.leadsNowhere
+                       ? Theme.bgHover : "transparent"
 
                 RefChip {
                     id: rowChip
                     anchors.verticalCenter: parent.verticalCenter
                     x: Theme.spaceSm
                     records: [refRow.modelData]
-                    tagStyle: refRow.modelData[0] === "T"
-                    muted: refRow.dead
+                    muted: refRow.unavailable
                     // Unstacking is only worth it if the names read; the
                     // window the popup opens over is the only limit.
                     maxWidth: refList.parent ? refList.parent.width : 400
@@ -87,7 +94,7 @@ Popup {
                     id: rowHover
                 }
                 TapHandler {
-                    enabled: !refRow.dead
+                    enabled: !refRow.leadsNowhere
                     onTapped: {
                         refList.close()
                         refList.picked(refRow.modelData)

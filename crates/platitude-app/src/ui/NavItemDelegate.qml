@@ -137,10 +137,13 @@ Item {
         // Branch remote state: nothing = local only, remote icon =
         // has a remote, PR icon = has a PR (real data in Phase 4;
         // PG_FAKE_PR previews the look). Remote-branch and worktree
-        // rows show the PR state too.
+        // rows show the PR state too. A tag reads the same way — the
+        // badge answers "is this only here?" whatever it is on
+        // (PG_FAKE_REMOTE_TAGS until the fetch cycle carries it).
         NavIcon {
             visible: !navRow.folder
-                     && ((navRow.kindHint === "branch"
+                     && (((navRow.kindHint === "branch"
+                           || navRow.kindHint === "tag")
                           && (navRow.has_remote || navRow.has_pr))
                          || ((navRow.kindHint === "remote"
                               || navRow.kindHint === "worktree")
@@ -152,7 +155,8 @@ Item {
             ToolTip.visible: remoteHover.containsMouse
             ToolTip.delay: 600
             ToolTip.text: navRow.has_pr ? qsTr("Has an open pull request")
-                                        : qsTr("Has a remote branch")
+                          : navRow.kindHint === "tag" ? qsTr("Also on a remote")
+                                                      : qsTr("Has a remote branch")
             MouseArea {
                 id: remoteHover
                 anchors.fill: parent

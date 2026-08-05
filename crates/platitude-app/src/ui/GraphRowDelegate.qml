@@ -37,11 +37,13 @@ Item {
                                      ? ListView.view.topMargin : 0
     // The all-zero id marks the synthetic uncommitted-changes row.
     readonly property bool isWip: oid_hex !== "" && !/[^0]/.test(oid_hex)
-    // Chip records are separated by U+001F (see encode.rs). Branch-like
-    // records (HEAD / local / remote) and tags get separate chips.
+    // Chip records are separated by U+001F (see encode.rs), and arrive
+    // in the order the chip reads them out: HEAD → local → remote → tag.
+    // One chip for the row, so a commit that is both a branch tip and a
+    // release shows the branch — the tag is behind the "+N", where the
+    // hover card has it.
     readonly property var labelRecords: labels === "" ? [] : labels.split(String.fromCharCode(31))
     readonly property var branchRecords: labelRecords.filter(r => r[0] !== "T")
-    readonly property var tagRecords: labelRecords.filter(r => r[0] === "T")
     // Whether this row is somewhere HEAD could stand: the working-tree
     // row is not a commit, and a stash sits on no branch's history.
     readonly property bool movable: !rowItem.isWip && rowItem.stash_ref === ""
@@ -50,8 +52,8 @@ Item {
     // row shows no branch, which is the offer to put one there.
     readonly property string primaryRecord:
         rowItem.movable && rowItem.branchRecords.length > 0 ? rowItem.branchRecords[0] : ""
-    // The branch chip itself — what a stacked one is unstacked under.
-    readonly property alias branchChipItem: branchChip
+    // The chip itself — what a stacked one is unstacked under.
+    readonly property alias chipItem: rowChip
     // This row's chip column is a branch-name box right now.
     readonly property bool naming:
         rowItem.ListView.view ? rowItem.ListView.view.namingOid === rowItem.oid_hex : false
@@ -83,32 +85,25 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // Branch / tag chips, right-aligned against the graph — or, on a
+        // The row's chip, right-aligned against the graph — or, on a
         // row with no branch to move to, the box that names one here.
         Item {
             Layout.preferredWidth: rowItem.labelsW
             Layout.fillHeight: true
-            Row {
+            RefChip {
+                id: rowChip
+                // Assigning `visible` here replaces the chip's own rule,
+                // so the "has anything to show" half has to be repeated:
+                // without it a row with no refs draws an empty frame.
+                visible: rowItem.labelRecords.length > 0
+                         && !rowItem.naming && !rowItem.asking
                 anchors.right: parent.right
                 anchors.rightMargin: Theme.spaceXs
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: Theme.spaceXs
-                visible: !rowItem.naming && !rowItem.asking
-                RefChip {
-                    id: branchChip
-                    records: rowItem.branchRecords
-                    tagStyle: false
-                    maxWidth: rowItem.tagRecords.length > 0
-                              ? (rowItem.labelsW - Theme.spaceSm) / 2
-                              : rowItem.labelsW - Theme.spaceSm
-                }
-                RefChip {
-                    records: rowItem.tagRecords
-                    tagStyle: true
-                    maxWidth: rowItem.branchRecords.length > 0
-                              ? (rowItem.labelsW - Theme.spaceSm) / 2
-                              : rowItem.labelsW - Theme.spaceSm
-                }
+                records: rowItem.labelRecords
+                // One chip now has the column to itself; the names it
+                // cannot fit are read in the card, not squeezed here.
+                maxWidth: rowItem.labelsW - Theme.spaceSm
             }
             // A row with nothing to move to answers the double-click with
             // the one thing that would give it something: a name. The
@@ -372,10 +367,10 @@ Item {
     // is the one that hears about the pointer at all.
     property Item hoveredChip: null
     function chipUnder(px, py) {
-        if (!branchChip.visible || branchChip.records.length < 2)
+        if (!rowChip.visible || rowChip.records.length < 2)
             return null
-        const p = rowItem.mapToItem(branchChip, px, py)
-        return branchChip.contains(Qt.point(p.x, p.y)) ? branchChip : null
+        const p = rowItem.mapToItem(rowChip, px, py)
+        return rowChip.contains(Qt.point(p.x, p.y)) ? rowChip : null
     }
     // Opens and closes with the pointer, with no wait either way: only a
     // chip with something stacked behind it answers at all, so there is
