@@ -569,10 +569,11 @@ impl RepoSession {
 
     /// Starts, restarts or stops the periodic `git fetch --prune`.
     ///
-    /// `None` (or zero) turns it off. Only one fetch is ever outstanding:
-    /// on a slow link or a repository whose credential helper is taking its
-    /// time, a tick that finds the previous fetch unfinished is skipped
-    /// rather than queued behind it.
+    /// `None` (or zero) turns it off, and nothing is queued once it has
+    /// returned (a fetch already in the write queue still runs). Only one
+    /// fetch is ever outstanding: on a slow link or a repository whose
+    /// credential helper is taking its time, a tick that finds the previous
+    /// fetch unfinished is skipped rather than queued behind it.
     pub fn set_auto_fetch(self: &Arc<Self>, interval: Option<std::time::Duration>) {
         let mut guard = match self.auto_fetch.lock() {
             Ok(g) => g,
@@ -596,8 +597,16 @@ impl RepoSession {
             ticker.tick().await;
             loop {
                 tokio::select! {
+                    // Biased: a stop that arrives while ticks are already
+                    // overdue (a starved timer catches up in a burst) wins
+                    // over them instead of being picked at random.
+                    biased;
                     _ = cancel.cancelled() => return,
-                    _ = ticker.tick() => s.auto_fetch_tick(),
+                    _ = ticker.tick() => {
+                        if !s.auto_fetch_tick(&cancel) {
+                            return;
+                        }
+                    }
                 }
             }
         });
@@ -607,10 +616,23 @@ impl RepoSession {
     ///
     /// Reported under its own op name: a laptop that is simply offline must
     /// not put a fresh error banner on screen every interval.
-    fn auto_fetch_tick(self: &Arc<Self>) {
+    ///
+    /// Answers whether the timer is still running. Its token is read under
+    /// the lock a stop cancels it under, so the two cannot interleave: a
+    /// tick either has its fetch in the write queue before `set_auto_fetch`
+    /// returns, or sees the stop and queues nothing. Turning it off leaves
+    /// nothing still to come.
+    fn auto_fetch_tick(self: &Arc<Self>, cancel: &CancellationToken) -> bool {
+        let _stop = match self.auto_fetch.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        if cancel.is_cancelled() {
+            return false;
+        }
         let Ok(permit) = Arc::clone(&self.auto_fetch_slot).try_acquire_owned() else {
             tracing::debug!("auto fetch skipped: the previous one has not finished");
-            return;
+            return true;
         };
         let timeout = self.network_timeout();
         self.write(
@@ -621,6 +643,7 @@ impl RepoSession {
                 remote::fetch(&exec, &repo.workdir, None, timeout, &cancel).await
             },
         );
+        true
     }
 
     pub fn log_options(&self) -> LogOptions {
