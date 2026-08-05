@@ -345,10 +345,11 @@ Item {
             onTriggered: page.switchToRef(page.menuRefKind === "remote" ? "R" : "L",
                                           page.menuRefId)
         }
-        // Nothing here repeats a gesture: renaming and creating a branch
-        // on a tag are a click away on the row itself, and every row this
-        // menu keeps costs the ones that have nowhere else to go
-        // (デザイン規約 §メニュー).
+        // Nothing here repeats a gesture or a button: renaming and
+        // creating a branch on a tag are a click away on the row itself,
+        // and the commit's hash is on the pane the same click fills in.
+        // Every row this menu keeps costs the ones that have nowhere else
+        // to go (デザイン規約 §メニュー).
         AppMenuItem {
             text: qsTr("Delete…")
             visible: page.menuRefKind === "branch" || page.menuRefKind === "tag"
@@ -360,11 +361,6 @@ Item {
                           && page.menuRefId === workTree.branch)
             onTriggered: page.deleteRow(page.menuRefKind, page.menuRefId,
                                         page.menuRefName, page.menuRefOid)
-        }
-        AppMenuSeparator {}
-        AppMenuItem {
-            text: qsTr("Copy commit hash")
-            onTriggered: clipboard.copy(page.menuRefOid)
         }
     }
 
@@ -460,20 +456,45 @@ Item {
         }
     }
 
-    // ---- context menu on a commit row ------------------------------
+    // ---- context menu on a graph row -------------------------------
     property string menuOid: ""
     readonly property string menuShort: page.menuOid.substring(0, 8)
+    // The stash the menu was opened on, by the selector git answers to
+    // ("" on an ordinary commit). A stash is a commit git keeps off to
+    // one side of every branch, so none of the commit menu's rows land on
+    // it and it gets its own (デザイン規約 §グラフ行の右クリック).
+    property string menuStashRef: ""
     // Whether a remote already has the menu's commit. Rewriting it is
     // not asked about — nothing here leaves the machine — but 要望.md
     // wants it said, so the squash row carries a tag the way the amend
     // editor does. The answer lands a frame after the menu opens.
     property bool menuPublished: false
-    function openCommitMenu(oidHex) {
+    function openRowMenu(oidHex) {
         page.menuOid = oidHex
+        page.menuStashRef = graphModel.stashRefOf(oidHex)
+        if (page.menuStashRef !== "") {
+            stashMenu.popup()
+            return
+        }
         page.menuPublished = false
         if (repoTab.state === "open")
             repoTab.checkPublish(oidHex + "^!")
         commitMenu.popup()
+    }
+
+    // The one thing a stash row has nowhere else: the click that opens
+    // this menu also selects the row, and the details pane it fills in
+    // carries Apply and Pop (デザイン規約 §メニュー).
+    AppMenu {
+        id: stashMenu
+        AppMenuItem {
+            text: qsTr("Delete…")
+            enabled: repoTab.busyCount === 0
+            // The same wording, question and write as the left menu's
+            // row: one stash, asked about one way.
+            onTriggered: page.deleteRow("stash", page.menuStashRef,
+                                        page.menuStashRef, page.menuOid)
+        }
     }
 
     AppMenu {
@@ -528,11 +549,6 @@ Item {
                 text: qsTr("Discard everything after it")
                 onTriggered: page.moveBranchHere("hard")
             }
-        }
-        AppMenuSeparator {}
-        AppMenuItem {
-            text: qsTr("Copy commit hash")
-            onTriggered: clipboard.copy(page.menuOid)
         }
     }
 
@@ -616,7 +632,7 @@ Item {
         && !workTree.detached && workTree.branch !== ""
         && workTree.opText === ""
         && page.menuOid !== "" && page.menuOid !== workTree.headOid
-        && graphModel.stashRefOf(page.menuOid) === ""
+        && page.menuStashRef === ""
 
     // Only the discarding one is asked about. Keeping the work staged or
     // unstaged leaves every byte where it is — the branch moves, and a
@@ -865,6 +881,22 @@ Item {
             repoTab.deleteTag(arg)
         } else if (act === "delete-stash-go") {
             repoTab.dropStash(stashesModel.fullAt(0))
+        } else if (act === "stash-menu" || act === "delete-stash-row") {
+            // The graph's way to the same delete, entered where a
+            // right-click enters it: the row menu on the first stash's
+            // row. "stash-menu" leaves it standing for the overlay shot;
+            // "-row" goes on to the question, as its one row does, and
+            // with the argument "go" answers it as well. Which menu
+            // opened is said in words too — the difference is the whole
+            // point, and a shot of a one-row menu proves little.
+            page.openRowMenu(stashesModel.oidOfName(stashesModel.nameAt(0)))
+            AppBackend.report("row_menu stash=" + page.menuStashRef)
+            if (act === "delete-stash-row") {
+                page.deleteRow("stash", page.menuStashRef,
+                               page.menuStashRef, page.menuOid)
+                if (arg === "go")
+                    page.answerRowAsk()
+            }
         } else if (act === "branch-at-tag") {
             // The box a double-click puts on a tag row, accepted with the
             // argument as the new branch's name.
@@ -898,7 +930,7 @@ Item {
             // the row, since the box only belongs on one with no chips.
             graphPane.startNaming(graphModel.oidAt(Number(arg)))
         } else if (act === "squash") {
-            page.openCommitMenu(branchesModel.headOid)
+            page.openRowMenu(branchesModel.headOid)
             page.squashCommit(branchesModel.headOid)
         } else if (act === "reword" || act === "edit-message"
                    || act === "edit-message-leave"
@@ -919,7 +951,7 @@ Item {
             // opened on is where the branch lands. "-confirm" stops at
             // the question, so nothing should have moved until it is
             // answered.
-            page.openCommitMenu(arg)
+            page.openRowMenu(arg)
             page.moveBranchHere(act === "reset-soft" ? "soft"
                                 : act === "reset-mixed" ? "mixed" : "hard")
         } else if (act === "reset-hard") {
@@ -929,7 +961,7 @@ Item {
             // Nothing written: the menu is left standing for the overlay
             // shot. Which rows are offered is said in words as well — a
             // greyed row is not something a screenshot can be trusted on.
-            page.openCommitMenu(arg)
+            page.openRowMenu(arg)
             if (act === "reset-menu")
                 resetMenu.popup()
             AppBackend.report("commit_menu can_move=" + page.canMoveBranchHere)
@@ -1534,7 +1566,7 @@ Item {
                         worktreeModel: worktreeModel
                         blank: page.blank
                         onRowActivated: oidHex => page.activateRow(oidHex)
-                        onCommitMenuRequested: oidHex => page.openCommitMenu(oidHex)
+                        onRowMenuOpenRequested: oidHex => page.openRowMenu(oidHex)
                         onRowSwitchRequested: (oidHex, record) =>
                             page.rowDoubleClicked(oidHex, record)
                         onChipExpandRequested: (records, anchor) =>

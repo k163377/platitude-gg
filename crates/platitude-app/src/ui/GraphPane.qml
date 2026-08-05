@@ -20,8 +20,9 @@ Rectangle {
 
     /// A row was clicked (or programmatically activated).
     signal rowActivated(string oidHex)
-    /// Right-click on a commit row.
-    signal commitMenuRequested(string oidHex)
+    /// Right-click on a row. What the row is decides which menu opens,
+    /// and that is the page's call.
+    signal rowMenuOpenRequested(string oidHex)
     /// A row was double-clicked. `record` is the chip it shows (kind +
     /// flags + name); empty when the row shows no branch at all.
     signal rowSwitchRequested(string oidHex, string record)
@@ -332,7 +333,7 @@ Rectangle {
         signal chipCollapseRequested()
         signal namingSubmitted(string oidHex, string name)
         signal namingCancelled()
-        onRowMenuRequested: oidHex => graphArea.commitMenuRequested(oidHex)
+        onRowMenuRequested: oidHex => graphArea.rowMenuOpenRequested(oidHex)
         onRowSelected: oidHex => graphArea.rowActivated(oidHex)
         onRowSwitchRequested: (oidHex, record) =>
             graphArea.rowSwitchRequested(oidHex, record)
