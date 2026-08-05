@@ -162,6 +162,47 @@ pub fn branches_with_remote(refs: &[RefEntry]) -> HashSet<String> {
         .collect()
 }
 
+/// Remote branches a local branch on the **same commit** already speaks
+/// for: the one its cloud badge is about — the configured upstream, or,
+/// with none configured, the only same-named remote. Listing it again in
+/// the row's chip says twice what the badge says once, so the row folds
+/// it away (デザイン規約 §グラフ行のチップ).
+///
+/// Co-location is half the condition: a branch that has drifted from its
+/// upstream leaves the remote on a row of its own, and that row keeps its
+/// chip — folding never hides a divergence. Ambiguity is not folded
+/// either: with no upstream and two same-named remotes there is no single
+/// branch the badge is about, so both stay.
+pub fn remotes_folded_into_local(refs: &[RefEntry]) -> HashSet<String> {
+    let remotes: Vec<&RefEntry> = refs
+        .iter()
+        .filter(|r| r.kind == RefKind::RemoteBranch)
+        .collect();
+    let mut folded = HashSet::new();
+    for local in refs.iter().filter(|r| r.kind == RefKind::LocalBranch) {
+        let badge = match local.upstream.as_deref() {
+            Some(up) => remotes.iter().find(|r| r.name == up).copied(),
+            None => {
+                let mut same_named = remotes.iter().filter(|r| {
+                    r.short
+                        .split_once('/')
+                        .is_some_and(|(_, rest)| rest == local.short)
+                });
+                match (same_named.next(), same_named.next()) {
+                    (Some(only), None) => Some(*only),
+                    _ => None,
+                }
+            }
+        };
+        if let Some(remote) = badge
+            && remote.commit_oid() == local.commit_oid()
+        {
+            folded.insert(remote.name.clone());
+        }
+    }
+    folded
+}
+
 /// Where HEAD points right now.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeadState {
@@ -387,5 +428,124 @@ mod tests {
         assert!(!with_remote.contains("refs/heads/dead"), "[gone] upstream");
         assert!(with_remote.contains("refs/heads/feature/x"));
         assert!(!with_remote.contains("refs/heads/local"));
+    }
+
+    fn at(mut e: RefEntry, sha: &str) -> RefEntry {
+        e.target = Oid::from_hex_str(sha).expect("valid test sha");
+        e
+    }
+
+    #[test]
+    fn folds_the_upstream_sharing_the_commit() {
+        let refs = vec![
+            entry(
+                RefKind::LocalBranch,
+                "refs/heads/main",
+                "main",
+                Some("refs/remotes/origin/main"),
+            ),
+            entry(
+                RefKind::RemoteBranch,
+                "refs/remotes/origin/main",
+                "origin/main",
+                None,
+            ),
+        ];
+        let folded = remotes_folded_into_local(&refs);
+        assert!(folded.contains("refs/remotes/origin/main"));
+    }
+
+    #[test]
+    fn keeps_an_upstream_left_behind_on_another_commit() {
+        let refs = vec![
+            entry(
+                RefKind::LocalBranch,
+                "refs/heads/topic",
+                "topic",
+                Some("refs/remotes/origin/topic"),
+            ),
+            at(
+                entry(
+                    RefKind::RemoteBranch,
+                    "refs/remotes/origin/topic",
+                    "origin/topic",
+                    None,
+                ),
+                SHA_B,
+            ),
+        ];
+        assert!(
+            remotes_folded_into_local(&refs).is_empty(),
+            "a drifted upstream is another row's chip"
+        );
+    }
+
+    #[test]
+    fn keeps_a_second_remote_that_is_not_the_upstream() {
+        let refs = vec![
+            entry(
+                RefKind::LocalBranch,
+                "refs/heads/main",
+                "main",
+                Some("refs/remotes/origin/main"),
+            ),
+            entry(
+                RefKind::RemoteBranch,
+                "refs/remotes/origin/main",
+                "origin/main",
+                None,
+            ),
+            entry(
+                RefKind::RemoteBranch,
+                "refs/remotes/fork/main",
+                "fork/main",
+                None,
+            ),
+        ];
+        let folded = remotes_folded_into_local(&refs);
+        assert!(folded.contains("refs/remotes/origin/main"));
+        assert!(!folded.contains("refs/remotes/fork/main"), "not the badge");
+    }
+
+    #[test]
+    fn folds_the_only_same_named_remote_without_an_upstream() {
+        let refs = vec![
+            entry(
+                RefKind::LocalBranch,
+                "refs/heads/feature/x",
+                "feature/x",
+                None,
+            ),
+            entry(
+                RefKind::RemoteBranch,
+                "refs/remotes/origin/feature/x",
+                "origin/feature/x",
+                None,
+            ),
+        ];
+        assert!(remotes_folded_into_local(&refs).contains("refs/remotes/origin/feature/x"));
+    }
+
+    #[test]
+    fn folds_neither_same_named_remote_when_no_upstream_picks_one() {
+        let refs = vec![
+            entry(RefKind::LocalBranch, "refs/heads/main", "main", None),
+            entry(
+                RefKind::RemoteBranch,
+                "refs/remotes/origin/main",
+                "origin/main",
+                None,
+            ),
+            entry(
+                RefKind::RemoteBranch,
+                "refs/remotes/fork/main",
+                "fork/main",
+                None,
+            ),
+        ];
+        assert!(
+            remotes_folded_into_local(&refs).is_empty(),
+            "no single branch the badge is about"
+        );
     }
 }

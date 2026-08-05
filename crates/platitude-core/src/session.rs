@@ -2321,10 +2321,18 @@ fn make_row(
 }
 
 /// Builds the per-commit label chips from a refs listing.
+///
+/// A branch and the remote it is about get one chip between them: the
+/// cloud badge already says the remote is here, so the remote's own label
+/// is dropped (see [`refs::remotes_folded_into_local`]).
 fn build_label_map(refs: &[RefEntry], head: &HeadState) -> HashMap<Oid, Vec<RefLabel>> {
     let with_remote = refs::branches_with_remote(refs);
+    let folded = refs::remotes_folded_into_local(refs);
     let mut map: HashMap<Oid, Vec<RefLabel>> = HashMap::new();
     for r in refs {
+        if r.kind == RefKind::RemoteBranch && folded.contains(&r.name) {
+            continue;
+        }
         let kind = match r.kind {
             RefKind::LocalBranch => LabelKind::LocalBranch,
             RefKind::RemoteBranch => LabelKind::RemoteBranch,
