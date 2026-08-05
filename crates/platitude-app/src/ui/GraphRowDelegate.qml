@@ -57,9 +57,11 @@ Item {
     // This row's chip column is a branch-name box right now.
     readonly property bool naming:
         rowItem.ListView.view ? rowItem.ListView.view.namingOid === rowItem.oid_hex : false
-    // ... or a yes-strip.
-    readonly property bool asking:
-        rowItem.ListView.view ? rowItem.ListView.view.askOid === rowItem.oid_hex : false
+    // The standing question is about this row. Its words are on the bar
+    // above the graph; the row answers "which one" and nothing else.
+    readonly property bool marked:
+        rowItem.ListView.view ? rowItem.ListView.view.askOid === rowItem.oid_hex
+                              : false
 
     /// The record for the branch the working tree is on. The head flag
     /// rides on the detached-HEAD marker as well, and that one is a state
@@ -86,6 +88,22 @@ Item {
         color: Theme.bgHover
         visible: rowMouse.containsMouse && !rowItem.selected
     }
+    // The row the standing question is about: the tone of the bar, run
+    // down the edge the rows begin at.
+    Rectangle {
+        anchors.fill: parent
+        anchors.topMargin: -rowItem.topBleed
+        color: Theme.bgHover
+        visible: rowItem.marked
+        Rectangle {
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: Metrics.laneStroke
+            color: rowItem.ListView.view && rowItem.ListView.view.askDanger
+                   ? Theme.danger : Theme.warning
+        }
+    }
 
     onGeometryChanged: laneCanvas.requestPaint()
     onNode_laneChanged: laneCanvas.requestPaint()
@@ -108,8 +126,7 @@ Item {
                 // Assigning `visible` here replaces the chip's own rule,
                 // so the "has anything to show" half has to be repeated:
                 // without it a row with no refs draws an empty frame.
-                visible: rowItem.labelRecords.length > 0
-                         && !rowItem.naming && !rowItem.asking
+                visible: rowItem.labelRecords.length > 0 && !rowItem.naming
                 anchors.right: parent.right
                 anchors.rightMargin: Theme.spaceXs
                 anchors.verticalCenter: parent.verticalCenter
@@ -139,55 +156,13 @@ Item {
                 onTextEdited: rowItem.ListView.view.namingText = nameField.text
                 Keys.onEscapePressed: rowItem.ListView.view.namingCancelled()
             }
-            // A question about this row stands where its chips were:
-            // clicking the strip is the answer, Escape or any other
-            // click walks away, and nothing happens until one of the
-            // two (デザイン規約 §可否・警告の出し場所). What the answer
-            // costs is on the strip's own tooltip.
-            Rectangle {
-                id: askStrip
-                visible: rowItem.asking
-                anchors.right: parent.right
-                anchors.rightMargin: Theme.spaceXs
-                anchors.verticalCenter: parent.verticalCenter
-                width: rowItem.labelsW - 2 * Theme.spaceXs
-                height: Theme.fontSmLine
-                radius: Theme.radiusSm
-                color: askMouse.containsMouse ? Theme.bgHover : "transparent"
-                readonly property color tone:
-                    rowItem.ListView.view && rowItem.ListView.view.askDanger
-                    ? Theme.danger : Theme.warning
-                border.color: tone
-                border.width: Theme.borderWidth
-                Label {
-                    anchors.fill: parent
-                    leftPadding: Theme.spaceXs
-                    rightPadding: Theme.spaceXs
-                    text: rowItem.ListView.view ? rowItem.ListView.view.askLabel : ""
-                    color: askStrip.tone
-                    font.pixelSize: Theme.fontSm
-                    elide: Text.ElideRight
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-                MouseArea {
-                    id: askMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: rowItem.ListView.view.askConfirmed(rowItem.oid_hex)
-                }
-                ToolTip.visible: askMouse.containsMouse
-                ToolTip.delay: 300
-                ToolTip.text: rowItem.ListView.view ? rowItem.ListView.view.askDetail : ""
-                Keys.onEscapePressed: rowItem.ListView.view.askCancelled()
-            }
             MouseArea {
                 id: labelHover
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.NoButton
             }
-            ToolTip.visible: labelHover.containsMouse && !rowItem.asking
+            ToolTip.visible: labelHover.containsMouse
                              && rowItem.labelRecords.length > 0
             ToolTip.delay: 300
             // The branch the working tree stands on is written here the
@@ -372,19 +347,12 @@ Item {
     onNamingChanged: rowItem.takeNamingFocus()
     Component.onCompleted: {
         rowItem.takeNamingFocus()
-        rowItem.takeAskFocus()
     }
     function takeNamingFocus() {
         if (!rowItem.naming || !rowItem.ListView.view)
             return
         nameField.text = rowItem.ListView.view.namingText
         nameField.forceActiveFocus()
-    }
-    // Same for the strip: Escape has to land somewhere.
-    onAskingChanged: rowItem.takeAskFocus()
-    function takeAskFocus() {
-        if (rowItem.asking)
-            askStrip.forceActiveFocus()
     }
 
     // Which stacked chip the pointer is over, if it is over one that has

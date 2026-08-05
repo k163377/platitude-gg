@@ -191,12 +191,7 @@ Item {
         page.startRowAsk(
             remotesModel.oidOfName(remoteRef),
             qsTr("Move %1 here?").arg(local),
-            qsTr("%1 stands somewhere else. Moving it here and landing on it "
-                 + "leaves whatever only %1 had with nothing pointing at it: "
-                 + "those commits stay in the repository until git next "
-                 + "cleans up, but nothing in this window reaches them any "
-                 + "more.\n\nWhat you have not committed comes along, as it "
-                 + "would on any move.").arg(local),
+            qsTr("Commits only %1 has stop being reachable.").arg(local),
             false,
             qsTr("Move %1 here").arg(local),
             function () { page.switchTo("force", local, local, remoteRef) })
@@ -206,25 +201,27 @@ Item {
             AppBackend.report("move_branch_asked local=" + local)
     }
 
-    // ---- inline row questions --------------------------------------
-    // One question at a time, asked on the row it is about: the chip
-    // column turns into a strip whose click is the answer (デザイン規約
+    // ---- standing questions ----------------------------------------
+    // One question at a time, asked on the bar that comes down over the
+    // graph, with the row it is about marked (デザイン規約
     // §可否・警告の出し場所). The run waits here; Escape, another ask or
-    // a click anywhere else walks away from it. Only when the subject's
-    // row is outside the loaded window — where the near-the-operation
-    // place does not exist — does the window dialog stand in.
+    // a click anywhere else walks away from it. The bar stands wherever
+    // the question came from — a row outside the loaded window simply
+    // goes unmarked — so nothing needs a dialog to fall back to.
     property var rowAskRun: null
     function startRowAsk(oidHex, label, detail, danger, acceptText, run) {
-        if (oidHex !== "" && graphModel.rowOf(oidHex) >= 0) {
-            page.rowAskRun = run
-            graphPane.startAsking(oidHex, label, detail, danger)
-        } else {
-            page.confirmRequested(label, detail, acceptText, run)
-        }
+        page.rowAskRun = run
+        graphPane.startAsking(oidHex, label, detail, acceptText, danger)
     }
     function stopRowAsk() {
         page.rowAskRun = null
         graphPane.stopAsking()
+    }
+    function answerRowAsk() {
+        const run = page.rowAskRun
+        page.stopRowAsk()
+        if (run)
+            run()
     }
 
     // A refusal arrives on its own counter: the same answer can be needed
@@ -545,18 +542,12 @@ Item {
             repoTab.resetTo(oid, mode)
             return
         }
-        // "after it": the strip stands on the very commit the branch
-        // would go back to, so the row names itself.
+        // "after it": the marked row is the very commit the branch would
+        // go back to, so the question needs no other name for it.
         page.startRowAsk(
             oid,
             qsTr("Discard everything after it?"),
-            qsTr("%1 goes back to this commit, and the working tree with "
-                 + "it: changes to tracked files are thrown away whether "
-                 + "they are staged or not, and nothing here keeps a copy "
-                 + "of them.\n\nUntracked files are left alone. The "
-                 + "commits after this one stay in the repository until "
-                 + "git next cleans up, but nothing in this window points "
-                 + "at them any more.").arg(workTree.branch),
+            qsTr("Changes to tracked files go too; untracked files stay."),
             true,
             qsTr("Discard changes"),
             function () { repoTab.resetTo(oid, "hard") })
@@ -1397,13 +1388,8 @@ Item {
                         onCreateBranchRequested: (oidHex, name) =>
                             repoTab.createBranch(name, oidHex, true)
                         onOpenRepositoryRequested: page.openRepositoryPicker()
-                        onRowAskConfirmed: oidHex => {
-                            const run = page.rowAskRun
-                            page.stopRowAsk()
-                            if (run)
-                                run()
-                        }
-                        onRowAskCancelled: page.stopRowAsk()
+                        onAskConfirmed: page.answerRowAsk()
+                        onAskCancelled: page.stopRowAsk()
                     }
 
                     DiffPane {

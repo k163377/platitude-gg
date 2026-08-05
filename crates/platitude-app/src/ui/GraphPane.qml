@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Fusion
+import QtQuick.Layouts
 import platitude.ui
 
 // Center pane: the commit graph. Owns its column geometry (label /
@@ -48,25 +49,37 @@ Rectangle {
         graphList.namingText = ""
     }
 
-    /// Puts the chip column of one row into a yes-strip: the question
-    /// stands where its subject is, clicking the strip is the answer,
-    /// and Escape or any other click walks away (デザイン規約
-    /// §可否・警告の出し場所).
-    function startAsking(oidHex, label, detail, danger) {
+    // ---- a standing question ---------------------------------------
+    // One place for all of them (デザイン規約 §可否・警告の出し場所): the
+    // bar comes down from the top of the pane and pushes the history
+    // down — a question that covered what it is about would hide the
+    // very thing being judged — and the row it concerns is marked rather
+    // than worded, so the question is written exactly once.
+    property string askLabel: ""
+    property string askDetail: ""
+    property string askAccept: ""
+    property bool askDanger: false
+    /// Raises the bar. `oidHex` is the row it is about ("" for none, and
+    /// a row outside the loaded window simply goes unmarked — the bar
+    /// stands either way).
+    function startAsking(oidHex, label, detail, accept, danger) {
         graphList.namingOid = ""
         graphList.namingText = ""
-        graphList.askOid = oidHex
-        graphList.askLabel = label
-        graphList.askDetail = detail
+        graphArea.askLabel = label
+        graphArea.askDetail = detail
+        graphArea.askAccept = accept
+        graphArea.askDanger = danger
         graphList.askDanger = danger
+        graphList.askOid = oidHex === undefined ? "" : oidHex
     }
     function stopAsking() {
+        graphArea.askLabel = ""
         graphList.askOid = ""
     }
-    /// The strip was clicked; the page runs what it guarded.
-    signal rowAskConfirmed(string oidHex)
-    /// The strip was walked away from.
-    signal rowAskCancelled()
+    /// The bar's accept was clicked; the page runs what it guarded.
+    signal askConfirmed()
+    /// The question was walked away from.
+    signal askCancelled()
 
     /// The list itself — for automation hooks (bench / scroll-to /
     /// screenshot flows) only; app code goes through the functions.
@@ -163,9 +176,117 @@ Rectangle {
         color: Theme.borderStrong
         visible: graphDivider.containsMouse || graphDivider.pressed
     }
+    // The question bar. Sized by its own words, opened and closed with
+    // the standard 200ms, and the list starts under it — the graph moves
+    // down rather than losing its top rows behind the bar.
+    Rectangle {
+        id: askBar
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        z: 3
+        clip: true
+        readonly property bool open: graphArea.askLabel !== ""
+        readonly property color tone: graphArea.askDanger ? Theme.danger
+                                                          : Theme.warning
+        height: open ? askRow.implicitHeight + 2 * Theme.spaceMd : 0
+        Behavior on height {
+            NumberAnimation { duration: 200 }
+        }
+        color: Theme.bgElevated
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: Theme.borderWidth
+            color: askBar.tone
+        }
+        RowLayout {
+            id: askRow
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Theme.spaceMd
+            spacing: Theme.spaceMd
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spaceXs
+                Label {
+                    text: graphArea.askLabel
+                    color: askBar.tone
+                    font.pixelSize: Theme.fontMd
+                    font.weight: Font.DemiBold
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+                // What answering costs, in the one line §用語 allows it.
+                Label {
+                    text: graphArea.askDetail
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSm
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+            }
+            // Clicking this is the answer. It is the only thing on the bar
+            // that acts, so nothing else here can be hit by accident.
+            Rectangle {
+                Layout.alignment: Qt.AlignVCenter
+                implicitWidth: acceptLabel.implicitWidth + 2 * Theme.spaceMd
+                implicitHeight: Theme.controlHeight
+                radius: Theme.radiusSm
+                color: acceptMouse.containsMouse ? Theme.bgHover : "transparent"
+                border.color: askBar.tone
+                border.width: Theme.borderWidth
+                Label {
+                    id: acceptLabel
+                    anchors.centerIn: parent
+                    text: graphArea.askAccept
+                    color: askBar.tone
+                    font.pixelSize: Theme.fontMd
+                }
+                MouseArea {
+                    id: acceptMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: graphArea.askConfirmed()
+                }
+            }
+            // Escape and a click anywhere else walk away too; this is the
+            // way out that can be seen, for a bar that stands until it is
+            // answered.
+            Label {
+                Layout.alignment: Qt.AlignVCenter
+                text: "✕"
+                color: dismissMouse.containsMouse ? Theme.textPrimary
+                                                  : Theme.textSecondary
+                font.pixelSize: Theme.fontMd
+                MouseArea {
+                    id: dismissMouse
+                    anchors.fill: parent
+                    anchors.margins: -Theme.spaceXs
+                    hoverEnabled: true
+                    onClicked: graphArea.askCancelled()
+                }
+            }
+        }
+    }
+    // The bar has no focus of its own — nothing in the graph takes any —
+    // so Escape is heard as a shortcut while it stands.
+    Shortcut {
+        // `sequences` rather than `sequence`: Cancel is more than one key
+        // on some platforms, and binding the single form takes only the
+        // first of them (Qt warns about exactly this).
+        sequences: [StandardKey.Cancel]
+        enabled: askBar.open
+        onActivated: graphArea.askCancelled()
+    }
     ListView {
         id: graphList
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.top: askBar.bottom
         clip: true
         model: graphArea.graphModel
         reuseItems: true
@@ -199,11 +320,10 @@ Rectangle {
         // recycled the moment its row scrolls off.
         property string namingOid: ""
         property string namingText: ""
-        // Which row's chip column is a yes-strip, and its words — held
-        // here for the same recycling reason.
+        // Which row the standing question is about, and in which tone —
+        // held here for the same recycling reason. The words are on the
+        // bar; the row only marks itself.
         property string askOid: ""
-        property string askLabel: ""
-        property string askDetail: ""
         property bool askDanger: false
         signal rowSelected(string oidHex)
         signal rowMenuRequested(string oidHex)
@@ -212,8 +332,6 @@ Rectangle {
         signal chipCollapseRequested()
         signal namingSubmitted(string oidHex, string name)
         signal namingCancelled()
-        signal askConfirmed(string oidHex)
-        signal askCancelled()
         onRowMenuRequested: oidHex => graphArea.commitMenuRequested(oidHex)
         onRowSelected: oidHex => graphArea.rowActivated(oidHex)
         onRowSwitchRequested: (oidHex, record) =>
@@ -229,8 +347,6 @@ Rectangle {
                 graphArea.createBranchRequested(oidHex, name)
         }
         onNamingCancelled: graphArea.stopNaming()
-        onAskConfirmed: oidHex => graphArea.rowAskConfirmed(oidHex)
-        onAskCancelled: graphArea.rowAskCancelled()
         delegate: GraphRowDelegate {}
         // Window cut: lanes keep running through the footer and the
         // message sits where subjects go.
