@@ -2,12 +2,16 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// One aggregated chip: primary name + "+N". The kind reads through
-// color alone, matching the sidebar header tints (local = accent,
-// remote = secondary grey, detached HEAD = warning -- the same colour
-// the sidebar gives it, since it is one fact -- and tag = refTag, off
-// the severity ramp); tags are additionally filled while branches stay
-// outlined (デザイン規約 §ref の種別). The kind is the
+// One aggregated chip: primary name + "+N". There are two things to read
+// off it and they get one channel each — the frame carries the kind
+// (local = accent, remote = secondary grey, detached HEAD = warning,
+// which is a state rather than a kind, tag = refTag with a fill behind
+// it), and the name carries where the ref is: ordinary text for one that
+// is in this repository, grey for one that is only on the remote
+// (デザイン規約 §ref の種別). The sidebar already reads that way — names
+// in textPrimary, kind in the section icon — and on a graph row the name
+// is the thing most worth reading, so it is not the place to spend a
+// colour on something the frame is already saying. The kind is the
 // first record's own, not something the caller sets: a row hands over
 // everything on it in one list, branches ahead of tags, and the chip
 // shows the head of that list. The one icon is the remote/PR badge,
@@ -37,14 +41,25 @@ Rectangle {
     // One slot, one mark: on the remote, or on the remote with a PR
     // open (§ブランチ状態バッジ — the two never stack).
     readonly property bool hasBadge: recRemote || recPr
-    readonly property color chipColor: muted ? Theme.textMuted
-                                      : tagStyle ? Theme.refTag
-                                      : recKind === "R" ? Theme.textSecondary
-                                      : recKind === "H" ? Theme.warning
-                                      : Theme.accent
+    readonly property color kindColor: muted ? Theme.textMuted
+                                       : tagStyle ? Theme.refTag
+                                       : recKind === "R" ? Theme.textSecondary
+                                       : recKind === "H" ? Theme.warning
+                                       : Theme.accent
+    // Where it is, not what it is. A remote branch chip is one the local
+    // side is not on — its own kind colour already reads as "elsewhere",
+    // so nothing is added for it; dropping further, to textMuted, would
+    // claim it cannot be reached, and a double-click on that row goes
+    // there (§無効 is for what is actually unavailable). The detached
+    // HEAD marker keeps its state colour in the name too: it is the one
+    // chip whose colour is not a kind.
+    readonly property color nameColor: muted ? Theme.textMuted
+                                       : recKind === "H" ? Theme.warning
+                                       : recKind === "R" ? Theme.textSecondary
+                                       : Theme.textPrimary
 
     color: tagStyle ? Theme.bgElevated : "transparent"
-    border.color: chipColor
+    border.color: kindColor
     border.width: Theme.borderWidth
 
     Row {
@@ -55,7 +70,7 @@ Rectangle {
         spacing: Theme.spaceXs
         Label {
             text: chip.rec.substring(4)
-            color: chip.chipColor
+            color: chip.nameColor
             font.pixelSize: Theme.fontSm
             font.weight: chip.recHead ? Font.DemiBold : Font.Normal
             elide: Text.ElideRight
@@ -64,10 +79,13 @@ Rectangle {
                             - (chip.records.length > 1 ? Theme.spaceLg : 0)
                             - (chip.hasBadge ? Theme.iconSm + Theme.spaceXs : 0))
         }
+        // How many more names the card has, which is meta about the row
+        // rather than one of the names — the colour the row's other meta
+        // (author, date) is written in.
         Label {
             visible: chip.records.length > 1
             text: "+" + (chip.records.length - 1)
-            color: chip.chipColor
+            color: chip.muted ? Theme.textMuted : Theme.textSecondary
             font.pixelSize: Theme.fontSm
         }
         // Remote / PR badge: reserved width above, so it survives any
