@@ -345,24 +345,21 @@ Item {
             onTriggered: page.switchToRef(page.menuRefKind === "remote" ? "R" : "L",
                                           page.menuRefId)
         }
-        // A tag is not somewhere to carry on from, so the row offers the
-        // thing that would make it one (デザイン規約 §タグでは detach しない).
+        // Nothing here repeats a gesture: renaming and creating a branch
+        // on a tag are a click away on the row itself, and every row this
+        // menu keeps costs the ones that have nowhere else to go
+        // (デザイン規約 §メニュー).
         AppMenuItem {
-            text: qsTr("Create a branch here")
-            visible: page.menuRefKind === "tag"
-            enabled: repoTab.busyCount === 0
-            onTriggered: sidebarPane.beginBranchAt(page.menuRefId, page.menuRefOid)
-        }
-        // The same box the second click opens — the row says which row it
-        // is about, so the wording does not repeat it.
-        AppMenuItem {
-            text: qsTr("Rename…")
+            text: qsTr("Delete…")
             visible: page.menuRefKind === "branch" || page.menuRefKind === "tag"
                      || page.menuRefKind === "stash"
+            // The branch under the working tree cannot be deleted at all,
+            // and git says so rather than doing something else.
             enabled: repoTab.busyCount === 0
-            onTriggered: sidebarPane.beginRename(
-                page.menuRefKind, page.menuRefId,
-                page.menuRefKind === "stash" ? page.menuRefName : page.menuRefId)
+                     && !(page.menuRefKind === "branch"
+                          && page.menuRefId === workTree.branch)
+            onTriggered: page.deleteRow(page.menuRefKind, page.menuRefId,
+                                        page.menuRefName, page.menuRefOid)
         }
         AppMenuSeparator {}
         AppMenuItem {
@@ -383,6 +380,53 @@ Item {
             repoTab.renameTag(id, name)
         else if (kind === "stash")
             repoTab.renameStash(id, name)
+    }
+
+    /// Deleting a row from the left menu.
+    ///
+    /// A branch goes the way git deletes one — `-d`, which refuses while
+    /// the branch holds commits nothing else does. That refusal is the
+    /// question worth asking, so it is asked when it arrives rather than
+    /// guessed at beforehand (P2-確認事項 §B). A tag and a stash have no
+    /// such refusal in git, and both can take something with them, so they
+    /// are asked about up front.
+    property string pendingDeleteBranch: ""
+    function deleteRow(kind, id, name, oidHex) {
+        if (kind === "branch") {
+            page.pendingDeleteBranch = id
+            repoTab.deleteBranch(id, false)
+        } else if (kind === "tag") {
+            page.startRowAsk(
+                oidHex,
+                qsTr("Delete %1?").arg(id),
+                qsTr("What only this tag reaches stops being reachable."),
+                true,
+                qsTr("Delete %1").arg(id),
+                function () { repoTab.deleteTag(id) })
+        } else if (kind === "stash") {
+            page.startRowAsk(
+                oidHex,
+                qsTr("Delete this stash?"),
+                qsTr("What it holds is kept nowhere else."),
+                true,
+                qsTr("Delete it"),
+                function () { repoTab.dropStash(id) })
+        }
+    }
+    /// git refused the plain delete: the branch has commits of its own.
+    /// Forcing is the only way through, and it is the one thing here that
+    /// leaves work with nothing pointing at it.
+    function askForceDelete(name) {
+        const oid = branchesModel.oidOfName(name)
+        page.startRowAsk(
+            oid,
+            qsTr("Delete %1 anyway?").arg(name),
+            qsTr("Commits only %1 has stop being reachable.").arg(name),
+            true,
+            qsTr("Delete %1").arg(name),
+            function () { repoTab.deleteBranch(name, true) })
+        if (AppBackend.autoAct !== "")
+            AppBackend.report("force_delete_asked branch=" + name)
     }
 
     // ---- context menu on a working-tree file row --------------------
@@ -797,6 +841,23 @@ Item {
             sidebarPane.beginRename(kind, id, shown)
             if (act !== "nav-rename")
                 sidebarPane.submitEdit(arg)
+        } else if (act === "delete-branch" || act === "delete-tag"
+                   || act === "delete-stash") {
+            // Through the menu's own path: the branch one runs the plain
+            // delete (and raises the question when git refuses), the
+            // other two stop at the question.
+            const kind = act.substring("delete-".length)
+            const id = kind === "stash" ? stashesModel.fullAt(0) : arg
+            const model = kind === "tag" ? tagsModel : branchesModel
+            page.deleteRow(kind, id, id,
+                           kind === "stash" ? stashesModel.oidOfName(stashesModel.nameAt(0))
+                                            : model.oidOfName(id))
+        } else if (act === "delete-force") {
+            repoTab.deleteBranch(arg, true)
+        } else if (act === "delete-tag-go") {
+            repoTab.deleteTag(arg)
+        } else if (act === "delete-stash-go") {
+            repoTab.dropStash(stashesModel.fullAt(0))
         } else if (act === "branch-at-tag") {
             // The box a double-click puts on a tag row, accepted with the
             // argument as the new branch's name.
@@ -908,8 +969,17 @@ Item {
         if (repoTab.writeSeq === page.seenWriteSeq)
             return
         page.seenWriteSeq = repoTab.writeSeq
-        if (repoTab.lastWriteError !== "")
+        if (repoTab.lastWriteError !== "") {
+            // The one refusal this page has a second move for: a branch
+            // delete git would not do on its own.
+            if (repoTab.lastWriteOp === "branch" && page.pendingDeleteBranch !== "") {
+                const refused = page.pendingDeleteBranch
+                page.pendingDeleteBranch = ""
+                page.askForceDelete(refused)
+            }
             return
+        }
+        page.pendingDeleteBranch = ""
         if (repoTab.lastWriteOp === "commit") {
             page.clearCommitEditor()
             wipPane.setAmendChecked(false)

@@ -34,10 +34,21 @@ pub async fn rename(
         .cwd(workdir)
         .args(["tag", "--end-of-options", to, from]);
     executor.run(create, cancel).await?;
-    let delete = GitCommand::new()
+    delete(executor, workdir, from, cancel).await
+}
+
+/// Deletes a tag. Only the name goes: whatever it marked is still in the
+/// repository, reachable or not.
+pub async fn delete(
+    executor: &GitExecutor,
+    workdir: &Path,
+    name: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let cmd = GitCommand::new()
         .cwd(workdir)
-        .args(["tag", "--delete", "--end-of-options", from]);
-    executor.run(delete, cancel).await.map(drop)
+        .args(["tag", "--delete", "--end-of-options", name]);
+    executor.run(cmd, cancel).await.map(drop)
 }
 
 /// Whether a name is one git will take for a branch or a tag.

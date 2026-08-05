@@ -577,6 +577,12 @@ impl RepoTab {
         self.with_session(|s| s.rename_tag(from.clone(), to.clone()));
     }
 
+    /// Deletes a tag: only the name goes.
+    #[qslot]
+    fn delete_tag(&mut self, name: String) {
+        self.with_session(|s| s.delete_tag(name.clone()));
+    }
+
     /// Renames a stash entry. Built the same way, out of a re-store and a
     /// drop — so the entry moves to the top of the list.
     #[qslot]

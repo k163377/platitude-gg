@@ -1572,6 +1572,18 @@ impl RepoSession {
         );
     }
 
+    /// Deletes a tag. Destructive in one way only: what it marked may
+    /// have nothing else reaching it, so the UI asks first.
+    pub fn delete_tag(self: &Arc<Self>, name: String) {
+        self.write(
+            "tag",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                tag::delete(&exec, &repo.workdir, &name, &cancel).await
+            },
+        );
+    }
+
     /// Renames a stash entry — stored again under the new label, old entry
     /// dropped (git has no rename for one — see [`crate::stash::rename`]).
     pub fn rename_stash(self: &Arc<Self>, selector: String, message: String) {
