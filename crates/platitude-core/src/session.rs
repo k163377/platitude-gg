@@ -1096,7 +1096,7 @@ impl RepoSession {
         );
     }
 
-    /// `git add -A` for the whole work tree.
+    /// `git add --all` for the whole work tree, untracked included.
     pub fn stage_all(self: &Arc<Self>) {
         self.write(
             "stage",

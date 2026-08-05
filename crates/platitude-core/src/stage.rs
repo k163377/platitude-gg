@@ -33,7 +33,9 @@ pub async fn stage_paths(
     executor.run(cmd, cancel).await.map(drop)
 }
 
-/// `git add -A`: stages every change in the work tree, untracked included.
+/// `git add --all`: stages modifications, additions and deletions, plus the
+/// files git is not tracking yet. Staging all means all — the tracked-only
+/// `--update` variant is deliberately not offered.
 pub async fn stage_all(
     executor: &GitExecutor,
     workdir: &Path,
