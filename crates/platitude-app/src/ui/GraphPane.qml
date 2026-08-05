@@ -276,7 +276,10 @@ Rectangle {
             }
             // Bounded like a subject: the message is the only thing
             // that explains the cut, so it wraps over the footer's two
-            // rows rather than running under the next pane.
+            // rows rather than running under the next pane. Told in the
+            // secondary colour, not a state one: the window is how the
+            // graph is meant to work, and nothing is waiting on it
+            // (デザイン規約 §状態).
             Label {
                 x: graphList.labelWidth + graphList.graphColWidth
                 width: graphList.width - x
@@ -288,7 +291,7 @@ Rectangle {
                 elide: Text.ElideRight
                 text: qsTr("Showing the first %L1 commits — older history is not loaded")
                       .arg(graphArea.graphModel.rowTotal)
-                color: Theme.warning
+                color: Theme.textSecondary
                 font.pixelSize: Theme.fontMd
                 font.weight: Font.DemiBold
             }

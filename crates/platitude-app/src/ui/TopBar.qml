@@ -251,14 +251,16 @@ Rectangle {
         }
         // Auto fetch: quiet by design. A machine that is simply offline
         // fails here once a minute, and that belongs in a tooltip
-        // rather than in the error line.
+        // rather than in the error line -- which is also why a failure
+        // does not reach for a state colour: nothing is stuck and
+        // nothing is waiting on an answer (デザイン規約 §状態).
         Label {
             readonly property bool failing: topBar.curPage !== null
                                             && topBar.curPage.pageTab.autoFetchError !== ""
             text: "↻"
             color: topBar.curPage !== null && topBar.curPage.pageTab.autoFetchRunning
                    ? Theme.accent
-                   : failing ? Theme.warning
+                   : failing ? Theme.textSecondary
                    : AppBackend.autoFetchMinutes > 0 ? Theme.textMuted
                    : Theme.borderDefault
             font.pixelSize: Theme.fontMd

@@ -259,7 +259,7 @@ Rectangle {
         NavHeader {
             caption: qsTr("TAGS")
             iconKind: "tag"
-            iconTint: Theme.warning
+            iconTint: Theme.refTag
             count: sidebar.tagsModel.total
             expanded: sidebar.expTags || refFilter.text !== ""
             onToggled: sidebar.expTags = !sidebar.expTags

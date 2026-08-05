@@ -34,9 +34,17 @@ QtObject {
     readonly property color accentMuted: "#172554"
 
     // ---- colors: states ----
+    // Told apart by "does it reach past me / is it stuck", not by whether
+    // it can be undone -- see デザイン規約 §状態.
     readonly property color success: "#16A34A"
     readonly property color warning: "#D97706"
     readonly property color danger: "#EF4444"
+
+    // ---- colors: ref kinds ----
+    // A separate axis from the three above: a tag is a kind, not a
+    // severity. Local = accent, remote = textSecondary, detached HEAD =
+    // warning (that one really is a state).
+    readonly property color refTag: "#D946EF"
 
     // ---- colors: git / diff ----
     readonly property color diffAddedFg: "#4ADE80"

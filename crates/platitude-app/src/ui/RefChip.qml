@@ -4,8 +4,10 @@ import platitude.ui
 
 // One aggregated chip: primary name + "+N". The kind reads through
 // color alone, matching the sidebar header tints (local = accent,
-// remote = secondary grey, detached HEAD = red, tag = amber); tags are
-// additionally filled while branches stay outlined. The kind is the
+// remote = secondary grey, detached HEAD = warning -- the same colour
+// the sidebar gives it, since it is one fact -- and tag = refTag, off
+// the severity ramp); tags are additionally filled while branches stay
+// outlined (デザイン規約 §ref の種別). The kind is the
 // first record's own, not something the caller sets: a row hands over
 // everything on it in one list, branches ahead of tags, and the chip
 // shows the head of that list. The one icon is the remote/PR badge,
@@ -36,9 +38,9 @@ Rectangle {
     // open (§ブランチ状態バッジ — the two never stack).
     readonly property bool hasBadge: recRemote || recPr
     readonly property color chipColor: muted ? Theme.textMuted
-                                      : tagStyle ? Theme.warning
+                                      : tagStyle ? Theme.refTag
                                       : recKind === "R" ? Theme.textSecondary
-                                      : recKind === "H" ? Theme.danger
+                                      : recKind === "H" ? Theme.warning
                                       : Theme.accent
 
     color: tagStyle ? Theme.bgElevated : "transparent"
