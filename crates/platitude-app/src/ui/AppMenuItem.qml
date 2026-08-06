@@ -18,7 +18,12 @@ MenuItem {
     padding: Theme.spaceSm
     topPadding: 0
     bottomPadding: 0
-    implicitHeight: Theme.rowHeight
+    // A row this menu is not offering takes no room. The list lays its
+    // rows out by height, so an invisible one that keeps a height leaves
+    // an empty row behind — a hole where the reader looks for the row
+    // that is missing (measured on the file menu, whose two destructive
+    // rows are one per bucket).
+    implicitHeight: menuItem.visible ? Theme.rowHeight : 0
     implicitWidth: itemLabel.implicitWidth
                    + (menuItem.note !== ""
                       ? noteLabel.implicitWidth + Theme.spaceSm : 0)

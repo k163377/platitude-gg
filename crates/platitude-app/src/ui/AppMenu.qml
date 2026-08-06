@@ -23,7 +23,9 @@ Menu {
         let widest = 0
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
-            if (row)
+            // A row that is not being offered does not get to set the
+            // width either.
+            if (row && row.visible)
                 widest = Math.max(widest, row.implicitWidth)
         }
         return widest
