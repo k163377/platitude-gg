@@ -59,8 +59,8 @@ pub struct GraphRow {
 #[derive(Debug, Clone)]
 struct LaneState {
     color: u8,
-    /// The lane carries only a synthetic leash (WIP → HEAD, stash → base)
-    /// and draws dashed. Cleared once a real edge merges into the lane.
+    /// The lane carries a synthetic leash (WIP → HEAD, stash → base) and
+    /// draws dashed for its whole run: real edges never join it.
     dashed: bool,
 }
 
@@ -170,27 +170,8 @@ impl GraphBuilder {
         for p in parents {
             // Another edge already waits for this parent: merge into the
             // nearest waiting lane (keeps the graph narrow and the
-            // horizontal jog short). The edge is real history, so the lane
-            // stops drawing dashed from this row on — including this row's
-            // through segment built above, which the fork edge shares with
-            // the WIP / stash leash that opened the lane. Deciding this
-            // here, on the lane the edge actually lands on, keeps the
-            // un-dash in lockstep with the merge target (a duplicate
-            // parent lands on the node lane, not on a waiting lane).
+            // horizontal jog short).
             if let Some(existing) = self.waiting_lane(p, node_lane) {
-                if let Some(state) = self
-                    .lanes
-                    .get_mut(existing as usize)
-                    .and_then(Option::as_mut)
-                {
-                    state.dashed = false;
-                }
-                for s in segments
-                    .iter_mut()
-                    .filter(|s| s.lane == existing && s.kind == SegmentKind::Through)
-                {
-                    s.dashed = false;
-                }
                 segments.push(Segment {
                     kind: SegmentKind::OutOfNode,
                     lane: existing,
@@ -283,12 +264,28 @@ impl GraphBuilder {
 
     /// Lane a fork edge to `parent` merges into: the lane already waiting
     /// for it that sits nearest to `near` (ties prefer the left side).
+    ///
+    /// A leash lane is not one of them. Real history sharing it would draw
+    /// solid over the leash's whole run down to the shared parent, leaving
+    /// the stash (or WIP) hanging from a line that reads as committed —
+    /// which is what happens whenever the stash's base is also a merge's
+    /// second parent. The real edge opens its own lane instead, and both
+    /// arrive at the parent as separate curves.
     fn waiting_lane(&self, parent: &Oid, near: u16) -> Option<u16> {
         self.expects
             .get(parent)?
             .iter()
+            .filter(|l| !self.is_leash(**l))
             .min_by_key(|l| (l.abs_diff(near), **l))
             .copied()
+    }
+
+    /// Whether a lane carries a synthetic leash rather than real history.
+    fn is_leash(&self, lane: u16) -> bool {
+        self.lanes
+            .get(lane as usize)
+            .and_then(Option::as_ref)
+            .is_some_and(|s| s.dashed)
     }
 
     fn take_color(&mut self) -> u8 {
@@ -594,12 +591,11 @@ mod tests {
         assert!(!out.dashed, "the chain below HEAD is a normal edge");
     }
 
-    /// A merge whose second parent is HEAD lands on the lane the WIP leash
-    /// reserved. That lane now carries committed history, so neither the
-    /// merge's fork edge nor anything below it may draw dashed — only the
-    /// stub leaving the WIP node stays dotted.
+    /// A merge whose second parent is HEAD wants the lane the WIP leash
+    /// reserved. Real history may not share it — the fork edge opens a
+    /// lane of its own, and the leash keeps dotting all the way to HEAD.
     #[test]
-    fn a_merge_reaching_head_undashes_the_wip_lane() {
+    fn a_merge_reaching_head_leaves_the_wip_leash_dashed() {
         let mut pool = StrPool::new();
         let mut b = GraphBuilder::new();
         let head = oid(2);
@@ -607,25 +603,113 @@ mod tests {
         assert!(wip.segments.iter().all(|s| s.dashed));
 
         // Merge of the branch HEAD sits on: parents are the mainline (3)
-        // and HEAD itself, so its fork edge merges into the WIP lane.
+        // and HEAD itself, which the WIP lane is already waiting for.
         let merge = b.push(&commit(&mut pool, 1, &[3, 2]));
         assert_eq!(merge.node_lane, 1, "the WIP row keeps lane 0");
+        let outs: Vec<u16> = merge
+            .segments
+            .iter()
+            .filter(|s| s.kind == SegmentKind::OutOfNode)
+            .map(|s| s.lane)
+            .collect();
+        assert_eq!(outs, vec![1, 2], "the fork edge takes a fresh lane");
+        let through = merge
+            .segments
+            .iter()
+            .find(|s| s.kind == SegmentKind::Through && s.lane == 0)
+            .unwrap();
+        assert!(through.dashed, "the leash runs on: {:?}", merge.segments);
         assert!(
-            merge.segments.iter().all(|s| !s.dashed),
-            "the merge row is committed history: {:?}",
+            merge
+                .segments
+                .iter()
+                .filter(|s| s.lane != 0)
+                .all(|s| !s.dashed),
+            "the merge's own edges are committed history: {:?}",
             merge.segments
         );
 
-        // HEAD arrives on the same lane; the leash no longer owns it.
+        // HEAD gathers both: the leash arrives dashed, the fork solid, and
+        // the chain leaving HEAD is a normal edge.
         let head_row = b.push(&commit(&mut pool, 2, &[4]));
         assert_eq!(head_row.node_lane, 0);
-        assert!(head_row.segments.iter().all(|s| !s.dashed));
+        let ins: Vec<(u16, bool)> = head_row
+            .segments
+            .iter()
+            .filter(|s| s.kind == SegmentKind::IntoNode)
+            .map(|s| (s.lane, s.dashed))
+            .collect();
+        assert_eq!(ins, vec![(0, true), (2, false)]);
+        assert!(
+            head_row
+                .segments
+                .iter()
+                .filter(|s| s.kind == SegmentKind::OutOfNode)
+                .all(|s| !s.dashed)
+        );
+    }
+
+    /// The everyday shape that gave this away: a stash taken on a branch
+    /// that was later merged. The merge's second parent is exactly the
+    /// stash's base, so its fork edge wants the leash's lane — and taking
+    /// it would draw the stash's whole run down to the base as solid,
+    /// committed history.
+    #[test]
+    fn a_merge_reaching_a_stash_base_leaves_the_leash_dashed() {
+        let mut pool = StrPool::new();
+        let mut b = GraphBuilder::new();
+        // Branch tip (5) on lane 0, then the stash hanging off base 3.
+        b.push(&commit(&mut pool, 5, &[4]));
+        let stash = b.push_with_edge_style(&commit(&mut pool, 6, &[3]), true);
+        assert_eq!(stash.node_lane, 1);
+        // The merge that brought the branch in: mainline (4) and base (3).
+        let merge = b.push(&commit(&mut pool, 2, &[4, 3]));
+        assert_eq!(
+            merge
+                .segments
+                .iter()
+                .filter(|s| s.kind == SegmentKind::OutOfNode)
+                .map(|s| s.lane)
+                .collect::<Vec<_>>(),
+            vec![2, 3],
+            "the fork edge steps around the leash: {:?}",
+            merge.segments
+        );
+        let through = merge
+            .segments
+            .iter()
+            .find(|s| s.kind == SegmentKind::Through && s.lane == 1)
+            .unwrap();
+        assert!(
+            through.dashed,
+            "the leash passes the merge untouched: {:?}",
+            merge.segments
+        );
+
+        // Every row between the stash and its base keeps the lane dashed.
+        let mainline = b.push(&commit(&mut pool, 4, &[3]));
+        assert!(
+            mainline
+                .segments
+                .iter()
+                .find(|s| s.kind == SegmentKind::Through && s.lane == 1)
+                .is_some_and(|s| s.dashed)
+        );
+        // The base gathers the leash and the merge's fork edge separately.
+        let base = b.push(&commit(&mut pool, 3, &[]));
+        let ins: Vec<(u16, bool)> = base
+            .segments
+            .iter()
+            .filter(|s| s.kind == SegmentKind::IntoNode)
+            .map(|s| (s.lane, s.dashed))
+            .collect();
+        assert_eq!(ins, vec![(0, false), (1, true), (3, false)]);
     }
 
     /// A duplicate-parent merge sends its extra edge onto the node's own
-    /// first-parent edge (distance zero beats every waiting lane), so a
-    /// WIP leash waiting for the same commit on another lane gets no real
-    /// history and must keep drawing dashed.
+    /// first-parent edge (distance zero beats every waiting lane, and a
+    /// WIP leash waiting for the same commit is not a candidate at all),
+    /// so the leash keeps drawing dashed.
     #[test]
     fn duplicate_parent_merge_keeps_an_unrelated_leash_dashed() {
         let mut pool = StrPool::new();
@@ -774,7 +858,8 @@ mod tests {
     /// Lanes touching one horizontal edge of a row — its bottom (through
     /// and out-of-node) or its top (through and into-node) — with the
     /// color and dash of the segment drawn there. Two segments sharing a
-    /// lane must agree on color (a merge edge joining a through lane).
+    /// lane (a merge edge joining a through lane) must agree on both, or
+    /// one would be drawn over the other.
     fn boundary_lanes(row: &GraphRow, bottom: bool) -> BTreeMap<u16, (u8, bool)> {
         let mut lanes = BTreeMap::new();
         for s in &row.segments {
@@ -786,27 +871,25 @@ mod tests {
             if !touches {
                 continue;
             }
-            if let Some((color, dashed)) = lanes.insert(s.lane, (s.color, s.dashed)) {
+            if let Some(seen) = lanes.insert(s.lane, (s.color, s.dashed)) {
                 assert_eq!(
-                    color, s.color,
-                    "row {}: segments on lane {} disagree on color",
-                    row.row, s.lane
+                    seen,
+                    (s.color, s.dashed),
+                    "row {}: segments on lane {} disagree",
+                    row.row,
+                    s.lane
                 );
-                // A solid segment wins the boundary (drawn on top).
-                if !dashed {
-                    lanes.insert(s.lane, (s.color, false));
-                }
             }
         }
         lanes
     }
 
     /// Every edge leaving a row's bottom must continue at the next row's
-    /// top on the same lane in the same color — across arbitrary DAGs
-    /// (merges, octopus and duplicate parents, extra roots, orphan tips)
-    /// with WIP and stash rows mixed in. Dashes may switch dashed→solid
-    /// between rows (a real edge merging into a leash lane), never
-    /// solid→dashed.
+    /// top on the same lane, in the same color and the same dash — across
+    /// arbitrary DAGs (merges, octopus and duplicate parents, extra roots,
+    /// orphan tips) with WIP and stash rows mixed in. A leash lane is a
+    /// leash for its whole run: no row may turn it solid, and no solid
+    /// lane may turn dashed.
     #[test]
     fn edges_are_continuous_across_rows_on_random_dags() {
         for seed in 1..=300u64 {
@@ -864,9 +947,10 @@ mod tests {
                         pair[1].row,
                         render(&rows)
                     );
-                    assert!(
-                        *dashed || !top_dashed,
-                        "seed {seed}: lane {lane} turns a solid edge dashed between rows {} and {}\n{}",
+                    assert_eq!(
+                        *dashed,
+                        top_dashed,
+                        "seed {seed}: lane {lane} changes dash between rows {} and {}\n{}",
                         pair[0].row,
                         pair[1].row,
                         render(&rows)
