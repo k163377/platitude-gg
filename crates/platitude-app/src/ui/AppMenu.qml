@@ -30,7 +30,13 @@ Menu {
         }
         return widest
     }
-    implicitWidth: appMenu.widestRow + appMenu.leftPadding + appMenu.rightPadding
+    // ...but never narrower than `menuMinW`. A held row reports itself by
+    // filling from the left, and on a row only as wide as its own words
+    // there is too little travel to read as progress (デザイン規約
+    // §進行中・長押しの定数).
+    implicitWidth: Math.max(Metrics.menuMinW,
+                            appMenu.widestRow + appMenu.leftPadding
+                            + appMenu.rightPadding)
 
     // The window is reached through the item the menu was declared
     // under: a menu that opens as a window of its own would otherwise

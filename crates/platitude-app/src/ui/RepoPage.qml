@@ -356,16 +356,29 @@ Item {
         // Every row this menu keeps costs the ones that have nowhere else
         // to go (デザイン規約 §メニュー).
         AppMenuItem {
-            text: qsTr("Delete…")
+            id: refDeleteItem
+            // A stash is held down here instead of raising a bar over the
+            // graph: it is one row, kept nowhere else, and the question
+            // has nothing to add that the words on the row do not already
+            // say (デザイン規約 §長押し). The ellipsis goes with it — the
+            // row no longer promises a question.
+            readonly property bool stashRow: page.menuRefKind === "stash"
+            text: stashRow ? qsTr("Hold to delete") : qsTr("Delete…")
             visible: page.menuRefKind === "branch" || page.menuRefKind === "tag"
-                     || page.menuRefKind === "stash"
+                     || stashRow
             // The branch under the working tree cannot be deleted at all,
             // and git says so rather than doing something else.
             enabled: repoTab.busyCount === 0
                      && !(page.menuRefKind === "branch"
                           && page.menuRefId === workTree.branch)
-            onTriggered: page.deleteRow(page.menuRefKind, page.menuRefId,
-                                        page.menuRefName, page.menuRefOid)
+            holdMs: stashRow ? Metrics.holdMs : 0
+            onTriggered: if (!stashRow)
+                             page.deleteRow(page.menuRefKind, page.menuRefId,
+                                            page.menuRefName, page.menuRefOid)
+            onHeld: {
+                refMenu.close()
+                page.dropStashNow(page.menuRefId)
+            }
         }
     }
 
@@ -456,15 +469,15 @@ Item {
                 true,
                 qsTr("Delete %1").arg(id),
                 function () { repoTab.deleteTag(id) })
-        } else if (kind === "stash") {
-            page.startRowAsk(
-                oidHex,
-                qsTr("Delete this stash?"),
-                qsTr("What it holds is kept nowhere else."),
-                true,
-                qsTr("Delete it"),
-                function () { repoTab.dropStash(id) })
         }
+    }
+    /// A stash dropped with no question in front of it: the menu row that
+    /// reaches this was held down, which is the whole of the asking
+    /// (デザイン規約 §長押し).
+    function dropStashNow(ref) {
+        repoTab.dropStash(ref)
+        if (page.selectedStashRef === ref)
+            page.selectedStashRef = ""
     }
     /// git refused the plain delete: the branch has commits of its own.
     /// Forcing is the only way through, and it is the one thing here that
@@ -649,12 +662,32 @@ Item {
     AppMenu {
         id: stashMenu
         AppMenuItem {
-            text: qsTr("Delete…")
+            text: qsTr("Apply")
             enabled: repoTab.busyCount === 0
-            // The same wording, question and write as the left menu's
-            // row: one stash, asked about one way.
-            onTriggered: page.deleteRow("stash", page.menuStashRef,
-                                        page.menuStashRef, page.menuOid)
+            onTriggered: repoTab.applyStash(page.menuStashRef)
+        }
+        AppMenuItem {
+            text: qsTr("Pop")
+            enabled: repoTab.busyCount === 0
+            onTriggered: {
+                repoTab.popStash(page.menuStashRef)
+                page.selectedStashRef = ""
+            }
+        }
+        AppMenuSeparator {}
+        // Held, not asked about: a bar coming down over the graph to ask
+        // about one row of it is more machinery than one stash is worth,
+        // and the hold says the same thing in the place the hand already
+        // is (デザイン規約 §長押し).
+        AppMenuItem {
+            id: stashDeleteItem
+            text: qsTr("Hold to delete")
+            enabled: repoTab.busyCount === 0
+            holdMs: Metrics.holdMs
+            onHeld: {
+                stashMenu.close()
+                page.dropStashNow(page.menuStashRef)
+            }
         }
     }
 
@@ -1126,39 +1159,44 @@ Item {
             const local = workTree.branch
             sidebarPane.beginRename("branch", local, local)
             sidebarPane.submitEdit(arg)
-        } else if (act === "delete-branch" || act === "delete-tag"
-                   || act === "delete-stash") {
+        } else if (act === "delete-branch" || act === "delete-tag") {
             // Through the menu's own path: the branch one runs the plain
-            // delete (and raises the question when git refuses), the
-            // other two stop at the question.
+            // delete (and raises the question when git refuses), the tag
+            // one stops at the question.
             const kind = act.substring("delete-".length)
-            const id = kind === "stash" ? stashesModel.fullAt(0) : arg
             const model = kind === "tag" ? tagsModel : branchesModel
-            page.deleteRow(kind, id, id,
-                           kind === "stash" ? stashesModel.oidOfName(stashesModel.nameAt(0))
-                                            : model.oidOfName(id))
+            page.deleteRow(kind, arg, arg, model.oidOfName(arg))
+        } else if (act === "delete-stash" || act === "delete-stash-go") {
+            // The left menu's row for the first stash. That row is held
+            // rather than asked about, so there is no question to stop at:
+            // the plain verb leaves the menu standing for the shot, and
+            // "-go" runs the hold to its end.
+            page.openRefMenu("stash", stashesModel.nameAt(0),
+                             stashesModel.fullAt(0),
+                             stashesModel.oidOfName(stashesModel.nameAt(0)))
+            if (act === "delete-stash-go")
+                refDeleteItem.completeHold()
         } else if (act === "delete-force") {
             repoTab.deleteBranch(arg, true)
         } else if (act === "delete-tag-go") {
             repoTab.deleteTag(arg)
-        } else if (act === "delete-stash-go") {
-            repoTab.dropStash(stashesModel.fullAt(0))
         } else if (act === "stash-menu" || act === "delete-stash-row") {
-            // The graph's way to the same delete, entered where a
+            // The graph's way to the same three rows, entered where a
             // right-click enters it: the row menu on the first stash's
-            // row. "stash-menu" leaves it standing for the overlay shot;
-            // "-row" goes on to the question, as its one row does, and
-            // with the argument "go" answers it as well. Which menu
-            // opened is said in words too — the difference is the whole
-            // point, and a shot of a one-row menu proves little.
+            // row. Which menu opened is said in words too — the difference
+            // is the whole point, and a shot alone proves little. The
+            // argument "go" holds the delete row down.
             page.openRowMenu(stashesModel.oidOfName(stashesModel.nameAt(0)))
             AppBackend.report("row_menu stash=" + page.menuStashRef)
-            if (act === "delete-stash-row") {
-                page.deleteRow("stash", page.menuStashRef,
-                               page.menuStashRef, page.menuOid)
-                if (arg === "go")
-                    page.answerRowAsk()
-            }
+            if (act === "delete-stash-row" && arg === "go")
+                stashDeleteItem.completeHold()
+        } else if (act === "stash-apply-row" || act === "stash-pop-row") {
+            // Apply and Pop from the graph's own stash row.
+            page.openRowMenu(stashesModel.oidOfName(stashesModel.nameAt(0)))
+            if (act === "stash-apply-row")
+                repoTab.applyStash(page.menuStashRef)
+            else
+                repoTab.popStash(page.menuStashRef)
         } else if (act === "branch-at-tag") {
             // The box a double-click puts on a tag row, accepted with the
             // argument as the new branch's name.
