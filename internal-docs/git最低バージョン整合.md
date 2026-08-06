@@ -58,7 +58,7 @@
 | `show` | `--no-patch` / `-z` / `--format=` | 古参(`--no-patch` 1.8.4) |
 | `stash` | `list -z --format=` / `push -m --include-untracked --keep-index --staged` / `pop --index` / `apply` / `drop` / `store -m` | 2.43.0 ✓(`push --staged` 2.35) |
 | `status` | `--porcelain=v2` / `-z` / `--branch` / `-uall` | 2.43.0 ✓(v2 は 2.11) |
-| `switch` | `--create` / `--force-create` / `--detach` / `--track` | 2.43.0 ✓(2.23 導入。EXPERIMENTAL 表記は restore と同様) |
+| `switch` | `--create` / `--force-create` / `--track` | 2.43.0 ✓(2.23 導入。EXPERIMENTAL 表記は restore と同様) |
 | `symbolic-ref` | `-q` / `--short` | 古参(1.7.10) |
 | `tag` | `--delete` / `--end-of-options` | 2.42.0 ✓ |
 | `worktree` | `list --porcelain -z` | 2.42.1 ✓(`-z` 2.36) |

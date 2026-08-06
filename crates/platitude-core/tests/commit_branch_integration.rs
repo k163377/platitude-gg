@@ -282,23 +282,30 @@ async fn branch_create_switch_rename_delete() {
     assert!(!repo.git(&["branch", "--list"]).contains("renamed"));
 }
 
+/// Nothing offered here detaches HEAD, but git and the command line still
+/// leave it detached — after a bisect, a `checkout <tag>`, an interrupted
+/// rebase. That is a state to be worked from and left, and leaving it is
+/// an ordinary switch.
 #[tokio::test]
-async fn detached_checkout_is_explicit() {
+async fn a_detached_head_switches_back_onto_a_branch() {
     let mut repo = TestRepo::init();
     let root = repo.commit_file("a.txt", "one\n", "root");
     repo.commit_file("a.txt", "two\n", "second");
     let (exec, cancel) = env();
+    repo.git(&["checkout", "--detach", &root]);
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "HEAD");
 
     branch::checkout(
         &exec,
         &repo.path,
-        &CheckoutTarget::Detach { rev: root.clone() },
+        &CheckoutTarget::Branch {
+            name: "main".into(),
+        },
         &cancel,
     )
     .await
-    .expect("detach");
-    assert_eq!(repo.git(&["rev-parse", "HEAD"]), root);
-    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "HEAD");
+    .expect("switch off the detached HEAD");
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
 }
 
 /// Two commits on `main`; the returned id is the first of them, which is

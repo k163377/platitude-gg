@@ -13,13 +13,16 @@ use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
 /// What a checkout should land on.
+///
+/// Every variant lands on a branch. Nothing here detaches HEAD: a branch
+/// is what the next commit needs somewhere to go, and the UI offers to
+/// make one wherever a bare commit is what was pointed at (デザイン規約
+/// §ブランチ・コミットへの移動). A HEAD already detached — left by git
+/// itself, or by the command line — is read and worked from as normal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CheckoutTarget {
     /// An existing local branch.
     Branch { name: String },
-    /// Any commit-ish (commit, tag, remote-tracking ref): detaches HEAD.
-    /// Detaching is always explicit — never a side effect of a plain name.
-    Detach { rev: String },
     /// A remote-tracking branch: creates `local` tracking it and switches.
     Track { remote_ref: String, local: String },
     /// An existing local branch, moved to `start` before landing on it.
@@ -107,7 +110,6 @@ pub async fn checkout(
     let cmd = GitCommand::new().cwd(workdir).arg("switch");
     let cmd = match target {
         CheckoutTarget::Branch { name } => cmd.args(["--", name.as_str()]),
-        CheckoutTarget::Detach { rev } => cmd.args(["--detach", "--", rev.as_str()]),
         CheckoutTarget::Track { remote_ref, local } => {
             cmd.args(["--create", local, "--track", remote_ref])
         }

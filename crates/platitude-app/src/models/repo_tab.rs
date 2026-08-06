@@ -591,13 +591,6 @@ impl RepoTab {
         self.move_head(target, &carry);
     }
 
-    /// Checks out any commit-ish, detaching HEAD.
-    #[qslot]
-    fn checkout_detached(&mut self, rev: String, carry: String) {
-        let target = platitude_core::branch::CheckoutTarget::Detach { rev };
-        self.move_head(target, &carry);
-    }
-
     /// Creates a local branch tracking a remote-tracking ref and switches.
     #[qslot]
     fn checkout_remote(&mut self, remote_ref: String, local: String, carry: String) {

@@ -120,8 +120,10 @@ Item {
     // the move goes ahead carrying them, and git refuses — changing
     // nothing — when it cannot. That refusal comes back as `moveBlock`
     // and raises the dialog, which re-runs the same move a different way.
-    // What the pending move is: kind is "branch" / "remote" / "commit" /
-    // "force" (a local branch moved to `moveStart` before landing on it).
+    // What the pending move is: kind is "branch" / "remote" / "force"
+    // (a local branch moved to `moveStart` before landing on it). Every
+    // one of them lands on a branch — nothing here moves onto a bare
+    // commit (デザイン規約 §ブランチ・コミットへの移動).
     property string moveKind: ""
     property string moveTarget: ""
     property string moveLabel: ""
@@ -144,8 +146,6 @@ Item {
         else if (page.moveKind === "remote")
             repoTab.checkoutRemote(page.moveTarget,
                                    repoTab.localNameFor(page.moveTarget), carry)
-        else if (page.moveKind === "commit")
-            repoTab.checkoutDetached(page.moveTarget, carry)
         else if (page.moveKind === "force")
             repoTab.checkoutForceCreate(page.moveTarget, page.moveStart, carry)
     }
@@ -170,8 +170,9 @@ Item {
         }
         // The detached-HEAD marker names no branch, and a tag is a
         // standing mark rather than somewhere to carry on from — moving
-        // onto one can only detach, which stays an explicit choice
-        // (the commit menu's "Switch to this commit").
+        // onto one can only leave HEAD on no branch, which nothing here
+        // does. A tag's row offers a branch at that commit instead
+        // (`startNaming`), which is what the move was after.
         if (kind !== "R")
             return
         const local = repoTab.localNameFor(name)
@@ -650,7 +651,6 @@ Item {
 
     // ---- context menu on a graph row -------------------------------
     property string menuOid: ""
-    readonly property string menuShort: page.menuOid.substring(0, 8)
     // The stash the menu was opened on, by the selector git answers to
     // ("" on an ordinary commit). A stash is a commit git keeps off to
     // one side of every branch, so none of the commit menu's rows land on
@@ -716,11 +716,11 @@ Item {
             enabled: repoTab.busyCount === 0
             onTriggered: repoTab.cherryPick(page.menuOid)
         }
-        AppMenuItem {
-            text: qsTr("Switch to this commit")
-            enabled: repoTab.busyCount === 0
-            onTriggered: page.switchTo("commit", page.menuOid, page.menuShort)
-        }
+        // No row for landing on the commit itself: doing so leaves HEAD
+        // on no branch, which is a state to be got out of rather than one
+        // to offer (デザイン規約 §ブランチ・コミットへの移動). What that
+        // row was reached for is a branch at this commit, which the
+        // double-click already opens the box for.
         AppMenuSeparator {}
         // No entry for editing the message: the click that opens this
         // menu selects the row, which puts the message in the details
