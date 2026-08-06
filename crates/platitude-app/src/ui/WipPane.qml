@@ -36,6 +36,94 @@ ColumnLayout {
     signal askConfirmed()
     signal askCancelled()
 
+    // ---- which rows are chosen -------------------------------------
+    // Several files at once, the way a file list is used to being asked:
+    // a plain click takes one, Ctrl adds or removes, Shift reaches from
+    // the last one clicked. Held here, keyed `<bucket>:<path>`, because a
+    // delegate is recycled the moment its row scrolls off.
+    property var chosenKeys: ({})
+    property int chosenCount: 0
+    /// The row the next Shift-click reaches from.
+    property int anchorRow: -1
+    function isChosen(bucket, path) {
+        return wipPane.chosenKeys[bucket + ":" + path] === true
+    }
+    /// Rows in list order, so a caller can act on what was chosen.
+    function chosenRows() {
+        const out = []
+        for (let i = 0; i < wipList.count; i++) {
+            const row = wipList.itemAtIndex(i)
+            if (row && !row.folder && wipPane.isChosen(row.bucket, row.fullName))
+                out.push(row)
+        }
+        return out
+    }
+    /// Makes one row the whole of the choice — what a plain click does,
+    /// and what a right-click outside the choice does before opening the
+    /// menu (the menu acts on what is highlighted).
+    function chooseOnly(bucket, path) {
+        wipPane.applyClick(bucket, path, Qt.NoModifier)
+    }
+    function clearChoice() {
+        wipPane.chosenKeys = ({})
+        wipPane.chosenCount = 0
+        wipPane.anchorRow = -1
+    }
+    /// Applies a click to the choice. Returns whether the diff should
+    /// follow it: adding to a choice is about the choice, not about which
+    /// file is being read.
+    function applyClick(bucket, path, modifiers) {
+        const key = bucket + ":" + path
+        const row = wipPane.rowIndexOf(key)
+        if (modifiers & Qt.ShiftModifier && wipPane.anchorRow >= 0) {
+            wipPane.chooseRange(wipPane.anchorRow, row)
+            return false
+        }
+        if (modifiers & Qt.ControlModifier) {
+            // A fresh object every time: the rows follow this property,
+            // and assigning the same one back changes nothing to follow.
+            const next = ({})
+            for (const k in wipPane.chosenKeys)
+                next[k] = true
+            if (next[key] === true)
+                delete next[key]
+            else
+                next[key] = true
+            wipPane.chosenKeys = next
+            wipPane.chosenCount = Object.keys(next).length
+            wipPane.anchorRow = row
+            return false
+        }
+        const only = ({})
+        only[key] = true
+        wipPane.chosenKeys = only
+        wipPane.chosenCount = 1
+        wipPane.anchorRow = row
+        return true
+    }
+    function rowIndexOf(key) {
+        for (let i = 0; i < wipList.count; i++) {
+            const row = wipList.itemAtIndex(i)
+            if (row && !row.folder && row.bucket + ":" + row.fullName === key)
+                return i
+        }
+        return -1
+    }
+    function chooseRange(from, to) {
+        if (from < 0 || to < 0)
+            return
+        const lo = Math.min(from, to)
+        const hi = Math.max(from, to)
+        const next = ({})
+        for (let i = lo; i <= hi; i++) {
+            const row = wipList.itemAtIndex(i)
+            if (row && !row.folder)
+                next[row.bucket + ":" + row.fullName] = true
+        }
+        wipPane.chosenKeys = next
+        wipPane.chosenCount = Object.keys(next).length
+    }
+
     // ---- a standing question about one file ------------------------
     // The same bar the graph raises, over the list the file is in: the
     // question is written on the bar and the file's own row is marked
@@ -68,6 +156,10 @@ ColumnLayout {
     function leaveAsk() {
         if (askBar.open)
             wipPane.askCancelled()
+    }
+    /// The row at an index — automation, like `rowFor` below.
+    function rowAt(index) {
+        return wipList.itemAtIndex(index)
     }
     /// The row a path is on — for the automation hooks, which enter a
     /// click where the row itself enters it. App code goes through the
@@ -513,10 +605,21 @@ ColumnLayout {
             showStage: true
             askKey: wipPane.askKey
             askDanger: askBar.danger
-            onFileClicked: (bucket, path, origPath) =>
+            chosen: wipPane.isChosen(bucket, fullName)
+            onFileClicked: (bucket, path, origPath, modifiers) => {
+                // Choosing rows is not reading one: only a plain click
+                // moves the diff. A question about other rows goes.
+                if (!wipPane.applyClick(bucket, path, modifiers)) {
+                    wipPane.leaveAsk()
+                    return
+                }
                 wipPane.fileActivated(bucket, path, origPath)
-            onFileMenuRequested: (bucket, path, origPath) =>
+            }
+            onFileMenuRequested: (bucket, path, origPath) => {
+                if (!wipPane.isChosen(bucket, path))
+                    wipPane.chooseOnly(bucket, path)
                 wipPane.fileMenuRequested(bucket, path, origPath)
+            }
             onFolderClicked: key => {
                 wipPane.leaveAsk()
                 wipPane.worktreeModel.toggleFolder(key)

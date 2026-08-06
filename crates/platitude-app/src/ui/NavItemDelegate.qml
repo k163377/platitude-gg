@@ -36,9 +36,15 @@ Item {
     /// file changed on both sides has a row on each.
     property string askKey: ""
     property bool askDanger: false
+    /// Whether this row is one of those chosen (working-tree list). Held
+    /// by the list for the same recycling reason as the mark above.
+    property bool chosen: false
+    /// `*` means the question is about every chosen row at once.
     readonly property bool marked:
         navRow.askKey !== "" && !navRow.folder
-        && navRow.askKey === navRow.bucket + ":" + navRow.fullName
+        && (navRow.askKey === "*"
+            ? navRow.chosen
+            : navRow.askKey === navRow.bucket + ":" + navRow.fullName)
 
     // ---- the two-click gestures ------------------------------------
     // Which row was clicked last, and which is being typed into, are held
@@ -61,7 +67,9 @@ Item {
     readonly property string fullName: navRow.full !== "" ? navRow.full : navRow.name
 
     signal refClicked(string oidHex)
-    signal fileClicked(string bucket, string path, string origPath)
+    /// A working-tree file row was clicked. `modifiers` carries Ctrl and
+    /// Shift, which is how several rows are chosen at once.
+    signal fileClicked(string bucket, string path, string origPath, int modifiers)
     signal folderClicked(string key)
     signal stageClicked(string bucket, string path)
     /// A left click landed on this row, whatever it then meant.
@@ -101,8 +109,10 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: Theme.bgSelected
-        visible: !navRow.folder && navRow.rowKey !== ""
-                 && navRow.activeKey === navRow.rowKey
+        visible: !navRow.folder
+                 && (navRow.chosen
+                     || (navRow.rowKey !== ""
+                         && navRow.activeKey === navRow.rowKey))
     }
     Rectangle {
         anchors.fill: parent
@@ -293,11 +303,12 @@ Item {
         editField.selectAll()
         editField.forceActiveFocus()
     }
-    function ordinaryClick() {
+    function ordinaryClick(modifiers) {
         if (navRow.folder) {
             navRow.folderClicked(navRow.full)
         } else if (navRow.kindHint === "wt") {
-            navRow.fileClicked(navRow.bucket, navRow.fullName, navRow.orig_path)
+            navRow.fileClicked(navRow.bucket, navRow.fullName, navRow.orig_path,
+                               modifiers === undefined ? Qt.NoModifier : modifiers)
         } else if (navRow.kindHint === "worktree") {
             // Another repository: nothing here to jump to, so a click only
             // takes the row (the double-click opens it as a tab).
@@ -334,7 +345,7 @@ Item {
             const wasActive = navRow.activeKey === navRow.rowKey
             doubleGuard.restart()
             navRow.rowClicked()
-            navRow.ordinaryClick()
+            navRow.ordinaryClick(mouse.modifiers)
             if (wasActive && navRow.nameable)
                 renameTimer.restart()
         }

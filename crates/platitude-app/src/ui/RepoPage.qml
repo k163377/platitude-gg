@@ -542,35 +542,81 @@ Item {
     ///
     /// A conflicted path gets here from nowhere: git refuses to restore
     /// one until it has been told how it was resolved.
-    function askDiscardFile(bucket, path, origPath) {
-        const detail = bucket === "untracked"
+    function askDiscardFile() {
+        // Whatever is highlighted, in list order. A right-click outside
+        // the choice has already made its row the whole of it.
+        const rows = wipPane.chosenRows()
+        const unstaged = [], untracked = [], staged = []
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i]
+            // git will not restore a path it has not been told how to
+            // merge yet, so a conflicted row rides along with none of it.
+            if (row.bucket === "conflicts")
+                continue
+            const bag = row.bucket === "untracked" ? untracked
+                      : row.bucket === "staged" ? staged : unstaged
+            bag.push(row.fullName)
+            // A rename is undone by both of its names at once.
+            if (row.bucket === "staged" && row.orig_path !== "")
+                bag.push(row.orig_path)
+        }
+        const count = rows.length
+        if (unstaged.length + untracked.length + staged.length === 0)
+            return
+        // One file says exactly what it loses; several say the one thing
+        // that is true of all of them (デザイン規約 §長さ).
+        const detail = count > 1 ? qsTr("Kept nowhere else.")
+                     : untracked.length > 0
                      ? qsTr("The file goes — git never recorded it.")
-                     : bucket === "staged"
+                     : staged.length > 0
                      ? qsTr("Everything since the last commit goes.")
                      : qsTr("Kept nowhere else.")
         page.startFileAsk(
-            bucket + ":" + path,
-            qsTr("Discard changes?"),
+            count > 1 ? "*" : rows[0].bucket + ":" + rows[0].fullName,
+            count > 1 ? qsTr("Discard changes to %n files?", "", count)
+                      : qsTr("Discard changes?"),
             detail,
             qsTr("Hold to discard"),
             function () {
-                if (bucket === "untracked")
-                    repoTab.removeUntracked(path)
-                else if (bucket === "staged")
-                    repoTab.discardPathToHead(path, origPath === undefined
-                                                    ? "" : origPath)
-                else
-                    repoTab.discardPath(path)
+                // One git command per bucket, however many rows were
+                // chosen: the paths cross the bridge one at a time and
+                // the write takes the whole set (P2-確認事項 §C).
+                if (unstaged.length > 0) {
+                    page.sendPaths(unstaged)
+                    repoTab.discardPaths()
+                }
+                if (untracked.length > 0) {
+                    page.sendPaths(untracked)
+                    repoTab.removeUntrackedPaths()
+                }
+                if (staged.length > 0) {
+                    page.sendPaths(staged)
+                    repoTab.discardPathsToHead()
+                }
             })
+    }
+    /// Hands a set of paths to the bridge for the write that follows.
+    function sendPaths(paths) {
+        repoTab.beginPaths()
+        for (let i = 0; i < paths.length; i++)
+            repoTab.addPath(paths[i])
     }
     AppMenu {
         id: fileMenu
         AppMenuItem {
-            text: qsTr("Stash this file")
+            text: wipPane.chosenCount > 1 ? qsTr("Stash these files")
+                                          : qsTr("Stash this file")
             // git will not stash a tree with unresolved conflicts in it.
             enabled: repoTab.busyCount === 0
                      && page.menuFileBucket !== "conflicts"
-            onTriggered: repoTab.stashPath(page.menuFilePath, "")
+            onTriggered: {
+                const rows = wipPane.chosenRows()
+                const paths = []
+                for (let i = 0; i < rows.length; i++)
+                    paths.push(rows[i].fullName)
+                page.sendPaths(paths)
+                repoTab.stashPaths("")
+            }
         }
         // One row on every kind of file — the row says what is being
         // undone, the question says what that costs. On a file changed on
@@ -581,14 +627,18 @@ Item {
             text: qsTr("Discard changes…")
             visible: page.menuFileBucket !== "conflicts"
             enabled: repoTab.busyCount === 0
-            onTriggered: page.askDiscardFile(page.menuFileBucket,
-                                             page.menuFilePath,
-                                             page.menuFileOrig)
+            onTriggered: page.askDiscardFile()
         }
         AppMenuSeparator {}
         AppMenuItem {
-            text: qsTr("Copy path")
-            onTriggered: clipboard.copy(page.menuFilePath)
+            text: wipPane.chosenCount > 1 ? qsTr("Copy paths") : qsTr("Copy path")
+            onTriggered: {
+                const rows = wipPane.chosenRows()
+                const paths = []
+                for (let i = 0; i < rows.length; i++)
+                    paths.push(rows[i].fullName)
+                clipboard.copy(paths.join("\n"))
+            }
         }
     }
 
@@ -959,8 +1009,26 @@ Item {
                 wipPane.stashClickStagedOnly()
             wipPane.stashApply()
         } else if (act === "stash-file") {
-            page.openFileMenu("unstaged", arg)
-            repoTab.stashPath(arg, "")
+            wipPane.chooseOnly("unstaged", arg)
+            page.openFileMenu("unstaged", arg, "")
+            page.sendPaths([arg])
+            repoTab.stashPaths("")
+        } else if (act === "discard-many" || act === "discard-many-go") {
+            // Two rows chosen the way clicks choose them — the first row
+            // plainly, the argument's row with Ctrl — and then the menu's
+            // one row over both.
+            page.showWip()
+            const first = wipPane.rowAt(0)
+            if (first)
+                wipPane.chooseOnly(first.bucket, first.fullName)
+            const other = wipPane.rowFor(arg)
+            if (other)
+                wipPane.applyClick(other.bucket, other.fullName, Qt.ControlModifier)
+            AppBackend.report("chosen count=" + wipPane.chosenCount)
+            page.openFileMenu(other ? other.bucket : "unstaged", arg, "")
+            page.askDiscardFile()
+            if (act.endsWith("-go"))
+                wipPane.completeHold()
         } else if (act === "stash-dialog") {
             // Opened and left standing, for a look at it. With the
             // argument "staged-only" the staged-only box is clicked
@@ -988,10 +1056,11 @@ Item {
                          : act.startsWith("discard-staged") ? "staged"
                          : "unstaged"
             // The row carries where a rename came from, as it does for a
-            // right-click.
+            // right-click, and the right-click makes it the whole choice.
             const row = wipPane.rowFor(arg)
+            wipPane.chooseOnly(bucket, arg)
             page.openFileMenu(bucket, arg, row ? row.orig_path : "")
-            page.askDiscardFile(bucket, arg, page.menuFileOrig)
+            page.askDiscardFile()
             // "-go" answers it the way a person does: by holding the
             // pill down, which is the only gesture that answers here.
             if (act.endsWith("-go"))

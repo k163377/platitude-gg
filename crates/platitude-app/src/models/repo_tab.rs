@@ -38,6 +38,12 @@ pub struct RepoTab {
     /// Whether this repository signs commits or tags, and how.
     signing_active: bool,
     signing_format: String,
+    /// Paths gathered for the next write over several files at once, one
+    /// call at a time: a git path may hold any byte but NUL, so there is no
+    /// separator safe enough to pack a list into one string
+    /// (P2-確認事項 §C). Emptied by whichever write consumes it, so a set
+    /// left behind by an abandoned question cannot be spent later.
+    pending_paths: Vec<String>,
     /// Configured remote names — where a branch with no upstream can go.
     remotes: Vec<String>,
     /// Derived from `remotes` on arrival rather than computed on demand:
@@ -102,6 +108,7 @@ impl Default for RepoTab {
             identity_ready: true,
             signing_active: false,
             signing_format: String::new(),
+            pending_paths: Vec::new(),
             remotes: Vec::new(),
             remote_count: 0,
             default_remote: String::new(),
@@ -430,29 +437,50 @@ impl RepoTab {
         self.with_session(|s| s.unstage_paths(vec![path.clone()]));
     }
 
-    /// Throws away unstaged modifications of a tracked file (destructive).
+    /// Opens a set of paths for the next write, and adds to it. One call
+    /// per path (see [`RepoTab::pending_paths`]); the write that follows
+    /// takes them all in one git command, however many rows were chosen.
     #[qslot]
-    fn discard_path(&mut self, path: String) {
-        self.with_session(|s| s.discard_paths(vec![path.clone()]));
+    fn begin_paths(&mut self) {
+        self.pending_paths.clear();
     }
 
-    /// Throws away both sides of one tracked file, back to HEAD
-    /// (destructive). `orig_path` is the name a rename came from, empty
-    /// otherwise: restoring only the new name leaves the old one staged as
-    /// a deletion.
     #[qslot]
-    fn discard_path_to_head(&mut self, path: String, orig_path: String) {
-        let mut paths = vec![path.clone()];
-        if !orig_path.is_empty() {
-            paths.push(orig_path.clone());
+    fn add_path(&mut self, path: String) {
+        self.pending_paths.push(path);
+    }
+
+    /// Throws away unstaged modifications of the gathered files
+    /// (destructive).
+    #[qslot]
+    fn discard_paths(&mut self) {
+        let paths = std::mem::take(&mut self.pending_paths);
+        if paths.is_empty() {
+            return;
+        }
+        self.with_session(|s| s.discard_paths(paths.clone()));
+    }
+
+    /// Throws away both sides of the gathered files, back to HEAD
+    /// (destructive). A rename's old name is one of the gathered paths:
+    /// restoring only the new one leaves the old staged as a deletion.
+    #[qslot]
+    fn discard_paths_to_head(&mut self) {
+        let paths = std::mem::take(&mut self.pending_paths);
+        if paths.is_empty() {
+            return;
         }
         self.with_session(|s| s.discard_paths_to_head(paths.clone()));
     }
 
-    /// Deletes an untracked file or directory (destructive).
+    /// Deletes the gathered untracked files (destructive).
     #[qslot]
-    fn remove_untracked(&mut self, path: String) {
-        self.with_session(|s| s.remove_untracked(vec![path.clone()]));
+    fn remove_untracked_paths(&mut self) {
+        let paths = std::mem::take(&mut self.pending_paths);
+        if paths.is_empty() {
+            return;
+        }
+        self.with_session(|s| s.remove_untracked(paths.clone()));
     }
 
     #[qslot]
@@ -662,19 +690,23 @@ impl RepoTab {
         self.with_session(|s| s.stash_push(message.clone(), options, Vec::new()));
     }
 
-    /// `git stash push -- <path>`: puts one file's changes away and leaves
-    /// the rest of the working tree as it is.
+    /// `git stash push -- <paths>`: puts the gathered files' changes away
+    /// and leaves the rest of the working tree as it is.
     ///
     /// Untracked files are included, since a path the user pointed at is
     /// meant to go whether or not git is tracking it yet.
     #[qslot]
-    fn stash_path(&mut self, path: String, message: String) {
+    fn stash_paths(&mut self, message: String) {
+        let paths = std::mem::take(&mut self.pending_paths);
+        if paths.is_empty() {
+            return;
+        }
         let options = platitude_core::stash::PushOptions {
             include_untracked: true,
             keep_index: false,
             staged_only: false,
         };
-        self.with_session(|s| s.stash_push(message.clone(), options, vec![path.clone()]));
+        self.with_session(|s| s.stash_push(message.clone(), options, paths.clone()));
     }
 
     /// `git stash pop` on the given selector (stash-row action).
