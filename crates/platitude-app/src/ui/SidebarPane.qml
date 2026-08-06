@@ -43,18 +43,33 @@ Rectangle {
     property string editId: ""
     property string editOid: ""
     property string editText: ""
+    /// The remote a row being renamed lives on (`origin`), empty for
+    /// every other kind of row.
+    readonly property string editRemote: sidebar.editKind !== "remote" ? ""
+        : sidebar.editId.substring(0, sidebar.editId.indexOf("/"))
+    /// A name the remote already carries. Refused here rather than left
+    /// to git: a plain push to a name that exists fast-forwards it and
+    /// reports success, so somebody else's branch would move instead of
+    /// this one being renamed.
+    readonly property bool editTaken: sidebar.editRemote !== ""
+        && sidebar.editText.trim() !== ""
+        && sidebar.remotesModel.oidOfName(
+               sidebar.editRemote + "/" + sidebar.editText.trim()) !== ""
     /// What is typed cannot be accepted. The rules are git's own, asked of
     /// core (a stash's label is free text, not a ref name).
     readonly property bool editRefused: sidebar.editKey !== ""
-        && !(sidebar.editKind === "stash"
-             ? sidebar.repoTab.validStashMessage(sidebar.editText)
-             : sidebar.repoTab.validRefName(sidebar.editText))
+        && (sidebar.editTaken
+            || !(sidebar.editKind === "stash"
+                 ? sidebar.repoTab.validStashMessage(sidebar.editText)
+                 : sidebar.repoTab.validRefName(sidebar.editText)))
     readonly property string editRefusedWhy: !sidebar.editRefused ? ""
         : sidebar.editText.trim() === ""
           ? qsTr("A name is needed")
-          : sidebar.editKind === "stash"
-            ? qsTr("One line, and nothing invisible in it")
-            : qsTr("git will not take this as a name")
+          : sidebar.editTaken
+            ? qsTr("%1 already has a branch called that").arg(sidebar.editRemote)
+            : sidebar.editKind === "stash"
+              ? qsTr("One line, and nothing invisible in it")
+              : qsTr("git will not take this as a name")
 
     function startEdit(kind, key, mode, id, oid, text) {
         sidebar.editKind = kind
@@ -74,10 +89,13 @@ Rectangle {
         const id = sidebar.editId
         const oid = sidebar.editOid
         const mode = sidebar.editMode
+        // What the box opened with: a remote branch is typed without the
+        // remote it is on, so the name it answers to is not what it shows.
+        const was = kind === "remote" ? id.substring(id.indexOf("/") + 1) : id
         sidebar.stopEdit()
         if (mode === "branch")
             sidebar.branchAtRequested(oid, text.trim())
-        else if (text.trim() !== id)
+        else if (text.trim() !== was)
             sidebar.renameSubmitted(kind, id, text.trim())
     }
     /// A click landed somewhere: the row it landed on becomes the one a

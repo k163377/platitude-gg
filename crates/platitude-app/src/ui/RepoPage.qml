@@ -212,11 +212,13 @@ Item {
     // the question came from — a row outside the loaded window simply
     // goes unmarked — so nothing needs a dialog to fall back to.
     property var rowAskRun: null
-    function startRowAsk(oidHex, label, detail, danger, acceptText, run) {
+    function startRowAsk(oidHex, label, detail, danger, acceptText, run,
+                         hold = false, tip = "") {
         page.rowAskRun = run
         // One question stands at a time, wherever it was raised.
         wipPane.stopAsking()
-        graphPane.startAsking(oidHex, label, detail, acceptText, danger)
+        graphPane.startAsking(oidHex, label, detail, acceptText, danger,
+                              hold, tip)
     }
     /// The same, over the working tree's file list: the question is about
     /// one file, so it is asked where that file's row is (デザイン規約
@@ -387,12 +389,57 @@ Item {
     /// stash are re-made under the new name by core, which is the only
     /// rename git has for them).
     function renameRow(kind, id, name) {
-        if (kind === "branch")
+        if (kind === "branch") {
+            // Which remote this branch speaks for has to be read before
+            // the rename: afterwards the row answers to the new name.
+            page.pendingRenameRemote = branchesModel.upstreamOf(id)
+            page.pendingRenameTo = name
             repoTab.renameBranch(id, name, false)
-        else if (kind === "tag")
+        } else if (kind === "tag") {
             repoTab.renameTag(id, name)
-        else if (kind === "stash")
+        } else if (kind === "stash") {
             repoTab.renameStash(id, name)
+        } else if (kind === "remote") {
+            page.askRenameRemote(id, name)
+        }
+    }
+
+    /// The remote branch a just-renamed local one spoke for, and the name
+    /// it took — the question about carrying the name over waits until
+    /// git says the local rename landed.
+    property string pendingRenameRemote: ""
+    property string pendingRenameTo: ""
+
+    /// Renaming a branch on a remote, which git has no command for: core
+    /// pushes the new name and deletes the old, so the question is asked
+    /// first and its answer is held down rather than clicked — this is
+    /// the one write here that another machine keeps (デザイン規約 §長押し).
+    function askRenameRemote(remoteRef, name) {
+        const cut = remoteRef.indexOf("/")
+        if (cut < 0)
+            return
+        const remote = remoteRef.substring(0, cut)
+        const from = remoteRef.substring(cut + 1)
+        // A name already over there is not offered: a plain push to one
+        // that exists fast-forwards it and reports success, so somebody
+        // else's branch would move instead of ours being renamed. The
+        // box refuses it too; this catches the way in that has no box.
+        if (name === from || remotesModel.oidOfName(remote + "/" + name) !== "")
+            return
+        page.startRowAsk(
+            remotesModel.oidOfName(remoteRef),
+            qsTr("Rename %1 to %2?").arg(remoteRef).arg(remote + "/" + name),
+            qsTr("The old branch is deleted, not moved."),
+            false,
+            qsTr("Hold to rename"),
+            function () { repoTab.renameRemoteBranch(remote, from, name) },
+            true,
+            qsTr("Hold to rename. git has no rename on a remote: %1 is "
+                 + "pushed, then %2 is deleted. Anything the old name "
+                 + "carried — an open pull request, a running check — "
+                 + "does not follow it.").arg(remote + "/" + name).arg(remoteRef))
+        if (AppBackend.autoAct !== "")
+            AppBackend.report("rename_remote_asked from=" + remoteRef + " to=" + name)
     }
 
     /// Deleting a row from the left menu.
@@ -960,6 +1007,37 @@ Item {
             sidebarPane.beginRename(kind, id, shown)
             if (act !== "nav-rename")
                 sidebarPane.submitEdit(arg)
+        } else if (act === "rename-remote" || act === "rename-remote-box"
+                   || act === "rename-remote-go") {
+            // A remote branch renamed from its own row, named outright
+            // (`origin/billing:billing-v2`) because the remote's rows are
+            // behind a fold. The box carries the branch without the
+            // remote it is on; "-box" leaves it standing for the shot,
+            // the plain act stops at the question, and "-go" holds the
+            // pill down to the end.
+            const parts = arg.split(":")
+            const ref = parts[0]
+            const was = ref.substring(ref.indexOf("/") + 1)
+            // "-box" opens with the argument already in it, so a name the
+            // remote already carries can be photographed being refused —
+            // and the remote's fold has to come open for the row to be
+            // there at all (a remote root starts closed).
+            if (act === "rename-remote-box")
+                remotesModel.toggleFolder(ref.substring(0, ref.indexOf("/")))
+            sidebarPane.beginRename("remote", ref,
+                                    act === "rename-remote-box" ? parts[1] : was)
+            if (act === "rename-remote-box")
+                return
+            sidebarPane.submitEdit(parts[1])
+            if (act === "rename-remote-go")
+                graphPane.completeHold()
+        } else if (act === "rename-local-upstream") {
+            // The whole of the local flow: the branch takes the new name
+            // here, and the question about carrying it over comes back
+            // when git says that landed (so the shot is taken later).
+            const local = workTree.branch
+            sidebarPane.beginRename("branch", local, local)
+            sidebarPane.submitEdit(arg)
         } else if (act === "delete-branch" || act === "delete-tag"
                    || act === "delete-stash") {
             // Through the menu's own path: the branch one runs the plain
@@ -1112,12 +1190,25 @@ Item {
                 page.pendingDeleteBranch = ""
                 page.askForceDelete(refused)
             }
+            // A rename that did not happen has nothing to carry over.
+            page.pendingRenameRemote = ""
+            page.pendingRenameTo = ""
             return
         }
         // Landed: no refusal is coming for it after all.
         if (page.pendingDeleteBranch !== "") {
             page.pendingDeleteBranch = ""
             page.expectedRefusals = Math.max(0, page.expectedRefusals - 1)
+        }
+        // The branch took its new name here; the remote it speaks for is
+        // still under the old one. Asked only now, and only because there
+        // is a remote to ask about (デザイン規約 §左メニューの所作).
+        if (repoTab.lastWriteOp === "branch" && page.pendingRenameRemote !== "") {
+            const spokenFor = page.pendingRenameRemote
+            const took = page.pendingRenameTo
+            page.pendingRenameRemote = ""
+            page.pendingRenameTo = ""
+            page.askRenameRemote(spokenFor, took)
         }
         if (repoTab.lastWriteOp === "commit") {
             page.clearCommitEditor()

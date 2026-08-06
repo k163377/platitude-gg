@@ -79,10 +79,14 @@ ListView {
                 return
             // A stash is named by its message and known to git by its
             // selector; everything else answers to the name it shows.
+            // A remote branch is typed without the remote it is on —
+            // `origin/` is where the branch lives, not part of its name.
             const id = row.full !== "" ? row.full : row.name
             navList.gestures.startEdit(
                 navList.kindHint, row.rowKey, "rename", id, row.oid_hex,
-                navList.kindHint === "stash" ? row.name : id)
+                navList.kindHint === "stash" ? row.name
+                : navList.kindHint === "remote"
+                  ? id.substring(id.indexOf("/") + 1) : id)
         }
         onEditTyped: text => {
             if (navList.gestures)

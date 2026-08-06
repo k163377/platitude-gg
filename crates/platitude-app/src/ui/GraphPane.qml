@@ -57,19 +57,30 @@ Rectangle {
     /// Raises the bar. `oidHex` is the row it is about ("" for none, and
     /// a row outside the loaded window simply goes unmarked — the bar
     /// stands either way).
-    function startAsking(oidHex, label, detail, accept, danger) {
+    /// `hold` takes the answer as a press held down instead of a click,
+    /// and `tip` is what the pill says on hover — the questions whose
+    /// write leaves this machine ask that way (デザイン規約 §長押し).
+    function startAsking(oidHex, label, detail, accept, danger,
+                         hold = false, tip = "") {
         graphList.namingOid = ""
         graphList.namingText = ""
         askBar.label = label
         askBar.detail = detail
         askBar.accept = accept
         askBar.danger = danger
+        askBar.hold = hold
+        askBar.tip = tip
         graphList.askDanger = danger
         graphList.askOid = oidHex === undefined ? "" : oidHex
     }
     function stopAsking() {
         askBar.label = ""
         graphList.askOid = ""
+    }
+    /// Automation: answer a held question the way a person does, by
+    /// keeping the pill down to the end.
+    function completeHold() {
+        askBar.completeHold()
     }
     /// The bar's accept was clicked; the page runs what it guarded.
     signal askConfirmed()

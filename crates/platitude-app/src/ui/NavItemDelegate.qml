@@ -257,12 +257,13 @@ Item {
             }
         }
     }
-    // Rows whose name is the repository's to change. A remote branch is
-    // not one of them (git has no rename over there), and neither is a
-    // folder — it is the shape of the names below it, not a name.
+    // Rows whose name can be changed from here. A remote branch is one of
+    // them even though git has no rename over there — core builds the
+    // rename out of a push and a delete, and the bar asks before it runs.
+    // A folder is not: it is the shape of the names below it, not a name.
     readonly property bool nameable: !navRow.folder
         && (navRow.kindHint === "branch" || navRow.kindHint === "tag"
-            || navRow.kindHint === "stash")
+            || navRow.kindHint === "stash" || navRow.kindHint === "remote")
     // Long enough that the second click of a double-click falls inside
     // it; the system's own setting, since it is the system that decides
     // what counts as a double-click.
