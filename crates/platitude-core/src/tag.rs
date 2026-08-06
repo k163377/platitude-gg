@@ -23,6 +23,15 @@ use crate::process::{GitCommand, GitExecutor};
 ///
 /// The first step is the one that can fail on its own (bad name, name
 /// taken); if it does, the old tag is still there and nothing was lost.
+///
+/// A rename that changes only letter case is refused outright. On a
+/// case-insensitive filesystem (Windows, macOS) with the tag packed —
+/// the normal state after a clone — the create step sees the new name as
+/// free and writes a loose ref whose *file* collides with the old name;
+/// the delete step then removes both, and every command involved exits 0
+/// (実測 2026-08-07: `tag V1.0 v1.0` + `tag -d v1.0` on packed refs
+/// leaves no tag at all). Refused everywhere, not just where it breaks:
+/// the same repository may be opened from either kind of filesystem.
 pub async fn rename(
     executor: &GitExecutor,
     workdir: &Path,
@@ -30,6 +39,14 @@ pub async fn rename(
     to: &str,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
+    if from != to && from.to_lowercase() == to.to_lowercase() {
+        return Err(GitError::Rejected {
+            message: format!(
+                "renaming {from} to {to} changes only letter case, which \
+                 deletes both names on a case-insensitive disk"
+            ),
+        });
+    }
     let create = GitCommand::new()
         .cwd(workdir)
         .args(["tag", "--end-of-options", to, from]);
