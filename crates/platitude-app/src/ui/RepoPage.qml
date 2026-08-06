@@ -592,8 +592,10 @@ Item {
     AppMenu {
         id: fileMenu
         AppMenuItem {
-            text: wipPane.chosenCount > 1 ? qsTr("Stash these files")
-                                          : qsTr("Stash this file")
+            code: "stash"
+            //: Follows the `stash` chip: "stash this file".
+            text: wipPane.chosenCount > 1 ? qsTr("these files")
+                                          : qsTr("this file")
             // git will not stash a tree with unresolved conflicts in it.
             enabled: repoTab.busyCount === 0
                      && page.menuFileBucket !== "conflicts"
@@ -694,7 +696,7 @@ Item {
     AppMenu {
         id: commitMenu
         AppMenuItem {
-            text: qsTr("Cherry-pick")
+            code: "cherry-pick"
             enabled: repoTab.busyCount === 0
             onTriggered: repoTab.cherryPick(page.menuOid)
         }

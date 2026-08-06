@@ -15,6 +15,13 @@ MenuItem {
     /// costs, the same shape the amend editor uses.
     property string note: ""
 
+    /// A git term said in git's own spelling — lowercase, mono, on a
+    /// faint chip — instead of dressed up as a sentence word (デザイン
+    /// 規約 §git 用語のコード表記). Never translated: it is the command,
+    /// not a phrase about it. It sits ahead of `text`, which carries
+    /// whatever of the sentence is left ("this file"), often nothing.
+    property string code: ""
+
     /// Held rather than clicked, for a row that would otherwise have to
     /// raise a question of its own (デザイン規約 §長押し). Zero is an
     /// ordinary row. A hold row reports no click at all — the press is
@@ -43,18 +50,52 @@ MenuItem {
     // that is missing (measured on the file menu, whose two destructive
     // rows are one per bucket).
     implicitHeight: menuItem.visible ? Theme.rowHeight : 0
-    implicitWidth: itemLabel.implicitWidth
+    implicitWidth: (menuItem.code !== ""
+                    ? codeChip.implicitWidth + Theme.spaceSm : 0)
+                   + itemLabel.implicitWidth
                    + (menuItem.note !== ""
                       ? noteLabel.implicitWidth + Theme.spaceSm : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
 
+    // The one colour every word in the row follows, so the chip cannot
+    // disagree with the sentence it sits in. A held row says what it
+    // costs in its own colour before it is touched at all — it is the
+    // one row in the menu that takes something away (デザイン規約
+    // §状態); over the fill the words cross the tone itself and lift
+    // clear of it.
+    readonly property color wordColor: !menuItem.enabled ? Theme.textMuted
+                                     : menuItem.holding ? Theme.textOnAccent
+                                     : menuItem.holdMs > 0 ? menuItem.holdTone
+                                     : menuItem.highlighted ? Theme.textOnAccent
+                                                            : Theme.textPrimary
+
     ToolTip.visible: menuItem.hovered && itemLabel.truncated
     ToolTip.delay: 600
-    ToolTip.text: menuItem.text
+    ToolTip.text: menuItem.code !== ""
+                  ? menuItem.code + " " + menuItem.text : menuItem.text
 
     contentItem: RowLayout {
         spacing: Theme.spaceSm
+        Rectangle {
+            id: codeChip
+            visible: menuItem.code !== ""
+            implicitWidth: codeLabel.implicitWidth + 2 * Theme.spaceXs
+            implicitHeight: codeLabel.implicitHeight
+            radius: Theme.radiusSm
+            // A faint lift off whatever the row is showing underneath —
+            // the menu card at rest, the accent under the pointer, the
+            // hold tone mid-hold — the way inline code sits in prose.
+            color: Theme.bgHover
+            Label {
+                id: codeLabel
+                anchors.centerIn: parent
+                text: menuItem.code
+                font.family: Theme.monoFamily
+                font.pixelSize: menuItem.font.pixelSize
+                color: menuItem.wordColor
+            }
+        }
         Label {
             id: itemLabel
             Layout.fillWidth: true
@@ -67,15 +108,7 @@ MenuItem {
             // is one, is what sits last instead).
             rightPadding: !noteLabel.visible && menuItem.subMenu && menuItem.arrow
                           ? menuItem.arrow.width + Theme.spaceXs : 0
-            // A held row says what it costs in its own colour, before it
-            // is touched at all — it is the one row in the menu that
-            // takes something away (デザイン規約 §状態). Over the fill
-            // the words cross the tone itself and lift clear of it.
-            color: !menuItem.enabled ? Theme.textMuted
-                 : menuItem.holding ? Theme.textOnAccent
-                 : menuItem.holdMs > 0 ? menuItem.holdTone
-                 : menuItem.highlighted ? Theme.textOnAccent
-                                        : Theme.textPrimary
+            color: menuItem.wordColor
         }
         Label {
             id: noteLabel
