@@ -28,8 +28,9 @@ ColumnLayout {
     /// keep index / staged only.
     signal stashSubmitted(string message, bool untracked, bool keepIndex, bool stagedOnly)
     /// Right-click on a file row; the page owns the menu because
-    /// delegates are recycled out from under an open popup.
-    signal fileMenuRequested(string bucket, string path)
+    /// delegates are recycled out from under an open popup. `origPath` is
+    /// where a rename came from ("" otherwise).
+    signal fileMenuRequested(string bucket, string path, string origPath)
     /// The question bar over the file list was answered / walked away
     /// from. The page holds what the question guarded.
     signal askConfirmed()
@@ -514,8 +515,8 @@ ColumnLayout {
             askDanger: askBar.danger
             onFileClicked: (bucket, path, origPath) =>
                 wipPane.fileActivated(bucket, path, origPath)
-            onFileMenuRequested: (bucket, path) =>
-                wipPane.fileMenuRequested(bucket, path)
+            onFileMenuRequested: (bucket, path, origPath) =>
+                wipPane.fileMenuRequested(bucket, path, origPath)
             onFolderClicked: key => {
                 wipPane.leaveAsk()
                 wipPane.worktreeModel.toggleFolder(key)

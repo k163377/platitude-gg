@@ -436,6 +436,19 @@ impl RepoTab {
         self.with_session(|s| s.discard_paths(vec![path.clone()]));
     }
 
+    /// Throws away both sides of one tracked file, back to HEAD
+    /// (destructive). `orig_path` is the name a rename came from, empty
+    /// otherwise: restoring only the new name leaves the old one staged as
+    /// a deletion.
+    #[qslot]
+    fn discard_path_to_head(&mut self, path: String, orig_path: String) {
+        let mut paths = vec![path.clone()];
+        if !orig_path.is_empty() {
+            paths.push(orig_path.clone());
+        }
+        self.with_session(|s| s.discard_paths_to_head(paths.clone()));
+    }
+
     /// Deletes an untracked file or directory (destructive).
     #[qslot]
     fn remove_untracked(&mut self, path: String) {

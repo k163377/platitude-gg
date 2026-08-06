@@ -115,6 +115,72 @@ async fn discard_and_clean_reset_the_working_tree() {
     assert!(!repo.path.join("junk.txt").exists());
 }
 
+/// Discarding from the staged side takes both sides with it, whatever
+/// shape the staged change has: an edit goes back to HEAD, a file staged
+/// as new leaves the disk, and a rename needs both of its names to be
+/// undone in one go.
+#[tokio::test]
+async fn discard_to_head_undoes_every_staged_shape() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("kept.txt", "one\n", "root");
+    repo.commit_file("moved.txt", "move me\n", "second");
+    repo.write_file("kept.txt", "staged\n");
+    repo.git(&["add", "--", "kept.txt"]);
+    // Staged on both sides: the worktree has gone on past the index.
+    repo.write_file("kept.txt", "and dirty\n");
+    repo.write_file("fresh.txt", "brand new\n");
+    repo.git(&["add", "--", "fresh.txt"]);
+    repo.git(&["mv", "moved.txt", "elsewhere.txt"]);
+    let (exec, cancel) = env();
+
+    stage::discard_to_head(
+        &exec,
+        &repo.path,
+        &[
+            "kept.txt".into(),
+            "fresh.txt".into(),
+            // Both names of the rename, or the old one stays staged as a
+            // deletion.
+            "elsewhere.txt".into(),
+            "moved.txt".into(),
+        ],
+        &cancel,
+    )
+    .await
+    .expect("discard to head");
+
+    let (staged, unstaged, untracked) = buckets(&repo).await;
+    assert!(
+        staged.is_empty() && unstaged.is_empty() && untracked.is_empty(),
+        "nothing is left over: {staged:?} {unstaged:?} {untracked:?}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("kept.txt")).unwrap(),
+        "one\n"
+    );
+    assert!(repo.path.join("moved.txt").exists(), "the rename is undone");
+    assert!(!repo.path.join("elsewhere.txt").exists());
+    assert!(
+        !repo.path.join("fresh.txt").exists(),
+        "HEAD has no such file, so discarding it takes the file"
+    );
+}
+
+#[tokio::test]
+async fn discard_to_head_works_on_an_unborn_branch() {
+    let mut repo = TestRepo::init();
+    repo.write_file("first.txt", "hello\n");
+    repo.git(&["add", "--", "first.txt"]);
+    let (exec, cancel) = env();
+
+    stage::discard_to_head(&exec, &repo.path, &["first.txt".into()], &cancel)
+        .await
+        .expect("discard to head on unborn HEAD");
+    let (staged, _, untracked) = buckets(&repo).await;
+    assert!(staged.is_empty() && untracked.is_empty());
+    assert!(!repo.path.join("first.txt").exists());
+}
+
 /// Two well-separated edits produce two hunks; staging only the second
 /// must leave the first out of the index.
 #[tokio::test]

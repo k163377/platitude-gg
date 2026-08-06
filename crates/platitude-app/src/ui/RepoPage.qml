@@ -499,12 +499,15 @@ Item {
     // ---- context menu on a working-tree file row --------------------
     property string menuFilePath: ""
     property string menuFileBucket: ""
-    function openFileMenu(bucket, path) {
+    /// Where a staged rename came from ("" for every other row).
+    property string menuFileOrig: ""
+    function openFileMenu(bucket, path, origPath) {
         // A right-click is a click: it walks away from a question that
         // was standing, which may well be about another row.
         page.stopRowAsk()
         page.menuFileBucket = bucket
         page.menuFilePath = path
+        page.menuFileOrig = origPath === undefined ? "" : origPath
         fileMenu.popup()
         // Which rows the menu offers follows from the bucket, and a
         // greyed or absent row is not something a screenshot can be
@@ -516,26 +519,37 @@ Item {
     /// and with its row marked, so the file is named once — by the row.
     ///
     /// One way in, because the reader's intent is the same whatever git
-    /// knows about the file; two questions, because what it costs is not.
-    /// A tracked file's edits go back to the index; an untracked file
-    /// goes from disk — there the file *is* the change, so removing it is
-    /// what undoing it means (デザイン規約 §その他の操作).
+    /// knows about the file; one line apart, because what it costs is not
+    /// (デザイン規約 §その他の操作). Which row it was asked on is the
+    /// whole of the difference:
     ///
-    /// Only what is outside the index gets here: the staged side is a
-    /// click from being unstaged, and git refuses to restore a path it
-    /// has not been told how to merge yet.
-    function askDiscardFile(bucket, path) {
-        const untracked = bucket === "untracked"
+    /// - unstaged — the edits on disk go, and what is staged stays
+    /// - untracked — the file goes; there the file *is* the change
+    /// - staged — both sides go, back to HEAD, and a rename takes the
+    ///   name it came from with it or leaves half of itself staged
+    ///
+    /// A conflicted path gets here from nowhere: git refuses to restore
+    /// one until it has been told how it was resolved.
+    function askDiscardFile(bucket, path, origPath) {
+        const detail = bucket === "untracked"
+                     ? qsTr("The file goes — git never recorded it.")
+                     : bucket === "staged"
+                     ? qsTr("Everything since the last commit goes.")
+                     : qsTr("Kept nowhere else.")
         page.startFileAsk(
-            (untracked ? "untracked:" : "unstaged:") + path,
+            bucket + ":" + path,
             qsTr("Discard changes?"),
-            // The one line that differs: an untracked file has no edits
-            // to lose apart from itself.
-            untracked ? qsTr("The file goes — git never recorded it.")
-                      : qsTr("Kept nowhere else."),
+            detail,
             qsTr("Hold to discard"),
-            untracked ? function () { repoTab.removeUntracked(path) }
-                      : function () { repoTab.discardPath(path) })
+            function () {
+                if (bucket === "untracked")
+                    repoTab.removeUntracked(path)
+                else if (bucket === "staged")
+                    repoTab.discardPathToHead(path, origPath === undefined
+                                                    ? "" : origPath)
+                else
+                    repoTab.discardPath(path)
+            })
     }
     AppMenu {
         id: fileMenu
@@ -546,16 +560,18 @@ Item {
                      && page.menuFileBucket !== "conflicts"
             onTriggered: repoTab.stashPath(page.menuFilePath, "")
         }
-        // One row for both kinds of file — the row says what is being
-        // undone, the question says what that costs. The ellipsis is the
-        // one on `Delete…`: it says a question comes first.
+        // One row on every kind of file — the row says what is being
+        // undone, the question says what that costs. On a file changed on
+        // both sides that makes the two rows the choice itself: the
+        // unstaged one keeps what is staged, the staged one takes the lot.
+        // The ellipsis is the one on `Delete…`: a question comes first.
         AppMenuItem {
             text: qsTr("Discard changes…")
-            visible: page.menuFileBucket === "unstaged"
-                     || page.menuFileBucket === "untracked"
+            visible: page.menuFileBucket !== "conflicts"
             enabled: repoTab.busyCount === 0
             onTriggered: page.askDiscardFile(page.menuFileBucket,
-                                             page.menuFilePath)
+                                             page.menuFilePath,
+                                             page.menuFileOrig)
         }
         AppMenuSeparator {}
         AppMenuItem {
@@ -940,15 +956,21 @@ Item {
                               : act === "file-menu-staged" ? "staged"
                               : "untracked", arg)
         } else if (act === "discard-file" || act === "discard-file-go"
-                   || act === "delete-file" || act === "delete-file-go") {
+                   || act === "delete-file" || act === "delete-file-go"
+                   || act === "discard-staged" || act === "discard-staged-go") {
             // Through the file menu, where a right-click enters it. The
-            // one row asks what the file is: "delete-*" enters it on an
-            // untracked row, "discard-*" on a tracked one. Both stop at
-            // the question; "-go" answers it.
+            // one row asks which row it was opened on: "delete-file" an
+            // untracked one, "discard-staged" the staged side, otherwise
+            // the unstaged one. All stop at the question; "-go" answers it.
             page.showWip()
-            page.openFileMenu(act.startsWith("delete-file") ? "untracked"
-                                                            : "unstaged", arg)
-            page.askDiscardFile(page.menuFileBucket, arg)
+            const bucket = act.startsWith("delete-file") ? "untracked"
+                         : act.startsWith("discard-staged") ? "staged"
+                         : "unstaged"
+            // The row carries where a rename came from, as it does for a
+            // right-click.
+            const row = wipPane.rowFor(arg)
+            page.openFileMenu(bucket, arg, row ? row.orig_path : "")
+            page.askDiscardFile(bucket, arg, page.menuFileOrig)
             // "-go" answers it the way a person does: by holding the
             // pill down, which is the only gesture that answers here.
             if (act.endsWith("-go"))

@@ -119,6 +119,43 @@ pub async fn discard_worktree(
     executor.run(cmd, cancel).await.map(drop)
 }
 
+/// `git restore --staged --worktree -- <paths>`: throws away both sides at
+/// once, back to HEAD — what is staged and what is on disk. With
+/// `--staged` git restores from HEAD rather than from the index, so a path
+/// HEAD does not have goes from disk with it: a file staged as new is
+/// deleted, and so is the new name of a rename — whose old name must be
+/// passed alongside it, or its staged deletion is left standing (measured).
+///
+/// Before the first commit there is no HEAD to restore from, and `git rm`
+/// is the same journey: out of the index and off the disk.
+///
+/// Destructive — the caller confirms first.
+pub async fn discard_to_head(
+    executor: &GitExecutor,
+    workdir: &Path,
+    paths: &[String],
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let unborn = refs::head_state(executor, workdir, cancel)
+        .await?
+        .oid
+        .is_none();
+    let cmd = if unborn {
+        GitCommand::new()
+            .cwd(workdir)
+            .args(["rm", "-f", "-r", "--quiet", "--"])
+    } else {
+        GitCommand::new()
+            .cwd(workdir)
+            .args(["restore", "--staged", "--worktree", "--"])
+    };
+    let cmd = cmd.args(paths.iter().map(|p| literal_pathspec(p)));
+    executor.run(cmd, cancel).await.map(drop)
+}
+
 /// `git clean -f -d -- <paths>`: deletes untracked files. `status -uall`
 /// hands us one path per file, and `-f` alone already deletes a file inside
 /// an untracked directory; `-d` is kept so a directory pathspec still takes
