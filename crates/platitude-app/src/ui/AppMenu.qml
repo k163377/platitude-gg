@@ -24,8 +24,8 @@ Menu {
     // The one column this menu's chips share when a sentence follows
     // them: as wide as the widest such chip, so every row's words start
     // on the same x and the chips read as a table's first column. A
-    // chip that ends its row (cherry-pick) has nothing to line up and
-    // stays its own width, claiming no seat.
+    // chip that ends its row has nothing to line up and stays its own
+    // width, claiming no seat.
     readonly property real codeColW: {
         let widest = 0
         for (let i = 0; i < appMenu.count; i++) {

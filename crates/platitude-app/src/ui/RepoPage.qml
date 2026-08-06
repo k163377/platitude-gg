@@ -713,6 +713,8 @@ Item {
         id: commitMenu
         AppMenuItem {
             code: "cherry-pick"
+            //: Follows the `cherry-pick` chip: "cherry-pick this commit".
+            text: qsTr("this commit")
             enabled: repoTab.busyCount === 0
             onTriggered: repoTab.cherryPick(page.menuOid)
         }
