@@ -51,30 +51,24 @@ Rectangle {
     }
 
     // ---- a standing question ---------------------------------------
-    // One place for all of them (デザイン規約 §可否・警告の出し場所): the
-    // bar comes down from the top of the pane and pushes the history
-    // down — a question that covered what it is about would hide the
-    // very thing being judged — and the row it concerns is marked rather
-    // than worded, so the question is written exactly once.
-    property string askLabel: ""
-    property string askDetail: ""
-    property string askAccept: ""
-    property bool askDanger: false
+    // The bar comes down from the top of the pane and pushes the history
+    // down (デザイン規約 §可否・警告の出し場所); the row it concerns is
+    // marked rather than worded, so the question is written exactly once.
     /// Raises the bar. `oidHex` is the row it is about ("" for none, and
     /// a row outside the loaded window simply goes unmarked — the bar
     /// stands either way).
     function startAsking(oidHex, label, detail, accept, danger) {
         graphList.namingOid = ""
         graphList.namingText = ""
-        graphArea.askLabel = label
-        graphArea.askDetail = detail
-        graphArea.askAccept = accept
-        graphArea.askDanger = danger
+        askBar.label = label
+        askBar.detail = detail
+        askBar.accept = accept
+        askBar.danger = danger
         graphList.askDanger = danger
         graphList.askOid = oidHex === undefined ? "" : oidHex
     }
     function stopAsking() {
-        graphArea.askLabel = ""
+        askBar.label = ""
         graphList.askOid = ""
     }
     /// The bar's accept was clicked; the page runs what it guarded.
@@ -177,110 +171,16 @@ Rectangle {
         color: Theme.borderStrong
         visible: graphDivider.containsMouse || graphDivider.pressed
     }
-    // The question bar. Sized by its own words, opened and closed with
-    // the standard 200ms, and the list starts under it — the graph moves
-    // down rather than losing its top rows behind the bar.
-    Rectangle {
+    // The list starts under the bar — the graph moves down rather than
+    // losing its top rows behind it.
+    AskBar {
         id: askBar
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
         z: 3
-        clip: true
-        readonly property bool open: graphArea.askLabel !== ""
-        readonly property color tone: graphArea.askDanger ? Theme.danger
-                                                          : Theme.warning
-        height: open ? askRow.implicitHeight + 2 * Theme.spaceMd : 0
-        Behavior on height {
-            NumberAnimation { duration: 200 }
-        }
-        color: Theme.bgElevated
-        Rectangle {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: Theme.borderWidth
-            color: askBar.tone
-        }
-        RowLayout {
-            id: askRow
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.margins: Theme.spaceMd
-            spacing: Theme.spaceMd
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spaceXs
-                Label {
-                    text: graphArea.askLabel
-                    color: askBar.tone
-                    font.pixelSize: Theme.fontMd
-                    font.weight: Font.DemiBold
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                }
-                // What answering costs, in the one line §用語 allows it.
-                Label {
-                    text: graphArea.askDetail
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSm
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                }
-            }
-            // Clicking this is the answer. It is the only thing on the bar
-            // that acts, so nothing else here can be hit by accident.
-            Rectangle {
-                Layout.alignment: Qt.AlignVCenter
-                implicitWidth: acceptLabel.implicitWidth + 2 * Theme.spaceMd
-                implicitHeight: Theme.controlHeight
-                radius: Theme.radiusSm
-                color: acceptMouse.containsMouse ? Theme.bgHover : "transparent"
-                border.color: askBar.tone
-                border.width: Theme.borderWidth
-                Label {
-                    id: acceptLabel
-                    anchors.centerIn: parent
-                    text: graphArea.askAccept
-                    color: askBar.tone
-                    font.pixelSize: Theme.fontMd
-                }
-                MouseArea {
-                    id: acceptMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: graphArea.askConfirmed()
-                }
-            }
-            // Escape and a click anywhere else walk away too; this is the
-            // way out that can be seen, for a bar that stands until it is
-            // answered.
-            Label {
-                Layout.alignment: Qt.AlignVCenter
-                text: "✕"
-                color: dismissMouse.containsMouse ? Theme.textPrimary
-                                                  : Theme.textSecondary
-                font.pixelSize: Theme.fontMd
-                MouseArea {
-                    id: dismissMouse
-                    anchors.fill: parent
-                    anchors.margins: -Theme.spaceXs
-                    hoverEnabled: true
-                    onClicked: graphArea.askCancelled()
-                }
-            }
-        }
-    }
-    // The bar has no focus of its own — nothing in the graph takes any —
-    // so Escape is heard as a shortcut while it stands.
-    Shortcut {
-        // `sequences` rather than `sequence`: Cancel is more than one key
-        // on some platforms, and binding the single form takes only the
-        // first of them (Qt warns about exactly this).
-        sequences: [StandardKey.Cancel]
-        enabled: askBar.open
-        onActivated: graphArea.askCancelled()
+        onConfirmed: graphArea.askConfirmed()
+        onCancelled: graphArea.askCancelled()
     }
     ListView {
         id: graphList

@@ -6,6 +6,7 @@ AppDialog 1.0 AppDialog.qml
 AppMenu 1.0 AppMenu.qml
 AppMenuItem 1.0 AppMenuItem.qml
 AppMenuSeparator 1.0 AppMenuSeparator.qml
+AskBar 1.0 AskBar.qml
 AutoScrollBar 1.0 AutoScrollBar.qml
 ChangeIcon 1.0 ChangeIcon.qml
 ClipboardHelper 1.0 ClipboardHelper.qml
