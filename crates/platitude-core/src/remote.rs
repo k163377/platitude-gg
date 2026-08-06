@@ -243,11 +243,22 @@ async fn config_value(
         .cwd(workdir)
         .args(["config", "--get", "--", key]);
     let out = executor.run_unchecked(cmd, cancel).await?;
-    if out.code != 0 {
-        return Ok(None);
+    match out.code {
+        0 => {
+            let value = out.stdout_utf8().trim().to_string();
+            Ok((!value.is_empty()).then_some(value))
+        }
+        // 1 is git's "no such key" — a valid empty answer. Anything else
+        // (128 on an unreadable config) must not read as "unset": a push
+        // planned on that misreading rewrites upstreams (実測: a bad
+        // config line makes `git config --get` exit 128, not 1).
+        1 => Ok(None),
+        code => Err(GitError::Failed {
+            command: format!("git config --get -- {key}"),
+            code,
+            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        }),
     }
-    let value = out.stdout_utf8().trim().to_string();
-    Ok((!value.is_empty()).then_some(value))
 }
 
 /// `git push` for one branch.

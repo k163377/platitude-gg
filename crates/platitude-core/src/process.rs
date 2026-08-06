@@ -463,7 +463,10 @@ impl GitExecutor {
                     "git finished"
                 );
                 report(
-                    if cmd.answers_by_code {
+                    // Only 0 and 1 are answers ("yes" / "no"); a 128 from
+                    // a command marked answers_by_code is still a failure
+                    // and must look like one in the log.
+                    if cmd.answers_by_code && (code == 0 || code == 1) {
                         CommandEnd::Answered(code)
                     } else {
                         CommandEnd::Exited(code)

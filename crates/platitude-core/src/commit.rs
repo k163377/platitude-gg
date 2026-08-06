@@ -182,8 +182,8 @@ pub async fn head_oid(
 ///
 /// What history a rewrite may touch: only this line of commits can be
 /// amended or replayed from where the working tree stands. `--is-ancestor`
-/// answers by exit code, so a refusal (1) is an answer and not a failure;
-/// anything else is treated as "no", which is the harmless direction.
+/// answers by exit code — 0 and 1 are the two answers; anything else
+/// (an unreadable repository, a vanished object) is a failure, not a "no".
 pub async fn is_in_head_history(
     executor: &GitExecutor,
     workdir: &Path,
@@ -194,9 +194,18 @@ pub async fn is_in_head_history(
         .cwd(workdir)
         .args(["merge-base", "--is-ancestor"])
         .arg(oid.to_hex())
-        .arg("HEAD");
+        .arg("HEAD")
+        .answers_by_code();
     let out = executor.run_unchecked(cmd, cancel).await?;
-    Ok(out.code == 0)
+    match out.code {
+        0 => Ok(true),
+        1 => Ok(false),
+        code => Err(GitError::Failed {
+            command: format!("git merge-base --is-ancestor {} HEAD", oid.to_hex()),
+            code,
+            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        }),
+    }
 }
 
 /// Normalizes editor text for git: CRLF to LF and exactly one trailing

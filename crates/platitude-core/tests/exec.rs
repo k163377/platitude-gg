@@ -147,3 +147,61 @@ async fn pre_cancelled_token_short_circuits() {
     let err = executor.run(cmd, &cancel).await.unwrap_err();
     assert!(err.is_cancelled(), "got {err:?}");
 }
+
+/// `answers_by_code` marks 0 and 1 as answers for the command log; any
+/// other exit from the same command (a fatal 128) is still a failure and
+/// must be reported as a plain exit — a broken repository must not show
+/// up as an answered, ok-looking row.
+#[tokio::test]
+async fn answers_by_code_reports_only_zero_and_one_as_answers() {
+    use platitude_core::process::{CommandEnd, CommandObserver};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct Ends(Mutex<Vec<CommandEnd>>);
+    impl CommandObserver for Ends {
+        fn records(&self, _user: bool) -> bool {
+            true
+        }
+        fn started(&self, _display: &str, _full: &str, _user: bool) -> u64 {
+            0
+        }
+        fn finished(&self, _id: u64, end: CommandEnd, _elapsed_ms: u64, _message: &str) {
+            self.0.lock().unwrap().push(end);
+        }
+    }
+
+    let mut repo_dir = TestRepo::init();
+    let c1 = repo_dir.commit_file("a.txt", "1\n", "one");
+    let c2 = repo_dir.commit_file("a.txt", "2\n", "two");
+
+    let ends = Arc::new(Ends::default());
+    let executor = GitExecutor::new().observed(Arc::clone(&ends) as _, true);
+    let cancel = CancellationToken::new();
+    let ancestor = |a: String, b: String| {
+        GitCommand::new()
+            .cwd(&repo_dir.path)
+            .args(["merge-base", "--is-ancestor"])
+            .arg(a)
+            .arg(b)
+            .answers_by_code()
+    };
+
+    for cmd in [
+        ancestor(c1.clone(), c2.clone()), // yes → 0
+        ancestor(c2, c1.clone()),         // no → 1
+        ancestor("0".repeat(40), c1),     // fatal → 128
+    ] {
+        let _out = executor.run_unchecked(cmd, &cancel).await.expect("spawn");
+    }
+
+    let seen = ends.0.lock().unwrap().clone();
+    assert_eq!(
+        seen,
+        vec![
+            CommandEnd::Answered(0),
+            CommandEnd::Answered(1),
+            CommandEnd::Exited(128),
+        ]
+    );
+}
