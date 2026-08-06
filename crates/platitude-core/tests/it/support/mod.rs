@@ -15,17 +15,47 @@ const BASE_EPOCH: u64 = 1_700_000_000;
 pub struct TestRepo {
     // Kept alive for the lifetime of the repo; dropped last.
     _dir: tempfile::TempDir,
-    /// Points at a file that never exists → empty global config.
+    /// Replaces the developer's global config for TestRepo-spawned git only
+    /// (the code under test inherits the process environment instead and
+    /// reads the repo-local config below).
     global_config: PathBuf,
     pub path: PathBuf,
     tick: u64,
 }
 
+/// Written into `.git/config` right after init — one file write instead of
+/// five `git config` spawns per repo (process spawns dominate suite time on
+/// Windows). Must stay repo-local: the code under test does not see
+/// `global_config`, only this file.
+const REPO_CONFIG: &str = "\
+[user]
+\tname = Test User
+\temail = test@example.com
+[commit]
+\tgpgsign = false
+[tag]
+\tgpgSign = false
+[core]
+\tautocrlf = false
+";
+
+/// Test-only speed knobs for TestRepo-spawned git (setup commits are the
+/// bulk of the suite's writes): no fsync — repos are throwaway — and no
+/// auto-gc mid-test. Unknown keys are ignored by older git, so nothing here
+/// is a compatibility constraint.
+const GLOBAL_CONFIG: &str = "\
+[core]
+\tfsync = none
+[gc]
+\tauto = 0
+";
+
 impl TestRepo {
     pub fn init() -> Self {
         let dir = tempfile::tempdir().expect("create tempdir");
         let path = dir.path().join("repo");
-        let global_config = dir.path().join("no-global-config");
+        let global_config = dir.path().join("global-config");
+        std::fs::write(&global_config, GLOBAL_CONFIG).expect("write global config");
         std::fs::create_dir(&path).expect("create repo dir");
         let mut repo = Self {
             _dir: dir,
@@ -34,11 +64,9 @@ impl TestRepo {
             tick: 0,
         };
         repo.git(&["init", "-b", "main"]);
-        repo.git(&["config", "user.name", "Test User"]);
-        repo.git(&["config", "user.email", "test@example.com"]);
-        repo.git(&["config", "commit.gpgsign", "false"]);
-        repo.git(&["config", "tag.gpgSign", "false"]);
-        repo.git(&["config", "core.autocrlf", "false"]);
+        let config = repo.path.join(".git").join("config");
+        let existing = std::fs::read_to_string(&config).expect("read repo config");
+        std::fs::write(&config, format!("{existing}{REPO_CONFIG}")).expect("write repo config");
         repo
     }
 
