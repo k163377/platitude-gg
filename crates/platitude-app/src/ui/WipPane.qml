@@ -52,12 +52,27 @@ ColumnLayout {
         askBar.label = ""
     }
     /// A click on anything in this pane other than the bar walks away
-    /// from the question, the way one anywhere else does — and every
-    /// click here either moves rows between the buckets the mark names
-    /// or leaves the list behind entirely.
+    /// from the question, the way one anywhere else does — every click
+    /// here either moves rows between the buckets the mark names or
+    /// leaves the list behind.
+    ///
+    /// A click on a file row is the exception: it opens that file's diff
+    /// in the centre, which is how one sees what is about to be thrown
+    /// away, so the question waits.
     function leaveAsk() {
         if (askBar.open)
             wipPane.askCancelled()
+    }
+    /// The row a path is on — for the automation hooks, which enter a
+    /// click where the row itself enters it. App code goes through the
+    /// signals.
+    function rowFor(path) {
+        for (let i = 0; i < wipList.count; i++) {
+            const row = wipList.itemAtIndex(i)
+            if (row && row.fullName === path)
+                return row
+        }
+        return null
     }
 
     readonly property string subjectText: wipSubject.text
@@ -488,10 +503,8 @@ ColumnLayout {
             showStage: true
             askKey: wipPane.askKey
             askDanger: askBar.danger
-            onFileClicked: (bucket, path, origPath) => {
-                wipPane.leaveAsk()
+            onFileClicked: (bucket, path, origPath) =>
                 wipPane.fileActivated(bucket, path, origPath)
-            }
             onFileMenuRequested: (bucket, path) =>
                 wipPane.fileMenuRequested(bucket, path)
             onFolderClicked: key => {

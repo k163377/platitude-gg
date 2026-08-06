@@ -465,28 +465,34 @@ Item {
         if (AppBackend.autoAct !== "")
             AppBackend.report("file_menu bucket=" + bucket)
     }
-    /// The two rows that end in something being gone for good. Both are
-    /// asked over the list the file is in, with its row marked, so the
-    /// file is named once — by the row itself.
+    /// Undoing what happened to one file, over the list the file is in
+    /// and with its row marked, so the file is named once — by the row.
     ///
-    /// Only what is outside the index can be thrown away here: the staged
-    /// side is a click from being unstaged, and git refuses to restore a
-    /// path it has not been told how to merge yet.
-    function askDiscardFile(path) {
+    /// One way in, because the reader's intent is the same whatever git
+    /// knows about the file; two questions, because what it costs is not.
+    /// A tracked file's edits go back to the index; an untracked file
+    /// goes from disk — there the file *is* the change, so removing it is
+    /// what undoing it means (デザイン規約 §その他の操作).
+    ///
+    /// Only what is outside the index gets here: the staged side is a
+    /// click from being unstaged, and git refuses to restore a path it
+    /// has not been told how to merge yet.
+    function askDiscardFile(bucket, path) {
+        if (bucket === "untracked") {
+            page.startFileAsk(
+                "untracked:" + path,
+                qsTr("Delete this file?"),
+                qsTr("git never recorded it."),
+                qsTr("Delete file"),
+                function () { repoTab.removeUntracked(path) })
+            return
+        }
         page.startFileAsk(
             "unstaged:" + path,
             qsTr("Discard changes to this file?"),
-            qsTr("Unstaged edits are kept nowhere else."),
+            qsTr("Kept nowhere else."),
             qsTr("Discard changes"),
             function () { repoTab.discardPath(path) })
-    }
-    function askDeleteFile(path) {
-        page.startFileAsk(
-            "untracked:" + path,
-            qsTr("Delete this file?"),
-            qsTr("Nothing has a copy — git never recorded it."),
-            qsTr("Delete file"),
-            function () { repoTab.removeUntracked(path) })
     }
     AppMenu {
         id: fileMenu
@@ -497,21 +503,16 @@ Item {
                      && page.menuFileBucket !== "conflicts"
             onTriggered: repoTab.stashPath(page.menuFilePath, "")
         }
-        // One row or the other, never both: what a tracked file loses is
-        // its edits, what an untracked one loses is itself
-        // (デザイン規約 §その他の操作). The ellipsis is the one on
-        // `Delete…` — it says a question comes first.
+        // One row for both kinds of file — the row says what is being
+        // undone, the question says what that costs. The ellipsis is the
+        // one on `Delete…`: it says a question comes first.
         AppMenuItem {
             text: qsTr("Discard changes…")
             visible: page.menuFileBucket === "unstaged"
+                     || page.menuFileBucket === "untracked"
             enabled: repoTab.busyCount === 0
-            onTriggered: page.askDiscardFile(page.menuFilePath)
-        }
-        AppMenuItem {
-            text: qsTr("Delete file…")
-            visible: page.menuFileBucket === "untracked"
-            enabled: repoTab.busyCount === 0
-            onTriggered: page.askDeleteFile(page.menuFilePath)
+            onTriggered: page.askDiscardFile(page.menuFileBucket,
+                                             page.menuFilePath)
         }
         AppMenuSeparator {}
         AppMenuItem {
@@ -897,18 +898,32 @@ Item {
                               : "untracked", arg)
         } else if (act === "discard-file" || act === "discard-file-go"
                    || act === "delete-file" || act === "delete-file-go") {
-            // Through the file menu, where a right-click enters it: a
-            // tracked file's row offers the discard, an untracked one's
-            // the delete. Both stop at the question; "-go" answers it.
-            const untracked = act.startsWith("delete-file")
+            // Through the file menu, where a right-click enters it. The
+            // one row asks what the file is: "delete-*" enters it on an
+            // untracked row, "discard-*" on a tracked one. Both stop at
+            // the question; "-go" answers it.
             page.showWip()
-            page.openFileMenu(untracked ? "untracked" : "unstaged", arg)
-            if (untracked)
-                page.askDeleteFile(arg)
-            else
-                page.askDiscardFile(arg)
+            page.openFileMenu(act.startsWith("delete-file") ? "untracked"
+                                                            : "unstaged", arg)
+            page.askDiscardFile(page.menuFileBucket, arg)
             if (act.endsWith("-go"))
                 page.answerRowAsk()
+        } else if (act === "file-ask-clicks") {
+            // What the clicks around a standing question do: one on the
+            // file's own row opens its diff and the question waits (that
+            // is how one sees what is about to go), one on its stage box
+            // moves the row to the other bucket and takes the question
+            // with it. Entered where the row enters them.
+            page.showWip()
+            page.askDiscardFile("unstaged", arg)
+            const row = wipPane.rowFor(arg)
+            AppBackend.report("row_found=" + (row !== null))
+            if (row) {
+                row.fileClicked(row.bucket, row.fullName, row.orig_path)
+                AppBackend.report("after_row_click asking=" + (wipPane.askKey !== ""))
+                row.stageClicked(row.bucket, row.fullName)
+                AppBackend.report("after_stage_click asking=" + (wipPane.askKey !== ""))
+            }
         } else if (act === "amend-author") {
             // The amend editor with authorship on offer, left standing.
             wipPane.setAmendChecked(true)
