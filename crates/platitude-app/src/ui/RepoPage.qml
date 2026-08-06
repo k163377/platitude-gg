@@ -694,7 +694,7 @@ Item {
     AppMenu {
         id: commitMenu
         AppMenuItem {
-            text: qsTr("Copy this commit onto the current branch")
+            text: qsTr("Cherry-pick")
             enabled: repoTab.busyCount === 0
             onTriggered: repoTab.cherryPick(page.menuOid)
         }
