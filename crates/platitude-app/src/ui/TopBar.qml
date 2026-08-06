@@ -399,22 +399,6 @@ Rectangle {
                               .arg(topBar.curPage.pushTargetLabel)
                           : ""
             onActivated: topBar.curPage.pushNow()
-            // Overwriting a remote's history is the one push that needs
-            // asking about, so it lives behind its own entry.
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.RightButton
-                onClicked: pushMenu.popup()
-            }
-            AppMenu {
-                id: pushMenu
-                AppMenuItem {
-                    text: qsTr("Force push…")
-                    enabled: topBar.curPage !== null
-                             && topBar.curPage.canForcePush
-                    onTriggered: topBar.curPage.forcePushNow()
-                }
-            }
         }
     }
 }

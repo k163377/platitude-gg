@@ -320,30 +320,6 @@ Item {
     function forcePush() {
         repoTab.pushCurrent("lease", page.upstreamOid())
     }
-    /// The menu's way to the same thing, for anyone who cannot hold a
-    /// button down. Here the asking is the dialog's job rather than the
-    /// press's, and its one remaining job is to say what the overwrite
-    /// costs: status's behind count is exactly the commits the remote
-    /// loses, dated to the fetch it came from (デザイン規約 §相手の履歴を
-    /// 置き換える).
-    function forcePushNow() {
-        const lost = workTree.behind > 0
-            ? qsTr("%1 has %n commit(s) this branch does not, as seen at "
-                   + "the last fetch. Overwriting removes them, and anyone "
-                   + "who already pulled them keeps a history that no "
-                   + "longer matches.", "", workTree.behind)
-              .arg(page.pushTargetLabel)
-            : qsTr("As seen at the last fetch, %1 has no commits of its "
-                   + "own, so overwriting it removes nothing.")
-              .arg(page.pushTargetLabel)
-        page.confirmRequested(
-            qsTr("Overwrite %1 with this branch?").arg(page.pushTargetLabel),
-            lost + "\n\n"
-            + qsTr("The push is refused if the remote moved since this "
-                   + "window last saw it."),
-            qsTr("Force push"),
-            function () { page.forcePush() })
-    }
     /// Commit the remote-tracking branch points at, as shown here.
     function upstreamOid() {
         return workTree.upstream !== ""
@@ -1263,10 +1239,6 @@ Item {
             page.pushNow()
         } else if (act === "force-push") {
             page.forcePush()
-        } else if (act === "force-push-confirm") {
-            // Goes through the confirmation, so nothing should be
-            // pushed until someone answers it.
-            page.forcePushNow()
         } else if (act === "fetch") {
             repoTab.fetch("")
         } else if (act === "preview") {

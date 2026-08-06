@@ -45,6 +45,11 @@ HoverToolButton {
             holdAnim.restart()
     }
 
+    // Tab reaches the buttons that need a second way in. The rest of the
+    // toolbar stays out of the tab order: a hold is the only gesture here
+    // that a pointer alone can fail to make (デザイン規約 §長押し).
+    activeFocusOnTab: actionBtn.holdMs > 0
+
     onClicked: if (actionBtn.holdMs <= 0) actionBtn.activated()
     onDownChanged: {
         if (actionBtn.holdMs <= 0)
@@ -53,6 +58,30 @@ HoverToolButton {
             holdAnim.restart()
         else
             holdAnim.stop()
+    }
+    // The hold's other hand: focus it, then hold Space or Enter. Accepting
+    // the key keeps AbstractButton from also taking Space as a press, which
+    // would drive the same fill from `down` a second time.
+    //
+    // Auto-repeat is dropped on both edges. A held key repeats its press on
+    // every platform and its release on some, and either edge would restart
+    // the fill from zero for as long as the key was held — the hold could
+    // then never complete.
+    Keys.onPressed: event => {
+        if (actionBtn.holdMs <= 0 || event.isAutoRepeat || !holdKey(event.key))
+            return
+        holdAnim.restart()
+        event.accepted = true
+    }
+    Keys.onReleased: event => {
+        if (actionBtn.holdMs <= 0 || event.isAutoRepeat || !holdKey(event.key))
+            return
+        holdAnim.stop()
+        event.accepted = true
+    }
+    function holdKey(key) {
+        return key === Qt.Key_Space || key === Qt.Key_Return
+                || key === Qt.Key_Enter
     }
     NumberAnimation {
         id: holdAnim
@@ -78,9 +107,29 @@ HoverToolButton {
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             anchors.margins: Theme.borderWidth
-            width: (parent.width - 2 * Theme.borderWidth) * actionBtn.holdProgress
+            // Never thinner than `holdFillMin` while it runs: proportional
+            // from zero, the first tenth of the hold is a sub-pixel sliver,
+            // so the press reads as not having taken and the whole gesture
+            // feels longer than it is (デザイン規約 §進行中・長押しの定数).
+            width: actionBtn.holdProgress > 0
+                   ? Math.max(Metrics.holdFillMin,
+                              (parent.width - 2 * Theme.borderWidth)
+                              * actionBtn.holdProgress)
+                   : 0
             color: actionBtn.frameColor
             visible: actionBtn.holdProgress > 0
+        }
+        // Drawn outside the frame rather than in it: the frame's colour is
+        // already saying this button is the dangerous one, and focus must
+        // not be able to take that over.
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -Theme.spaceXs / 2
+            color: "transparent"
+            border.color: Theme.borderFocus
+            border.width: Theme.borderWidth
+            radius: Theme.radiusMd
+            visible: actionBtn.activeFocus
         }
     }
     contentItem: RowLayout {

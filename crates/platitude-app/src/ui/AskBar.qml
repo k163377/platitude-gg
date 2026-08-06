@@ -44,6 +44,11 @@ Rectangle {
         if (bar.hold)
             holdAnim.restart()
     }
+    /// The keys that stand in for the press (デザイン規約 §長押し).
+    function holdKey(key) {
+        return key === Qt.Key_Space || key === Qt.Key_Return
+                || key === Qt.Key_Enter
+    }
 
     /// The pill was clicked: the owner runs what the question guarded.
     signal confirmed()
@@ -54,7 +59,16 @@ Rectangle {
     readonly property color tone: bar.danger ? Theme.danger : Theme.warning
     // A question walked away from mid-press takes the press with it: a
     // fill left standing would carry on into whatever is asked next.
-    onOpenChanged: if (!bar.open) holdAnim.stop()
+    //
+    // Opening hands the pill the focus so the keyboard's way in needs no
+    // hunting for it. The bar only ever opens because the person just asked
+    // for it from a list, so there is no typing here to interrupt.
+    onOpenChanged: {
+        if (bar.open)
+            acceptPill.forceActiveFocus()
+        else
+            holdAnim.stop()
+    }
 
     // Sized by its own words, opened and closed with the standard 200ms.
     clip: true
@@ -100,6 +114,7 @@ Rectangle {
         // down where the question asks for one. It is the only thing on
         // the bar that acts, so nothing else here can be hit by accident.
         Rectangle {
+            id: acceptPill
             Layout.alignment: Qt.AlignVCenter
             implicitWidth: acceptLabel.implicitWidth + 2 * Theme.spaceMd
             implicitHeight: Theme.controlHeight
@@ -108,6 +123,17 @@ Rectangle {
                    ? Theme.bgHover : "transparent"
             border.color: bar.tone
             border.width: Theme.borderWidth
+            // Reachable without a pointer, and given the focus as the bar
+            // opens: the pill is the only thing here that acts, so there is
+            // nothing else for a tab to land on first (デザイン規約 §長押し).
+            //
+            // Closed, it leaves the tab order by going disabled rather than
+            // by dropping `activeFocusOnTab` — Qt refuses to clear that on
+            // the item that currently holds the focus, and warns. Disabling
+            // takes the focus away first, and the pill draws its own colours
+            // rather than the palette's, so the collapse looks no different.
+            activeFocusOnTab: true
+            enabled: bar.open
             // The hold filling the frame from the left, inset by the
             // border so the frame stays a frame while it fills: that the
             // fill reaches the end is the whole progress report.
@@ -116,9 +142,26 @@ Rectangle {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 anchors.margins: Theme.borderWidth
-                width: (parent.width - 2 * Theme.borderWidth) * bar.holdProgress
+                // Never thinner than `holdFillMin` while it runs — see
+                // ActionButton for why the proportional start is no good.
+                width: bar.holdProgress > 0
+                       ? Math.max(Metrics.holdFillMin,
+                                  (parent.width - 2 * Theme.borderWidth)
+                                  * bar.holdProgress)
+                       : 0
                 color: bar.tone
                 visible: bar.holdProgress > 0
+            }
+            // Outside the frame: the frame's colour says what answering
+            // costs, and focus must not be able to take that over.
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -Theme.spaceXs / 2
+                color: "transparent"
+                border.color: Theme.borderFocus
+                border.width: Theme.borderWidth
+                radius: Theme.radiusMd
+                visible: acceptPill.activeFocus
             }
             Label {
                 id: acceptLabel
@@ -137,14 +180,37 @@ Rectangle {
                 anchors.fill: parent
                 hoverEnabled: true
                 onClicked: if (!bar.hold) bar.confirmed()
-                onPressedChanged: {
+                // `containsPress`, not `pressed`: a press dragged off the
+                // pill has to call the hold off, the way letting go does.
+                // `pressed` stays true out there — it keeps the grab — and
+                // would leave sliding away as no escape at all.
+                onContainsPressChanged: {
                     if (!bar.hold)
                         return
-                    if (pressed)
+                    if (containsPress)
                         holdAnim.restart()
                     else
                         holdAnim.stop()
                 }
+            }
+            // The same answer without a pointer: Space or Enter, held where
+            // the question asks for a hold and simply pressed where it does
+            // not. Auto-repeat is dropped on both edges — see ActionButton.
+            Keys.onPressed: event => {
+                if (event.isAutoRepeat || !bar.holdKey(event.key))
+                    return
+                if (bar.hold)
+                    holdAnim.restart()
+                event.accepted = true
+            }
+            Keys.onReleased: event => {
+                if (event.isAutoRepeat || !bar.holdKey(event.key))
+                    return
+                if (bar.hold)
+                    holdAnim.stop()
+                else
+                    bar.confirmed()
+                event.accepted = true
             }
             NumberAnimation {
                 id: holdAnim
