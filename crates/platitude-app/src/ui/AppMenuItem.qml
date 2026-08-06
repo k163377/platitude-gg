@@ -67,9 +67,15 @@ MenuItem {
             // is one, is what sits last instead).
             rightPadding: !noteLabel.visible && menuItem.subMenu && menuItem.arrow
                           ? menuItem.arrow.width + Theme.spaceXs : 0
+            // A held row says what it costs in its own colour, before it
+            // is touched at all — it is the one row in the menu that
+            // takes something away (デザイン規約 §状態). Over the fill
+            // the words cross the tone itself and lift clear of it.
             color: !menuItem.enabled ? Theme.textMuted
-                 : menuItem.holding || menuItem.highlighted ? Theme.textOnAccent
-                                                            : Theme.textPrimary
+                 : menuItem.holding ? Theme.textOnAccent
+                 : menuItem.holdMs > 0 ? menuItem.holdTone
+                 : menuItem.highlighted ? Theme.textOnAccent
+                                        : Theme.textPrimary
         }
         Label {
             id: noteLabel
@@ -85,7 +91,13 @@ MenuItem {
 
     background: Rectangle {
         radius: Theme.radiusSm
-        color: menuItem.highlighted ? Theme.accent : "transparent"
+        // A held row hovers to a wash rather than to the solid accent:
+        // its words are the tone, and the accent underneath them would
+        // both fight the colour and take the warning away at the exact
+        // moment the pointer is on the row (the same reason the pill
+        // hovers to `bgHover`).
+        color: !menuItem.highlighted ? "transparent"
+             : menuItem.holdMs > 0 ? Theme.bgHover : Theme.accent
         // The hold filling the row from the left, the same report the
         // pill and the toolbar button give (デザイン規約 §長押し), and
         // never thinner than `holdFillMin` while it runs.
