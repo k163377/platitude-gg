@@ -629,3 +629,71 @@ async fn unstage_all_on_an_unborn_empty_index_succeeds() {
         .await
         .expect("unstaging nothing succeeds at its job");
 }
+
+/// A selection that indexes a diff the file no longer produces is a
+/// refusal, not a write that quietly did nothing: the graph refresh
+/// after a "successful" no-op would show the user nothing happened,
+/// with no words saying why.
+#[tokio::test]
+async fn a_vanished_selection_is_an_error_not_a_silent_success() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.write_file("a.txt", "one changed\n");
+    let repo_info = info(&repo).await;
+    let (exec, cancel) = env();
+
+    let target = DiffTarget::Unstaged {
+        path: "a.txt".into(),
+    };
+    let err = stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(99)],
+        &cancel,
+    )
+    .await
+    .expect_err("hunk 99 is not in the diff");
+    assert!(format!("{err}").contains("no longer"), "{err}");
+
+    let err = stage::discard_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(99)],
+        &cancel,
+    )
+    .await
+    .expect_err("same refusal on the discarding side");
+    assert!(format!("{err}").contains("no longer"), "{err}");
+}
+
+/// A failed partial stage of an untracked file must not leave the
+/// intent-to-add mark behind — the file would silently change buckets
+/// (and with it, which discard the row offers).
+#[tokio::test]
+async fn a_failed_untracked_partial_stage_leaves_the_file_untracked() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.write_file("new.txt", "fresh\n");
+    let repo_info = info(&repo).await;
+    let (exec, cancel) = env();
+
+    let target = DiffTarget::Untracked {
+        path: "new.txt".into(),
+    };
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(99)],
+        &cancel,
+    )
+    .await
+    .expect_err("hunk 99 is not in the diff");
+
+    let (staged, unstaged, untracked) = buckets(&repo).await;
+    assert!(staged.is_empty(), "no half-staged leftovers: {staged:?}");
+    assert!(unstaged.is_empty(), "{unstaged:?}");
+    assert_eq!(untracked, vec!["new.txt"], "back in the untracked bucket");
+}

@@ -206,9 +206,9 @@ pub async fn apply_partial(
     }
     let workdir = repo.workdir.as_path();
 
-    let (target, side) = match target {
-        DiffTarget::Unstaged { .. } => (target.clone(), PatchSide::Forward),
-        DiffTarget::Staged { .. } => (target.clone(), PatchSide::Reverse),
+    let (target, side, intent_path) = match target {
+        DiffTarget::Unstaged { .. } => (target.clone(), PatchSide::Forward, None),
+        DiffTarget::Staged { .. } => (target.clone(), PatchSide::Reverse, None),
         DiffTarget::Untracked { path } => {
             let cmd = GitCommand::new()
                 .cwd(workdir)
@@ -218,6 +218,7 @@ pub async fn apply_partial(
             (
                 DiffTarget::Unstaged { path: path.clone() },
                 PatchSide::Forward,
+                Some(path.clone()),
             )
         }
         DiffTarget::Commit { .. } => {
@@ -228,9 +229,45 @@ pub async fn apply_partial(
         }
     };
 
-    let raw = details::file_diff_raw(executor, workdir, &target, cancel).await?;
+    let result = apply_prepared(executor, repo, &target, selects, side, cancel).await;
+    if result.is_err() {
+        // The intent-to-add mark has already moved the file out of the
+        // untracked bucket; a failure must not leave it half-staged with
+        // nothing actually staged. Best-effort — the failure itself is
+        // what the caller surfaces.
+        if let Some(path) = intent_path
+            && let Err(undo) = unstage_paths(executor, workdir, &[path], cancel).await
+        {
+            tracing::warn!(
+                %undo,
+                "could not undo intent-to-add after a failed partial stage"
+            );
+        }
+    }
+    result
+}
+
+/// The staging half of [`apply_partial`], once the target is one a diff
+/// can be built from.
+async fn apply_prepared(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    target: &DiffTarget,
+    selects: &[HunkSelect],
+    side: PatchSide,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let workdir = repo.workdir.as_path();
+    let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
     let Some(built) = patch::build_partial(&raw, selects, side) else {
-        return Ok(());
+        // The selection indexes a diff that no longer holds it — the file
+        // changed under the open diff. Doing nothing must not read as the
+        // write having landed.
+        return Err(GitError::Rejected {
+            message: "the file changed on disk; the selected part is no longer \
+                      in its diff"
+                .to_string(),
+        });
     };
 
     let scratch = ScratchFile::create(&repo.git_dir, "stage.patch", &built).map_err(|source| {
@@ -283,7 +320,13 @@ pub async fn discard_partial(
     let workdir = repo.workdir.as_path();
     let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
     let Some(built) = patch::build_partial(&raw, selects, PatchSide::Reverse) else {
-        return Ok(());
+        // As in apply_partial: a vanished selection is a refusal, not a
+        // discard that quietly did nothing.
+        return Err(GitError::Rejected {
+            message: "the file changed on disk; the selected part is no longer \
+                      in its diff"
+                .to_string(),
+        });
     };
 
     let scratch =
