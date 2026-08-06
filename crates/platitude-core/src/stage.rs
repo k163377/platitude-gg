@@ -246,6 +246,56 @@ pub async fn apply_partial(
     executor.run(cmd, cancel).await.map(drop)
 }
 
+/// Throws away part of one file's unstaged diff: the selection is built
+/// the way [`apply_partial`] builds an unstaging one — the post-image side
+/// stays whole, since that is the side the patch has to fit — and applied
+/// in reverse to the working tree alone. Without `--cached` the index is
+/// not touched, so what is staged survives.
+///
+/// Only the unstaged side gets here. A staged hunk is unstaged first (that
+/// is what the staged side's affordance does) and thrown away from the
+/// unstaged side afterwards; an untracked file has no pre-image to restore
+/// part of, so it goes whole or not at all.
+///
+/// Destructive — the caller confirms first.
+pub async fn discard_partial(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    target: &DiffTarget,
+    selects: &[HunkSelect],
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    if selects.is_empty() {
+        return Ok(());
+    }
+    if !matches!(target, DiffTarget::Unstaged { .. }) {
+        return Err(GitError::UnexpectedOutput {
+            command: "git apply --reverse".to_string(),
+            message: "only unstaged changes can be discarded piecemeal".to_string(),
+        });
+    }
+    let workdir = repo.workdir.as_path();
+    let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
+    let Some(built) = patch::build_partial(&raw, selects, PatchSide::Reverse) else {
+        return Ok(());
+    };
+
+    let scratch =
+        ScratchFile::create(&repo.git_dir, "discard.patch", &built).map_err(|source| {
+            GitError::Io {
+                command: "git apply --reverse".to_string(),
+                source,
+            }
+        })?;
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        // Same pinning as the staging path: the patch lands byte-for-byte
+        // or not at all.
+        .args(["apply", "--whitespace=nowarn", "--reverse"])
+        .arg(scratch.path());
+    executor.run(cmd, cancel).await.map(drop)
+}
+
 /// Number of hunks in the diff a target currently produces (the range the
 /// UI may address with [`HunkSelect`]).
 pub async fn hunk_count(

@@ -1340,6 +1340,19 @@ impl RepoSession {
         );
     }
 
+    /// Throws away both sides of a path at once, back to HEAD: what is
+    /// staged and what is on disk. A rename must be given both of its
+    /// names (see [`stage::discard_to_head`]).
+    pub fn discard_paths_to_head(self: &Arc<Self>, paths: Vec<String>) {
+        self.write(
+            "discard",
+            AfterWrite::Snapshots,
+            move |exec, repo, cancel| async move {
+                stage::discard_to_head(&exec, &repo.workdir, &paths, &cancel).await
+            },
+        );
+    }
+
     /// Deletes untracked files.
     pub fn remove_untracked(self: &Arc<Self>, paths: Vec<String>) {
         self.write(
@@ -1347,6 +1360,18 @@ impl RepoSession {
             AfterWrite::Snapshots,
             move |exec, repo, cancel| async move {
                 stage::remove_untracked(&exec, &repo.workdir, &paths, &cancel).await
+            },
+        );
+    }
+
+    /// Throws away part of one file's unstaged diff (hunk / line level).
+    /// The index keeps what is staged (see [`stage::discard_partial`]).
+    pub fn discard_partial(self: &Arc<Self>, target: DiffTarget, selects: Vec<HunkSelect>) {
+        self.write(
+            "discard",
+            AfterWrite::Snapshots,
+            move |exec, repo, cancel| async move {
+                stage::discard_partial(&exec, &repo, &target, &selects, &cancel).await
             },
         );
     }

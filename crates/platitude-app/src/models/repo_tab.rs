@@ -491,6 +491,29 @@ impl RepoTab {
         self.with_session(|s| s.apply_partial(target.clone(), selects.clone()));
     }
 
+    /// Throws away part of one file's unstaged diff, addressed the same way
+    /// (destructive). Only the unstaged side has a piece to throw away:
+    /// what is staged is unstaged first, by the affordance beside this one.
+    #[qslot]
+    fn discard_selection(
+        &mut self,
+        kind: String,
+        path: String,
+        orig_path: String,
+        hunk: i32,
+        line: i32,
+    ) {
+        let Some(target) = crate::encode::worktree_target(&kind, &path, &orig_path) else {
+            tracing::warn!(kind, "selection discard asked for a non-worktree diff");
+            return;
+        };
+        let selects = crate::encode::hunk_selection(hunk, line);
+        if selects.is_empty() {
+            return;
+        }
+        self.with_session(|s| s.discard_partial(target.clone(), selects.clone()));
+    }
+
     /// Commits the index from the editor's two fields. Both empty is only
     /// valid with `amend`, where it keeps the existing message.
     ///

@@ -254,6 +254,82 @@ async fn stage_a_single_line() {
     );
 }
 
+/// Throwing away one hunk of an unstaged diff leaves the other hunk on
+/// disk and the index where it was.
+#[tokio::test]
+async fn discard_a_single_hunk() {
+    let mut repo = TestRepo::init();
+    let base: String = (1..=20).map(|n| format!("line {n}\n")).collect();
+    repo.commit_file("f.txt", &base, "root");
+    // Staged first, so the discard has an index side it must not touch.
+    repo.write_file("f.txt", &base.replace("line 10\n", "line 10 STAGED\n"));
+    repo.git(&["add", "--", "f.txt"]);
+    let staged_content = indexed(&mut repo, "f.txt");
+    repo.write_file(
+        "f.txt",
+        &base
+            .replace("line 2\n", "line 2 EDITED\n")
+            .replace("line 10\n", "line 10 STAGED\n")
+            .replace("line 18\n", "line 18 EDITED\n"),
+    );
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+
+    stage::discard_partial(
+        &exec,
+        &repo_info,
+        &DiffTarget::Unstaged {
+            path: "f.txt".into(),
+        },
+        &[HunkSelect::whole(0)],
+        &cancel,
+    )
+    .await
+    .expect("discard hunk");
+
+    let on_disk = std::fs::read_to_string(repo.path.join("f.txt")).unwrap();
+    assert!(
+        !on_disk.contains("line 2 EDITED"),
+        "the chosen hunk is gone"
+    );
+    assert!(on_disk.contains("line 18 EDITED"), "the other hunk stays");
+    assert!(on_disk.contains("line 10 STAGED"), "the staged edit stays");
+    assert_eq!(
+        indexed(&mut repo, "f.txt"),
+        staged_content,
+        "the index is untouched"
+    );
+}
+
+/// One line of a hunk, thrown away on its own.
+#[tokio::test]
+async fn discard_a_single_line() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "a\nb\nc\n", "root");
+    repo.write_file("f.txt", "a\nB\nc\nD\n");
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+
+    // Body: 0 " a", 1 "-b", 2 "+B", 3 " c", 4 "+D".
+    stage::discard_partial(
+        &exec,
+        &repo_info,
+        &DiffTarget::Unstaged {
+            path: "f.txt".into(),
+        },
+        &[HunkSelect::lines(0, [4])],
+        &cancel,
+    )
+    .await
+    .expect("discard one line");
+
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("f.txt")).unwrap(),
+        "a\nB\nc\n",
+        "only the appended line went"
+    );
+}
+
 /// Staging a deletion alone (its replacement line stays unstaged).
 #[tokio::test]
 async fn stage_only_a_deletion() {

@@ -227,14 +227,26 @@ Item {
     function startFileAsk(key, label, detail, acceptText, run) {
         page.rowAskRun = run
         graphPane.stopAsking()
+        diffPane.stopAsking()
         wipPane.startAsking(key, label, detail, acceptText)
         if (AppBackend.autoAct !== "")
             AppBackend.report("file_ask key=" + key)
+    }
+    /// The same again, over the lines of one diff: what is being thrown
+    /// away is a hunk of it, or one line inside that hunk.
+    function startDiffAsk(hunk, line, label, detail, acceptText, run) {
+        page.rowAskRun = run
+        graphPane.stopAsking()
+        wipPane.stopAsking()
+        diffPane.startAsking(hunk, line, label, detail, acceptText)
+        if (AppBackend.autoAct !== "")
+            AppBackend.report("diff_ask hunk=" + hunk + " line=" + line)
     }
     function stopRowAsk() {
         page.rowAskRun = null
         graphPane.stopAsking()
         wipPane.stopAsking()
+        diffPane.stopAsking()
     }
     function answerRowAsk() {
         const run = page.rowAskRun
@@ -877,12 +889,21 @@ Item {
             page.commitNow()
         }
     }
-    // The diff has to arrive before a row of it can be staged.
+    // The diff has to arrive before a row of it can be staged — or
+    // thrown away, which stops at the question the pill answers.
     Timer {
         id: stageRowTimer
         interval: 800
-        onTriggered: page.stageSelection(
-            0, AppBackend.autoAct === "stage-line" ? 0 : -1)
+        onTriggered: {
+            const act = AppBackend.autoAct
+            if (act === "stage-hunk" || act === "stage-line") {
+                page.stageSelection(0, act === "stage-line" ? 0 : -1)
+                return
+            }
+            page.askDiscardSelection(0, act.startsWith("discard-line") ? 0 : -1)
+            if (act.endsWith("-go"))
+                diffPane.completeHold()
+        }
     }
     // The message has to arrive before it can be typed over, and the
     // "is this commit ours to rewrite?" answer before it may be saved.
@@ -1161,7 +1182,12 @@ Item {
             if (act === "reset-menu")
                 resetMenu.popup()
             AppBackend.report("commit_menu can_move=" + page.canMoveBranchHere)
-        } else if (act === "stage-hunk" || act === "stage-line") {
+        } else if (act === "stage-hunk" || act === "stage-line"
+                   || act === "discard-hunk" || act === "discard-hunk-go"
+                   || act === "discard-line" || act === "discard-line-go") {
+            // All five enter through the diff of one unstaged file and
+            // act on its first hunk; the discarding ones stop at the
+            // question, and "-go" holds the pill down to answer it.
             page.toggleDiff("unstaged", arg, "")
             stageRowTimer.start()
         } else if (act === "push") {
@@ -1237,7 +1263,8 @@ Item {
             wipPane.setAmendChecked(false)
             page.amending = false
         }
-        if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage")
+        if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage"
+                || repoTab.lastWriteOp === "discard")
             page.reloadDiff()
         // The message landed: the editor stops offering to save it, and
         // keeps what was written until the selection catches up with
@@ -1295,6 +1322,21 @@ Item {
         repoTab.stageSelection(page.diffKind, page.diffPath, page.diffOrigPath, hunk, line)
         page.pendingDiffReload = true
     }
+    /// Throwing part of the shown diff away. Asked over the lines it is
+    /// about, like every other discard, and the rows are marked while the
+    /// question stands.
+    function askDiscardSelection(hunk, line) {
+        page.startDiffAsk(
+            hunk, line,
+            line < 0 ? qsTr("Discard this hunk?") : qsTr("Discard this line?"),
+            qsTr("Kept nowhere else."),
+            qsTr("Hold to discard"),
+            function () {
+                repoTab.discardSelection(page.diffKind, page.diffPath,
+                                         page.diffOrigPath, hunk, line)
+                page.pendingDiffReload = true
+            })
+    }
     property bool pendingDiffReload: false
     function reloadDiff() {
         if (!page.pendingDiffReload || !page.diffShown)
@@ -1304,6 +1346,9 @@ Item {
     }
 
     function closeDiff() {
+        // A question about these lines goes off screen with them.
+        if (diffPane.askHunk >= 0)
+            page.stopRowAsk()
         page.diffShown = false
         page.diffKey = ""
         page.diffKind = ""
@@ -1789,11 +1834,16 @@ Item {
                     }
 
                     DiffPane {
+                        id: diffPane
                         diffModel: diffModel
                         fromWorkTree: page.diffFromWt
                         staged: page.diffStaged
                         busy: repoTab.busyCount > 0
                         onCloseRequested: page.closeDiff()
+                        onDiscardSelectionRequested: (hunk, line) =>
+                            page.askDiscardSelection(hunk, line)
+                        onAskConfirmed: page.answerRowAsk()
+                        onAskCancelled: page.stopRowAsk()
                         onStageFileRequested: {
                             if (page.diffStaged)
                                 repoTab.unstagePath(page.diffPath)
