@@ -261,10 +261,17 @@ Rectangle {
         onNamingCancelled: graphArea.stopNaming()
         delegate: GraphRowDelegate {}
         // Window cut: lanes keep running through the footer and the
-        // message sits where subjects go.
+        // message sits where subjects go. One row tall — the lanes carry
+        // on for exactly one more commit's worth, which is all it takes
+        // to read as "and it continues" — unless the message needs more
+        // than that. It is the only thing explaining the cut, so a narrow
+        // subject column grows the footer rather than eliding it.
         footer: Item {
             width: graphList.width
-            height: graphArea.graphModel.truncated ? 2 * Theme.graphRowHeight : 0
+            height: graphArea.graphModel.truncated
+                    ? Math.max(Theme.graphRowHeight,
+                               tailMessage.contentHeight + 2 * Theme.spaceXs)
+                    : 0
             visible: graphArea.graphModel.truncated
             Item {
                 x: graphList.labelWidth
@@ -309,21 +316,25 @@ Rectangle {
                     }
                 }
             }
-            // Bounded like a subject: the message is the only thing
-            // that explains the cut, so it wraps over the footer's two
-            // rows rather than running under the next pane. Told in the
+            // Bounded like a subject: the message stays in the subject
+            // column rather than running under the next pane. Told in the
             // secondary colour, not a state one: the window is how the
             // graph is meant to work, and nothing is waiting on it
             // (デザイン規約 §状態).
             Label {
+                id: tailMessage
                 x: graphList.labelWidth + graphList.graphColWidth
                 width: graphList.width - x
-                height: parent.height
-                verticalAlignment: Text.AlignVCenter
+                // Its own laid-out height, centered in whatever the
+                // footer ends up being: reading the footer's height back
+                // here is the binding loop, since the footer is sized
+                // from this. Nothing elides — the height follows the
+                // wrap, so every line of the message is shown.
+                height: contentHeight
+                y: (parent.height - height) / 2
                 leftPadding: Theme.spaceSm
                 rightPadding: Theme.spaceSm
                 wrapMode: Text.Wrap
-                elide: Text.ElideRight
                 text: qsTr("Showing the first %L1 commits — older history is not loaded")
                       .arg(graphArea.graphModel.rowTotal)
                 color: Theme.textSecondary
