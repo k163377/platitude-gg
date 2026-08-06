@@ -51,6 +51,11 @@ ColumnLayout {
         wipPane.askKey = ""
         askBar.label = ""
     }
+    /// Automation: answer the standing question the way a person does,
+    /// by holding the pill down to the end.
+    function completeHold() {
+        askBar.completeHold()
+    }
     /// A click on anything in this pane other than the bar walks away
     /// from the question, the way one anywhere else does — every click
     /// here either moves rows between the buckets the mark names or
@@ -436,8 +441,12 @@ ColumnLayout {
         id: askBar
         Layout.fillWidth: true
         // Everything asked over this list ends in work being thrown
-        // away, and nothing here reaches past this machine (§状態).
+        // away, and nothing here reaches past this machine (§状態) — so
+        // the answer is taken the way an irreversible one is taken where
+        // the intent can be shown on the spot: held, not clicked
+        // (デザイン規約 §進行中・長押しの定数).
         danger: true
+        hold: true
         onConfirmed: wipPane.askConfirmed()
         onCancelled: wipPane.askCancelled()
     }

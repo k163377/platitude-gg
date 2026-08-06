@@ -478,21 +478,17 @@ Item {
     /// click from being unstaged, and git refuses to restore a path it
     /// has not been told how to merge yet.
     function askDiscardFile(bucket, path) {
-        if (bucket === "untracked") {
-            page.startFileAsk(
-                "untracked:" + path,
-                qsTr("Delete this file?"),
-                qsTr("git never recorded it."),
-                qsTr("Delete file"),
-                function () { repoTab.removeUntracked(path) })
-            return
-        }
+        const untracked = bucket === "untracked"
         page.startFileAsk(
-            "unstaged:" + path,
-            qsTr("Discard changes to this file?"),
-            qsTr("Kept nowhere else."),
-            qsTr("Discard changes"),
-            function () { repoTab.discardPath(path) })
+            (untracked ? "untracked:" : "unstaged:") + path,
+            qsTr("Discard changes?"),
+            // The one line that differs: an untracked file has no edits
+            // to lose apart from itself.
+            untracked ? qsTr("The file goes — git never recorded it.")
+                      : qsTr("Kept nowhere else."),
+            qsTr("Hold to discard"),
+            untracked ? function () { repoTab.removeUntracked(path) }
+                      : function () { repoTab.discardPath(path) })
     }
     AppMenu {
         id: fileMenu
@@ -906,8 +902,10 @@ Item {
             page.openFileMenu(act.startsWith("delete-file") ? "untracked"
                                                             : "unstaged", arg)
             page.askDiscardFile(page.menuFileBucket, arg)
+            // "-go" answers it the way a person does: by holding the
+            // pill down, which is the only gesture that answers here.
             if (act.endsWith("-go"))
-                page.answerRowAsk()
+                wipPane.completeHold()
         } else if (act === "file-ask-clicks") {
             // What the clicks around a standing question do: one on the
             // file's own row opens its diff and the question waits (that

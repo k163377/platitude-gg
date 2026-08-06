@@ -26,6 +26,24 @@ Rectangle {
     /// Throwing away work in hand (danger) rather than reaching past this
     /// machine (warning) — §状態.
     property bool danger: false
+    /// What the pill says on hover: that it is held, and what the far side
+    /// will make of what it does. The bar's own line has room for one
+    /// thing only, and this is where §長押し puts the rest.
+    property string tip: ""
+    /// Whether answering takes a hold rather than a click (デザイン規約
+    /// §進行中・長押しの定数): the frame fills from the left while the
+    /// press lasts, and letting go part way leaves nothing behind. A hold
+    /// pill reports no click at all — neither the release that completes
+    /// the hold nor the one that gives up on it may fall through to the
+    /// answer.
+    property bool hold: false
+    /// How far into the hold the press has got, 0 to 1.
+    property real holdProgress: 0
+    /// Automation: run the hold to its end without a press behind it.
+    function completeHold() {
+        if (bar.hold)
+            holdAnim.restart()
+    }
 
     /// The pill was clicked: the owner runs what the question guarded.
     signal confirmed()
@@ -34,6 +52,9 @@ Rectangle {
 
     readonly property bool open: bar.label !== ""
     readonly property color tone: bar.danger ? Theme.danger : Theme.warning
+    // A question walked away from mid-press takes the press with it: a
+    // fill left standing would carry on into whatever is asked next.
+    onOpenChanged: if (!bar.open) holdAnim.stop()
 
     // Sized by its own words, opened and closed with the standard 200ms.
     clip: true
@@ -75,28 +96,67 @@ Rectangle {
                 Layout.fillWidth: true
             }
         }
-        // Clicking this is the answer. It is the only thing on the bar
-        // that acts, so nothing else here can be hit by accident.
+        // This is the answer — by a click, or by a press held all the way
+        // down where the question asks for one. It is the only thing on
+        // the bar that acts, so nothing else here can be hit by accident.
         Rectangle {
             Layout.alignment: Qt.AlignVCenter
             implicitWidth: acceptLabel.implicitWidth + 2 * Theme.spaceMd
             implicitHeight: Theme.controlHeight
             radius: Theme.radiusSm
-            color: acceptMouse.containsMouse ? Theme.bgHover : "transparent"
+            color: acceptMouse.containsMouse && bar.holdProgress === 0
+                   ? Theme.bgHover : "transparent"
             border.color: bar.tone
             border.width: Theme.borderWidth
+            // The hold filling the frame from the left, inset by the
+            // border so the frame stays a frame while it fills: that the
+            // fill reaches the end is the whole progress report.
+            Rectangle {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.margins: Theme.borderWidth
+                width: (parent.width - 2 * Theme.borderWidth) * bar.holdProgress
+                color: bar.tone
+                visible: bar.holdProgress > 0
+            }
             Label {
                 id: acceptLabel
                 anchors.centerIn: parent
                 text: bar.accept
-                color: bar.tone
+                // Lifted while the fill runs under it: the words cross
+                // both the filled side and the bare one.
+                color: bar.holdProgress > 0 ? Theme.textOnAccent : bar.tone
                 font.pixelSize: Theme.fontMd
             }
+            ToolTip.visible: bar.tip !== "" && acceptMouse.containsMouse
+            ToolTip.delay: 600
+            ToolTip.text: bar.tip
             MouseArea {
                 id: acceptMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                onClicked: bar.confirmed()
+                onClicked: if (!bar.hold) bar.confirmed()
+                onPressedChanged: {
+                    if (!bar.hold)
+                        return
+                    if (pressed)
+                        holdAnim.restart()
+                    else
+                        holdAnim.stop()
+                }
+            }
+            NumberAnimation {
+                id: holdAnim
+                target: bar
+                property: "holdProgress"
+                from: 0
+                to: 1
+                duration: Metrics.holdMs
+                // Letting go part way leaves nothing behind, so the next
+                // press starts the whole way from the beginning again.
+                onStopped: bar.holdProgress = 0
+                onFinished: bar.confirmed()
             }
         }
         // Escape and a click anywhere else walk away too; this is the
