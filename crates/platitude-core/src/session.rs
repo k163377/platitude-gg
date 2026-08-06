@@ -1401,19 +1401,21 @@ impl RepoSession {
     ///
     /// The stash keeps git's own message ("WIP on `<branch>`: …"), which
     /// already names where the changes came from.
+    ///
+    /// A move refused after all leaves neither half standing: the entry was
+    /// only ever the room the switch needed, so it goes back rather than
+    /// parking the work on the branch it never left.
     pub fn checkout_stashing(self: &Arc<Self>, target: CheckoutTarget) {
         let session = Arc::clone(self);
         self.write(
             "checkout",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let options = stash::PushOptions {
-                    include_untracked: true,
-                    keep_index: false,
-                    staged_only: false,
-                };
-                stash::push(&exec, &repo.workdir, "", options, &[], &cancel).await?;
+                let stashed = stash_everything(&exec, &repo, &cancel).await?;
                 let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
+                if stashed && matches!(outcome, branch::CheckoutOutcome::Blocked(_)) {
+                    stash::pop(&exec, &repo.workdir, STASH_TOP, &cancel).await?;
+                }
                 session.report_move(outcome);
                 Ok(())
             },
@@ -1442,20 +1444,9 @@ impl RepoSession {
             "checkout",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                const TOP: &str = "stash@{0}";
-                let options = stash::PushOptions {
-                    include_untracked: true,
-                    keep_index: false,
-                    staged_only: false,
-                };
-                let before = stash::tip(&exec, &repo.workdir, &cancel).await?;
-                stash::push(&exec, &repo.workdir, "", options, &[], &cancel).await?;
-                // A clean tree stashes nothing while exiting 0 — the
-                // refusal that raised this choice can go stale when the
-                // tree is cleaned from a terminal in between. With no
-                // entry of ours, `stash@{0}` is someone else's work and
-                // must not be popped; the move alone is the whole job.
-                if stash::tip(&exec, &repo.workdir, &cancel).await? == before {
+                // With nothing of ours stashed there is nothing to bring
+                // across, and the move alone is the whole job.
+                if !stash_everything(&exec, &repo, &cancel).await? {
                     let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
                     session.report_move(outcome);
                     return Ok(());
@@ -1465,12 +1456,13 @@ impl RepoSession {
                     // Nothing should stand in the way of a tree that was
                     // just emptied; put the work back rather than leave it
                     // stashed behind a refusal.
-                    stash::pop(&exec, &repo.workdir, TOP, &cancel).await?;
+                    stash::pop(&exec, &repo.workdir, STASH_TOP, &cancel).await?;
                     session.report_move(outcome);
                     return Ok(());
                 }
 
-                let kept_index = stash::pop_with_index(&exec, &repo.workdir, TOP, &cancel).await;
+                let kept_index =
+                    stash::pop_with_index(&exec, &repo.workdir, STASH_TOP, &cancel).await;
                 if kept_index.is_ok() || conflicts_now(&exec, &repo, &cancel).await? {
                     return Ok(());
                 }
@@ -1480,7 +1472,7 @@ impl RepoSession {
                 // advice is the fallback: restore without the index, which
                 // brings the changes across merged and gives up only on
                 // the staged/unstaged split.
-                match stash::pop(&exec, &repo.workdir, TOP, &cancel).await {
+                match stash::pop(&exec, &repo.workdir, STASH_TOP, &cancel).await {
                     Ok(()) => Ok(()),
                     Err(error) => {
                         if conflicts_now(&exec, &repo, &cancel).await? {
@@ -2373,6 +2365,32 @@ struct LogTotals {
     /// Commits the walk emitted — what `--max-count` limits, so this is
     /// what decides `truncated`.
     walked: u32,
+}
+
+/// The entry a [`stash_everything`] just made, for the moves that put it
+/// back.
+const STASH_TOP: &str = "stash@{0}";
+
+/// Stashes the whole working tree out of a move's way, and answers whether
+/// an entry of ours was really made.
+///
+/// A clean tree stashes nothing while exiting 0 — the refusal that raised
+/// the question can go stale when the tree is cleaned from a terminal in
+/// between. With no entry of ours, [`STASH_TOP`] names somebody else's
+/// work and must not be touched.
+async fn stash_everything(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let options = stash::PushOptions {
+        include_untracked: true,
+        keep_index: false,
+        staged_only: false,
+    };
+    let before = stash::tip(executor, &repo.workdir, cancel).await?;
+    stash::push(executor, &repo.workdir, "", options, &[], cancel).await?;
+    Ok(stash::tip(executor, &repo.workdir, cancel).await? != before)
 }
 
 /// Whether the working tree has unmerged paths right now.
