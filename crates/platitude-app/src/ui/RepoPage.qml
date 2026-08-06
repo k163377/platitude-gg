@@ -552,12 +552,16 @@ Item {
         // the choice has already made its row the whole of it.
         const rows = wipPane.chosenRows()
         const unstaged = [], untracked = [], staged = []
+        // The rows the discard will actually touch: conflicted ones ride
+        // along with none of it, so they must not be counted or keyed on.
+        const kept = []
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i]
             // git will not restore a path it has not been told how to
             // merge yet, so a conflicted row rides along with none of it.
             if (row.bucket === "conflicts")
                 continue
+            kept.push(row)
             const bag = row.bucket === "untracked" ? untracked
                       : row.bucket === "staged" ? staged : unstaged
             bag.push(row.fullName)
@@ -565,8 +569,8 @@ Item {
             if (row.bucket === "staged" && row.orig_path !== "")
                 bag.push(row.orig_path)
         }
-        const count = rows.length
-        if (unstaged.length + untracked.length + staged.length === 0)
+        const count = kept.length
+        if (count === 0)
             return
         // One file says exactly what it loses; several say the one thing
         // that is true of all of them (デザイン規約 §長さ).
@@ -577,7 +581,7 @@ Item {
                      ? qsTr("Everything since the last commit goes.")
                      : qsTr("Kept nowhere else.")
         page.startFileAsk(
-            count > 1 ? "*" : rows[0].bucket + ":" + rows[0].fullName,
+            count > 1 ? "*" : kept[0].bucket + ":" + kept[0].fullName,
             count > 1 ? qsTr("Discard changes to %n files?", "", count)
                       : qsTr("Discard changes?"),
             detail,
@@ -1101,14 +1105,20 @@ Item {
             // What the clicks around a standing question do: one on the
             // file's own row opens its diff and the question waits (that
             // is how one sees what is about to go), one on its stage box
-            // moves the row to the other bucket and takes the question
-            // with it. Entered where the row enters them.
+            // moves the row to the other bucket and lets the question go
+            // — the file row's own click is the only one that keeps it.
+            // Entered where the row enters them. The row has to be
+            // chosen first — askDiscardFile reads the choice, and takes
+            // no arguments.
             page.showWip()
-            page.askDiscardFile("unstaged", arg)
+            wipPane.chooseOnly("unstaged", arg)
+            page.askDiscardFile()
             const row = wipPane.rowFor(arg)
             AppBackend.report("row_found=" + (row !== null))
             if (row) {
-                row.fileClicked(row.bucket, row.fullName, row.orig_path)
+                // A plain click: no modifiers, like the finger it stands for.
+                row.fileClicked(row.bucket, row.fullName, row.orig_path,
+                                Qt.NoModifier)
                 AppBackend.report("after_row_click asking=" + (wipPane.askKey !== ""))
                 row.stageClicked(row.bucket, row.fullName)
                 AppBackend.report("after_stage_click asking=" + (wipPane.askKey !== ""))

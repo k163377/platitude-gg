@@ -156,6 +156,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // this every glyph is a box (CLAUDE.md).
         cmd.env("QT_QPA_FONTDIR", "C:\\Windows\\Fonts");
     }
+    // The automation hooks report through tracing at info; without this
+    // their lines never reach the verdict output.
+    if std::env::var_os("PG_LOG").is_none() {
+        cmd.env("PG_LOG", "info");
+    }
     if opts.select {
         cmd.env("PG_AUTO_SELECT", "1");
     }
