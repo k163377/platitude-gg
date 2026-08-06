@@ -153,6 +153,10 @@ pub struct BranchItem {
     pub oid_hex: String,
     pub has_remote: bool,
     pub is_head: bool,
+    /// For a local branch, the remote branch it speaks for (`origin/main`),
+    /// wherever the two stand — the one its badge is about, and the one a
+    /// rename offers to carry over. Empty when it speaks for none.
+    pub upstream: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1731,6 +1735,29 @@ impl RepoSession {
         );
     }
 
+    /// Renames a branch on a remote, which git does as a push and a delete
+    /// (see [`remote::rename_remote_branch`]). The UI asks first: the old
+    /// name is destroyed, not moved.
+    pub fn rename_remote_branch(self: &Arc<Self>, remote_name: String, from: String, to: String) {
+        let timeout = self.network_timeout();
+        self.write(
+            "push",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                remote::rename_remote_branch(
+                    &exec,
+                    &repo.workdir,
+                    &remote_name,
+                    &from,
+                    &to,
+                    timeout,
+                    &cancel,
+                )
+                .await
+            },
+        );
+    }
+
     /// `git merge <rev>`.
     pub fn merge(self: &Arc<Self>, rev: String, options: integrate::MergeOptions) {
         self.write(
@@ -2531,6 +2558,10 @@ fn refs_key(refs: &[RefEntry], head: &HeadState) -> u64 {
 /// Builds the sorted sidebar snapshot.
 fn build_snapshot(refs: &[RefEntry], head: &HeadState) -> RefsSnapshot {
     let with_remote = refs::branches_with_remote(refs);
+    let remotes: Vec<&RefEntry> = refs
+        .iter()
+        .filter(|r| r.kind == RefKind::RemoteBranch)
+        .collect();
     let mut snapshot = RefsSnapshot {
         head: Some(head.clone()),
         ..Default::default()
@@ -2543,6 +2574,9 @@ fn build_snapshot(refs: &[RefEntry], head: &HeadState) -> RefsSnapshot {
                 oid_hex: r.commit_oid().to_hex(),
                 has_remote: with_remote.contains(&r.name),
                 is_head: r.is_head,
+                upstream: refs::spoken_for_remote(r, &remotes)
+                    .map(|u| u.short.clone())
+                    .unwrap_or_default(),
             }),
             RefKind::RemoteBranch => snapshot.remotes.push(BranchItem {
                 short: r.short.clone(),
@@ -2550,6 +2584,7 @@ fn build_snapshot(refs: &[RefEntry], head: &HeadState) -> RefsSnapshot {
                 oid_hex: r.commit_oid().to_hex(),
                 has_remote: true,
                 is_head: false,
+                upstream: String::new(),
             }),
             RefKind::Tag => snapshot.tags.push(TagItem {
                 short: r.short.clone(),

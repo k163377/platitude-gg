@@ -180,27 +180,37 @@ pub fn remotes_folded_into_local(refs: &[RefEntry]) -> HashSet<String> {
         .collect();
     let mut folded = HashSet::new();
     for local in refs.iter().filter(|r| r.kind == RefKind::LocalBranch) {
-        let badge = match local.upstream.as_deref() {
-            Some(up) => remotes.iter().find(|r| r.name == up).copied(),
-            None => {
-                let mut same_named = remotes.iter().filter(|r| {
-                    r.short
-                        .split_once('/')
-                        .is_some_and(|(_, rest)| rest == local.short)
-                });
-                match (same_named.next(), same_named.next()) {
-                    (Some(only), None) => Some(*only),
-                    _ => None,
-                }
-            }
-        };
-        if let Some(remote) = badge
+        if let Some(remote) = spoken_for_remote(local, &remotes)
             && remote.commit_oid() == local.commit_oid()
         {
             folded.insert(remote.name.clone());
         }
     }
     folded
+}
+
+/// The remote branch a local one speaks for, wherever the two stand: its
+/// configured upstream, or, with none configured, the only same-named
+/// remote. This is what the cloud badge is about, and so what a rename of
+/// the branch offers to carry over.
+///
+/// Ambiguity answers nothing: with no upstream and two same-named remotes
+/// there is no single branch meant, and this says so.
+pub fn spoken_for_remote<'a>(local: &RefEntry, remotes: &[&'a RefEntry]) -> Option<&'a RefEntry> {
+    match local.upstream.as_deref() {
+        Some(up) => remotes.iter().find(|r| r.name == up).copied(),
+        None => {
+            let mut same_named = remotes.iter().filter(|r| {
+                r.short
+                    .split_once('/')
+                    .is_some_and(|(_, rest)| rest == local.short)
+            });
+            match (same_named.next(), same_named.next()) {
+                (Some(only), None) => Some(*only),
+                _ => None,
+            }
+        }
+    }
 }
 
 /// Where HEAD points right now.

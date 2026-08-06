@@ -34,6 +34,10 @@ pub struct NavItem {
     orig_path: String,
     is_head: bool,
     has_remote: bool,
+    /// The remote branch a local one speaks for (`origin/main`), empty for
+    /// every other kind of row. What a rename of this row offers to carry
+    /// over, and what the badge beside it is about.
+    upstream: String,
     /// PR-state badge. Real data arrives in Phase 4 (ls-remote refs/pull
     /// matching); until then PG_FAKE_PR previews the look.
     has_pr: bool,
@@ -205,6 +209,7 @@ fn branch_nav_items(list: &[platitude_core::session::BranchItem], remote: bool) 
                 oid_hex: b.oid_hex.clone(),
                 is_head: b.is_head,
                 has_remote: b.has_remote,
+                upstream: b.upstream.clone(),
                 has_pr: crate::encode::fake_pr_set().contains(pr_key),
                 ..Default::default()
             }
@@ -568,6 +573,17 @@ impl NavSectionModel {
             .iter()
             .find(|item| item.name == name)
             .map(|item| item.oid_hex.clone())
+            .unwrap_or_default()
+    }
+
+    /// The remote branch this one speaks for (`origin/main`); empty when
+    /// it speaks for none, and for every section but the branches.
+    #[qslot]
+    fn upstream_of(&self, name: String) -> String {
+        self.all
+            .iter()
+            .find(|item| item.name == name)
+            .map(|item| item.upstream.clone())
             .unwrap_or_default()
     }
 

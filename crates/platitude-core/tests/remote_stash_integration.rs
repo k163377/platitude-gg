@@ -440,3 +440,96 @@ async fn deleting_a_remote_branch_prunes_on_the_next_fetch() {
         "--prune dropped the stale remote-tracking ref"
     );
 }
+
+/// The rename git has no command for: the name moves, what the branch
+/// pointed at does not, and the local branch that tracked it comes along.
+#[tokio::test]
+async fn renaming_a_remote_branch_moves_the_name_and_the_tracking() {
+    let (mut bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+
+    work.git(&["switch", "-c", "billing"]);
+    work.commit_file("b.txt", "b\n", "billing work");
+    work.git(&["push", "-u", "origin", "billing"]);
+    let tip = work.git(&["rev-parse", "billing"]);
+    // Renaming publishes nothing: this commit is only here.
+    work.commit_file("b.txt", "b2\n", "not published");
+
+    remote::rename_remote_branch(
+        &exec,
+        &work.path,
+        "origin",
+        "billing",
+        "billing-v2",
+        NET,
+        &cancel,
+    )
+    .await
+    .expect("rename remote branch");
+
+    let listed = bare.git(&["branch", "--list"]);
+    assert!(listed.contains("billing-v2"), "{listed}");
+    assert!(
+        !listed.contains("  billing\n"),
+        "the old name is gone: {listed}"
+    );
+    assert_eq!(
+        bare.git(&["rev-parse", "billing-v2"]),
+        tip,
+        "the new name points where the old one did, not at what is only here"
+    );
+    assert_eq!(
+        work.git(&["config", "branch.billing.merge"]),
+        "refs/heads/billing-v2",
+        "the branch that tracked it follows the name"
+    );
+    assert!(
+        !work
+            .git(&["branch", "-r", "--list"])
+            .contains("origin/billing\n"),
+        "the tracking ref for the old name went with the delete"
+    );
+}
+
+/// A push git turns down leaves the old name where it was: nothing is
+/// deleted on the strength of a half-finished rename.
+#[tokio::test]
+async fn a_rename_whose_push_fails_deletes_nothing() {
+    let (mut bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+
+    work.git(&["switch", "-c", "billing"]);
+    work.commit_file("b.txt", "b\n", "billing work");
+    work.git(&["push", "-u", "origin", "billing"]);
+    // Somebody else's work already stands under the new name, on a line of
+    // its own, so the push cannot be a fast-forward.
+    work.git(&["switch", "-c", "someone-else", "main"]);
+    work.commit_file("c.txt", "c\n", "not ours");
+    work.git(&["push", "origin", "someone-else:billing-v2"]);
+    work.git(&["switch", "billing"]);
+
+    let error = remote::rename_remote_branch(
+        &exec,
+        &work.path,
+        "origin",
+        "billing",
+        "billing-v2",
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("the push is refused");
+    assert!(
+        matches!(error, GitError::PushOutdated { .. }) || matches!(error, GitError::Failed { .. }),
+        "{error:?}"
+    );
+    assert!(
+        bare.git(&["branch", "--list"]).contains("billing"),
+        "the old name is still there"
+    );
+    assert_eq!(
+        work.git(&["config", "branch.billing.merge"]),
+        "refs/heads/billing",
+        "and nothing was re-pointed"
+    );
+}

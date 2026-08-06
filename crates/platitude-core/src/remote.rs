@@ -344,6 +344,118 @@ pub async fn delete_remote_branch(
     executor.run(cmd, cancel).await.map(|_| ())
 }
 
+/// Renames a branch on a remote: the composition git has no command for.
+///
+/// The new name is pushed **from the remote-tracking ref**, not from a
+/// local branch of the same name: the question asked was about a name, and
+/// a local branch that has moved on since would publish its commits as
+/// well. Then the old name goes, and any local branch that tracked it is
+/// pointed at the new one — `push --delete` prunes the tracking ref an
+/// upstream setting names, and a stale one sends the next push straight
+/// back to the name just deleted.
+///
+/// This is not the rename a forge offers: the far side sees a branch
+/// created and a branch deleted, so whatever hung off the old name — an
+/// open pull request, a protected-branch rule — does not follow it. The UI
+/// says so before this runs, and holds the answer down to mean it.
+pub async fn rename_remote_branch(
+    executor: &GitExecutor,
+    workdir: &Path,
+    remote: &str,
+    from: &str,
+    to: &str,
+    timeout: Duration,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let spec = PushSpec {
+        remote: remote.to_string(),
+        local: format!("refs/remotes/{remote}/{from}"),
+        remote_branch: to.to_string(),
+        set_upstream: false,
+        force: PushForce::None,
+    };
+    push(executor, workdir, &spec, timeout, cancel).await?;
+    delete_remote_branch(executor, workdir, remote, from, timeout, cancel).await?;
+    for branch in tracking_branches(executor, workdir, remote, from, cancel).await? {
+        let cmd = GitCommand::new().cwd(workdir).args([
+            "branch",
+            &format!("--set-upstream-to={remote}/{to}"),
+            "--end-of-options",
+            &branch,
+        ]);
+        executor.run(cmd, cancel).await?;
+    }
+    Ok(())
+}
+
+/// Local branches configured to track `<remote>/<branch>`.
+///
+/// One read of the whole `branch.` section rather than a lookup per branch:
+/// which local branches point at a remote one is not something git answers
+/// directly, and the section is small.
+async fn tracking_branches(
+    executor: &GitExecutor,
+    workdir: &Path,
+    remote: &str,
+    branch: &str,
+    cancel: &CancellationToken,
+) -> Result<Vec<String>, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["config", "-z", "--get-regexp", r"^branch\."]);
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    // 1 is "no matching keys" — a repository whose branches all stand on
+    // their own.
+    if out.code == 1 {
+        return Ok(Vec::new());
+    }
+    if out.code != 0 {
+        return Err(GitError::Failed {
+            command: "git config --get-regexp branch".to_string(),
+            code: out.code,
+            stderr: out.failure_message(),
+        });
+    }
+    Ok(parse_tracking(&out.stdout, remote, branch))
+}
+
+/// Picks the branches whose `remote` and `merge` both name the same remote
+/// branch out of `git config -z --get-regexp ^branch\.` output.
+fn parse_tracking(bytes: &[u8], remote: &str, branch: &str) -> Vec<String> {
+    let merge_ref = format!("refs/heads/{branch}");
+    let mut remotes: Vec<(String, String)> = Vec::new();
+    let mut merges: Vec<(String, String)> = Vec::new();
+    for record in bytes.split(|b| *b == 0).filter(|r| !r.is_empty()) {
+        let text = String::from_utf8_lossy(record);
+        let Some((key, value)) = text.split_once('\n') else {
+            continue;
+        };
+        // `branch.<name>.<field>` — a branch name may contain dots, so the
+        // field is the last segment and everything between is the name.
+        let Some(rest) = key.strip_prefix("branch.") else {
+            continue;
+        };
+        let Some((name, field)) = rest.rsplit_once('.') else {
+            continue;
+        };
+        match field {
+            "remote" => remotes.push((name.to_string(), value.to_string())),
+            "merge" => merges.push((name.to_string(), value.to_string())),
+            _ => {}
+        }
+    }
+    remotes
+        .into_iter()
+        .filter(|(_, value)| value == remote)
+        .map(|(name, _)| name)
+        .filter(|name| {
+            merges
+                .iter()
+                .any(|(other, value)| other == name && *value == merge_ref)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -427,5 +539,34 @@ mod tests {
              !\trefs/heads/main:refs/heads/main\t[remote rejected] (pre-receive hook declined)\nDone\n"
         ));
         assert!(!is_outdated(""));
+    }
+
+    #[test]
+    fn tracking_needs_both_halves_to_agree() {
+        let bytes = z(&[
+            "branch.billing.remote\norigin",
+            "branch.billing.merge\nrefs/heads/billing",
+            // Same name over there, but on another remote.
+            "branch.mirror.remote\nupstream",
+            "branch.mirror.merge\nrefs/heads/billing",
+            // Same remote, another branch.
+            "branch.main.remote\norigin",
+            "branch.main.merge\nrefs/heads/main",
+            // Half a setting is no setting.
+            "branch.orphan.remote\norigin",
+        ]);
+        assert_eq!(parse_tracking(&bytes, "origin", "billing"), ["billing"]);
+    }
+
+    #[test]
+    fn a_branch_name_with_dots_keeps_its_name() {
+        let bytes = z(&[
+            "branch.release.8.4.remote\norigin",
+            "branch.release.8.4.merge\nrefs/heads/release.8.4",
+        ]);
+        assert_eq!(
+            parse_tracking(&bytes, "origin", "release.8.4"),
+            ["release.8.4"]
+        );
     }
 }

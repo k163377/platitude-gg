@@ -700,6 +700,14 @@ impl RepoTab {
         self.with_session(|s| s.push(spec.clone()));
     }
 
+    /// Renames a branch on a remote. git has none, so core pushes the new
+    /// name and deletes the old — the UI holds the answer down first,
+    /// because the old name is destroyed rather than moved.
+    #[qslot]
+    fn rename_remote_branch(&mut self, remote: String, from: String, to: String) {
+        self.with_session(|s| s.rename_remote_branch(remote.clone(), from.clone(), to.clone()));
+    }
+
     /// `git push <remote> --delete <branch>` (destructive).
     #[qslot]
     fn delete_remote_branch(&mut self, remote: String, branch: String) {
