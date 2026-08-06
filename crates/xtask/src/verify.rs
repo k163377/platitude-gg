@@ -1,0 +1,252 @@
+//! `cargo xtask verify-ui` — one command from source to a judged
+//! headless run.
+//!
+//! Wraps what CLAUDE.md prescribes for write-path verification: release
+//! build (QML is embedded in the exe), offscreen QPA with an explicit
+//! font dir, the PG_AUTO_* hooks, a bounded wait with a kill guard (never
+//! an unbounded one — the lessons of the locked-screen hangs), and the
+//! `screenshot saved=true` stderr line as the verdict.
+
+use std::io::BufRead;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+/// Grace on top of PG_AUTO_QUIT_MS before the run is killed: startup,
+/// repository load, and the write itself happen inside this.
+const GRACE_MS: u64 = 20_000;
+
+struct Options {
+    verb: String,
+    arg: String,
+    repo: Option<PathBuf>,
+    preset: String,
+    build: bool,
+    select: bool,
+    quit_ms: u64,
+    shot_dir: Option<PathBuf>,
+}
+
+fn parse(args: &[String]) -> Result<Options, String> {
+    let mut opts = Options {
+        verb: String::new(),
+        arg: String::new(),
+        repo: None,
+        preset: "basic".into(),
+        build: true,
+        select: false,
+        quit_ms: 10_000,
+        shot_dir: None,
+    };
+    let mut positional: Vec<&str> = Vec::new();
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--repo" => opts.repo = Some(PathBuf::from(it.next().ok_or("--repo needs a path")?)),
+            "--preset" => opts.preset = it.next().ok_or("--preset needs a name")?.clone(),
+            "--no-build" => opts.build = false,
+            "--select" => opts.select = true,
+            "--quit-ms" => {
+                opts.quit_ms = it
+                    .next()
+                    .ok_or("--quit-ms needs a number")?
+                    .parse()
+                    .map_err(|e| format!("--quit-ms: {e}"))?;
+            }
+            "--shot-dir" => {
+                opts.shot_dir = Some(PathBuf::from(it.next().ok_or("--shot-dir needs a path")?));
+            }
+            other => positional.push(other),
+        }
+    }
+    match positional.as_slice() {
+        [] => return Err("verify-ui needs a verb (see `cargo xtask`)".into()),
+        [verb] => opts.verb = (*verb).to_string(),
+        [verb, arg] => {
+            opts.verb = (*verb).to_string();
+            opts.arg = (*arg).to_string();
+        }
+        more => return Err(format!("too many positional arguments: {more:?}")),
+    }
+    Ok(opts)
+}
+
+/// The workspace root, resolved at compile time from this crate's location.
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap_or(Path::new("."))
+        .to_path_buf()
+}
+
+pub fn run(args: &[String]) -> Result<(), String> {
+    let opts = parse(args)?;
+    let root = workspace_root();
+    let path = crate::qt::path_with_qt()?;
+
+    let repo = match &opts.repo {
+        Some(dir) => dir.clone(),
+        None => {
+            let repo = crate::demo::create(&opts.preset, None)?;
+            println!("demo repo ({}): {}", opts.preset, repo.display());
+            repo
+        }
+    };
+
+    if opts.build {
+        println!("building (release)…");
+        let status = Command::new("cargo")
+            .args(["build", "--release"])
+            .current_dir(&root)
+            .env("PATH", &path)
+            .status()
+            .map_err(|e| format!("failed to run cargo: {e}"))?;
+        if !status.success() {
+            return Err("cargo build --release failed".into());
+        }
+    }
+
+    let exe = root.join("target").join("release").join(if cfg!(windows) {
+        "platitude-gg.exe"
+    } else {
+        "platitude-gg"
+    });
+    if !exe.is_file() {
+        return Err(format!(
+            "{} not found — build first (or drop --no-build)",
+            exe.display()
+        ));
+    }
+
+    let shot_dir = match &opts.shot_dir {
+        Some(dir) => dir.clone(),
+        None => {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|e| e.to_string())?
+                .as_nanos();
+            std::env::temp_dir()
+                .join("pg-verify")
+                .join(format!("{}-{nanos}", opts.verb))
+        }
+    };
+    std::fs::create_dir_all(&shot_dir).map_err(|e| e.to_string())?;
+
+    println!(
+        "running: {} (arg: {}) against {}",
+        opts.verb,
+        if opts.arg.is_empty() { "-" } else { &opts.arg },
+        repo.display()
+    );
+    let mut cmd = Command::new(&exe);
+    cmd.current_dir(&root)
+        .env("PATH", &path)
+        .env("QT_QPA_PLATFORM", "offscreen")
+        .env("QT_FORCE_STDERR_LOGGING", "1")
+        .env("PG_AUTO_OPEN", &repo)
+        .env("PG_AUTO_QUIT_MS", opts.quit_ms.to_string())
+        .env("PG_SHOT_DIR", &shot_dir)
+        .env("PG_AUTO_ACT", &opts.verb)
+        .env("PG_AUTO_ACT_ARG", &opts.arg)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if cfg!(windows) {
+        // Offscreen Qt does not discover system fonts on Windows; without
+        // this every glyph is a box (CLAUDE.md).
+        cmd.env("QT_QPA_FONTDIR", "C:\\Windows\\Fonts");
+    }
+    if opts.select {
+        cmd.env("PG_AUTO_SELECT", "1");
+    }
+
+    let started = Instant::now();
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("failed to start the app: {e}"))?;
+    let stdout = child.stdout.take().map(collect_lines);
+    let stderr = child.stderr.take().map(collect_lines);
+
+    // Bounded wait with a kill guard — never an unbounded wait or poll.
+    let deadline = Duration::from_millis(opts.quit_ms + GRACE_MS);
+    let mut timed_out = false;
+    let status = loop {
+        match child.try_wait().map_err(|e| e.to_string())? {
+            Some(status) => break Some(status),
+            None if started.elapsed() > deadline => {
+                let _ = child.kill();
+                timed_out = true;
+                break child.wait().ok();
+            }
+            None => std::thread::sleep(Duration::from_millis(100)),
+        }
+    };
+
+    let join = |h: Option<std::thread::JoinHandle<Vec<String>>>| {
+        h.and_then(|h| h.join().ok()).unwrap_or_default()
+    };
+    let out_lines = join(stdout);
+    let err_lines = join(stderr);
+    let elapsed = started.elapsed();
+
+    let saved = err_lines
+        .iter()
+        .chain(out_lines.iter())
+        .any(|l| l.contains("screenshot saved=true"));
+    let exit_ok = status.as_ref().is_some_and(|s| s.success());
+    // Not part of the verdict — some verbs *exist* to walk a refusal path
+    // (delete-branch on an unmerged branch) — but always worth eyes.
+    let write_failures = err_lines
+        .iter()
+        .filter(|l| l.contains("write failed"))
+        .count();
+
+    for line in err_lines.iter().chain(out_lines.iter()) {
+        println!("  | {line}");
+    }
+    let mut shots: Vec<PathBuf> = std::fs::read_dir(&shot_dir)
+        .map(|it| {
+            it.flatten()
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|e| e == "png"))
+                .collect()
+        })
+        .unwrap_or_default();
+    shots.sort();
+    for shot in &shots {
+        println!("shot: {}", shot.display());
+    }
+
+    let verdict_ok = exit_ok && saved && !timed_out;
+    println!(
+        "{}: {} in {:.1}s (exit {}, screenshot saved={}, write-failures {}{})",
+        if verdict_ok { "PASS" } else { "FAIL" },
+        opts.verb,
+        elapsed.as_secs_f32(),
+        status.map_or_else(
+            || "?".into(),
+            |s| s.code().map_or("signal".into(), |c| c.to_string())
+        ),
+        saved,
+        write_failures,
+        if timed_out { ", TIMED OUT" } else { "" },
+    );
+    if verdict_ok {
+        Ok(())
+    } else {
+        Err(format!("verify-ui {} failed", opts.verb))
+    }
+}
+
+/// Drains a pipe on its own thread, so a chatty child never blocks on a
+/// full pipe while the parent waits for it to exit.
+fn collect_lines<R: std::io::Read + Send + 'static>(
+    reader: R,
+) -> std::thread::JoinHandle<Vec<String>> {
+    std::thread::spawn(move || {
+        std::io::BufReader::new(reader)
+            .lines()
+            .map_while(Result::ok)
+            .collect()
+    })
+}

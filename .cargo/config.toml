@@ -1,0 +1,4 @@
+# `cargo xtask <command>` — the cross-platform dev task runner
+# (crates/xtask). See CLAUDE.md: no Windows-only dev tooling.
+[alias]
+xtask = "run --quiet -p xtask --"

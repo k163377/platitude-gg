@@ -1,0 +1,11 @@
+[package]
+name = "xtask"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# Deliberately no `[lints] workspace = true`: this is a CLI dev tool whose
+# job is printing to stdout, which the workspace lints deny for the app.
+
+[dependencies]
