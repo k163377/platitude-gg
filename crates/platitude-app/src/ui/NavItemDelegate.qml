@@ -28,6 +28,17 @@ Item {
     property real listWidth: 200
     // Shows the hover stage/unstage affordance (WIP view).
     property bool showStage: false
+    /// Which row the standing question is about, as `<bucket>:<path>` —
+    /// held by the list, since a delegate is recycled the moment its row
+    /// scrolls off. The words are on the bar above the list; the row
+    /// answers "which one" and nothing else (デザイン規約
+    /// §可否・警告の出し場所). Buckets are part of the key because one
+    /// file changed on both sides has a row on each.
+    property string askKey: ""
+    property bool askDanger: false
+    readonly property bool marked:
+        navRow.askKey !== "" && !navRow.folder
+        && navRow.askKey === navRow.bucket + ":" + navRow.fullName
 
     // ---- the two-click gestures ------------------------------------
     // Which row was clicked last, and which is being typed into, are held
@@ -95,6 +106,20 @@ Item {
         anchors.fill: parent
         color: Theme.bgHover
         visible: itemMouse.containsMouse
+    }
+    // The mark the graph's rows wear for the same reason, in the same
+    // tone as the bar asking about this one.
+    Rectangle {
+        anchors.fill: parent
+        color: Theme.bgHover
+        visible: navRow.marked
+        Rectangle {
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: Metrics.laneStroke
+            color: navRow.askDanger ? Theme.danger : Theme.warning
+        }
     }
     RowLayout {
         anchors.fill: parent

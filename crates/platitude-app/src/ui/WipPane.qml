@@ -30,6 +30,35 @@ ColumnLayout {
     /// Right-click on a file row; the page owns the menu because
     /// delegates are recycled out from under an open popup.
     signal fileMenuRequested(string bucket, string path)
+    /// The question bar over the file list was answered / walked away
+    /// from. The page holds what the question guarded.
+    signal askConfirmed()
+    signal askCancelled()
+
+    // ---- a standing question about one file ------------------------
+    // The same bar the graph raises, over the list the file is in: the
+    // question is written on the bar and the file's own row is marked
+    // (デザイン規約 §可否・警告の出し場所).
+    /// Which row is being asked about, as `<bucket>:<path>`.
+    property string askKey: ""
+    function startAsking(key, label, detail, accept) {
+        wipPane.askKey = key
+        askBar.label = label
+        askBar.detail = detail
+        askBar.accept = accept
+    }
+    function stopAsking() {
+        wipPane.askKey = ""
+        askBar.label = ""
+    }
+    /// A click on anything in this pane other than the bar walks away
+    /// from the question, the way one anywhere else does — and every
+    /// click here either moves rows between the buckets the mark names
+    /// or leaves the list behind entirely.
+    function leaveAsk() {
+        if (askBar.open)
+            wipPane.askCancelled()
+    }
 
     readonly property string subjectText: wipSubject.text
     readonly property string bodyText: wipBody.text
@@ -115,8 +144,13 @@ ColumnLayout {
                 ToolTip.visible: hovered
                 ToolTip.delay: 600
                 ToolTip.text: qsTr("Set these changes aside for later")
-                onClicked: wipPane.stashPanelShown ? wipPane.closeStashPanel()
-                                                   : wipPane.openStashPanel()
+                onClicked: {
+                    wipPane.leaveAsk()
+                    if (wipPane.stashPanelShown)
+                        wipPane.closeStashPanel()
+                    else
+                        wipPane.openStashPanel()
+                }
             }
             HoverToolButton {
                 padding: 0
@@ -362,7 +396,10 @@ ColumnLayout {
                      && wipPane.repoTab.identityReady
                      && wipSubject.text.trim() !== ""
                      && (wipPane.amending || wipPane.workTree.stagedCount > 0)
-            onClicked: wipPane.commitClicked()
+            onClicked: {
+                wipPane.leaveAsk()
+                wipPane.commitClicked()
+            }
             ToolTip.visible: commitHover.containsMouse && !enabled
             ToolTip.delay: 300
             ToolTip.text: !wipPane.repoTab.identityReady
@@ -377,6 +414,17 @@ ColumnLayout {
                 acceptedButtons: Qt.NoButton
             }
         }
+    }
+    // Between the editor and the rows it is about: the list moves down
+    // rather than losing its top rows behind the bar.
+    AskBar {
+        id: askBar
+        Layout.fillWidth: true
+        // Everything asked over this list ends in work being thrown
+        // away, and nothing here reaches past this machine (§状態).
+        danger: true
+        onConfirmed: wipPane.askConfirmed()
+        onCancelled: wipPane.askCancelled()
     }
     ListView {
         id: wipList
@@ -425,6 +473,7 @@ ColumnLayout {
                         ? qsTr("Unstage everything")
                         : qsTr("Stage everything, untracked included")
                     onClicked: {
+                        wipPane.leaveAsk()
                         if (bucketHeader.section === "staged")
                             wipPane.repoTab.unstageAll()
                         else
@@ -437,12 +486,20 @@ ColumnLayout {
             listWidth: wipList.width
             kindHint: "wt"
             showStage: true
-            onFileClicked: (bucket, path, origPath) =>
+            askKey: wipPane.askKey
+            askDanger: askBar.danger
+            onFileClicked: (bucket, path, origPath) => {
+                wipPane.leaveAsk()
                 wipPane.fileActivated(bucket, path, origPath)
+            }
             onFileMenuRequested: (bucket, path) =>
                 wipPane.fileMenuRequested(bucket, path)
-            onFolderClicked: key => wipPane.worktreeModel.toggleFolder(key)
+            onFolderClicked: key => {
+                wipPane.leaveAsk()
+                wipPane.worktreeModel.toggleFolder(key)
+            }
             onStageClicked: (bucket, path) => {
+                wipPane.leaveAsk()
                 if (bucket === "staged")
                     wipPane.repoTab.unstagePath(path)
                 else

@@ -35,6 +35,9 @@ Item {
 
     // Right pane switches to the working-tree (WIP) view.
     property bool wipShown: false
+    // Leaving the file list takes its question with it: the bar goes off
+    // screen with the pane, and nothing off screen may be answered.
+    onWipShownChanged: if (!page.wipShown) page.stopRowAsk()
     // Selected stash row's reflog selector ("" = not a stash).
     property string selectedStashRef: ""
     function showWip() {
@@ -211,11 +214,25 @@ Item {
     property var rowAskRun: null
     function startRowAsk(oidHex, label, detail, danger, acceptText, run) {
         page.rowAskRun = run
+        // One question stands at a time, wherever it was raised.
+        wipPane.stopAsking()
         graphPane.startAsking(oidHex, label, detail, acceptText, danger)
+    }
+    /// The same, over the working tree's file list: the question is about
+    /// one file, so it is asked where that file's row is (デザイン規約
+    /// §可否・警告の出し場所). `key` is `<bucket>:<path>`, which is what
+    /// the row marks itself by.
+    function startFileAsk(key, label, detail, acceptText, run) {
+        page.rowAskRun = run
+        graphPane.stopAsking()
+        wipPane.startAsking(key, label, detail, acceptText)
+        if (AppBackend.autoAct !== "")
+            AppBackend.report("file_ask key=" + key)
     }
     function stopRowAsk() {
         page.rowAskRun = null
         graphPane.stopAsking()
+        wipPane.stopAsking()
     }
     function answerRowAsk() {
         const run = page.rowAskRun
@@ -436,9 +453,40 @@ Item {
     property string menuFilePath: ""
     property string menuFileBucket: ""
     function openFileMenu(bucket, path) {
+        // A right-click is a click: it walks away from a question that
+        // was standing, which may well be about another row.
+        page.stopRowAsk()
         page.menuFileBucket = bucket
         page.menuFilePath = path
         fileMenu.popup()
+        // Which rows the menu offers follows from the bucket, and a
+        // greyed or absent row is not something a screenshot can be
+        // trusted on.
+        if (AppBackend.autoAct !== "")
+            AppBackend.report("file_menu bucket=" + bucket)
+    }
+    /// The two rows that end in something being gone for good. Both are
+    /// asked over the list the file is in, with its row marked, so the
+    /// file is named once — by the row itself.
+    ///
+    /// Only what is outside the index can be thrown away here: the staged
+    /// side is a click from being unstaged, and git refuses to restore a
+    /// path it has not been told how to merge yet.
+    function askDiscardFile(path) {
+        page.startFileAsk(
+            "unstaged:" + path,
+            qsTr("Discard changes to this file?"),
+            qsTr("Unstaged edits are kept nowhere else."),
+            qsTr("Discard changes"),
+            function () { repoTab.discardPath(path) })
+    }
+    function askDeleteFile(path) {
+        page.startFileAsk(
+            "untracked:" + path,
+            qsTr("Delete this file?"),
+            qsTr("Nothing has a copy — git never recorded it."),
+            qsTr("Delete file"),
+            function () { repoTab.removeUntracked(path) })
     }
     AppMenu {
         id: fileMenu
@@ -448,6 +496,22 @@ Item {
             enabled: repoTab.busyCount === 0
                      && page.menuFileBucket !== "conflicts"
             onTriggered: repoTab.stashPath(page.menuFilePath, "")
+        }
+        // One row or the other, never both: what a tracked file loses is
+        // its edits, what an untracked one loses is itself
+        // (デザイン規約 §その他の操作). The ellipsis is the one on
+        // `Delete…` — it says a question comes first.
+        AppMenuItem {
+            text: qsTr("Discard changes…")
+            visible: page.menuFileBucket === "unstaged"
+            enabled: repoTab.busyCount === 0
+            onTriggered: page.askDiscardFile(page.menuFilePath)
+        }
+        AppMenuItem {
+            text: qsTr("Delete file…")
+            visible: page.menuFileBucket === "untracked"
+            enabled: repoTab.busyCount === 0
+            onTriggered: page.askDeleteFile(page.menuFilePath)
         }
         AppMenuSeparator {}
         AppMenuItem {
@@ -824,8 +888,27 @@ Item {
             wipPane.openStashPanel()
             if (arg === "staged-only")
                 wipPane.stashClickStagedOnly()
-        } else if (act === "file-menu") {
-            page.openFileMenu("unstaged", arg)
+        } else if (act === "file-menu" || act === "file-menu-untracked"
+                   || act === "file-menu-staged") {
+            // Which rows a file row offers follows from its bucket, so
+            // each bucket has its own way in here.
+            page.openFileMenu(act === "file-menu" ? "unstaged"
+                              : act === "file-menu-staged" ? "staged"
+                              : "untracked", arg)
+        } else if (act === "discard-file" || act === "discard-file-go"
+                   || act === "delete-file" || act === "delete-file-go") {
+            // Through the file menu, where a right-click enters it: a
+            // tracked file's row offers the discard, an untracked one's
+            // the delete. Both stop at the question; "-go" answers it.
+            const untracked = act.startsWith("delete-file")
+            page.showWip()
+            page.openFileMenu(untracked ? "untracked" : "unstaged", arg)
+            if (untracked)
+                page.askDeleteFile(arg)
+            else
+                page.askDiscardFile(arg)
+            if (act.endsWith("-go"))
+                page.answerRowAsk()
         } else if (act === "amend-author") {
             // The amend editor with authorship on offer, left standing.
             wipPane.setAmendChecked(true)
@@ -1633,6 +1716,8 @@ Item {
                             repoTab.pushStash(message, untracked, keepIndex, stagedOnly)
                         onFileMenuRequested: (bucket, path) =>
                             page.openFileMenu(bucket, path)
+                        onAskConfirmed: page.answerRowAsk()
+                        onAskCancelled: page.stopRowAsk()
                     }
 
                     DetailsPane {
