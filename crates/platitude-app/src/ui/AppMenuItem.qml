@@ -77,16 +77,28 @@ MenuItem {
 
     contentItem: RowLayout {
         spacing: Theme.spaceSm
-        Rectangle {
+        // The chip spends no width of its own: the layout sees only the
+        // glyphs, so the word starts exactly where every other row
+        // starts its words, and its distance to the rest of the sentence
+        // stays an ordinary word gap. The tint hangs outside that box —
+        // left into the row padding, right into the gap — half tint,
+        // half air (デザイン規約 §git 用語のコード表記).
+        Item {
             id: codeChip
             visible: menuItem.code !== ""
-            implicitWidth: codeLabel.implicitWidth + 2 * Theme.spaceXs
+            implicitWidth: codeLabel.implicitWidth
             implicitHeight: codeLabel.implicitHeight
-            radius: Theme.radiusSm
-            // A faint lift off whatever the row is showing underneath —
-            // the menu card at rest, the accent under the pointer, the
-            // hold tone mid-hold — the way inline code sits in prose.
-            color: Theme.bgHover
+            Rectangle {
+                anchors.fill: parent
+                anchors.leftMargin: -Theme.spaceXs
+                anchors.rightMargin: -Theme.spaceXs
+                radius: Theme.radiusSm
+                // A faint lift off whatever the row is showing under it —
+                // the menu card at rest, the accent under the pointer,
+                // the hold tone mid-hold — the way inline code sits in
+                // prose.
+                color: Theme.bgHover
+            }
             Label {
                 id: codeLabel
                 anchors.centerIn: parent
