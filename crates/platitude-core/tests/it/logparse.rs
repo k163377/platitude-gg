@@ -1,11 +1,9 @@
 //! Validates the log format + streaming parser against real `git log`
 //! output, including the `-z` record-terminator behavior.
 
-mod support;
-
+use crate::support::TestRepo;
 use platitude_core::parse::log::{LOG_FORMAT_ARG, LogParser};
 use platitude_core::{GitCommand, GitExecutor};
-use support::TestRepo;
 use tokio_util::sync::CancellationToken;
 
 /// Builds: root ── a ── merge(main) with a side branch, plus a unicode

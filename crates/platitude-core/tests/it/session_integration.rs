@@ -3,15 +3,13 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
-mod support;
-
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::support::TestRepo;
 use platitude_core::details::DiffTarget;
 use platitude_core::session::{RepoSession, SessionEvent, SessionSink};
 use platitude_core::{GitExecutor, Oid};
-use support::TestRepo;
 
 struct CaptureSink {
     events: Mutex<Vec<SessionEvent>>,

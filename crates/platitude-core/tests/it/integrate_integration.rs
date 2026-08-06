@@ -4,17 +4,15 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
-mod support;
-
 use std::path::{Path, PathBuf};
 
+use crate::support::TestRepo;
 use platitude_core::conflict::{self, ConflictKind, Side};
 use platitude_core::integrate::{self, Continuation, InProgress, MergeOptions, RebaseOptions};
 use platitude_core::process::GitExecutor;
 use platitude_core::repo::RepoInfo;
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 use platitude_core::{opstate, publish, status};
-use support::TestRepo;
 use tokio_util::sync::CancellationToken;
 
 fn env() -> (GitExecutor, CancellationToken) {

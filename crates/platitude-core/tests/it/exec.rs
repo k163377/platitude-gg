@@ -1,11 +1,9 @@
 //! Integration tests for the execution layer against the real system git.
 
-mod support;
-
 use std::time::Duration;
 
+use crate::support::TestRepo;
 use platitude_core::{GitCommand, GitError, GitExecutor, repo, version};
-use support::TestRepo;
 use tokio_util::sync::CancellationToken;
 
 #[tokio::test]

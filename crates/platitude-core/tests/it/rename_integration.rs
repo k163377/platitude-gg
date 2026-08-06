@@ -3,11 +3,9 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
-mod support;
-
+use crate::support::TestRepo;
 use platitude_core::process::GitExecutor;
 use platitude_core::{stash, tag};
-use support::TestRepo;
 use tokio_util::sync::CancellationToken;
 
 fn env() -> (GitExecutor, CancellationToken) {

@@ -4,11 +4,9 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::expect_used)]
 
-mod support;
-
+use crate::support::TestRepo;
 use platitude_core::refs::{self, RefKind};
 use platitude_core::{GitExecutor, Oid};
-use support::TestRepo;
 use tokio_util::sync::CancellationToken;
 
 /// main (upstream: origin/main) + feature (no upstream, same name on

@@ -3,12 +3,10 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
-mod support;
-
+use crate::support::TestRepo;
 use platitude_core::details::{self, DiffTarget};
 use platitude_core::preview::{self, IMAGE_BYTE_CAP};
 use platitude_core::{GitExecutor, Oid};
-use support::TestRepo;
 use tokio_util::sync::CancellationToken;
 
 /// A tiny valid PNG (1x1 RGBA). Contains NUL bytes, so git classifies the

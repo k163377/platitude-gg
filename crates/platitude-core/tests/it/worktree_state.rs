@@ -4,11 +4,9 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
-mod support;
-
+use crate::support::TestRepo;
 use platitude_core::status::StatusItem;
 use platitude_core::{GitExecutor, opstate, stash, status};
-use support::TestRepo;
 use tokio_util::sync::CancellationToken;
 
 /// staged add + staged rename + unstaged modify + untracked, on main with
@@ -199,7 +197,7 @@ fn fixture_dir() -> std::path::PathBuf {
 }
 
 /// Regenerates the committed fixture bytes from real git output. Run with:
-/// `cargo test -p platitude-core --test worktree_state -- --ignored capture`
+/// `cargo test -p platitude-core --test it -- --ignored capture`
 /// then review the diff (never hand-edit the .bin files).
 #[tokio::test]
 #[ignore = "regenerates committed fixtures; run explicitly and review the diff"]
@@ -224,7 +222,7 @@ fn read_fixture(name: &str) -> Vec<u8> {
     std::fs::read(&path).unwrap_or_else(|e| {
         panic!(
             "missing fixture {} ({e}); regenerate with: cargo test -p platitude-core \
-             --test worktree_state -- --ignored capture",
+             --test it -- --ignored capture",
             path.display()
         )
     })
