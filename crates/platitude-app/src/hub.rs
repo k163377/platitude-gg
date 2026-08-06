@@ -52,6 +52,11 @@ pub enum TabMsg {
     MoveBlocked {
         kind: String,
     },
+    /// A branch move would leave commits unreachable and was not made.
+    MoveNeedsAsk {
+        local: String,
+        start: String,
+    },
     /// How much of a range a remote already has (rewrite warning).
     Publish {
         range: String,
@@ -140,6 +145,9 @@ pub enum CommandMsg {
         code: Option<i32>,
         /// Why there is no code, for the row to say instead.
         note: String,
+        /// The code is an answer this command was asked for, so the row
+        /// is not a failure however it exited.
+        answered: bool,
         elapsed_ms: i64,
         message: String,
     },
@@ -376,7 +384,9 @@ impl SessionSink for BridgeSink {
                 message,
             } => {
                 let (code, note) = match end {
-                    CommandEnd::Exited(code) => (Some(code), String::new()),
+                    CommandEnd::Exited(code) | CommandEnd::Answered(code) => {
+                        (Some(code), String::new())
+                    }
                     CommandEnd::TimedOut => (None, "timed out".to_string()),
                     CommandEnd::Cancelled => (None, "cancelled".to_string()),
                     CommandEnd::Failed => (None, "did not run".to_string()),
@@ -385,6 +395,9 @@ impl SessionSink for BridgeSink {
                     id,
                     code,
                     note,
+                    // An answer by exit code is not a failure, whatever
+                    // the code says.
+                    answered: matches!(end, CommandEnd::Answered(_)),
                     elapsed_ms: elapsed_ms as i64,
                     message,
                 });
@@ -392,6 +405,9 @@ impl SessionSink for BridgeSink {
             SessionEvent::OpFailed { op, error } => self.feeds.tab.push(TabMsg::OpError {
                 message: format!("{op}: {error}"),
             }),
+            SessionEvent::MoveNeedsAsk { local, start } => {
+                self.feeds.tab.push(TabMsg::MoveNeedsAsk { local, start })
+            }
             SessionEvent::MoveBlocked { block } => {
                 use platitude_core::branch::CheckoutBlock;
                 self.feeds.tab.push(TabMsg::MoveBlocked {

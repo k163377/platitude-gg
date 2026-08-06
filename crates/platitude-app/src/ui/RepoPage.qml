@@ -73,6 +73,7 @@ Item {
                 page.selectedPublished = repoTab.publishPublished > 0
             page.absorbHeadMessage()
             page.absorbMoveBlock()
+            page.absorbMoveAsk()
             page.absorbWriteResult()
         }
     }
@@ -180,7 +181,12 @@ Item {
         if (branchesModel.oidOfName(local) === "")
             page.switchTo("remote", name, local, "")
         else
-            page.askMoveBranchOnto(local, name)
+            // Whether this is worth asking about is git's to answer: a
+            // branch that has only fallen behind loses nothing by moving,
+            // and the question's own words ("commits only X has") would be
+            // describing something that does not exist. It comes back as
+            // `moveAskSeq` when there really is something to lose.
+            repoTab.checkoutMovingBranch(local, name)
     }
 
     // A local branch of that name exists, and it is not here — its own
@@ -255,6 +261,16 @@ Item {
 
     // A refusal arrives on its own counter: the same answer can be needed
     // twice in a row, and only a fresh one may raise the dialog.
+    // The same shape for the branch move git says is worth asking about:
+    // its own counter, because the same move can be asked about twice.
+    property int seenMoveAskSeq: 0
+    function absorbMoveAsk() {
+        if (repoTab.moveAskSeq === page.seenMoveAskSeq)
+            return
+        page.seenMoveAskSeq = repoTab.moveAskSeq
+        page.askMoveBranchOnto(repoTab.moveAskLocal, repoTab.moveAskStart)
+    }
+
     property int seenMoveBlockSeq: 0
     function absorbMoveBlock() {
         if (repoTab.moveBlockSeq === page.seenMoveBlockSeq)

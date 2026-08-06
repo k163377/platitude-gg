@@ -270,6 +270,13 @@ pub enum SessionEvent {
     MoveBlocked {
         block: branch::CheckoutBlock,
     },
+    /// A branch move would leave commits unreachable, so it was not made.
+    /// Nothing changed; the UI asks before running it for real
+    /// ([`RepoSession::checkout`] with [`CheckoutTarget::ForceCreate`]).
+    MoveNeedsAsk {
+        local: String,
+        start: String,
+    },
     /// A write operation started; the UI can show it as in flight.
     WriteStarted {
         op: &'static str,
@@ -1415,6 +1422,37 @@ impl RepoSession {
             "checkout",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
+                let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
+                session.report_move(outcome);
+                Ok(())
+            },
+        );
+    }
+
+    /// Moves a local branch onto `start` and lands on it, asking first only
+    /// when there is something to ask about.
+    ///
+    /// Landing on a branch that has fallen behind is the everyday case and
+    /// loses nothing: every commit it has is already reachable from where
+    /// it is going, so the move is a fast-forward and simply happens. Only
+    /// where the branch holds commits `start` does not — the case the
+    /// question's own words describe — does this stop and emit
+    /// [`SessionEvent::MoveNeedsAsk`] without touching anything.
+    ///
+    /// The check is a read, so a refusal here has nothing to undo.
+    pub fn checkout_moving_branch(self: &Arc<Self>, local: String, start: String) {
+        let session = Arc::clone(self);
+        self.write(
+            "checkout",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                if !branch::is_merged_into(&exec, &repo.workdir, &local, &start, &cancel).await? {
+                    session
+                        .sink
+                        .event(SessionEvent::MoveNeedsAsk { local, start });
+                    return Ok(());
+                }
+                let target = CheckoutTarget::ForceCreate { local, start };
                 let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
                 session.report_move(outcome);
                 Ok(())

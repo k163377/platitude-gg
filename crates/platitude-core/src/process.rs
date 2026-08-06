@@ -97,6 +97,10 @@ fn shell_quote(arg: &str) -> std::borrow::Cow<'_, str> {
 pub enum CommandEnd {
     /// The process ran and returned this code (`-1` = killed by a signal).
     Exited(i32),
+    /// The process ran and its non-zero code is the answer that was asked
+    /// for, not a failure (`merge-base --is-ancestor` says "no" with 1).
+    /// The log keeps the row and its code; it just does not raise itself.
+    Answered(i32),
     TimedOut,
     Cancelled,
     /// git never started, or the pipes died under it. The reported message
@@ -132,6 +136,8 @@ pub struct GitCommand {
     /// Applied after [`FIXED_ENV`], so a command can override a default
     /// (interactive rebase replaces the editors).
     env: Vec<(OsString, OsString)>,
+    /// This command answers by exit code, so a non-zero one is data.
+    answers_by_code: bool,
 }
 
 impl GitCommand {
@@ -141,7 +147,16 @@ impl GitCommand {
             cwd: None,
             timeout: Some(DEFAULT_TIMEOUT),
             env: Vec::new(),
+            answers_by_code: false,
         }
+    }
+
+    /// Marks a command whose non-zero exit is the answer rather than a
+    /// failure, so the command log keeps the row without raising itself
+    /// over it (デザイン規約 §git が言ったことを読む場所).
+    pub fn answers_by_code(mut self) -> Self {
+        self.answers_by_code = true;
+        self
     }
 
     pub fn arg(mut self, arg: impl Into<OsString>) -> Self {
@@ -448,7 +463,11 @@ impl GitExecutor {
                     "git finished"
                 );
                 report(
-                    CommandEnd::Exited(code),
+                    if cmd.answers_by_code {
+                        CommandEnd::Answered(code)
+                    } else {
+                        CommandEnd::Exited(code)
+                    },
                     String::from_utf8_lossy(&stderr).trim_end(),
                 );
                 Ok(GitOutput {

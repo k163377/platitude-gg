@@ -253,7 +253,11 @@ pub async fn is_merged_into(
 ) -> Result<bool, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .args(["merge-base", "--is-ancestor", rev, into]);
+        .args(["merge-base", "--is-ancestor", rev, into])
+        // Exit 1 here means "no", which is half of what this asks. Left
+        // unmarked, the command log would read it as a failure and raise
+        // itself over an answer.
+        .answers_by_code();
     let out = executor.run_unchecked(cmd, cancel).await?;
     match out.code {
         0 => Ok(true),

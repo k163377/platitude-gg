@@ -76,6 +76,11 @@ pub struct RepoTab {
     /// a second refusal of the same kind still has to raise it again.
     move_block: String,
     move_block_seq: i32,
+    /// A branch move that would leave commits unreachable, waiting to be
+    /// asked about. Nothing has happened yet.
+    move_ask_local: String,
+    move_ask_start: String,
+    move_ask_seq: i32,
     /// Auto fetch, reported apart from the shared busy/error surface so an
     /// offline machine does not raise a banner every interval.
     auto_fetch_running: bool,
@@ -123,6 +128,9 @@ impl Default for RepoTab {
             write_seq: 0,
             move_block: String::new(),
             move_block_seq: 0,
+            move_ask_local: String::new(),
+            move_ask_start: String::new(),
+            move_ask_seq: 0,
             auto_fetch_running: false,
             auto_fetch_error: String::new(),
             feed: None,
@@ -227,6 +235,9 @@ impl RepoTab {
     qproperty!("writeSeq", Member = write_seq, Notify = changed);
     qproperty!("moveBlock", Member = move_block, Notify = changed);
     qproperty!("moveBlockSeq", Member = move_block_seq, Notify = changed);
+    qproperty!("moveAskLocal", Member = move_ask_local, Notify = changed);
+    qproperty!("moveAskStart", Member = move_ask_start, Notify = changed);
+    qproperty!("moveAskSeq", Member = move_ask_seq, Notify = changed);
     qproperty!(
         "autoFetchRunning",
         Member = auto_fetch_running,
@@ -366,6 +377,11 @@ impl RepoTab {
                 TabMsg::MoveBlocked { kind } => {
                     self.move_block = kind;
                     self.move_block_seq += 1;
+                }
+                TabMsg::MoveNeedsAsk { local, start } => {
+                    self.move_ask_local = local;
+                    self.move_ask_start = start;
+                    self.move_ask_seq += 1;
                 }
                 TabMsg::WriteState { op, running, error } => {
                     if running {
@@ -587,6 +603,15 @@ impl RepoTab {
     fn checkout_remote(&mut self, remote_ref: String, local: String, carry: String) {
         let target = platitude_core::branch::CheckoutTarget::Track { remote_ref, local };
         self.move_head(target, &carry);
+    }
+
+    /// Moves an existing local branch to `start` and lands on it, but only
+    /// where nothing is lost by it: a branch that has merely fallen behind
+    /// fast-forwards straight away, and one holding commits of its own
+    /// comes back as `moveAskSeq` for the UI to ask about.
+    #[qslot]
+    fn checkout_moving_branch(&mut self, local: String, start: String) {
+        self.with_session(|s| s.checkout_moving_branch(local.clone(), start.clone()));
     }
 
     /// Moves an existing local branch to `start` and lands on it. What the

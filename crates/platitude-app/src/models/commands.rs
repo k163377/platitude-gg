@@ -182,6 +182,7 @@ impl CommandsModel {
                     id,
                     code,
                     note,
+                    answered,
                     elapsed_ms,
                     message,
                 } => {
@@ -193,7 +194,10 @@ impl CommandsModel {
                     let Some(row) = self.rows.get(index).cloned() else {
                         continue;
                     };
-                    let ok = code == Some(0);
+                    // A command asked to answer by its exit code has not
+                    // failed by answering: the row keeps the code it
+                    // returned, and the log stays where the reader put it.
+                    let ok = answered || code == Some(0);
                     self.set(
                         index,
                         CommandItem {
