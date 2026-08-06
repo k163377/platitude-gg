@@ -131,6 +131,10 @@ Rectangle {
             }
 
             Label {
+                // Children of a ListView are adopted by its contentItem,
+                // which is 0×0 while the list is empty — pin the label to
+                // the view itself so "empty" is said in its middle.
+                parent: list
                 anchors.centerIn: parent
                 visible: list.count === 0
                 text: qsTr("Nothing yet — the commands this window runs "
