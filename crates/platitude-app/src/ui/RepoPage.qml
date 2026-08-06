@@ -735,11 +735,14 @@ Item {
             onTriggered: page.squashCommit(page.menuOid)
         }
         // Three ways to take the branch back to this commit, told apart
-        // by what becomes of the work they skip over rather than by
-        // git's own words for the modes. A submenu keeps the choice out
-        // of the way until it is asked for; disabling the submenu itself
-        // greys the row that opens it (its items are never reachable
-        // while it is off).
+        // by what becomes of the work they skip over. The sentence never
+        // says the mode's name — git's own words ride ahead of it as a
+        // code chip instead (デザイン規約 §git 用語のコード表記), so the
+        // hand that knows `reset --soft` finds its row at a glance and
+        // the eye that does not reads the sentence alone. A submenu
+        // keeps the choice out of the way until it is asked for;
+        // disabling the submenu itself greys the row that opens it (its
+        // items are never reachable while it is off).
         AppMenu {
             id: resetMenu
             // "here" rather than "to this commit": the commit it means
@@ -750,16 +753,29 @@ Item {
                    : qsTr("Move the branch here")
             enabled: page.canMoveBranchHere
             AppMenuItem {
+                code: "reset --soft"
                 text: qsTr("Keep everything, staged")
                 onTriggered: page.moveBranchHere("soft")
             }
             AppMenuItem {
+                code: "reset --mixed"
                 text: qsTr("Keep everything, unstaged")
                 onTriggered: page.moveBranchHere("mixed")
             }
+            // Held, not asked about — the stash delete's judgement: a
+            // bar coming down over the whole graph is too much machinery
+            // for one row of it, and the hold says the same thing in the
+            // place the hand already is (デザイン規約 §長押し).
             AppMenuItem {
-                text: qsTr("Discard everything after it")
-                onTriggered: page.moveBranchHere("hard")
+                id: hardResetItem
+                code: "reset --hard"
+                text: qsTr("Hold to discard everything after it")
+                holdMs: Metrics.holdMs
+                onHeld: {
+                    resetMenu.close()
+                    commitMenu.close()
+                    page.moveBranchHere("hard")
+                }
             }
         }
     }
@@ -846,29 +862,13 @@ Item {
         && page.menuOid !== "" && page.menuOid !== workTree.headOid
         && page.menuStashRef === ""
 
-    // Only the discarding one is asked about. Keeping the work staged or
-    // unstaged leaves every byte where it is — the branch moves, and a
-    // commit puts back what it skipped — while discarding is the one
-    // that leaves nothing to put back.
+    // Only the discarding one is held, and it is held on its own row —
+    // no bar. Keeping the work staged or unstaged leaves every byte
+    // where it is — the branch moves, and a commit puts back what it
+    // skipped — while discarding is the one that leaves nothing to put
+    // back.
     function moveBranchHere(mode) {
-        // Held apart from the menu's own oid: the question outlives the
-        // menu, and the answer must still act on the row it was asked
-        // about.
-        const oid = page.menuOid
-        if (mode !== "hard") {
-            repoTab.resetTo(oid, mode)
-            return
-        }
-        // "after it": the marked row is the very commit the branch would
-        // go back to, so the question needs no other name for it.
-        page.startRowAsk(
-            oid,
-            qsTr("Discard everything after it?"),
-            qsTr("Changes to tracked files go too; untracked files stay."),
-            true,
-            qsTr("Hold to discard"),
-            function () { repoTab.resetTo(oid, "hard") },
-            true)
+        repoTab.resetTo(page.menuOid, mode)
     }
 
     // ---- editing the selected commit's message ---------------------
@@ -1263,18 +1263,20 @@ Item {
             rewordTimer.start()
         } else if (act === "cherry-pick") {
             repoTab.cherryPick(arg)
-        } else if (act === "reset-soft" || act === "reset-mixed"
-                   || act === "reset-hard-confirm") {
+        } else if (act === "reset-soft" || act === "reset-mixed") {
             // Through the menu, like clicking it: the row the menu was
-            // opened on is where the branch lands. "-confirm" stops at
-            // the question, so nothing should have moved until it is
-            // answered.
+            // opened on is where the branch lands.
             page.openRowMenu(arg)
-            page.moveBranchHere(act === "reset-soft" ? "soft"
-                                : act === "reset-mixed" ? "mixed" : "hard")
-        } else if (act === "reset-hard") {
-            // Past the question, for the discarding write itself.
-            repoTab.resetTo(arg, "hard")
+            page.moveBranchHere(act === "reset-soft" ? "soft" : "mixed")
+        } else if (act === "reset-hard" || act === "reset-hard-confirm") {
+            // Both stand where the click path stands: menu open, submenu
+            // up, the held row on screen. "-confirm" stops there —
+            // nothing has moved until the hold runs — and "reset-hard"
+            // runs the hold to its end for the discarding write itself.
+            page.openRowMenu(arg)
+            resetMenu.popup()
+            if (act === "reset-hard")
+                hardResetItem.completeHold()
         } else if (act === "commit-menu" || act === "reset-menu") {
             // Nothing written: the menu is left standing for the overlay
             // shot. Which rows are offered is said in words as well — a
