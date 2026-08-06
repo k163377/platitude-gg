@@ -477,8 +477,12 @@ Rectangle {
         // would die in exactly the repositories wide enough to need
         // panning, and nothing on screen would say why.
         onDoubleClicked: mouse => {
+            // mouse.y is in this MouseArea's frame, which starts at the
+            // pane's top; the list starts below the ask bar. Map, or a
+            // standing question makes every lane click land rows lower.
+            const p = lanePan.mapToItem(graphList, mouse.x, mouse.y)
             const idx = graphList.indexAt(graphArea.labelW + 1,
-                                          graphList.contentY + mouse.y)
+                                          graphList.contentY + p.y)
             if (idx < 0)
                 return
             // Asked of the row itself, so which chip a row leads to is
@@ -491,8 +495,10 @@ Rectangle {
         onReleased: mouse => {
             if (panning)
                 return
+            // Same frame correction as the double-click above.
+            const p = lanePan.mapToItem(graphList, mouse.x, mouse.y)
             const idx = graphList.indexAt(graphArea.labelW + 1,
-                                          graphList.contentY + mouse.y)
+                                          graphList.contentY + p.y)
             if (idx >= 0) {
                 graphList.currentIndex = idx
                 graphList.rowSelected(graphArea.graphModel.oidAt(idx))
