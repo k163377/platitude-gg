@@ -847,9 +847,12 @@ async fn switching_can_stash_the_working_tree_first() {
     session.close();
 }
 
-/// A stash that cannot run must not let the switch happen anyway.
+/// A switch that fails outright — a name git rejects, not a `Blocked`
+/// refusal — must not move HEAD, and must put the freshly made stash
+/// back: it was only the room the switch needed, and leaving it stashed
+/// makes the user's uncommitted work vanish from the editor.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_switch_whose_stash_fails_does_not_move_head() {
+async fn a_switch_that_fails_outright_puts_the_stashed_work_back() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "0\n", "root");
     repo.git(&["branch", "other"]);
@@ -866,6 +869,12 @@ async fn a_switch_whose_stash_fails_does_not_move_head() {
         "git rejected the branch name"
     );
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("f.txt")).unwrap(),
+        "uncommitted\n",
+        "the stashed work came back to the tree"
+    );
+    assert_eq!(repo.git(&["stash", "list"]), "", "no entry left behind");
     session.close();
 }
 

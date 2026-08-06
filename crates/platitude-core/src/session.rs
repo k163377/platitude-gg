@@ -1479,7 +1479,15 @@ impl RepoSession {
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let stashed = stash_everything(&exec, &repo, &cancel).await?;
-                let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
+                let outcome = match branch::checkout(&exec, &repo.workdir, &target, &cancel).await {
+                    Ok(outcome) => outcome,
+                    Err(error) => {
+                        if stashed {
+                            pop_back_after_failed_switch(&exec, &repo, &cancel).await;
+                        }
+                        return Err(error);
+                    }
+                };
                 if stashed && matches!(outcome, branch::CheckoutOutcome::Blocked(_)) {
                     stash::pop(&exec, &repo.workdir, STASH_TOP, &cancel).await?;
                 }
@@ -1518,7 +1526,13 @@ impl RepoSession {
                     session.report_move(outcome);
                     return Ok(());
                 }
-                let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
+                let outcome = match branch::checkout(&exec, &repo.workdir, &target, &cancel).await {
+                    Ok(outcome) => outcome,
+                    Err(error) => {
+                        pop_back_after_failed_switch(&exec, &repo, &cancel).await;
+                        return Err(error);
+                    }
+                };
                 if let branch::CheckoutOutcome::Blocked(_) = outcome {
                     // Nothing should stand in the way of a tree that was
                     // just emptied; put the work back rather than leave it
@@ -2481,6 +2495,27 @@ async fn stash_everything(
     let before = stash::tip(executor, &repo.workdir, cancel).await?;
     stash::push(executor, &repo.workdir, "", options, &[], cancel).await?;
     Ok(stash::tip(executor, &repo.workdir, cancel).await? != before)
+}
+
+/// Best-effort restore after a switch that failed outright (an `Err`,
+/// not a `Blocked` refusal — a refusal git words in a way
+/// `CheckoutBlock` does not know arrives here). The switch did nothing,
+/// so the stash was only the room it needed: put the work back before
+/// the caller surfaces the switch's own error. If even the pop fails,
+/// that is logged and the entry stays in the stash list, where the work
+/// is still recoverable — the switch error is the one worth showing.
+async fn pop_back_after_failed_switch(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    cancel: &CancellationToken,
+) {
+    if let Err(error) = stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await {
+        tracing::warn!(
+            %error,
+            "the switch failed and the stashed work could not be popped back; \
+             it remains in the stash list"
+        );
+    }
 }
 
 /// Whether the working tree has unmerged paths right now.
