@@ -56,6 +56,7 @@ crates/
 - **`git switch --merge` は使わない** — conflict しても exit 0 の「成功」で着地し、`MERGE_HEAD` を作らないので `merge --abort` が効かず(素の switch も「needs merge」で拒まれ、逃げ道は捨てる `switch --force` だけ)、さらに **staged が 1 つでもあると衝突ファイルでなくても拒否**する。未コミット変更を移動先へ運ぶのは **stash → switch → `stash pop --index`**(`session::checkout_merging`)。staged / unstaged の区別が残り、conflict 時は stash が残って戻れる
 - **`git stash pop` の非ゼロ終了は「何も起きなかった」を意味しない** — 作業ツリー側の conflict なら**マージ済み**でマーカーを残し stash も残す(`Index was not unstashed`)が、staged 側が衝突すると**丸ごと拒否**して何もしない(`conflicts in index. Try without --index.` → `--index` 無しで再試行する)。判定は exit code ではなく status の unmerged 有無で行う(実測)
 - 書き込みは**セッション単位のキューで直列化**する(ロックでは順序が保証されない — spawn したタスクが mutex を取る順は実行順と一致しない)
+- **複数コマンドの合成は 1 手目が失敗したら止める**(`?` で伝播。途中まで進めた状態で次を撃たない)。落とし穴は**失敗が `Ok` に化ける経路** — `switch` の拒否(`CheckoutOutcome::Blocked`)と `stash pop` の非ゼロ終了は成功として返るので、そこだけは明示的に判定し、**戻せるものは戻す**(`session::checkout_stashing` / `checkout_merging` は拒まれたら stash を pop で戻す)。失敗後に走ってよいのは読み取りだけ(`catch_up_after` の fetch)
 - `git config <key> <value>` に **`--` セパレータを付けない**(`--` 自体が値として保存される)。ダッシュ始まりの値はそのまま渡して通る
 - **identity(`user.name` / `user.email`)に独自バリデーションを足さない** — git が拒むのは**空の name だけ**(空 email は通り author 行が `<>` になる)。`<` `>` と改行は author 行から黙って落とされ、前後の空白・句読点は削られる。config 書き込み時に改行は `\n` にエスケープされるので設定注入は起きない(実測)
 - **署名の有無を `%G?` だけで判定しない** — SSH 署名は `gpg.ssh.allowedSignersFile` 未設定だと未署名と同じ `N` を返す。`git cat-file commit` のヘッダ(`gpgsig`)で存在を確認する。署名パスフレーズはアプリが扱わない(gpg-agent / ssh-agent の pinentry に委譲。**GUI pinentry 必須** — サブプロセスに端末が無い)
