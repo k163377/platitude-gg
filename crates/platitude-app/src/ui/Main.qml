@@ -296,14 +296,6 @@ ApplicationWindow {
         }
     }
 
-    // ---- confirmation ----------------------------------------------------
-    function confirm(heading, detail, acceptText, action) {
-        confirmDialog.ask(heading, detail, acceptText, action)
-    }
-    ConfirmDialog {
-        id: confirmDialog
-    }
-
     // ---- settings --------------------------------------------------------
     SettingsDialog {
         id: settingsDialog
@@ -374,8 +366,6 @@ ApplicationWindow {
                 RepoPage {
                     focusEpoch: root.focusEpoch
                     onScreen: root.onScreen
-                    onConfirmRequested: (heading, detail, acceptText, action) =>
-                        root.confirm(heading, detail, acceptText, action)
                     onOpenRepositoryPicker: folderDialog.open()
                     onOpenRepositoryPathRequested: path => tabsModel.openRepositoryPath(path)
                     onSettingsDialogRequested: settingsDialog.open()

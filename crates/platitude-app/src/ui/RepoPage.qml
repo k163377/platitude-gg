@@ -20,9 +20,6 @@ Item {
     // with empty models and the graph column offers the way in.
     readonly property bool blank: tab_id < 0
 
-    /// Ask the window's confirmation dialog (heading, detail, accept
-    /// wording, what to run on yes).
-    signal confirmRequested(string heading, string detail, string acceptText, var action)
     /// The blank page's "Open repository…" button (folder picker).
     signal openRepositoryPicker()
     /// A worktree row was clicked: open that path as a new tab.
@@ -196,8 +193,9 @@ Item {
             qsTr("Move %1 here?").arg(local),
             qsTr("Commits only %1 has stop being reachable.").arg(local),
             false,
-            qsTr("Move %1 here").arg(local),
-            function () { page.switchTo("force", local, local, remoteRef) })
+            qsTr("Hold to move"),
+            function () { page.switchTo("force", local, local, remoteRef) },
+            true)
         // Say it in words too: a smoke run asserts on the report line
         // without having to look at the shot.
         if (AppBackend.autoAct !== "")
@@ -478,8 +476,9 @@ Item {
             qsTr("Delete %1 anyway?").arg(name),
             qsTr("Commits only %1 has stop being reachable.").arg(name),
             true,
-            qsTr("Delete %1").arg(name),
-            function () { repoTab.deleteBranch(name, true) })
+            qsTr("Hold to delete"),
+            function () { repoTab.deleteBranch(name, true) },
+            true)
         if (AppBackend.autoAct !== "")
             AppBackend.report("force_delete_asked branch=" + name)
     }
@@ -816,8 +815,9 @@ Item {
             qsTr("Discard everything after it?"),
             qsTr("Changes to tracked files go too; untracked files stay."),
             true,
-            qsTr("Discard changes"),
-            function () { repoTab.resetTo(oid, "hard") })
+            qsTr("Hold to discard"),
+            function () { repoTab.resetTo(oid, "hard") },
+            true)
     }
 
     // ---- editing the selected commit's message ---------------------

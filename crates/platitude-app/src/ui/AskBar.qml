@@ -63,9 +63,14 @@ Rectangle {
     // Opening hands the pill the focus so the keyboard's way in needs no
     // hunting for it. The bar only ever opens because the person just asked
     // for it from a list, so there is no typing here to interrupt.
+    //
+    // A tick later, not now: the gesture that raised the question is still
+    // being delivered — a double-click on a graph row has a release and a
+    // second click behind it — and the list it lands on takes the focus
+    // back if the pill claims it first.
     onOpenChanged: {
         if (bar.open)
-            acceptPill.forceActiveFocus()
+            Qt.callLater(acceptPill.forceActiveFocus)
         else
             holdAnim.stop()
     }
@@ -179,7 +184,13 @@ Rectangle {
                 id: acceptMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                onClicked: if (!bar.hold) bar.confirmed()
+                // `released` inside the pill, not `clicked`: Qt stops
+                // emitting `clicked` once its own press-and-hold timer has
+                // gone off (800ms), so a click pill held down the way the
+                // hold pills ask for would answer nothing at all and say
+                // nothing about it. Releasing away from the pill still
+                // calls it off — `containsMouse` is what a click checked.
+                onReleased: if (!bar.hold && containsMouse) bar.confirmed()
                 // `containsPress`, not `pressed`: a press dragged off the
                 // pill has to call the hold off, the way letting go does.
                 // `pressed` stays true out there — it keeps the grab — and
