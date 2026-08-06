@@ -283,18 +283,25 @@ Rectangle {
                             return
                         ctx.lineWidth = Metrics.laneStroke
                         ctx.globalAlpha = 0.45
+                        // Same tokens as a row's geometry (uppercase =
+                        // dashed leash): a stash or WIP row whose target
+                        // sits past the cut keeps dotting through here.
                         const toks = graphArea.graphModel.tailGeometry.split(";")
                         for (let n = 0; n < toks.length; n++) {
-                            const dot = toks[n].indexOf(".")
-                            const lane = parseInt(toks[n].substring(0, dot))
-                            const color = parseInt(toks[n].substring(dot + 1))
+                            const t = toks[n]
+                            const dot = t.indexOf(".")
+                            const lane = parseInt(t.substring(1, dot))
+                            const color = parseInt(t.substring(dot + 1))
                             const x = Metrics.laneInset + lane * Metrics.laneW + Metrics.laneW / 2
                             ctx.strokeStyle = Theme.graphLane[color % Theme.graphLane.length]
+                            ctx.setLineDash(t[0] === t[0].toLowerCase()
+                                            ? [] : Metrics.laneDash)
                             ctx.beginPath()
                             ctx.moveTo(x, 0)
                             ctx.lineTo(x, height)
                             ctx.stroke()
                         }
+                        ctx.setLineDash([])
                     }
                     Connections {
                         target: graphArea.graphModel

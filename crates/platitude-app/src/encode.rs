@@ -115,12 +115,18 @@ pub fn avatar_code(author: &str) -> i32 {
 
 /// Lanes that touch the bottom edge of a row (from its geometry tokens):
 /// `t` segments plus `o` targets. Used by the truncation footer to draw
-/// the lanes running off the end of the window. Output: `lane.color;...`.
+/// the lanes running off the end of the window. Output keeps the row
+/// tokens' shape — `t<lane>.<color>`, uppercase for a dashed leash — so
+/// one rule reads the same on both sides of the cut. A leash does reach
+/// here: with many starting refs the walk can emit thousands of commits
+/// before it gets to HEAD, and the WIP row waits on that lane the whole
+/// way (measured on JetBrains/kotlin).
 pub fn tail_lanes(geometry: &str) -> String {
     let mut seen = std::collections::HashSet::new();
     let mut out = String::new();
     for token in geometry.split(';').filter(|t| t.len() > 1) {
-        let kind = token.as_bytes()[0].to_ascii_lowercase();
+        let head = token.as_bytes()[0];
+        let kind = head.to_ascii_lowercase();
         if kind != b't' && kind != b'o' {
             continue;
         }
@@ -132,6 +138,7 @@ pub fn tail_lanes(geometry: &str) -> String {
             if !out.is_empty() {
                 out.push(';');
             }
+            out.push(if head.is_ascii_uppercase() { 'T' } else { 't' });
             out.push_str(rest);
         }
     }
@@ -326,10 +333,14 @@ mod tests {
 
     #[test]
     fn tail_lanes_picks_bottom_touching_segments() {
-        assert_eq!(tail_lanes("t0.3;i2.11;o1.0"), "0.3;1.0");
+        assert_eq!(tail_lanes("t0.3;i2.11;o1.0"), "t0.3;t1.0");
         assert_eq!(tail_lanes("i2.5"), "", "into-node stops at the node");
-        assert_eq!(tail_lanes("t0.1;o0.2"), "0.1", "deduped by lane");
-        assert_eq!(tail_lanes("T0.4;O1.5"), "0.4;1.5", "dashed still counts");
+        assert_eq!(tail_lanes("t0.1;o0.2"), "t0.1", "deduped by lane");
+        assert_eq!(
+            tail_lanes("T0.4;O1.5"),
+            "T0.4;T1.5",
+            "a leash keeps dotting past the cut"
+        );
         assert_eq!(tail_lanes(""), "");
     }
 
