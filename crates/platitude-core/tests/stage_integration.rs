@@ -617,3 +617,15 @@ async fn staging_a_commit_diff_is_rejected() {
     .expect_err("committed diffs are not stageable");
     assert!(err.to_string().contains("cannot be staged"));
 }
+
+/// A fresh `git init` has no HEAD and an empty index; emptying that index
+/// is a no-op, not a fatal (実測 2026-08-07: without --ignore-unmatch,
+/// `git rm --cached -r -- .` exits 128 on "did not match any files").
+#[tokio::test]
+async fn unstage_all_on_an_unborn_empty_index_succeeds() {
+    let repo = TestRepo::init();
+    let (exec, cancel) = env();
+    stage::unstage_all(&exec, &repo.path, &cancel)
+        .await
+        .expect("unstaging nothing succeeds at its job");
+}

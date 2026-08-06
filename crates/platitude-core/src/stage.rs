@@ -56,11 +56,15 @@ pub async fn unstage_all(
         .oid
         .is_none();
     let cmd = if unborn {
-        // No HEAD to reset to; drop every entry instead.
+        // No HEAD to reset to; drop every entry instead. `--ignore-unmatch`
+        // because an empty index matches nothing and `git rm` calls that
+        // fatal — but "unstage nothing" has succeeded at its job (実測:
+        // `rm --cached -r -- .` in a fresh `git init` exits 128).
         GitCommand::new().cwd(workdir).args([
             "rm",
             "--cached",
             "-r",
+            "--ignore-unmatch",
             "--quiet",
             "--",
             ":(literal).",
@@ -91,7 +95,9 @@ pub async fn unstage_paths(
     let cmd = if unborn {
         GitCommand::new()
             .cwd(workdir)
-            .args(["rm", "--cached", "-r", "--quiet", "--"])
+            // `--ignore-unmatch` as in unstage_all: a path that is not in
+            // the index is already unstaged, not a fatal error.
+            .args(["rm", "--cached", "-r", "--ignore-unmatch", "--quiet", "--"])
     } else {
         GitCommand::new()
             .cwd(workdir)
