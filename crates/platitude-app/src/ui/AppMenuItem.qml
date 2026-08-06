@@ -21,6 +21,12 @@ MenuItem {
     /// not a phrase about it. It sits ahead of `text`, which carries
     /// whatever of the sentence is left ("this file"), often nothing.
     property string code: ""
+    /// The width this row asks the menu's shared chip column to hold:
+    /// its chip's own glyphs, when words follow them. A chip that ends
+    /// its row has nothing to line up with and asks for nothing.
+    readonly property real codeColSeat:
+        menuItem.code !== "" && menuItem.text !== ""
+        ? codeLabel.implicitWidth : 0
 
     /// Held rather than clicked, for a row that would otherwise have to
     /// raise a question of its own (デザイン規約 §長押し). Zero is an
@@ -77,19 +83,27 @@ MenuItem {
 
     contentItem: RowLayout {
         spacing: Theme.spaceSm
-        // The chip spends no width of its own: the layout sees only the
-        // glyphs, so the word starts exactly where every other row
-        // starts its words, and its distance to the rest of the sentence
-        // stays an ordinary word gap. The tint hangs outside that box —
-        // left into the row padding, right into the gap — half tint,
-        // half air (デザイン規約 §git 用語のコード表記).
+        // The chip spends no width of its own beyond the column: the
+        // layout sees the glyphs — or the menu's shared chip column
+        // when a sentence follows, so every such row's words start on
+        // the same x (デザイン規約 §git 用語のコード表記). The word
+        // itself starts where every other row starts its words, and the
+        // tint hangs outside its glyphs — left into the row padding,
+        // right into the gap — half tint, half air; the column's spare
+        // width stays air.
         Item {
             id: codeChip
             visible: menuItem.code !== ""
-            implicitWidth: codeLabel.implicitWidth
+            implicitWidth: {
+                const own = codeLabel.implicitWidth
+                if (menuItem.text === "" || !menuItem.menu)
+                    return own
+                const col = menuItem.menu.codeColW
+                return col !== undefined ? Math.max(col, own) : own
+            }
             implicitHeight: codeLabel.implicitHeight
             Rectangle {
-                anchors.fill: parent
+                anchors.fill: codeLabel
                 anchors.leftMargin: -Theme.spaceXs
                 anchors.rightMargin: -Theme.spaceXs
                 radius: Theme.radiusSm
@@ -101,7 +115,8 @@ MenuItem {
             }
             Label {
                 id: codeLabel
-                anchors.centerIn: parent
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
                 text: menuItem.code
                 font.family: Theme.monoFamily
                 font.pixelSize: menuItem.font.pixelSize

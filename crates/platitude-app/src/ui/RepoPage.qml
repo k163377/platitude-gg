@@ -735,9 +735,10 @@ Item {
             onTriggered: page.squashCommit(page.menuOid)
         }
         // Three ways to take the branch back to this commit, told apart
-        // by what becomes of the work they skip over. The sentence never
-        // says the mode's name — git's own words ride ahead of it as a
-        // code chip instead (デザイン規約 §git 用語のコード表記), so the
+        // by what becomes of the work they skip over. The command is
+        // said once, as the title row's own verb (`reset` main here, the
+        // way `stash` this file reads), and each row leads with just its
+        // flag as a code chip (デザイン規約 §git 用語のコード表記) — the
         // hand that knows `reset --soft` finds its row at a glance and
         // the eye that does not reads the sentence alone. A submenu
         // keeps the choice out of the way until it is asked for;
@@ -745,20 +746,22 @@ Item {
         // items are never reachable while it is off).
         AppMenu {
             id: resetMenu
+            titleCode: "reset"
             // "here" rather than "to this commit": the commit it means
             // is the row this menu was opened on, and the row already
             // says which one that is.
+            //: Follows the `reset` chip: "reset main here".
             title: workTree.branch !== ""
-                   ? qsTr("Move %1 here").arg(workTree.branch)
-                   : qsTr("Move the branch here")
+                   ? qsTr("%1 here").arg(workTree.branch)
+                   : qsTr("the branch here")
             enabled: page.canMoveBranchHere
             AppMenuItem {
-                code: "reset --soft"
+                code: "--soft"
                 text: qsTr("Keep everything, staged")
                 onTriggered: page.moveBranchHere("soft")
             }
             AppMenuItem {
-                code: "reset --mixed"
+                code: "--mixed"
                 text: qsTr("Keep everything, unstaged")
                 onTriggered: page.moveBranchHere("mixed")
             }
@@ -768,7 +771,7 @@ Item {
             // place the hand already is (デザイン規約 §長押し).
             AppMenuItem {
                 id: hardResetItem
-                code: "reset --hard"
+                code: "--hard"
                 text: qsTr("Hold to discard everything after it")
                 holdMs: Metrics.holdMs
                 onHeld: {
