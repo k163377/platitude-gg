@@ -34,6 +34,12 @@ pub struct NavItem {
     orig_path: String,
     is_head: bool,
     has_remote: bool,
+    /// This repository does not hold the ref, so the name greys. Only tags
+    /// are ever listed that way: a tag a remote has and this one does not
+    /// reaches no graph row, and the sidebar is where it can be read at
+    /// all. Written as the negative of core's `here` so every other kind
+    /// of row keeps it off by default.
+    only_remote: bool,
     /// The remote branch a local one speaks for (`origin/main`), empty for
     /// every other kind of row. What a rename of this row offers to carry
     /// over, and what the badge beside it is about.
@@ -457,9 +463,10 @@ impl NavSectionModel {
                         name: t.short.clone(),
                         oid_hex: t.oid_hex.clone(),
                         // Same badge as a branch: nothing means this tag
-                        // is only here. Real data needs ls-remote (Phase
-                        // 4); PG_FAKE_REMOTE_TAGS previews the look.
-                        has_remote: crate::encode::fake_remote_tag_set().contains(&t.short),
+                        // is only here. The bit comes off `ls-remote
+                        // --tags`, which the fetch carries.
+                        has_remote: t.has_remote,
+                        only_remote: !t.here,
                         ..Default::default()
                     })
                     .collect(),

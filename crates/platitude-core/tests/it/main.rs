@@ -17,6 +17,7 @@ mod logparse;
 mod preview_integration;
 mod refs_integration;
 mod remote_stash_integration;
+mod remote_tags_integration;
 mod rename_integration;
 mod session_integration;
 mod stage_integration;

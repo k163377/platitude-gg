@@ -16,8 +16,8 @@
 //! because a command that stops halfway (a conflicted merge, an interrupted
 //! rebase) has still changed the repository.
 
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -107,11 +107,16 @@ pub enum LabelKind {
 pub struct RefLabel {
     pub text: String,
     pub kind: LabelKind,
-    /// Badge state for local branches (local-only vs has-remote); the PR
-    /// dimension is wired in Phase 4.
+    /// Cloud badge: this name is on a remote as well. The PR dimension is
+    /// wired in Phase 4.
     pub has_remote: bool,
     /// True when HEAD is on this branch (bold chip).
     pub is_head: bool,
+    /// Whether this repository holds the ref — the whereabouts the chip
+    /// writes in the name's colour (デザイン規約 §ref の種別). False for a
+    /// remote branch, and for a tag that is only over there or that points
+    /// somewhere this one does not.
+    pub here: bool,
 }
 
 /// Display-ready row of the commit graph.
@@ -133,6 +138,21 @@ pub struct LogRow {
     /// ordinary commits and the WIP row.
     pub stash_ref: String,
 }
+
+/// What the remotes last said they carry under `refs/tags/`: tag name →
+/// every commit some remote has it on, and whether the tag over there is
+/// annotated.
+///
+/// Two commits under one name means the remotes disagree, which reads on
+/// screen exactly like a tag that drifted from the one here — the name
+/// standing on more than one row.
+type RemoteTagIndex = BTreeMap<String, BTreeMap<Oid, bool>>;
+
+/// The same thing before it is merged, kept per remote so one that could
+/// not be reached keeps its last answer instead of dropping every badge it
+/// accounted for. `refs/remotes/` does this for branches; a tag has no such
+/// local record, so the session holds it.
+type RemoteTagsByRemote = BTreeMap<String, Vec<remote::RemoteTag>>;
 
 /// Sidebar-ready refs snapshot (sorted).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -166,7 +186,15 @@ pub struct TagItem {
     pub oid_hex: String,
     pub annotated: bool,
     /// Creator date (unix seconds); the sidebar sorts tags newest-first.
+    /// Zero for a tag only a remote has: an advertisement carries the name
+    /// and the commit, and no date to sort by.
     pub created_unix: i64,
+    /// A remote carries this name too (cloud badge).
+    pub has_remote: bool,
+    /// Whether this repository holds the tag. False lists a name only a
+    /// remote has — the sidebar is where it can be read at all, since no
+    /// local ref puts it on a graph row.
+    pub here: bool,
 }
 
 /// Everything the session can tell the UI.
@@ -511,6 +539,11 @@ pub struct RepoSession {
     write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,
     /// Time budget for fetch / push (settings, Phase 4, persist this).
     network_timeout: Mutex<std::time::Duration>,
+    /// What each remote last advertised under `refs/tags/`. Empty until a
+    /// fetch has been through: asking costs the network, so it rides the
+    /// one command the user already meant to spend it on, and before that
+    /// every tag reads as one this repository alone has.
+    remote_tags: Mutex<RemoteTagsByRemote>,
     /// The running auto-fetch timer, if any.
     auto_fetch: Mutex<Option<AutoFetch>>,
     /// One permit: an auto fetch that is still queued or running holds it,
@@ -553,6 +586,7 @@ impl RepoSession {
             poll_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             write_tx,
             network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
+            remote_tags: Mutex::new(RemoteTagsByRemote::new()),
             auto_fetch: Mutex::new(None),
             auto_fetch_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             refs_gate: OpGate::default(),
@@ -722,12 +756,14 @@ impl RepoSession {
             return true;
         };
         let timeout = self.network_timeout();
+        let s = Arc::clone(self);
         self.write(
             AUTO_FETCH_OP,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let _permit = permit;
-                remote::fetch(&exec, &repo.workdir, None, timeout, &cancel).await
+                s.fetch_and_read_tags(&exec, &repo.workdir, None, timeout, &cancel)
+                    .await
             },
         );
         true
@@ -1027,7 +1063,8 @@ impl RepoSession {
                     .lock()
                     .map(|mut slot| slot.replace(key))
                     .unwrap_or_default();
-                let mut snapshot = build_snapshot(&refs, &head);
+                let remote_tags = self.remote_tag_index();
+                let mut snapshot = build_snapshot(&refs, &head, &remote_tags);
                 snapshot.remote_names = remotes.into_iter().map(|r| r.name).collect();
                 let label_updates = self.apply_refs(&refs, &head);
                 self.sink.event(SessionEvent::RefsLoaded { snapshot });
@@ -1742,13 +1779,97 @@ impl RepoSession {
     /// `git fetch --prune`; `None` fetches every remote.
     pub fn fetch(self: &Arc<Self>, remote: Option<String>) {
         let timeout = self.network_timeout();
+        let s = Arc::clone(self);
         self.write(
             "fetch",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                remote::fetch(&exec, &repo.workdir, remote.as_deref(), timeout, &cancel).await
+                s.fetch_and_read_tags(&exec, &repo.workdir, remote.as_deref(), timeout, &cancel)
+                    .await
             },
         );
+    }
+
+    /// The fetch, and then the one thing it cannot leave behind: where the
+    /// remotes keep their tags.
+    ///
+    /// A fetched tag lands in `refs/tags/` beside the ones made here, so
+    /// afterwards nothing local says which is which. Asking costs a second
+    /// round trip, and this is where it belongs — the user has already
+    /// agreed to reach the network, and a poll never should.
+    async fn fetch_and_read_tags(
+        self: &Arc<Self>,
+        exec: &GitExecutor,
+        workdir: &Path,
+        remote_name: Option<&str>,
+        timeout: std::time::Duration,
+        cancel: &CancellationToken,
+    ) -> Result<(), GitError> {
+        remote::fetch(exec, workdir, remote_name, timeout, cancel).await?;
+        self.read_remote_tags(exec, workdir, remote_name, timeout, cancel)
+            .await;
+        Ok(())
+    }
+
+    /// Records what each remote advertises under `refs/tags/`.
+    ///
+    /// Reports nothing upwards. A badge is not worth failing a fetch that
+    /// worked, and a remote that could not be reached keeps the answer it
+    /// last gave instead of dropping every cloud it accounted for — which
+    /// is what `refs/remotes/` does for branches on its own.
+    async fn read_remote_tags(
+        &self,
+        exec: &GitExecutor,
+        workdir: &Path,
+        only: Option<&str>,
+        timeout: std::time::Duration,
+        cancel: &CancellationToken,
+    ) {
+        let remotes = match remote::list(exec, workdir, cancel).await {
+            Ok(list) => list,
+            Err(error) => {
+                tracing::debug!(%error, "remote tags: the remotes could not be listed");
+                return;
+            }
+        };
+        // A remote that is no longer configured stops answering for names.
+        self.lock_remote_tags()
+            .retain(|name, _| remotes.iter().any(|r| r.name == *name));
+        for r in remotes {
+            if only.is_some_and(|wanted| wanted != r.name) {
+                continue;
+            }
+            match remote::list_tags(exec, workdir, &r.name, timeout, cancel).await {
+                Ok(tags) => {
+                    self.lock_remote_tags().insert(r.name, tags);
+                }
+                Err(error) if error.is_cancelled() => return,
+                Err(error) => {
+                    tracing::debug!(remote = %r.name, %error, "remote tags: unreadable");
+                }
+            }
+        }
+    }
+
+    fn lock_remote_tags(&self) -> std::sync::MutexGuard<'_, RemoteTagsByRemote> {
+        match self.remote_tags.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        }
+    }
+
+    /// The per-remote answers merged into the index the join reads.
+    fn remote_tag_index(&self) -> RemoteTagIndex {
+        let mut index = RemoteTagIndex::new();
+        for tags in self.lock_remote_tags().values() {
+            for tag in tags {
+                index
+                    .entry(tag.name.clone())
+                    .or_default()
+                    .insert(tag.commit, tag.annotated);
+            }
+        }
+        index
     }
 
     /// `git push` for one branch.
@@ -2418,7 +2539,7 @@ impl RepoSession {
     /// Installs a new refs snapshot into the label join and returns the
     /// rows whose chips changed.
     fn apply_refs(&self, refs: &[RefEntry], head: &HeadState) -> Vec<(u32, Vec<RefLabel>)> {
-        let label_map = build_label_map(refs, head);
+        let label_map = build_label_map(refs, head, &self.remote_tag_index());
         let mut shared = self.lock_shared();
         shared.label_map = label_map;
 
@@ -2634,12 +2755,23 @@ fn make_row(
     }
 }
 
-/// Builds the per-commit label chips from a refs listing.
+/// Builds the per-commit label chips from a refs listing and what the
+/// remotes carry under `refs/tags/`.
 ///
 /// A branch and the remote it is about get one chip between them: the
 /// cloud badge already says the remote is here, so the remote's own label
 /// is dropped (see [`refs::remotes_folded_into_local`]).
-fn build_label_map(refs: &[RefEntry], head: &HeadState) -> HashMap<Oid, Vec<RefLabel>> {
+///
+/// Tags fold on the same terms, but only when both sides point at the same
+/// commit. One that points elsewhere over there gets a label of its own on
+/// the row it is really on, so the same name stands on two rows — the whole
+/// of that signal, since a fetch never resolves the disagreement (measured:
+/// `--prune` leaves the local tag silently) and it has to keep showing.
+fn build_label_map(
+    refs: &[RefEntry],
+    head: &HeadState,
+    remote_tags: &RemoteTagIndex,
+) -> HashMap<Oid, Vec<RefLabel>> {
     let with_remote = refs::branches_with_remote(refs);
     let folded = refs::remotes_folded_into_local(refs);
     let mut map: HashMap<Oid, Vec<RefLabel>> = HashMap::new();
@@ -2652,12 +2784,38 @@ fn build_label_map(refs: &[RefEntry], head: &HeadState) -> HashMap<Oid, Vec<RefL
             RefKind::RemoteBranch => LabelKind::RemoteBranch,
             RefKind::Tag => LabelKind::Tag,
         };
+        let has_remote = match r.kind {
+            RefKind::LocalBranch => with_remote.contains(&r.name),
+            RefKind::Tag => remote_tags.contains_key(&r.short),
+            RefKind::RemoteBranch => false,
+        };
         map.entry(r.commit_oid()).or_default().push(RefLabel {
             text: r.short.clone(),
             kind,
-            has_remote: r.kind == RefKind::LocalBranch && with_remote.contains(&r.name),
+            has_remote,
             is_head: r.is_head,
+            here: r.kind != RefKind::RemoteBranch,
         });
+    }
+    for (name, commits) in remote_tags {
+        let local = refs
+            .iter()
+            .find(|r| r.kind == RefKind::Tag && r.short == *name)
+            .map(RefEntry::commit_oid);
+        for oid in commits.keys() {
+            // Where the two agree there is one tag to speak of, and the
+            // local label is already carrying its cloud.
+            if local == Some(*oid) {
+                continue;
+            }
+            map.entry(*oid).or_default().push(RefLabel {
+                text: name.clone(),
+                kind: LabelKind::Tag,
+                has_remote: true,
+                is_head: false,
+                here: false,
+            });
+        }
     }
     if head.detached
         && let Some(oid) = head.oid
@@ -2667,6 +2825,7 @@ fn build_label_map(refs: &[RefEntry], head: &HeadState) -> HashMap<Oid, Vec<RefL
             kind: LabelKind::Head,
             has_remote: false,
             is_head: true,
+            here: true,
         });
     }
     for labels in map.values_mut() {
@@ -2699,7 +2858,17 @@ fn refs_key(refs: &[RefEntry], head: &HeadState) -> u64 {
 }
 
 /// Builds the sorted sidebar snapshot.
-fn build_snapshot(refs: &[RefEntry], head: &HeadState) -> RefsSnapshot {
+///
+/// Tags a remote has and this repository does not are listed too: no local
+/// ref puts them on a graph row, so the sidebar is the only place they can
+/// be read at all. Where a name exists on both sides it is listed once —
+/// the sidebar is a list of names to act on, and which commits the two
+/// sides point at is what the graph rows are for.
+fn build_snapshot(
+    refs: &[RefEntry],
+    head: &HeadState,
+    remote_tags: &RemoteTagIndex,
+) -> RefsSnapshot {
     let with_remote = refs::branches_with_remote(refs);
     let remotes: Vec<&RefEntry> = refs
         .iter()
@@ -2734,8 +2903,30 @@ fn build_snapshot(refs: &[RefEntry], head: &HeadState) -> RefsSnapshot {
                 oid_hex: r.commit_oid().to_hex(),
                 annotated: r.peeled.is_some(),
                 created_unix: r.created_unix,
+                has_remote: remote_tags.contains_key(&r.short),
+                here: true,
             }),
         }
+    }
+    for (name, commits) in remote_tags {
+        if snapshot.tags.iter().any(|t| t.short == *name) {
+            continue;
+        }
+        // Remotes that disagree about a name still name one tag, and the
+        // sidebar answers "does this name exist" rather than "where".
+        let Some((oid, annotated)) = commits.iter().next() else {
+            continue;
+        };
+        snapshot.tags.push(TagItem {
+            short: name.clone(),
+            oid_hex: oid.to_hex(),
+            annotated: *annotated,
+            // An advertisement carries no date; these sort last, after
+            // every tag whose creation this repository can see.
+            created_unix: 0,
+            has_remote: true,
+            here: false,
+        });
     }
     snapshot.locals.sort_by(|a, b| a.short.cmp(&b.short));
     snapshot.remotes.sort_by(|a, b| a.short.cmp(&b.short));

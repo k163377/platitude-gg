@@ -164,6 +164,8 @@ Item {
                 }
             }
         }
+        // The name says where the ref is, the way a chip's does: grey for
+        // one this repository does not hold (デザイン規約 §ref の種別).
         Label {
             visible: !navRow.editing
             Layout.fillWidth: true
@@ -171,7 +173,8 @@ Item {
             elide: Text.ElideMiddle
             font.weight: navRow.is_head ? Font.DemiBold : Font.Normal
             color: navRow.folder ? Theme.textSecondary
-                   : navRow.is_head ? Theme.textLink : Theme.textPrimary
+                   : navRow.is_head ? Theme.textLink
+                   : navRow.only_remote ? Theme.textSecondary : Theme.textPrimary
             font.pixelSize: Theme.fontMd
         }
         // The name, in a box, where the name was. Nothing is asked before
@@ -219,8 +222,8 @@ Item {
         // has a remote, PR icon = has a PR (real data in Phase 4;
         // PG_FAKE_PR previews the look). Remote-branch and worktree
         // rows show the PR state too. A tag reads the same way — the
-        // badge answers "is this only here?" whatever it is on
-        // (PG_FAKE_REMOTE_TAGS until the fetch cycle carries it).
+        // badge answers "is this only here?" whatever it is on, and
+        // the fetch carries the bit for it (`ls-remote --tags`).
         NavIcon {
             visible: !navRow.folder
                      && (((navRow.kindHint === "branch"

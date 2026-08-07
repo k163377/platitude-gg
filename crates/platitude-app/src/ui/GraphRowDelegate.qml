@@ -180,8 +180,8 @@ Item {
                                : r[0] === "H" ? "HEAD" : "⎇"
                     // Aggregated records keep their PR mark visible here.
                     const pr = r.length > 3 && r[3] === "1" ? qsTr(" · PR") : ""
-                    const name = colour ? rowItem.escapeMarkup(r.substring(4))
-                                        : r.substring(4)
+                    const name = colour ? rowItem.escapeMarkup(r.substring(5))
+                                        : r.substring(5)
                     const line = icon + " " + name + pr
                     lines.push(rowItem.isCurrentRecord(r)
                                ? "<font color=\"" + Theme.textLink + "\">"

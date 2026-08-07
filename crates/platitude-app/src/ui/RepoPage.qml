@@ -154,10 +154,10 @@ Item {
     // One dispatcher for every way of asking to move to a named ref: the
     // graph's chips, the list the stacked ones open into, and the
     // sidebar's menu. `record` is the chip as it is drawn — kind letter,
-    // three flags, then the name (see encode.rs).
+    // four flags, then the name (see encode.rs).
     function activateRecord(record) {
         if (record !== "")
-            page.switchToRef(record[0], record.substring(4))
+            page.switchToRef(record[0], record.substring(5))
     }
     function switchToRef(kind, name) {
         if (repoTab.state !== "open" || repoTab.busyCount > 0)
@@ -1085,6 +1085,19 @@ Item {
         onTriggered: AppBackend.report("ref_menu delete=" + refDeleteItem.text
                                        + " note=" + refDeleteItem.note)
     }
+    // The fetch has to land, and its answer reach the chips, before the
+    // stacked ones are worth unstacking.
+    Timer {
+        id: fetchedRefListTimer
+        interval: 1500
+        onTriggered: {
+            const stacked = graphPane.view.itemAtIndex(
+                Number(AppBackend.autoActArg))
+            if (stacked)
+                graphPane.view.chipExpandRequested(
+                    stacked.chipItem.records, stacked.chipItem)
+        }
+    }
     // The message has to arrive before it can be typed over, and the
     // "is this commit ours to rewrite?" answer before it may be saved.
     Timer {
@@ -1361,8 +1374,11 @@ Item {
         } else if (act === "dbl-local" || act === "dbl-remote") {
             // What a double-click on a chip does, entered where the
             // delegate enters it: the record is the chip as it is drawn
-            // (kind letter, three flags, name).
-            page.activateRecord((act === "dbl-local" ? "L000" : "R000") + arg)
+            // (kind letter, four flags, name — see encode.rs). The last
+            // flag is where the ref is, and it is the one thing the two
+            // differ on here.
+            page.activateRecord(
+                (act === "dbl-local" ? "L0001" : "R0000") + arg)
         } else if (act === "move-branch") {
             // Past the question, for the write it guards: the local
             // branch of that name is moved onto the remote one.
@@ -1451,6 +1467,14 @@ Item {
             page.forcePush()
         } else if (act === "fetch") {
             repoTab.fetch("")
+        } else if (act === "fetch-ref-list") {
+            // What a tag says about the remote only exists after a fetch
+            // (`ls-remote --tags` is what carries it), and the names it
+            // changes are inside the stacked chips — so the two steps are
+            // one verb. The wait is the fetch's; a `file://` remote in a
+            // demo repository answers in a fraction of it.
+            repoTab.fetch("")
+            fetchedRefListTimer.start()
         } else if (act === "preview") {
             page.toggleDiff("untracked", arg, "")
         } else if (act === "preview-unstaged") {

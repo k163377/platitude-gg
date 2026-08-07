@@ -68,7 +68,7 @@ Popup {
                 // (§タグでは detach しない) and keeps its colour too.
                 readonly property bool current:
                     refRow.modelData[0] === "L"
-                    && refRow.modelData.substring(4) === refList.currentBranch
+                    && refRow.modelData.substring(5) === refList.currentBranch
                 // The detached-HEAD marker is the one row that is only a
                 // marker: nowhere to go and no ref to read, so it mutes.
                 readonly property bool unavailable: refRow.modelData[0] === "H"

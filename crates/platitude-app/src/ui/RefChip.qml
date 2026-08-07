@@ -32,11 +32,12 @@ Rectangle {
     radius: Theme.radiusSm
     clip: true
 
-    readonly property string rec: records.length > 0 ? records[0] : "L000"
+    readonly property string rec: records.length > 0 ? records[0] : "L0001"
     readonly property string recKind: rec[0]
     readonly property bool recHead: rec[1] === "1"
     readonly property bool recRemote: rec.length > 2 && rec[2] === "1"
     readonly property bool recPr: rec.length > 3 && rec[3] === "1"
+    readonly property bool recHere: rec.length > 4 && rec[4] === "1"
     readonly property bool tagStyle: recKind === "T"
     // One slot, one mark: on the remote, or on the remote with a PR
     // open (§ブランチ状態バッジ — the two never stack).
@@ -46,19 +47,19 @@ Rectangle {
                                        : recKind === "R" ? Theme.textSecondary
                                        : recKind === "H" ? Theme.warning
                                        : Theme.accent
-    // Where it is, not what it is. A remote branch chip is one the local
-    // side is not on — its own kind colour already reads as "elsewhere",
-    // so nothing is added for it; dropping further, to textMuted, would
-    // claim it cannot be reached, and a double-click on that row goes
-    // there (§無効 is for what is actually unavailable). The detached
-    // HEAD marker keeps its state colour in the name too: it is the one
-    // chip whose colour is not a kind. The branch the working tree
-    // stands on is the nearest answer this colour has — "here" — and the
-    // sidebar already writes it that way, so the chip does too.
+    // Where it is, not what it is. Grey is the name of something this
+    // repository does not hold — a remote branch, or a tag only a remote
+    // has. Dropping further, to textMuted, would claim it cannot be
+    // reached, and a double-click on a remote branch row goes there (§無効
+    // is for what is actually unavailable). The detached HEAD marker keeps
+    // its state colour in the name too: it is the one chip whose colour is
+    // not a kind. The branch the working tree stands on is the nearest
+    // answer this colour has — "here" — and the sidebar already writes it
+    // that way, so the chip does too.
     readonly property color nameColor: muted ? Theme.textMuted
                                        : recKind === "H" ? Theme.warning
                                        : recHead ? Theme.textLink
-                                       : recKind === "R" ? Theme.textSecondary
+                                       : !recHere ? Theme.textSecondary
                                        : Theme.textPrimary
 
     color: tagStyle ? Theme.bgElevated : "transparent"
@@ -72,7 +73,7 @@ Rectangle {
         anchors.leftMargin: Theme.spaceXs
         spacing: Theme.spaceXs
         Label {
-            text: chip.rec.substring(4)
+            text: chip.rec.substring(5)
             color: chip.nameColor
             font.pixelSize: Theme.fontSm
             font.weight: chip.recHead ? Font.DemiBold : Font.Normal
