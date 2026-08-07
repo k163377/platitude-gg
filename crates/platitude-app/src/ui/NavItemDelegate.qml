@@ -19,6 +19,7 @@ Item {
     required property string orig_path
     required property bool is_head
     required property bool has_remote
+    required property bool only_remote
     required property bool has_pr
     required property int depth
     required property bool folder

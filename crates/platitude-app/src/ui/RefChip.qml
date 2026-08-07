@@ -49,8 +49,14 @@ Rectangle {
     // One slot, one mark: on the remote, or on the remote with a PR
     // open (§ブランチ状態バッジ — the two never stack).
     readonly property bool hasBadge: recRemote || recPr
+    // A tag this repository does not hold keeps the tag hue and only
+    // drops a step (§暗く落とした段): still a tag, read somewhere else.
+    // Only tags dim, because only tags need it — every other kind says
+    // where it is in its own frame colour (a remote branch is grey) or in
+    // its name (`origin/main` carries the remote in the name itself).
     readonly property color kindColor: muted ? Theme.textMuted
-                                       : tagStyle ? Theme.refTag
+                                       : tagStyle ? (recHere ? Theme.refTag
+                                                             : Theme.refTagDim)
                                        : recKind === "R" ? Theme.textSecondary
                                        : recKind === "H" ? Theme.warning
                                        : Theme.accent
