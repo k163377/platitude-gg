@@ -3,7 +3,7 @@
 //! Record separator is newline (refnames cannot contain newlines), field
 //! separator is NUL via `%00`.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
@@ -132,85 +132,115 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
     }))
 }
 
-/// Local branches that verifiably have a remote counterpart **right now**:
-/// either the configured upstream still exists, or some remote has a
-/// same-named branch. Everything else is "local only" (the 3-state badge's
-/// PR dimension is wired up in Phase 4).
-pub fn branches_with_remote(refs: &[RefEntry]) -> HashSet<String> {
-    let remote_full: HashSet<&str> = refs
-        .iter()
-        .filter(|r| r.kind == RefKind::RemoteBranch)
-        .map(|r| r.name.as_str())
-        .collect();
-    // `origin/feature/x` → `feature/x` (strip the remote component).
-    let remote_suffix: HashSet<&str> = refs
-        .iter()
-        .filter(|r| r.kind == RefKind::RemoteBranch)
-        .filter_map(|r| r.short.split_once('/').map(|(_, rest)| rest))
-        .collect();
+/// The remote branches, looked up the two ways a local branch asks after
+/// them: by the refname an upstream names, and by the name left once the
+/// remote component is stripped.
+///
+/// Built once per listing because both questions are asked per local
+/// branch, and answering either by scanning the listing makes the pair a
+/// product — on a repository carrying thousands of remote branches
+/// (`JetBrains/kotlin`: 7,831) that is the whole cost of the join.
+pub struct RemoteBranches<'a> {
+    by_refname: HashMap<&'a str, &'a RefEntry>,
+    /// `None` where more than one remote carries the name: then there is
+    /// no single branch a badge could be about.
+    by_branch_name: HashMap<&'a str, Option<&'a RefEntry>>,
+}
 
+impl<'a> RemoteBranches<'a> {
+    pub fn index(refs: &'a [RefEntry]) -> Self {
+        let mut by_refname = HashMap::new();
+        let mut by_branch_name: HashMap<&str, Option<&RefEntry>> = HashMap::new();
+        for r in refs.iter().filter(|r| r.kind == RefKind::RemoteBranch) {
+            by_refname.insert(r.name.as_str(), r);
+            // `origin/feature/x` → `feature/x` (strip the remote component).
+            if let Some((_, rest)) = r.short.split_once('/') {
+                by_branch_name
+                    .entry(rest)
+                    .and_modify(|slot| *slot = None)
+                    .or_insert(Some(r));
+            }
+        }
+        Self {
+            by_refname,
+            by_branch_name,
+        }
+    }
+
+    /// The remote branch a local one speaks for, wherever the two stand:
+    /// its configured upstream, or, with none configured, the only
+    /// same-named remote. This is what the cloud badge is about, and so
+    /// what a rename of the branch offers to carry over.
+    ///
+    /// Ambiguity answers nothing: with no upstream and two same-named
+    /// remotes there is no single branch meant, and this says so.
+    pub fn spoken_for(&self, local: &RefEntry) -> Option<&'a RefEntry> {
+        match local.upstream.as_deref() {
+            Some(up) => self.by_refname.get(up).copied(),
+            None => self
+                .by_branch_name
+                .get(local.short.as_str())
+                .copied()
+                .flatten(),
+        }
+    }
+
+    /// Whether this local branch verifiably has a remote counterpart
+    /// **right now**: either the configured upstream still exists, or some
+    /// remote has a same-named branch. Everything else is "local only"
+    /// (the 3-state badge's PR dimension is wired up in Phase 4).
+    ///
+    /// Wider than [`Self::spoken_for`]: two same-named remotes are an
+    /// ambiguity about *which* one the badge is about, not about whether
+    /// the branch is out there.
+    pub fn has_counterpart(&self, local: &RefEntry) -> bool {
+        let upstream_exists = local
+            .upstream
+            .as_deref()
+            .is_some_and(|u| self.by_refname.contains_key(u));
+        upstream_exists || self.by_branch_name.contains_key(local.short.as_str())
+    }
+
+    /// Remote branches a local branch on the **same commit** already
+    /// speaks for. Listing one again in the row's chip says twice what the
+    /// badge says once, so the row folds it away (デザイン規約 §グラフ行のチップ).
+    ///
+    /// Co-location is half the condition: a branch that has drifted from
+    /// its upstream leaves the remote on a row of its own, and that row
+    /// keeps its chip — folding never hides a divergence. Ambiguity is not
+    /// folded either (see [`Self::spoken_for`]).
+    pub fn folded_into_local(&self, refs: &'a [RefEntry]) -> HashSet<&'a str> {
+        let mut folded = HashSet::new();
+        for local in refs.iter().filter(|r| r.kind == RefKind::LocalBranch) {
+            if let Some(remote) = self.spoken_for(local)
+                && remote.commit_oid() == local.commit_oid()
+            {
+                folded.insert(remote.name.as_str());
+            }
+        }
+        folded
+    }
+}
+
+/// Local branches that verifiably have a remote counterpart right now
+/// ([`RemoteBranches::has_counterpart`]), by full refname.
+pub fn branches_with_remote(refs: &[RefEntry]) -> HashSet<String> {
+    let remotes = RemoteBranches::index(refs);
     refs.iter()
         .filter(|r| r.kind == RefKind::LocalBranch)
-        .filter(|r| {
-            let upstream_exists = r
-                .upstream
-                .as_deref()
-                .is_some_and(|u| remote_full.contains(u));
-            upstream_exists || remote_suffix.contains(r.short.as_str())
-        })
+        .filter(|r| remotes.has_counterpart(r))
         .map(|r| r.name.clone())
         .collect()
 }
 
-/// Remote branches a local branch on the **same commit** already speaks
-/// for: the one its cloud badge is about — the configured upstream, or,
-/// with none configured, the only same-named remote. Listing it again in
-/// the row's chip says twice what the badge says once, so the row folds
-/// it away (デザイン規約 §グラフ行のチップ).
-///
-/// Co-location is half the condition: a branch that has drifted from its
-/// upstream leaves the remote on a row of its own, and that row keeps its
-/// chip — folding never hides a divergence. Ambiguity is not folded
-/// either: with no upstream and two same-named remotes there is no single
-/// branch the badge is about, so both stay.
+/// Remote branches folded into a local branch's chip
+/// ([`RemoteBranches::folded_into_local`]), by full refname.
 pub fn remotes_folded_into_local(refs: &[RefEntry]) -> HashSet<String> {
-    let remotes: Vec<&RefEntry> = refs
-        .iter()
-        .filter(|r| r.kind == RefKind::RemoteBranch)
-        .collect();
-    let mut folded = HashSet::new();
-    for local in refs.iter().filter(|r| r.kind == RefKind::LocalBranch) {
-        if let Some(remote) = spoken_for_remote(local, &remotes)
-            && remote.commit_oid() == local.commit_oid()
-        {
-            folded.insert(remote.name.clone());
-        }
-    }
-    folded
-}
-
-/// The remote branch a local one speaks for, wherever the two stand: its
-/// configured upstream, or, with none configured, the only same-named
-/// remote. This is what the cloud badge is about, and so what a rename of
-/// the branch offers to carry over.
-///
-/// Ambiguity answers nothing: with no upstream and two same-named remotes
-/// there is no single branch meant, and this says so.
-pub fn spoken_for_remote<'a>(local: &RefEntry, remotes: &[&'a RefEntry]) -> Option<&'a RefEntry> {
-    match local.upstream.as_deref() {
-        Some(up) => remotes.iter().find(|r| r.name == up).copied(),
-        None => {
-            let mut same_named = remotes.iter().filter(|r| {
-                r.short
-                    .split_once('/')
-                    .is_some_and(|(_, rest)| rest == local.short)
-            });
-            match (same_named.next(), same_named.next()) {
-                (Some(only), None) => Some(*only),
-                _ => None,
-            }
-        }
-    }
+    RemoteBranches::index(refs)
+        .folded_into_local(refs)
+        .into_iter()
+        .map(str::to_string)
+        .collect()
 }
 
 /// Where HEAD points right now.

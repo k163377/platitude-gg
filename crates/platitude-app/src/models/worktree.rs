@@ -163,11 +163,14 @@ impl WorkTreeModel {
             InProgress::from_state(&op_state),
             None | Some(InProgress::Merge)
         );
-        self.staged_count = status.staged().count() as i32;
-        self.unstaged_count = status.unstaged().count() as i32;
-        self.untracked_count = status.untracked().count() as i32;
-        self.conflict_count = status.conflicted().count() as i32;
-        self.partially_staged_count = status.partially_staged().count() as i32;
+        // One pass, not five: `-uall` lists every untracked file, so the
+        // list is as long as the working tree is dirty.
+        let counts = platitude_core::status::Counts::of(&status);
+        self.staged_count = counts.staged as i32;
+        self.unstaged_count = counts.unstaged as i32;
+        self.untracked_count = counts.untracked as i32;
+        self.conflict_count = counts.conflicted as i32;
+        self.partially_staged_count = counts.partially_staged as i32;
         (self.op_step, self.op_steps) = match progress {
             Some(p) => (p.current as i32, p.total as i32),
             None => (0, 0),

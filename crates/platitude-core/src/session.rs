@@ -257,8 +257,12 @@ pub enum SessionEvent {
     LabelsChanged {
         rows: Vec<(u32, Vec<RefLabel>)>,
     },
+    /// Shared rather than owned: every sidebar section is handed the whole
+    /// snapshot and reads its own part of it, and a deep copy per section
+    /// is tens of thousands of strings duplicated for nobody
+    /// (`JetBrains/kotlin`: 45,782 tags).
     RefsLoaded {
-        snapshot: RefsSnapshot,
+        snapshot: Arc<RefsSnapshot>,
     },
     StatusLoaded {
         status: WorkTreeStatus,
@@ -584,6 +588,12 @@ pub struct RepoSession {
     /// one command the user already meant to spend it on, and before that
     /// every tag reads as one this repository alone has.
     remote_tags: Mutex<RemoteTagsByRemote>,
+    /// The same answers merged into the shape the joins read, rebuilt only
+    /// when a remote has spoken. Shared because every refs read wants it
+    /// and none of them changes it: merging tens of thousands of names on
+    /// every poll tick copies the whole tag list for nothing
+    /// (`JetBrains/kotlin`: 45,782 names).
+    remote_tag_index: Mutex<Arc<RemoteTagIndex>>,
     /// One permit for the background read of the above, so a second
     /// permission-granting call cannot stack another on top of it.
     remote_tags_slot: Arc<tokio::sync::Semaphore>,
@@ -638,6 +648,7 @@ impl RepoSession {
             write_tx,
             network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
             remote_tags: Mutex::new(RemoteTagsByRemote::new()),
+            remote_tag_index: Mutex::new(Arc::new(RemoteTagIndex::new())),
             remote_tags_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             merge_tools_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             auto_fetch: Mutex::new(None),
@@ -864,10 +875,9 @@ impl RepoSession {
                 return;
             };
             let cancel = s.root_cancel.clone();
-            let before = s.remote_tag_index();
-            s.read_remote_tags(&s.executor, &workdir, None, timeout, &cancel)
-                .await;
-            if s.remote_tag_index() != before {
+            if s.read_remote_tags(&s.executor, &workdir, None, timeout, &cancel)
+                .await
+            {
                 s.refresh_refs();
             }
         });
@@ -1213,11 +1223,19 @@ impl RepoSession {
                     .lock()
                     .map(|mut slot| slot.replace(key))
                     .unwrap_or_default();
+                // One index and one set of joins for both halves: the
+                // sidebar snapshot and the row chips read the same
+                // listing, and building either twice is one whole join
+                // thrown away.
                 let remote_tags = self.remote_tag_index();
-                let mut snapshot = build_snapshot(&refs, &head, &remote_tags);
+                let joins = RefJoins::new(&refs);
+                let mut snapshot = build_snapshot(&refs, &head, &remote_tags, &joins);
                 snapshot.remote_names = remotes.into_iter().map(|r| r.name).collect();
-                let label_updates = self.apply_refs(&refs, &head);
-                self.sink.event(SessionEvent::RefsLoaded { snapshot });
+                let label_map = build_label_map(&refs, &head, &remote_tags, &joins);
+                let label_updates = self.apply_refs(label_map);
+                self.sink.event(SessionEvent::RefsLoaded {
+                    snapshot: Arc::new(snapshot),
+                });
                 if !label_updates.is_empty() {
                     self.sink.event(SessionEvent::LabelsChanged {
                         rows: label_updates,
@@ -1999,6 +2017,8 @@ impl RepoSession {
     /// worked, and a remote that could not be reached keeps the answer it
     /// last gave instead of dropping every cloud it accounted for — which
     /// is what `refs/remotes/` does for branches on its own.
+    /// Answers whether what the remotes carry moved — the caller's reason
+    /// to republish, and nobody else's business.
     async fn read_remote_tags(
         &self,
         exec: &GitExecutor,
@@ -2006,12 +2026,12 @@ impl RepoSession {
         only: Option<&str>,
         timeout: std::time::Duration,
         cancel: &CancellationToken,
-    ) {
+    ) -> bool {
         let remotes = match remote::list(exec, workdir, cancel).await {
             Ok(list) => list,
             Err(error) => {
                 tracing::debug!(%error, "remote tags: the remotes could not be listed");
-                return;
+                return false;
             }
         };
         // A remote that is no longer configured stops answering for names.
@@ -2025,12 +2045,13 @@ impl RepoSession {
                 Ok(tags) => {
                     self.lock_remote_tags().insert(r.name, tags);
                 }
-                Err(error) if error.is_cancelled() => return,
+                Err(error) if error.is_cancelled() => return false,
                 Err(error) => {
                     tracing::debug!(remote = %r.name, %error, "remote tags: unreadable");
                 }
             }
         }
+        self.remerge_remote_tags()
     }
 
     fn lock_remote_tags(&self) -> std::sync::MutexGuard<'_, RemoteTagsByRemote> {
@@ -2040,8 +2061,10 @@ impl RepoSession {
         }
     }
 
-    /// The per-remote answers merged into the index the join reads.
-    fn remote_tag_index(&self) -> RemoteTagIndex {
+    /// Merges the per-remote answers into the index the joins read, and
+    /// says whether that changed anything. The only place the index is
+    /// built: everything downstream shares the one it leaves behind.
+    fn remerge_remote_tags(&self) -> bool {
         let mut index = RemoteTagIndex::new();
         for (remote, tags) in self.lock_remote_tags().iter() {
             for tag in tags {
@@ -2054,7 +2077,23 @@ impl RepoSession {
                 place.remotes.push(remote.clone());
             }
         }
-        index
+        let mut slot = match self.remote_tag_index.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        if **slot == index {
+            return false;
+        }
+        *slot = Arc::new(index);
+        true
+    }
+
+    /// The per-remote answers merged into the index the join reads.
+    fn remote_tag_index(&self) -> Arc<RemoteTagIndex> {
+        match self.remote_tag_index.lock() {
+            Ok(g) => Arc::clone(&g),
+            Err(e) => Arc::clone(&e.into_inner()),
+        }
     }
 
     /// `git push` for one branch.
@@ -2834,10 +2873,9 @@ impl RepoSession {
         self.sink.event(SessionEvent::LogChunk { generation, rows });
     }
 
-    /// Installs a new refs snapshot into the label join and returns the
-    /// rows whose chips changed.
-    fn apply_refs(&self, refs: &[RefEntry], head: &HeadState) -> Vec<(u32, Vec<RefLabel>)> {
-        let label_map = build_label_map(refs, head, &self.remote_tag_index());
+    /// Installs a new label map into the join and returns the rows whose
+    /// chips changed.
+    fn apply_refs(&self, label_map: HashMap<Oid, Vec<RefLabel>>) -> Vec<(u32, Vec<RefLabel>)> {
         let mut shared = self.lock_shared();
         shared.label_map = label_map;
 
@@ -3053,6 +3091,41 @@ fn make_row(
     }
 }
 
+/// The per-listing lookups the two ref joins share, built once so neither
+/// of them scans the listing from inside a loop.
+///
+/// Both joins run on every refs read — which is every poll tick — and both
+/// used to answer "is there a remote for this branch", "is this remote
+/// already spoken for" and "does this repository hold this tag" by walking
+/// the whole listing again. On `JetBrains/kotlin` (53,614 refs, 45,782 of
+/// them tags) that made one read cost seconds; through these it is
+/// milliseconds.
+struct RefJoins<'a> {
+    remotes: refs::RemoteBranches<'a>,
+    /// Remote branches whose chip a local branch already carries.
+    folded: std::collections::HashSet<&'a str>,
+    /// Where each tag this repository holds points, by short name. Answers
+    /// both "is this name here" and "is it on the same commit as there".
+    tag_commit: HashMap<&'a str, Oid>,
+}
+
+impl<'a> RefJoins<'a> {
+    fn new(refs: &'a [RefEntry]) -> Self {
+        let remotes = refs::RemoteBranches::index(refs);
+        let folded = remotes.folded_into_local(refs);
+        let tag_commit = refs
+            .iter()
+            .filter(|r| r.kind == RefKind::Tag)
+            .map(|r| (r.short.as_str(), r.commit_oid()))
+            .collect();
+        Self {
+            remotes,
+            folded,
+            tag_commit,
+        }
+    }
+}
+
 /// Builds the per-commit label chips from a refs listing and what the
 /// remotes carry under `refs/tags/`.
 ///
@@ -3069,12 +3142,11 @@ fn build_label_map(
     refs: &[RefEntry],
     head: &HeadState,
     remote_tags: &RemoteTagIndex,
+    joins: &RefJoins<'_>,
 ) -> HashMap<Oid, Vec<RefLabel>> {
-    let with_remote = refs::branches_with_remote(refs);
-    let folded = refs::remotes_folded_into_local(refs);
     let mut map: HashMap<Oid, Vec<RefLabel>> = HashMap::new();
     for r in refs {
-        if r.kind == RefKind::RemoteBranch && folded.contains(&r.name) {
+        if r.kind == RefKind::RemoteBranch && joins.folded.contains(r.name.as_str()) {
             continue;
         }
         let kind = match r.kind {
@@ -3083,7 +3155,7 @@ fn build_label_map(
             RefKind::Tag => LabelKind::Tag,
         };
         let has_remote = match r.kind {
-            RefKind::LocalBranch => with_remote.contains(&r.name),
+            RefKind::LocalBranch => joins.remotes.has_counterpart(r),
             RefKind::Tag => remote_tags.contains_key(&r.short),
             RefKind::RemoteBranch => false,
         };
@@ -3097,10 +3169,7 @@ fn build_label_map(
         });
     }
     for (name, commits) in remote_tags {
-        let local = refs
-            .iter()
-            .find(|r| r.kind == RefKind::Tag && r.short == *name)
-            .map(RefEntry::commit_oid);
+        let local = joins.tag_commit.get(name.as_str()).copied();
         for (oid, place) in commits {
             // Where the two agree there is one tag to speak of, and the
             // local label is already carrying its cloud.
@@ -3169,12 +3238,8 @@ fn build_snapshot(
     refs: &[RefEntry],
     head: &HeadState,
     remote_tags: &RemoteTagIndex,
+    joins: &RefJoins<'_>,
 ) -> RefsSnapshot {
-    let with_remote = refs::branches_with_remote(refs);
-    let remotes: Vec<&RefEntry> = refs
-        .iter()
-        .filter(|r| r.kind == RefKind::RemoteBranch)
-        .collect();
     let mut snapshot = RefsSnapshot {
         head: Some(head.clone()),
         ..Default::default()
@@ -3185,9 +3250,11 @@ fn build_snapshot(
                 short: r.short.clone(),
                 full: r.name.clone(),
                 oid_hex: r.commit_oid().to_hex(),
-                has_remote: with_remote.contains(&r.name),
+                has_remote: joins.remotes.has_counterpart(r),
                 is_head: r.is_head,
-                upstream: refs::spoken_for_remote(r, &remotes)
+                upstream: joins
+                    .remotes
+                    .spoken_for(r)
                     .map(|u| u.short.clone())
                     .unwrap_or_default(),
             }),
@@ -3210,7 +3277,7 @@ fn build_snapshot(
         }
     }
     for (name, commits) in remote_tags {
-        if snapshot.tags.iter().any(|t| t.short == *name) {
+        if joins.tag_commit.contains_key(name.as_str()) {
             continue;
         }
         // Remotes that disagree about a name still name one tag, and the
@@ -3238,4 +3305,184 @@ fn build_snapshot(
             .then(a.short.cmp(&b.short))
     });
     snapshot
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::print_stdout, clippy::expect_used)]
+
+    use super::*;
+    use crate::remote::RemoteTag;
+
+    fn tag(name: &str, commit: Oid, annotated: bool) -> RefEntry {
+        RefEntry {
+            name: format!("refs/tags/{name}"),
+            short: name.to_string(),
+            kind: RefKind::Tag,
+            target: commit,
+            peeled: annotated.then_some(commit),
+            upstream: None,
+            is_head: false,
+            created_unix: 0,
+        }
+    }
+
+    fn oid(byte: u8) -> Oid {
+        Oid::from_hex_str(&format!("{byte:02x}").repeat(20)).expect("valid sha")
+    }
+
+    fn head_at(commit: Oid) -> HeadState {
+        HeadState {
+            branch: Some("main".to_string()),
+            oid: Some(commit),
+            detached: false,
+        }
+    }
+
+    fn index_of(remote: &str, tags: Vec<RemoteTag>) -> RemoteTagIndex {
+        let mut index = RemoteTagIndex::new();
+        for t in tags {
+            let place = index
+                .entry(t.name)
+                .or_default()
+                .entry(t.commit)
+                .or_default();
+            place.annotated |= t.annotated;
+            place.remotes.push(remote.to_string());
+        }
+        index
+    }
+
+    /// A tag both sides agree on is one tag: the local label carries the
+    /// cloud and the remote's reading adds no second chip.
+    #[test]
+    fn an_agreed_tag_gets_one_label() {
+        let refs = vec![tag("v1", oid(1), false)];
+        let remote_tags = index_of(
+            "origin",
+            vec![RemoteTag {
+                name: "v1".to_string(),
+                commit: oid(1),
+                annotated: false,
+            }],
+        );
+        let joins = RefJoins::new(&refs);
+        let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
+        let labels = map.get(&oid(1)).expect("a label on the commit");
+        assert_eq!(labels.len(), 1, "one name, one chip: {labels:?}");
+        assert!(labels[0].has_remote, "the cloud says the remote has it");
+        assert!(labels[0].here);
+
+        let snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
+        assert_eq!(snapshot.tags.len(), 1, "the sidebar lists the name once");
+        assert!(snapshot.tags[0].here && snapshot.tags[0].has_remote);
+    }
+
+    /// A tag the remote puts somewhere else stands on both rows, and the
+    /// one that is not here says whose reading it is.
+    #[test]
+    fn a_drifted_tag_stands_on_both_rows() {
+        let refs = vec![tag("v1", oid(1), false)];
+        let remote_tags = index_of(
+            "origin",
+            vec![RemoteTag {
+                name: "v1".to_string(),
+                commit: oid(2),
+                annotated: false,
+            }],
+        );
+        let joins = RefJoins::new(&refs);
+        let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
+        assert!(map.get(&oid(1)).is_some_and(|l| l[0].here));
+        let theirs = map.get(&oid(2)).expect("the remote's reading");
+        assert!(!theirs[0].here);
+        assert_eq!(theirs[0].remote, "origin");
+
+        // One name is one row in the sidebar, wherever the two point.
+        let snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
+        assert_eq!(snapshot.tags.len(), 1);
+        assert!(snapshot.tags[0].here);
+    }
+
+    /// A name only a remote has reaches no graph row, so the sidebar is
+    /// where it can be read at all.
+    #[test]
+    fn a_tag_only_a_remote_has_is_listed_and_marked() {
+        let refs = vec![tag("v1", oid(1), false)];
+        let remote_tags = index_of(
+            "origin",
+            vec![RemoteTag {
+                name: "v9".to_string(),
+                commit: oid(9),
+                annotated: true,
+            }],
+        );
+        let joins = RefJoins::new(&refs);
+        let snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
+        let v9 = snapshot
+            .tags
+            .iter()
+            .find(|t| t.short == "v9")
+            .expect("listed");
+        assert!(!v9.here && v9.has_remote && v9.annotated);
+        assert_eq!(v9.created_unix, 0, "an advertisement carries no date");
+    }
+
+    /// Ignored: it needs a repository worth measuring. Run it with
+    /// `PG_PERF_REPO=<path> cargo test -p platitude-core --release
+    /// refs_join_at_scale -- --ignored --nocapture`.
+    ///
+    /// What it times is one `publish_refs` join — the work every poll tick
+    /// does on top of the two git reads. Recorded in
+    /// `ci/baseline/refs-join-windows-x64.md`.
+    #[test]
+    #[ignore = "needs PG_PERF_REPO pointed at a large repository"]
+    fn refs_join_at_scale() {
+        let repo = std::env::var("PG_PERF_REPO").unwrap_or_else(|_| ".".to_string());
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args([
+                "for-each-ref",
+                refs::REFS_FORMAT_ARG,
+                "refs/heads",
+                "refs/remotes",
+                "refs/tags",
+            ])
+            .output()
+            .expect("git for-each-ref");
+        let refs = refs::parse_refs(&out.stdout);
+        let head = head_at(refs.first().map(RefEntry::commit_oid).unwrap_or(oid(0)));
+
+        // What a remote carrying every tag this repository has would
+        // advertise — the steady state once a fetch has been through.
+        let remote_tags = index_of(
+            "origin",
+            refs.iter()
+                .filter(|r| r.kind == RefKind::Tag)
+                .map(|r| RemoteTag {
+                    name: r.short.clone(),
+                    commit: r.commit_oid(),
+                    annotated: r.peeled.is_some(),
+                })
+                .collect(),
+        );
+
+        let started = Instant::now();
+        let joins = RefJoins::new(&refs);
+        let snapshot = build_snapshot(&refs, &head, &remote_tags, &joins);
+        let labels = build_label_map(&refs, &head, &remote_tags, &joins);
+        println!(
+            "refs={} tags={} remote_branches={} | one publish_refs join: {:.1} ms \
+             ({} sidebar tags, {} labelled commits)",
+            refs.len(),
+            refs.iter().filter(|r| r.kind == RefKind::Tag).count(),
+            refs.iter()
+                .filter(|r| r.kind == RefKind::RemoteBranch)
+                .count(),
+            started.elapsed().as_secs_f64() * 1000.0,
+            snapshot.tags.len(),
+            labels.len(),
+        );
+    }
 }

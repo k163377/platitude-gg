@@ -188,7 +188,7 @@ impl CaptureSink {
                 matches!(e, SessionEvent::WriteFinished { op, error } if *op == "fetch" && error.is_none())
             })?;
             evs[done..].iter().find_map(|e| match e {
-                SessionEvent::RefsLoaded { snapshot } => Some(snapshot.clone()),
+                SessionEvent::RefsLoaded { snapshot } => Some((**snapshot).clone()),
                 _ => None,
             })
         })

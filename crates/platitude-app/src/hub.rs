@@ -277,9 +277,12 @@ pub struct Feeds {
     pub tab: Arc<Feed<TabMsg>>,
     pub graph: Arc<Feed<GraphMsg>>,
     /// Refs fan out to one feed per sidebar section (one consumer each).
-    pub refs_branches: Arc<Feed<RefsSnapshot>>,
-    pub refs_remotes: Arc<Feed<RefsSnapshot>>,
-    pub refs_tags: Arc<Feed<RefsSnapshot>>,
+    /// Shared, not copied: each section reads its own part of the same
+    /// snapshot, and a deep copy per section duplicates tens of thousands
+    /// of strings for nobody.
+    pub refs_branches: Arc<Feed<Arc<RefsSnapshot>>>,
+    pub refs_remotes: Arc<Feed<Arc<RefsSnapshot>>>,
+    pub refs_tags: Arc<Feed<Arc<RefsSnapshot>>>,
     /// Status headline consumer (WorkTreeModel: header props/counts).
     pub status: Arc<Feed<StatusMsg>>,
     /// Status list consumer (the `worktree` NavSectionModel — the changed
@@ -356,8 +359,8 @@ impl SessionSink for BridgeSink {
                 self.feeds.tab.push(TabMsg::Remotes {
                     names: snapshot.remote_names.clone(),
                 });
-                self.feeds.refs_branches.push_replace(snapshot.clone());
-                self.feeds.refs_remotes.push_replace(snapshot.clone());
+                self.feeds.refs_branches.push_replace(Arc::clone(&snapshot));
+                self.feeds.refs_remotes.push_replace(Arc::clone(&snapshot));
                 self.feeds.refs_tags.push_replace(snapshot);
             }
             SessionEvent::StatusLoaded {

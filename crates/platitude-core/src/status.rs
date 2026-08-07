@@ -114,6 +114,44 @@ impl WorkTreeStatus {
     }
 }
 
+/// How many entries fall into each bucket, counted in one pass.
+///
+/// The headline shows all five at once, and `-uall` (which hunk and line
+/// staging need) lists every untracked file individually — so the list is
+/// as long as the working tree is dirty, and walking it once per number
+/// is five walks for one answer.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Counts {
+    pub staged: usize,
+    pub unstaged: usize,
+    pub untracked: usize,
+    pub conflicted: usize,
+    /// Entries whose change is split across the index and the working
+    /// tree — a subset of both `staged` and `unstaged`.
+    pub partially_staged: usize,
+}
+
+impl Counts {
+    pub fn of(status: &WorkTreeStatus) -> Self {
+        let mut counts = Self::default();
+        for item in &status.items {
+            match item {
+                StatusItem::Tracked {
+                    staged, unstaged, ..
+                } => {
+                    counts.staged += usize::from(*staged != '.');
+                    counts.unstaged += usize::from(*unstaged != '.');
+                    counts.partially_staged += usize::from(*staged != '.' && *unstaged != '.');
+                }
+                StatusItem::Unmerged { .. } => counts.conflicted += 1,
+                StatusItem::Untracked { .. } => counts.untracked += 1,
+                StatusItem::Ignored { .. } => {}
+            }
+        }
+        counts
+    }
+}
+
 /// Fatal parse error (the stream shape is fixed; a mismatch means the
 /// snapshot cannot be trusted).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

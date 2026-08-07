@@ -16,7 +16,12 @@ use super::qml_register;
 // WIP view shows.
 // ---------------------------------------------------------------------------
 
-#[derive(QModelItem, Default, Clone)]
+// PartialEq feeds the unchanged-drain check: refs and status are
+// republished on every poll tick whether or not they moved, and rebuilding
+// the section (plus the Qt model reset behind it) for identical rows is
+// work the sidebar can see — a repository with tens of thousands of tags
+// pays it in the view, on the main thread.
+#[derive(QModelItem, Default, Clone, PartialEq)]
 pub struct NavItem {
     /// Display text: the last path segment in tree mode, the full name in
     /// flat/filter mode.
@@ -77,7 +82,7 @@ pub struct NavSectionModel {
     /// Explicit folder open/close choices (key = folder path); anything
     /// absent uses the section default.
     folder_overrides: HashMap<String, bool>,
-    refs_feed: Option<Arc<Feed<platitude_core::session::RefsSnapshot>>>,
+    refs_feed: Option<Arc<Feed<Arc<platitude_core::session::RefsSnapshot>>>>,
     status_feed: Option<Arc<Feed<StatusMsg>>>,
     stash_feed: Option<Arc<Feed<Vec<platitude_core::stash::StashEntry>>>>,
     worktrees_feed: Option<Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>>,
@@ -439,13 +444,35 @@ impl NavSectionModel {
         }
     }
 
+    /// Installs freshly built rows, and answers whether they were new.
+    ///
+    /// A poll tick republishes refs and status whether or not they moved,
+    /// so most arrivals carry exactly what the section already shows.
+    /// Swapping those in would still reset the Qt model — every delegate
+    /// rebuilt, the inner list scrolled back — for an identical picture.
+    fn take_rows(&mut self, rows: Vec<NavItem>) -> bool {
+        if self.all == rows {
+            return false;
+        }
+        self.all = rows;
+        true
+    }
+
     #[qslot]
     fn drain(&mut self) {
+        // Every push queues its own `drain`, so a second call can find the
+        // queue already emptied by the first. Nothing arrived means
+        // nothing to rebuild.
+        let mut arrived = false;
         if let Some(feed) = self.refs_feed.clone()
             && let Some(snapshot) = feed.drain().pop()
         {
+            // The first snapshot is news whatever it holds: the default
+            // selection is waiting on `refsLoaded`, and a section that is
+            // legitimately empty would otherwise never say so.
+            arrived |= !self.refs_loaded;
             self.refs_loaded = true;
-            self.all = match self.section.as_str() {
+            let rows = match self.section.as_str() {
                 "branches" => {
                     let items = branch_nav_items(&snapshot.locals, false);
                     let head = items.iter().find(|b| b.is_head);
@@ -471,11 +498,13 @@ impl NavSectionModel {
                     })
                     .collect(),
             };
+            arrived |= self.take_rows(rows);
         }
         if let Some(feed) = self.status_feed.clone()
             && let Some(StatusMsg { status, .. }) = feed.drain().pop()
         {
-            self.all = status_nav_items(&status);
+            let rows = status_nav_items(&status);
+            arrived |= self.take_rows(rows);
         }
         if let Some(feed) = self.worktrees_feed.clone()
             && let Some(list) = feed.drain().pop()
@@ -487,7 +516,7 @@ impl NavSectionModel {
                 .flatten()
                 .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
                 .unwrap_or_default();
-            self.all = list
+            let rows = list
                 .into_iter()
                 .filter(|w| !w.bare)
                 .map(|w| {
@@ -507,6 +536,7 @@ impl NavSectionModel {
                     }
                 })
                 .collect();
+            arrived |= self.take_rows(rows);
         }
         if let Some(feed) = self.stash_feed.clone()
             && let Some(stashes) = feed.drain().pop()
@@ -517,7 +547,7 @@ impl NavSectionModel {
             // git — renaming one takes the selector, not the message.
             // The commit id makes rows clickable: the details pane then
             // shows the stashed changes.
-            self.all = stashes
+            let rows = stashes
                 .into_iter()
                 .map(|s| NavItem {
                     name: s.message,
@@ -526,6 +556,10 @@ impl NavSectionModel {
                     ..Default::default()
                 })
                 .collect();
+            arrived |= self.take_rows(rows);
+        }
+        if !arrived {
+            return;
         }
         self.total = self.all.len() as i32;
         self.reset();
