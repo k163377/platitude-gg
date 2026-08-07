@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use crate::support::TestRepo;
 use platitude_core::details::DiffTarget;
+use platitude_core::identity::SignatureStatus;
 use platitude_core::session::{RepoSession, SessionEvent, SessionSink};
 use platitude_core::{GitExecutor, Oid};
 
@@ -359,6 +360,50 @@ async fn details_and_diff_round_trip_through_the_session() {
             SessionEvent::DiffLoaded { patches, .. } => {
                 assert_eq!(patches.len(), 1);
                 assert!(!patches[0].hunks.is_empty());
+                Some(())
+            }
+            _ => None,
+        })
+    })
+    .await;
+
+    session.close();
+}
+
+/// The signature question is asked and answered on its own, apart from
+/// the details it belongs beside: verifying may run gpg, and the details
+/// pane cannot wait for that.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_signature_answer_names_the_commit_it_is_about() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\n", "add f");
+    let head = repo.git(&["rev-parse", "HEAD"]);
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    sink.wait_for("Opened", |evs| {
+        evs.iter()
+            .any(|e| matches!(e, SessionEvent::Opened { .. }))
+            .then_some(())
+    })
+    .await;
+
+    let oid = Oid::from_hex_str(&head).unwrap();
+    session.check_signature(oid);
+    sink.wait_for("SignatureChecked", |evs| {
+        evs.iter().find_map(|e| match e {
+            SessionEvent::SignatureChecked {
+                oid: asked,
+                signature,
+            } => {
+                assert_eq!(asked, &head, "the answer says which commit it is about");
+                assert_eq!(signature.status, SignatureStatus::Absent);
+                assert!(!signature.status.is_signed());
                 Some(())
             }
             _ => None,

@@ -73,8 +73,18 @@ pub enum TabMsg {
         name: String,
         email: String,
         complete: bool,
-        signing: bool,
+        /// `commit.gpgsign`, not `is_active()`: the commit editor is what
+        /// says so, and `tag.gpgsign` would make it say it falsely.
+        sign_commits: bool,
         signing_format: String,
+    },
+    /// One commit's signature: the outcome the UI shows (empty for an
+    /// unsigned commit), git's own `%G?` letter behind it, and who signed.
+    Signature {
+        oid: String,
+        kind: String,
+        code: String,
+        signer: String,
     },
     /// Configured remote names — where a branch with no upstream can go.
     Remotes {
@@ -428,8 +438,28 @@ impl SessionSink for BridgeSink {
                     complete: config.identity.is_complete(),
                     name: config.identity.name.unwrap_or_default(),
                     email: config.identity.email.unwrap_or_default(),
-                    signing: config.signing.is_active(),
+                    sign_commits: config.signing.sign_commits,
                     signing_format: config.signing.format.as_str().to_string(),
+                });
+            }
+            SessionEvent::SignatureChecked { oid, signature } => {
+                use platitude_core::identity::SignatureStatus;
+                // Eight verdicts, three outcomes: only `G` may read as
+                // verified (`SignatureStatus::is_trusted`), `B` is the one
+                // that says the content moved, and everything else in
+                // between is a signature nobody here can judge. The letter
+                // rides along so the tooltip can say which one it was.
+                self.feeds.tab.push(TabMsg::Signature {
+                    oid,
+                    kind: match signature.status {
+                        SignatureStatus::Absent => "",
+                        SignatureStatus::Good => "verified",
+                        SignatureStatus::Bad => "bad",
+                        _ => "signed",
+                    }
+                    .to_string(),
+                    code: signature.status.code().to_string(),
+                    signer: signature.signer,
                 });
             }
             SessionEvent::PublishChecked { range, state } => {

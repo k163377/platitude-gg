@@ -35,6 +35,33 @@ ColumnLayout {
     // A remote already has this commit. Rewriting is not asked about,
     // but 要望.md wants it said, so the save row carries the warning.
     property bool published: false
+    // What git makes of this commit's signature, once the check comes
+    // back: "" (unsigned, or not answered yet), "verified", "signed" or
+    // "bad". The letter behind it is git's own `%G?` code, which is what
+    // the tooltip needs -- the mark says one of three things, but the
+    // reason a signature could not be judged is one of five.
+    property string signatureKind: ""
+    property string signatureCode: ""
+    property string signatureSigner: ""
+    /// Conclusion first, one line (デザイン規約 §hover のツールチップ).
+    readonly property string signatureTip:
+        detailsPane.signatureCode === "G"
+        ? (detailsPane.signatureSigner !== ""
+           ? qsTr("Signed by %1").arg(detailsPane.signatureSigner)
+           : qsTr("Signed by a key you trust"))
+        : detailsPane.signatureCode === "B"
+          ? qsTr("The content changed after it was signed")
+        : detailsPane.signatureCode === "U"
+          // git names no signer for this one: the key it read is not one
+          // it can put a name to.
+          ? qsTr("The key is not one you have vouched for")
+        : detailsPane.signatureCode === "X"
+          ? qsTr("The signature has expired")
+        : detailsPane.signatureCode === "Y"
+          ? qsTr("The signing key has expired")
+        : detailsPane.signatureCode === "R"
+          ? qsTr("The signing key was revoked")
+        : qsTr("Cannot be checked — no key here to check it against")
 
     signal fileActivated(string path, string origPath)
     signal parentClicked(string oidHex)
@@ -326,12 +353,55 @@ ColumnLayout {
                         acceptedButtons: Qt.NoButton
                     }
                 }
-                Label {
-                    id: detailsDate
-                    text: Qt.formatDateTime(new Date(detailsPane.details.authorTime * 1000),
-                                            "yyyy-MM-dd HH:mm")
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSm
+                // Date, and beside it what git makes of the signature.
+                // An unsigned commit gets nothing: the ordinary case
+                // carries no mark, the same rule the graph's state
+                // badges follow.
+                RowLayout {
+                    spacing: Theme.spaceSm
+                    Label {
+                        id: detailsDate
+                        text: Qt.formatDateTime(new Date(detailsPane.details.authorTime * 1000),
+                                                "yyyy-MM-dd HH:mm")
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSm
+                    }
+                    RowLayout {
+                        id: signatureMark
+                        visible: detailsPane.signatureKind !== ""
+                        spacing: Theme.spaceXs
+                        // Only a signature git trusts is green, and only
+                        // one that contradicts the content is red; the
+                        // rest are signatures nobody here can judge, and
+                        // a mark that judged them would be a lie.
+                        readonly property color tone:
+                            detailsPane.signatureKind === "verified" ? Theme.success
+                            : detailsPane.signatureKind === "bad" ? Theme.danger
+                            : Theme.textSecondary
+                        NavIcon {
+                            visible: detailsPane.signatureKind !== "signed"
+                            kind: detailsPane.signatureKind === "bad" ? "bang" : "check"
+                            tint: signatureMark.tone
+                            width: Theme.iconSm + 2
+                            height: Theme.iconSm + 2
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        Label {
+                            text: detailsPane.signatureKind === "verified" ? qsTr("Verified")
+                                  : detailsPane.signatureKind === "bad" ? qsTr("Bad signature")
+                                  : qsTr("Signed")
+                            color: signatureMark.tone
+                            font.pixelSize: Theme.fontSm
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        ToolTip.visible: signatureHover.hovered
+                        ToolTip.delay: 400
+                        ToolTip.text: detailsPane.signatureTip
+                        // A handler, not a MouseArea: an item inside a
+                        // layout is sized by the layout, and anchoring
+                        // one to fill its parent is undefined behaviour.
+                        HoverHandler { id: signatureHover }
+                    }
                 }
             }
             ColumnLayout {

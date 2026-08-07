@@ -199,6 +199,22 @@ impl SignatureStatus {
         }
     }
 
+    /// git's own letter for this verdict, as `%G?` spells it. The UI
+    /// shows one of three outcomes, so the letter is what carries the
+    /// exact reason to a tooltip.
+    pub fn code(self) -> &'static str {
+        match self {
+            SignatureStatus::Good => "G",
+            SignatureStatus::Bad => "B",
+            SignatureStatus::GoodUnknownValidity => "U",
+            SignatureStatus::GoodExpired => "X",
+            SignatureStatus::GoodExpiredKey => "Y",
+            SignatureStatus::GoodRevokedKey => "R",
+            SignatureStatus::CannotCheck => "E",
+            SignatureStatus::Absent => "N",
+        }
+    }
+
     /// True when a signature exists, whatever its verdict.
     pub fn is_signed(self) -> bool {
         self != SignatureStatus::Absent
@@ -413,6 +429,22 @@ mod tests {
         }
         let none = SignatureStatus::parse("N");
         assert!(!none.is_signed() && !none.is_trusted());
+    }
+
+    #[test]
+    fn every_verdict_round_trips_through_its_git_letter() {
+        for status in [
+            SignatureStatus::Good,
+            SignatureStatus::Bad,
+            SignatureStatus::GoodUnknownValidity,
+            SignatureStatus::GoodExpired,
+            SignatureStatus::GoodExpiredKey,
+            SignatureStatus::GoodRevokedKey,
+            SignatureStatus::CannotCheck,
+            SignatureStatus::Absent,
+        ] {
+            assert_eq!(SignatureStatus::parse(status.code()), status);
+        }
     }
 
     #[test]

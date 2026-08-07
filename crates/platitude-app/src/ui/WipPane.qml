@@ -475,6 +475,32 @@ ColumnLayout {
                               .arg(wipPane.repoTab.headAuthorEmail)
             }
             Item { Layout.fillWidth: true }
+            // What this button is about to do beyond committing: git will
+            // ask an agent for the key, and that agent may put a
+            // passphrase prompt on screen. Said only when signing is on,
+            // and in the plain text colour — it is a fact, not a warning.
+            // It gives the slot up to the pushed-amend warning: one tag
+            // fits here, and a warning outranks a fact.
+            Label {
+                visible: wipPane.repoTab.signsCommits
+                         && !(wipPane.amending && wipPane.headPublished)
+                text: qsTr("will be signed")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+                ToolTip.visible: signingHover.containsMouse
+                ToolTip.delay: 400
+                ToolTip.text: wipPane.repoTab.signingFormat === "ssh"
+                              ? qsTr("Signed with your ssh key")
+                              : wipPane.repoTab.signingFormat === "x509"
+                                ? qsTr("Signed with your x509 certificate")
+                                : qsTr("Signed with your gpg key")
+                MouseArea {
+                    id: signingHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                }
+            }
             // Said, not asked: rewriting a pushed commit is undone by a
             // switch or a reset, so the amend goes ahead and this tag
             // is all the warning it gets.

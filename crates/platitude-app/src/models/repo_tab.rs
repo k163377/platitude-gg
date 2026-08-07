@@ -35,9 +35,15 @@ pub struct RepoTab {
     author_name: String,
     author_email: String,
     identity_ready: bool,
-    /// Whether this repository signs commits or tags, and how.
-    signing_active: bool,
+    /// Whether new commits here get signed, and with what kind of key.
+    signs_commits: bool,
     signing_format: String,
+    /// Last answer to `checkSignature`: the commit asked about, what to
+    /// show for it ("" = unsigned), git's `%G?` letter and the signer.
+    signature_oid: String,
+    signature_kind: String,
+    signature_code: String,
+    signature_signer: String,
     /// Paths gathered for the next write over several files at once, one
     /// call at a time: a git path may hold any byte but NUL, so there is no
     /// separator safe enough to pack a list into one string
@@ -111,8 +117,12 @@ impl Default for RepoTab {
             // Assumed fine until the check says otherwise, so nothing
             // flashes a warning during startup.
             identity_ready: true,
-            signing_active: false,
+            signs_commits: false,
             signing_format: String::new(),
+            signature_oid: String::new(),
+            signature_kind: String::new(),
+            signature_code: String::new(),
+            signature_signer: String::new(),
             pending_paths: Vec::new(),
             remotes: Vec::new(),
             remote_count: 0,
@@ -204,8 +214,16 @@ impl RepoTab {
     qproperty!("authorName", Member = author_name, Notify = changed);
     qproperty!("authorEmail", Member = author_email, Notify = changed);
     qproperty!("identityReady", Member = identity_ready, Notify = changed);
-    qproperty!("signingActive", Member = signing_active, Notify = changed);
+    qproperty!("signsCommits", Member = signs_commits, Notify = changed);
     qproperty!("signingFormat", Member = signing_format, Notify = changed);
+    qproperty!("signatureOid", Member = signature_oid, Notify = changed);
+    qproperty!("signatureKind", Member = signature_kind, Notify = changed);
+    qproperty!("signatureCode", Member = signature_code, Notify = changed);
+    qproperty!(
+        "signatureSigner",
+        Member = signature_signer,
+        Notify = changed
+    );
     qproperty!("remoteCount", Member = remote_count, Notify = changed);
     qproperty!("defaultRemote", Member = default_remote, Notify = changed);
     qproperty!("headSubject", Member = head_subject, Notify = changed);
@@ -318,15 +336,26 @@ impl RepoTab {
                     name,
                     email,
                     complete,
-                    signing,
+                    sign_commits,
                     signing_format,
                 } => {
                     self.author_name = name;
                     self.author_email = email;
                     self.identity_ready = complete;
-                    self.signing_active = signing;
+                    self.signs_commits = sign_commits;
                     self.signing_format = signing_format;
                     self.compare_head_author();
+                }
+                TabMsg::Signature {
+                    oid,
+                    kind,
+                    code,
+                    signer,
+                } => {
+                    self.signature_oid = oid;
+                    self.signature_kind = kind;
+                    self.signature_code = code;
+                    self.signature_signer = signer;
                 }
                 TabMsg::Remotes { names } => {
                     // A push with no upstream goes to `origin` when there
@@ -927,6 +956,17 @@ impl RepoTab {
             return;
         };
         self.with_session(|s| s.check_in_history(oid));
+    }
+
+    /// Asks what git makes of `oid_hex`'s signature; the answer arrives as
+    /// `signatureOid` / `signatureKind` / `signatureCode` / `signatureSigner`.
+    #[qslot]
+    fn check_signature(&mut self, oid_hex: String) {
+        let Ok(oid) = platitude_core::oid::Oid::from_hex_str(oid_hex.trim()) else {
+            tracing::warn!(oid_hex, "invalid oid in signature check");
+            return;
+        };
+        self.with_session(|s| s.check_signature(oid));
     }
 
     /// Records `user.name` / `user.email`. `global` writes the user's own

@@ -23,6 +23,7 @@ commands:
         stashes   three stashes, one with untracked files
         detached  HEAD detached at a tag
         behind    remote has commits fetch would bring in
+        signed    ssh-signed commits: verified, unjudgeable, unsigned
         empty     `git init` and nothing else
 
   verify-ui <verb> [arg] [options]

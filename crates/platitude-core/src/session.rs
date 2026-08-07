@@ -232,6 +232,11 @@ pub enum SessionEvent {
         oid: String,
         in_history: bool,
     },
+    /// Answer to [`RepoSession::check_signature`].
+    SignatureChecked {
+        oid: String,
+        signature: identity::Signature,
+    },
     /// Answer to [`RepoSession::load_head_commit`] — what an amend starts
     /// from: HEAD's message, and whose commit it is about to replace. All
     /// empty on an unborn branch.
@@ -2039,6 +2044,28 @@ impl RepoSession {
                     in_history,
                 }),
                 Err(e) => s.fail("history", e),
+            }
+        });
+    }
+
+    /// Asks whether `oid` carries a signature and what git makes of it.
+    ///
+    /// Kept out of [`Self::load_details`] on purpose: verifying runs gpg or
+    /// ssh-keygen, and the details pane has a 100ms budget. The answer
+    /// arrives on its own, after the commit is already on screen.
+    pub fn check_signature(self: &Arc<Self>, oid: Oid) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            match identity::verify_commit(&s.executor, &workdir, &oid.to_hex(), &cancel).await {
+                Ok(signature) => s.sink.event(SessionEvent::SignatureChecked {
+                    oid: oid.to_hex(),
+                    signature,
+                }),
+                Err(e) => s.fail("signature", e),
             }
         });
     }
