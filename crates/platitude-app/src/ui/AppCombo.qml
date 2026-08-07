@@ -91,7 +91,7 @@ ComboBox {
         height: Theme.iconMd
         NavIcon {
             anchors.fill: parent
-            kind: combo.loading ? "spinner" : "chevrons"
+            kind: combo.loading ? "spinner" : "chevron"
             tint: Theme.textSecondary
             // Only the turning one is animated; the arrow keeps the angle
             // it was drawn at (an animator leaves it where it stopped).

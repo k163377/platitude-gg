@@ -204,6 +204,18 @@ Canvas {
             ctx.lineTo(13.5 * s, 12.5 * s)
             ctx.closePath()
             ctx.stroke()
+        } else if (icon.kind === "chevron") {
+            // One of the pair below, for "this opens a list". The pair
+            // itself is spoken for — it moves a pane's edge — and a mark
+            // cannot mean two things in one window. Same geometry and the
+            // same stroke, so it stays level with the ring it swaps with
+            // in the same seat.
+            ctx.lineJoin = "round"
+            ctx.beginPath()
+            ctx.moveTo(6 * s, 4 * s)
+            ctx.lineTo(10 * s, 8 * s)
+            ctx.lineTo(6 * s, 12 * s)
+            ctx.stroke()
         } else if (icon.kind === "chevrons") {
             // The pair that moves a pane's edge, drawn rather than typed.
             // A text guillemet sits on the lowercase band, so centring
