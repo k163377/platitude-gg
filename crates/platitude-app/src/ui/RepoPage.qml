@@ -200,7 +200,7 @@ Item {
             qsTr("Move %1 here?").arg(local),
             qsTr("Commits only %1 has stop being reachable.").arg(local),
             false,
-            qsTr("Hold to move"),
+            qsTr("Move"),
             function () { page.switchTo("force", local, local, remoteRef) },
             true)
         // Say it in words too: a smoke run asserts on the report line
@@ -383,11 +383,11 @@ Item {
             readonly property bool heldRow: stashRow || remoteRow || tagRow
                                             || refusedRow
             code: remoteRow ? "push --delete" : ""
-            // The verb first, the gesture after it: every held row in the
-            // app would otherwise open with the same two words, and a menu
-            // is read by its first word (デザイン規約 §長押し).
-            text: refusedRow ? qsTr("Delete anyway — hold")
-                : heldRow ? qsTr("Delete — hold") : qsTr("Delete…")
+            // The verb and nothing else: the gesture is the mark ahead of
+            // it, and the ellipsis is what tells a row that asks first
+            // from one that is held (デザイン規約 §長押し).
+            text: refusedRow ? qsTr("Delete anyway")
+                : heldRow ? qsTr("Delete") : qsTr("Delete…")
             // What git said, in the row rather than on a bar: the branch
             // holds commits its reference point does not (§左メニューの所作).
             note: refusedRow ? qsTr("not merged") : ""
@@ -468,7 +468,7 @@ Item {
             qsTr("Rename %1 to %2?").arg(remoteRef).arg(remote + "/" + name),
             qsTr("The old branch is deleted, not moved."),
             false,
-            qsTr("Hold to rename"),
+            qsTr("Rename"),
             function () { repoTab.renameRemoteBranch(remote, from, name) },
             true,
             qsTr("Hold to rename. git has no rename on a remote: %1 is "
@@ -597,12 +597,10 @@ Item {
         return plan
     }
     /// What the row does, said the way every held row says it: the verb
-    /// first, the gesture after it (デザイン規約 §長押し). Leading with
-    /// `Hold to` instead would open every destructive row in the app with
-    /// the same two words, and a menu is read by its first word.
-    /// Nothing to take is nothing to say.
+    /// and nothing else, with the gesture left to the mark ahead of it
+    /// (デザイン規約 §長押し). Nothing to take is nothing to say.
     function discardWords(plan) {
-        return !plan || plan.count === 0 ? "" : qsTr("Discard — hold")
+        return !plan || plan.count === 0 ? "" : qsTr("Discard")
     }
     /// What that costs, when it is more than the verb implies: one wording
     /// for every bucket and the difference on the tag, since the reader's
@@ -746,7 +744,7 @@ Item {
         // is (デザイン規約 §長押し).
         AppMenuItem {
             id: stashDeleteItem
-            text: qsTr("Delete — hold")
+            text: qsTr("Delete")
             enabled: repoTab.busyCount === 0
             holdMs: Metrics.holdMs
             onHeld: {
@@ -821,7 +819,7 @@ Item {
             AppMenuItem {
                 id: hardResetItem
                 code: "--hard"
-                text: qsTr("Discard everything after it — hold")
+                text: qsTr("Discard everything after it")
                 holdMs: Metrics.holdMs
                 onHeld: {
                     resetMenu.close()
@@ -1300,7 +1298,7 @@ Item {
             // Through the menu's own row, which stays standing over the
             // plain `-d` so git's answer has somewhere to land. On a merged
             // branch it lands and the menu closes; on one git refuses, the
-            // row turns into the held `Delete anyway — hold`, which "-go"
+            // row turns into the held `Delete anyway`, which "-go"
             // then runs to its end. What the row says goes into words too,
             // since that is the whole of the difference.
             page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))

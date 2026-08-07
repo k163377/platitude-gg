@@ -24,6 +24,8 @@ QtObject {
     readonly property int spinMs: 1000
     readonly property int holdMs: 500
     readonly property int holdFillMin: Theme.spaceXs
+    readonly property int holdBackMs: 150
+    readonly property int opticalDrop: 1
     readonly property int menuMinW: 160
     readonly property var laneDash: [1, 1]
 }

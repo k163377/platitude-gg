@@ -36,6 +36,28 @@ Menu {
         return widest
     }
 
+    // The seat every row of a menu that holds one held row leaves for the
+    // hold mark, whether or not that row is the held one: a mark on some
+    // rows and not others would start their words on different x, and a
+    // menu is read down its first letters (デザイン規約 §長押し). Zero
+    // where nothing here is held, so the everyday menus keep their words
+    // hard against the padding.
+    //
+    // Carried as extra left padding rather than as a seat in the row's
+    // layout: a seat would have to pay the layout's own gap on top of its
+    // width, and that gap is shared with the code chip — the words would
+    // end up further from the mark than they are from anything else in
+    // the row. This is the whole distance the words move, and the mark is
+    // placed inside it.
+    readonly property real holdIndent: {
+        for (let i = 0; i < appMenu.count; i++) {
+            const row = appMenu.itemAt(i)
+            if (row && row.visible && row.holdMs !== undefined && row.holdMs > 0)
+                return Theme.spaceSm
+        }
+        return 0
+    }
+
     // Fusion measures a menu by its background (a flat 200) and by its
     // list view (which has no implicit width at all), so the rows never
     // get a say. Here the widest row decides.

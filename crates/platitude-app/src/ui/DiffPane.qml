@@ -258,25 +258,39 @@ Rectangle {
                     // button sits in the hunk's own heading, so what it
                     // takes is the thing it is standing on, and a bar
                     // coming down over the diff to say so is machinery a
-                    // hunk does not need. The frame is what says it must
-                    // be held; the fill runs left to right inside it.
+                    // hunk does not need.
+                    //
+                    // Shaped like the held row of a right-click menu, not
+                    // like the toolbar's framed button: this one sits in a
+                    // line of other words rather than in a row of other
+                    // buttons, and a frame around one word in a heading
+                    // reads as a box that has come loose. The mark says it
+                    // is held, and the hold fills the words' own ground
+                    // edge to edge.
                     ActionButton {
                         id: discardHunkButton
                         visible: !diffPane.staged
-                        text: qsTr("Discard hunk — hold")
+                        text: qsTr("Discard hunk")
                         font.pixelSize: Theme.fontSm
                         tone: Theme.danger
-                        frameColor: Theme.danger
+                        holdTone: Theme.danger
                         holdMs: Metrics.holdMs
                         enabled: !diffPane.busy
                         onHeld: diffPane.discardHunkRequested(diffRow.hunk)
                     }
-                    HoverToolButton {
+                    // The same pair of colours the file rows put on their
+                    // own `+` and `−`: staging is the green half of the
+                    // gesture and unstaging the red one, and the heading
+                    // should not name them in a different voice than the
+                    // list does.
+                    ActionButton {
                         text: diffPane.staged ? qsTr("Unstage hunk")
                                               : qsTr("Stage hunk")
                         font.pixelSize: Theme.fontSm
+                        tone: diffPane.staged ? Theme.diffRemovedFg
+                                              : Theme.diffAddedFg
                         enabled: !diffPane.busy
-                        onClicked: diffPane.stageSelectionRequested(diffRow.hunk, -1)
+                        onActivated: diffPane.stageSelectionRequested(diffRow.hunk, -1)
                     }
                 }
                 // Line-level staging.

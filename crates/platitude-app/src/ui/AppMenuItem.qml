@@ -33,6 +33,10 @@ MenuItem {
     /// ordinary row. A hold row reports no click at all — the press is
     /// taken before the button behind it can see it, which is also what
     /// keeps the menu from closing under the hold.
+    ///
+    /// The row says so with the mark ahead of its words, not in them: the
+    /// menu leaves the same seat for it on every row, so a held row reads
+    /// down the same column as the rest (`AppMenu.holdColW`).
     property int holdMs: 0
     /// How far into the hold the press has got, 0 to 1.
     property real holdProgress: 0
@@ -42,8 +46,10 @@ MenuItem {
     signal held()
     /// Automation: run the hold to its end without a press behind it.
     function completeHold() {
-        if (menuItem.holdMs > 0)
+        if (menuItem.holdMs > 0) {
+            rowBackAnim.stop()
             rowHoldAnim.restart()
+        }
     }
     readonly property bool holding: menuItem.holdProgress > 0
 
@@ -60,7 +66,15 @@ MenuItem {
     /// what keeps the menu up.
     signal picked()
 
+    /// How far this menu's rows are pushed in to leave room for the hold
+    /// mark — the same on every row, held or not, so a menu still reads
+    /// down one column of first letters (`AppMenu.holdIndent`).
+    readonly property real holdIndent:
+        menuItem.menu !== null && menuItem.menu.holdIndent !== undefined
+        ? menuItem.menu.holdIndent : 0
+
     padding: Theme.spaceSm
+    leftPadding: Theme.spaceSm + menuItem.holdIndent
     topPadding: 0
     bottomPadding: 0
     // A row this menu is not offering takes no room. The list lays its
@@ -70,12 +84,15 @@ MenuItem {
     // rows are one per bucket).
     implicitHeight: menuItem.visible ? Theme.rowHeight : 0
     implicitWidth: (menuItem.code !== ""
-                    ? codeChip.implicitWidth + Theme.spaceSm : 0)
+                      ? codeChip.implicitWidth + Theme.spaceSm : 0)
                    + itemLabel.implicitWidth
                    + (menuItem.note !== ""
                       ? noteLabel.implicitWidth + Theme.spaceSm : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
+    // The words no longer say the gesture, so this is where it is left
+    // for a reader who cannot see the mark.
+    Accessible.description: menuItem.holdMs > 0 ? qsTr("Hold to activate") : ""
 
     // The one colour every word in the row follows, so the chip cannot
     // disagree with the sentence it sits in. A held row says what it
@@ -93,6 +110,21 @@ MenuItem {
     ToolTip.delay: 600
     ToolTip.text: menuItem.code !== ""
                   ? menuItem.code + " " + menuItem.text : menuItem.text
+
+    // The mark, inside the padding the whole menu carries for it rather
+    // than in the row's layout: it stands against the card's own padding
+    // with nothing but air to its left, and the words follow at the
+    // distance `holdIndent` sets — not at that distance plus the layout's
+    // gap (デザイン規約 §長押し). A row of the menu that is not held
+    // leaves the same space empty, so the column of first letters holds.
+    HoldIcon {
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: Metrics.opticalDrop
+        progress: menuItem.holdProgress
+        tint: menuItem.wordColor
+        visible: menuItem.holdMs > 0
+    }
 
     contentItem: RowLayout {
         spacing: Theme.spaceSm
@@ -117,8 +149,13 @@ MenuItem {
             implicitHeight: codeLabel.implicitHeight
             Rectangle {
                 anchors.fill: codeLabel
-                anchors.leftMargin: -Theme.spaceXs
-                anchors.rightMargin: -Theme.spaceXs
+                // Half a gap of tint outside the glyphs, not a whole one:
+                // a chip that follows the hold mark would otherwise reach
+                // back far enough to sit against it, and the row would
+                // read as one run of ink with no air between the two
+                // things it is saying.
+                anchors.leftMargin: -Theme.spaceXs / 2
+                anchors.rightMargin: -Theme.spaceXs / 2
                 radius: Theme.radiusSm
                 // A faint lift off whatever the row is showing under it —
                 // the menu card at rest, the accent under the pointer,
@@ -195,9 +232,26 @@ MenuItem {
         from: 0
         to: 1
         duration: Math.max(menuItem.holdMs, 1)
-        // Letting go part way leaves nothing behind.
-        onStopped: menuItem.holdProgress = 0
+        // A press that stopped short slides back out. A held row reports
+        // no click at all, so without this the answer to a plain click on
+        // it is nothing happening at all (デザイン規約 §長押し). Pressed
+        // all the way through, the row has already run and there is
+        // nothing left to say — that one blanks.
+        onStopped: {
+            if (menuItem.holdProgress >= 1)
+                menuItem.holdProgress = 0
+            else if (menuItem.holdProgress > 0)
+                rowBackAnim.restart()
+        }
         onFinished: menuItem.held()
+    }
+    NumberAnimation {
+        id: rowBackAnim
+        target: menuItem
+        property: "holdProgress"
+        to: 0
+        duration: Metrics.holdBackMs
+        easing.type: Easing.OutCubic
     }
     // Takes the press before the MenuItem underneath can: a click here
     // would emit `triggered`, which both runs the row and closes the menu
@@ -208,7 +262,12 @@ MenuItem {
         id: rowPress
         anchors.fill: parent
         enabled: (menuItem.holdMs > 0 || menuItem.staysOpen) && menuItem.enabled
-        onPressed: if (menuItem.holdMs > 0) rowHoldAnim.restart()
+        onPressed: {
+            if (menuItem.holdMs > 0) {
+                rowBackAnim.stop()
+                rowHoldAnim.restart()
+            }
+        }
         // Released anywhere, or dragged off the row: both call it off.
         // A stays-open row has no fill to call off — letting go on the row
         // is its click, and letting go outside it is not.
@@ -228,6 +287,7 @@ MenuItem {
     Keys.onPressed: event => {
         if (menuItem.holdMs <= 0 || event.isAutoRepeat || !holdKey(event.key))
             return
+        rowBackAnim.stop()
         rowHoldAnim.restart()
         event.accepted = true
     }

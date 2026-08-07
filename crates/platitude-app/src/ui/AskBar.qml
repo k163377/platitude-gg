@@ -41,8 +41,19 @@ Rectangle {
     property real holdProgress: 0
     /// Automation: run the hold to its end without a press behind it.
     function completeHold() {
-        if (bar.hold)
+        if (bar.hold) {
+            backAnim.stop()
             holdAnim.restart()
+        }
+    }
+    /// Called off without the hand letting go — the question itself has
+    /// gone. Blanks the fill rather than sliding it back: the slide is an
+    /// answer to a press that stopped short, and there is no longer
+    /// anything here for it to be an answer about.
+    function blankHold() {
+        holdAnim.stop()
+        backAnim.stop()
+        bar.holdProgress = 0
     }
     /// The keys that stand in for the press (デザイン規約 §長押し).
     function holdKey(key) {
@@ -72,7 +83,7 @@ Rectangle {
         if (bar.open)
             Qt.callLater(acceptPill.forceActiveFocus)
         else
-            holdAnim.stop()
+            bar.blankHold()
     }
 
     // Sized by its own words, opened and closed with the standard 200ms.
@@ -121,7 +132,7 @@ Rectangle {
         Rectangle {
             id: acceptPill
             Layout.alignment: Qt.AlignVCenter
-            implicitWidth: acceptLabel.implicitWidth + 2 * Theme.spaceMd
+            implicitWidth: acceptRow.implicitWidth + 2 * Theme.spaceMd
             implicitHeight: Theme.controlHeight
             radius: Theme.radiusSm
             color: acceptMouse.containsMouse && bar.holdProgress === 0
@@ -139,6 +150,12 @@ Rectangle {
             // rather than the palette's, so the collapse looks no different.
             activeFocusOnTab: true
             enabled: bar.open
+            // The pill draws itself rather than being a control, so it
+            // has to name itself. The gesture is said here because the
+            // words on it no longer carry it.
+            Accessible.role: Accessible.Button
+            Accessible.name: bar.accept
+            Accessible.description: bar.hold ? qsTr("Hold to activate") : ""
             // The hold filling the frame from the left, inset by the
             // border so the frame stays a frame while it fills: that the
             // fill reaches the end is the whole progress report.
@@ -168,14 +185,30 @@ Rectangle {
                 radius: Theme.radiusMd
                 visible: acceptPill.activeFocus
             }
-            Label {
-                id: acceptLabel
+            Row {
+                id: acceptRow
                 anchors.centerIn: parent
-                text: bar.accept
-                // Lifted while the fill runs under it: the words cross
-                // both the filled side and the bare one.
-                color: bar.holdProgress > 0 ? Theme.textOnAccent : bar.tone
-                font.pixelSize: Theme.fontMd
+                spacing: Theme.spaceXs
+                // Ahead of the word, where the eye starts: the pill says
+                // how it is answered before it says what answering does
+                // (デザイン規約 §長押し). A pill answered by a click wears
+                // no mark and spends no width on one.
+                HoldIcon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenterOffset: Metrics.opticalDrop
+                    visible: bar.hold
+                    progress: bar.holdProgress
+                    tint: acceptLabel.color
+                }
+                Label {
+                    id: acceptLabel
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: bar.accept
+                    // Lifted while the fill runs under it: the words cross
+                    // both the filled side and the bare one.
+                    color: bar.holdProgress > 0 ? Theme.textOnAccent : bar.tone
+                    font.pixelSize: Theme.fontMd
+                }
             }
             ToolTip.visible: bar.tip !== "" && acceptMouse.containsMouse
             ToolTip.delay: 600
@@ -198,10 +231,12 @@ Rectangle {
                 onContainsPressChanged: {
                     if (!bar.hold)
                         return
-                    if (containsPress)
+                    if (containsPress) {
+                        backAnim.stop()
                         holdAnim.restart()
-                    else
+                    } else {
                         holdAnim.stop()
+                    }
                 }
             }
             // The same answer without a pointer: Space or Enter, held where
@@ -210,8 +245,10 @@ Rectangle {
             Keys.onPressed: event => {
                 if (event.isAutoRepeat || !bar.holdKey(event.key))
                     return
-                if (bar.hold)
+                if (bar.hold) {
+                    backAnim.stop()
                     holdAnim.restart()
+                }
                 event.accepted = true
             }
             Keys.onReleased: event => {
@@ -230,10 +267,26 @@ Rectangle {
                 from: 0
                 to: 1
                 duration: Metrics.holdMs
-                // Letting go part way leaves nothing behind, so the next
-                // press starts the whole way from the beginning again.
-                onStopped: bar.holdProgress = 0
+                // A press that stopped short slides back out. A hold pill
+                // reports no click at all, so without this a plain click
+                // on it is answered by nothing happening (デザイン規約
+                // §長押し). Pressed all the way through, the question has
+                // already been answered and the bar is on its way out.
+                onStopped: {
+                    if (bar.holdProgress >= 1)
+                        bar.holdProgress = 0
+                    else if (bar.holdProgress > 0)
+                        backAnim.restart()
+                }
                 onFinished: bar.confirmed()
+            }
+            NumberAnimation {
+                id: backAnim
+                target: bar
+                property: "holdProgress"
+                to: 0
+                duration: Metrics.holdBackMs
+                easing.type: Easing.OutCubic
             }
         }
         // Escape and a click anywhere else walk away too; this is the

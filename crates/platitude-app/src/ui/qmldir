@@ -19,6 +19,7 @@ FileRowDelegate 1.0 FileRowDelegate.qml
 FormField 1.0 FormField.qml
 GraphPane 1.0 GraphPane.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml
+HoldIcon 1.0 HoldIcon.qml
 HoverButton 1.0 HoverButton.qml
 HoverToolButton 1.0 HoverToolButton.qml
 IdentIcon 1.0 IdentIcon.qml

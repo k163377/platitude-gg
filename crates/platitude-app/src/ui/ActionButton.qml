@@ -10,7 +10,13 @@ HoverToolButton {
     property string kind: ""
     /// Colour of both halves while the button is live.
     property color tone: Theme.textPrimary
-    /// git is on the network for this button: the icon turns in its place.
+    /// git is on the network for this button: the words step aside for a
+    /// turning ring in the middle of the button, and the whole of it goes
+    /// as dim and as deaf as a disabled one (デザイン規約 §長押し).
+    ///
+    /// Dimmed rather than actually disabled: `enabled` would take the
+    /// focus away, and the press that started the network call is the
+    /// very one that may have come from the keyboard.
     property bool busy: false
     /// Hold the turn still (automation — a spinning icon photographs
     /// differently every time).
@@ -21,9 +27,14 @@ HoverToolButton {
     property int holdMs: 0
     /// How far into the hold the press has got, 0 to 1.
     property real holdProgress: 0
-    /// Frame drawn around the button, and the colour the hold fills it
-    /// with. Transparent leaves the button bare.
+    /// Frame drawn around the button. Transparent leaves the button bare.
     property color frameColor: "transparent"
+    /// The colour the hold fills the button with — the frame's, since a
+    /// framed button fills the frame it drew. A bare one names its own
+    /// (the hunk heading's `Discard hunk`, which fills edge to edge the
+    /// way a held menu row does — デザイン規約 §長押し).
+    property color holdTone: actionBtn.frameColor
+    readonly property bool framed: actionBtn.frameColor.a > 0
     /// Text the label's box is measured for. A button whose wording
     /// changes with its state would otherwise move everything beside it
     /// in the toolbar every time the state changed.
@@ -36,28 +47,38 @@ HoverToolButton {
     /// a hold nor the one that gives up on it part way may fall through
     /// to what this button does when it is not a hold button.
     signal activated()
-    readonly property color fg: holdProgress > 0 ? Theme.textOnAccent
+    readonly property color fg: actionBtn.busy ? Theme.textMuted
+                                : holdProgress > 0 ? Theme.textOnAccent
                                 : enabled ? tone : Theme.textMuted
+    /// Nothing here answers a press while git is on the network for it.
+    readonly property bool live: actionBtn.enabled && !actionBtn.busy
 
     /// Automation: run the hold to its end without a press behind it.
     function completeHold() {
-        if (actionBtn.holdMs > 0)
+        if (actionBtn.holdMs > 0) {
+            backAnim.stop()
             holdAnim.restart()
+        }
     }
 
     // Tab reaches the buttons that need a second way in. The rest of the
     // toolbar stays out of the tab order: a hold is the only gesture here
     // that a pointer alone can fail to make (デザイン規約 §長押し).
     activeFocusOnTab: actionBtn.holdMs > 0
+    // The mark says it to whoever can see it, and this says it to whoever
+    // cannot: the words themselves no longer carry the gesture.
+    Accessible.description: actionBtn.holdMs > 0 ? qsTr("Hold to activate") : ""
 
-    onClicked: if (actionBtn.holdMs <= 0) actionBtn.activated()
+    onClicked: if (actionBtn.holdMs <= 0 && actionBtn.live) actionBtn.activated()
     onDownChanged: {
-        if (actionBtn.holdMs <= 0)
+        if (actionBtn.holdMs <= 0 || !actionBtn.live)
             return
-        if (actionBtn.down)
+        if (actionBtn.down) {
+            backAnim.stop()
             holdAnim.restart()
-        else
+        } else {
             holdAnim.stop()
+        }
     }
     // The hold's other hand: focus it, then hold Space or Enter. Accepting
     // the key keeps AbstractButton from also taking Space as a press, which
@@ -68,13 +89,16 @@ HoverToolButton {
     // the fill from zero for as long as the key was held — the hold could
     // then never complete.
     Keys.onPressed: event => {
-        if (actionBtn.holdMs <= 0 || event.isAutoRepeat || !holdKey(event.key))
+        if (actionBtn.holdMs <= 0 || !actionBtn.live
+                || event.isAutoRepeat || !holdKey(event.key))
             return
+        backAnim.stop()
         holdAnim.restart()
         event.accepted = true
     }
     Keys.onReleased: event => {
-        if (actionBtn.holdMs <= 0 || event.isAutoRepeat || !holdKey(event.key))
+        if (actionBtn.holdMs <= 0 || !actionBtn.live
+                || event.isAutoRepeat || !holdKey(event.key))
             return
         holdAnim.stop()
         event.accepted = true
@@ -90,33 +114,54 @@ HoverToolButton {
         from: 0
         to: 1
         duration: Math.max(actionBtn.holdMs, 1)
-        // Letting go part way leaves nothing behind, so the next press
-        // starts the whole way from the beginning again.
-        onStopped: actionBtn.holdProgress = 0
+        // A press that stopped short slides back out instead of blanking:
+        // a hold button reports no click at all, so without this the only
+        // answer to a plain click is nothing happening (デザイン規約
+        // §長押し). Pressed all the way through, it has already fired and
+        // there is nothing left to say — that one blanks.
+        onStopped: {
+            if (actionBtn.holdProgress >= 1)
+                actionBtn.holdProgress = 0
+            else if (actionBtn.holdProgress > 0)
+                backAnim.restart()
+        }
         onFinished: actionBtn.held()
+    }
+    NumberAnimation {
+        id: backAnim
+        target: actionBtn
+        property: "holdProgress"
+        to: 0
+        duration: Metrics.holdBackMs
+        easing.type: Easing.OutCubic
     }
     background: Rectangle {
         color: "transparent"
-        border.color: actionBtn.frameColor
+        // The frame goes inert with the rest of the button while git is
+        // out on the network: its colour is a warning about a press, and
+        // there is no press to be had until this comes back.
+        border.color: actionBtn.busy ? Theme.borderDefault : actionBtn.frameColor
         border.width: Theme.borderWidth
         radius: Theme.radiusSm
-        // The hold, filling the frame from the left. Inset by the border
-        // so the frame stays a frame while it fills.
+        // The hold, filling from the left. Inset by the border where
+        // there is one, so the frame stays a frame while it fills; a bare
+        // button fills edge to edge, the way a held menu row does.
         Rectangle {
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            anchors.margins: Theme.borderWidth
+            anchors.margins: actionBtn.framed ? Theme.borderWidth : 0
+            radius: Theme.radiusSm
             // Never thinner than `holdFillMin` while it runs: proportional
             // from zero, the first tenth of the hold is a sub-pixel sliver,
             // so the press reads as not having taken and the whole gesture
             // feels longer than it is (デザイン規約 §進行中・長押しの定数).
             width: actionBtn.holdProgress > 0
                    ? Math.max(Metrics.holdFillMin,
-                              (parent.width - 2 * Theme.borderWidth)
+                              (parent.width - 2 * anchors.margins)
                               * actionBtn.holdProgress)
                    : 0
-            color: actionBtn.frameColor
+            color: actionBtn.holdTone
             visible: actionBtn.holdProgress > 0
         }
         // Drawn outside the frame rather than in it: the frame's colour is
@@ -136,65 +181,110 @@ HoverToolButton {
     // header's buttons are the body size the rest of that row is.
     font.pixelSize: Theme.fontMd
 
-    contentItem: RowLayout {
-        spacing: Theme.spaceXs
-        // A button with no icon to name it spends no width on one — the
-        // word is the whole of it (the hunk header's buttons).
-        Item {
-            visible: actionBtn.kind !== "" || actionBtn.busy
-            implicitWidth: visible ? Theme.iconMd : 0
-            implicitHeight: Theme.iconMd
-            Layout.alignment: Qt.AlignVCenter
-            NavIcon {
-                anchors.fill: parent
-                kind: actionBtn.kind
-                tint: actionBtn.fg
-                visible: !actionBtn.busy
-            }
-            // Its own item rather than a rotation on the one above: an
-            // animator leaves the angle where it stopped, and the icon
-            // that returns must not come back tilted.
-            NavIcon {
-                anchors.fill: parent
-                kind: "spinner"
-                tint: actionBtn.fg
-                visible: actionBtn.busy
-                // On the render thread, so it keeps turning while the GUI
-                // thread drains models.
-                RotationAnimator on rotation {
-                    running: actionBtn.busy && !actionBtn.still
-                    loops: Animation.Infinite
-                    from: 0
-                    to: 360
-                    duration: Metrics.spinMs
+    // The row keeps its size while the network call runs — the toolbar
+    // must not shuffle under a pointer that is still resting on the
+    // button — so the words step aside by going transparent rather than
+    // by leaving the layout, and the ring turns over the middle of what
+    // they left.
+    contentItem: Item {
+        implicitWidth: btnRow.implicitWidth
+        implicitHeight: btnRow.implicitHeight
+
+        RowLayout {
+            id: btnRow
+            anchors.fill: parent
+            spacing: Theme.spaceXs
+            opacity: actionBtn.busy ? 0 : 1
+            // A button with no icon to name it spends no width on one —
+            // the word is the whole of it (the hunk header's buttons).
+            // A button that swaps between a named icon and the mark keeps
+            // the wider of the two seats whichever it is wearing, so its
+            // width does not change with its state and the toolbar does
+            // not slide under a pointer already resting on it. One that
+            // only ever wears the mark fits it, and its words sit as
+            // close to it as a menu row's do.
+            Item {
+                visible: actionBtn.kind !== "" || actionBtn.holdMs > 0
+                implicitWidth: !visible ? 0
+                               : actionBtn.kind !== "" ? Theme.iconMd
+                                                       : Theme.iconSm
+                implicitHeight: Theme.iconMd
+                Layout.alignment: Qt.AlignVCenter
+                NavIcon {
+                    anchors.fill: parent
+                    kind: actionBtn.kind
+                    tint: actionBtn.fg
+                    visible: actionBtn.holdMs <= 0
+                }
+                // A held button says how it is worked before it says what
+                // it does, and it says it where the eye starts the row
+                // (デザイン規約 §長押し). It takes the icon's seat rather
+                // than a seat of its own: what the button does is already
+                // in the word beside it and in the frame around it, and
+                // two marks on one button is one too many to read at a
+                // glance.
+                //
+                // Left in a seat kept at the icon's full width, not fitted
+                // to the mark: this button's shape changes with the
+                // branch's standing (`Push` / `Push -f`), and a seat that
+                // changed width with it would slide the whole toolbar
+                // sideways under a pointer already resting on it.
+                HoldIcon {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenterOffset: Metrics.opticalDrop
+                    progress: actionBtn.holdProgress
+                    tint: actionBtn.fg
+                    visible: actionBtn.holdMs > 0
                 }
             }
+            // Measured, never drawn: a hidden item is left out of the
+            // layout, and a Label measures the way the visible one does —
+            // TextMetrics reports a few pixels tighter, which is enough of
+            // a difference to shift the toolbar it is here to hold still.
+            Label {
+                id: widest
+                visible: false
+                text: actionBtn.widestText
+                font.pixelSize: actionBtn.font.pixelSize
+            }
+            Label {
+                id: btnLabel
+                // The box is the widest wording plus one gap, so the last
+                // letter stands off the frame the way the first stands off
+                // the icon. Without it the words sit hard against the
+                // border (measured: 8px of air on the left, 5 on the
+                // right).
+                readonly property real box: widest.implicitWidth > 0
+                                            ? widest.implicitWidth + Theme.spaceXs : 0
+                text: actionBtn.text
+                color: actionBtn.fg
+                font.pixelSize: actionBtn.font.pixelSize
+                elide: Text.ElideRight
+                Layout.maximumWidth: 240
+                Layout.preferredWidth: Math.max(implicitWidth, box)
+                Layout.alignment: Qt.AlignVCenter
+            }
         }
-        // Measured, never drawn: a hidden item is left out of the layout,
-        // and a Label measures the way the visible one does — TextMetrics
-        // reports a few pixels tighter, which is enough of a difference
-        // to shift the toolbar it is here to hold still.
-        Label {
-            id: widest
-            visible: false
-            text: actionBtn.widestText
-            font.pixelSize: actionBtn.font.pixelSize
-        }
-        Label {
-            id: btnLabel
-            // The box is the widest wording plus one gap, so the last
-            // letter stands off the frame the way the first stands off
-            // the icon. Without it the words sit hard against the border
-            // (measured: 8px of air on the left, 5 on the right).
-            readonly property real box: widest.implicitWidth > 0
-                                        ? widest.implicitWidth + Theme.spaceXs : 0
-            text: actionBtn.text
-            color: actionBtn.fg
-            font.pixelSize: actionBtn.font.pixelSize
-            elide: Text.ElideRight
-            Layout.maximumWidth: 240
-            Layout.preferredWidth: Math.max(implicitWidth, box)
-            Layout.alignment: Qt.AlignVCenter
+        // Its own item rather than a rotation on the icon above: an
+        // animator leaves the angle where it stopped, and the icon that
+        // returns must not come back tilted.
+        NavIcon {
+            anchors.centerIn: parent
+            width: Theme.iconMd
+            height: Theme.iconMd
+            kind: "spinner"
+            tint: Theme.textMuted
+            visible: actionBtn.busy
+            // On the render thread, so it keeps turning while the GUI
+            // thread drains models.
+            RotationAnimator on rotation {
+                running: actionBtn.busy && !actionBtn.still
+                loops: Animation.Infinite
+                from: 0
+                to: 360
+                duration: Metrics.spinMs
+            }
         }
     }
 }
