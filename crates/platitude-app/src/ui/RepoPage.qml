@@ -75,6 +75,16 @@ Item {
             page.absorbMoveBlock()
             page.absorbMoveAsk()
             page.absorbWriteResult()
+            page.runFetchFailures()
+        }
+        // The first fetch of a run to fail opens the log, the way a
+        // refusal the user asked for does. Only the first: the ones after
+        // it are the same news, and a machine that is offline would put
+        // the panel back up every interval (デザイン規約 §git が言ったことを
+        // 読む場所).
+        function onFetchFirstFailed() {
+            page.commandsOpen = true
+            commandsPane.showLatest()
         }
     }
 
@@ -1127,6 +1137,28 @@ Item {
             + " code=" + page.selectedSignatureCode
             + " signer=" + page.selectedSignatureSigner)
     }
+    /// Automation: how long a run of failed fetches the verb asked for,
+    /// and whether to hold the button that resumes once it is there.
+    property int fetchFailRuns: 0
+    property bool fetchResumeAfter: false
+    /// The count this already answered. `changed` fires on every message
+    /// the tab drains, and without this every one of them would queue
+    /// another fetch behind the one still running.
+    property int fetchFailSeen: -1
+    function runFetchFailures() {
+        if (page.fetchFailRuns <= 0 || repoTab.fetchFailures === page.fetchFailSeen)
+            return
+        page.fetchFailSeen = repoTab.fetchFailures
+        if (repoTab.fetchFailures < page.fetchFailRuns) {
+            repoTab.fetch("")
+            return
+        }
+        page.fetchFailRuns = 0
+        if (page.fetchResumeAfter) {
+            page.fetchResumeAfter = false
+            repoTab.resumeAutoFetch()
+        }
+    }
     function runAutoAct() {
         const act = AppBackend.autoAct
         const arg = AppBackend.autoActArg
@@ -1492,6 +1524,21 @@ Item {
             // A move to a branch that is not there: a real refusal, in
             // git's own words, that raises the panel by itself.
             repoTab.checkoutBranch("pg-no-such-branch", "carry")
+        } else if (act === "fetch-fail") {
+            // Against a remote that is not there, every fetch comes back
+            // non-zero. The argument is how many to run, so one verb
+            // reaches the warning shape and the stopped one alike.
+            page.fetchFailRuns = Math.max(1, Number(arg))
+            AppBackend.setAutoFetchMinutes(0)
+            AppBackend.setAutoFetchMinutes(5)
+            repoTab.fetch("")
+        } else if (act === "fetch-resume") {
+            // Stopped, then the hold that starts it again.
+            page.fetchFailRuns = 3
+            page.fetchResumeAfter = true
+            AppBackend.setAutoFetchMinutes(0)
+            AppBackend.setAutoFetchMinutes(5)
+            repoTab.fetch("")
         }
         AppBackend.report("auto_act ran=" + act)
     }

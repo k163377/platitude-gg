@@ -1280,6 +1280,58 @@ async fn auto_fetch_runs_on_its_interval_and_stops() {
     session.close();
 }
 
+/// Suspending stops the timer without forgetting what it was set to, so
+/// resuming needs no one to say the interval again — and a repository that
+/// never had one says so, which is how the caller tells "stopped because it
+/// kept failing" from "never fetched on its own in the first place".
+#[tokio::test(flavor = "multi_thread")]
+async fn a_suspended_timer_comes_back_on_the_interval_it_had() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("f.txt", "0\n", "root");
+    let mut clone = TestRepo::init();
+    clone.git(&["remote", "add", "origin", &origin.file_url()]);
+
+    let (sink, session) = opened(&clone).await;
+    assert!(
+        !session.suspend_auto_fetch(),
+        "nothing to suspend before an interval is ever set"
+    );
+    // Resuming what was never on leaves it off.
+    session.resume_auto_fetch();
+    assert!(
+        session.auto_fetch_ticker().is_none(),
+        "resume does not invent an interval of its own"
+    );
+
+    session.set_auto_fetch(Some(Duration::from_secs(3600)));
+    let before = session.auto_fetch_ticker().expect("auto fetch is on");
+    assert!(session.suspend_auto_fetch(), "there was a timer to stop");
+    assert!(
+        !before.tick().await,
+        "the suspended timer refuses the tick it would have taken"
+    );
+    assert!(
+        session.auto_fetch_ticker().is_none(),
+        "and there is no timer to reach while it is suspended"
+    );
+    assert!(
+        !session.suspend_auto_fetch(),
+        "suspending twice has nothing left to stop"
+    );
+
+    session.resume_auto_fetch();
+    let after = session
+        .auto_fetch_ticker()
+        .expect("resume put the interval back");
+    assert!(after.tick().await, "the timer that came back takes a tick");
+    assert_eq!(
+        auto_fetch_done(&sink, 1).await,
+        None,
+        "and the fetch it queued ran"
+    );
+    session.close();
+}
+
 /// A push refused for looking at an older remote is followed by a fetch,
 /// so what the remote actually holds is on screen before anything else is
 /// decided. The push itself still fails and nothing is retried.

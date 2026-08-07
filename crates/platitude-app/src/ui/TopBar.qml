@@ -27,6 +27,31 @@ Rectangle {
         AppBackend.report("push_hold mode=" + pushButton.mode)
     }
 
+    /// The word both toolbar buttons are measured for. They sit side by
+    /// side and change wording independently, so one box for the pair is
+    /// what keeps either of them from shifting the other — and which of
+    /// the two words is the wider one is a question about the installed
+    /// font, not about their spelling.
+    ///
+    /// Settled once rather than bound: a binding that reads two text
+    /// metrics and feeds two button widths is a loop as far as the engine
+    /// is concerned, and the answer cannot change while the app runs.
+    property string widestAction: ""
+    Component.onCompleted: topBar.widestAction =
+        fetchWidest.width >= pushWidest.width ? fetchWidest.text : pushWidest.text
+    TextMetrics {
+        id: fetchWidest
+        font.family: Theme.uiFamily
+        font.pixelSize: Theme.fontMd
+        text: qsTr("Resume")
+    }
+    TextMetrics {
+        id: pushWidest
+        font.family: Theme.uiFamily
+        font.pixelSize: Theme.fontMd
+        text: qsTr("Push -f")
+    }
+
     implicitHeight: Theme.toolbarHeight
     color: Theme.bgElevated
 
@@ -280,41 +305,6 @@ Rectangle {
                                 : qsTr("Show the git commands this window ran")
             }
         }
-        // Auto fetch: quiet by design. A machine that is simply offline
-        // fails here once a minute, and that belongs in a tooltip
-        // rather than in the error line -- which is also why a failure
-        // does not reach for a state colour: nothing is stuck and
-        // nothing is waiting on an answer (デザイン規約 §状態).
-        Label {
-            readonly property bool failing: topBar.curPage !== null
-                                            && topBar.curPage.pageTab.autoFetchError !== ""
-            text: "↻"
-            color: topBar.curPage !== null && topBar.curPage.pageTab.autoFetchRunning
-                   ? Theme.accent
-                   : failing ? Theme.textSecondary
-                   : AppBackend.autoFetchMinutes > 0 ? Theme.textMuted
-                   : Theme.borderDefault
-            font.pixelSize: Theme.fontMd
-            background: Rectangle {
-                radius: Theme.radiusSm
-                color: Theme.bgHover
-                visible: fetchIndicatorMouse.containsMouse
-            }
-            MouseArea {
-                id: fetchIndicatorMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                onClicked: topBar.settingsRequested()
-                ToolTip.visible: containsMouse
-                ToolTip.delay: 600
-                ToolTip.text: parent.failing
-                              ? topBar.curPage.pageTab.autoFetchError
-                              : AppBackend.autoFetchMinutes > 0
-                                ? qsTr("Fetching every %n minute(s)", "",
-                                       AppBackend.autoFetchMinutes)
-                                : qsTr("Automatic fetching is off")
-            }
-        }
         // Reserved: search box (backlog)
         SlimField {
             enabled: false
@@ -322,19 +312,68 @@ Rectangle {
             placeholderText: qsTr("Search")
             implicitWidth: 160
         }
+        // Fetch, and everything the network has to say about fetching.
+        // There is no indicator beside it: a second thing on the toolbar
+        // saying the same three states was one place too many for the
+        // reader to look (デザイン規約 §リモートから取り込む).
         ActionButton {
+            id: fetchButton
+            /// Fetches that failed in a row, whoever asked for them.
+            readonly property int fails: topBar.curPage !== null
+                                         ? topBar.curPage.pageTab.fetchFailures : 0
+            /// Enough of them that the timer was stopped. Only a hold on
+            /// this button starts it again.
+            readonly property bool stopped: topBar.curPage !== null
+                                            && topBar.curPage.pageTab.autoFetchSuspended
+
             kind: "fetch"
-            text: qsTr("Fetch")
+            // Stopped, the button is no longer about one fetch: it is the
+            // way back to fetching on its own, and it says so.
+            text: fetchButton.stopped ? qsTr("Resume") : qsTr("Fetch")
+            widestText: topBar.widestAction
+            tone: fetchButton.stopped ? Theme.danger
+                  : fetchButton.fails > 0 ? Theme.warning
+                  : Theme.textPrimary
+            frameColor: fetchButton.stopped ? Theme.danger
+                        : fetchButton.fails > 0 ? Theme.warning
+                        : "transparent"
+            // Only while the word is still `Fetch`: once it reads
+            // `Resume`, the word is the news and a mark beside it is the
+            // fourth thing on one button saying the same thing.
+            alert: fetchButton.fails > 0 && !fetchButton.stopped
+            holdMs: fetchButton.stopped ? Metrics.holdMs : 0
+            // Whoever asked for it, the network shows here: a fetch on
+            // the timer turns the button the way a clicked one does.
             busy: topBar.curPage !== null
-                  && topBar.curPage.pageTab.busyOp === "fetch"
+                  && (topBar.curPage.pageTab.busyOp === "fetch"
+                      || topBar.curPage.pageTab.autoFetchRunning)
             still: AppBackend.shotDir !== ""
             enabled: topBar.curPage !== null
                      && topBar.curPage.pageTab.remoteCount > 0
-                     && topBar.curPage.pageTab.busyCount === 0
+                     && (fetchButton.stopped
+                         || topBar.curPage.pageTab.busyCount === 0)
             ToolTip.visible: hovered
             ToolTip.delay: 600
-            ToolTip.text: qsTr("Fetch all remotes and prune deleted branches")
+            ToolTip.text: {
+                if (topBar.curPage === null)
+                    return ""
+                const what = fetchButton.stopped
+                             ? qsTr("Automatic fetching stopped after %n failure(s)."
+                                    + " Hold to start it again.", "",
+                                    fetchButton.fails)
+                             : qsTr("Fetch all remotes and prune deleted branches")
+                const why = topBar.curPage.pageTab.autoFetchError
+                if (fetchButton.fails > 0 && why !== "")
+                    return what + "\n\n" + why
+                if (fetchButton.fails > 0)
+                    return what
+                return what + "\n" + (AppBackend.autoFetchMinutes > 0
+                                      ? qsTr("Automatically every %n minute(s)", "",
+                                             AppBackend.autoFetchMinutes)
+                                      : qsTr("Automatic fetching is off"))
+            }
             onActivated: topBar.curPage.pageTab.fetch("")
+            onHeld: topBar.curPage.pageTab.resumeAutoFetch()
         }
         // Push, in whichever shape this branch's standing with its remote
         // allows (デザイン規約 §リモートへ送る). The counts behind it are
@@ -363,7 +402,7 @@ Rectangle {
             // by a hair over Publish — so the toolbar's right-hand end sits
             // still while the branch's standing with its remote changes
             // under it.
-            widestText: qsTr("Push -f")
+            widestText: topBar.widestAction
             tone: mode === "diverged" ? Theme.warning : Theme.textPrimary
             frameColor: mode === "diverged" ? Theme.warning : "transparent"
             // Diverged, the button stays live for the hold that is its

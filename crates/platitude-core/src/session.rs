@@ -565,6 +565,9 @@ pub struct RepoSession {
     remote_tags_slot: Arc<tokio::sync::Semaphore>,
     /// The running auto-fetch timer, if any.
     auto_fetch: Mutex<Option<AutoFetch>>,
+    /// The interval the timer was last *asked* for, kept while it is
+    /// suspended so there is something to put back.
+    auto_fetch_interval: Mutex<Option<std::time::Duration>>,
     /// One permit: an auto fetch that is still queued or running holds it,
     /// so a tick that arrives meanwhile is skipped instead of stacking up.
     /// A permit moved into a dropped request is released with it.
@@ -608,6 +611,7 @@ impl RepoSession {
             remote_tags: Mutex::new(RemoteTagsByRemote::new()),
             remote_tags_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             auto_fetch: Mutex::new(None),
+            auto_fetch_interval: Mutex::new(None),
             auto_fetch_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             refs_gate: OpGate::default(),
             status_gate: OpGate::default(),
@@ -698,6 +702,46 @@ impl RepoSession {
     /// The clock is not the only way in: [`Self::auto_fetch_ticker`] steps
     /// the timer this starts.
     pub fn set_auto_fetch(self: &Arc<Self>, interval: Option<std::time::Duration>) {
+        let wanted = interval.filter(|i| !i.is_zero());
+        *self.lock_auto_fetch_interval() = wanted;
+        self.install_auto_fetch(wanted);
+    }
+
+    /// Stops the timer without forgetting what it was set to, so
+    /// [`Self::resume_auto_fetch`] can put it back.
+    ///
+    /// Answers whether there was one to stop. A repository whose owner
+    /// turned automatic fetching off has nothing suspended and nothing to
+    /// say about it — the caller uses that to tell the two apart.
+    pub fn suspend_auto_fetch(&self) -> bool {
+        let mut guard = match self.auto_fetch.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        match guard.take() {
+            Some(previous) => {
+                previous.cancel.cancel();
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Starts the timer again on the interval it was last set to. Does
+    /// nothing where automatic fetching was never on.
+    pub fn resume_auto_fetch(self: &Arc<Self>) {
+        let wanted = *self.lock_auto_fetch_interval();
+        self.install_auto_fetch(wanted);
+    }
+
+    fn lock_auto_fetch_interval(&self) -> std::sync::MutexGuard<'_, Option<std::time::Duration>> {
+        match self.auto_fetch_interval.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        }
+    }
+
+    fn install_auto_fetch(self: &Arc<Self>, interval: Option<std::time::Duration>) {
         let mut guard = match self.auto_fetch.lock() {
             Ok(g) => g,
             Err(e) => e.into_inner(),

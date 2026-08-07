@@ -10,6 +10,11 @@ use super::qml_register;
 // RepoTab: per-tab lifecycle + error surface + refresh entry points
 // ---------------------------------------------------------------------------
 
+/// Failed fetches in a row before the timer is stopped. Two is a lid
+/// closed on a train; three is a network that is not coming back by
+/// itself, and going on asking every interval only fills the log.
+const FETCH_FAILURES_BEFORE_STOP: i32 = 3;
+
 pub struct RepoTab {
     tab_id: i32,
     state: String,
@@ -91,6 +96,15 @@ pub struct RepoTab {
     /// offline machine does not raise a banner every interval.
     auto_fetch_running: bool,
     auto_fetch_error: String,
+    /// Fetches that came back with something to say, in a row, whoever
+    /// asked for them. Any fetch that comes back clean puts it to zero.
+    fetch_failures: i32,
+    /// The timer was stopped because of those. Nothing but the button
+    /// that says so starts it again: a repository that has been offline
+    /// all morning would otherwise quietly resume behind the reader's
+    /// back, and the state they were told about would be gone with no
+    /// one having answered it.
+    auto_fetch_suspended: bool,
     feed: Option<Arc<Feed<TabMsg>>>,
 }
 
@@ -143,6 +157,8 @@ impl Default for RepoTab {
             move_ask_seq: 0,
             auto_fetch_running: false,
             auto_fetch_error: String::new(),
+            fetch_failures: 0,
+            auto_fetch_suspended: false,
             feed: None,
         }
     }
@@ -154,6 +170,35 @@ impl RepoTab {
         if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
             f(&session);
         }
+    }
+
+    /// A fetch ended, whoever asked for it. Counts the ones that failed
+    /// and stops the timer once there have been enough of them, so a
+    /// machine that has lost the network stops reaching for it every
+    /// interval. Anything that comes back clean clears the run.
+    fn fetch_settled(&mut self, error: &str) {
+        if error.is_empty() {
+            self.fetch_failures = 0;
+            self.auto_fetch_error = String::new();
+            return;
+        }
+        self.fetch_failures += 1;
+        if self.fetch_failures == 1 {
+            // The panel reads this; the ones after it are the same news.
+            self.last_error = error.to_string();
+            self.fetch_first_failed();
+        }
+        if self.fetch_failures < FETCH_FAILURES_BEFORE_STOP || self.auto_fetch_suspended {
+            return;
+        }
+        // Whether there was a timer to stop is the answer to "is this a
+        // repository that fetches on its own at all": one that does not
+        // has nothing suspended, and nothing to be told about it.
+        let mut stopped = false;
+        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
+            stopped = session.suspend_auto_fetch();
+        }
+        self.auto_fetch_suspended = stopped;
     }
 
     /// Whether HEAD carries someone else's name — the only case where an
@@ -266,9 +311,34 @@ impl RepoTab {
         Member = auto_fetch_error,
         Notify = changed
     );
+    qproperty!("fetchFailures", Member = fetch_failures, Notify = changed);
+    qproperty!(
+        "autoFetchSuspended",
+        Member = auto_fetch_suspended,
+        Notify = changed
+    );
 
     #[qsignal]
     fn changed(&mut self);
+
+    /// The first fetch of a run to fail. Only the first: a machine that
+    /// is simply offline fails every interval, and the panel that opens
+    /// on this would then be opening over and over on the same news.
+    #[qsignal]
+    fn fetch_first_failed(&mut self);
+
+    /// Starts the timer again on the interval it was set to, and fetches
+    /// now — the hold on the toolbar button is what reaches this.
+    #[qslot]
+    fn resume_auto_fetch(&mut self) {
+        self.auto_fetch_suspended = false;
+        self.fetch_failures = 0;
+        self.auto_fetch_error = String::new();
+        self.last_error = String::new();
+        self.with_session(|s| s.resume_auto_fetch());
+        self.with_session(|s| s.fetch(None));
+        self.changed();
+    }
 
     /// Name of one remote (a list property would need a model of its own
     /// for three strings).
@@ -384,10 +454,9 @@ impl RepoTab {
                 }
                 TabMsg::AutoFetch { running, error } => {
                     self.auto_fetch_running = running;
-                    // A finished fetch answers the previous failure, so a
-                    // recovered connection clears the warning by itself.
                     if !running {
-                        self.auto_fetch_error = error;
+                        self.auto_fetch_error = error.clone();
+                        self.fetch_settled(&error);
                     }
                 }
                 TabMsg::Publish {
@@ -420,6 +489,12 @@ impl RepoTab {
                         self.busy_count = (self.busy_count - 1).max(0);
                         if self.busy_count == 0 {
                             self.busy_op = String::new();
+                        }
+                        // A fetch the user asked for counts the same way
+                        // the timer's do: what the button says is about
+                        // fetching, not about who started it.
+                        if op == "fetch" {
+                            self.fetch_settled(&error.clone());
                         }
                         self.last_write_op = op;
                         self.last_write_error = error;

@@ -29,6 +29,12 @@ HoverToolButton {
     property real holdProgress: 0
     /// Frame drawn around the button. Transparent leaves the button bare.
     property color frameColor: "transparent"
+    /// The last go at what this button does did not work. Drawn as a mark
+    /// standing clear of the word's last letter, in the word's own colour
+    /// — the frame and the colour already say something is wrong, and this
+    /// is what says it is about this button rather than about the state
+    /// the toolbar is in.
+    property bool alert: false
     /// The colour the hold fills the button with — the frame's, since a
     /// framed button fills the frame it drew. A bare one names its own
     /// (the hunk heading's `Discard hunk`, which fills edge to edge the
@@ -204,38 +210,71 @@ HoverToolButton {
             // only ever wears the mark fits it, and its words sit as
             // close to it as a menu row's do.
             Item {
+                id: seat
+                /// Both marks to wear at once: what the button does, and
+                /// that it is held rather than clicked.
+                readonly property bool paired: actionBtn.kind !== ""
+                                               && actionBtn.holdMs > 0
+                /// How far the two are set apart across the slash.
+                readonly property int spread: Theme.iconMd - Theme.spaceXs
+
                 visible: actionBtn.kind !== "" || actionBtn.holdMs > 0
                 implicitWidth: !visible ? 0
-                               : actionBtn.kind !== "" ? Theme.iconMd
-                                                       : Theme.iconSm
-                implicitHeight: Theme.iconMd
+                               : actionBtn.kind !== ""
+                                 ? Math.max(Theme.iconMd, Theme.iconSm + seat.spread)
+                                 : Theme.iconSm
+                implicitHeight: Theme.iconMd + Theme.spaceXs
                 Layout.alignment: Qt.AlignVCenter
                 NavIcon {
-                    anchors.fill: parent
+                    width: Theme.iconMd
+                    height: Theme.iconMd
+                    anchors.centerIn: parent
                     kind: actionBtn.kind
                     tint: actionBtn.fg
                     visible: actionBtn.holdMs <= 0
                 }
-                // A held button says how it is worked before it says what
-                // it does, and it says it where the eye starts the row
-                // (デザイン規約 §長押し). It takes the icon's seat rather
-                // than a seat of its own: what the button does is already
-                // in the word beside it and in the frame around it, and
-                // two marks on one button is one too many to read at a
-                // glance.
-                //
-                // Left in a seat kept at the icon's full width, not fitted
-                // to the mark: this button's shape changes with the
-                // branch's standing (`Push` / `Push -f`), and a seat that
-                // changed width with it would slide the whole toolbar
-                // sideways under a pointer already resting on it.
+                // A held button with nothing to name it says only how it
+                // is worked, where the eye starts the row (デザイン規約
+                // §長押し).
                 HoldIcon {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.verticalCenterOffset: Metrics.opticalDrop
                     progress: actionBtn.holdProgress
                     tint: actionBtn.fg
-                    visible: actionBtn.holdMs > 0
+                    visible: actionBtn.holdMs > 0 && !seat.paired
+                }
+                // A held button that also has a name wears both, set as a
+                // fraction: each a size down, the slash between them, each
+                // pushed off the middle line. Letting the hold mark take
+                // the seat on its own would cost the button the one thing
+                // that says what it does — `Push -f` would stop being a
+                // push at a glance (デザイン規約 §長押し).
+                Item {
+                    anchors.fill: parent
+                    visible: seat.paired
+                    NavIcon {
+                        kind: actionBtn.kind
+                        tint: actionBtn.fg
+                        width: Theme.iconSm
+                        height: Theme.iconSm
+                        x: 0
+                        y: 0
+                    }
+                    Label {
+                        text: "/"
+                        color: actionBtn.fg
+                        font.pixelSize: Theme.fontMd
+                        anchors.centerIn: parent
+                    }
+                    HoldIcon {
+                        progress: actionBtn.holdProgress
+                        tint: actionBtn.fg
+                        width: Theme.iconSm
+                        height: Theme.iconSm
+                        x: seat.spread
+                        y: parent.height - Theme.iconSm
+                    }
                 }
             }
             // Measured, never drawn: a hidden item is left out of the
@@ -264,6 +303,19 @@ HoverToolButton {
                 Layout.maximumWidth: 240
                 Layout.preferredWidth: Math.max(implicitWidth, box)
                 Layout.alignment: Qt.AlignVCenter
+                // Past the word's end rather than over its shoulder: the
+                // last letter has to stay readable, and the box is
+                // measured for the longest wording so there is room after
+                // the shorter ones.
+                NavIcon {
+                    visible: actionBtn.alert
+                    kind: "bang"
+                    tint: actionBtn.fg
+                    width: Theme.iconSm
+                    height: Theme.iconSm
+                    x: btnLabel.implicitWidth - Theme.spaceXs
+                    y: -Theme.spaceXs
+                }
             }
         }
         // Its own item rather than a rotation on the icon above: an
