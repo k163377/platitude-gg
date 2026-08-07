@@ -22,6 +22,9 @@ core のファイルを読み書きすると自動ロードされる。常時必
 - `git config <key> <value>` に **`--` セパレータを付けない**(`--` 自体が値として保存される)。ダッシュ始まりの値はそのまま渡して通る
 - **identity(`user.name` / `user.email`)に独自バリデーションを足さない** — git が拒むのは**空の name だけ**(空 email は通り author 行が `<>` になる)。`<` `>` と改行は author 行から黙って落とされ、前後の空白・句読点は削られる。config 書き込み時に改行は `\n` にエスケープされるので設定注入は起きない(実測)
 - **署名の有無を `%G?` だけで判定しない** — SSH 署名は `gpg.ssh.allowedSignersFile` 未設定だと未署名と同じ `N` を返す。`git cat-file commit` のヘッダ(`gpgsig`)で存在を確認する。署名パスフレーズはアプリが扱わない(gpg-agent / ssh-agent の pinentry に委譲。**GUI pinentry 必須** — サブプロセスに端末が無い)
+- **`ls-files --eol` は worktree の実ファイルを読む** — `w/` 列のために内容を全部読むので、グロブを渡すと基準リポジトリ級で数十秒(`JetBrains/kotlin` 全件 24.7s / 120MB のファイル 1 件 213ms、実測)。**候補列挙(`ls-files`、索引のみ = 64,012 件ヒットで 85ms)と EOL 読み(`--eol` に確定した数パスだけ = 42ms)を必ず別コマンドに分ける**。未チェックアウトのパスは `w/` が空で返る
+- **`diff --ignore-cr-at-eol` で作った patch は `apply` できない**(実測 `patch does not apply`)。EOL のみの差に掛けると diff が空になる一方 status は modified のまま — 表示用と staging 用で diff の bytes を分けない不変条件(`details::file_diff_raw`)を壊すので使わない
+- **worktree の diff は index 空間で出る** — `core.autocrlf=true` でも patch に CR は現れず、`apply --cached` / `apply -R` はそのまま通る(untracked の `--no-index` にも変換が効き `git add` と結果が一致する)。**index blob に CR があるファイルは `autocrlf=true` でも変換されない**ので、設定を切り替えても全ファイルが modified にはならない(いずれも実測)
 - 対話エディタを開かせない(`GIT_EDITOR` / `GIT_SEQUENCE_EDITOR` を非対話に固定して rebase 等を駆動する)
 - 全実行にタイムアウトとキャンセルを付ける。auto fetch は多重起動を防ぐ
 - Windows ではコンソールウィンドウを出さない(`CREATE_NO_WINDOW`)
