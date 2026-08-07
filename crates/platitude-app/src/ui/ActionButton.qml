@@ -306,8 +306,18 @@ HoverToolButton {
                 // the icon. Without it the words sit hard against the
                 // border (measured: 8px of air on the left, 5 on the
                 // right).
-                readonly property real box: widest.implicitWidth > 0
-                                            ? widest.implicitWidth + Theme.spaceXs : 0
+                //
+                // A command has that gap already: its chip's ground reaches
+                // half a gap past the last letter on its way out, and what
+                // the eye measures to the frame is the ground's edge rather
+                // than the letter's. Adding the gap on top of it leaves the
+                // widest wording loose on the right while the chip all but
+                // touches the icon on the left (measured: 7px against 2px).
+                readonly property real box:
+                    widest.implicitWidth > 0
+                    ? widest.implicitWidth
+                      + (actionBtn.widestCode ? 0 : Theme.spaceXs)
+                    : 0
                 text: actionBtn.text
                 color: actionBtn.fg
                 font.family: actionBtn.code ? Theme.monoFamily
