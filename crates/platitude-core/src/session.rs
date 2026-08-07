@@ -573,6 +573,12 @@ pub struct RepoSession {
     /// can tell an external commit / fetch / switch from a quiet re-read.
     /// `None` until the first read: opening already streams the graph.
     refs_key: Mutex<Option<u64>>,
+    /// The snapshot last published. A read that finds nothing moved hands
+    /// this one out again rather than an equal copy, so the sidebar can
+    /// tell "the same" from "equal" by pointer — a repository with tens of
+    /// thousands of tags must not rebuild every section, on the Qt thread,
+    /// to discover that a poll tick changed nothing.
+    last_snapshot: Mutex<Option<Arc<RefsSnapshot>>>,
     /// Set while the write queue runs a request, so the poll can stay out
     /// of a repository that is mid-operation.
     write_busy: std::sync::atomic::AtomicBool,
@@ -643,6 +649,7 @@ impl RepoSession {
             merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),
             merge_tool_seen: Mutex::new(String::new()),
             refs_key: Mutex::new(None),
+            last_snapshot: Mutex::new(None),
             write_busy: std::sync::atomic::AtomicBool::new(false),
             poll_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             write_tx,
@@ -1234,7 +1241,7 @@ impl RepoSession {
                 let label_map = build_label_map(&refs, &head, &remote_tags, &joins);
                 let label_updates = self.apply_refs(label_map);
                 self.sink.event(SessionEvent::RefsLoaded {
-                    snapshot: Arc::new(snapshot),
+                    snapshot: self.share_snapshot(snapshot),
                 });
                 if !label_updates.is_empty() {
                     self.sink.event(SessionEvent::LabelsChanged {
@@ -2871,6 +2878,29 @@ impl RepoSession {
         }
         shared.sent_rows.extend(rows.iter().cloned());
         self.sink.event(SessionEvent::LogChunk { generation, rows });
+    }
+
+    /// The snapshot to publish: the one already on screen when this read
+    /// found it unchanged, so the sidebar can tell "the same" from "equal"
+    /// by pointer and rebuild nothing for it.
+    ///
+    /// Still published either way. Withholding the event instead would
+    /// save the same work, but a consumer that attached after the last one
+    /// went out would then sit empty until something moved, and "nothing
+    /// changed" is the state that lasts longest.
+    fn share_snapshot(&self, fresh: RefsSnapshot) -> Arc<RefsSnapshot> {
+        let mut slot = match self.last_snapshot.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        if let Some(previous) = slot.as_ref()
+            && **previous == fresh
+        {
+            return Arc::clone(previous);
+        }
+        let shared = Arc::new(fresh);
+        *slot = Some(Arc::clone(&shared));
+        shared
     }
 
     /// Installs a new label map into the join and returns the rows whose

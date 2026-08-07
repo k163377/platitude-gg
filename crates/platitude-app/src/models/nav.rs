@@ -82,6 +82,11 @@ pub struct NavSectionModel {
     /// Explicit folder open/close choices (key = folder path); anything
     /// absent uses the section default.
     folder_overrides: HashMap<String, bool>,
+    /// The snapshot this section last built its rows from. A poll tick
+    /// that found nothing moved republishes the very same one, so this
+    /// pointer is the whole check — the rows are not rebuilt to discover
+    /// they are identical.
+    last_refs: Option<Arc<platitude_core::session::RefsSnapshot>>,
     refs_feed: Option<Arc<Feed<Arc<platitude_core::session::RefsSnapshot>>>>,
     status_feed: Option<Arc<Feed<StatusMsg>>>,
     stash_feed: Option<Arc<Feed<Vec<platitude_core::stash::StashEntry>>>>,
@@ -472,33 +477,42 @@ impl NavSectionModel {
             // legitimately empty would otherwise never say so.
             arrived |= !self.refs_loaded;
             self.refs_loaded = true;
-            let rows = match self.section.as_str() {
-                "branches" => {
-                    let items = branch_nav_items(&snapshot.locals, false);
-                    let head = items.iter().find(|b| b.is_head);
-                    self.head_name = head.map(|b| b.name.clone()).unwrap_or_default();
-                    self.head_oid = head.map(|b| b.oid_hex.clone()).unwrap_or_default();
-                    self.head_has_remote = head.is_some_and(|b| b.has_remote);
-                    self.head_has_pr = head.is_some_and(|b| b.has_pr);
-                    items
-                }
-                "remotes" => branch_nav_items(&snapshot.remotes, true),
-                _ => snapshot
-                    .tags
-                    .iter()
-                    .map(|t| NavItem {
-                        name: t.short.clone(),
-                        oid_hex: t.oid_hex.clone(),
-                        // Same badge as a branch: nothing means this tag
-                        // is only here. The bit comes off `ls-remote
-                        // --tags`, which the fetch carries.
-                        has_remote: t.has_remote,
-                        only_remote: !t.here,
-                        ..Default::default()
-                    })
-                    .collect(),
-            };
-            arrived |= self.take_rows(rows);
+            // Not the same snapshot means it has to be read; the same one
+            // means these rows were built from it already.
+            let fresh = !self
+                .last_refs
+                .as_ref()
+                .is_some_and(|last| Arc::ptr_eq(last, &snapshot));
+            if fresh {
+                self.last_refs = Some(Arc::clone(&snapshot));
+                let rows = match self.section.as_str() {
+                    "branches" => {
+                        let items = branch_nav_items(&snapshot.locals, false);
+                        let head = items.iter().find(|b| b.is_head);
+                        self.head_name = head.map(|b| b.name.clone()).unwrap_or_default();
+                        self.head_oid = head.map(|b| b.oid_hex.clone()).unwrap_or_default();
+                        self.head_has_remote = head.is_some_and(|b| b.has_remote);
+                        self.head_has_pr = head.is_some_and(|b| b.has_pr);
+                        items
+                    }
+                    "remotes" => branch_nav_items(&snapshot.remotes, true),
+                    _ => snapshot
+                        .tags
+                        .iter()
+                        .map(|t| NavItem {
+                            name: t.short.clone(),
+                            oid_hex: t.oid_hex.clone(),
+                            // Same badge as a branch: nothing means this
+                            // tag is only here. The bit comes off
+                            // `ls-remote --tags`, which the fetch carries.
+                            has_remote: t.has_remote,
+                            only_remote: !t.here,
+                            ..Default::default()
+                        })
+                        .collect(),
+                };
+                arrived |= self.take_rows(rows);
+            }
         }
         if let Some(feed) = self.status_feed.clone()
             && let Some(StatusMsg { status, .. }) = feed.drain().pop()
