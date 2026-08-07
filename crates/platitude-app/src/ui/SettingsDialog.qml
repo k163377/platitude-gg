@@ -115,9 +115,9 @@ AppDialog {
                 // Named rather than picked from a list: the only way to
                 // enumerate them is `git mergetool --tool-help`, whose
                 // output is laid out for a person to read.
-                text: qsTr("Which tool opens a conflicted file. It has to be "
-                           + "a windowed one — this app gives git no console, "
-                           + "so vimdiff and its kind cannot run.")
+                text: qsTr("Which tool opens a conflicted file. It must not "
+                           + "need a console — this app gives git none, so "
+                           + "vimdiff and its kind cannot run.")
             }
         }
         Label {

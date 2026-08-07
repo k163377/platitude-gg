@@ -288,9 +288,14 @@ const MERGETOOL_ARGS: [&str; 2] = ["-c", "mergetool.writeToTemp=true"];
 /// sessions as there are conflicts.
 ///
 /// No time limit: the tool runs for as long as the person takes, and
-/// cancelling the session is what stops it. On Windows the subprocess gets
-/// no console (CREATE_NO_WINDOW), so a terminal-based tool such as vimdiff
-/// cannot be used — a GUI tool must be configured.
+/// cancelling the session is what stops it.
+///
+/// What a tool has to be is not "graphical" but "does not need the console
+/// it was not given": on Windows the subprocess gets none
+/// (CREATE_NO_WINDOW), which rules out anything that draws in a terminal
+/// (vimdiff and its kind) and nothing else. A windowed tool works, and so
+/// does a plain script that writes `$MERGED` — the merge tool contract is
+/// the whole requirement.
 pub async fn mergetool(
     executor: &GitExecutor,
     workdir: &Path,
