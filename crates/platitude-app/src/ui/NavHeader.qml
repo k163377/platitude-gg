@@ -12,6 +12,11 @@ Rectangle {
     property color iconTint: Theme.textSecondary
     property int count: 0
     property bool expanded: true
+    /// Whether this header's section can be closed from here. False on
+    /// the one the folded rail opens beside itself: that list is already
+    /// the only thing on screen, so an arrow offering to close it would
+    /// be offering to leave nothing.
+    property bool foldable: true
     property bool showTagToggle: false
     property bool tagsShown: true
     signal toggled()
@@ -29,7 +34,7 @@ Rectangle {
     Rectangle {
         anchors.fill: parent
         color: Theme.bgHover
-        visible: headerHover.hovered
+        visible: headerHover.hovered && header.foldable
     }
     RowLayout {
         anchors.fill: parent
@@ -37,6 +42,7 @@ Rectangle {
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
         Label {
+            visible: header.foldable
             text: header.expanded ? "▾" : "▸"
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSm
@@ -79,6 +85,7 @@ Rectangle {
         anchors.fill: parent
         // Leave the toggle button clickable.
         anchors.rightMargin: header.showTagToggle ? Theme.spaceXl : 0
+        enabled: header.foldable
         onClicked: header.toggled()
     }
 }

@@ -30,6 +30,11 @@ Item {
 
     property string selectedOid: ""
 
+    // Left pane folded down to its icons. Held here rather than in the
+    // sidebar because it is going to have a second thing deciding it:
+    // a diff open in the middle takes the width from both sides.
+    property bool sidebarCollapsed: false
+
     // Right pane switches to the working-tree (WIP) view.
     property bool wipShown: false
     // Leaving the file list takes its question with it: the bar goes off
@@ -1087,6 +1092,17 @@ Item {
             refDeleteItem.completeHold()
         }
     }
+    // The splitter has to have handed the pane its new width before the
+    // width can be reported — the fold sets it, the layout takes it.
+    Timer {
+        id: navRailTimer
+        interval: 400
+        onTriggered: AppBackend.report(
+            "nav_rail collapsed=" + page.sidebarCollapsed
+            + " width=" + Math.round(sidebarPane.width)
+            + " peek=" + sidebarPane.peekKind
+            + " editing=" + sidebarPane.editKey)
+    }
     Timer {
         id: refusedRowTimer
         interval: 800
@@ -1281,6 +1297,27 @@ Item {
                         : section === "remote" ? remotesModel : branchesModel
             sidebarPane.activateRow(section, rowName, rowName,
                                     model.oidOfName(rowName))
+        } else if (act === "nav-fold" || act === "nav-peek"
+                   || act === "nav-unfold" || act === "nav-peek-rename") {
+            // The left menu folded to its icons, and one of them rested
+            // on. The resting cannot be injected (hover never can), so
+            // the section is named the way the diff's line tools are.
+            // "nav-unfold" walks the whole way back, which is the one
+            // thing folding has to be able to do.
+            page.sidebarCollapsed = true
+            if (act === "nav-peek")
+                sidebarPane.peekAt(arg)
+            else if (act === "nav-unfold")
+                page.sidebarCollapsed = false
+            else if (act === "nav-peek-rename") {
+                // Typing a name into a peeked row: the list has to come
+                // back on its own and the box land on the same row in it
+                // with the keyboard (SidebarPane.startEdit).
+                sidebarPane.peekAt("branch")
+                sidebarPane.beginRename("branch", workTree.branch,
+                                        workTree.branch)
+            }
+            navRailTimer.start()
         } else if (act === "nav-rename" || act === "rename-branch"
                    || act === "rename-tag" || act === "rename-stash") {
             // The box the second click opens, entered at the same place.
@@ -2115,6 +2152,11 @@ Item {
                     worktreesModel: worktreesModel
                     stashesModel: stashesModel
                     tagsModel: tagsModel
+                    collapsed: page.sidebarCollapsed
+                    // The menus the rows raise are the page's, so only the
+                    // page can say one is standing over the folded list.
+                    menuOpen: refMenu.visible
+                    onFoldRequested: collapse => page.sidebarCollapsed = collapse
                     onRefActivated: oidHex => page.jumpToRef(oidHex)
                     onRefMenuRequested: (kind, name, full, oidHex) =>
                         page.openRefMenu(kind, name, full, oidHex)

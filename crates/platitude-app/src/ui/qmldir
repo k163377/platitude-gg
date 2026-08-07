@@ -29,6 +29,7 @@ NavHeader 1.0 NavHeader.qml
 NavIcon 1.0 NavIcon.qml
 NavItemDelegate 1.0 NavItemDelegate.qml
 NavList 1.0 NavList.qml
+NavRail 1.0 NavRail.qml
 PaneHeader 1.0 PaneHeader.qml
 RefChip 1.0 RefChip.qml
 RefListPopup 1.0 RefListPopup.qml

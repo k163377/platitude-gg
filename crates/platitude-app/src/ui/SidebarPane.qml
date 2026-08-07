@@ -17,6 +17,13 @@ Rectangle {
     required property var stashesModel
     required property var tagsModel
 
+    /// Folded down to the rail. Held by the page: what folds it is going
+    /// to include opening a diff, and that is the page's to know.
+    required property bool collapsed
+    /// A menu raised from one of the folded list's rows is standing over
+    /// it. Also the page's to know — the menus are its.
+    property bool menuOpen: false
+
     signal refActivated(string oidHex)
     /// Right-click on a row. `kind` is the section it came from, `name`
     /// what the row shows and `full` what git knows it by.
@@ -30,6 +37,8 @@ Rectangle {
     /// A row was renamed. `kind` is the section ("branch" / "tag" /
     /// "stash"), `id` what git knows the row by.
     signal renameSubmitted(string kind, string id, string name)
+    /// Fold the list to its icons, or put it back.
+    signal foldRequested(bool collapse)
 
     // ---- the row gestures ------------------------------------------
     // Held here rather than in a list or a delegate: only one row at a
@@ -72,6 +81,14 @@ Rectangle {
               : qsTr("git will not take this as a name")
 
     function startEdit(kind, key, mode, id, oid, text) {
+        // A name is typed in the list, not in a peek at it. The box wants
+        // the keyboard, and a hovered list that has taken the keyboard is
+        // one the pointer no longer owns — walking away from it would take
+        // the half-typed name with it. So the list comes back first, and
+        // the box opens on the same row in it (the key is the row's, not
+        // the list's).
+        if (sidebar.collapsed)
+            sidebar.foldRequested(false)
         sidebar.editKind = kind
         sidebar.editMode = mode
         sidebar.editId = id
@@ -130,6 +147,13 @@ Rectangle {
         sidebar.startEdit("tag", "tag:" + id, "branch", id, oidHex, "")
     }
 
+    /// Smoke hook (PG_AUTO_ACT=nav-peek): open one section beside the
+    /// rail, the way resting on its cell does. Named rather than hovered
+    /// — hover cannot be injected (verify-ui スキル).
+    function peekAt(kind) {
+        sidebar.openPeek(kind, rail.topOf(kind))
+    }
+
     /// Smoke hook (PG_SCROLL_TO=nav-bottom): jump the branches list to
     /// its end. The current branch's sticky row only changes edges
     /// under scroll, which a headless run cannot produce otherwise.
@@ -138,9 +162,51 @@ Rectangle {
             0, branchList.contentHeight - branchList.height)
     }
 
-    SplitView.preferredWidth: 260
+    // The width the list goes back to. Read off the pane as it folds
+    // rather than fixed, so one that has been widened comes back the
+    // width it was left (規約 §レイアウト初期値 is only where it starts).
+    property real openWidth: 260
+    SplitView.preferredWidth: sidebar.openWidth
     SplitView.minimumWidth: 180
     color: Theme.bgSurface
+
+    // Folding is a size, and a size is the splitter's business: pinning
+    // both ends to the rail's width is what takes the drag away while it
+    // is folded. Assigned rather than bound — a drag writes the same
+    // attached property, and a binding here would be gone after the first
+    // one (leaving the fold with nothing to set).
+    onCollapsedChanged: sidebar.applyFold()
+    function applyFold() {
+        // Whichever way it goes, the one section the rail had open goes
+        // with the rail — including when what put the list back was a
+        // row in that very section (startEdit).
+        sidebar.closePeek()
+        if (sidebar.collapsed) {
+            sidebar.openWidth = sidebar.width
+            sidebar.SplitView.minimumWidth = rail.cellSize
+            sidebar.SplitView.maximumWidth = rail.cellSize
+            sidebar.SplitView.preferredWidth = rail.cellSize
+        } else {
+            sidebar.SplitView.minimumWidth = 180
+            sidebar.SplitView.maximumWidth = Number.POSITIVE_INFINITY
+            sidebar.SplitView.preferredWidth = sidebar.openWidth
+        }
+    }
+    /// Open a section, for the click on a folded cell that names one: the
+    /// list coming back with the asked-for section shut would answer a
+    /// different question.
+    function expandSection(kind) {
+        if (kind === "branch")
+            sidebar.expBranches = true
+        else if (kind === "remote")
+            sidebar.expRemotes = true
+        else if (kind === "worktree")
+            sidebar.expWorktree = true
+        else if (kind === "stash")
+            sidebar.expStashes = true
+        else if (kind === "tag")
+            sidebar.expTags = true
+    }
 
     // Section expansion (filter reveals collapsed sections).
     property bool expBranches: true
@@ -161,6 +227,7 @@ Rectangle {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
+        visible: !sidebar.collapsed
         // Frameless, full-width filter: the sidebar is already enclosed
         // by dividers, so the input only keeps a hairline underline
         // (accent on focus). It is this pane's header band, so it takes
@@ -172,7 +239,9 @@ Rectangle {
             implicitHeight: Theme.headerHeight
             font.pixelSize: Theme.fontMd
             leftPadding: Theme.spaceSm
-            rightPadding: Theme.spaceSm
+            // The fold control sits at the end of the band; the text
+            // stops before it rather than running under it.
+            rightPadding: Theme.spaceSm + Theme.iconLg
             topPadding: 0
             bottomPadding: 0
             placeholderText: qsTr("Filter")
@@ -193,6 +262,22 @@ Rectangle {
                 sidebar.worktreesModel.setFilter(text)
                 sidebar.stashesModel.setFilter(text)
                 sidebar.tagsModel.setFilter(text)
+            }
+            // The seat the fold control keeps whichever way the list is:
+            // the rail's band has the same button pointing back.
+            HoverToolButton {
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.spaceXs
+                anchors.verticalCenter: parent.verticalCenter
+                padding: 0
+                implicitWidth: Theme.iconLg
+                implicitHeight: Theme.iconLg
+                text: "◂"
+                font.pixelSize: Theme.fontSm
+                ToolTip.visible: hovered
+                ToolTip.delay: 600
+                ToolTip.text: qsTr("Fold the list to its icons")
+                onClicked: sidebar.foldRequested(true)
             }
         }
 
@@ -389,6 +474,150 @@ Rectangle {
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
             onRefMenuRequested: (kind, name, full, oidHex) =>
                 sidebar.refMenuRequested(kind, name, full, oidHex)
+        }
+    }
+
+    // ---- folded ------------------------------------------------------
+    NavRail {
+        id: rail
+        anchors.fill: parent
+        visible: sidebar.collapsed
+        branchesModel: sidebar.branchesModel
+        remotesModel: sidebar.remotesModel
+        worktreesModel: sidebar.worktreesModel
+        stashesModel: sidebar.stashesModel
+        tagsModel: sidebar.tagsModel
+        openKind: peek.visible ? sidebar.peekKind : ""
+        onPeekRequested: (kind, top) => sidebar.openPeek(kind, top)
+        onPeekLeft: kind => sidebar.leavePeek(kind)
+        onUnfoldRequested: kind => {
+            sidebar.expandSection(kind)
+            sidebar.foldRequested(false)
+        }
+    }
+
+    // ---- the folded list's one open section --------------------------
+    // Which one is open, and whether it still has the pointer, are held
+    // here rather than on a cell: the cell is left behind the moment the
+    // pointer walks into what it opened.
+    property string peekKind: ""
+    property real peekTop: 0
+    property bool peekWanted: false
+    /// What holds it open with the pointer elsewhere: a menu raised from
+    /// one of its rows is standing over it, and taking the row away from
+    /// under an open menu reads as the row having gone.
+    readonly property bool peekPinned: sidebar.menuOpen
+    readonly property var peekModel:
+        sidebar.peekKind === "" ? null : rail.modelOf(sidebar.peekKind)
+    // The section headers' own words, said again for the one section the
+    // folded list shows: the rail has only an icon to name it with.
+    readonly property string peekCaption:
+        sidebar.peekKind === "branch" ? qsTr("BRANCHES")
+        : sidebar.peekKind === "remote" ? qsTr("REMOTES")
+        : sidebar.peekKind === "worktree" ? qsTr("WORKTREES")
+        : sidebar.peekKind === "stash" ? qsTr("STASHES")
+        : sidebar.peekKind === "tag" ? qsTr("TAGS") : ""
+
+    function openPeek(kind, top) {
+        sidebar.peekKind = kind
+        sidebar.peekTop = top
+        sidebar.peekWanted = true
+        peek.open()
+    }
+    /// The pointer left a cell. Only the cell whose section is open can
+    /// take it away — the one being left on the way to another has
+    /// already been replaced by the time this runs, in whichever order
+    /// the two arrive.
+    function leavePeek(kind) {
+        if (sidebar.peekKind === kind)
+            sidebar.peekWanted = false
+        sidebar.settlePeek()
+    }
+    // The section opens flush against the rail, so walking into it takes
+    // the pointer off the cell, and walking back out puts it on again.
+    // Both hovers change in the same frame and in no fixed order, so the
+    // answer waits for the end of this round of events, by which time
+    // whichever of the two now holds the pointer has said so.
+    function settlePeek() {
+        Qt.callLater(function () {
+            if (!peek.pointerInside && !sidebar.peekWanted
+                    && !sidebar.peekPinned)
+                sidebar.closePeek()
+        })
+    }
+    function closePeek() {
+        peek.close()
+        sidebar.peekKind = ""
+        sidebar.peekWanted = false
+    }
+    // The menu that was standing over it has gone: whether the pointer
+    // came back in the meantime decides what happens now.
+    onPeekPinnedChanged: sidebar.settlePeek()
+
+    Popup {
+        id: peek
+        parent: sidebar
+        // Flush against the rail, with nothing in between for the pointer
+        // to fall through, and level with the cell that opened it.
+        x: sidebar.width
+        y: Math.max(0, Math.min(sidebar.peekTop, sidebar.height - peek.height))
+        width: sidebar.openWidth
+        // As tall as it has rows, and never taller than the pane it comes
+        // out of. An empty section is its header and nothing else, which
+        // is the honest answer to hovering a zero.
+        height: Math.min(Theme.headerHeight + peekList.count * Theme.rowHeight
+                         + Theme.borderWidth, sidebar.height)
+        padding: 0
+        margins: 0
+        // Leaving it is what closes it (above). Escape is for the reader
+        // whose pointer is already inside it.
+        closePolicy: Popup.CloseOnEscape
+
+        readonly property alias pointerInside: peekHover.hovered
+
+        // It keeps the list's own ground rather than a menu's: what is in
+        // it is the sidebar, and the header band would be lost against
+        // `bgElevated`. The frame is what floats it (規約 §メニュー), and
+        // there is no rounding on a panel that starts flush against the
+        // rail.
+        background: Rectangle {
+            color: Theme.bgSurface
+            border.color: Theme.borderDefault
+            border.width: Theme.borderWidth
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 0
+            HoverHandler {
+                id: peekHover
+            }
+            NavHeader {
+                caption: sidebar.peekCaption
+                iconKind: rail.sectionOf(sidebar.peekKind).icon
+                iconTint: rail.sectionOf(sidebar.peekKind).tint
+                count: sidebar.peekModel ? sidebar.peekModel.total : 0
+                // Nothing to fold away to: this list is the only thing on
+                // screen. What closes it is the pointer leaving.
+                foldable: false
+                showTagToggle: sidebar.peekKind === "tag"
+                tagsShown: sidebar.repoTab.tagsShown
+                onTagsToggled: shown => sidebar.repoTab.setTagsShown(shown)
+            }
+            NavList {
+                id: peekList
+                sectionModel: sidebar.peekModel
+                expanded: true
+                kindHint: sidebar.peekKind
+                gestures: sidebar
+                stretch: true
+                headTrack: sidebar.peekKind === "branch"
+                           && sidebar.workTree.upstream !== ""
+                           ? "↑" + sidebar.workTree.ahead
+                             + " ↓" + sidebar.workTree.behind : ""
+                onRefActivated: oidHex => sidebar.refActivated(oidHex)
+                onRefMenuRequested: (kind, name, full, oidHex) =>
+                    sidebar.refMenuRequested(kind, name, full, oidHex)
+            }
         }
     }
 }
