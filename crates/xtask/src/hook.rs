@@ -46,9 +46,11 @@ fn pre_write(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// PostToolUse(Write): a QML file that is not listed in both qmldir and
-/// main.rs silently fails to resolve at runtime (qmldir directories only
-/// expose enumerated types). Warn right when the file is written.
+/// PostToolUse(Write|Edit): rules a QML change keeps missing by
+/// attention. A file absent from qmldir or main.rs silently fails to
+/// resolve at runtime (qmldir directories only expose enumerated
+/// types), and the font rules below dodge review because the wrong
+/// form still renders fine on the machine it was written on.
 fn post_write(input: &str) -> Result<(), String> {
     let Some(path) = string_field(input, "file_path") else {
         return Ok(());
@@ -63,6 +65,7 @@ fn post_write(input: &str) -> Result<(), String> {
     let ui_dir = std::path::Path::new(&path)
         .parent()
         .ok_or("qml path has no parent")?;
+    let mut notes: Vec<String> = Vec::new();
     let mut missing: Vec<&str> = Vec::new();
     // Missing registries are someone else's layout problem, not this hook's:
     // only judge the files that are actually there.
@@ -78,16 +81,61 @@ fn post_write(input: &str) -> Result<(), String> {
         missing.push("main.rs (include_bytes_qml!)");
     }
     if !missing.is_empty() {
+        notes.push(format!(
+            "{file_name} is not registered in: {}. A QML component in a \
+             qmldir directory is invisible unless enumerated there, and \
+             unbundled unless embedded in main.rs (.claude/rules/app-ui.md).",
+            missing.join(" and ")
+        ));
+    }
+    if let Ok(content) = std::fs::read_to_string(&path) {
+        notes.extend(qml_font_notes(&content));
+    }
+    if !notes.is_empty() {
         println!(
             "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PostToolUse\",\
-             \"additionalContext\":\"{file_name} is not registered in: {}. \
-             A QML component in a qmldir directory is invisible unless \
-             enumerated there, and unbundled unless embedded in main.rs \
-             (.claude/rules/app-ui.md).\"}}}}",
-            missing.join(" and ")
+             \"additionalContext\":\"{}\"}}}}",
+            notes.join(" ")
         );
     }
     Ok(())
+}
+
+/// The font rules of デザイン規約 §QML実装ルール, checked line by line:
+/// pointSize drifts with each OS's logical DPI, and a family named
+/// outside Theme skips the per-OS fallback chain Theme resolves — both
+/// look right on the machine they were written on and break on another.
+fn qml_font_notes(content: &str) -> Vec<String> {
+    let mut notes = Vec::new();
+    for (number, line) in content.lines().enumerate() {
+        let code = line.trim_start();
+        if code.starts_with("//") {
+            continue;
+        }
+        if code.contains("font.pointSize") {
+            notes.push(format!(
+                "line {}: font.pointSize drifts with each OS's logical DPI; \
+                 use font.pixelSize with a Theme token \
+                 (デザイン規約 §QML実装ルール).",
+                number + 1
+            ));
+        }
+        let Some(value) = code.split("font.family").nth(1) else {
+            continue;
+        };
+        let Some(value) = value.trim_start().strip_prefix(':') else {
+            continue;
+        };
+        if value.contains('"') || !value.contains("Theme.") {
+            notes.push(format!(
+                "line {}: font.family may only take a family Theme resolved \
+                 (Theme.uiFamily / Theme.monoFamily) — anything else skips \
+                 the per-OS fallback chain (デザイン規約 §QML実装ルール).",
+                number + 1
+            ));
+        }
+    }
+    notes
 }
 
 /// SessionStart: sessions opened in the primary checkout get the worktree
@@ -128,4 +176,28 @@ fn string_field(input: &str, key: &str) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::qml_font_notes;
+
+    #[test]
+    fn flags_point_size_and_families_named_outside_theme() {
+        let notes =
+            qml_font_notes("Text {\n    font.pointSize: 12\n    font.family: \"Segoe UI\"\n}\n");
+        assert_eq!(notes.len(), 2, "{notes:?}");
+        assert!(notes[0].contains("line 2"));
+        assert!(notes[1].contains("line 3"));
+    }
+
+    #[test]
+    fn accepts_theme_resolved_families_and_comments() {
+        let notes = qml_font_notes(
+            "// font.pointSize in a comment is fine\n\
+             Text { font.family: Theme.monoFamily }\n\
+             Text { font.family: code ? Theme.monoFamily : Theme.uiFamily }\n",
+        );
+        assert!(notes.is_empty(), "{notes:?}");
+    }
 }
