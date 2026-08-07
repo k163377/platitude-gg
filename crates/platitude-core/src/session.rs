@@ -3339,7 +3339,10 @@ fn build_snapshot(
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::print_stdout, clippy::expect_used)]
+    #![expect(
+        clippy::print_stdout,
+        reason = "the scale measurement reports its number to whoever ran it"
+    )]
 
     use super::*;
     use crate::remote::RemoteTag;
