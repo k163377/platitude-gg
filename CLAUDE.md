@@ -85,6 +85,7 @@ cargo fmt --all
 
 `JetBrains/kotlin` 級(10万コミット超)で: 起動→グラフ初回表示 3 秒以内 / 操作応答 100ms / スクロール 60fps / メモリ 300MB 以下。
 コミット数に比例する同期処理を UI 操作の経路に置かない。遅延読み込みと差分更新を基本とする。
+**refs の本数にも比例させない** — 基準リポジトリは refs が 5 万本(うちタグ 4.5 万)で、ループの中の走査は積になる。ref 同士を突き合わせる時は索引を 1 本作ってから回す(`session::RefJoins` / `refs::RemoteBranches`。実測 [ci/baseline/refs-join-windows-x64.md](ci/baseline/refs-join-windows-x64.md))。未着手の非同期化の候補は [非同期化の候補.md](internal-docs/非同期化の候補.md)。
 
 ## Git 運用
 
