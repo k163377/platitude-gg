@@ -352,6 +352,128 @@ pub async fn configured_tool(
     Ok(None)
 }
 
+/// Merge tools git found installed and this app can actually launch.
+///
+/// **Slow on Windows** — around 8 seconds, measured warm. `--tool-help`
+/// sources every one of git's ~25 tool definitions twice and probes each
+/// one's availability, which on Windows means walking the registry and
+/// Program Files. Never put this on the write queue, and never let
+/// anything wait on it.
+///
+/// Only the first group is read (what is installed); the second group
+/// lists tools git knows of but cannot find, which is not an offer worth
+/// making. User-defined tools are skipped here — [`user_defined_tools`]
+/// names them from config without the eight seconds, and reads them from
+/// a key rather than out of prose.
+///
+/// **Tools that draw in a terminal are dropped.** The subprocess gets no
+/// console, so vimdiff and its kind cannot run, and offering them is
+/// offering a dead end. git marks the rest itself, in the description it
+/// prints. That marker is prose, and the price of it changing is this
+/// returning nothing — which lands on the plain text field the caller
+/// already has. It also loses `emerge`, which a graphical Emacs would run
+/// fine; typing the name still works.
+/// Read once per process. What is installed on the machine does not change
+/// while the app is open, and at eight seconds it is not a read to repeat
+/// per tab or per dialog. Errors are not stored, so a read that timed out
+/// can be tried again.
+static INSTALLED: tokio::sync::OnceCell<Vec<String>> = tokio::sync::OnceCell::const_new();
+
+pub async fn available_tools(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<Vec<String>, GitError> {
+    let names = INSTALLED
+        .get_or_try_init(|| async {
+            let cmd = GitCommand::new()
+                .cwd(workdir)
+                .args(["mergetool", "--tool-help"]);
+            let out = executor.run(cmd, cancel).await?;
+            Ok::<_, GitError>(parse_tool_help(&out.stdout_utf8()))
+        })
+        .await?;
+    Ok(names.clone())
+}
+
+/// Names from the installed group of `git mergetool --tool-help`, keeping
+/// only the ones git marks as windowed.
+fn parse_tool_help(text: &str) -> Vec<String> {
+    const GROUP: &str = "may be set to one of the following:";
+    const WINDOWED: &str = "(requires a graphical session)";
+
+    let mut names = Vec::new();
+    let mut inside = false;
+    for line in text.lines() {
+        if !inside {
+            inside = line.contains(GROUP);
+            continue;
+        }
+        // Entries are indented by two tabs. A blank line separates the
+        // user-defined block; anything else at a shallower indent is that
+        // block's heading or the next group's preamble — either way the
+        // installed list has ended.
+        let Some(entry) = line.strip_prefix("\t\t") else {
+            if line.trim().is_empty() {
+                continue;
+            }
+            break;
+        };
+        if !entry.contains(WINDOWED) {
+            continue;
+        }
+        if let Some(name) = entry.split_whitespace().next() {
+            names.push(name.to_string());
+        }
+    }
+    names
+}
+
+/// Merge tools defined in config (`mergetool.<name>.cmd`).
+///
+/// Cheap where [`available_tools`] is not, and read from a key rather than
+/// from prose. **Not filtered**: someone who wrote a `cmd` chose it, and a
+/// script that writes `$MERGED` satisfies the whole contract without
+/// needing a window or a console.
+pub async fn user_defined_tools(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<Vec<String>, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        // Nothing configured answers with code 1, which is an answer.
+        .answers_by_code()
+        .args(["config", "-z", "--get-regexp", r"^mergetool\..*\.cmd$"]);
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    // Exit 1 only means nothing matched, which is a valid empty answer.
+    if out.code == 1 {
+        return Ok(Vec::new());
+    }
+    if out.code != 0 {
+        return Err(GitError::Failed {
+            command: "git config --get-regexp".to_string(),
+            code: out.code,
+            stderr: out.failure_message(),
+        });
+    }
+    // `-z` gives "key\nvalue" records, so a value holding newlines cannot
+    // be mistaken for the next key.
+    let mut names = Vec::new();
+    for record in out.stdout.split(|b| *b == 0).filter(|r| !r.is_empty()) {
+        let text = String::from_utf8_lossy(record);
+        let key = text.split('\n').next().unwrap_or_default().trim();
+        let name = key
+            .strip_prefix("mergetool.")
+            .and_then(|rest| rest.strip_suffix(".cmd"))
+            .unwrap_or_default();
+        if !name.is_empty() {
+            names.push(name.to_string());
+        }
+    }
+    Ok(names)
+}
+
 /// Records which merge tool to launch, or clears the choice when `tool`
 /// is empty.
 ///
@@ -456,6 +578,46 @@ mod tests {
             ConflictKind::DeletedByUs
         );
         assert_eq!(ConflictKind::from_stages('X', 'Y'), ConflictKind::Other);
+    }
+
+    /// Real `git mergetool --tool-help` output (2.51.0.windows.1), cut to
+    /// the shape that matters: the installed group holds both terminal and
+    /// windowed tools, a user-defined block follows it, and the group of
+    /// tools git knows but cannot find comes after that — indented exactly
+    /// like the first one, which is why the heading has to stop the read.
+    const TOOL_HELP: &str = "\
+'git mergetool --tool=<tool>' may be set to one of the following:
+\t\tvimdiff          Use Vim with a custom layout (see `git help mergetool`'s `BACKEND SPECIFIC HINTS` section)
+\t\tvimdiff1         Use Vim with a 2 panes layout (LOCAL and REMOTE)
+\t\tvscode           Use Visual Studio Code (requires a graphical session)
+
+\tuser-defined:
+\t\tmytool.cmd true
+
+The following tools are valid, but not currently available:
+\t\twinmerge         Use WinMerge (requires a graphical session)
+
+Some of the tools listed above only work in a windowed
+environment. If run in a terminal-only session, they will fail.
+";
+
+    #[test]
+    fn tool_help_lists_only_what_is_installed_and_windowed() {
+        // vimdiff is installed but draws in a terminal, winmerge is
+        // windowed but not installed, mytool is read from config instead.
+        assert_eq!(parse_tool_help(TOOL_HELP), vec!["vscode".to_string()]);
+    }
+
+    #[test]
+    fn tool_help_without_a_user_defined_block_still_stops_at_the_next_group() {
+        let text = TOOL_HELP.replace("\tuser-defined:\n\t\tmytool.cmd true\n", "");
+        assert_eq!(parse_tool_help(&text), vec!["vscode".to_string()]);
+    }
+
+    #[test]
+    fn tool_help_that_found_nothing_offers_nothing() {
+        assert!(parse_tool_help("No suitable tool for 'git mergetool' found.").is_empty());
+        assert!(parse_tool_help("").is_empty());
     }
 
     #[test]

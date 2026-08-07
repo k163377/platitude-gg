@@ -273,6 +273,16 @@ pub enum SessionEvent {
         /// the config again, so a stale name here cannot start anything.
         merge_tool: String,
     },
+    /// Answer to [`RepoSession::ask_merge_tools`]: names the settings field
+    /// can offer, deliberate ones first. Empty is a valid answer.
+    ///
+    /// Sent twice where config named anything: once with those, so the
+    /// eight-second read does not hold back an answer that took
+    /// milliseconds, and once with everything. `settled` marks the last.
+    MergeToolsLoaded {
+        names: Vec<String>,
+        settled: bool,
+    },
     /// Answer to [`RepoSession::check_publish`].
     PublishChecked {
         range: String,
@@ -553,6 +563,8 @@ pub struct RepoSession {
     /// read: two `git config` spawns on every poll of every open tab is
     /// not a price the common case should pay for a settings field.
     merge_tool_wanted: std::sync::atomic::AtomicBool,
+    /// The last answer, repeated by refreshes that did not read it.
+    merge_tool_seen: Mutex<String>,
     /// Fingerprint of the last refs read (see [`refs_key`]), so a refresh
     /// can tell an external commit / fetch / switch from a quiet re-read.
     /// `None` until the first read: opening already streams the graph.
@@ -575,6 +587,9 @@ pub struct RepoSession {
     /// One permit for the background read of the above, so a second
     /// permission-granting call cannot stack another on top of it.
     remote_tags_slot: Arc<tokio::sync::Semaphore>,
+    /// One merge-tool candidate read at a time. Opening settings twice in
+    /// a row must not start a second eight-second walk of the registry.
+    merge_tools_slot: Arc<tokio::sync::Semaphore>,
     /// The running auto-fetch timer, if any.
     auto_fetch: Mutex<Option<AutoFetch>>,
     /// The interval the timer was last *asked* for, kept while it is
@@ -616,6 +631,7 @@ impl RepoSession {
             log_cancel: Mutex::new(None),
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
             merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),
+            merge_tool_seen: Mutex::new(String::new()),
             refs_key: Mutex::new(None),
             write_busy: std::sync::atomic::AtomicBool::new(false),
             poll_slot: Arc::new(tokio::sync::Semaphore::new(1)),
@@ -623,6 +639,7 @@ impl RepoSession {
             network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
             remote_tags: Mutex::new(RemoteTagsByRemote::new()),
             remote_tags_slot: Arc::new(tokio::sync::Semaphore::new(1)),
+            merge_tools_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             auto_fetch: Mutex::new(None),
             auto_fetch_interval: Mutex::new(None),
             auto_fetch_slot: Arc::new(tokio::sync::Semaphore::new(1)),
@@ -1266,13 +1283,20 @@ impl RepoSession {
                 // per opening rather than once per poll.
                 let asked = self.merge_tool_wanted.swap(false, Ordering::SeqCst);
                 let merge_tool = if asked || status.conflicted().next().is_some() {
-                    conflict::configured_tool(&self.executor, &workdir, &cancel)
+                    let read = conflict::configured_tool(&self.executor, &workdir, &cancel)
                         .await
                         .ok()
                         .flatten()
-                        .unwrap_or_default()
+                        .unwrap_or_default();
+                    self.set_merge_tool_seen(read.clone());
+                    read
                 } else {
-                    String::new()
+                    // Not read this time, so repeat the last answer rather
+                    // than replace it with nothing: a settings dialog left
+                    // open would otherwise watch its value evaporate on
+                    // the next tick, and a conflict resolved by the tool
+                    // takes the name out of the pane it was just used in.
+                    self.merge_tool_seen()
                 };
                 if !self.status_gate.is_current(op_gen) {
                     return false;
@@ -2314,6 +2338,72 @@ impl RepoSession {
         );
     }
 
+    /// Reads what the settings field can offer: tools named in config
+    /// (cheap) and tools git found installed (about eight seconds on
+    /// Windows, kept for the life of the process).
+    ///
+    /// Deliberately **not** on the write queue, for the reason the remote
+    /// tag read is not: eight seconds there would raise `write_busy`, hold
+    /// the poll out, and put every later write behind a dialog nobody is
+    /// waiting on.
+    ///
+    /// Both answers arrive as one event, so the list is never seen half
+    /// filled. Either read failing contributes nothing rather than failing
+    /// the pair — what it feeds is a free text field, and offering nothing
+    /// is a working state.
+    pub fn ask_merge_tools(self: &Arc<Self>) {
+        let Ok(permit) = Arc::clone(&self.merge_tools_slot).try_acquire_owned() else {
+            tracing::debug!("merge tools: the previous read has not finished");
+            return;
+        };
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let _permit = permit;
+            let Some(workdir) = s.workdir() else {
+                return;
+            };
+            let cancel = s.root_cancel.clone();
+            // Config first: these are deliberate choices, and they arrive
+            // in milliseconds where the other takes seconds. Publish them
+            // on their own rather than making them wait for it.
+            let mut names = conflict::user_defined_tools(&s.executor, &workdir, &cancel)
+                .await
+                .unwrap_or_default();
+            if !names.is_empty() {
+                s.sink.event(SessionEvent::MergeToolsLoaded {
+                    names: names.clone(),
+                    settled: false,
+                });
+            }
+            let installed = conflict::available_tools(&s.executor, &workdir, &cancel)
+                .await
+                .unwrap_or_default();
+            for name in installed {
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+            s.sink.event(SessionEvent::MergeToolsLoaded {
+                names,
+                settled: true,
+            });
+        });
+    }
+
+    fn merge_tool_seen(&self) -> String {
+        match self.merge_tool_seen.lock() {
+            Ok(g) => g.clone(),
+            Err(e) => e.into_inner().clone(),
+        }
+    }
+
+    fn set_merge_tool_seen(&self, tool: String) {
+        match self.merge_tool_seen.lock() {
+            Ok(mut g) => *g = tool,
+            Err(e) => *e.into_inner() = tool,
+        }
+    }
+
     /// Has the next status read name the merge tool even with nothing
     /// conflicted, so a settings field can show what is configured now.
     pub fn ask_merge_tool(self: &Arc<Self>) {
@@ -2327,6 +2417,10 @@ impl RepoSession {
     /// Refreshing afterwards is what re-reads the name for the menu row,
     /// so the row and the config never disagree for longer than a write.
     pub fn set_merge_tool(self: &Arc<Self>, tool: String) {
+        // The refresh this write triggers has to re-read, or it would
+        // repeat the name from before the write.
+        self.merge_tool_wanted
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         self.write(
             // Not "mergetool": that label is what the pane watches to know
             // a tool is open, and writing the setting is not opening one.

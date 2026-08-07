@@ -68,6 +68,12 @@ pub enum TabMsg {
         oid: String,
         in_history: bool,
     },
+    /// Merge tool names the settings field can offer. Empty is an answer.
+    /// `settled` false is the fast half, with the slow read still out.
+    MergeTools {
+        names: Vec<String>,
+        settled: bool,
+    },
     /// Author identity and signing state.
     Author {
         name: String,
@@ -484,6 +490,9 @@ impl SessionSink for BridgeSink {
             }
             SessionEvent::InHistoryChecked { oid, in_history } => {
                 self.feeds.tab.push(TabMsg::InHistory { oid, in_history });
+            }
+            SessionEvent::MergeToolsLoaded { names, settled } => {
+                self.feeds.tab.push(TabMsg::MergeTools { names, settled });
             }
             SessionEvent::HeadCommitLoaded { head } => {
                 self.feeds.tab.push(TabMsg::HeadCommit {

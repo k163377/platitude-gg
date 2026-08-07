@@ -14,23 +14,46 @@ AppDialog {
     property var curPage: null
     readonly property string mergeTool:
         settingsDialog.curPage ? settingsDialog.curPage.pageWt.mergeTool : ""
+    /// Names to offer, packed the way the graph's label records are.
+    readonly property var toolChoices: {
+        const packed = settingsDialog.curPage
+                       ? settingsDialog.curPage.pageTab.mergeTools : ""
+        return packed === "" ? [] : packed.split(String.fromCharCode(31))
+    }
     /// Stops a late answer from overwriting something already typed.
     property bool toolTouched: false
+
+    /// Smoke hook. The candidates arrive in two waves and the configured
+    /// name in a third, so the value has three chances to be knocked out
+    /// by something that is not a person — report it at each.
+    function reportTool() {
+        if (AppBackend.autoAct === "settings-tools")
+            AppBackend.report("merge_editor wanted=" + toolField.wanted
+                              + " shown=" + toolField.editText
+                              + " configured=" + settingsDialog.mergeTool)
+    }
+    onToolChoicesChanged: settingsDialog.reportTool()
 
     onOpened: {
         fetchField.text = AppBackend.autoFetchMinutes > 0
                           ? String(AppBackend.autoFetchMinutes) : ""
+        toolField.wanted = settingsDialog.mergeTool
         settingsDialog.toolTouched = false
-        toolField.text = settingsDialog.mergeTool
-        // The status refresh only names the tool where something is
-        // conflicted, so ask for it — the answer lands a beat later.
-        if (settingsDialog.curPage)
+        if (settingsDialog.curPage) {
+            // The status refresh only names the configured tool where
+            // something is conflicted, so ask for it. The candidates are
+            // a separate, far slower read — hence the turning indicator.
             settingsDialog.curPage.pageTab.askMergeTool()
+            settingsDialog.curPage.pageTab.askMergeTools()
+        }
         fetchField.forceActiveFocus()
     }
     onMergeToolChanged: {
-        if (settingsDialog.opened && !settingsDialog.toolTouched)
-            toolField.text = settingsDialog.mergeTool
+        if (settingsDialog.opened && !settingsDialog.toolTouched) {
+            toolField.wanted = settingsDialog.mergeTool
+            settingsDialog.toolTouched = false
+        }
+        settingsDialog.reportTool()
     }
     // An empty field is the off switch — nothing to type is the
     // clearest way to say "do not do this".
@@ -38,7 +61,7 @@ AppDialog {
         AppBackend.setAutoFetchMinutes(fetchField.text === "" ? 0
                                                               : Number(fetchField.text))
         if (settingsDialog.toolTouched && settingsDialog.curPage)
-            settingsDialog.curPage.pageTab.setMergeTool(toolField.text)
+            settingsDialog.curPage.pageTab.setMergeTool(toolField.wanted)
         settingsDialog.close()
     }
     contentItem: ColumnLayout {
@@ -98,11 +121,22 @@ AppDialog {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceSm
-                FormField {
+                AppCombo {
                     id: toolField
-                    implicitWidth: 160
-                    placeholderText: qsTr("none")
-                    onTextEdited: settingsDialog.toolTouched = true
+                    implicitWidth: 220
+                    placeholder: qsTr("none")
+                    // Smoke hook: the popup is drawn here rather than by
+                    // Fusion, so it needs its own look at (PG_AUTO_ACT).
+                    Timer {
+                        running: settingsDialog.opened
+                                 && AppBackend.autoAct === "settings-tools"
+                        interval: 400
+                        onTriggered: toolField.popup.open()
+                    }
+                    loading: settingsDialog.curPage
+                             && settingsDialog.curPage.pageTab.mergeToolsLoading
+                    model: settingsDialog.toolChoices
+                    onWantedChanged: settingsDialog.toolTouched = true
                     onAccepted: settingsDialog.apply()
                 }
                 Item { Layout.fillWidth: true }

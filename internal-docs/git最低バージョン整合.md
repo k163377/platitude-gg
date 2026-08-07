@@ -48,7 +48,8 @@
 | `log` | `-z` / `-1` / `--topo-order` / `--branches` `--remotes` `--tags` / `--max-count=` / `--ignore-missing` / `--reverse` / `--format=` / `--end-of-options` | 2.43.0 ✓。`-z` は diff-options.txt の `ifdef::git-log`「Separate the commits with NULs instead of newlines」を v2.43.0 ソースで確認 |
 | `merge` | `--no-edit` / `--no-ff` / `--ff-only` / `--squash` / `--continue` `--abort` `--quit` | 2.43.0 ✓ |
 | `merge-base` | `--is-ancestor` | 古参(1.8.0) |
-| `mergetool` | `--no-prompt` / `--gui` / `--tool=` | 2.43.0 ✓(`--gui` は guitool → tool のフォールバックまで記載を確認) |
+| `mergetool` | `--no-prompt` / `--gui` / `--tool=` / `--tool-help` | 2.43.0 ✓(`--gui` は guitool → tool のフォールバックまで記載を確認) |
+| `config` | `--get-regexp` に `^mergetool\..*\.cmd$`(自前定義ツールの列挙) | 古参 |
 | `-c` | `mergetool.writeToTemp=true`(mergetool 実行時) | 2.43.0 ✓(`keepBackup` / `guiDefault` / `hideResolved` も同じ config 文書に在る) |
 | `push` | `--porcelain` / `--set-upstream` / `--force-with-lease=<ref>:<oid>` / `--force` / `--delete` | 2.43.0 ✓(値付き lease 形式まで記載確認) |
 | `rebase` | `--interactive` / `--onto` / `--root` / `--autostash` / `--update-refs` / `--continue` `--abort` `--skip` `--quit` | 2.43.0 ✓(`--update-refs` 2.38 = **最も新しい依存**) |

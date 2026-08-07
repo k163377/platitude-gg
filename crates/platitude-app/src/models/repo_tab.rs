@@ -27,6 +27,14 @@ pub struct RepoTab {
     /// but requests can queue up).
     busy_count: i32,
     busy_op: String,
+    /// Merge tool names the settings field can offer, joined by U+001F the
+    /// way the graph's label records are. Empty means none to offer, which
+    /// is a working state — the field takes a typed name either way.
+    merge_tools: String,
+    /// A candidate read is out. Asking git what is installed takes about
+    /// eight seconds on Windows, so the field says so rather than looking
+    /// like it has nothing.
+    merge_tools_loading: bool,
     /// Last answer to `checkPublish`: how much of a range a remote has.
     publish_range: String,
     publish_total: i32,
@@ -121,6 +129,8 @@ impl Default for RepoTab {
             tags_shown: true,
             busy_count: 0,
             busy_op: String::new(),
+            merge_tools: String::new(),
+            merge_tools_loading: false,
             publish_range: String::new(),
             publish_total: 0,
             publish_published: 0,
@@ -247,6 +257,12 @@ impl RepoTab {
     qproperty!("tagsShown", Member = tags_shown, Notify = changed);
     qproperty!("busyCount", Member = busy_count, Notify = changed);
     qproperty!("busyOp", Member = busy_op, Notify = changed);
+    qproperty!("mergeTools", Member = merge_tools, Notify = changed);
+    qproperty!(
+        "mergeToolsLoading",
+        Member = merge_tools_loading,
+        Notify = changed
+    );
     qproperty!("publishRange", Member = publish_range, Notify = changed);
     qproperty!("publishTotal", Member = publish_total, Notify = changed);
     qproperty!(
@@ -480,6 +496,14 @@ impl RepoTab {
                     self.move_ask_local = local;
                     self.move_ask_start = start;
                     self.move_ask_seq += 1;
+                }
+                TabMsg::MergeTools { names, settled } => {
+                    self.merge_tools = names.join("\u{1f}");
+                    // The fast half arrives first; the indicator keeps
+                    // turning until the slow read has had its say.
+                    if settled {
+                        self.merge_tools_loading = false;
+                    }
                 }
                 TabMsg::WriteState { op, running, error } => {
                     if running {
@@ -1044,6 +1068,19 @@ impl RepoTab {
     #[qslot]
     fn ask_merge_tool(&mut self) {
         self.with_session(|s| s.ask_merge_tool());
+    }
+
+    /// Asks which tools could be offered; the answer lands on `mergeTools`.
+    /// Off the write queue, and slow enough that `mergeToolsLoading` is
+    /// worth showing while it runs.
+    #[qslot]
+    fn ask_merge_tools(&mut self) {
+        if self.merge_tools_loading {
+            return;
+        }
+        self.merge_tools_loading = true;
+        self.with_session(|s| s.ask_merge_tools());
+        self.changed();
     }
 
     /// Asks how much of `range` is already on a remote; the answer arrives

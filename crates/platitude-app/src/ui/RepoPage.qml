@@ -1857,9 +1857,12 @@ Item {
             page.toggleDiff("unstaged", arg, "")
         } else if (act === "preview-staged") {
             page.toggleDiff("staged", arg, "")
-        } else if (act === "settings") {
+        } else if (act === "settings" || act === "settings-tools") {
+            // `-tools` goes on to open the candidate list from inside the
+            // dialog, and leaves the fetch interval where it was.
             page.settingsDialogRequested()
-            AppBackend.setAutoFetchMinutes(Number(arg))
+            if (act === "settings")
+                AppBackend.setAutoFetchMinutes(Number(arg))
         } else if (act === "commands") {
             // Stage and unstage so the log has something in it, then
             // open it the way the toolbar does.
