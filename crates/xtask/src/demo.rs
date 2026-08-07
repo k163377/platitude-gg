@@ -193,6 +193,14 @@ fn basic(repo: &mut DemoRepo) -> Result<(), String> {
     )?;
     repo.git(&["tag", "-a", "v0.1", "-m", "first cut"])?;
     repo.commit("docs/guide.md", "guide v1\n", "docs: add a guide")?;
+    // Japanese subject and body on purpose: every screenshot of this
+    // preset then exercises CJK rendering, and 直 / 骨 make a wrong
+    // (Chinese-variant) glyph visible at a glance.
+    repo.commit(
+        "docs/guide.md",
+        "guide v1\n\n## 使い方\n直感的な操作の案内。骨組みだけ先に日本語で書く。\n",
+        "docs: 利用案内の骨子を日本語で直す",
+    )?;
     repo.commit("src/lib.txt", "lib v2\n", "fix: harden the library")?;
 
     repo.git(&["switch", "--create", "feature/topic-a"])?;
