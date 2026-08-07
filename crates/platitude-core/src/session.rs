@@ -265,6 +265,9 @@ pub enum SessionEvent {
         op_state: OpState,
         /// "commit N of M" while a rebase is stepping through commits.
         progress: Option<conflict::Progress>,
+        /// What to call the two sides of a conflict, for whatever is
+        /// stopped. Default while nothing is.
+        sides: conflict::Sides,
     },
     /// Answer to [`RepoSession::check_publish`].
     PublishChecked {
@@ -1238,6 +1241,15 @@ impl RepoSession {
                 } else {
                     None
                 };
+                // Likewise: the two sides only have names while something
+                // is stopped, which is the rare case. Nothing stopped
+                // means nothing read.
+                let sides = match integrate::InProgress::from_state(&op_state) {
+                    Some(op) => conflict::sides(&self.executor, &workdir, op, &cancel)
+                        .await
+                        .unwrap_or_default(),
+                    None => conflict::Sides::default(),
+                };
                 if !self.status_gate.is_current(op_gen) {
                     return false;
                 }
@@ -1247,6 +1259,7 @@ impl RepoSession {
                     status,
                     op_state,
                     progress,
+                    sides,
                 });
                 flipped
             }

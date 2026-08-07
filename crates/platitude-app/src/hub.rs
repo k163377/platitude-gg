@@ -169,6 +169,9 @@ pub struct StatusMsg {
     pub op_state: OpState,
     /// "commit N of M" while a rebase is stepping.
     pub progress: Option<platitude_core::conflict::Progress>,
+    /// What the two sides of a conflict are called. Empty names while
+    /// nothing is stopped, or where git left nothing to name one by.
+    pub sides: platitude_core::conflict::Sides,
 }
 
 #[derive(Debug)]
@@ -351,16 +354,19 @@ impl SessionSink for BridgeSink {
                 status,
                 op_state,
                 progress,
+                sides,
             } => {
                 self.feeds.status_nav.push_replace(StatusMsg {
                     status: status.clone(),
                     op_state,
                     progress,
+                    sides: sides.clone(),
                 });
                 self.feeds.status.push_replace(StatusMsg {
                     status,
                     op_state,
                     progress,
+                    sides,
                 });
             }
             SessionEvent::StashesLoaded { stashes } => self.feeds.stash.push_replace(stashes),

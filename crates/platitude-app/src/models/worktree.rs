@@ -46,6 +46,12 @@ pub struct WorkTreeModel {
     /// count: only a rebase writes one, and a cherry-pick that steps
     /// would look like a merge if the count were the test.
     op_stepping: bool,
+    /// What to call each side of a conflict. **The two swap over during a
+    /// rebase** (the commits being replayed are "theirs"), which is why
+    /// these are read from the operation rather than worked out here.
+    /// Empty where git left nothing to name a side by.
+    side_ours: String,
+    side_theirs: String,
     feed: Option<Arc<Feed<StatusMsg>>>,
     tab_id: i32,
 }
@@ -77,6 +83,8 @@ impl WorkTreeModel {
     qproperty!("opStep", Member = op_step, Notify = changed);
     qproperty!("opSteps", Member = op_steps, Notify = changed);
     qproperty!("opStepping", Member = op_stepping, Notify = changed);
+    qproperty!("sideOurs", Member = side_ours, Notify = changed);
+    qproperty!("sideTheirs", Member = side_theirs, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -100,10 +108,13 @@ impl WorkTreeModel {
             status,
             op_state,
             progress,
+            sides,
         }) = feed.drain().pop()
         else {
             return;
         };
+        self.side_ours = sides.ours;
+        self.side_theirs = sides.theirs;
 
         self.branch = status.branch_head.clone().unwrap_or_default();
         self.head_oid = status
