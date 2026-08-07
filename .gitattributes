@@ -1,6 +1,10 @@
-# Normalize line endings to LF in the repository (checkout stays platform-native
-# for files git considers text). Keeps fmt/clippy/CI consistent across 3 OSes.
-* text=auto
+# Line endings are LF in the repository AND in the working tree on all 3 OSes.
+# The checkout is deliberately not platform-native: a native checkout leaves the
+# tree half CRLF (what git wrote) and half LF (what editors and xtask wrote), and
+# CRLF reaching a .sh on Linux/macOS shows up as `/bin/sh^M: bad interpreter`.
+# eol=lf here outranks whatever core.autocrlf a developer has set locally, so the
+# tree is byte-identical everywhere. Keeps fmt/clippy/CI consistent across 3 OSes.
+* text=auto eol=lf
 *.rs text
 *.toml text
 *.md text
