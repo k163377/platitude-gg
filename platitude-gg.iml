@@ -6,6 +6,7 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/platitude-app/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/platitude-core/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/platitude-core/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/xtask/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="sourceFolder" forTests="false" />
