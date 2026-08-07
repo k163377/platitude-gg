@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
+import platitude
 import platitude.ui
 
 // Right pane, working-tree (WIP) mode: the commit editor pinned on top
@@ -671,6 +672,12 @@ ColumnLayout {
         section.delegate: Rectangle {
             id: bucketHeader
             required property string section
+            /// An external merge tool holds the write queue until it is
+            /// closed, which is the longest wait in the app and the only
+            /// one with no upper bound.
+            readonly property bool waitingForTool:
+                bucketHeader.section === "conflicts"
+                && wipPane.repoTab.busyOp === "mergetool"
             width: wipList.width
             height: Theme.rowHeight
             color: Theme.bgElevated
@@ -692,6 +699,37 @@ ColumnLayout {
                            ? Theme.danger : Theme.textSecondary
                 }
                 Item { Layout.fillWidth: true }
+                // The seat `Stage all` takes on the other two buckets.
+                // The words stay — nothing else in view names the tool
+                // being waited on — and the ring says it is still running.
+                // No `…`: that is the word for a question standing, and
+                // progress is the ring's job (規約 §進行中・長押しの定数).
+                //
+                // Nothing to press: killing `git mergetool` would leave
+                // the editor it started running and its scratch behind.
+                Label {
+                    visible: bucketHeader.waitingForTool
+                    text: qsTr("Waiting for %1").arg(wipPane.workTree.mergeTool)
+                    font.pixelSize: Theme.fontSm
+                    color: Theme.textSecondary
+                }
+                NavIcon {
+                    visible: bucketHeader.waitingForTool
+                    Layout.preferredWidth: Theme.iconSm
+                    Layout.preferredHeight: Theme.iconSm
+                    kind: "spinner"
+                    tint: Theme.textSecondary
+                    // On the render thread, so it keeps turning while the
+                    // GUI thread drains models.
+                    RotationAnimator on rotation {
+                        running: bucketHeader.waitingForTool
+                                 && AppBackend.shotDir === ""
+                        loops: Animation.Infinite
+                        from: 0
+                        to: 360
+                        duration: Metrics.spinMs
+                    }
+                }
                 HoverToolButton {
                     visible: bucketHeader.section !== "conflicts"
                     text: bucketHeader.section === "staged"

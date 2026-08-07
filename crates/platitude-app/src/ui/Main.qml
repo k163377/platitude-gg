@@ -299,6 +299,7 @@ ApplicationWindow {
     // ---- settings --------------------------------------------------------
     SettingsDialog {
         id: settingsDialog
+        curPage: root.curPage
     }
 
     // ---- main ------------------------------------------------------------

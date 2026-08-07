@@ -11,6 +11,8 @@
 
 **発行する全コマンド・全オプションが 2.43 に存在する。** 個別マニュアルに無いのは `cherry-pick --no-edit` 1 件のみで、gitcli(7) の「long option は `--no-` で否定できる」一般規定(§Negating options)+ 実測(CLAUDE.md の実測注記)でカバーされる。最も新しい依存は `rebase --update-refs`(2.38 — 要望.md が明示的に前提化)。
 
+**同梱物にもバージョン差がある。** git が持つのはマージツールの**起動レシピだけ**(`$(git --exec-path)/mergetools/` の数十行のシェル。ツール本体は利用者が入れる)で、その顔ぶれが版で変わる — **2.43.0 は 23 個で `vscode` を含まない**(追加は 2.47.0 = `6b77283f mergetools: vscode: new tool`)。`smerge` は 2.22 から在る。**アプリはツール名を利用者から受け取るだけで候補を持たない**ので現状これに依存しないが、将来「既定を提案する」を作るなら名前を書くだけでは 2.43 で外れる(`mergetool.vscode.cmd` を自前で書く形になる)。なお Git for Windows は vim を同梱するため `vimdiff` 系だけは常に「利用可能」と表示されるが、`CREATE_NO_WINDOW` のため**このアプリからは起動できない**。
+
 ## 毎回付くもの(process.rs)
 
 | 種別 | 値 | 確認 |
@@ -46,7 +48,8 @@
 | `log` | `-z` / `-1` / `--topo-order` / `--branches` `--remotes` `--tags` / `--max-count=` / `--ignore-missing` / `--reverse` / `--format=` / `--end-of-options` | 2.43.0 ✓。`-z` は diff-options.txt の `ifdef::git-log`「Separate the commits with NULs instead of newlines」を v2.43.0 ソースで確認 |
 | `merge` | `--no-edit` / `--no-ff` / `--ff-only` / `--squash` / `--continue` `--abort` `--quit` | 2.43.0 ✓ |
 | `merge-base` | `--is-ancestor` | 古参(1.8.0) |
-| `mergetool` | `--no-prompt` | 古参 |
+| `mergetool` | `--no-prompt` / `--gui` / `--tool=` | 2.43.0 ✓(`--gui` は guitool → tool のフォールバックまで記載を確認) |
+| `-c` | `mergetool.writeToTemp=true`(mergetool 実行時) | 2.43.0 ✓(`keepBackup` / `guiDefault` / `hideResolved` も同じ config 文書に在る) |
 | `push` | `--porcelain` / `--set-upstream` / `--force-with-lease=<ref>:<oid>` / `--force` / `--delete` | 2.43.0 ✓(値付き lease 形式まで記載確認) |
 | `rebase` | `--interactive` / `--onto` / `--root` / `--autostash` / `--update-refs` / `--continue` `--abort` `--skip` `--quit` | 2.43.0 ✓(`--update-refs` 2.38 = **最も新しい依存**) |
 | `reset` | `--quiet` / `--soft` `--mixed` `--hard` / `--end-of-options` | 古参 |

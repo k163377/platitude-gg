@@ -262,9 +262,32 @@ fn short_ref(full: &str) -> String {
     full.strip_prefix("refs/heads/").unwrap_or(full).to_string()
 }
 
-/// Launches `git mergetool` for `paths` (all conflicted files when empty).
+/// Keeps the temporary files git writes for the tool out of the working
+/// tree. The default (false) puts `<file>_LOCAL_<pid>`, `_REMOTE_`,
+/// `_BASE_` and `_BACKUP_` *beside* the conflicted file, so every launch
+/// fills the pane with four to six untracked entries per path until the
+/// tool is closed.
 ///
-/// No time limit: the tool runs for as long as the user takes, and
+/// `mergetool.keepBackup` is deliberately left alone: the `<file>.orig`
+/// its default leaves behind is not git's scratch space but the person's
+/// safety net, and it is theirs to discard.
+const MERGETOOL_ARGS: [&str; 2] = ["-c", "mergetool.writeToTemp=true"];
+
+/// Launches the configured merge tool for `paths`, one at a time, and
+/// stages each file the tool resolves (git does the `add` itself).
+///
+/// The tool is resolved here rather than passed in, so the name that is
+/// launched is the one configured at this moment — a caller showing the
+/// name in a menu cannot launch a stale one. With none configured this
+/// refuses instead of running: git would otherwise guess a tool, and a
+/// guessed tool makes it prompt on a stdin that is closed.
+///
+/// `paths` is never allowed to be empty. Bare `git mergetool` walks every
+/// conflicted file in turn, and since the whole run holds the write queue
+/// (below), that turns one launch into a queue blocked for as many tool
+/// sessions as there are conflicts.
+///
+/// No time limit: the tool runs for as long as the person takes, and
 /// cancelling the session is what stops it. On Windows the subprocess gets
 /// no console (CREATE_NO_WINDOW), so a terminal-based tool such as vimdiff
 /// cannot be used — a GUI tool must be configured.
@@ -274,17 +297,31 @@ pub async fn mergetool(
     paths: &[String],
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let Some(tool) = configured_tool(executor, workdir, cancel).await? else {
+        return Err(GitError::Rejected {
+            message: "no merge tool is configured: set merge.guitool or merge.tool".to_string(),
+        });
+    };
     let cmd = GitCommand::new()
         .cwd(workdir)
-        // `--no-prompt` keeps git from asking on stdin, which is closed.
-        .args(["mergetool", "--no-prompt"])
+        .args(MERGETOOL_ARGS)
+        // `--gui` is what makes git resolve the tool the way
+        // [`configured_tool`] reports it. Without it git reads `merge.tool`
+        // alone, so someone who set only `merge.guitool` would be told a
+        // tool is configured and then watch the launch fail.
+        //
+        // `--tool` is passed even so, because `--no-prompt` does not cover
+        // the guessing path: with neither key set git picks a tool itself
+        // and *then* asks on stdin to confirm, which closed stdin turns
+        // into a failed file.
+        .args(["mergetool", "--gui", "--no-prompt"])
+        .arg(format!("--tool={tool}"))
+        .arg("--")
+        .args(paths.iter().map(|p| literal_pathspec(p)))
         .no_timeout();
-    let cmd = if paths.is_empty() {
-        cmd
-    } else {
-        cmd.arg("--")
-            .args(paths.iter().map(|p| literal_pathspec(p)))
-    };
     executor.run(cmd, cancel).await.map(drop)
 }
 
@@ -308,6 +345,54 @@ pub async fn configured_tool(
         }
     }
     Ok(None)
+}
+
+/// Records which merge tool to launch, or clears the choice when `tool`
+/// is empty.
+///
+/// Written to `merge.guitool`, not `merge.tool`, for two reasons that
+/// point the same way. It is the key that takes effect: launches pass
+/// `--gui`, under which git reads `guitool` first, so writing `tool`
+/// would silently do nothing for anyone who already set `guitool`. And it
+/// is the key that belongs to this app: `merge.tool` is what their
+/// terminal `git mergetool` uses, and choosing a windowed tool here has
+/// no business changing that — a terminal tool cannot run under this app
+/// at all (no console), while `merge.tool` may well name one.
+///
+/// Always global. Which editor someone reaches for is a property of their
+/// desk, not of one repository.
+///
+/// Clearing does not necessarily leave nothing configured: `merge.tool`
+/// may still be set, and [`configured_tool`] will then report it. That is
+/// the honest answer, since it is what git would launch.
+pub async fn set_merge_tool(
+    executor: &GitExecutor,
+    workdir: &Path,
+    tool: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let tool = tool.trim();
+    if tool.is_empty() {
+        let cmd = GitCommand::new()
+            .cwd(workdir)
+            // "nothing was set" comes back as code 5, which is the same
+            // outcome as clearing rather than a failure to report.
+            .answers_by_code()
+            .args(["config", "--global", "--unset", "merge.guitool"]);
+        let out = executor.run_unchecked(cmd, cancel).await?;
+        return match out.code {
+            0 | 5 => Ok(()),
+            _ => Err(GitError::Rejected {
+                message: out.failure_message(),
+            }),
+        };
+    }
+    // No `--` separator: `git config <key> -- <value>` stores "--" as the
+    // value (the same trap `identity::set_identity` documents).
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["config", "--global", "merge.guitool", tool]);
+    executor.run(cmd, cancel).await.map(drop)
 }
 
 /// Resolves a conflict by taking one side wholesale.

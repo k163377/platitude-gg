@@ -1016,15 +1016,34 @@ impl RepoTab {
         self.with_session(|s| s.take_side(paths.clone(), side));
     }
 
-    /// Hands a conflicted path to `git mergetool` (empty = all of them).
+    /// Opens the chosen conflicted paths in the configured merge tool, the
+    /// same path-set route the rest of the file menu takes.
+    ///
+    /// Named paths only, never "all of them": git walks a bare `mergetool`
+    /// one file at a time and the whole walk holds the write queue, so an
+    /// unnamed launch would block every other write for as many tool
+    /// sessions as there are conflicts.
     #[qslot]
-    fn open_mergetool(&mut self, path: String) {
-        let paths = if path.is_empty() {
-            Vec::new()
-        } else {
-            vec![path]
-        };
+    fn open_mergetool(&mut self) {
+        let paths = std::mem::take(&mut self.pending_paths);
+        if paths.is_empty() {
+            return;
+        }
         self.with_session(|s| s.mergetool(paths.clone()));
+    }
+
+    /// Records which merge tool to launch; empty clears the choice.
+    #[qslot]
+    fn set_merge_tool(&mut self, tool: String) {
+        self.with_session(|s| s.set_merge_tool(tool.clone()));
+    }
+
+    /// Asks for the configured merge tool; the answer arrives on the
+    /// working-tree model's `mergeTool`. The status refresh only names it
+    /// where something is conflicted, so a settings field has to ask.
+    #[qslot]
+    fn ask_merge_tool(&mut self) {
+        self.with_session(|s| s.ask_merge_tool());
     }
 
     /// Asks how much of `range` is already on a remote; the answer arrives

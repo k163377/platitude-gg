@@ -52,6 +52,11 @@ pub struct WorkTreeModel {
     /// Empty where git left nothing to name a side by.
     side_ours: String,
     side_theirs: String,
+    /// The merge tool git would launch, for the menu row to name. Empty
+    /// with none configured — the row becomes the way to set one. Display
+    /// only: `conflict::mergetool` resolves the tool itself at launch, so
+    /// a name that went stale between poll and click cannot start anything.
+    merge_tool: String,
     feed: Option<Arc<Feed<StatusMsg>>>,
     tab_id: i32,
 }
@@ -85,6 +90,7 @@ impl WorkTreeModel {
     qproperty!("opStepping", Member = op_stepping, Notify = changed);
     qproperty!("sideOurs", Member = side_ours, Notify = changed);
     qproperty!("sideTheirs", Member = side_theirs, Notify = changed);
+    qproperty!("mergeTool", Member = merge_tool, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -109,12 +115,14 @@ impl WorkTreeModel {
             op_state,
             progress,
             sides,
+            merge_tool,
         }) = feed.drain().pop()
         else {
             return;
         };
         self.side_ours = sides.ours;
         self.side_theirs = sides.theirs;
+        self.merge_tool = merge_tool;
 
         self.branch = status.branch_head.clone().unwrap_or_default();
         self.head_oid = status

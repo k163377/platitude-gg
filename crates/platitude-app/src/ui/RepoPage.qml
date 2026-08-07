@@ -765,6 +765,22 @@ Item {
         page.sendPaths(paths)
         repoTab.takeSidePaths(side)
     }
+    /// Opens the highlighted conflicted rows in the configured tool, or
+    /// goes to settings when there is no tool to open them with.
+    ///
+    /// The paths are always named: git walks a bare `mergetool` one file
+    /// at a time and holds the write queue for the whole walk.
+    function openInMergeTool() {
+        if (wipPane.workTree.mergeTool === "") {
+            page.settingsDialogRequested()
+            return
+        }
+        const paths = page.chosenConflicts()
+        if (paths.length === 0)
+            return
+        page.sendPaths(paths)
+        repoTab.openMergetool()
+    }
     AppMenu {
         id: fileMenu
         // Which side to keep, named by the branch each side is rather
@@ -789,6 +805,20 @@ Item {
             visible: page.menuFileBucket === "conflicts"
             enabled: repoTab.busyCount === 0
             onTriggered: page.takeSideNow("theirs")
+        }
+        // The external tool shares its seat with the way to pick one:
+        // with nothing configured there is nothing to open, so the row
+        // becomes the door to the setting instead (`…` = a question
+        // stands). Changing the tool afterwards lives in settings rather
+        // than in a second row here — the menu is the one surface where
+        // an extra row costs every reader (P3-確認事項 §B).
+        AppMenuItem {
+            text: wipPane.workTree.mergeTool !== ""
+                  ? qsTr("Open in %1").arg(wipPane.workTree.mergeTool)
+                  : qsTr("Choose an editor…")
+            visible: page.menuFileBucket === "conflicts"
+            enabled: repoTab.busyCount === 0
+            onTriggered: page.openInMergeTool()
         }
         AppMenuSeparator { visible: page.menuFileBucket === "conflicts" }
         AppMenuItem {
@@ -1462,6 +1492,16 @@ Item {
             page.openFileMenu("conflicts", arg, "")
             fileMenu.close()
             page.takeSideNow(act === "take-side-ours" ? "ours" : "theirs")
+        } else if (act === "open-mergetool") {
+            // Same route as the row above. With a tool configured this
+            // holds the write queue until it exits, so a demo tool that
+            // blocks is what leaves the pane's wait on screen.
+            page.showWip()
+            wipPane.chooseOnly("conflicts", arg)
+            page.openFileMenu("conflicts", arg, "")
+            fileMenu.close()
+            page.openInMergeTool()
+            AppBackend.report("merge_tool " + wipPane.workTree.mergeTool)
         } else if (act === "discard-file" || act === "discard-file-go"
                    || act === "delete-file" || act === "delete-file-go"
                    || act === "discard-staged" || act === "discard-staged-go") {

@@ -268,6 +268,10 @@ pub enum SessionEvent {
         /// What to call the two sides of a conflict, for whatever is
         /// stopped. Default while nothing is.
         sides: conflict::Sides,
+        /// The merge tool git would launch, empty when none is configured
+        /// or when nothing is conflicted. Display only — the launch reads
+        /// the config again, so a stale name here cannot start anything.
+        merge_tool: String,
     },
     /// Answer to [`RepoSession::check_publish`].
     PublishChecked {
@@ -544,6 +548,11 @@ pub struct RepoSession {
     log_cancel: Mutex<Option<CancellationToken>>,
     /// Dirty working tree → the log stream prepends a synthetic WIP row.
     wip_dirty: std::sync::atomic::AtomicBool,
+    /// Set by [`RepoSession::ask_merge_tool`] to have the next status read
+    /// name the merge tool even with nothing conflicted. Cleared by that
+    /// read: two `git config` spawns on every poll of every open tab is
+    /// not a price the common case should pay for a settings field.
+    merge_tool_wanted: std::sync::atomic::AtomicBool,
     /// Fingerprint of the last refs read (see [`refs_key`]), so a refresh
     /// can tell an external commit / fetch / switch from a quiet re-read.
     /// `None` until the first read: opening already streams the graph.
@@ -606,6 +615,7 @@ impl RepoSession {
             log_gen: AtomicU64::new(0),
             log_cancel: Mutex::new(None),
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
+            merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),
             refs_key: Mutex::new(None),
             write_busy: std::sync::atomic::AtomicBool::new(false),
             poll_slot: Arc::new(tokio::sync::Semaphore::new(1)),
@@ -1250,6 +1260,20 @@ impl RepoSession {
                         .unwrap_or_default(),
                     None => conflict::Sides::default(),
                 };
+                // And again: the tool is only worth naming where there is
+                // something to open with it, so a clean tree pays nothing
+                // — unless the settings field asked, which it does once
+                // per opening rather than once per poll.
+                let asked = self.merge_tool_wanted.swap(false, Ordering::SeqCst);
+                let merge_tool = if asked || status.conflicted().next().is_some() {
+                    conflict::configured_tool(&self.executor, &workdir, &cancel)
+                        .await
+                        .ok()
+                        .flatten()
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
                 if !self.status_gate.is_current(op_gen) {
                     return false;
                 }
@@ -1260,6 +1284,7 @@ impl RepoSession {
                     op_state,
                     progress,
                     sides,
+                    merge_tool,
                 });
                 flipped
             }
@@ -2285,6 +2310,30 @@ impl RepoSession {
             AfterWrite::Snapshots,
             move |exec, repo, cancel| async move {
                 conflict::mergetool(&exec, &repo.workdir, &paths, &cancel).await
+            },
+        );
+    }
+
+    /// Has the next status read name the merge tool even with nothing
+    /// conflicted, so a settings field can show what is configured now.
+    pub fn ask_merge_tool(self: &Arc<Self>) {
+        self.merge_tool_wanted
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.refresh_status();
+    }
+
+    /// Records which merge tool to launch; empty clears the choice.
+    ///
+    /// Refreshing afterwards is what re-reads the name for the menu row,
+    /// so the row and the config never disagree for longer than a write.
+    pub fn set_merge_tool(self: &Arc<Self>, tool: String) {
+        self.write(
+            // Not "mergetool": that label is what the pane watches to know
+            // a tool is open, and writing the setting is not opening one.
+            "config",
+            AfterWrite::Snapshots,
+            move |exec, repo, cancel| async move {
+                conflict::set_merge_tool(&exec, &repo.workdir, &tool, &cancel).await
             },
         );
     }

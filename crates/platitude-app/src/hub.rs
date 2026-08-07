@@ -172,6 +172,10 @@ pub struct StatusMsg {
     /// What the two sides of a conflict are called. Empty names while
     /// nothing is stopped, or where git left nothing to name one by.
     pub sides: platitude_core::conflict::Sides,
+    /// The merge tool git would launch. Empty with none configured, or
+    /// while nothing is conflicted. Names the menu row; the launch reads
+    /// the config again rather than trusting this.
+    pub merge_tool: String,
 }
 
 #[derive(Debug)]
@@ -355,18 +359,21 @@ impl SessionSink for BridgeSink {
                 op_state,
                 progress,
                 sides,
+                merge_tool,
             } => {
                 self.feeds.status_nav.push_replace(StatusMsg {
                     status: status.clone(),
                     op_state,
                     progress,
                     sides: sides.clone(),
+                    merge_tool: merge_tool.clone(),
                 });
                 self.feeds.status.push_replace(StatusMsg {
                     status,
                     op_state,
                     progress,
                     sides,
+                    merge_tool,
                 });
             }
             SessionEvent::StashesLoaded { stashes } => self.feeds.stash.push_replace(stashes),

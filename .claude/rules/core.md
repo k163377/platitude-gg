@@ -26,6 +26,7 @@ core のファイルを読み書きすると自動ロードされる。常時必
 - **`diff --ignore-cr-at-eol` で作った patch は `apply` できない**(実測 `patch does not apply`)。EOL のみの差に掛けると diff が空になる一方 status は modified のまま — 表示用と staging 用で diff の bytes を分けない不変条件(`details::file_diff_raw`)を壊すので使わない
 - **worktree の diff は index 空間で出る** — `core.autocrlf=true` でも patch に CR は現れず、`apply --cached` / `apply -R` はそのまま通る(untracked の `--no-index` にも変換が効き `git add` と結果が一致する)。**index blob に CR があるファイルは `autocrlf=true` でも変換されない**ので、設定を切り替えても全ファイルが modified にはならない(いずれも実測)
 - 対話エディタを開かせない(`GIT_EDITOR` / `GIT_SEQUENCE_EDITOR` を非対話に固定して rebase 等を駆動する)
+- **`git mergetool` は `--no-prompt` だけでは stdin を踏む**(いずれも同梱スクリプトで確認・`conflict::mergetool`): ツール未設定だと git が推測して `guessed_merge_tool` を立て、**`--no-prompt` を無視して**確認を stdin に出す(閉じているので失敗)→ **`--tool=` を必ず明示**する。**`--gui` も必須** — 付けないと git は `merge.tool` しか見ず、`configured_tool()` が先に読む `merge.guitool` と食い違う。**`mergetool.writeToTemp=true` を撃つ**(既定 false は一時ファイルを衝突ファイルの隣に作り、WIP ペインが untracked で埋まる)。`keepBackup` は触らない(`.orig` は利用者の安全網)。**引数なしで撃たない**(全衝突ファイルを順に開き、その間ずっと書き込みキューが塞がる)。**自前 `cmd` のツールは exit code を信用されない** — git は BACKUP を touch してから mtime を比べ、動いていなければ stdin で聞く = **保存せず閉じると「失敗」で返りマーカーが戻る**(ハングはしない)
 - 全実行にタイムアウトとキャンセルを付ける。auto fetch は多重起動を防ぐ
 - Windows ではコンソールウィンドウを出さない(`CREATE_NO_WINDOW`)
 - UI(Qt)スレッドでサブプロセスの完了を待たない — git 実行は常にバックグラウンド
