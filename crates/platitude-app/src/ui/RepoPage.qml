@@ -31,9 +31,33 @@ Item {
     property string selectedOid: ""
 
     // Left pane folded down to its icons. Held here rather than in the
-    // sidebar because it is going to have a second thing deciding it:
-    // a diff open in the middle takes the width from both sides.
+    // sidebar because two things decide it: the control on its own band,
+    // and a diff opening in the middle — reading a file wants every
+    // column and every line the window can give it, and the list of refs
+    // is the one thing on screen that has nothing to say about the file.
     property bool sidebarCollapsed: false
+    /// The fold the diff put on. Closing the diff takes back exactly
+    /// that and nothing anybody did by hand: somebody who opens the list
+    /// while reading a file has said they want it, and somebody who folds
+    /// it themselves has said they want it folded after.
+    property bool foldedByDiff: false
+    function foldForDiff(open) {
+        if (open) {
+            if (page.sidebarCollapsed)
+                return
+            page.sidebarCollapsed = true
+            page.foldedByDiff = true
+        } else if (page.foldedByDiff) {
+            page.sidebarCollapsed = false
+            page.foldedByDiff = false
+        }
+    }
+    function foldByHand(collapse) {
+        page.sidebarCollapsed = collapse
+        // A hand on it takes it over from the diff, whichever way it
+        // moved it.
+        page.foldedByDiff = false
+    }
 
     // Right pane switches to the working-tree (WIP) view.
     property bool wipShown: false
@@ -1308,11 +1332,11 @@ Item {
             // the mark the rail wears for that can be photographed.
             if (arg === "no-tags")
                 repoTab.setTagsShown(false)
-            page.sidebarCollapsed = true
+            page.foldByHand(true)
             if (act === "nav-peek")
                 sidebarPane.peekAt(arg)
             else if (act === "nav-unfold")
-                page.sidebarCollapsed = false
+                page.foldByHand(false)
             else if (act === "nav-peek-rename") {
                 // Typing a name into a peeked row: the list has to come
                 // back on its own and the box land on the same row in it
@@ -1532,6 +1556,24 @@ Item {
             page.showWip()
             page.toggleDiff("unstaged", arg, "")
             stageRowTimer.start()
+        } else if (act === "diff-fold" || act === "diff-unfold"
+                   || act === "diff-fold-by-hand"
+                   || act === "diff-keep-folded") {
+            // What opening a file does to the left menu on its own, and
+            // what closing it puts back — which is what the diff did and
+            // nothing else. "-by-hand" opens the list again while the
+            // diff is still up, and "-keep-folded" had it folded before
+            // the diff arrived: in both, the hand's answer is the one
+            // that survives closing it.
+            page.showWip()
+            if (act === "diff-keep-folded")
+                page.foldByHand(true)
+            page.toggleDiff("unstaged", arg, "")
+            if (act === "diff-fold-by-hand")
+                page.foldByHand(false)
+            if (act !== "diff-fold")
+                page.closeDiff()
+            navRailTimer.start()
         } else if (act === "push") {
             page.pushNow()
         } else if (act === "force-push") {
@@ -1653,6 +1695,7 @@ Item {
     // pieces are kept apart rather than parsed back out of the key:
     // a path may contain anything, colons included.
     property bool diffShown: false
+    onDiffShownChanged: page.foldForDiff(page.diffShown)
     property string diffKey: ""
     property string diffKind: ""
     property string diffPath: ""
@@ -2160,7 +2203,7 @@ Item {
                     // The menus the rows raise are the page's, so only the
                     // page can say one is standing over the folded list.
                     menuOpen: refMenu.visible
-                    onFoldRequested: collapse => page.sidebarCollapsed = collapse
+                    onFoldRequested: collapse => page.foldByHand(collapse)
                     onRefActivated: oidHex => page.jumpToRef(oidHex)
                     onRefMenuRequested: (kind, name, full, oidHex) =>
                         page.openRefMenu(kind, name, full, oidHex)

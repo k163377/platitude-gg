@@ -183,9 +183,9 @@ Rectangle {
         sidebar.closePeek()
         if (sidebar.collapsed) {
             sidebar.openWidth = sidebar.width
-            sidebar.SplitView.minimumWidth = rail.cellSize
-            sidebar.SplitView.maximumWidth = rail.cellSize
-            sidebar.SplitView.preferredWidth = rail.cellSize
+            sidebar.SplitView.minimumWidth = Theme.railWidth
+            sidebar.SplitView.maximumWidth = Theme.railWidth
+            sidebar.SplitView.preferredWidth = Theme.railWidth
         } else {
             sidebar.SplitView.minimumWidth = 180
             sidebar.SplitView.maximumWidth = Number.POSITIVE_INFINITY

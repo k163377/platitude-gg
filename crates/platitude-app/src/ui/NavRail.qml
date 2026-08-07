@@ -39,11 +39,6 @@ Rectangle {
     /// is the one that has to be open in it.
     signal unfoldRequested(string kind)
 
-    // A square cell: the icon on its 20 grid with the count's line under
-    // it, spaceXs above and below. Not a token yet — the value is being
-    // looked at in place before it takes a row in 規約 §寸法.
-    readonly property int cellSize: 44
-
     // The sections in the order the open sidebar stacks them, wearing the
     // tints their headers wear (NavHeader).
     readonly property var sections: [
@@ -78,12 +73,12 @@ Rectangle {
     function topOf(kind) {
         for (let i = 0; i < rail.sections.length; i++) {
             if (rail.sections[i].kind === kind)
-                return Theme.headerHeight + i * rail.cellSize
+                return Theme.headerHeight + i * Theme.railWidth
         }
         return Theme.headerHeight
     }
 
-    implicitWidth: rail.cellSize
+    implicitWidth: Theme.railWidth
     color: Theme.bgSurface
 
     Column {
@@ -127,8 +122,8 @@ Rectangle {
                 readonly property bool taggable: cell.modelData.kind === "tag"
                 readonly property bool offGraph: cell.taggable && !rail.tagsShown
 
-                width: rail.cellSize
-                height: rail.cellSize
+                width: Theme.railWidth
+                height: Theme.railWidth
                 // The open section keeps the hover wash while the pointer
                 // is away in its list: what is on screen has to say which
                 // cell put it there.
