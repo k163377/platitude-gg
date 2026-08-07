@@ -41,10 +41,20 @@ HoverToolButton {
     /// way a held menu row does — デザイン規約 §長押し).
     property color holdTone: actionBtn.frameColor
     readonly property bool framed: actionBtn.frameColor.a > 0
-    /// Text the label's box is measured for. A button whose wording
-    /// changes with its state would otherwise move everything beside it
-    /// in the toolbar every time the state changed.
+    /// The label is a git command said in git's own spelling, and wears
+    /// the chip that says so — lowercase, mono, on a faint ground
+    /// (デザイン規約 §git 用語のコード表記). Where a menu row carries the
+    /// chip ahead of a sentence, here the command is the whole label, so
+    /// `text` itself is what the chip is drawn around — and that text is
+    /// never translated: it is the command, not a phrase about it.
+    property bool code: false
+    /// Text the label's box is measured for, and whether that wording is
+    /// a command (the two families measure differently, so the box has to
+    /// be told which one it is holding). A button whose wording changes
+    /// with its state would otherwise move everything beside it in the
+    /// toolbar every time the state changed.
     property string widestText: ""
+    property bool widestCode: false
     /// Held all the way down.
     signal held()
     /// Pressed and let go, meaning the button's ordinary action.
@@ -248,7 +258,7 @@ HoverToolButton {
                 // fraction: each a size down, the slash between them, each
                 // pushed off the middle line. Letting the hold mark take
                 // the seat on its own would cost the button the one thing
-                // that says what it does — `Push -f` would stop being a
+                // that says what it does — `push -f` would stop being a
                 // push at a glance (デザイン規約 §長押し).
                 Item {
                     anchors.fill: parent
@@ -285,6 +295,8 @@ HoverToolButton {
                 id: widest
                 visible: false
                 text: actionBtn.widestText
+                font.family: actionBtn.widestCode ? Theme.monoFamily
+                                                  : Theme.uiFamily
                 font.pixelSize: actionBtn.font.pixelSize
             }
             Label {
@@ -298,22 +310,43 @@ HoverToolButton {
                                             ? widest.implicitWidth + Theme.spaceXs : 0
                 text: actionBtn.text
                 color: actionBtn.fg
+                font.family: actionBtn.code ? Theme.monoFamily
+                                            : Theme.uiFamily
                 font.pixelSize: actionBtn.font.pixelSize
                 elide: Text.ElideRight
                 Layout.maximumWidth: 240
                 Layout.preferredWidth: Math.max(implicitWidth, box)
                 Layout.alignment: Qt.AlignVCenter
+                // The chip a command wears, behind the glyphs and only as
+                // wide as they are — the box around them is measured for
+                // the longest wording of the pair, and a ground stretched
+                // to that would draw a chip the word does not fill. Half a
+                // gap of tint hangs off either end, the same as a menu
+                // row's (デザイン規約 §git 用語のコード表記).
+                Rectangle {
+                    z: -1
+                    visible: actionBtn.code
+                    x: -Theme.spaceXs / 2
+                    width: btnLabel.implicitWidth + Theme.spaceXs
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    radius: Theme.radiusSm
+                    color: Theme.bgHover
+                }
                 // Past the word's end rather than over its shoulder: the
                 // last letter has to stay readable, and the box is
                 // measured for the longest wording so there is room after
-                // the shorter ones.
+                // the shorter ones. Past the chip's edge where there is
+                // one — a mark crossing that edge reads as stuck to the
+                // chip rather than said after the word.
                 NavIcon {
                     visible: actionBtn.alert
                     kind: "bang"
                     tint: actionBtn.fg
                     width: Theme.iconSm
                     height: Theme.iconSm
-                    x: btnLabel.implicitWidth - Theme.spaceXs
+                    x: btnLabel.implicitWidth
+                       + (actionBtn.code ? Theme.spaceXs / 2 : -Theme.spaceXs)
                     y: -Theme.spaceXs
                 }
             }

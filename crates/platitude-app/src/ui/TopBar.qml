@@ -30,26 +30,56 @@ Rectangle {
     /// The word both toolbar buttons are measured for. They sit side by
     /// side and change wording independently, so one box for the pair is
     /// what keeps either of them from shifting the other — and which of
-    /// the two words is the wider one is a question about the installed
-    /// font, not about their spelling.
+    /// the wordings is the wider one is a question about the installed
+    /// fonts, not about their spelling. Two of the four are commands and
+    /// are set in the mono family (デザイン規約 §git 用語のコード表記),
+    /// so the winner carries which family it was measured in.
     ///
-    /// Settled once rather than bound: a binding that reads two text
+    /// Settled once rather than bound: a binding that reads four text
     /// metrics and feeds two button widths is a loop as far as the engine
     /// is concerned, and the answer cannot change while the app runs.
     property string widestAction: ""
-    Component.onCompleted: topBar.widestAction =
-        fetchWidest.width >= pushWidest.width ? fetchWidest.text : pushWidest.text
-    TextMetrics {
-        id: fetchWidest
-        font.family: Theme.uiFamily
+    property bool widestActionCode: false
+    Component.onCompleted: {
+        let best = fetchCodeWidest
+        for (const m of [fetchWordWidest, pushCodeWidest, pushWordWidest])
+            if (m.implicitWidth > best.implicitWidth)
+                best = m
+        topBar.widestAction = best.text
+        topBar.widestActionCode = best.code
+    }
+    // The longest each button can say, in each of the two voices it says
+    // things in. `push` is inside `push -f`, and fetch says the command in
+    // every shape but the stopped one, so four cover all six states.
+    //
+    // Labels rather than TextMetrics, and never drawn: the box these are
+    // ranked for is a Label's, and TextMetrics reports a few pixels
+    // tighter than one — enough that the pair could be ranked on one
+    // measure and sized by another, and the loser could then be the wider
+    // of the two (`ActionButton.widestText`).
+    component Widest: Label {
+        visible: false
+        property bool code: false
+        font.family: code ? Theme.monoFamily : Theme.uiFamily
         font.pixelSize: Theme.fontMd
+    }
+    Widest {
+        id: fetchCodeWidest
+        code: true
+        text: "fetch"
+    }
+    Widest {
+        id: fetchWordWidest
         text: qsTr("Resume")
     }
-    TextMetrics {
-        id: pushWidest
-        font.family: Theme.uiFamily
-        font.pixelSize: Theme.fontMd
-        text: qsTr("Push -f")
+    Widest {
+        id: pushCodeWidest
+        code: true
+        text: "push -f"
+    }
+    Widest {
+        id: pushWordWidest
+        text: qsTr("Publish")
     }
 
     implicitHeight: Theme.toolbarHeight
@@ -328,9 +358,12 @@ Rectangle {
 
             kind: "fetch"
             // Stopped, the button is no longer about one fetch: it is the
-            // way back to fetching on its own, and it says so.
-            text: fetchButton.stopped ? qsTr("Resume") : qsTr("Fetch")
+            // way back to fetching on its own, and it says so — in words,
+            // where every other shape of it says the command.
+            text: fetchButton.stopped ? qsTr("Resume") : "fetch"
+            code: !fetchButton.stopped
             widestText: topBar.widestAction
+            widestCode: topBar.widestActionCode
             tone: fetchButton.stopped ? Theme.danger
                   : fetchButton.fails > 0 ? Theme.warning
                   : Theme.textPrimary
@@ -386,23 +419,23 @@ Rectangle {
             busy: topBar.curPage !== null
                   && topBar.curPage.pageTab.busyOp === "push"
             still: AppBackend.shotDir !== ""
-            // Three fixed words, no counts: how far ahead the branch is
+            // Three fixed wordings, no counts: how far ahead the branch is
             // stands in the sidebar and in this button's own tooltip, and
             // a number here would make the button a different width for
             // every value it took (デザイン規約 §リモートへ送る).
             //
-            // `-f` rather than the word: it is git's own mark for this, it
-            // is the only wording short enough to sit in the same box as
-            // the others, and the frame and the colour are what say this
-            // one is different anyway.
+            // Two of them are the command and wear the chip; the first
+            // push is not `push` alone (it is what makes the branch exist
+            // over there), so that one is a word.
             text: mode === "publish" ? qsTr("Publish")
-                  : mode === "diverged" ? qsTr("Push -f")
-                    : qsTr("Push")
-            // Every shape measured against the longest of them — this one,
-            // by a hair over Publish — so the toolbar's right-hand end sits
-            // still while the branch's standing with its remote changes
-            // under it.
+                  : mode === "diverged" ? "push -f"
+                    : "push"
+            code: mode !== "publish"
+            // Every shape of both buttons measured against the longest of
+            // them, so the toolbar's right-hand end sits still while the
+            // branch's standing with its remote changes under it.
             widestText: topBar.widestAction
+            widestCode: topBar.widestActionCode
             tone: mode === "diverged" ? Theme.warning : Theme.textPrimary
             frameColor: mode === "diverged" ? Theme.warning : "transparent"
             // Diverged, the button stays live for the hold that is its
