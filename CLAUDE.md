@@ -96,7 +96,7 @@ cargo fmt --all
 
 - Phase 1(読み取り専用ビューア)は**完了**。Done 条件の性能 4 項目は完了時点の最終確認でもクリア(first chunk 79ms / 詳細 75ms / 178fps / peak 269MB): [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)
 - **配線済み**: ステージング(ファイル / hunk / 行)・commit / amend・switch・fetch(手動 + auto)・push / force push・単体 cherry-pick・単体 squash・コミットメッセージ編集・amend の著者引き継ぎ・reset(soft / mixed / hard)・stash push・stash の Apply / Pop・discard / clean・ブランチ / タグ / stash / リモートブランチの改名と削除・identity・署名の表示・設定(auto fetch 間隔)・diff プレビュー・コマンドログ・タグのリモート状態バッジ。**各操作の意匠決定と実装対応は [.claude/rules/app-ui.md](.claude/rules/app-ui.md) が正**(app のファイルに触れると自動ロード)
-- **未配線**: merge / rebase / revert の起動・conflict の種別と解決の手・コミット単体の drop・フル interactive rebase 画面(止まった操作の出口 = continue / skip / quit / abort は配線済み)
+- **未配線**: mergetool 起動・コミット単体の drop・フル interactive rebase 画面(merge / rebase / revert の起動、止まった操作の出口 = continue / skip / quit / abort、conflict の種別と片側採用は配線済み)
 - 残作業と要判断事項は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読むこと**。配布準備期に検証する項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
 - CI(3OS + 完全オフライン job)は記述済みだが **GitHub リモート未設定のため一度も実行されていない**。push は相当先まで行わない方針(2026-08-02 ユーザー指示)のため、初回検証は**配布準備期(P5 目安)まで大幅後ろ倒し**
 - ネットワーク非通信の baseline 実測: [ci/baseline/windows-x64.md](ci/baseline/windows-x64.md)。**Qt6Network は Qt6Qml のロード時依存として同梱が必須** — 「同梱しない」ではなく「アプリ自身の import table に通信系なし + ネットワーク系プラグイン除外」を主張する

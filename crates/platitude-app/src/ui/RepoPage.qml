@@ -100,6 +100,9 @@ Item {
             if (page.selectedOid !== ""
                     && repoTab.publishRange === page.selectedOid + "^!")
                 page.selectedPublished = repoTab.publishPublished > 0
+            if (page.rebaseRange !== ""
+                    && repoTab.publishRange === page.rebaseRange)
+                page.rebasePublished = repoTab.publishPublished > 0
             page.absorbHeadMessage()
             page.absorbMoveBlock()
             page.absorbMoveAsk()
@@ -375,8 +378,28 @@ Item {
         page.menuRefId = full
         page.menuRefOid = oidHex
         page.forceDeleteBranch = ""
+        page.rebasePublished = false
+        if (repoTab.state === "open" && page.rebaseRange !== "")
+            repoTab.checkPublish(page.rebaseRange)
         refMenu.popup()
     }
+
+    // ---- bringing two lines of history together --------------------
+    /// Whether the current branch can take a merge or a rebase from the
+    /// row the menu is on: a branch to land on, nothing already stepping,
+    /// and somewhere other than itself to come from.
+    readonly property bool canIntegrateFrom:
+        repoTab.state === "open" && repoTab.busyCount === 0
+        && !workTree.detached && workTree.branch !== ""
+        && workTree.opText === ""
+        && page.menuRefId !== "" && page.menuRefId !== workTree.branch
+    /// The commits a rebase onto this row would rewrite. Asked about as
+    /// the menu opens, because the answer is a whole git call away and
+    /// the row wants to say it the moment it is read.
+    readonly property string rebaseRange:
+        (page.menuRefKind === "branch" || page.menuRefKind === "remote")
+        && page.menuRefId !== "" ? page.menuRefId + "..HEAD" : ""
+    property bool rebasePublished: false
     AppMenu {
         id: refMenu
         // Walking away from a refused delete takes the offer with it.
@@ -390,6 +413,44 @@ Item {
             // created, and that answer belongs in one place.
             onTriggered: page.switchToRef(page.menuRefKind === "remote" ? "R" : "L",
                                           page.menuRefId)
+        }
+        // Bringing this row's line of history together with the one the
+        // working tree is on. The current branch is the subject of both
+        // sentences — it is what changes — and the row is where the
+        // commits come from or land on (デザイン規約 §履歴を合流させる).
+        //
+        // `merge` and `rebase` are git's own words taken as they are, so
+        // they are said in git's spelling on a chip, the way `cherry-pick`
+        // and the reset flags are (§git 用語のコード表記).
+        AppMenuItem {
+            code: "merge"
+            //: Follows the `merge` chip: "merge topic into main".
+            text: qsTr("%1 into %2").arg(page.menuRefId).arg(workTree.branch)
+            visible: page.menuRefKind === "branch" || page.menuRefKind === "remote"
+                     || page.menuRefKind === "tag"
+            enabled: page.canIntegrateFrom
+            onTriggered: repoTab.merge(page.menuRefId, false, false, "")
+        }
+        AppMenuItem {
+            code: "rebase"
+            //: Follows the `rebase` chip: "rebase main onto topic".
+            text: qsTr("%1 onto %2").arg(workTree.branch).arg(page.menuRefId)
+            // Onto a tag as well would be a rebase onto a fixed point,
+            // which is a thing to do — but the row that says it belongs
+            // with the tag's own gestures, not squeezed in here.
+            visible: page.menuRefKind === "branch" || page.menuRefKind === "remote"
+            // Said, not asked (要望: rewriting a pushed commit shows a
+            // warning): the rebase goes ahead, and this tag is the
+            // warning. The count is the answer to this row's own range —
+            // published means reachable from a remote-tracking ref, which
+            // is only ever as fresh as the last fetch.
+            note: page.rebasePublished ? qsTr("rewrites pushed commits") : ""
+            enabled: page.canIntegrateFrom
+            onTriggered: repoTab.rebase(page.menuRefId, "", true, true)
+        }
+        AppMenuSeparator {
+            visible: page.menuRefKind === "branch" || page.menuRefKind === "remote"
+                     || page.menuRefKind === "tag"
         }
         // Nothing here repeats a gesture or a button: renaming and
         // creating a branch on a tag are a click away on the row itself,
@@ -843,8 +904,38 @@ Item {
             code: "cherry-pick"
             //: Follows the `cherry-pick` chip: "cherry-pick this commit".
             text: qsTr("this commit")
-            enabled: repoTab.busyCount === 0
+            enabled: repoTab.busyCount === 0 && workTree.opText === ""
             onTriggered: repoTab.cherryPick(page.menuOid)
+        }
+        // The other half of the same pair: one copies the commit here,
+        // the other undoes it here. Both add a commit rather than
+        // rewriting one, so neither is asked about or held.
+        AppMenuItem {
+            code: "revert"
+            //: Follows the `revert` chip: "revert this commit".
+            text: qsTr("this commit")
+            enabled: repoTab.busyCount === 0 && workTree.opText === ""
+            onTriggered: repoTab.revert(page.menuOid)
+        }
+        AppMenuSeparator {}
+        // The same two the sidebar's rows carry, reaching a commit that
+        // may have no name at all (デザイン規約 §履歴を合流させる). The
+        // words say "here" rather than naming the row, the way the reset
+        // submenu does — the row is what was clicked.
+        AppMenuItem {
+            code: "merge"
+            //: Follows the `merge` chip: "merge this commit into main".
+            text: qsTr("this commit into %1").arg(workTree.branch)
+            enabled: page.canIntegrateHere
+            onTriggered: repoTab.merge(page.menuOid, false, false, "")
+        }
+        AppMenuItem {
+            code: "rebase"
+            //: Follows the `rebase` chip: "rebase main onto this commit".
+            text: qsTr("%1 onto this commit").arg(workTree.branch)
+            note: page.menuPublished ? qsTr("rewrites pushed commits") : ""
+            enabled: page.canIntegrateHere
+            onTriggered: repoTab.rebase(page.menuOid, "", true, true)
         }
         // No row for landing on the commit itself: doing so leaves HEAD
         // on no branch, which is a state to be got out of rather than one
@@ -988,6 +1079,15 @@ Item {
     // Continue / Abort instead (mid-merge a soft reset refuses outright
     // and the other two abandon the merge without a word), and the
     // commit the branch already stands on is not a move at all.
+    /// The commit-menu twin of `canIntegrateFrom`: a branch to land on,
+    /// nothing already stepping, and a commit other than the one the
+    /// working tree is already sitting on.
+    readonly property bool canIntegrateHere:
+        repoTab.state === "open" && repoTab.busyCount === 0
+        && !workTree.detached && workTree.branch !== ""
+        && workTree.opText === ""
+        && page.menuOid !== "" && page.menuOid !== workTree.headOid
+        && page.menuStashRef === ""
     readonly property bool canMoveBranchHere:
         repoTab.state === "open" && repoTab.busyCount === 0
         && !workTree.detached && workTree.branch !== ""
@@ -1606,6 +1706,22 @@ Item {
             // The working tree, as the row above the newest commit opens
             // it: the file list this pane's every other verb starts from.
             page.showWip()
+        } else if (act === "merge-branch" || act === "rebase-onto"
+                   || act === "revert-commit" || act === "integrate-menu") {
+            // Through the menus a right-click opens, so the rows' own
+            // gating decides whether anything runs. "integrate-menu"
+            // leaves the ref menu standing for a shot instead.
+            if (act === "revert-commit") {
+                page.openRowMenu(arg)
+                repoTab.revert(arg)
+            } else {
+                page.openRefMenu("branch", arg, arg,
+                                 branchesModel.oidOfName(arg))
+                if (act === "merge-branch")
+                    repoTab.merge(arg, false, false, "")
+                else if (act === "rebase-onto")
+                    repoTab.rebase(arg, "", true, true)
+            }
         } else if (act === "op-exit" || act === "op-exit-go") {
             // The ways out of a stopped operation, which stand in the pane
             // under the commit button rather than dropping from a click.
