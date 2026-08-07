@@ -632,6 +632,173 @@ fn read_git_file(repo: &mut TestRepo, rel: &str) -> String {
         .unwrap_or_default()
 }
 
+/// Dropping one commit out of the middle leaves everything after it in
+/// place, rewritten onto the gap.
+#[tokio::test]
+async fn dropping_a_commit_keeps_the_ones_after_it() {
+    let mut repo = TestRepo::init();
+    let kept = repo.commit_file("a.txt", "one\n", "root");
+    let doomed = repo.commit_file("b.txt", "two\n", "the one to go");
+    repo.commit_file("c.txt", "three\n", "after it");
+    let (exec, cancel) = env();
+
+    let plan = sequencer::plan_edit(&exec, &repo.path, &doomed, sequencer::Edit::Drop, &cancel)
+        .await
+        .expect("plan");
+    sequencer::rebase_interactive(
+        &exec,
+        &info(&repo).await,
+        &plan.upstream,
+        &plan.steps,
+        &plan.options(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect("drop");
+
+    assert_eq!(
+        repo.git(&["log", "--format=%s"])
+            .lines()
+            .collect::<Vec<_>>(),
+        vec!["after it", "root"]
+    );
+    // The commit's own file goes with it; the later one stays.
+    assert!(!repo.path.join("b.txt").exists());
+    assert!(repo.path.join("c.txt").exists());
+    // The plan reaches back to the parent so that dropping the newest
+    // commit is not an all-drop plan — but that parent rides along as an
+    // ordinary pick and comes out with the object name it went in with.
+    // Nothing before the dropped commit is rewritten.
+    assert_eq!(repo.git(&["rev-parse", "HEAD~1"]), kept);
+}
+
+/// The two edges of the same operation, measured rather than assumed:
+/// the newest commit (nothing after it to replay) and the very first one
+/// (no parent to start the plan from).
+#[tokio::test]
+async fn dropping_at_either_end_of_the_history() {
+    let (exec, cancel) = env();
+
+    // The newest commit.
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    let newest = repo.commit_file("b.txt", "two\n", "the newest");
+    let plan = sequencer::plan_edit(&exec, &repo.path, &newest, sequencer::Edit::Drop, &cancel)
+        .await
+        .expect("plan");
+    sequencer::rebase_interactive(
+        &exec,
+        &info(&repo).await,
+        &plan.upstream,
+        &plan.steps,
+        &plan.options(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect("drop the newest");
+    assert_eq!(repo.git(&["log", "--format=%s"]), "root");
+
+    // The first commit, which has no parent to be the plan's upstream —
+    // the plan says `--root` instead.
+    let mut repo = TestRepo::init();
+    let first = repo.commit_file("a.txt", "one\n", "the first");
+    repo.commit_file("b.txt", "two\n", "the second");
+    let plan = sequencer::plan_edit(&exec, &repo.path, &first, sequencer::Edit::Drop, &cancel)
+        .await
+        .expect("plan");
+    assert!(plan.root, "no parent, so the plan reaches the root");
+    sequencer::rebase_interactive(
+        &exec,
+        &info(&repo).await,
+        &plan.upstream,
+        &plan.steps,
+        &plan.options(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect("drop the root");
+    assert_eq!(repo.git(&["log", "--format=%s"]), "the second");
+    assert!(!repo.path.join("a.txt").exists());
+}
+
+/// Planning against the first commit asks for a parent that is not
+/// there, and that "no" is an answer rather than a failed command. Left
+/// unmarked it counts as a failure, and the command log throws its panel
+/// open over a perfectly good drop (規約 §終了コードで答える問い合わせ).
+#[tokio::test]
+async fn reaching_past_the_first_commit_is_an_answer_not_a_failure() {
+    use platitude_core::process::{CommandEnd, CommandObserver};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct Ends(Mutex<Vec<CommandEnd>>);
+    impl CommandObserver for Ends {
+        fn records(&self, _user: bool) -> bool {
+            true
+        }
+        fn started(&self, _display: &str, _full: &str, _user: bool) -> u64 {
+            0
+        }
+        fn finished(&self, _id: u64, end: CommandEnd, _elapsed_ms: u64, _message: &str) {
+            self.0.lock().unwrap().push(end);
+        }
+    }
+
+    let mut repo = TestRepo::init();
+    let first = repo.commit_file("a.txt", "one\n", "the first");
+    repo.commit_file("b.txt", "two\n", "the second");
+
+    let ends = Arc::new(Ends::default());
+    let executor = GitExecutor::new().observed(Arc::clone(&ends) as _, true);
+    let cancel = CancellationToken::new();
+    let plan = sequencer::plan_edit(
+        &executor,
+        &repo.path,
+        &first,
+        sequencer::Edit::Drop,
+        &cancel,
+    )
+    .await
+    .expect("plan");
+    assert!(plan.root);
+
+    let recorded = ends.0.lock().unwrap().clone();
+    assert!(
+        !recorded.is_empty(),
+        "the observer saw the commands go past"
+    );
+    assert!(
+        !recorded
+            .iter()
+            .any(|end| matches!(end, CommandEnd::Exited(code) if *code != 0)),
+        "nothing here failed: {recorded:?}"
+    );
+}
+
+/// A range holding a merge is refused for a drop the same way it is for
+/// a squash: a plain interactive rebase would flatten the history rather
+/// than leave one commit out of it.
+#[tokio::test]
+async fn dropping_across_a_merge_is_refused() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    let doomed = repo.commit_file("b.txt", "two\n", "the one to go");
+    repo.git(&["checkout", "-b", "side"]);
+    repo.commit_file("c.txt", "three\n", "side work");
+    repo.git(&["checkout", "main"]);
+    repo.commit_file("d.txt", "four\n", "main work");
+    repo.git(&["merge", "--no-ff", "-m", "bring side in", "side"]);
+    let (exec, cancel) = env();
+
+    let err = sequencer::plan_edit(&exec, &repo.path, &doomed, sequencer::Edit::Drop, &cancel)
+        .await
+        .expect_err("a merge is in the way");
+    assert!(err.to_string().contains("merge commit"), "{err}");
+}
+
 #[tokio::test]
 async fn cherry_pick_and_revert() {
     let mut repo = TestRepo::init();

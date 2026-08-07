@@ -952,8 +952,26 @@ Item {
             // Said, not asked (要望: rewriting a pushed commit shows a
             // warning): the fold goes ahead, and this tag is the warning.
             note: page.menuPublished ? qsTr("already pushed") : ""
-            enabled: repoTab.busyCount === 0
+            enabled: page.canEditHistoryHere
             onTriggered: page.squashCommit(page.menuOid)
+        }
+        // The commit stops being part of the history, and what came after
+        // it is replayed over the gap. Held rather than asked about: every
+        // other row here either adds a commit or moves one, and this is
+        // the only one that takes a commit away — afterwards nothing but
+        // the reflog reaches it (デザイン規約 §長押し).
+        AppMenuItem {
+            id: dropCommitItem
+            code: "drop"
+            //: Follows the `drop` chip: "drop this commit".
+            text: qsTr("this commit")
+            note: page.menuPublished ? qsTr("already pushed") : ""
+            enabled: page.canEditHistoryHere
+            holdMs: Metrics.holdMs
+            onHeld: {
+                commitMenu.close()
+                repoTab.dropCommit(page.menuOid)
+            }
         }
         // Three ways to take the branch back to this commit, told apart
         // by what becomes of the work they skip over. The command is
@@ -1079,6 +1097,14 @@ Item {
     // Continue / Abort instead (mid-merge a soft reset refuses outright
     // and the other two abandon the merge without a word), and the
     // commit the branch already stands on is not a move at all.
+    /// Rewriting this commit's place in the history. Unlike the two
+    /// above it, the newest commit is fair game — that is the one a fold
+    /// or a drop most often means.
+    readonly property bool canEditHistoryHere:
+        repoTab.state === "open" && repoTab.busyCount === 0
+        && !workTree.detached && workTree.branch !== ""
+        && workTree.opText === ""
+        && page.menuOid !== "" && page.menuStashRef === ""
     /// The commit-menu twin of `canIntegrateFrom`: a branch to land on,
     /// nothing already stepping, and a commit other than the one the
     /// working tree is already sitting on.
@@ -1706,6 +1732,17 @@ Item {
             // The working tree, as the row above the newest commit opens
             // it: the file list this pane's every other verb starts from.
             page.showWip()
+        } else if (act === "drop-commit" || act === "drop-commit-go") {
+            // Through the graph row's menu, where the row is held rather
+            // than asked about: the plain verb leaves the menu standing
+            // for the shot and "-go" runs the hold to its end. The plan
+            // is built by object name, the way a graph row hands one
+            // over, so a symbolic name is not what this takes.
+            page.openRowMenu(arg !== "" ? arg : branchesModel.headOid)
+            AppBackend.report("drop_row " + dropCommitItem.code
+                              + " " + dropCommitItem.text)
+            if (act === "drop-commit-go")
+                dropCommitItem.completeHold()
         } else if (act === "merge-branch" || act === "rebase-onto"
                    || act === "revert-commit" || act === "integrate-menu") {
             // Through the menus a right-click opens, so the rows' own

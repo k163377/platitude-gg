@@ -954,6 +954,12 @@ impl RepoTab {
 
     /// Replaces one commit's message. HEAD is amended; anything older is
     /// replayed, which rewrites every commit after it.
+    /// Leaves one commit out of the history, replaying what came after it.
+    #[qslot]
+    fn drop_commit(&mut self, oid: String) {
+        self.with_session(|s| s.drop_commit(oid.clone()));
+    }
+
     #[qslot]
     fn reword_commit(&mut self, oid: String, subject: String, body: String) {
         let message = platitude_core::commit::join_message(&subject, &body);

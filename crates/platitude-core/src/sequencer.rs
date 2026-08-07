@@ -225,6 +225,8 @@ pub enum Edit {
     SquashIntoParent,
     /// Replace the commit's message.
     Reword(String),
+    /// Leave the commit out of the history entirely.
+    Drop,
 }
 
 impl Edit {
@@ -232,9 +234,15 @@ impl Edit {
     ///
     /// `squash` folds into the line above it, so the parent must be in the
     /// plan as well; a reword only needs the commit itself.
+    ///
+    /// A drop takes the parent in too, for a different reason: dropping
+    /// the newest commit would otherwise leave a plan whose every line is
+    /// a drop, which [`rebase_interactive`] refuses. The parent rides
+    /// along as an ordinary `pick` and keeps its own object name
+    /// (measured — `dropping_at_either_end_of_the_history`).
     fn depth(&self) -> u32 {
         match self {
-            Edit::SquashIntoParent => 2,
+            Edit::SquashIntoParent | Edit::Drop => 2,
             Edit::Reword(_) => 1,
         }
     }
@@ -293,6 +301,7 @@ pub async fn plan_edit(
             steps[index].action = TodoAction::Reword;
             steps[index].message = Some(message);
         }
+        Edit::Drop => steps[index].action = TodoAction::Drop,
     }
     Ok(EditPlan {
         upstream,
@@ -315,7 +324,13 @@ async fn resolve(
     let cmd = crate::process::GitCommand::new()
         .cwd(workdir)
         .args(["rev-parse", "--verify", "--quiet", "--end-of-options"])
-        .arg(format!("{rev}^{{commit}}"));
+        .arg(format!("{rev}^{{commit}}"))
+        // "there is no such commit" is the answer, not a failure: a plan
+        // that reaches the very first commit asks for its parent and is
+        // told there is none. Left unmarked it counts as a failed command
+        // and the command log throws its panel open over a perfectly good
+        // squash or drop near the root (.claude/rules/core.md).
+        .answers_by_code();
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code != 0 {
         return Ok(None);

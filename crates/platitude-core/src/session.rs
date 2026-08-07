@@ -2178,6 +2178,25 @@ impl RepoSession {
         );
     }
 
+    /// Leaves one commit out of the history.
+    pub fn drop_commit(self: &Arc<Self>, oid: String) {
+        self.write(
+            "drop",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                let plan = sequencer::plan_edit(
+                    &exec,
+                    &repo.workdir,
+                    &oid,
+                    sequencer::Edit::Drop,
+                    &cancel,
+                )
+                .await?;
+                run_plan(&exec, &repo, &plan, &cancel).await
+            },
+        );
+    }
+
     /// Replaces one commit's message.
     ///
     /// The newest commit is amended instead of replayed: an amend touches
