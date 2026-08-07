@@ -183,6 +183,12 @@ MenuItem {
             Layout.fillWidth: true
             text: menuItem.text
             font: menuItem.font
+            // Pinned, not left to `AutoText`. Rows carry text nobody here
+            // chose — branch names, paths, commit subjects — plus one
+            // deliberate placeholder in angle brackets, and AutoText
+            // decides by guessing whether a string looks like markup. A
+            // branch called `<b>` should read as its name, not vanish.
+            textFormat: Text.PlainText
             elide: Text.ElideRight
             verticalAlignment: Text.AlignVCenter
             // Clear of the arrow the style paints over the row's right

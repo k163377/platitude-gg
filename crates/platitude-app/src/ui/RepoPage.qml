@@ -825,7 +825,7 @@ Item {
         AppMenuItem {
             text: wipPane.workTree.mergeTool !== ""
                   ? qsTr("Edit in %1").arg(wipPane.workTree.mergeTool)
-                  : qsTr("Choose merge editor…")
+                  : qsTr("Edit in <merge editor>…")
             visible: page.menuFileBucket === "conflicts"
             enabled: repoTab.busyCount === 0
             onTriggered: page.openInMergeTool()
