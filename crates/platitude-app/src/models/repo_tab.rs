@@ -47,7 +47,7 @@ pub struct RepoTab {
     /// Paths gathered for the next write over several files at once, one
     /// call at a time: a git path may hold any byte but NUL, so there is no
     /// separator safe enough to pack a list into one string
-    /// (P2-確認事項 §C). Emptied by whichever write consumes it, so a set
+    /// (デザイン規約 §その他の操作). Emptied by whichever write consumes it, so a set
     /// left behind by an abandoned question cannot be spent later.
     pending_paths: Vec<String>,
     /// Configured remote names — where a branch with no upstream can go.

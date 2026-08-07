@@ -477,7 +477,7 @@ Item {
     /// A branch goes the way git deletes one — `-d`, which refuses while
     /// the branch holds commits nothing else does. That refusal is the
     /// question worth asking, so it is asked when it arrives rather than
-    /// guessed at beforehand (P2-確認事項 §B). A tag and a stash have no
+    /// guessed at beforehand (デザイン規約 §左メニューの所作). A tag and a stash have no
     /// such refusal in git, and both can take something with them, so they
     /// are asked about up front. A branch on a remote never arrives here:
     /// its row is held down instead (`deleteRemoteNow`).
@@ -616,7 +616,7 @@ Item {
             function () {
                 // One git command per bucket, however many rows were
                 // chosen: the paths cross the bridge one at a time and
-                // the write takes the whole set (P2-確認事項 §C).
+                // the write takes the whole set (デザイン規約 §その他の操作).
                 if (unstaged.length > 0) {
                     page.sendPaths(unstaged)
                     repoTab.discardPaths()
