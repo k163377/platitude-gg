@@ -34,9 +34,18 @@ pub struct WorkTreeModel {
     /// Files changed on both sides at once. `git stash push --staged`
     /// cannot separate those, so the option is withheld while any exist.
     partially_staged_count: i32,
-    /// Rebase progress; both zero when nothing is stepping.
+    /// Rebase progress; both zero when nothing is stepping. Only a rebase
+    /// keeps a count — `op_stepping` is what says whether the operation
+    /// steps at all.
     op_step: i32,
     op_steps: i32,
+    /// Whether the stopped operation takes `--skip` / `--quit`. A merge
+    /// steps through nothing, so it has no commit to leave out and
+    /// nowhere to stop stepping; a rebase, a cherry-pick and a revert all
+    /// do. Read from the operation itself rather than from the progress
+    /// count: only a rebase writes one, and a cherry-pick that steps
+    /// would look like a merge if the count were the test.
+    op_stepping: bool,
     feed: Option<Arc<Feed<StatusMsg>>>,
     tab_id: i32,
 }
@@ -67,6 +76,7 @@ impl WorkTreeModel {
     );
     qproperty!("opStep", Member = op_step, Notify = changed);
     qproperty!("opSteps", Member = op_steps, Notify = changed);
+    qproperty!("opStepping", Member = op_stepping, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -107,23 +117,33 @@ impl WorkTreeModel {
         self.ahead = status.ahead;
         self.behind = status.behind;
         self.has_conflicts = status.has_conflicts();
+        // One name, not every flag that happens to be set: a rebase
+        // stopped on a pick writes CHERRY_PICK_HEAD too, and joining the
+        // two said `REBASING · CHERRY-PICKING` for what is one rebase.
+        // Core already answers which operation is the live one — it is
+        // the same answer the continuations act on.
+        use platitude_core::integrate::InProgress;
         let mut ops: Vec<&str> = Vec::new();
-        if op_state.rebasing {
-            ops.push("REBASING");
+        if let Some(op) = InProgress::from_state(&op_state) {
+            ops.push(match op {
+                InProgress::Rebase => "REBASING",
+                InProgress::Merge => "MERGING",
+                InProgress::CherryPick => "CHERRY-PICKING",
+                InProgress::Revert => "REVERTING",
+            });
         }
-        if op_state.merging {
-            ops.push("MERGING");
-        }
-        if op_state.cherry_picking {
-            ops.push("CHERRY-PICKING");
-        }
-        if op_state.reverting {
-            ops.push("REVERTING");
-        }
+        // Bisect is not one of those — it runs alongside rather than
+        // instead, and it is the one thing here that can share the line.
         if op_state.bisecting {
             ops.push("BISECTING");
         }
         self.op_text = ops.join(" · ");
+        // A merge steps through nothing, so it takes neither skip nor
+        // quit; everything else here does.
+        self.op_stepping = !matches!(
+            InProgress::from_state(&op_state),
+            None | Some(InProgress::Merge)
+        );
         self.staged_count = status.staged().count() as i32;
         self.unstaged_count = status.unstaged().count() as i32;
         self.untracked_count = status.untracked().count() as i32;

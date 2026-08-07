@@ -370,6 +370,123 @@ async fn skipping_drops_work_that_is_nowhere_else() {
     );
 }
 
+/// The free skip, and whether it reaches a person after all: resolving a
+/// conflict by taking the upstream side wholesale leaves the commit with
+/// nothing to say, and `--continue` has to decide what that means.
+#[tokio::test]
+async fn resolving_a_conflict_to_match_upstream_then_continuing() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "base\n", "root");
+    repo.git(&["checkout", "-b", "topic"]);
+    repo.commit_file("f.txt", "topic\n", "same idea, other words");
+    repo.git(&["checkout", "main"]);
+    repo.commit_file("f.txt", "main\n", "main change");
+    repo.git(&["checkout", "topic"]);
+    let (exec, cancel) = env();
+
+    integrate::rebase(
+        &exec,
+        &repo.path,
+        "main",
+        &RebaseOptions::default(),
+        &cancel,
+    )
+    .await
+    .expect_err("conflict");
+    // Taking upstream's side outright, which is what `Take theirs`-style
+    // resolution does — and which leaves this commit contributing nothing.
+    conflict::take_side(&exec, &repo.path, &["f.txt".into()], Side::Ours, &cancel)
+        .await
+        .expect("take the upstream side");
+
+    // A plain rebase drops the emptied commit itself: `--empty=drop` is
+    // the merge backend's default, so nobody is asked anything.
+    integrate::resolve_current(&exec, &repo.path, Continuation::Continue, &cancel)
+        .await
+        .expect("continue carries on past the emptied commit");
+
+    assert_eq!(current_op(&repo).await, None);
+    let subjects = repo.git(&["log", "--format=%s"]);
+    assert!(
+        !subjects.contains("same idea, other words"),
+        "the emptied commit went quietly: {subjects}"
+    );
+}
+
+/// The other emptied-commit path, and the one that does reach a person:
+/// interactive rebase — what this app drives for squash / reword / drop —
+/// stops on a commit that came out empty and asks for `--skip` by name.
+/// So there *is* a state where skipping costs nothing, and the gesture on
+/// that row cannot be chosen from the plain rebase's behaviour alone.
+#[tokio::test]
+async fn an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "a\n", "root");
+    repo.git(&["checkout", "-b", "topic"]);
+    let doomed = repo.commit_file("f.txt", "a\nX\n", "adds X");
+    repo.commit_file("h.txt", "keep\n", "keeper");
+    repo.git(&["checkout", "main"]);
+    // Same net line, different patch: not a clean cherry-pick of `doomed`,
+    // so the cherry-pick filter cannot be what drops it.
+    repo.write_file("f.txt", "a\nX\n");
+    repo.write_file("g.txt", "unrelated\n");
+    repo.git(&["add", "-A"]);
+    repo.git(&["commit", "-m", "X arrives with company"]);
+    repo.git(&["checkout", "topic"]);
+    let (exec, cancel) = env();
+
+    let steps = vec![
+        RebaseStep::pick(doomed.clone(), "adds X"),
+        RebaseStep {
+            action: TodoAction::Pick,
+            oid: repo.git(&["rev-parse", "topic"]),
+            subject: "keeper".into(),
+            message: None,
+        },
+    ];
+    let outcome = sequencer::rebase_interactive(
+        &exec,
+        &info(&repo).await,
+        "main",
+        &steps,
+        &RebaseOptions::default(),
+        &helper(),
+        &cancel,
+    )
+    .await;
+
+    let message = match outcome {
+        Ok(_) => "REBASE FINISHED".to_string(),
+        Err(e) => e.to_string(),
+    };
+    assert_eq!(current_op(&repo).await, Some(InProgress::Rebase));
+    assert!(
+        message.contains("The previous cherry-pick is now empty"),
+        "git's reason: {message}"
+    );
+    assert!(
+        message.contains("git rebase --skip"),
+        "git names the way out: {message}"
+    );
+    // Two flags are set at once here — the stopped pick leaves
+    // CHERRY_PICK_HEAD behind — and only one of them is the operation.
+    // Anything naming what is in progress has to ask `from_state`, not
+    // list the flags: the badge did the latter and said
+    // `REBASING · CHERRY-PICKING` for one rebase.
+    let (exec2, cancel2) = env();
+    let state = opstate::detect(&exec2, &repo.path, &cancel2)
+        .await
+        .expect("op state");
+    assert!(state.rebasing && state.cherry_picking, "got: {state:?}");
+    assert_eq!(InProgress::from_state(&state), Some(InProgress::Rebase));
+    // And nothing is conflicted while it stands there, so a UI cannot
+    // tell this stop from an `edit` stop by the file list alone.
+    let state = status::load(&exec, &repo.path, &cancel)
+        .await
+        .expect("status");
+    assert_eq!(state.conflicted().count(), 0);
+}
+
 #[tokio::test]
 async fn cherry_pick_and_revert() {
     let mut repo = TestRepo::init();

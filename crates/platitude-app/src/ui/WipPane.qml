@@ -32,6 +32,19 @@ ColumnLayout {
     /// where a rename came from ("" otherwise).
     signal fileMenuRequested(string bucket, string path, string origPath)
 
+    /// Automation: run one of the stopped operation's held rows to its
+    /// end, named by its flag.
+    function completeOpExit(code) {
+        for (let i = 0; i < opExitCol.children.length; i++) {
+            const row = opExitCol.children[i]
+            if (row && row.code === code) {
+                row.completeHold()
+                return true
+            }
+        }
+        return false
+    }
+
     // ---- which rows are chosen -------------------------------------
     // Several files at once, the way a file list is used to being asked:
     // a plain click takes one, Ctrl adds or removes, Shift reaches from
@@ -259,6 +272,7 @@ ColumnLayout {
             }
         }
     }
+
     // Stash options card, under the button that opened it. The same
     // framed-card inset rhythm as the editor below (帯 → 枠 → 枠 = one
     // even spaceXs step).
@@ -512,6 +526,130 @@ ColumnLayout {
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.NoButton
+            }
+        }
+        // ==== 案 C: the way out of a stopped operation, built into ====
+        // ==== the pane under the button that finishes things.     ====
+        //
+        // The commit button's seat is already "conclude this": during a
+        // merge `--continue` is literally the commit. Standing rather
+        // than dropped from a click — while an operation is stopped this
+        // is the pane's business, and the file list moves down to make
+        // room for it rather than the rows covering the list.
+        Rectangle {
+            id: opExitCard
+            visible: wipPane.workTree.opText !== ""
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.spaceXs
+            implicitHeight: opExitCol.implicitHeight + 2 * Theme.spaceXs
+            color: Theme.bgBase
+            radius: Theme.radiusMd
+            border.color: Theme.warning
+            border.width: Theme.borderWidth
+            // The chip column and the mark's seat, shared by every row so
+            // the sentences start on one x and the card reads down its
+            // first letters — what `AppMenu` does for a menu's rows.
+            // The mark's own seat, left on every row whether or not that
+            // row is a held one — the words start on one x either way
+            // (デザイン規約 §長押し). Wide enough for the mark and the gap
+            // after it, or the chip runs into the ring.
+            readonly property real holdIndent: Theme.iconSm + Theme.spaceXs
+            /// Whether leaving the stopped commit out costs nothing.
+            ///
+            /// An interactive rebase stops on a commit that came out
+            /// empty and names `--skip` as the way past it (measured —
+            /// `an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip`).
+            /// Nothing is conflicted or staged while it stands there, and
+            /// a clean tree under a stopped operation is what tells that
+            /// stop from every other one this app can reach today.
+            ///
+            /// **Revisit when `edit` steps land** (full interactive
+            /// rebase): an `edit` stop is clean too, and skipping one
+            /// does lose the commit. Distinguishing them needs core to
+            /// say why git stopped (P3-確認事項).
+            readonly property bool skipIsFree:
+                wipPane.workTree.conflictCount === 0
+                && wipPane.workTree.stagedCount === 0
+                && wipPane.workTree.unstagedCount === 0
+            readonly property real codeColW: {
+                let widest = 0
+                for (let i = 0; i < opExitCol.children.length; i++) {
+                    const row = opExitCol.children[i]
+                    if (row && row.visible && row.codeColSeat !== undefined)
+                        widest = Math.max(widest, row.codeColSeat)
+                }
+                return widest
+            }
+            ColumnLayout {
+                id: opExitCol
+                anchors.fill: parent
+                anchors.margins: Theme.spaceXs
+                spacing: 0
+                Label {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.spaceXs
+                    Layout.bottomMargin: Theme.spaceXs
+                    // What is stopped, and how far it got. The count is
+                    // the half a stopped rebase cannot say without it.
+                    text: wipPane.workTree.opSteps > 0
+                          ? qsTr("%1 — %2 of %3").arg(wipPane.workTree.opText)
+                            .arg(wipPane.workTree.opStep).arg(wipPane.workTree.opSteps)
+                          : wipPane.workTree.opText
+                    font.pixelSize: Theme.fontSm
+                    font.weight: Font.DemiBold
+                    color: Theme.warning
+                }
+                OpExitRow {
+                    Layout.fillWidth: true
+                    codeColW: opExitCard.codeColW
+                    holdIndent: opExitCard.holdIndent
+                    code: "--continue"
+                    text: qsTr("Carry on with what is staged")
+                    enabled: wipPane.repoTab.busyCount === 0
+                             && wipPane.workTree.conflictCount === 0
+                    onPicked: wipPane.repoTab.resolveOperation("continue")
+                }
+                // A merge steps through nothing: no commit to leave out,
+                // and nowhere to stop stepping.
+                OpExitRow {
+                    Layout.fillWidth: true
+                    codeColW: opExitCard.codeColW
+                    holdIndent: opExitCard.holdIndent
+                    code: "--skip"
+                    text: qsTr("Leave this commit out")
+                    // What the skip costs, said where a menu row says it.
+                    note: opExitCard.skipIsFree ? qsTr("nothing in it") : ""
+                    visible: wipPane.workTree.opStepping
+                    enabled: wipPane.repoTab.busyCount === 0
+                    // The mark is what says a row takes something away
+                    // (デザイン規約 §長押し), so it goes when the row does
+                    // not: git stops on a commit that came out empty and
+                    // names `--skip` itself, and leaving that one out
+                    // loses nothing. Everywhere else the commit is real
+                    // and only the reflog holds it afterwards.
+                    holdMs: opExitCard.skipIsFree ? 0 : Metrics.holdMs
+                    onPicked: wipPane.repoTab.resolveOperation("skip")
+                }
+                OpExitRow {
+                    Layout.fillWidth: true
+                    codeColW: opExitCard.codeColW
+                    holdIndent: opExitCard.holdIndent
+                    code: "--quit"
+                    text: qsTr("Stop stepping, keep the tree")
+                    visible: wipPane.workTree.opStepping
+                    enabled: wipPane.repoTab.busyCount === 0
+                    onPicked: wipPane.repoTab.resolveOperation("quit")
+                }
+                OpExitRow {
+                    Layout.fillWidth: true
+                    codeColW: opExitCard.codeColW
+                    holdIndent: opExitCard.holdIndent
+                    code: "--abort"
+                    text: qsTr("Undo it all and go back")
+                    enabled: wipPane.repoTab.busyCount === 0
+                    holdMs: Metrics.holdMs
+                    onPicked: wipPane.repoTab.resolveOperation("abort")
+                }
             }
         }
     }

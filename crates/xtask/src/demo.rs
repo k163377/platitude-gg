@@ -47,6 +47,9 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
         "dirty" => dirty(&mut repo)?,
         "conflict" => conflict(&mut repo)?,
         "rebase-conflict" => rebase_conflict(&mut repo)?,
+        "rebase-staged" => rebase_staged(&mut repo)?,
+        "rebase-empty" => rebase_empty(&mut repo)?,
+        "cherry-pick-conflict" => cherry_pick_conflict(&mut repo)?,
         "stashes" => stashes(&mut repo)?,
         "detached" => detached(&mut repo)?,
         "behind" => behind(&mut repo)?,
@@ -283,6 +286,52 @@ fn rebase_conflict(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("shared.txt", "main side\n", "fix: change shared too")?;
     repo.git(&["switch", "feature/clash"])?;
     repo.git_expecting_stop(&["rebase", "main"])?;
+    Ok(())
+}
+
+/// The same rebase, one step further on: the conflict resolved and
+/// staged, so `--continue` is live and the file list has left CONFLICTS.
+fn rebase_staged(repo: &mut DemoRepo) -> Result<(), String> {
+    rebase_conflict(repo)?;
+    repo.write("shared.txt", "main side\nfeature side\n")?;
+    repo.git(&["add", "shared.txt"])?;
+    Ok(())
+}
+
+/// A rebase stopped on a commit that came out empty — git's own
+/// `Otherwise, please use 'git rebase --skip'`. Nothing is conflicted or
+/// staged, which is what makes leaving this one out cost nothing.
+///
+/// Reached with `--empty=stop` rather than through an interactive
+/// rebase: the state is the same one, and driving `-i` from here would
+/// need a sequence editor on the PATH of three operating systems.
+fn rebase_empty(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("f.txt", "a\n", "feat: root")?;
+    repo.git(&["switch", "--create", "topic"])?;
+    repo.commit("f.txt", "a\nX\n", "feat: adds X")?;
+    repo.commit("h.txt", "keep\n", "feat: one more on the branch")?;
+    repo.git(&["switch", "main"])?;
+    // The same net line, arriving with company: not a clean cherry-pick
+    // of "adds X", so the cherry-pick filter cannot be what drops it.
+    repo.write("f.txt", "a\nX\n")?;
+    repo.write("g.txt", "unrelated\n")?;
+    repo.git(&["add", "-A"])?;
+    repo.git(&["commit", "-m", "fix: X arrives with company"])?;
+    repo.git(&["switch", "topic"])?;
+    repo.git_expecting_stop(&["rebase", "--empty=stop", "main"])?;
+    Ok(())
+}
+
+/// A cherry-pick stopped on a conflict: it steps the way a rebase does
+/// (so it takes `--skip` and `--quit`) but keeps no count, which is what
+/// tells the card's two tests apart.
+fn cherry_pick_conflict(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("shared.txt", "base\n", "feat: shared base")?;
+    repo.git(&["switch", "--create", "feature/clash"])?;
+    repo.commit("shared.txt", "feature side\n", "feat: change shared")?;
+    repo.git(&["switch", "main"])?;
+    repo.commit("shared.txt", "main side\n", "fix: change shared too")?;
+    repo.git_expecting_stop(&["cherry-pick", "feature/clash"])?;
     Ok(())
 }
 

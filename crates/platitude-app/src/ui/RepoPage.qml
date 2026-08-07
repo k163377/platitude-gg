@@ -1543,6 +1543,13 @@ Item {
             // The working tree, as the row above the newest commit opens
             // it: the file list this pane's every other verb starts from.
             page.showWip()
+        } else if (act === "op-exit" || act === "op-exit-go") {
+            // The ways out of a stopped operation, which stand in the pane
+            // under the commit button rather than dropping from a click.
+            // "-go" runs the held row the argument names to its end.
+            page.showWip()
+            if (act === "op-exit-go")
+                AppBackend.report("op_exit_held " + wipPane.completeOpExit(arg))
         } else if (act === "stage-hunk" || act === "stage-line"
                    || act === "discard-hunk" || act === "discard-hunk-go"
                    || act === "diff-file" || act === "line-tools") {

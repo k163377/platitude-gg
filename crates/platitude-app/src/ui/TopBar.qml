@@ -216,9 +216,15 @@ Rectangle {
         }
         Item { Layout.fillWidth: true }
 
-        // Transient state of the current repository.
+        // Transient state of the current repository. The badge says what
+        // is stopped and how far it got; the ways out of it stand in the
+        // working-tree pane, under the button that finishes things
+        // (デザイン規約 §進行中の操作から出る).
         Rectangle {
-            visible: topBar.curPage !== null && topBar.curPage.pageWt.opText !== ""
+            id: opBadge
+            readonly property var wt: topBar.curPage !== null
+                                      ? topBar.curPage.pageWt : null
+            visible: opBadge.wt !== null && opBadge.wt.opText !== ""
             color: "transparent"
             border.color: Theme.warning
             border.width: Theme.borderWidth
@@ -228,7 +234,13 @@ Rectangle {
             Label {
                 id: opLabel
                 anchors.centerIn: parent
-                text: topBar.curPage !== null ? topBar.curPage.pageWt.opText : ""
+                // The count is the half a stopped rebase cannot say
+                // without it; a merge steps through nothing and has none.
+                text: opBadge.wt === null ? ""
+                    : opBadge.wt.opSteps > 0
+                      ? qsTr("%1 %2/%3").arg(opBadge.wt.opText)
+                        .arg(opBadge.wt.opStep).arg(opBadge.wt.opSteps)
+                      : opBadge.wt.opText
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
                 font.weight: Font.DemiBold
