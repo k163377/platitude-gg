@@ -7,6 +7,19 @@ import platitude.ui
 // ToolButton shows its panel all the time, hiding the hover entirely.
 ToolButton {
     id: hoverToolButtonSelf
+    /// Wear a button's frame at rest. For the ones that stand on a pane's
+    /// own ground with nothing of their own kind beside them: without it
+    /// they read as part of whatever they are standing on (the fold
+    /// control inside the filter's frame read as part of the input).
+    property bool framed: false
+    Rectangle {
+        anchors.fill: parent
+        visible: hoverToolButtonSelf.framed
+        color: "transparent"
+        radius: Theme.radiusSm
+        border.color: Theme.borderSubtle
+        border.width: Theme.borderWidth
+    }
     Rectangle {
         anchors.fill: parent
         radius: Theme.radiusSm

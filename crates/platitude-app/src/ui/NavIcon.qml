@@ -204,6 +204,19 @@ Canvas {
             ctx.lineTo(13.5 * s, 12.5 * s)
             ctx.closePath()
             ctx.stroke()
+        } else if (icon.kind === "flag") {
+            // A pennant on a pole. Filled rather than outlined: it is
+            // worn small, and a stroked triangle closes up at that size.
+            ctx.beginPath()
+            ctx.moveTo(5 * s, 2.5 * s)
+            ctx.lineTo(5 * s, 13.5 * s)
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.moveTo(6 * s, 3 * s)
+            ctx.lineTo(13 * s, 6 * s)
+            ctx.lineTo(6 * s, 9 * s)
+            ctx.closePath()
+            ctx.fill()
         } else if (icon.kind === "clock") {
             ctx.beginPath()
             ctx.arc(8 * s, 8 * s, 5.5 * s, 0, 2 * Math.PI)

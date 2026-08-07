@@ -228,56 +228,64 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
         visible: !sidebar.collapsed
-        // Frameless, full-width filter: the sidebar is already enclosed
-        // by dividers, so the input only keeps a hairline underline
-        // (accent on focus). It is this pane's header band, so it takes
-        // the header height — the other panes' headers and the first
-        // row under each of them line up with it.
-        TextField {
-            id: refFilter
+        // This pane's header band: a frameless filter that takes all the
+        // width left over, and the fold control at the end of it. The
+        // control stands beside the input rather than inside its frame —
+        // in it, it reads as part of what is being typed. It is the band
+        // the other panes' headers line up with, so it takes the header
+        // height, and the hairline that closes it is the band's rather
+        // than the input's (it runs on under the button).
+        Item {
             Layout.fillWidth: true
             implicitHeight: Theme.headerHeight
-            font.pixelSize: Theme.fontMd
-            leftPadding: Theme.spaceSm
-            // The fold control sits at the end of the band; the text
-            // stops before it rather than running under it.
-            rightPadding: Theme.spaceSm + Theme.iconLg
-            topPadding: 0
-            bottomPadding: 0
-            placeholderText: qsTr("Filter")
-            background: Rectangle {
-                color: "transparent"
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: Theme.borderWidth
-                    color: refFilter.activeFocus ? Theme.borderFocus
-                                                 : Theme.borderSubtle
+            RowLayout {
+                anchors.fill: parent
+                anchors.rightMargin: Theme.spaceXs
+                spacing: Theme.spaceXs
+                TextField {
+                    id: refFilter
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    font.pixelSize: Theme.fontMd
+                    leftPadding: Theme.spaceSm
+                    rightPadding: Theme.spaceSm
+                    topPadding: 0
+                    bottomPadding: 0
+                    placeholderText: qsTr("Filter")
+                    background: null
+                    onTextChanged: {
+                        sidebar.branchesModel.setFilter(text)
+                        sidebar.remotesModel.setFilter(text)
+                        sidebar.worktreesModel.setFilter(text)
+                        sidebar.stashesModel.setFilter(text)
+                        sidebar.tagsModel.setFilter(text)
+                    }
+                }
+                // The seat the fold control keeps whichever way the list
+                // is: the rail's band has the same button pointing back.
+                HoverToolButton {
+                    Layout.alignment: Qt.AlignVCenter
+                    framed: true
+                    padding: 0
+                    implicitWidth: Theme.iconLg
+                    implicitHeight: Theme.iconLg
+                    text: "«"
+                    // Written at the rail's size: it is the same control
+                    // and it has to carry the same distance.
+                    font.pixelSize: Theme.fontLg
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 600
+                    ToolTip.text: qsTr("Fold the list to its icons")
+                    onClicked: sidebar.foldRequested(true)
                 }
             }
-            onTextChanged: {
-                sidebar.branchesModel.setFilter(text)
-                sidebar.remotesModel.setFilter(text)
-                sidebar.worktreesModel.setFilter(text)
-                sidebar.stashesModel.setFilter(text)
-                sidebar.tagsModel.setFilter(text)
-            }
-            // The seat the fold control keeps whichever way the list is:
-            // the rail's band has the same button pointing back.
-            HoverToolButton {
+            Rectangle {
+                anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.rightMargin: Theme.spaceXs
-                anchors.verticalCenter: parent.verticalCenter
-                padding: 0
-                implicitWidth: Theme.iconLg
-                implicitHeight: Theme.iconLg
-                text: "◂"
-                font.pixelSize: Theme.fontSm
-                ToolTip.visible: hovered
-                ToolTip.delay: 600
-                ToolTip.text: qsTr("Fold the list to its icons")
-                onClicked: sidebar.foldRequested(true)
+                anchors.bottom: parent.bottom
+                height: Theme.borderWidth
+                color: refFilter.activeFocus ? Theme.borderFocus
+                                             : Theme.borderSubtle
             }
         }
 
@@ -487,6 +495,7 @@ Rectangle {
         worktreesModel: sidebar.worktreesModel
         stashesModel: sidebar.stashesModel
         tagsModel: sidebar.tagsModel
+        tagsShown: sidebar.repoTab.tagsShown
         openKind: peek.visible ? sidebar.peekKind : ""
         onPeekRequested: (kind, top) => sidebar.openPeek(kind, top)
         onPeekLeft: kind => sidebar.leavePeek(kind)

@@ -1304,6 +1304,10 @@ Item {
             // the section is named the way the diff's line tools are.
             // "nav-unfold" walks the whole way back, which is the one
             // thing folding has to be able to do.
+            // "nav-fold no-tags" takes the tags off the graph first, so
+            // the mark the rail wears for that can be photographed.
+            if (arg === "no-tags")
+                repoTab.setTagsShown(false)
             page.sidebarCollapsed = true
             if (act === "nav-peek")
                 sidebarPane.peekAt(arg)

@@ -21,6 +21,10 @@ Rectangle {
     required property var worktreesModel
     required property var stashesModel
     required property var tagsModel
+    /// Whether the graph is showing tags. The rail is the only place the
+    /// answer can be while the list is folded — the switch itself is in
+    /// the TAGS section, which is a hover away.
+    required property bool tagsShown
 
     /// The section the sidebar has open beside the rail: its cell keeps
     /// the hover look while the pointer is down in the list.
@@ -95,11 +99,15 @@ Rectangle {
 
             HoverToolButton {
                 anchors.centerIn: parent
+                framed: true
                 padding: 0
                 implicitWidth: Theme.iconLg
                 implicitHeight: Theme.iconLg
-                text: "▸"
-                font.pixelSize: Theme.fontSm
+                text: "»"
+                // The mark is the whole of the button, so it is written
+                // at the size a heading is rather than a caption's: at
+                // fontSm it is six pixels of ink in a twenty-pixel box.
+                font.pixelSize: Theme.fontLg
                 ToolTip.visible: hovered
                 ToolTip.delay: 600
                 ToolTip.text: qsTr("Unfold the list")
@@ -124,6 +132,11 @@ Rectangle {
                 required property var modelData
                 readonly property var sectionModel: rail.modelOf(cell.modelData.kind)
                 readonly property bool open: rail.openKind === cell.modelData.kind
+                // Tags are the one section that can be kept out of the
+                // graph, so its cell is the one that says whether they
+                // are in it.
+                readonly property bool taggable: cell.modelData.kind === "tag"
+                readonly property bool offGraph: cell.taggable && !rail.tagsShown
 
                 width: rail.cellSize
                 height: rail.cellSize
@@ -136,11 +149,32 @@ Rectangle {
                     anchors.centerIn: parent
                     spacing: 0
                     NavIcon {
+                        id: sectionIcon
                         anchors.horizontalCenter: parent.horizontalCenter
                         kind: cell.modelData.icon
-                        tint: cell.modelData.tint
+                        // Off the graph is a state, and a state is said by
+                        // dropping the mark a step, not by greying it —
+                        // grey text is what unavailable looks like
+                        // (デザイン規約 §暗く落とした段).
+                        tint: cell.offGraph ? Theme.refTagDim
+                                            : cell.modelData.tint
                         width: Theme.iconLg
                         height: Theme.iconLg
+                        // The flag the TAGS header carries, worn as a mark
+                        // on the corner: folded, this is the only place
+                        // "are tags in the graph" can be answered. It
+                        // flies or it is not there — a mark that is
+                        // always up says nothing, and two steps of colour
+                        // is not a state anyone reads at 12px.
+                        NavIcon {
+                            visible: cell.taggable && rail.tagsShown
+                            kind: "flag"
+                            tint: sectionIcon.tint
+                            width: Theme.iconSm
+                            height: Theme.iconSm
+                            anchors.horizontalCenter: parent.right
+                            anchors.verticalCenter: parent.top
+                        }
                     }
                     // How many are in there. It stands in for the caption
                     // as well as the count, so it takes the caption's
