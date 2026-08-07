@@ -1,0 +1,28 @@
+---
+name: verify-ui
+description: platitude-gg の UI 動作確認・スクリーンショット検証をする時に必ず読む。cargo xtask verify-ui の使い方、PG_AUTO_ACT 動詞の全表、headless(offscreen)起動と Windows での GUI 検証の罠(フォント・画面ロック・PrintWindow・PostMessage・hover)を全部ここに置く。
+---
+
+# UI 動作確認(ヘッドレス検証)
+
+**ヘッドレス動確は `cargo xtask verify-ui <動詞> [引数]`** — release ビルド → 使い捨て demo リポジトリ生成 → offscreen 起動 → `PG_AUTO_ACT` → `screenshot saved=true` 判定と PNG 保存まで 1 コマンド。`--no-build` で連続実行、`--preset` / `--repo` で対象指定、素材だけ欲しければ `cargo xtask demo-repo <preset>`。**UI 配線の Done はこれが PASS し PNG を目視するまで**(CLAUDE.md ビルド・テスト)。
+
+presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正。
+
+## PG_AUTO_ACT 動詞表
+
+書き込み操作の headless 検証は **`PG_AUTO_ACT` = 動詞 / `PG_AUTO_ACT_ARG`**(commit / amend / amend-reset-author / stash / stash-staged / stash-file / switch / switch-leave / switch-merge / switch-remote / squash / reword / edit-message / edit-message-leave / edit-message-discard / cherry-pick / stage-hunk / stage-line / push / force-push / force-push-hold / reset-soft / reset-mixed / reset-hard / reset-hard-confirm(hard はサブメニューの長押し行 — -confirm はメニューと行を出した所で止まり、reset-hard が長押しを完走させて実行)/ commit-menu / reset-menu / fetch / settings / preview / preview-unstaged / preview-staged / dbl-local / dbl-remote / move-branch / name-branch / commands / commands-fail / nav-dbl(引数 `<section>:<name>`)/ rename-branch / rename-tag / rename-stash / branch-at-tag(いずれも引数は新しい名前)/ delete-branch(メニューを開いたまま `-d`。マージ済みなら消えてメニューが閉じ、拒まれたら行が `Delete anyway` に化ける)/ delete-branch-refused(その化けた行を出したまま止める)/ delete-branch-go(化けた行の長押しまで走らせて `-D`)/ delete-tag / delete-stash / delete-remote / delete-stash-row(**質問は無く**メニューが開いたまま止まり、`-go`(delete-stash-row は引数 `go`)が行の長押しを走らせる)/ stash-apply-row / stash-pop-row(グラフ行の Apply / Pop)/ delete-force / delete-tag-go / delete-stash-go / delete-remote-go / discard-file / delete-file / discard-staged(引数はパス。同じ 1 行を unstaged / 未追跡 / staged の行から入る。メニューを出したまま止まり、行の文言を報告する)/ discard-file-go / delete-file-go / discard-staged-go(行の長押しを走らせる)/ diff-file / line-tools(引数はパス。diff を開く / 行がポインタの下で出す `+` を出す — hover は注入できないので行を名指しする)/ discard-hunk(hunk 見出しの長押しボタンを出したまま止まる)/ discard-hunk-go(そのボタンを完走させる)/ discard-many / discard-many-go(先頭行 + 引数のパスを Ctrl クリックで選んでから同じ 1 行)/ wip(作業ツリーの一覧)/ rename-remote(引数 `<remote>/<old>:<new>`。REMOTES の行は畳まれているので ref を名指しする。質問の手前で止まる)/ rename-remote-go(長押しを最後まで進めて実行)/ rename-local-upstream(引数は新しい名前。手元の改名 → 続く質問まで)/ delete-remote / delete-remote-go(引数 `<remote>/<branch>`。同じく ref を名指しする。**質問は無く**畳みが開いてメニューが立ったまま止まり、-go が行の長押しを完走させる))。クリックと同じ経路を通る。
+
+**開いたまま止める撮影用**は stash-dialog(引数 staged-only でそのチェックをクリック済みの状態)/ file-menu / file-menu-untracked / file-menu-staged(引数はパス。バケツごとに出る行が変わるので 3 つ)/ amend-author / settings / commit-menu / reset-menu / stash-menu / name-box(引数は行番号)/ ref-list(引数は行番号)/ fetch-ref-list(引数は行番号。fetch を撃ってからその行のチップを展開する — タグの雲は fetch 後にしか出ない。`--preset tags` に 4 状態が揃っている)/ signature(引数は行番号。その行を選び、gpg / ssh-keygen が返すまで待って印を報告する。`--preset signed` に verified / signed / 無署名の 3 行がある)/ nav-rename / rename-remote-box(引数 `<remote>/<old>:<入れておく名前>`。畳みを開いて入力欄を出す — 既にリモートに在る名前を渡せば拒否された枠が撮れる)
+
+**ダイアログ・メニューの見た目は headless で撮れる**: `PG_SHOT_DIR` 指定時、`Main.qml` のオーバーレイミラー(`ShaderEffectSource`)が **overlay.png** を app.png と並べて保存する(offscreen で成立・ロック状態と無関係 — 2026-08-05 実測)。オーバーレイ自体の grabToImage は "no QML engine" で不可、ミラーが唯一の経路。アンロック中の `PrintWindow` も引き続き可(実 hover 等、実ウィンドウが要る検証のみ)。
+
+## Windows での実行・デバッグの罠
+
+- Qt / QML のログ(console.*、QML ロードエラー含む)は既定で OutputDebugString 行き — **`QT_FORCE_STDERR_LOGGING=1` を付けないと stderr に出ず、QML の失敗が無音になる**
+- release ビルドは GUI サブシステム(`windows_subsystem`)のため PowerShell から直接起動すると**待機されない**(即座に制御が返り、プロセスが残って exe をロックする)。検証は `Start-Process -PassThru` + `WaitForExit` で行う
+- **画面ロック中は通常起動の GUI 検証がハングする**(プロセスは動きログも出るが、`grabToImage` の完了と `PG_AUTO_QUIT_MS` の自動終了が発生しない — 2026-08-03 ロック実測)。GUI 起動を伴う検証は必ず `WaitForExit(ms)` タイムアウト + 未終了なら `Kill()` のガード付きで実行し、無限待ち・無限ポーリングをしない
+- **ヘッドレス検証の標準**(ロック状態と無関係に成立、2026-08-03 ロック実測): `QT_QPA_PLATFORM=offscreen` + `QT_QPA_FONTDIR=C:\Windows\Fonts` + 自動化 env(PG_AUTO_OPEN / PG_AUTO_QUIT_MS / PG_SHOT_DIR / PG_AUTO_SELECT 等)。成否は stderr の `screenshot saved=true` と保存 PNG の目視で判定する。**FONTDIR 指定が無いと全文字が豆腐**(offscreen は Windows のシステムフォントを自動検出しない)
+- fps 計測(PG_AUTO_SCROLL)は offscreen でも完走するが、値は疑似フレームループの上限で表示性能ではない — **性能実測はアンロック状態の通常起動でのみ行う**
+- **ポップアップ(Popup / Dialog / Menu)は `grabToImage` に写らない** — ウィンドウのオーバーレイ層に描かれ、掴んだアイテムの部分木の外にいる。撮影は `PG_SHOT_DIR` の overlay.png(上記ミラー)で足りる。実ウィンドウが要る検証は OS 側から `PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT=2)` で撮る(GPU 描画のため flags 必須。アンロック中はダイアログも写る — 2026-08-03 設定ダイアログで実測)。キー入力の注入は `SendKeys` が届かない(このシェルはフォアグラウンドを取れず、ユーザーの操作中ウィンドウへ飛ぶ危険もある)。`PostMessage(hwnd, WM_KEYDOWN/UP)` を使う。クリックも `PostMessage(WM_LBUTTONDOWN/UP)` で確実に届くが、**hover は注入で検証不能**(`WM_MOUSEMOVE` 注入・`SetCursorPos` とも実マウスの動きに hover 状態を奪還され、成功と失敗が再現不能に混ざる — 2026-08-03 実測)。hover の見た目は実操作で確認する。**フォーカスは要アクティブ化**(非アクティブウィンドウでは `activeFocusItem` が null のまま。PostMessage はアクティブにしないが、フォアグラウンドスレッドへ `AttachThreadInput` してから `SetForegroundWindow` すれば奪えて検証可能 — 2026-08-04 実測)
+- exe の**起動**にも Qt の bin ディレクトリが PATH に要る(ビルド時だけではない)。無いと**約 10ms で無言終了**する — ログもエラーダイアログも出ないので死因が判らない。検証スクリプトは PATH 設定込みで書く
