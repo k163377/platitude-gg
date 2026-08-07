@@ -46,6 +46,19 @@ QtObject {
     // warning (that one really is a state).
     readonly property color refTag: "#D946EF"
 
+    // ---- colors: dimmed (state, hue kept) ----
+    // Two steps down the Tailwind ramp each source came from. For frames,
+    // icons and marks only -- dimming *text* is the disabled signal
+    // (§無効), and a second meaning for it cannot be read apart. Each is
+    // clear of its own source; they are NOT all clear of each other, so
+    // never put two of them where they have to be told apart
+    // (デザイン規約 §暗く落とした段).
+    readonly property color accentDim: "#1D4ED8"
+    readonly property color refTagDim: "#A21CAF"
+    readonly property color successDim: "#166534"
+    readonly property color warningDim: "#92400E"
+    readonly property color dangerDim: "#B91C1C"
+
     // ---- colors: git / diff ----
     readonly property color diffAddedFg: "#4ADE80"
     readonly property color diffAddedBg: "#052E16"
