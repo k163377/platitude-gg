@@ -24,6 +24,7 @@ commands:
         detached  HEAD detached at a tag
         behind    remote has commits fetch would bring in
         signed    ssh-signed commits: verified, unjudgeable, unsigned
+        tags      a tag in every state a remote can put it in (fetch first)
         empty     `git init` and nothing else
 
   verify-ui <verb> [arg] [options]

@@ -50,6 +50,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
         "detached" => detached(&mut repo)?,
         "behind" => behind(&mut repo)?,
         "signed" => signed(&mut repo)?,
+        "tags" => tags(&mut repo)?,
         "empty" => {}
         other => return Err(format!("unknown preset: {other}")),
     }
@@ -390,4 +391,54 @@ fn keygen(repo: &DemoRepo, name: &str, comment: &str) -> Result<String, String> 
 /// slashes on every platform.
 fn config_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
+}
+
+/// Every state a tag can be in with respect to the remote, so the badge
+/// and the name colour can be read side by side (デザイン規約 §グラフ行の
+/// チップ). Nothing shows until a fetch: `ls-remote --tags` is what carries
+/// it, so run this preset with the `fetch` verb.
+///
+/// | tag          | here          | on origin                    |
+/// |--------------|---------------|------------------------------|
+/// | `v1.0`       | second commit | the same commit              |
+/// | `v2.0-local` | HEAD          | nowhere                      |
+/// | `v1.5`       | HEAD          | the second commit — a drift  |
+/// | `v0.9-theirs`| —             | a commit no branch there has |
+///
+/// `v0.9-theirs` comes from the seeder on a branch deleted straight after,
+/// which is what keeps a fetch from quietly bringing the tag down with it
+/// (measured: auto-following only takes tags whose commits it downloads).
+fn tags(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# tags\n", "docs: start the readme")?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.git(&["tag", "-a", "v1.0", "-m", "first release"])?;
+    repo.git(&["tag", "v1.5"])?;
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+    repo.git(&["push", "origin", "v1.0", "v1.5"])?;
+
+    repo.commit("src/app.txt", "app v2\n", "feat: rework the app")?;
+    // Never pushed…
+    repo.git(&["tag", "v2.0-local"])?;
+    // …and one moved here after it was published, which no fetch undoes.
+    repo.git(&["tag", "-f", "v1.5"])?;
+
+    let seeder = repo.root.join("seeder");
+    let url = file_url(&repo.root.join("origin.git"));
+    let root = repo.root.clone();
+    repo.git_at(&root, &["clone", &url, "seeder"])?;
+    for (key, value) in [
+        ("user.name", "Away Colleague"),
+        ("user.email", "away@example.com"),
+    ] {
+        repo.git_at(&seeder.clone(), &["config", key, value])?;
+    }
+    repo.git_at(&seeder.clone(), &["switch", "--create", "gone"])?;
+    std::fs::write(seeder.join("side.txt"), "theirs\n").map_err(|e| e.to_string())?;
+    repo.git_at(&seeder.clone(), &["add", "--", "side.txt"])?;
+    repo.git_at(&seeder.clone(), &["commit", "-m", "feat: their side"])?;
+    repo.git_at(&seeder.clone(), &["tag", "v0.9-theirs"])?;
+    repo.git_at(&seeder.clone(), &["push", "origin", "gone", "v0.9-theirs"])?;
+    repo.git_at(&seeder.clone(), &["push", "origin", "--delete", "gone"])?;
+    Ok(())
 }
