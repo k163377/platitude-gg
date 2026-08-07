@@ -379,22 +379,36 @@ Item {
             // has nothing to add that the words on the row do not already
             // say (デザイン規約 §長押し). The ellipsis goes with it — the
             // row no longer promises a question.
+            //
+            // A branch on a remote is held for the same reason, and the
+            // chip is what tells the two apart: this one runs a command
+            // that leaves this machine, and says so in git's own spelling
+            // (デザイン規約 §git 用語のコード表記).
             readonly property bool stashRow: page.menuRefKind === "stash"
-            text: stashRow ? qsTr("Hold to delete") : qsTr("Delete…")
+            readonly property bool remoteRow: page.menuRefKind === "remote"
+            readonly property bool heldRow: stashRow || remoteRow
+            code: remoteRow ? "push --delete" : ""
+            text: heldRow ? qsTr("Hold to delete") : qsTr("Delete…")
             visible: page.menuRefKind === "branch" || page.menuRefKind === "tag"
-                     || page.menuRefKind === "remote" || stashRow
+                     || heldRow
             // The branch under the working tree cannot be deleted at all,
             // and git says so rather than doing something else.
             enabled: repoTab.busyCount === 0
                      && !(page.menuRefKind === "branch"
                           && page.menuRefId === workTree.branch)
-            holdMs: stashRow ? Metrics.holdMs : 0
-            onTriggered: if (!stashRow)
+            holdMs: heldRow ? Metrics.holdMs : 0
+            // Reaching past this machine is the warning tone; throwing
+            // away what is in hand is danger (デザイン規約 §状態).
+            holdTone: remoteRow ? Theme.warning : Theme.danger
+            onTriggered: if (!heldRow)
                              page.deleteRow(page.menuRefKind, page.menuRefId,
                                             page.menuRefName, page.menuRefOid)
             onHeld: {
                 refMenu.close()
-                page.dropStashNow(page.menuRefId)
+                if (stashRow)
+                    page.dropStashNow(page.menuRefId)
+                else
+                    page.deleteRemoteNow(page.menuRefId)
             }
         }
     }
@@ -465,8 +479,8 @@ Item {
     /// question worth asking, so it is asked when it arrives rather than
     /// guessed at beforehand (P2-確認事項 §B). A tag and a stash have no
     /// such refusal in git, and both can take something with them, so they
-    /// are asked about up front — and so does a branch on a remote, which
-    /// no refusal here can guard because the branch is over there.
+    /// are asked about up front. A branch on a remote never arrives here:
+    /// its row is held down instead (`deleteRemoteNow`).
     property string pendingDeleteBranch: ""
     /// Refusals this page already has an answer for. The question bar
     /// explains them, so the command log stays where it was rather than
@@ -487,38 +501,19 @@ Item {
                 true,
                 qsTr("Delete %1").arg(id),
                 function () { repoTab.deleteTag(id) })
-        } else if (kind === "remote") {
-            page.askDeleteRemote(id, oidHex)
         }
     }
-    /// Deleting a branch on a remote — the other write, with the rename it
-    /// shares its second half with, that lands where this machine keeps no
-    /// copy of what it undid (デザイン規約 §リモートブランチを消す).
-    ///
-    /// Asked before it runs, because git refuses nothing here: the branch
-    /// is on the far side, so no `-d` can weigh what it holds. Answered by
-    /// a hold, for the same reason the rename is. The tone is the warning
-    /// one rather than danger — nothing in hand is thrown away; this
-    /// reaches past this machine (デザイン規約 §状態).
-    function askDeleteRemote(remoteRef, oidHex) {
+    /// A branch on a remote, deleted with no question in front of it: the
+    /// menu row that reaches this was held down, which is the whole of the
+    /// asking (デザイン規約 §リモートブランチを消す). git refuses nothing
+    /// here — the branch is on the far side, so no `-d` can weigh what it
+    /// holds — and the hold is what stands in for that refusal.
+    function deleteRemoteNow(remoteRef) {
         const cut = remoteRef.indexOf("/")
         if (cut < 0)
             return
-        const remote = remoteRef.substring(0, cut)
-        const branch = remoteRef.substring(cut + 1)
-        page.startRowAsk(
-            oidHex !== "" ? oidHex : remotesModel.oidOfName(remoteRef),
-            qsTr("Delete %1?").arg(remoteRef),
-            qsTr("Nothing here can put it back."),
-            false,
-            qsTr("Hold to delete"),
-            function () { repoTab.deleteRemoteBranch(remote, branch) },
-            true,
-            qsTr("Hold to delete. %1 goes on %2 — anything the name carried, "
-                 + "an open pull request or a protected-branch rule, does "
-                 + "not come back with it.").arg(branch).arg(remote))
-        if (AppBackend.autoAct !== "")
-            AppBackend.report("delete_remote_asked ref=" + remoteRef)
+        repoTab.deleteRemoteBranch(remoteRef.substring(0, cut),
+                                   remoteRef.substring(cut + 1))
     }
     /// A stash dropped with no question in front of it: the menu row that
     /// reaches this was held down, which is the whole of the asking
@@ -937,6 +932,25 @@ Item {
             repoTab.checkInHistory(oidHex)
     }
 
+    // What git makes of the selected commit's signature. Asked on every
+    // selection, like the history question beside it, and read only when
+    // the answer names the commit now on screen — verifying runs gpg or
+    // ssh-keygen, so the answer arrives well after the details do.
+    // A signature only changes when the commit does, and a changed commit
+    // is a different hash, so nothing has to ask twice.
+    function askSignature(oidHex) {
+        if (oidHex !== "" && repoTab.state === "open")
+            repoTab.checkSignature(oidHex)
+    }
+    readonly property bool signatureIsForSelection:
+        detailsModel.shaHex !== "" && repoTab.signatureOid === detailsModel.shaHex
+    readonly property string selectedSignatureKind:
+        page.signatureIsForSelection ? repoTab.signatureKind : ""
+    readonly property string selectedSignatureCode:
+        page.signatureIsForSelection ? repoTab.signatureCode : ""
+    readonly property string selectedSignatureSigner:
+        page.signatureIsForSelection ? repoTab.signatureSigner : ""
+
     // Whether a remote already has the selected commit — what the save
     // row's warning rests on. Asked only once its message is touched:
     // that is the first moment the answer can matter, and it spares a
@@ -1043,6 +1057,16 @@ Item {
                     detailsPane.leaveResolved(true)
             }
         }
+    }
+    // gpg / ssh-keygen have to finish before the mark they decide can be
+    // on screen, so the shot and the report both wait for them.
+    Timer {
+        id: signatureTimer
+        interval: 800
+        onTriggered: AppBackend.report(
+            "signature kind=" + page.selectedSignatureKind
+            + " code=" + page.selectedSignatureCode
+            + " signer=" + page.selectedSignatureSigner)
     }
     function runAutoAct() {
         const act = AppBackend.autoAct
@@ -1241,26 +1265,21 @@ Item {
                              stashesModel.oidOfName(stashesModel.nameAt(0)))
             if (act === "delete-stash-go")
                 refDeleteItem.completeHold()
-        } else if (act === "remote-menu" || act === "delete-remote"
-                   || act === "delete-remote-go") {
-            // A branch on a remote, named outright (`origin/feature/x`)
-            // because the remote's rows sit behind a fold. "remote-menu"
-            // opens that fold and leaves the menu standing for the shot —
-            // and says in words which rows it offers, since a greyed or
-            // absent row is not something a screenshot can be trusted on.
-            // The plain verb stops at the question, "-go" holds its pill.
-            const remoteOid = remotesModel.oidOfName(arg)
-            if (act === "remote-menu") {
-                remotesModel.toggleFolder(arg.substring(0, arg.indexOf("/")))
-                page.openRefMenu("remote", arg, arg, remoteOid)
-                AppBackend.report("ref_menu kind=remote delete="
-                                  + refDeleteItem.visible
-                                  + " text=" + refDeleteItem.text)
-                return
-            }
-            page.deleteRow("remote", arg, arg, remoteOid)
+        } else if (act === "delete-remote" || act === "delete-remote-go") {
+            // The left menu's row for a branch on a remote, named outright
+            // (`origin/feature/x`) because those rows sit behind a fold —
+            // which is opened here so the row is under the menu it raises.
+            // That row is held rather than asked about, so there is no
+            // question to stop at: the plain verb leaves the menu standing
+            // for the shot, and "-go" runs the hold to its end. Which rows
+            // it offers is said in words too, since a greyed or absent row
+            // is not something a screenshot can be trusted on.
+            remotesModel.toggleFolder(arg.substring(0, arg.indexOf("/")))
+            page.openRefMenu("remote", arg, arg, remotesModel.oidOfName(arg))
+            AppBackend.report("ref_menu kind=remote delete=" + refDeleteItem.code
+                              + " " + refDeleteItem.text)
             if (act === "delete-remote-go")
-                graphPane.completeHold()
+                refDeleteItem.completeHold()
         } else if (act === "delete-force") {
             repoTab.deleteBranch(arg, true)
         } else if (act === "delete-tag-go") {
@@ -1310,6 +1329,12 @@ Item {
             if (stacked)
                 graphPane.view.chipExpandRequested(
                     stacked.chipItem.records, stacked.chipItem)
+        } else if (act === "signature") {
+            // Selecting a row is all the operating there is; the mark
+            // appears when the verify comes back, so the report waits
+            // for it. The argument is the row.
+            page.activateRow(graphModel.oidAt(Number(arg)))
+            signatureTimer.start()
         } else if (act === "name-box") {
             // Opened and left standing, for a look at it. The argument is
             // the row, since the box only belongs on one with no chips.
@@ -1707,6 +1732,7 @@ Item {
         page.selectedStashRef = graphModel.stashRefOf(oidHex)
         detailsModel.request(oidHex)
         page.askInHistory(oidHex)
+        page.askSignature(oidHex)
         page.closeDiff()
     }
 
@@ -2087,6 +2113,9 @@ Item {
                         busy: repoTab.busyCount > 0
                         asking: page.pendingMove !== null
                         published: page.selectedPublished
+                        signatureKind: page.selectedSignatureKind
+                        signatureCode: page.selectedSignatureCode
+                        signatureSigner: page.selectedSignatureSigner
                         // HEAD's own commit, not the current branch's tip:
                         // detached, there is no branch to ask.
                         headOid: workTree.headOid
@@ -2152,6 +2181,7 @@ Item {
             page.selectedStashRef = graphModel.stashRefOf(oidHex)
             detailsModel.request(oidHex)
             page.askInHistory(oidHex)
+            page.askSignature(oidHex)
             page.closeDiff()
         })
     }
