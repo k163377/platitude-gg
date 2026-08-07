@@ -806,15 +806,25 @@ Item {
             enabled: repoTab.busyCount === 0
             onTriggered: page.takeSideNow("theirs")
         }
+        // `Edit in`, not `Open in`: the two rows above say what the file
+        // ends up as, so this one keeps the same mood rather than
+        // switching to what a window does — and `Open` is already this
+        // app's word for bringing in a repository or a tab.
+        //
         // The external tool shares its seat with the way to pick one:
         // with nothing configured there is nothing to open, so the row
         // becomes the door to the setting instead (`…` = a question
         // stands). Changing the tool afterwards lives in settings rather
         // than in a second row here — the menu is the one surface where
         // an extra row costs every reader (P3-確認事項 §B).
+        //
+        // The name is left in plain type. A code chip would be the second
+        // in this menu, and `stash` two rows below wears one to say "this
+        // is a git command" — a tool name is a config value, and one mark
+        // cannot carry both (規約 §git 用語のコード表記).
         AppMenuItem {
             text: wipPane.workTree.mergeTool !== ""
-                  ? qsTr("Open in %1").arg(wipPane.workTree.mergeTool)
+                  ? qsTr("Edit in %1").arg(wipPane.workTree.mergeTool)
                   : qsTr("Choose merge editor…")
             visible: page.menuFileBucket === "conflicts"
             enabled: repoTab.busyCount === 0
