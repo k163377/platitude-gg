@@ -98,7 +98,7 @@ Rectangle {
         FoldBlock {
             width: parent.width
             height: Theme.headerHeight
-            mark: "»"
+            folds: false
             tip: qsTr("Unfold the list")
             divided: false
             // No section asked for: whatever was open stays open.

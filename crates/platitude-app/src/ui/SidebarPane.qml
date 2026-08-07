@@ -269,7 +269,6 @@ Rectangle {
                 FoldBlock {
                     Layout.fillHeight: true
                     Layout.preferredWidth: Theme.headerHeight
-                    mark: "«"
                     tip: qsTr("Fold the list to its icons")
                     onActivated: sidebar.foldRequested(true)
                 }

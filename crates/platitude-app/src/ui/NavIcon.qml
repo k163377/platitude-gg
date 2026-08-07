@@ -204,6 +204,19 @@ Canvas {
             ctx.lineTo(13.5 * s, 12.5 * s)
             ctx.closePath()
             ctx.stroke()
+        } else if (icon.kind === "chevrons") {
+            // The pair that moves a pane's edge, drawn rather than typed.
+            // A text guillemet sits on the lowercase band, so centring
+            // its line box leaves the ink low in the button; and drawn,
+            // it carries the same stroke as every other mark here.
+            ctx.lineJoin = "round"
+            for (const x of [4, 9]) {
+                ctx.beginPath()
+                ctx.moveTo(x * s, 4 * s)
+                ctx.lineTo((x + 4) * s, 8 * s)
+                ctx.lineTo(x * s, 12 * s)
+                ctx.stroke()
+            }
         } else if (icon.kind === "eye" || icon.kind === "eye-off") {
             // Lens and pupil — the visibility mark every layer list has
             // used since Photoshop. Drawn rather than borrowed from a

@@ -9,7 +9,9 @@ import platitude.ui
 // whole block takes the click, so the reach is the band's full height.
 Rectangle {
     id: block
-    property string mark: "«"
+    /// Which way the list goes when this is pressed — away to the left,
+    /// or back out to the right.
+    property bool folds: true
     property string tip: ""
     /// Whether something stands to its left to be divided from. False
     /// when the block is the whole band (folded), where the hairline
@@ -22,11 +24,19 @@ Rectangle {
     HoverToolButton {
         anchors.fill: parent
         padding: 0
-        text: block.mark
-        // The mark is the whole of the button, so it is written at a
-        // heading's size rather than a caption's: at fontSm a guillemet
-        // is six pixels of ink.
-        font.pixelSize: Theme.fontLg
+        // Carried in a box of its own rather than sized by the button:
+        // the mark stands beside the sections' icons on the folded rail
+        // and has to be the same weight and the same 20 as they are.
+        contentItem: Item {
+            NavIcon {
+                anchors.centerIn: parent
+                kind: "chevrons"
+                tint: Theme.textSecondary
+                width: Theme.iconLg
+                height: Theme.iconLg
+                rotation: block.folds ? 180 : 0
+            }
+        }
         ToolTip.visible: hovered
         ToolTip.delay: 600
         ToolTip.text: block.tip
