@@ -25,40 +25,46 @@ Rectangle {
     signal stageFileRequested()
     /// Stage or unstage one hunk (line < 0) or one line of it.
     signal stageSelectionRequested(int hunk, int line)
-    /// Throw one hunk (line < 0) or one line of it away. Offered on the
-    /// unstaged side only — the staged side unstages first.
-    signal discardSelectionRequested(int hunk, int line)
-    /// The question bar over these lines was answered / walked away from.
-    signal askConfirmed()
-    signal askCancelled()
+    /// Throw one hunk away. Offered on the unstaged side only — the
+    /// staged side unstages first. No question comes before it: the
+    /// heading's own button is held down (デザイン規約 §その他の操作).
+    signal discardHunkRequested(int hunk)
 
-    // ---- a standing question about part of this diff ----------------
-    // The same bar the graph and the file list raise, over the lines it
-    // is about (デザイン規約 §可否・警告の出し場所). What it concerns is
-    // marked rather than worded: one hunk, or the single line inside it.
-    property int askHunk: -1
-    property int askLine: -1
-    function startAsking(hunk, line, label, detail, accept) {
-        diffPane.askHunk = hunk
-        diffPane.askLine = line
-        askBar.label = label
-        askBar.detail = detail
-        askBar.accept = accept
-    }
-    function stopAsking() {
-        diffPane.askHunk = -1
-        diffPane.askLine = -1
-        askBar.label = ""
-    }
-    /// Automation: answer it by holding the pill to the end.
+    /// Automation: hold the heading's discard button to its end. The
+    /// hunk is the first one, which is the one every smoke run acts on.
     function completeHold() {
-        askBar.completeHold()
+        const row = diffList.itemAtIndex(0)
+        if (row && row.discardButton)
+            row.discardButton.completeHold()
     }
-    /// Any other click in here walks away from the question, the way one
-    /// anywhere else does — every one of them stages, unstages or leaves.
-    function leaveAsk() {
-        if (askBar.open)
-            diffPane.askCancelled()
+
+    // ---- automation: the tools a line only shows under the pointer ----
+    // Hover cannot be injected on Windows (CLAUDE.md), so the squares a
+    // line puts out — stage this line, throw it away — have no headless
+    // way to be seen. These name a row as though the pointer were on it,
+    // the way `ref-list` enters where the hover timer would. Nothing in
+    // the app writes them: the pointer is the only other way in.
+    property int hoverHunk: -1
+    property int hoverLine: -1
+    function showLineTools(hunk, line) {
+        diffPane.hoverHunk = hunk
+        diffPane.hoverLine = line
+    }
+    /// The first line of a hunk that a partial write can act on. A hunk's
+    /// lines are numbered through the context it carries, so line 0 is
+    /// usually a line that is not part of the change at all — selecting
+    /// one builds a patch with nothing in it, which core refuses ("the
+    /// selected part is no longer in its diff"). A pointer never has this
+    /// problem: it picks its line by being over it, and the squares only
+    /// come out on the lines that changed. -1 when the hunk has none.
+    function firstChangedLine(hunk) {
+        for (let i = 0; i < diffList.count; i++) {
+            const row = diffList.itemAtIndex(i)
+            if (row && row.hunk === hunk
+                    && (row.kind === "add" || row.kind === "del"))
+                return row.line
+        }
+        return -1
     }
 
     color: Theme.bgSurface
@@ -93,10 +99,7 @@ Rectangle {
                     ToolTip.text: diffPane.staged
                         ? qsTr("Unstage the whole file at once")
                         : qsTr("Stage the whole file at once")
-                    onClicked: {
-                        diffPane.leaveAsk()
-                        diffPane.stageFileRequested()
-                    }
+                    onClicked: diffPane.stageFileRequested()
                 }
                 HoverToolButton {
                     text: "×"
@@ -107,16 +110,9 @@ Rectangle {
                 }
             }
         }
-        // Between the header and the lines it is about, the same way it
-        // stands over the graph and over the file list.
-        AskBar {
-            id: askBar
-            Layout.fillWidth: true
-            danger: true
-            hold: true
-            onConfirmed: diffPane.askConfirmed()
-            onCancelled: diffPane.askCancelled()
-        }
+        // No question bar here: the only thing this pane throws away is a
+        // hunk, and that is held down on the hunk's own heading
+        // (デザイン規約 §その他の操作).
         // -- content preview: binaries summarized by size, images
         //    rendered (added = After only, deleted = Before only,
         //    modified = both).
@@ -188,25 +184,11 @@ Rectangle {
                        : kind === "del" ? Theme.diffRemovedBg
                        : kind === "hunk" ? Theme.diffHunkHeaderBg
                        : "transparent"
-                // The standing question is about this row: the whole hunk
-                // when no line was named, that one line otherwise. The
-                // words are on the bar; the rows answer "which".
-                readonly property bool marked:
-                    diffPane.askHunk >= 0 && diffRow.hunk === diffPane.askHunk
-                    && (diffPane.askLine < 0 ? diffRow.kind !== "meta"
-                                             : diffRow.line === diffPane.askLine)
-                Rectangle {
-                    anchors.fill: parent
-                    color: Theme.bgHover
-                    visible: diffRow.marked
-                    Rectangle {
-                        anchors.left: parent.left
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        width: Metrics.laneStroke
-                        color: Theme.danger
-                    }
-                }
+                // Nothing marks a row any more: what a hunk's discard
+                // takes is the hunk its heading sits on, and the button is
+                // in that heading. Reached from outside for the smoke run,
+                // which holds it the way a hand does.
+                readonly property alias discardButton: discardHunkButton
                 Row {
                     anchors.fill: parent
                     spacing: 0
@@ -254,6 +236,11 @@ Rectangle {
                     acceptedButtons: Qt.NoButton
                     enabled: diffPane.fromWorkTree
                 }
+                // Under the pointer, or named as if it were (see above).
+                readonly property bool underPointer:
+                    lineHover.containsMouse
+                    || (diffPane.hoverHunk === diffRow.hunk
+                        && diffPane.hoverLine === diffRow.line)
                 // Hunk-level staging. The row carries the hunk index the
                 // patch builder needs, so what is staged is exactly what
                 // is shown — and so is what is thrown away.
@@ -266,27 +253,35 @@ Rectangle {
                     // Only the unstaged side has a piece to throw away: on
                     // the staged side the button beside this one puts the
                     // hunk back where it can be.
-                    HoverToolButton {
+                    //
+                    // Held, not asked about (デザイン規約 §長押し): the
+                    // button sits in the hunk's own heading, so what it
+                    // takes is the thing it is standing on, and a bar
+                    // coming down over the diff to say so is machinery a
+                    // hunk does not need. The frame is what says it must
+                    // be held; the fill runs left to right inside it.
+                    ActionButton {
+                        id: discardHunkButton
                         visible: !diffPane.staged
-                        text: qsTr("Discard hunk…")
+                        text: qsTr("Discard hunk — hold")
                         font.pixelSize: Theme.fontSm
+                        tone: Theme.danger
+                        frameColor: Theme.danger
+                        holdMs: Metrics.holdMs
                         enabled: !diffPane.busy
-                        onClicked: diffPane.discardSelectionRequested(diffRow.hunk, -1)
+                        onHeld: diffPane.discardHunkRequested(diffRow.hunk)
                     }
                     HoverToolButton {
                         text: diffPane.staged ? qsTr("Unstage hunk")
                                               : qsTr("Stage hunk")
                         font.pixelSize: Theme.fontSm
                         enabled: !diffPane.busy
-                        onClicked: {
-                            diffPane.leaveAsk()
-                            diffPane.stageSelectionRequested(diffRow.hunk, -1)
-                        }
+                        onClicked: diffPane.stageSelectionRequested(diffRow.hunk, -1)
                     }
                 }
                 // Line-level staging.
                 Rectangle {
-                    visible: diffPane.fromWorkTree && lineHover.containsMouse
+                    visible: diffPane.fromWorkTree && diffRow.underPointer
                              && (diffRow.kind === "add"
                                  || diffRow.kind === "del")
                     x: Theme.spaceXs
@@ -318,51 +313,16 @@ Rectangle {
                         id: stageLineHover
                         anchors.fill: parent
                         hoverEnabled: true
-                        onClicked: {
-                            diffPane.leaveAsk()
-                            diffPane.stageSelectionRequested(diffRow.hunk,
-                                                             diffRow.line)
-                        }
+                        onClicked: diffPane.stageSelectionRequested(diffRow.hunk,
+                                                                   diffRow.line)
                     }
                 }
-                // The same square again, for throwing that one line away.
-                // Unstaged side only, for the same reason as the hunk's.
-                Rectangle {
-                    visible: diffPane.fromWorkTree && !diffPane.staged
-                             && lineHover.containsMouse
-                             && (diffRow.kind === "add"
-                                 || diffRow.kind === "del")
-                    x: Theme.spaceXs + Theme.iconMd + Theme.spaceXs
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Theme.iconMd
-                    height: Theme.iconMd
-                    radius: Theme.radiusSm
-                    color: Theme.bgElevated
-                    border.color: Theme.borderStrong
-                    border.width: Theme.borderWidth
-                    ToolTip.visible: discardLineHover.containsMouse
-                    ToolTip.delay: 300
-                    ToolTip.text: qsTr("Discard this line")
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: Theme.radiusSm
-                        color: Theme.bgHover
-                        visible: discardLineHover.containsMouse
-                    }
-                    Label {
-                        anchors.centerIn: parent
-                        text: "×"
-                        font.pixelSize: Theme.fontSm
-                        color: Theme.danger
-                    }
-                    MouseArea {
-                        id: discardLineHover
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: diffPane.discardSelectionRequested(diffRow.hunk,
-                                                                      diffRow.line)
-                    }
-                }
+                // No square for throwing one line away. A line can be
+                // staged on its own because staging loses nothing — the
+                // line stays on disk either way — but the smallest thing
+                // that can be thrown away is a hunk (デザイン規約
+                // §その他の操作): a bare `×` has no words to say what it
+                // takes, and a control that must be held has to say it.
             }
         }
     }

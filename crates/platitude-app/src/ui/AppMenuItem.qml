@@ -47,6 +47,19 @@ MenuItem {
     }
     readonly property bool holding: menuItem.holdProgress > 0
 
+    /// A row that runs on a click but leaves the menu standing, for the
+    /// one thing here that git answers rather than this app: `branch -d`
+    /// refuses while the branch holds commits nothing else does, and the
+    /// refusal is the question worth asking (デザイン規約 §左メニューの所作).
+    /// The menu has to outlive the click for that answer to have somewhere
+    /// to land — the row turns into a held one where the hand already is,
+    /// instead of a bar coming down over the graph.
+    property bool staysOpen: false
+    /// Clicked, on a row that stays open. `triggered` never fires for one:
+    /// the press is taken before the button behind it can see it, which is
+    /// what keeps the menu up.
+    signal picked()
+
     padding: Theme.spaceSm
     topPadding: 0
     bottomPadding: 0
@@ -192,11 +205,20 @@ MenuItem {
     // Hover is left alone (this one accepts none), so the row still
     // highlights the way every other row does.
     MouseArea {
+        id: rowPress
         anchors.fill: parent
-        enabled: menuItem.holdMs > 0 && menuItem.enabled
-        onPressed: rowHoldAnim.restart()
+        enabled: (menuItem.holdMs > 0 || menuItem.staysOpen) && menuItem.enabled
+        onPressed: if (menuItem.holdMs > 0) rowHoldAnim.restart()
         // Released anywhere, or dragged off the row: both call it off.
-        onReleased: rowHoldAnim.stop()
+        // A stays-open row has no fill to call off — letting go on the row
+        // is its click, and letting go outside it is not.
+        onReleased: mouse => {
+            rowHoldAnim.stop()
+            if (menuItem.holdMs <= 0 && menuItem.staysOpen
+                    && mouse.x >= 0 && mouse.y >= 0
+                    && mouse.x <= width && mouse.y <= height)
+                menuItem.picked()
+        }
         onCanceled: rowHoldAnim.stop()
         onPositionChanged: if (!containsMouse) rowHoldAnim.stop()
     }

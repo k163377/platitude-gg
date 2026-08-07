@@ -31,10 +31,6 @@ ColumnLayout {
     /// delegates are recycled out from under an open popup. `origPath` is
     /// where a rename came from ("" otherwise).
     signal fileMenuRequested(string bucket, string path, string origPath)
-    /// The question bar over the file list was answered / walked away
-    /// from. The page holds what the question guarded.
-    signal askConfirmed()
-    signal askCancelled()
 
     // ---- which rows are chosen -------------------------------------
     // Several files at once, the way a file list is used to being asked:
@@ -124,39 +120,6 @@ ColumnLayout {
         wipPane.chosenCount = Object.keys(next).length
     }
 
-    // ---- a standing question about one file ------------------------
-    // The same bar the graph raises, over the list the file is in: the
-    // question is written on the bar and the file's own row is marked
-    // (デザイン規約 §可否・警告の出し場所).
-    /// Which row is being asked about, as `<bucket>:<path>`.
-    property string askKey: ""
-    function startAsking(key, label, detail, accept) {
-        wipPane.askKey = key
-        askBar.label = label
-        askBar.detail = detail
-        askBar.accept = accept
-    }
-    function stopAsking() {
-        wipPane.askKey = ""
-        askBar.label = ""
-    }
-    /// Automation: answer the standing question the way a person does,
-    /// by holding the pill down to the end.
-    function completeHold() {
-        askBar.completeHold()
-    }
-    /// A click on anything in this pane other than the bar walks away
-    /// from the question, the way one anywhere else does — every click
-    /// here either moves rows between the buckets the mark names or
-    /// leaves the list behind.
-    ///
-    /// A click on a file row is the exception: it opens that file's diff
-    /// in the centre, which is how one sees what is about to be thrown
-    /// away, so the question waits.
-    function leaveAsk() {
-        if (askBar.open)
-            wipPane.askCancelled()
-    }
     /// The row at an index — automation, like `rowFor` below.
     function rowAt(index) {
         return wipList.itemAtIndex(index)
@@ -258,7 +221,6 @@ ColumnLayout {
                 ToolTip.delay: 600
                 ToolTip.text: qsTr("Set these changes aside for later")
                 onClicked: {
-                    wipPane.leaveAsk()
                     if (wipPane.stashPanelShown)
                         wipPane.closeStashPanel()
                     else
@@ -535,10 +497,7 @@ ColumnLayout {
                      && wipPane.repoTab.identityReady
                      && wipSubject.text.trim() !== ""
                      && (wipPane.amending || wipPane.workTree.stagedCount > 0)
-            onClicked: {
-                wipPane.leaveAsk()
-                wipPane.commitClicked()
-            }
+            onClicked: wipPane.commitClicked()
             ToolTip.visible: commitHover.containsMouse && !enabled
             ToolTip.delay: 300
             ToolTip.text: !wipPane.repoTab.identityReady
@@ -554,21 +513,9 @@ ColumnLayout {
             }
         }
     }
-    // Between the editor and the rows it is about: the list moves down
-    // rather than losing its top rows behind the bar.
-    AskBar {
-        id: askBar
-        Layout.fillWidth: true
-        // Everything asked over this list ends in work being thrown
-        // away, and nothing here reaches past this machine (§状態) — so
-        // the answer is taken the way an irreversible one is taken where
-        // the intent can be shown on the spot: held, not clicked
-        // (デザイン規約 §進行中・長押しの定数).
-        danger: true
-        hold: true
-        onConfirmed: wipPane.askConfirmed()
-        onCancelled: wipPane.askCancelled()
-    }
+    // No question bar over this list: what a file row throws away is held
+    // down on the menu row that names it, where the hand already is
+    // (デザイン規約 §長押し).
     ListView {
         id: wipList
         Layout.fillWidth: true
@@ -616,7 +563,6 @@ ColumnLayout {
                         ? qsTr("Unstage everything")
                         : qsTr("Stage everything, untracked included")
                     onClicked: {
-                        wipPane.leaveAsk()
                         if (bucketHeader.section === "staged")
                             wipPane.repoTab.unstageAll()
                         else
@@ -629,29 +575,20 @@ ColumnLayout {
             listWidth: wipList.width
             kindHint: "wt"
             showStage: true
-            askKey: wipPane.askKey
-            askDanger: askBar.danger
             chosen: wipPane.isChosen(bucket, fullName)
             onFileClicked: (bucket, path, origPath, modifiers) => {
                 // Choosing rows is not reading one: only a plain click
-                // moves the diff. A question about other rows goes.
-                if (!wipPane.applyClick(bucket, path, modifiers)) {
-                    wipPane.leaveAsk()
-                    return
-                }
-                wipPane.fileActivated(bucket, path, origPath)
+                // moves the diff.
+                if (wipPane.applyClick(bucket, path, modifiers))
+                    wipPane.fileActivated(bucket, path, origPath)
             }
             onFileMenuRequested: (bucket, path, origPath) => {
                 if (!wipPane.isChosen(bucket, path))
                     wipPane.chooseOnly(bucket, path)
                 wipPane.fileMenuRequested(bucket, path, origPath)
             }
-            onFolderClicked: key => {
-                wipPane.leaveAsk()
-                wipPane.worktreeModel.toggleFolder(key)
-            }
+            onFolderClicked: key => wipPane.worktreeModel.toggleFolder(key)
             onStageClicked: (bucket, path) => {
-                wipPane.leaveAsk()
                 if (bucket === "staged")
                     wipPane.repoTab.unstagePath(path)
                 else

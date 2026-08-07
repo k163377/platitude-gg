@@ -209,49 +209,27 @@ Item {
             AppBackend.report("move_branch_asked local=" + local)
     }
 
-    // ---- standing questions ----------------------------------------
-    // One question at a time, asked on the bar that comes down over the
-    // graph, with the row it is about marked (デザイン規約
-    // §可否・警告の出し場所). The run waits here; Escape, another ask or
-    // a click anywhere else walks away from it. The bar stands wherever
-    // the question came from — a row outside the loaded window simply
-    // goes unmarked — so nothing needs a dialog to fall back to.
+    // ---- the standing question --------------------------------------
+    // One bar, over the graph, with the row it is about marked (デザイン規約
+    // §可否・警告の出し場所). The run waits here; Escape, another ask or a
+    // click anywhere else walks away from it. A row outside the loaded
+    // window simply goes unmarked, so nothing needs a dialog to fall back
+    // to.
+    //
+    // Only questions about a ref reach it now. Everything that takes one
+    // named thing away — a file's changes, a hunk, a stash, a branch on a
+    // remote, `reset --hard` — is held down where the hand already is, on
+    // the row or button that names it (デザイン規約 §長押し).
     property var rowAskRun: null
     function startRowAsk(oidHex, label, detail, danger, acceptText, run,
                          hold = false, tip = "") {
         page.rowAskRun = run
-        // One question stands at a time, wherever it was raised.
-        wipPane.stopAsking()
         graphPane.startAsking(oidHex, label, detail, acceptText, danger,
                               hold, tip)
-    }
-    /// The same, over the working tree's file list: the question is about
-    /// one file, so it is asked where that file's row is (デザイン規約
-    /// §可否・警告の出し場所). `key` is `<bucket>:<path>`, which is what
-    /// the row marks itself by.
-    function startFileAsk(key, label, detail, acceptText, run) {
-        page.rowAskRun = run
-        graphPane.stopAsking()
-        diffPane.stopAsking()
-        wipPane.startAsking(key, label, detail, acceptText)
-        if (AppBackend.autoAct !== "")
-            AppBackend.report("file_ask key=" + key)
-    }
-    /// The same again, over the lines of one diff: what is being thrown
-    /// away is a hunk of it, or one line inside that hunk.
-    function startDiffAsk(hunk, line, label, detail, acceptText, run) {
-        page.rowAskRun = run
-        graphPane.stopAsking()
-        wipPane.stopAsking()
-        diffPane.startAsking(hunk, line, label, detail, acceptText)
-        if (AppBackend.autoAct !== "")
-            AppBackend.report("diff_ask hunk=" + hunk + " line=" + line)
     }
     function stopRowAsk() {
         page.rowAskRun = null
         graphPane.stopAsking()
-        wipPane.stopAsking()
-        diffPane.stopAsking()
     }
     function answerRowAsk() {
         const run = page.rowAskRun
@@ -348,15 +326,22 @@ Item {
     property string menuRefName: ""
     property string menuRefId: ""
     property string menuRefOid: ""
+    /// The branch git has just refused to delete, if the menu that asked
+    /// is still standing. Set only while its row is on screen to carry the
+    /// answer; a fresh menu starts with nothing refused.
+    property string forceDeleteBranch: ""
     function openRefMenu(kind, name, full, oidHex) {
         page.menuRefKind = kind
         page.menuRefName = name
         page.menuRefId = full
         page.menuRefOid = oidHex
+        page.forceDeleteBranch = ""
         refMenu.popup()
     }
     AppMenu {
         id: refMenu
+        // Walking away from a refused delete takes the offer with it.
+        onClosed: page.forceDeleteBranch = ""
         AppMenuItem {
             text: qsTr("Switch to %1").arg(page.menuRefId)
             visible: page.menuRefKind === "branch" || page.menuRefKind === "remote"
@@ -386,29 +371,51 @@ Item {
             // (デザイン規約 §git 用語のコード表記).
             readonly property bool stashRow: page.menuRefKind === "stash"
             readonly property bool remoteRow: page.menuRefKind === "remote"
-            readonly property bool heldRow: stashRow || remoteRow
+            readonly property bool tagRow: page.menuRefKind === "tag"
+            // A branch git already refused to delete. Until then a branch
+            // is the one row here that is not held: `-d` takes nothing
+            // away that git would not refuse over, so making the everyday
+            // tidy-up cost a hold would spend the gesture where there is
+            // nothing to lose (デザイン規約 §左メニューの所作).
+            readonly property bool refusedRow:
+                page.menuRefKind === "branch"
+                && page.forceDeleteBranch === page.menuRefId
+            readonly property bool heldRow: stashRow || remoteRow || tagRow
+                                            || refusedRow
             code: remoteRow ? "push --delete" : ""
-            text: heldRow ? qsTr("Hold to delete") : qsTr("Delete…")
-            visible: page.menuRefKind === "branch" || page.menuRefKind === "tag"
-                     || heldRow
+            // The verb first, the gesture after it: every held row in the
+            // app would otherwise open with the same two words, and a menu
+            // is read by its first word (デザイン規約 §長押し).
+            text: refusedRow ? qsTr("Delete anyway — hold")
+                : heldRow ? qsTr("Delete — hold") : qsTr("Delete…")
+            // What git said, in the row rather than on a bar: the branch
+            // holds commits its reference point does not (§左メニューの所作).
+            note: refusedRow ? qsTr("not merged") : ""
+            visible: page.menuRefKind === "branch" || heldRow
             // The branch under the working tree cannot be deleted at all,
             // and git says so rather than doing something else.
             enabled: repoTab.busyCount === 0
                      && !(page.menuRefKind === "branch"
                           && page.menuRefId === workTree.branch)
             holdMs: heldRow ? Metrics.holdMs : 0
+            // A branch's plain delete keeps the menu up: git's answer has
+            // nowhere to land otherwise, and this row is where it lands.
+            staysOpen: page.menuRefKind === "branch"
             // Reaching past this machine is the warning tone; throwing
             // away what is in hand is danger (デザイン規約 §状態).
             holdTone: remoteRow ? Theme.warning : Theme.danger
-            onTriggered: if (!heldRow)
-                             page.deleteRow(page.menuRefKind, page.menuRefId,
-                                            page.menuRefName, page.menuRefOid)
+            onPicked: page.deleteRow(page.menuRefKind, page.menuRefId,
+                                     page.menuRefName, page.menuRefOid)
             onHeld: {
                 refMenu.close()
                 if (stashRow)
                     page.dropStashNow(page.menuRefId)
-                else
+                else if (remoteRow)
                     page.deleteRemoteNow(page.menuRefId)
+                else if (tagRow)
+                    repoTab.deleteTag(page.menuRefId)
+                else
+                    repoTab.deleteBranch(page.menuRefId, true)
             }
         }
     }
@@ -489,19 +496,11 @@ Item {
     /// the write result arrive on separate paths, in no fixed order.
     property int expectedRefusals: 0
     function deleteRow(kind, id, name, oidHex) {
-        if (kind === "branch") {
-            page.pendingDeleteBranch = id
-            page.expectedRefusals++
-            repoTab.deleteBranch(id, false)
-        } else if (kind === "tag") {
-            page.startRowAsk(
-                oidHex,
-                qsTr("Delete %1?").arg(id),
-                qsTr("What only this tag reaches stops being reachable."),
-                true,
-                qsTr("Delete %1").arg(id),
-                function () { repoTab.deleteTag(id) })
-        }
+        if (kind !== "branch")
+            return
+        page.pendingDeleteBranch = id
+        page.expectedRefusals++
+        repoTab.deleteBranch(id, false)
     }
     /// A branch on a remote, deleted with no question in front of it: the
     /// menu row that reaches this was held down, which is the whole of the
@@ -523,21 +522,19 @@ Item {
         if (page.selectedStashRef === ref)
             page.selectedStashRef = ""
     }
-    /// git refused the plain delete: the branch has commits of its own.
-    /// Forcing is the only way through, and it is the one thing here that
-    /// leaves work with nothing pointing at it.
-    function askForceDelete(name) {
-        const oid = branchesModel.oidOfName(name)
-        page.startRowAsk(
-            oid,
-            qsTr("Delete %1 anyway?").arg(name),
-            qsTr("Commits only %1 has stop being reachable.").arg(name),
-            true,
-            qsTr("Hold to delete"),
-            function () { repoTab.deleteBranch(name, true) },
-            true)
+    /// git refused the plain delete. The row that asked is still standing
+    /// — the click that ran it left the menu up for exactly this — so the
+    /// answer lands there, on the row the hand is already on, and turns it
+    /// into a held one (デザイン規約 §左メニューの所作).
+    ///
+    /// The row says what git said and no more. A refusal does not mean the
+    /// commits stop being reachable: git measures the branch against its
+    /// upstream when it has one, so a branch merged into HEAD but not yet
+    /// pushed is refused while nothing at all would be lost (実測).
+    function noteForceDelete(name) {
+        page.forceDeleteBranch = name
         if (AppBackend.autoAct !== "")
-            AppBackend.report("force_delete_asked branch=" + name)
+            AppBackend.report("force_delete_offered branch=" + name)
     }
 
     // ---- context menu on a working-tree file row --------------------
@@ -552,6 +549,10 @@ Item {
         page.menuFileBucket = bucket
         page.menuFilePath = path
         page.menuFileOrig = origPath === undefined ? "" : origPath
+        // What the discard row would do, worked out once here: the choice
+        // cannot change while the menu is up, so the words the row says
+        // and the writes it runs are read off the same plan.
+        page.discardPlan = page.planDiscard()
         fileMenu.popup()
         // Which rows the menu offers follows from the bucket, and a
         // greyed or absent row is not something a screenshot can be
@@ -559,12 +560,12 @@ Item {
         if (AppBackend.autoAct !== "")
             AppBackend.report("file_menu bucket=" + bucket)
     }
-    /// Undoing what happened to one file, over the list the file is in
-    /// and with its row marked, so the file is named once — by the row.
+    /// Undoing what happened to one file: what the chosen rows would cost
+    /// and which git command each of them goes to.
     ///
     /// One way in, because the reader's intent is the same whatever git
-    /// knows about the file; one line apart, because what it costs is not
-    /// (デザイン規約 §その他の操作). Which row it was asked on is the
+    /// knows about the file; the words apart, because what it costs is not
+    /// (デザイン規約 §その他の操作). Which row it was opened on is the
     /// whole of the difference:
     ///
     /// - unstaged — the edits on disk go, and what is staged stays
@@ -573,63 +574,72 @@ Item {
     ///   name it came from with it or leaves half of itself staged
     ///
     /// A conflicted path gets here from nowhere: git refuses to restore
-    /// one until it has been told how it was resolved.
-    function askDiscardFile() {
+    /// one until it has been told how it was resolved, so a conflicted
+    /// row rides along with none of it and is not counted either.
+    property var discardPlan: null
+    function planDiscard() {
         // Whatever is highlighted, in list order. A right-click outside
         // the choice has already made its row the whole of it.
         const rows = wipPane.chosenRows()
-        const unstaged = [], untracked = [], staged = []
-        // The rows the discard will actually touch: conflicted ones ride
-        // along with none of it, so they must not be counted or keyed on.
-        const kept = []
+        const plan = { count: 0, unstaged: [], untracked: [], staged: [] }
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i]
-            // git will not restore a path it has not been told how to
-            // merge yet, so a conflicted row rides along with none of it.
             if (row.bucket === "conflicts")
                 continue
-            kept.push(row)
-            const bag = row.bucket === "untracked" ? untracked
-                      : row.bucket === "staged" ? staged : unstaged
+            plan.count++
+            const bag = row.bucket === "untracked" ? plan.untracked
+                      : row.bucket === "staged" ? plan.staged : plan.unstaged
             bag.push(row.fullName)
             // A rename is undone by both of its names at once.
             if (row.bucket === "staged" && row.orig_path !== "")
                 bag.push(row.orig_path)
         }
-        const count = kept.length
-        if (count === 0)
+        return plan
+    }
+    /// What the row does, said the way every held row says it: the verb
+    /// first, the gesture after it (デザイン規約 §長押し). Leading with
+    /// `Hold to` instead would open every destructive row in the app with
+    /// the same two words, and a menu is read by its first word.
+    /// Nothing to take is nothing to say.
+    function discardWords(plan) {
+        return !plan || plan.count === 0 ? "" : qsTr("Discard — hold")
+    }
+    /// What that costs, when it is more than the verb implies: one wording
+    /// for every bucket and the difference on the tag, since the reader's
+    /// intent is the same whatever git knows about the file
+    /// (デザイン規約 §その他の操作).
+    function discardNote(plan) {
+        if (!plan || plan.count === 0)
+            return ""
+        if (plan.count > 1)
+            return qsTr("%n files", "", plan.count)
+        if (plan.untracked.length > 0)
+            return qsTr("the file goes")
+        if (plan.staged.length > 0)
+            return qsTr("both sides")
+        return ""
+    }
+    /// Thrown away with no question in front of it: the menu row that
+    /// reaches this was held down, which is the whole of the asking
+    /// (デザイン規約 §長押し).
+    function discardChosenNow(plan) {
+        if (!plan || plan.count === 0)
             return
-        // One file says exactly what it loses; several say the one thing
-        // that is true of all of them (デザイン規約 §長さ).
-        const detail = count > 1 ? qsTr("Kept nowhere else.")
-                     : untracked.length > 0
-                     ? qsTr("The file goes — git never recorded it.")
-                     : staged.length > 0
-                     ? qsTr("Everything since the last commit goes.")
-                     : qsTr("Kept nowhere else.")
-        page.startFileAsk(
-            count > 1 ? "*" : kept[0].bucket + ":" + kept[0].fullName,
-            count > 1 ? qsTr("Discard changes to %n files?", "", count)
-                      : qsTr("Discard changes?"),
-            detail,
-            qsTr("Hold to discard"),
-            function () {
-                // One git command per bucket, however many rows were
-                // chosen: the paths cross the bridge one at a time and
-                // the write takes the whole set (デザイン規約 §その他の操作).
-                if (unstaged.length > 0) {
-                    page.sendPaths(unstaged)
-                    repoTab.discardPaths()
-                }
-                if (untracked.length > 0) {
-                    page.sendPaths(untracked)
-                    repoTab.removeUntrackedPaths()
-                }
-                if (staged.length > 0) {
-                    page.sendPaths(staged)
-                    repoTab.discardPathsToHead()
-                }
-            })
+        // One git command per bucket, however many rows were chosen: the
+        // paths cross the bridge one at a time and the write takes the
+        // whole set (デザイン規約 §その他の操作).
+        if (plan.unstaged.length > 0) {
+            page.sendPaths(plan.unstaged)
+            repoTab.discardPaths()
+        }
+        if (plan.untracked.length > 0) {
+            page.sendPaths(plan.untracked)
+            repoTab.removeUntrackedPaths()
+        }
+        if (plan.staged.length > 0) {
+            page.sendPaths(plan.staged)
+            repoTab.discardPathsToHead()
+        }
     }
     /// Hands a set of paths to the bridge for the write that follows.
     function sendPaths(paths) {
@@ -656,16 +666,22 @@ Item {
                 repoTab.stashPaths("")
             }
         }
-        // One row on every kind of file — the row says what is being
-        // undone, the question says what that costs. On a file changed on
-        // both sides that makes the two rows the choice itself: the
+        // One row on every kind of file, and the row says what it takes
+        // away — held rather than asked about, the way the stash and the
+        // remote branch above it are (デザイン規約 §長押し). On a file
+        // changed on both sides the two rows are the choice itself: the
         // unstaged one keeps what is staged, the staged one takes the lot.
-        // The ellipsis is the one on `Delete…`: a question comes first.
         AppMenuItem {
-            text: qsTr("Discard changes…")
+            id: fileDiscardItem
+            text: page.discardWords(page.discardPlan)
+            note: page.discardNote(page.discardPlan)
             visible: page.menuFileBucket !== "conflicts"
             enabled: repoTab.busyCount === 0
-            onTriggered: page.askDiscardFile()
+            holdMs: Metrics.holdMs
+            onHeld: {
+                fileMenu.close()
+                page.discardChosenNow(page.discardPlan)
+            }
         }
         AppMenuSeparator {}
         AppMenuItem {
@@ -730,7 +746,7 @@ Item {
         // is (デザイン規約 §長押し).
         AppMenuItem {
             id: stashDeleteItem
-            text: qsTr("Hold to delete")
+            text: qsTr("Delete — hold")
             enabled: repoTab.busyCount === 0
             holdMs: Metrics.holdMs
             onHeld: {
@@ -805,7 +821,7 @@ Item {
             AppMenuItem {
                 id: hardResetItem
                 code: "--hard"
-                text: qsTr("Hold to discard everything after it")
+                text: qsTr("Discard everything after it — hold")
                 holdMs: Metrics.holdMs
                 onHeld: {
                     resetMenu.close()
@@ -1028,14 +1044,46 @@ Item {
         interval: 800
         onTriggered: {
             const act = AppBackend.autoAct
-            if (act === "stage-hunk" || act === "stage-line") {
-                page.stageSelection(0, act === "stage-line" ? 0 : -1)
+            // Nothing to do but be looked at: the diff is the shot.
+            if (act === "diff-file")
+                return
+            // Which line the line-level verbs mean. Not 0: a hunk numbers
+            // its lines through the context it carries, and the context is
+            // not part of the change (see `firstChangedLine`).
+            const line = diffPane.firstChangedLine(0)
+            // The squares a line only puts out under the pointer, named
+            // rather than hovered (hover cannot be injected on Windows).
+            if (act === "line-tools") {
+                diffPane.showLineTools(0, line)
                 return
             }
-            page.askDiscardSelection(0, act.startsWith("discard-line") ? 0 : -1)
-            if (act.endsWith("-go"))
+            if (act === "stage-hunk" || act === "stage-line") {
+                page.stageSelection(0, act === "stage-line" ? line : -1)
+                return
+            }
+            // "discard-hunk" leaves the held button on screen for the shot;
+            // "-go" holds it to its end. There is no line-level discard to
+            // enter — a hunk is the smallest piece that can be thrown away.
+            if (act === "discard-hunk-go")
                 diffPane.completeHold()
         }
+    }
+    // git's refusal has to come back before the row it turns into a held
+    // one can be held — or photographed.
+    Timer {
+        id: forceDeleteTimer
+        interval: 800
+        onTriggered: {
+            AppBackend.report("ref_menu delete=" + refDeleteItem.text
+                              + " note=" + refDeleteItem.note)
+            refDeleteItem.completeHold()
+        }
+    }
+    Timer {
+        id: refusedRowTimer
+        interval: 800
+        onTriggered: AppBackend.report("ref_menu delete=" + refDeleteItem.text
+                                       + " note=" + refDeleteItem.note)
     }
     // The message has to arrive before it can be typed over, and the
     // "is this commit ours to rewrite?" answer before it may be saved.
@@ -1118,9 +1166,9 @@ Item {
                 wipPane.applyClick(other.bucket, other.fullName, Qt.ControlModifier)
             AppBackend.report("chosen count=" + wipPane.chosenCount)
             page.openFileMenu(other ? other.bucket : "unstaged", arg, "")
-            page.askDiscardFile()
+            AppBackend.report("discard_row " + fileDiscardItem.text)
             if (act.endsWith("-go"))
-                wipPane.completeHold()
+                fileDiscardItem.completeHold()
         } else if (act === "stash-dialog") {
             // Opened and left standing, for a look at it. With the
             // argument "staged-only" the staged-only box is clicked
@@ -1132,17 +1180,28 @@ Item {
         } else if (act === "file-menu" || act === "file-menu-untracked"
                    || act === "file-menu-staged") {
             // Which rows a file row offers follows from its bucket, so
-            // each bucket has its own way in here.
-            page.openFileMenu(act === "file-menu" ? "unstaged"
-                              : act === "file-menu-staged" ? "staged"
-                              : "untracked", arg)
+            // each bucket has its own way in here. The row is chosen
+            // first, the way a right-click on an unchosen row chooses it
+            // — the menu acts on what is highlighted, and its discard row
+            // says what that choice costs.
+            const menuBucket = act === "file-menu" ? "unstaged"
+                             : act === "file-menu-staged" ? "staged"
+                             : "untracked"
+            wipPane.chooseOnly(menuBucket, arg)
+            page.openFileMenu(menuBucket, arg, "")
+            AppBackend.report("discard_row " + fileDiscardItem.text)
         } else if (act === "discard-file" || act === "discard-file-go"
                    || act === "delete-file" || act === "delete-file-go"
                    || act === "discard-staged" || act === "discard-staged-go") {
             // Through the file menu, where a right-click enters it. The
-            // one row asks which row it was opened on: "delete-file" an
-            // untracked one, "discard-staged" the staged side, otherwise
-            // the unstaged one. All stop at the question; "-go" answers it.
+            // one row says what it takes, which follows the row it was
+            // opened on: "delete-file" an untracked one, "discard-staged"
+            // the staged side, otherwise the unstaged one. That row is
+            // held rather than asked about, so there is no question to
+            // stop at: the plain verb leaves the menu standing for the
+            // shot, and "-go" runs the hold to its end. What the row says
+            // goes into words as well — the wording is the whole of the
+            // difference between the three, and a shot alone proves little.
             page.showWip()
             const bucket = act.startsWith("delete-file") ? "untracked"
                          : act.startsWith("discard-staged") ? "staged"
@@ -1152,33 +1211,9 @@ Item {
             const row = wipPane.rowFor(arg)
             wipPane.chooseOnly(bucket, arg)
             page.openFileMenu(bucket, arg, row ? row.orig_path : "")
-            page.askDiscardFile()
-            // "-go" answers it the way a person does: by holding the
-            // pill down, which is the only gesture that answers here.
+            AppBackend.report("discard_row " + fileDiscardItem.text)
             if (act.endsWith("-go"))
-                wipPane.completeHold()
-        } else if (act === "file-ask-clicks") {
-            // What the clicks around a standing question do: one on the
-            // file's own row opens its diff and the question waits (that
-            // is how one sees what is about to go), one on its stage box
-            // moves the row to the other bucket and lets the question go
-            // — the file row's own click is the only one that keeps it.
-            // Entered where the row enters them. The row has to be
-            // chosen first — askDiscardFile reads the choice, and takes
-            // no arguments.
-            page.showWip()
-            wipPane.chooseOnly("unstaged", arg)
-            page.askDiscardFile()
-            const row = wipPane.rowFor(arg)
-            AppBackend.report("row_found=" + (row !== null))
-            if (row) {
-                // A plain click: no modifiers, like the finger it stands for.
-                row.fileClicked(row.bucket, row.fullName, row.orig_path,
-                                Qt.NoModifier)
-                AppBackend.report("after_row_click asking=" + (wipPane.askKey !== ""))
-                row.stageClicked(row.bucket, row.fullName)
-                AppBackend.report("after_stage_click asking=" + (wipPane.askKey !== ""))
-            }
+                fileDiscardItem.completeHold()
         } else if (act === "amend-author") {
             // The amend editor with authorship on offer, left standing.
             wipPane.setAmendChecked(true)
@@ -1248,13 +1283,23 @@ Item {
             const local = workTree.branch
             sidebarPane.beginRename("branch", local, local)
             sidebarPane.submitEdit(arg)
-        } else if (act === "delete-branch" || act === "delete-tag") {
-            // Through the menu's own path: the branch one runs the plain
-            // delete (and raises the question when git refuses), the tag
-            // one stops at the question.
-            const kind = act.substring("delete-".length)
-            const model = kind === "tag" ? tagsModel : branchesModel
-            page.deleteRow(kind, arg, arg, model.oidOfName(arg))
+        } else if (act === "delete-branch" || act === "delete-branch-go") {
+            // Through the menu's own row, which stays standing over the
+            // plain `-d` so git's answer has somewhere to land. On a merged
+            // branch it lands and the menu closes; on one git refuses, the
+            // row turns into the held `Delete anyway — hold`, which "-go"
+            // then runs to its end. What the row says goes into words too,
+            // since that is the whole of the difference.
+            page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
+            page.deleteRow("branch", arg, arg, branchesModel.oidOfName(arg))
+            if (act === "delete-branch-go")
+                forceDeleteTimer.start()
+        } else if (act === "delete-tag" || act === "delete-tag-go") {
+            // The tag's row is held rather than asked about: git refuses
+            // nothing here, so the hold is the whole of the asking.
+            page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
+            if (act === "delete-tag-go")
+                refDeleteItem.completeHold()
         } else if (act === "delete-stash" || act === "delete-stash-go") {
             // The left menu's row for the first stash. That row is held
             // rather than asked about, so there is no question to stop at:
@@ -1282,8 +1327,14 @@ Item {
                 refDeleteItem.completeHold()
         } else if (act === "delete-force") {
             repoTab.deleteBranch(arg, true)
-        } else if (act === "delete-tag-go") {
-            repoTab.deleteTag(arg)
+        } else if (act === "delete-branch-refused") {
+            // The refused branch's row, left standing for the shot: the
+            // plain delete runs and the refusal turns the row into a held
+            // one. Same entry as delete-branch; this one just waits for
+            // git's answer rather than acting on it.
+            page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
+            page.deleteRow("branch", arg, arg, branchesModel.oidOfName(arg))
+            refusedRowTimer.start()
         } else if (act === "stash-menu" || act === "delete-stash-row") {
             // The graph's way to the same three rows, entered where a
             // right-click enters it: the row menu on the first stash's
@@ -1377,12 +1428,21 @@ Item {
             if (act === "reset-menu")
                 resetMenu.popup()
             AppBackend.report("commit_menu can_move=" + page.canMoveBranchHere)
+        } else if (act === "wip") {
+            // The working tree, as the row above the newest commit opens
+            // it: the file list this pane's every other verb starts from.
+            page.showWip()
         } else if (act === "stage-hunk" || act === "stage-line"
                    || act === "discard-hunk" || act === "discard-hunk-go"
-                   || act === "discard-line" || act === "discard-line-go") {
-            // All five enter through the diff of one unstaged file and
-            // act on its first hunk; the discarding ones stop at the
-            // question, and "-go" holds the pill down to answer it.
+                   || act === "diff-file" || act === "line-tools") {
+            // All of them enter through the diff of one unstaged file and
+            // act on its first hunk: "diff-file" only opens it, and
+            // "line-tools" puts out the square a line shows under the
+            // pointer. "discard-hunk" leaves the held button standing for
+            // the shot and "-go" holds it to its end. The working tree
+            // comes up first, since its file list is where a diff is
+            // reached from.
+            page.showWip()
             page.toggleDiff("unstaged", arg, "")
             stageRowTimer.start()
         } else if (act === "push") {
@@ -1427,17 +1487,19 @@ Item {
             if (repoTab.lastWriteOp === "branch" && page.pendingDeleteBranch !== "") {
                 const refused = page.pendingDeleteBranch
                 page.pendingDeleteBranch = ""
-                page.askForceDelete(refused)
+                page.noteForceDelete(refused)
             }
             // A rename that did not happen has nothing to carry over.
             page.pendingRenameRemote = ""
             page.pendingRenameTo = ""
             return
         }
-        // Landed: no refusal is coming for it after all.
+        // Landed: no refusal is coming for it after all, so the menu left
+        // standing to catch one has nothing left to say.
         if (page.pendingDeleteBranch !== "") {
             page.pendingDeleteBranch = ""
             page.expectedRefusals = Math.max(0, page.expectedRefusals - 1)
+            refMenu.close()
         }
         // The branch took its new name here; the remote it speaks for is
         // still under the old one. Asked only now, and only because there
@@ -1516,21 +1578,16 @@ Item {
                                hunk, line, diffModel.fingerprint)
         page.pendingDiffReload = true
     }
-    /// Throwing part of the shown diff away. Asked over the lines it is
-    /// about, like every other discard, and the rows are marked while the
-    /// question stands.
-    function askDiscardSelection(hunk, line) {
-        page.startDiffAsk(
-            hunk, line,
-            line < 0 ? qsTr("Discard this hunk?") : qsTr("Discard this line?"),
-            qsTr("Kept nowhere else."),
-            qsTr("Hold to discard"),
-            function () {
-                repoTab.discardSelection(page.diffKind, page.diffPath,
-                                         page.diffOrigPath, hunk, line,
-                                         diffModel.fingerprint)
-                page.pendingDiffReload = true
-            })
+    /// Throwing one hunk of the shown diff away, with no question in front
+    /// of it: the button in that hunk's own heading was held down, which is
+    /// the whole of the asking (デザイン規約 §その他の操作). A line cannot
+    /// be thrown away on its own — the hunk is the smallest piece — though
+    /// it can still be staged on its own, which loses nothing.
+    function discardHunkNow(hunk) {
+        repoTab.discardSelection(page.diffKind, page.diffPath,
+                                 page.diffOrigPath, hunk, -1,
+                                 diffModel.fingerprint)
+        page.pendingDiffReload = true
     }
     property bool pendingDiffReload: false
     function reloadDiff() {
@@ -1541,9 +1598,6 @@ Item {
     }
 
     function closeDiff() {
-        // A question about these lines goes off screen with them.
-        if (diffPane.askHunk >= 0)
-            page.stopRowAsk()
         page.diffShown = false
         page.diffKey = ""
         page.diffKind = ""
@@ -2036,10 +2090,7 @@ Item {
                         staged: page.diffStaged
                         busy: repoTab.busyCount > 0
                         onCloseRequested: page.closeDiff()
-                        onDiscardSelectionRequested: (hunk, line) =>
-                            page.askDiscardSelection(hunk, line)
-                        onAskConfirmed: page.answerRowAsk()
-                        onAskCancelled: page.stopRowAsk()
+                        onDiscardHunkRequested: hunk => page.discardHunkNow(hunk)
                         onStageFileRequested: {
                             if (page.diffStaged)
                                 repoTab.unstagePath(page.diffPath)
@@ -2088,8 +2139,6 @@ Item {
                             repoTab.pushStash(message, untracked, keepIndex, stagedOnly)
                         onFileMenuRequested: (bucket, path) =>
                             page.openFileMenu(bucket, path)
-                        onAskConfirmed: page.answerRowAsk()
-                        onAskCancelled: page.stopRowAsk()
                     }
 
                     DetailsPane {

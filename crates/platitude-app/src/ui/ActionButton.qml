@@ -132,10 +132,17 @@ HoverToolButton {
             visible: actionBtn.activeFocus
         }
     }
+    // The toolbar's size unless an instance says otherwise: the hunk
+    // header's buttons are the body size the rest of that row is.
+    font.pixelSize: Theme.fontMd
+
     contentItem: RowLayout {
         spacing: Theme.spaceXs
+        // A button with no icon to name it spends no width on one — the
+        // word is the whole of it (the hunk header's buttons).
         Item {
-            implicitWidth: Theme.iconMd
+            visible: actionBtn.kind !== "" || actionBtn.busy
+            implicitWidth: visible ? Theme.iconMd : 0
             implicitHeight: Theme.iconMd
             Layout.alignment: Qt.AlignVCenter
             NavIcon {
@@ -171,7 +178,7 @@ HoverToolButton {
             id: widest
             visible: false
             text: actionBtn.widestText
-            font.pixelSize: Theme.fontMd
+            font.pixelSize: actionBtn.font.pixelSize
         }
         Label {
             id: btnLabel
@@ -183,7 +190,7 @@ HoverToolButton {
                                         ? widest.implicitWidth + Theme.spaceXs : 0
             text: actionBtn.text
             color: actionBtn.fg
-            font.pixelSize: Theme.fontMd
+            font.pixelSize: actionBtn.font.pixelSize
             elide: Text.ElideRight
             Layout.maximumWidth: 240
             Layout.preferredWidth: Math.max(implicitWidth, box)
