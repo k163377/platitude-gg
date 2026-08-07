@@ -204,19 +204,33 @@ Canvas {
             ctx.lineTo(13.5 * s, 12.5 * s)
             ctx.closePath()
             ctx.stroke()
-        } else if (icon.kind === "flag") {
-            // A pennant on a pole. Filled rather than outlined: it is
-            // worn small, and a stroked triangle closes up at that size.
+        } else if (icon.kind === "eye" || icon.kind === "eye-off") {
+            // Lens and pupil — the visibility mark every layer list has
+            // used since Photoshop. Drawn rather than borrowed from a
+            // symbol font: U+2691 and U+1F441 are in neither Segoe UI nor
+            // any of the families the chain names, so a glyph would be
+            // whatever each of the three platforms falls back to.
             ctx.beginPath()
-            ctx.moveTo(5 * s, 2.5 * s)
-            ctx.lineTo(5 * s, 13.5 * s)
-            ctx.stroke()
-            ctx.beginPath()
-            ctx.moveTo(6 * s, 3 * s)
-            ctx.lineTo(13 * s, 6 * s)
-            ctx.lineTo(6 * s, 9 * s)
+            ctx.moveTo(2.5 * s, 8 * s)
+            ctx.quadraticCurveTo(8 * s, 2 * s, 13.5 * s, 8 * s)
+            ctx.quadraticCurveTo(8 * s, 14 * s, 2.5 * s, 8 * s)
             ctx.closePath()
+            ctx.stroke()
+            // Half the lens, so the two still read apart once the mark is
+            // worn small on the rail.
+            ctx.beginPath()
+            ctx.arc(8 * s, 8 * s, 1.5 * s, 0, 2 * Math.PI)
             ctx.fill()
+            // Struck through when it is not being looked at. Two steps
+            // down the ramp is a state a reader can miss at this size;
+            // the stroke through it is the one nobody misses, and it is
+            // what every layer list has meant by hidden since Photoshop.
+            if (icon.kind === "eye-off") {
+                ctx.beginPath()
+                ctx.moveTo(3 * s, 13 * s)
+                ctx.lineTo(13 * s, 3 * s)
+                ctx.stroke()
+            }
         } else if (icon.kind === "clock") {
             ctx.beginPath()
             ctx.arc(8 * s, 8 * s, 5.5 * s, 0, 2 * Math.PI)

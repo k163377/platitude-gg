@@ -16,6 +16,7 @@ DetailsPane 1.0 DetailsPane.qml
 DiffPane 1.0 DiffPane.qml
 DirtySwitchDialog 1.0 DirtySwitchDialog.qml
 FileRowDelegate 1.0 FileRowDelegate.qml
+FoldBlock 1.0 FoldBlock.qml
 FormField 1.0 FormField.qml
 GraphPane 1.0 GraphPane.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml

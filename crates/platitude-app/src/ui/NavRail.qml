@@ -90,30 +90,19 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
 
-        // The pane's header band, kept for the seat the fold control sits
-        // in: folded or not it is the same seat, and the panes either side
+        // The pane's header band, which folded is the fold control and
+        // nothing else — the same block that sits at the end of the band
+        // when the list is open, holding the whole width because there is
+        // no filter beside it to divide it from. The panes either side
         // still start where this ends (規約 §QML 実装ルール).
-        Item {
+        FoldBlock {
             width: parent.width
             height: Theme.headerHeight
-
-            HoverToolButton {
-                anchors.centerIn: parent
-                framed: true
-                padding: 0
-                implicitWidth: Theme.iconLg
-                implicitHeight: Theme.iconLg
-                text: "»"
-                // The mark is the whole of the button, so it is written
-                // at the size a heading is rather than a caption's: at
-                // fontSm it is six pixels of ink in a twenty-pixel box.
-                font.pixelSize: Theme.fontLg
-                ToolTip.visible: hovered
-                ToolTip.delay: 600
-                ToolTip.text: qsTr("Unfold the list")
-                // No section asked for: whatever was open stays open.
-                onClicked: rail.unfoldRequested("")
-            }
+            mark: "»"
+            tip: qsTr("Unfold the list")
+            divided: false
+            // No section asked for: whatever was open stays open.
+            onActivated: rail.unfoldRequested("")
             // The hairline the filter's underline leaves behind, so the
             // band reads as the same band it was before it folded.
             Rectangle {
@@ -160,15 +149,17 @@ Rectangle {
                                             : cell.modelData.tint
                         width: Theme.iconLg
                         height: Theme.iconLg
-                        // The flag the TAGS header carries, worn as a mark
+                        // The eye the TAGS header carries, worn as a mark
                         // on the corner: folded, this is the only place
-                        // "are tags in the graph" can be answered. It
-                        // flies or it is not there — a mark that is
-                        // always up says nothing, and two steps of colour
-                        // is not a state anyone reads at 12px.
+                        // "are tags in the graph" can be answered. It is
+                        // open or it is not there — a mark that is always
+                        // up says nothing, and two steps of colour is not
+                        // a state anyone reads at this size. Smaller than
+                        // the section's own mark, because it is about the
+                        // mark rather than beside it.
                         NavIcon {
                             visible: cell.taggable && rail.tagsShown
-                            kind: "flag"
+                            kind: "eye"
                             tint: sectionIcon.tint
                             width: Theme.iconSm
                             height: Theme.iconSm

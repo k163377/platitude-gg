@@ -240,8 +240,7 @@ Rectangle {
             implicitHeight: Theme.headerHeight
             RowLayout {
                 anchors.fill: parent
-                anchors.rightMargin: Theme.spaceXs
-                spacing: Theme.spaceXs
+                spacing: 0
                 TextField {
                     id: refFilter
                     Layout.fillWidth: true
@@ -261,22 +260,18 @@ Rectangle {
                         sidebar.tagsModel.setFilter(text)
                     }
                 }
-                // The seat the fold control keeps whichever way the list
-                // is: the rail's band has the same button pointing back.
-                HoverToolButton {
-                    Layout.alignment: Qt.AlignVCenter
-                    framed: true
-                    padding: 0
-                    implicitWidth: Theme.iconLg
-                    implicitHeight: Theme.iconLg
-                    text: "«"
-                    // Written at the rail's size: it is the same control
-                    // and it has to carry the same distance.
-                    font.pixelSize: Theme.fontLg
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 600
-                    ToolTip.text: qsTr("Fold the list to its icons")
-                    onClicked: sidebar.foldRequested(true)
+                // The fold control has nothing to do with what is being
+                // typed, so it gets a block of its own at the end of the
+                // band — the header's ground, divided off by a hairline.
+                // The whole block is the button: the reach is the band's
+                // full height, not a mark's worth of it. The rail's band
+                // is the same block with the mark pointing back.
+                FoldBlock {
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: Theme.headerHeight
+                    mark: "«"
+                    tip: qsTr("Fold the list to its icons")
+                    onActivated: sidebar.foldRequested(true)
                 }
             }
             Rectangle {

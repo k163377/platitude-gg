@@ -65,15 +65,22 @@ Rectangle {
             font.pixelSize: Theme.fontSm
         }
         Item { Layout.fillWidth: true }
+        // Whether the graph is drawing tags. An eye rather than a flag: a
+        // flag is a mark on a commit, which is what a tag already is —
+        // what this switches is whether they are looked at. Told apart by
+        // the tint, the way the panes' tree/flat switches are, not by
+        // fading the whole control (§暗く落とした段).
         HoverToolButton {
             visible: header.showTagToggle
             checkable: true
             checked: header.tagsShown
-            text: "⚑"
-            opacity: checked ? 1.0 : 0.35
             padding: 0
             implicitWidth: Theme.iconLg
             implicitHeight: Theme.iconLg
+            contentItem: NavIcon {
+                kind: header.tagsShown ? "eye" : "eye-off"
+                tint: header.tagsShown ? Theme.refTag : Theme.refTagDim
+            }
             ToolTip.visible: hovered
             ToolTip.delay: 600
             ToolTip.text: header.tagsShown ? qsTr("Hide tags in the graph")
