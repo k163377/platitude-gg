@@ -288,6 +288,88 @@ async fn a_conflicting_rebase_can_be_skipped() {
     assert!(subjects.contains("keeper"));
 }
 
+/// What reaches a person as "skip or not?" is never the easy case: a
+/// commit whose change is already upstream *to the letter* is dropped by
+/// git without stopping, so it never gets as far as the UI.
+#[tokio::test]
+async fn a_commit_already_upstream_verbatim_never_stops_the_rebase() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "base\n", "root");
+    repo.git(&["checkout", "-b", "topic"]);
+    repo.commit_file("f.txt", "same\n", "the very same change");
+    repo.commit_file("g.txt", "extra\n", "keeper");
+    repo.git(&["checkout", "main"]);
+    // Byte-for-byte what topic did, landed upstream by another route.
+    repo.commit_file("f.txt", "same\n", "someone else got there first");
+    repo.git(&["checkout", "topic"]);
+    let (exec, cancel) = env();
+
+    integrate::rebase(
+        &exec,
+        &repo.path,
+        "main",
+        &RebaseOptions::default(),
+        &cancel,
+    )
+    .await
+    .expect("an identical change replays without stopping");
+
+    assert_eq!(current_op(&repo).await, None, "nothing left to continue");
+    let subjects = repo.git(&["log", "--format=%s"]);
+    assert!(
+        !subjects.contains("the very same change"),
+        "git drops the emptied commit itself: {subjects}"
+    );
+    assert!(subjects.contains("keeper"));
+}
+
+/// And skipping is not free: the commit left out takes its own work with
+/// it, wherever else that work does or does not exist. Only the reflog
+/// holds it afterwards — the same standing a hard reset leaves behind,
+/// which is the one this app already asks to be held for.
+#[tokio::test]
+async fn skipping_drops_work_that_is_nowhere_else() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "base\n", "root");
+    repo.git(&["checkout", "-b", "topic"]);
+    repo.write_file("f.txt", "topic\n");
+    repo.write_file("only-here.txt", "nowhere else\n");
+    repo.git(&["add", "-A"]);
+    repo.git(&["commit", "-m", "conflicts, and carries its own file"]);
+    repo.git(&["checkout", "main"]);
+    repo.commit_file("f.txt", "main\n", "main change");
+    repo.git(&["checkout", "topic"]);
+    let before = repo.git(&["rev-parse", "topic"]);
+    let (exec, cancel) = env();
+
+    integrate::rebase(
+        &exec,
+        &repo.path,
+        "main",
+        &RebaseOptions::default(),
+        &cancel,
+    )
+    .await
+    .expect_err("conflict");
+    integrate::resolve_current(&exec, &repo.path, Continuation::Skip, &cancel)
+        .await
+        .expect("skip");
+
+    assert!(
+        !repo.path.join("only-here.txt").exists(),
+        "the skipped commit's own file goes with it"
+    );
+    // Reachable only by hash: no branch, no tag, nothing in the UI points
+    // at it any more.
+    let orphan = repo.git(&["log", "--format=%s", "-1", before.trim()]);
+    assert_eq!(orphan, "conflicts, and carries its own file");
+    let described = repo.git(&["log", "--format=%s", "--all"]);
+    assert!(
+        !described.contains("conflicts, and carries its own file"),
+        "no ref reaches it: {described}"
+    );
+}
+
 #[tokio::test]
 async fn cherry_pick_and_revert() {
     let mut repo = TestRepo::init();
