@@ -521,8 +521,12 @@ ColumnLayout {
                 onClicked: detailsPane.details.setTreeView(true)
                 contentItem: NavIcon {
                     kind: "hier"
+                    // The one not in use is still the way to switch, so it
+                    // keeps the hue and drops a step rather than falling to
+                    // the muted colour, which would read as unavailable
+                    // (§暗く落とした段 / §無効).
                     tint: detailsPane.details.treeView ? Theme.accent
-                                                       : Theme.textMuted
+                                                       : Theme.accentDim
                 }
             }
             HoverToolButton {
@@ -535,7 +539,7 @@ ColumnLayout {
                 onClicked: detailsPane.details.setTreeView(false)
                 contentItem: NavIcon {
                     kind: "list"
-                    tint: detailsPane.details.treeView ? Theme.textMuted
+                    tint: detailsPane.details.treeView ? Theme.accentDim
                                                        : Theme.accent
                 }
             }

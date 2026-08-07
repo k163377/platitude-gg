@@ -237,8 +237,10 @@ ColumnLayout {
                 onClicked: wipPane.worktreeModel.setTreeView(true)
                 contentItem: NavIcon {
                     kind: "hier"
+                    // See the same pair in DetailsPane: the unchosen half
+                    // is what switches, so it dims rather than mutes.
                     tint: wipPane.worktreeModel.treeView ? Theme.accent
-                                                         : Theme.textMuted
+                                                         : Theme.accentDim
                 }
             }
             HoverToolButton {
@@ -251,7 +253,7 @@ ColumnLayout {
                 onClicked: wipPane.worktreeModel.setTreeView(false)
                 contentItem: NavIcon {
                     kind: "list"
-                    tint: wipPane.worktreeModel.treeView ? Theme.textMuted
+                    tint: wipPane.worktreeModel.treeView ? Theme.accentDim
                                                          : Theme.accent
                 }
             }
