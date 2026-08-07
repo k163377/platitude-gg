@@ -46,6 +46,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
         "basic" => basic(&mut repo)?,
         "dirty" => dirty(&mut repo)?,
         "conflict" => conflict(&mut repo)?,
+        "rebase-conflict" => rebase_conflict(&mut repo)?,
         "stashes" => stashes(&mut repo)?,
         "detached" => detached(&mut repo)?,
         "behind" => behind(&mut repo)?,
@@ -264,6 +265,24 @@ fn conflict(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["switch", "main"])?;
     repo.commit("shared.txt", "main side\n", "fix: change shared too")?;
     repo.git_expecting_stop(&["merge", "--no-edit", "feature/clash"])?;
+    Ok(())
+}
+
+/// A rebase stopped part-way, which a stopped merge cannot stand in for:
+/// it steps (so it counts `1/2` and takes `--skip` / `--quit`), and the
+/// two sides swap over — the commit being replayed is "theirs".
+fn rebase_conflict(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("shared.txt", "base\n", "feat: shared base")?;
+    repo.commit("other.txt", "calm\n", "feat: untouched elsewhere")?;
+    repo.git(&["switch", "--create", "feature/clash"])?;
+    repo.commit("shared.txt", "feature side\n", "feat: change shared")?;
+    // A second commit behind the conflicting one, so the count has
+    // somewhere to go and `--skip` has a next step to move to.
+    repo.commit("later.txt", "after\n", "feat: one more on the branch")?;
+    repo.git(&["switch", "main"])?;
+    repo.commit("shared.txt", "main side\n", "fix: change shared too")?;
+    repo.git(&["switch", "feature/clash"])?;
+    repo.git_expecting_stop(&["rebase", "main"])?;
     Ok(())
 }
 

@@ -21,6 +21,7 @@ commands:
         basic     branches + remote (ahead) + tags + stash + dirty WIP
         dirty     every WIP bucket: staged, unstaged, untracked, renamed
         conflict  a merge stopped on conflicts (MERGE_HEAD present)
+        rebase-conflict  a rebase stopped on conflicts, 1 of 2 steps
         stashes   three stashes, one with untracked files
         detached  HEAD detached at a tag
         behind    remote has commits fetch would bring in
