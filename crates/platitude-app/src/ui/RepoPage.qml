@@ -684,8 +684,52 @@ Item {
         for (let i = 0; i < paths.length; i++)
             repoTab.addPath(paths[i])
     }
+    /// The conflicted rows among those chosen — the only ones a side can
+    /// be taken on. A right-click on a conflicted row has already made it
+    /// the whole of the choice unless several were picked on purpose.
+    function chosenConflicts() {
+        const rows = wipPane.chosenRows()
+        const paths = []
+        for (let i = 0; i < rows.length; i++)
+            if (rows[i].bucket === "conflicts")
+                paths.push(rows[i].fullName)
+        return paths
+    }
+    /// Takes one side of every conflicted row that is highlighted, in one
+    /// git command (デザイン規約 §その他の操作).
+    function takeSideNow(side) {
+        const paths = page.chosenConflicts()
+        if (paths.length === 0)
+            return
+        page.sendPaths(paths)
+        repoTab.takeSidePaths(side)
+    }
     AppMenu {
         id: fileMenu
+        // Which side to keep, named by the branch each side is rather
+        // than by `--ours` / `--theirs` — during a rebase those two swap
+        // over, and a name that is simply what the side *is* does not ask
+        // anyone to hold that in their head (デザイン規約 §conflict の
+        // ours / theirs). Plain clicks: the file is conflicted, so there
+        // is no settled version of it to lose, and the other side is one
+        // click away until the operation is continued.
+        AppMenuItem {
+            text: wipPane.workTree.sideOurs !== ""
+                  ? qsTr("Keep %1's version").arg(wipPane.workTree.sideOurs)
+                  : qsTr("Keep this branch's version")
+            visible: page.menuFileBucket === "conflicts"
+            enabled: repoTab.busyCount === 0
+            onTriggered: page.takeSideNow("ours")
+        }
+        AppMenuItem {
+            text: wipPane.workTree.sideTheirs !== ""
+                  ? qsTr("Take %1's version").arg(wipPane.workTree.sideTheirs)
+                  : qsTr("Take the incoming version")
+            visible: page.menuFileBucket === "conflicts"
+            enabled: repoTab.busyCount === 0
+            onTriggered: page.takeSideNow("theirs")
+        }
+        AppMenuSeparator { visible: page.menuFileBucket === "conflicts" }
         AppMenuItem {
             code: "stash"
             //: Follows the `stash` chip: "stash this file".
@@ -1261,7 +1305,7 @@ Item {
             if (arg === "staged-only")
                 wipPane.stashClickStagedOnly()
         } else if (act === "file-menu" || act === "file-menu-untracked"
-                   || act === "file-menu-staged") {
+                   || act === "file-menu-staged" || act === "file-menu-conflict") {
             // Which rows a file row offers follows from its bucket, so
             // each bucket has its own way in here. The row is chosen
             // first, the way a right-click on an unchosen row chooses it
@@ -1269,10 +1313,29 @@ Item {
             // says what that choice costs.
             const menuBucket = act === "file-menu" ? "unstaged"
                              : act === "file-menu-staged" ? "staged"
+                             : act === "file-menu-conflict" ? "conflicts"
                              : "untracked"
+            page.showWip()
             wipPane.chooseOnly(menuBucket, arg)
             page.openFileMenu(menuBucket, arg, "")
-            AppBackend.report("discard_row " + fileDiscardItem.text)
+            if (menuBucket === "conflicts") {
+                // The two sides are named after branches that swap over
+                // during a rebase, so a shot has to be able to say which
+                // words the rows actually got.
+                const row = wipPane.rowFor(arg)
+                AppBackend.report("conflict_kind " + (row ? row.conflictWords() : "-"))
+            } else {
+                AppBackend.report("discard_row " + fileDiscardItem.text)
+            }
+        } else if (act === "take-side-ours" || act === "take-side-theirs") {
+            // Through the same menu a right-click opens, on the row that
+            // is highlighted — the write goes to every conflicted row in
+            // the choice, not just the one named here.
+            page.showWip()
+            wipPane.chooseOnly("conflicts", arg)
+            page.openFileMenu("conflicts", arg, "")
+            fileMenu.close()
+            page.takeSideNow(act === "take-side-ours" ? "ours" : "theirs")
         } else if (act === "discard-file" || act === "discard-file-go"
                    || act === "delete-file" || act === "delete-file-go"
                    || act === "discard-staged" || act === "discard-staged-go") {

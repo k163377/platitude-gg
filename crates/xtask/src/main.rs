@@ -25,6 +25,7 @@ commands:
         rebase-staged    the same rebase, conflict resolved and staged
         rebase-empty     a rebase stopped on a commit that came out empty
         cherry-pick-conflict  a cherry-pick stopped on a conflict
+        conflict-kinds   four kinds of conflict in one stopped merge
         stashes   three stashes, one with untracked files
         detached  HEAD detached at a tag
         behind    remote has commits fetch would bring in

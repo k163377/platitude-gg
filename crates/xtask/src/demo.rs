@@ -50,6 +50,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
         "rebase-staged" => rebase_staged(&mut repo)?,
         "rebase-empty" => rebase_empty(&mut repo)?,
         "cherry-pick-conflict" => cherry_pick_conflict(&mut repo)?,
+        "conflict-kinds" => conflict_kinds(&mut repo)?,
         "stashes" => stashes(&mut repo)?,
         "detached" => detached(&mut repo)?,
         "behind" => behind(&mut repo)?,
@@ -332,6 +333,35 @@ fn cherry_pick_conflict(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["switch", "main"])?;
     repo.commit("shared.txt", "main side\n", "fix: change shared too")?;
     repo.git_expecting_stop(&["cherry-pick", "feature/clash"])?;
+    Ok(())
+}
+
+/// A merge stopped on four different kinds of conflict at once, so the
+/// rows that name what each side did can be read side by side: both
+/// changed it (`UU`), both added it (`AA`), deleted here and changed
+/// there (`DU`), changed here and deleted there (`UD`).
+fn conflict_kinds(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("both.txt", "base\n", "feat: shared base")?;
+    repo.commit("ours-del.txt", "base\n", "feat: one we will drop")?;
+    repo.commit("theirs-del.txt", "base\n", "feat: one they will drop")?;
+
+    repo.git(&["switch", "--create", "feature/clash"])?;
+    repo.write("both.txt", "feature side\n")?;
+    repo.write("ours-del.txt", "feature keeps editing\n")?;
+    repo.write("added.txt", "feature's new file\n")?;
+    std::fs::remove_file(repo.work.join("theirs-del.txt")).map_err(|e| e.to_string())?;
+    repo.git(&["add", "-A"])?;
+    repo.git(&["commit", "-m", "feat: the feature side of all four"])?;
+
+    repo.git(&["switch", "main"])?;
+    repo.write("both.txt", "main side\n")?;
+    repo.write("theirs-del.txt", "main keeps editing\n")?;
+    repo.write("added.txt", "main's new file\n")?;
+    std::fs::remove_file(repo.work.join("ours-del.txt")).map_err(|e| e.to_string())?;
+    repo.git(&["add", "-A"])?;
+    repo.git(&["commit", "-m", "fix: the main side of all four"])?;
+
+    repo.git_expecting_stop(&["merge", "--no-edit", "feature/clash"])?;
     Ok(())
 }
 

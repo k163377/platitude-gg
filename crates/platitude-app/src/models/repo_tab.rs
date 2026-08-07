@@ -986,12 +986,14 @@ impl RepoTab {
         self.with_session(|s| s.resolve_current(continuation));
     }
 
-    /// Resolves one conflicted path by taking a side (`"ours"`/`"theirs"`).
+    /// Resolves the gathered conflicted paths by taking one side
+    /// (`"ours"`/`"theirs"`), in one git command however many were chosen.
     ///
-    /// During a rebase the sides are reversed: the commits being replayed
-    /// are "theirs".
+    /// Which branch each side is called is `sideOurs` / `sideTheirs` on
+    /// the working-tree model — during a rebase the two swap over, so the
+    /// wording cannot be worked out from the flag alone.
     #[qslot]
-    fn take_side(&mut self, path: String, side: String) {
+    fn take_side_paths(&mut self, side: String) {
         use platitude_core::conflict::Side;
         let side = match side.as_str() {
             "ours" => Side::Ours,
@@ -1001,7 +1003,11 @@ impl RepoTab {
                 return;
             }
         };
-        self.with_session(|s| s.take_side(vec![path.clone()], side));
+        let paths = std::mem::take(&mut self.pending_paths);
+        if paths.is_empty() {
+            return;
+        }
+        self.with_session(|s| s.take_side(paths.clone(), side));
     }
 
     /// Hands a conflicted path to `git mergetool` (empty = all of them).

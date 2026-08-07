@@ -33,6 +33,32 @@ Item {
     /// by the list, since a delegate is recycled the moment its row
     /// scrolls off.
     property bool chosen: false
+    /// What each side of a conflict is called. **The two swap over during
+    /// a rebase**, so they are handed down from the model rather than
+    /// worked out here (`WorkTreeModel.sideOurs` / `sideTheirs`); empty
+    /// where git left nothing to name a side by.
+    property string sideOurs: ""
+    property string sideTheirs: ""
+
+    /// What the two sides each did to this file, from the two stage
+    /// letters git reports (デザイン規約 §conflict の種別). A side that
+    /// has a name is called by it; one that has none falls back to where
+    /// it stands.
+    function conflictWords() {
+        const ours = navRow.sideOurs !== "" ? navRow.sideOurs : qsTr("this branch")
+        const theirs = navRow.sideTheirs !== "" ? navRow.sideTheirs
+                                               : qsTr("the incoming side")
+        switch (navRow.change) {
+        case "UU": return qsTr("Both changed it")
+        case "AA": return qsTr("Both added it")
+        case "DD": return qsTr("Both deleted it")
+        case "DU": return qsTr("Deleted on %1, changed on %2").arg(ours).arg(theirs)
+        case "UD": return qsTr("Changed on %1, deleted on %2").arg(ours).arg(theirs)
+        case "AU": return qsTr("Added on %1 only").arg(ours)
+        case "UA": return qsTr("Added on %1 only").arg(theirs)
+        default: return qsTr("Conflicted")
+        }
+    }
 
     // ---- the two-click gestures ------------------------------------
     // Which row was clicked last, and which is being typed into, are held
@@ -141,10 +167,17 @@ Item {
                 change: navRow.change
                 ToolTip.visible: wtHover.containsMouse
                 ToolTip.delay: 600
+                // A conflict says what the two sides each did — that is
+                // what decides which way out of it to take, and "%1" is
+                // the branch each side actually is (they swap over during
+                // a rebase, so the model is asked rather than guessed).
+                // The bucket is not repeated after it: the sentence
+                // already only makes sense for a conflict.
                 ToolTip.text: {
                     const c = navRow.change.length > 0 ? navRow.change[0] : ""
-                    const what = navRow.change.length === 2 ? qsTr("Conflicted")
-                               : c === "M" ? qsTr("Modified")
+                    if (navRow.change.length === 2)
+                        return navRow.conflictWords()
+                    const what = c === "M" ? qsTr("Modified")
                                : c === "A" ? qsTr("Added")
                                : c === "D" ? qsTr("Deleted")
                                : c === "R" ? qsTr("Renamed")
@@ -153,8 +186,7 @@ Item {
                                : c === "?" ? qsTr("Untracked") : navRow.change
                     const where = navRow.bucket === "staged" ? qsTr("staged")
                                 : navRow.bucket === "unstaged" ? qsTr("unstaged")
-                                : navRow.bucket === "untracked" ? qsTr("untracked")
-                                : qsTr("conflict")
+                                : qsTr("untracked")
                     return what + " · " + where
                 }
                 MouseArea {

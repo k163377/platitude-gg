@@ -716,6 +716,8 @@ ColumnLayout {
             kindHint: "wt"
             showStage: true
             chosen: wipPane.isChosen(bucket, fullName)
+            sideOurs: wipPane.workTree.sideOurs
+            sideTheirs: wipPane.workTree.sideTheirs
             onFileClicked: (bucket, path, origPath, modifiers) => {
                 // Choosing rows is not reading one: only a plain click
                 // moves the diff.
