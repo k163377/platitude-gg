@@ -219,10 +219,13 @@ fn basic(repo: &mut DemoRepo) -> Result<(), String> {
     // One stash…
     repo.write("src/lib.txt", "lib v2\nstashed experiment\n")?;
     repo.git(&["stash", "push", "-m", "experiment on the library"])?;
-    // …and a dirty working tree: staged, unstaged, untracked.
+    // …and a dirty working tree: staged, unstaged, untracked. The
+    // unstaged edit REPLACES the first line, so the diff's body line 0 is
+    // a change — the stage-line / discard-line hooks pick line 0, and a
+    // context line there would select nothing.
     repo.write("src/app.txt", "app v2\nwith settings\nstaged line\n")?;
     repo.git(&["add", "--", "src/app.txt"])?;
-    repo.write("docs/guide.md", "guide v2\nunstaged line\n")?;
+    repo.write("docs/guide.md", "guide v2, reworded\nunstaged line\n")?;
     repo.write("notes.txt", "untracked scratch\n")?;
     Ok(())
 }

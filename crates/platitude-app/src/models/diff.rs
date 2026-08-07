@@ -40,6 +40,10 @@ pub struct DiffModel {
     /// Human-readable sizes ("" = the side does not exist).
     preview_old_size: String,
     preview_new_size: String,
+    /// Fingerprint of the shown diff's source bytes, as hex (QML numbers
+    /// cannot hold a u64). Empty while loading — a selection made against
+    /// no diff has nothing valid to address.
+    fingerprint: String,
     current_key: String,
     feed: Option<Arc<Feed<crate::hub::DiffMsg>>>,
     tab_id: i32,
@@ -79,6 +83,7 @@ impl DiffModel {
         Member = preview_new_size,
         Notify = changed
     );
+    qproperty!("fingerprint", Member = fingerprint, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -155,6 +160,7 @@ impl DiffModel {
         }
         self.loading = false;
         self.is_binary = msg.patches.iter().any(|p| p.is_binary);
+        self.fingerprint = format!("{:016x}", msg.fingerprint);
         self.apply_preview(msg.preview.as_ref());
         self.reset();
         let rows = flatten_patches(&msg.patches, msg.preview.is_none())
@@ -179,6 +185,7 @@ impl DiffModel {
         self.current_key = diff_key(&target);
         self.title = title;
         self.is_binary = false;
+        self.fingerprint = String::new();
         self.loading = true;
         self.apply_preview(None);
         self.reset();

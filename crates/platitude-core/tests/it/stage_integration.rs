@@ -203,9 +203,16 @@ async fn stage_a_single_hunk() {
         2
     );
 
-    stage::apply_partial(&exec, &repo_info, &target, &[HunkSelect::whole(1)], &cancel)
-        .await
-        .expect("stage hunk");
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(1)],
+        fp(&repo_info, &target).await,
+        &cancel,
+    )
+    .await
+    .expect("stage hunk");
 
     let staged_content = indexed(&mut repo, "f.txt");
     assert!(
@@ -240,6 +247,7 @@ async fn stage_a_single_line() {
         &repo_info,
         &target,
         &[HunkSelect::lines(0, [4])],
+        fp(&repo_info, &target).await,
         &cancel,
     )
     .await
@@ -280,6 +288,13 @@ async fn discard_a_single_hunk() {
             path: "f.txt".into(),
         },
         &[HunkSelect::whole(0)],
+        fp(
+            &repo_info,
+            &DiffTarget::Unstaged {
+                path: "f.txt".into(),
+            },
+        )
+        .await,
         &cancel,
     )
     .await
@@ -316,6 +331,13 @@ async fn discard_a_single_line() {
             path: "f.txt".into(),
         },
         &[HunkSelect::lines(0, [4])],
+        fp(
+            &repo_info,
+            &DiffTarget::Unstaged {
+                path: "f.txt".into(),
+            },
+        )
+        .await,
         &cancel,
     )
     .await
@@ -344,6 +366,13 @@ async fn stage_only_a_deletion() {
             path: "f.txt".into(),
         },
         &[HunkSelect::lines(0, [1])],
+        fp(
+            &repo_info,
+            &DiffTarget::Unstaged {
+                path: "f.txt".into(),
+            },
+        )
+        .await,
         &cancel,
     )
     .await
@@ -371,6 +400,13 @@ async fn stage_the_first_line_of_a_two_line_replacement() {
             path: "f.txt".into(),
         },
         &[HunkSelect::lines(0, [0, 2])],
+        fp(
+            &repo_info,
+            &DiffTarget::Unstaged {
+                path: "f.txt".into(),
+            },
+        )
+        .await,
         &cancel,
     )
     .await
@@ -398,6 +434,14 @@ async fn unstage_the_second_line_of_a_two_line_replacement() {
             orig_path: None,
         },
         &[HunkSelect::lines(0, [1, 3])],
+        fp(
+            &repo_info,
+            &DiffTarget::Staged {
+                path: "f.txt".into(),
+                orig_path: None,
+            },
+        )
+        .await,
         &cancel,
     )
     .await
@@ -425,6 +469,13 @@ async fn stage_a_line_above_a_missing_trailing_newline() {
             path: "f.txt".into(),
         },
         &[HunkSelect::lines(0, [0, 3])],
+        fp(
+            &repo_info,
+            &DiffTarget::Unstaged {
+                path: "f.txt".into(),
+            },
+        )
+        .await,
         &cancel,
     )
     .await
@@ -457,6 +508,14 @@ async fn unstage_a_single_line() {
             orig_path: None,
         },
         &[HunkSelect::lines(0, [1, 2])],
+        fp(
+            &repo_info,
+            &DiffTarget::Staged {
+                path: "f.txt".into(),
+                orig_path: None,
+            },
+        )
+        .await,
         &cancel,
     )
     .await
@@ -486,6 +545,13 @@ async fn stage_part_of_an_untracked_file() {
             path: "new.txt".into(),
         },
         &[HunkSelect::lines(0, [0])],
+        fp(
+            &repo_info,
+            &DiffTarget::Untracked {
+                path: "new.txt".into(),
+            },
+        )
+        .await,
         &cancel,
     )
     .await
@@ -517,6 +583,13 @@ async fn stage_part_of_a_file_in_an_untracked_dir() {
             path: "newdir/new.txt".into(),
         },
         &[HunkSelect::lines(0, [0])],
+        fp(
+            &repo_info,
+            &DiffTarget::Untracked {
+                path: "newdir/new.txt".into(),
+            },
+        )
+        .await,
         &cancel,
     )
     .await
@@ -541,6 +614,13 @@ async fn stage_a_hunk_of_a_crlf_file() {
             path: "f.txt".into(),
         },
         &[HunkSelect::whole(0)],
+        fp(
+            &repo_info,
+            &DiffTarget::Unstaged {
+                path: "f.txt".into(),
+            },
+        )
+        .await,
         &cancel,
     )
     .await
@@ -567,9 +647,16 @@ async fn stage_a_file_without_a_trailing_newline() {
 
     // Body: 0 " keep", 1 "-old", 2 "\ No newline", 3 "+old", 4 "+new",
     // 5 "\ No newline" — git rewrites the last line as a replacement.
-    stage::apply_partial(&exec, &repo_info, &target, &[HunkSelect::whole(0)], &cancel)
-        .await
-        .expect("stage the whole hunk");
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        fp(&repo_info, &target).await,
+        &cancel,
+    )
+    .await
+    .expect("stage the whole hunk");
     assert_eq!(repo.git_raw(&["show", ":f.txt"]), b"keep\nold\nnew");
 }
 
@@ -609,6 +696,7 @@ async fn staging_a_commit_diff_is_rejected() {
             orig_path: None,
         },
         &[HunkSelect::whole(0)],
+        0,
         &cancel,
     )
     .await
@@ -648,6 +736,7 @@ async fn a_vanished_selection_is_an_error_not_a_silent_success() {
         &repo_info,
         &target,
         &[HunkSelect::whole(99)],
+        fp(&repo_info, &target).await,
         &cancel,
     )
     .await
@@ -659,6 +748,7 @@ async fn a_vanished_selection_is_an_error_not_a_silent_success() {
         &repo_info,
         &target,
         &[HunkSelect::whole(99)],
+        fp(&repo_info, &target).await,
         &cancel,
     )
     .await
@@ -685,6 +775,7 @@ async fn a_failed_untracked_partial_stage_leaves_the_file_untracked() {
         &repo_info,
         &target,
         &[HunkSelect::whole(99)],
+        fp(&repo_info, &target).await,
         &cancel,
     )
     .await
@@ -694,4 +785,101 @@ async fn a_failed_untracked_partial_stage_leaves_the_file_untracked() {
     assert!(staged.is_empty(), "no half-staged leftovers: {staged:?}");
     assert!(unstaged.is_empty(), "{unstaged:?}");
     assert_eq!(untracked, vec!["new.txt"], "back in the untracked bucket");
+}
+
+/// The fingerprint the UI would carry: taken from the same diff the
+/// selection addresses, before anything changes it.
+async fn fp(repo_info: &RepoInfo, target: &DiffTarget) -> u64 {
+    let (exec, cancel) = env();
+    platitude_core::details::file_diff_with_fingerprint(&exec, &repo_info.workdir, target, &cancel)
+        .await
+        .expect("diff for fingerprint")
+        .1
+}
+
+/// A selection carried from an older diff is refused once the file
+/// changes: the fingerprint the UI saw no longer matches the re-run
+/// bytes — on both the staging and the discarding side. This is the
+/// formatter-on-save case: the file moves on after the diff was read
+/// but before the queued write runs, and positional indices would land
+/// on the wrong hunk.
+#[tokio::test]
+async fn a_selection_from_a_stale_diff_is_refused() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\ntwo\nthree\n", "root");
+    repo.write_file("a.txt", "one\ntwo changed\nthree\n");
+    let repo_info = info(&repo).await;
+    let (exec, cancel) = env();
+    let target = DiffTarget::Unstaged {
+        path: "a.txt".into(),
+    };
+    let seen = fp(&repo_info, &target).await;
+
+    repo.write_file("a.txt", "prelude\none\ntwo changed\nthree\n");
+
+    let err = stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        seen,
+        &cancel,
+    )
+    .await
+    .expect_err("stale fingerprint is refused");
+    assert!(format!("{err}").contains("changed since"), "{err}");
+
+    let err = stage::discard_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        seen,
+        &cancel,
+    )
+    .await
+    .expect_err("stale fingerprint refuses the discard too");
+    assert!(format!("{err}").contains("changed since"), "{err}");
+
+    let (staged, unstaged, _) = buckets(&repo).await;
+    assert!(staged.is_empty(), "nothing was staged: {staged:?}");
+    assert_eq!(unstaged, vec!["a.txt"], "nothing was discarded");
+}
+
+/// An untracked partial stage checks the fingerprint against the same
+/// `--no-index` bytes the UI read — before the intent-to-add mark, which
+/// changes what the diff command even is. A stale one leaves the file
+/// fully untracked, mark and all.
+#[tokio::test]
+async fn a_stale_untracked_selection_is_refused_before_the_mark() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.write_file("new.txt", "fresh\n");
+    let repo_info = info(&repo).await;
+    let (exec, cancel) = env();
+    let target = DiffTarget::Untracked {
+        path: "new.txt".into(),
+    };
+    let seen = fp(&repo_info, &target).await;
+
+    repo.write_file("new.txt", "fresh\nand more\n");
+
+    let err = stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        seen,
+        &cancel,
+    )
+    .await
+    .expect_err("stale fingerprint is refused");
+    assert!(format!("{err}").contains("changed since"), "{err}");
+
+    let (staged, unstaged, untracked) = buckets(&repo).await;
+    assert!(
+        staged.is_empty() && unstaged.is_empty(),
+        "no intent-to-add mark left: {staged:?} {unstaged:?}"
+    );
+    assert_eq!(untracked, vec!["new.txt"]);
 }

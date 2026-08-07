@@ -258,6 +258,10 @@ pub enum SessionEvent {
         /// Image bytes / binary sizes when the text diff is not the whole
         /// story (`None` for ordinary text files).
         preview: Option<FilePreview>,
+        /// Fingerprint of the bytes `patches` was parsed from. Hunk/line
+        /// selections carry it back, so a partial write can refuse a diff
+        /// that drifted under the selection (`stage::apply_partial`).
+        fingerprint: u64,
     },
     /// A background refresh/query failed (op is a stable identifier).
     OpFailed {
@@ -1373,23 +1377,35 @@ impl RepoSession {
 
     /// Throws away part of one file's unstaged diff (hunk / line level).
     /// The index keeps what is staged (see [`stage::discard_partial`]).
-    pub fn discard_partial(self: &Arc<Self>, target: DiffTarget, selects: Vec<HunkSelect>) {
+    pub fn discard_partial(
+        self: &Arc<Self>,
+        target: DiffTarget,
+        selects: Vec<HunkSelect>,
+        seen: u64,
+    ) {
         self.write(
             "discard",
             AfterWrite::Snapshots,
             move |exec, repo, cancel| async move {
-                stage::discard_partial(&exec, &repo, &target, &selects, &cancel).await
+                stage::discard_partial(&exec, &repo, &target, &selects, seen, &cancel).await
             },
         );
     }
 
     /// Stages or unstages part of one file's diff (hunk / line level).
-    pub fn apply_partial(self: &Arc<Self>, target: DiffTarget, selects: Vec<HunkSelect>) {
+    /// `seen` is the fingerprint the selection's diff arrived with
+    /// ([`SessionEvent::DiffLoaded`]).
+    pub fn apply_partial(
+        self: &Arc<Self>,
+        target: DiffTarget,
+        selects: Vec<HunkSelect>,
+        seen: u64,
+    ) {
         self.write(
             "stage",
             AfterWrite::Snapshots,
             move |exec, repo, cancel| async move {
-                stage::apply_partial(&exec, &repo, &target, &selects, &cancel).await
+                stage::apply_partial(&exec, &repo, &target, &selects, seen, &cancel).await
             },
         );
     }
@@ -2050,8 +2066,9 @@ impl RepoSession {
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let cancel = s.root_cancel.clone();
-            match details::file_diff(&s.executor, &workdir, &target, &cancel).await {
-                Ok(patches) => {
+            match details::file_diff_with_fingerprint(&s.executor, &workdir, &target, &cancel).await
+            {
+                Ok((patches, fingerprint)) => {
                     let is_binary = patches.iter().any(|p| p.is_binary);
                     let preview =
                         preview::file_preview(&s.executor, &workdir, &target, is_binary, &cancel)
@@ -2060,6 +2077,7 @@ impl RepoSession {
                         target,
                         patches,
                         preview,
+                        fingerprint,
                     });
                 }
                 Err(e) => s.fail("diff", e),

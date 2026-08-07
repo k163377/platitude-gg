@@ -188,17 +188,23 @@ pub async fn remove_untracked(
 ///
 /// The diff is re-run here rather than taken from the caller so the bytes
 /// the selection indexes into are exactly the bytes being rebuilt. A
-/// concurrent edit therefore changes what the indices mean; the session
-/// serializes writes and refreshes afterwards, and `git apply` rejects a
-/// patch that no longer fits.
+/// concurrent edit changes what the indices mean, so `seen` — the
+/// fingerprint of the diff the selection was made on
+/// ([`details::file_diff_with_fingerprint`]) — is checked against the
+/// re-run bytes, and any drift is a refusal. (`git apply` cannot be the
+/// net here: a patch rebuilt from the drifted bytes always fits them.)
 ///
 /// [`DiffTarget::Untracked`] is staged with intent-to-add first (git's own
 /// requirement for partially staging a new file), then treated as unstaged.
+/// Its fingerprint is checked *before* the mark, against the same
+/// `--no-index` bytes the UI derived the selection from — marking first
+/// would change which command the diff even is.
 pub async fn apply_partial(
     executor: &GitExecutor,
     repo: &RepoInfo,
     target: &DiffTarget,
     selects: &[HunkSelect],
+    seen: u64,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     if selects.is_empty() {
@@ -206,10 +212,12 @@ pub async fn apply_partial(
     }
     let workdir = repo.workdir.as_path();
 
-    let (target, side, intent_path) = match target {
-        DiffTarget::Unstaged { .. } => (target.clone(), PatchSide::Forward, None),
-        DiffTarget::Staged { .. } => (target.clone(), PatchSide::Reverse, None),
+    let (target, side, verify, intent_path) = match target {
+        DiffTarget::Unstaged { .. } => (target.clone(), PatchSide::Forward, Some(seen), None),
+        DiffTarget::Staged { .. } => (target.clone(), PatchSide::Reverse, Some(seen), None),
         DiffTarget::Untracked { path } => {
+            let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
+            verify_fingerprint(&raw, seen)?;
             let cmd = GitCommand::new()
                 .cwd(workdir)
                 .args(["add", "--intent-to-add", "--"])
@@ -218,6 +226,7 @@ pub async fn apply_partial(
             (
                 DiffTarget::Unstaged { path: path.clone() },
                 PatchSide::Forward,
+                None,
                 Some(path.clone()),
             )
         }
@@ -229,7 +238,7 @@ pub async fn apply_partial(
         }
     };
 
-    let result = apply_prepared(executor, repo, &target, selects, side, cancel).await;
+    let result = apply_prepared(executor, repo, &target, selects, side, verify, cancel).await;
     if result.is_err() {
         // The intent-to-add mark has already moved the file out of the
         // untracked bucket; a failure must not leave it half-staged with
@@ -247,18 +256,36 @@ pub async fn apply_partial(
     result
 }
 
+/// Refuses a diff whose bytes are not the ones the selection indexed.
+fn verify_fingerprint(raw: &[u8], seen: u64) -> Result<(), GitError> {
+    if details::fingerprint(raw) == seen {
+        return Ok(());
+    }
+    Err(GitError::Rejected {
+        message: "the file changed since its diff was read; \
+                  the selection no longer addresses what was on screen"
+            .to_string(),
+    })
+}
+
 /// The staging half of [`apply_partial`], once the target is one a diff
-/// can be built from.
+/// can be built from. `verify` carries the fingerprint still to check —
+/// `None` when the untracked arm already checked it against the bytes
+/// the selection was actually made on.
 async fn apply_prepared(
     executor: &GitExecutor,
     repo: &RepoInfo,
     target: &DiffTarget,
     selects: &[HunkSelect],
     side: PatchSide,
+    verify: Option<u64>,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     let workdir = repo.workdir.as_path();
     let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
+    if let Some(seen) = verify {
+        verify_fingerprint(&raw, seen)?;
+    }
     let Some(built) = patch::build_partial(&raw, selects, side) else {
         // The selection indexes a diff that no longer holds it — the file
         // changed under the open diff. Doing nothing must not read as the
@@ -306,6 +333,7 @@ pub async fn discard_partial(
     repo: &RepoInfo,
     target: &DiffTarget,
     selects: &[HunkSelect],
+    seen: u64,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     if selects.is_empty() {
@@ -319,6 +347,9 @@ pub async fn discard_partial(
     }
     let workdir = repo.workdir.as_path();
     let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
+    // Destructive and index-addressed: bytes that drifted since the
+    // selection was made would throw away the wrong lines.
+    verify_fingerprint(&raw, seen)?;
     let Some(built) = patch::build_partial(&raw, selects, PatchSide::Reverse) else {
         // As in apply_partial: a vanished selection is a refusal, not a
         // discard that quietly did nothing.

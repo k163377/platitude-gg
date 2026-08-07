@@ -1433,7 +1433,10 @@ Item {
     // address the diff currently on screen, so the pane is reloaded
     // afterwards: once the patch is applied the rows have moved.
     function stageSelection(hunk, line) {
-        repoTab.stageSelection(page.diffKind, page.diffPath, page.diffOrigPath, hunk, line)
+        // The shown diff's fingerprint rides along: the write refuses to
+        // apply the indices to bytes that drifted since this was read.
+        repoTab.stageSelection(page.diffKind, page.diffPath, page.diffOrigPath,
+                               hunk, line, diffModel.fingerprint)
         page.pendingDiffReload = true
     }
     /// Throwing part of the shown diff away. Asked over the lines it is
@@ -1447,7 +1450,8 @@ Item {
             qsTr("Hold to discard"),
             function () {
                 repoTab.discardSelection(page.diffKind, page.diffPath,
-                                         page.diffOrigPath, hunk, line)
+                                         page.diffOrigPath, hunk, line,
+                                         diffModel.fingerprint)
                 page.pendingDiffReload = true
             })
     }

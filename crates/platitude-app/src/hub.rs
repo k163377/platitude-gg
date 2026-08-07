@@ -166,6 +166,9 @@ pub struct DiffMsg {
     pub target: DiffTarget,
     pub patches: Vec<FilePatch>,
     pub preview: Option<FilePreview>,
+    /// Fingerprint of the diff's source bytes; selections carry it back
+    /// so a partial write can refuse a drifted diff.
+    pub fingerprint: u64,
 }
 
 /// A queue whose consumer is one QML object on the Qt main thread.
@@ -359,11 +362,13 @@ impl SessionSink for BridgeSink {
                 target,
                 patches,
                 preview,
+                fingerprint,
             } => {
                 self.feeds.diff.push_replace(DiffMsg {
                     target,
                     patches,
                     preview,
+                    fingerprint,
                 });
             }
             SessionEvent::CommandStarted {

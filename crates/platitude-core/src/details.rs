@@ -156,9 +156,38 @@ pub async fn file_diff(
     target: &DiffTarget,
     cancel: &CancellationToken,
 ) -> Result<Vec<FilePatch>, GitError> {
-    Ok(parse_patch(
-        &file_diff_raw(executor, workdir, target, cancel).await?,
-    ))
+    Ok(
+        file_diff_with_fingerprint(executor, workdir, target, cancel)
+            .await?
+            .0,
+    )
+}
+
+/// [`file_diff`] plus the fingerprint of the bytes it was parsed from.
+///
+/// The fingerprint travels with the parsed diff to the UI and comes back
+/// attached to hunk/line selections, so a partial write can tell "the
+/// diff the selection was made on" from "the diff the write re-ran"
+/// (`stage::apply_partial`). Positional selections are only meaningful
+/// against the exact bytes they indexed.
+pub async fn file_diff_with_fingerprint(
+    executor: &GitExecutor,
+    workdir: &Path,
+    target: &DiffTarget,
+    cancel: &CancellationToken,
+) -> Result<(Vec<FilePatch>, u64), GitError> {
+    let raw = file_diff_raw(executor, workdir, target, cancel).await?;
+    Ok((parse_patch(&raw), fingerprint(&raw)))
+}
+
+/// Stable fingerprint of a raw diff. Drift detection, not cryptography:
+/// two runs of the same command over an unchanged file produce the same
+/// bytes, and any edit in between changes them.
+pub fn fingerprint(raw: &[u8]) -> u64 {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    raw.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Same diff as [`file_diff`], returned unparsed.

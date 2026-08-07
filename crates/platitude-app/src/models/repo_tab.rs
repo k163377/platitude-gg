@@ -523,6 +523,7 @@ impl RepoTab {
         orig_path: String,
         hunk: i32,
         line: i32,
+        fingerprint: String,
     ) {
         let Some(target) = crate::encode::worktree_target(&kind, &path, &orig_path) else {
             tracing::warn!(kind, "selection staging asked for a non-worktree diff");
@@ -532,7 +533,13 @@ impl RepoTab {
         if selects.is_empty() {
             return;
         }
-        self.with_session(|s| s.apply_partial(target.clone(), selects.clone()));
+        // The fingerprint of the diff the indices were made on (hex, from
+        // DiffModel). Without one the selection addresses nothing.
+        let Ok(seen) = u64::from_str_radix(&fingerprint, 16) else {
+            tracing::warn!(fingerprint, "selection staging without a diff fingerprint");
+            return;
+        };
+        self.with_session(|s| s.apply_partial(target.clone(), selects.clone(), seen));
     }
 
     /// Throws away part of one file's unstaged diff, addressed the same way
@@ -546,6 +553,7 @@ impl RepoTab {
         orig_path: String,
         hunk: i32,
         line: i32,
+        fingerprint: String,
     ) {
         let Some(target) = crate::encode::worktree_target(&kind, &path, &orig_path) else {
             tracing::warn!(kind, "selection discard asked for a non-worktree diff");
@@ -555,7 +563,11 @@ impl RepoTab {
         if selects.is_empty() {
             return;
         }
-        self.with_session(|s| s.discard_partial(target.clone(), selects.clone()));
+        let Ok(seen) = u64::from_str_radix(&fingerprint, 16) else {
+            tracing::warn!(fingerprint, "selection discard without a diff fingerprint");
+            return;
+        };
+        self.with_session(|s| s.discard_partial(target.clone(), selects.clone(), seen));
     }
 
     /// Commits the index from the editor's two fields. Both empty is only
