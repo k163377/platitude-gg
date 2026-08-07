@@ -382,7 +382,7 @@ Item {
             readonly property bool stashRow: page.menuRefKind === "stash"
             text: stashRow ? qsTr("Hold to delete") : qsTr("Delete…")
             visible: page.menuRefKind === "branch" || page.menuRefKind === "tag"
-                     || stashRow
+                     || page.menuRefKind === "remote" || stashRow
             // The branch under the working tree cannot be deleted at all,
             // and git says so rather than doing something else.
             enabled: repoTab.busyCount === 0
@@ -465,7 +465,8 @@ Item {
     /// question worth asking, so it is asked when it arrives rather than
     /// guessed at beforehand (P2-確認事項 §B). A tag and a stash have no
     /// such refusal in git, and both can take something with them, so they
-    /// are asked about up front.
+    /// are asked about up front — and so does a branch on a remote, which
+    /// no refusal here can guard because the branch is over there.
     property string pendingDeleteBranch: ""
     /// Refusals this page already has an answer for. The question bar
     /// explains them, so the command log stays where it was rather than
@@ -486,7 +487,38 @@ Item {
                 true,
                 qsTr("Delete %1").arg(id),
                 function () { repoTab.deleteTag(id) })
+        } else if (kind === "remote") {
+            page.askDeleteRemote(id, oidHex)
         }
+    }
+    /// Deleting a branch on a remote — the other write, with the rename it
+    /// shares its second half with, that lands where this machine keeps no
+    /// copy of what it undid (デザイン規約 §リモートブランチを消す).
+    ///
+    /// Asked before it runs, because git refuses nothing here: the branch
+    /// is on the far side, so no `-d` can weigh what it holds. Answered by
+    /// a hold, for the same reason the rename is. The tone is the warning
+    /// one rather than danger — nothing in hand is thrown away; this
+    /// reaches past this machine (デザイン規約 §状態).
+    function askDeleteRemote(remoteRef, oidHex) {
+        const cut = remoteRef.indexOf("/")
+        if (cut < 0)
+            return
+        const remote = remoteRef.substring(0, cut)
+        const branch = remoteRef.substring(cut + 1)
+        page.startRowAsk(
+            oidHex !== "" ? oidHex : remotesModel.oidOfName(remoteRef),
+            qsTr("Delete %1?").arg(remoteRef),
+            qsTr("Nothing here can put it back."),
+            false,
+            qsTr("Hold to delete"),
+            function () { repoTab.deleteRemoteBranch(remote, branch) },
+            true,
+            qsTr("Hold to delete. %1 goes on %2 — anything the name carried, "
+                 + "an open pull request or a protected-branch rule, does "
+                 + "not come back with it.").arg(branch).arg(remote))
+        if (AppBackend.autoAct !== "")
+            AppBackend.report("delete_remote_asked ref=" + remoteRef)
     }
     /// A stash dropped with no question in front of it: the menu row that
     /// reaches this was held down, which is the whole of the asking
@@ -1209,6 +1241,26 @@ Item {
                              stashesModel.oidOfName(stashesModel.nameAt(0)))
             if (act === "delete-stash-go")
                 refDeleteItem.completeHold()
+        } else if (act === "remote-menu" || act === "delete-remote"
+                   || act === "delete-remote-go") {
+            // A branch on a remote, named outright (`origin/feature/x`)
+            // because the remote's rows sit behind a fold. "remote-menu"
+            // opens that fold and leaves the menu standing for the shot —
+            // and says in words which rows it offers, since a greyed or
+            // absent row is not something a screenshot can be trusted on.
+            // The plain verb stops at the question, "-go" holds its pill.
+            const remoteOid = remotesModel.oidOfName(arg)
+            if (act === "remote-menu") {
+                remotesModel.toggleFolder(arg.substring(0, arg.indexOf("/")))
+                page.openRefMenu("remote", arg, arg, remoteOid)
+                AppBackend.report("ref_menu kind=remote delete="
+                                  + refDeleteItem.visible
+                                  + " text=" + refDeleteItem.text)
+                return
+            }
+            page.deleteRow("remote", arg, arg, remoteOid)
+            if (act === "delete-remote-go")
+                graphPane.completeHold()
         } else if (act === "delete-force") {
             repoTab.deleteBranch(arg, true)
         } else if (act === "delete-tag-go") {
