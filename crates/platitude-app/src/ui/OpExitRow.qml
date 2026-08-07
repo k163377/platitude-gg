@@ -55,6 +55,13 @@ Item {
     implicitHeight: opRow.visible ? Theme.rowHeight : 0
     Accessible.description: opRow.holdMs > 0 ? qsTr("Hold to activate") : ""
 
+    // A row says its whole line when the pane has narrowed enough to cut
+    // it, the way a menu row does — the elision is the pane running out
+    // of width, not the row having less to say (`AppMenuItem`).
+    ToolTip.visible: rowHover.containsMouse && rowLabel.truncated
+    ToolTip.delay: 600
+    ToolTip.text: opRow.code + " " + opRow.text
+
     // One colour for every word in the row, so the chip cannot disagree
     // with the sentence it sits in. A held row wears its cost before it
     // is touched (デザイン規約 §状態).
@@ -122,6 +129,7 @@ Item {
             }
         }
         Label {
+            id: rowLabel
             Layout.fillWidth: true
             text: opRow.text
             font.pixelSize: Theme.fontMd
