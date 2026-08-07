@@ -10,6 +10,13 @@ HoverToolButton {
     property string kind: ""
     /// Colour of both halves while the button is live.
     property color tone: Theme.textPrimary
+    /// `tone` taken a step down for the wait — the ring and the frame wear
+    /// it while git is on the network (デザイン規約 §暗く落とした段: the
+    /// hue stays, so what the button is does not change; only what state
+    /// it is in). A plain button has no darker step of its own and takes
+    /// `textMuted`, which is where its words go when they are not to be
+    /// read either.
+    property color toneDim: Theme.textMuted
     /// git is on the network for this button: the words step aside for a
     /// turning ring in the middle of the button, and the whole of it goes
     /// as dim and as deaf as a disabled one (デザイン規約 §長押し).
@@ -63,7 +70,7 @@ HoverToolButton {
     /// a hold nor the one that gives up on it part way may fall through
     /// to what this button does when it is not a hold button.
     signal activated()
-    readonly property color fg: actionBtn.busy ? Theme.textMuted
+    readonly property color fg: actionBtn.busy ? actionBtn.toneDim
                                 : holdProgress > 0 ? Theme.textOnAccent
                                 : enabled ? tone : Theme.textMuted
     /// Nothing here answers a press while git is on the network for it.
@@ -153,10 +160,17 @@ HoverToolButton {
     }
     background: Rectangle {
         color: "transparent"
-        // The frame goes inert with the rest of the button while git is
-        // out on the network: its colour is a warning about a press, and
-        // there is no press to be had until this comes back.
-        border.color: actionBtn.busy ? Theme.borderDefault : actionBtn.frameColor
+        // The frame goes a step down with the rest of the button while git
+        // is out on the network: there is no press to be had until this
+        // comes back, but the button is still the one that overwrites a
+        // remote, and a frame that dropped to grey would take that back
+        // for as long as the wait lasted. A button with no frame of its
+        // own borrows the plain one — the frame appearing is what says the
+        // wait has started, where there are no words left to say it.
+        border.color: actionBtn.busy
+                      ? (actionBtn.framed ? actionBtn.toneDim
+                                          : Theme.borderDefault)
+                      : actionBtn.frameColor
         border.width: Theme.borderWidth
         radius: Theme.radiusSm
         // The hold, filling from the left. Inset by the border where
@@ -297,6 +311,7 @@ HoverToolButton {
                 text: actionBtn.widestText
                 font.family: actionBtn.widestCode ? Theme.monoFamily
                                                   : Theme.uiFamily
+                font.wordSpacing: actionBtn.widestCode ? -Theme.spaceXs : 0
                 font.pixelSize: actionBtn.font.pixelSize
             }
             Label {
@@ -322,6 +337,12 @@ HoverToolButton {
                 color: actionBtn.fg
                 font.family: actionBtn.code ? Theme.monoFamily
                                             : Theme.uiFamily
+                // A command and its flag are one thing said, and a mono
+                // space is far wider than the air the chip keeps at its own
+                // ends — left alone, `-f` drifts away from the `push` it
+                // belongs to and the chip reads as two words on one ground
+                // (デザイン規約 §git 用語のコード表記).
+                font.wordSpacing: actionBtn.code ? -Theme.spaceXs : 0
                 font.pixelSize: actionBtn.font.pixelSize
                 elide: Text.ElideRight
                 Layout.maximumWidth: 240
@@ -369,7 +390,7 @@ HoverToolButton {
             width: Theme.iconMd
             height: Theme.iconMd
             kind: "spinner"
-            tint: Theme.textMuted
+            tint: actionBtn.toneDim
             visible: actionBtn.busy
             // On the render thread, so it keeps turning while the GUI
             // thread drains models.

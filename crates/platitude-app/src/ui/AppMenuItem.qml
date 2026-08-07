@@ -169,6 +169,11 @@ MenuItem {
                 anchors.verticalCenter: parent.verticalCenter
                 text: menuItem.code
                 font.family: Theme.monoFamily
+                // A command and its flag are one thing said (`push
+                // --delete`), and a mono space is wider than the air the
+                // chip keeps at its own ends — left alone the two drift
+                // apart and the chip reads as two words on one ground.
+                font.wordSpacing: -Theme.spaceXs
                 font.pixelSize: menuItem.font.pixelSize
                 color: menuItem.wordColor
             }

@@ -15,12 +15,31 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 **開いたまま止める撮影用**は stash-dialog(引数 staged-only でそのチェックをクリック済みの状態)/ file-menu / file-menu-untracked / file-menu-staged / file-menu-conflict(引数はパス。バケツごとに出る行が変わるので 4 つ。conflict は種別の文言を `conflict_kind` として報告する — hover は注入できないため。`--preset conflict-kinds` に 4 種が揃っている)/ amend-author / settings / commit-menu / reset-menu / stash-menu / name-box(引数は行番号)/ ref-list(引数は行番号)/ fetch-ref-list(引数は行番号。fetch を撃ってからその行のチップを展開する — タグの雲は fetch 後にしか出ない。`--preset tags` に 4 状態が揃っている)/ signature(引数は行番号。その行を選び、gpg / ssh-keygen が返すまで待って印を報告する。`--preset signed` に verified / signed / 無署名の 3 行がある)/ nav-rename / rename-remote-box(引数 `<remote>/<old>:<入れておく名前>`。畳みを開いて入力欄を出す — 既にリモートに在る名前を渡せば拒否された枠が撮れる)
 
-**通信中(暗転 + リング)は `--quit-ms` で狙う**: 撮影は `quit-ms - 800`、動詞は 1200ms
-の固定タイマで走る(`Main.qml` の `shotTimer` / `RepoPage.qml` の `autoActTimer`。どちらも
-ほぼ同じ瞬間から数え始める)ので、**その差が撮影窓**。`verify-ui fetch --quit-ms 2100`
-= 動詞の 100ms 後に撮る、で `file://` のデモリモートへの fetch が飛んでいる最中が撮れた
-(2026-08-07 実測)。既定の 10000 では fetch はとうに終わっている。リングは
-`PG_SHOT_DIR` があると止まる(`ActionButton.still`)ので毎回同じ絵になる。
+**通信中(リング)は `--quit-ms` で狙う**: 撮影は `quit-ms - 800`、動詞は 1200ms の
+固定タイマで走る(`Main.qml` の `shotTimer` / `RepoPage.qml` の `autoActTimer`。どちらも
+ほぼ同じ瞬間から数え始める)ので、**その差が撮影窓**。既定の 10000 では通信はとうに
+終わっている。リングは `PG_SHOT_DIR` があると止まる(`ActionButton.still`)ので毎回
+同じ絵になる。実測で当たった値(2026-08-07):
+
+| 撮りたい状態 | 動詞 | `--quit-ms` |
+|---|---|---|
+| fetch 通信中(通常) | `fetch` | 2100 |
+| fetch 通信中(1〜2 回失敗の黄) | `fetch-resume` | 2450 |
+| fetch 通信中(停止後の赤) | `fetch-fail 30` | 2600 |
+| push 通信中 | `push` | 2100 |
+| force push 通信中 | `force-push-hold` | 3400 |
+
+`file://` の fetch は 50〜150ms しか走らないので、**窓は数十 ms**。外したら 10〜20ms
+刻みで振る(**当たり外れは PNG を見るまで判らない** — stderr の `screenshot saved` の
+時刻は grab のコールバックが走った時刻で、掴んだ瞬間より後)。**黄は `fetch-fail 2` では
+撮れない**(失敗が記録されてから次の fetch が busy になるまでの間に必ず 1 フレーム
+入る)。`fetch-resume` なら 3 回失敗させた後の resume の fetch が「失敗数 > 0 かつ
+停止解除済み」= 黄のまま走るので、そこを狙う。**赤は逆に何回でも撃てる**(3 回で停止
+した後も `fetch-fail N` は N まで走り続け、その間ずっと赤 + busy)。
+
+**ヘッドレスで色を確かめる時はデモリモートの URL を疑う** — 届かないリモートを使う
+検証(`fetch-fail` / `fetch-resume`)で fetch が成功してしまうと失敗数が 0 に戻り、
+黄も赤も出ない。実験で `remote set-url` を触ったら戻すこと。
 
 **ダイアログ・メニューの見た目は headless で撮れる**: `PG_SHOT_DIR` 指定時、`Main.qml` のオーバーレイミラー(`ShaderEffectSource`)が **overlay.png** を app.png と並べて保存する(offscreen で成立・ロック状態と無関係 — 2026-08-05 実測)。オーバーレイ自体の grabToImage は "no QML engine" で不可、ミラーが唯一の経路。アンロック中の `PrintWindow` も引き続き可(実 hover 等、実ウィンドウが要る検証のみ)。
 

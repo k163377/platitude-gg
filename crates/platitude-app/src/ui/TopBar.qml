@@ -61,6 +61,7 @@ Rectangle {
         visible: false
         property bool code: false
         font.family: code ? Theme.monoFamily : Theme.uiFamily
+        font.wordSpacing: code ? -Theme.spaceXs : 0
         font.pixelSize: Theme.fontMd
     }
     Widest {
@@ -379,6 +380,12 @@ Rectangle {
             tone: fetchButton.stopped ? Theme.danger
                   : fetchButton.fails > 0 ? Theme.warning
                   : Theme.textPrimary
+            // The same three, a step down, for the wait: a fetch that runs
+            // while the last ones failed is still the button that failed
+            // (デザイン規約 §暗く落とした段).
+            toneDim: fetchButton.stopped ? Theme.dangerDim
+                     : fetchButton.fails > 0 ? Theme.warningDim
+                     : Theme.textMuted
             frameColor: fetchButton.stopped ? Theme.danger
                         : fetchButton.fails > 0 ? Theme.warning
                         : "transparent"
@@ -449,6 +456,10 @@ Rectangle {
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
             tone: mode === "diverged" ? Theme.warning : Theme.textPrimary
+            // A force push on the wire is still a force push, so the ring
+            // and the frame keep the warning through the wait, a step down
+            // (デザイン規約 §暗く落とした段).
+            toneDim: mode === "diverged" ? Theme.warningDim : Theme.textMuted
             frameColor: mode === "diverged" ? Theme.warning : "transparent"
             // Diverged, the button stays live for the hold that is its
             // only gesture: a plain push cannot land there, so nothing
