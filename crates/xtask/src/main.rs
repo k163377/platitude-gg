@@ -5,6 +5,7 @@
 //! script files.
 
 mod demo;
+mod hook;
 mod qt;
 mod verify;
 
@@ -38,6 +39,11 @@ commands:
         --select          also set PG_AUTO_SELECT=1
         --quit-ms <n>     PG_AUTO_QUIT_MS (default 10000)
         --shot-dir <dir>  screenshot directory (default: temp, kept)
+
+  hook <event>
+      Claude Code hook handler (wired from .claude/settings.json; reads
+      the hook payload from stdin). Events: pre-write, post-write,
+      session-start.
 ";
 
 fn main() -> ExitCode {
@@ -48,6 +54,7 @@ fn main() -> ExitCode {
             println!("{}", path.display());
         }),
         Some("verify-ui") => verify::run(&args[1..]),
+        Some("hook") => hook::run(&args[1..]),
         _ => {
             print!("{USAGE}");
             return ExitCode::from(2);
