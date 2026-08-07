@@ -157,7 +157,7 @@ Item {
     // four flags, then the name (see encode.rs).
     function activateRecord(record) {
         if (record !== "")
-            page.switchToRef(record[0], record.substring(5))
+            page.switchToRef(record[0], record.substring(5).split("\u001E")[0])
     }
     function switchToRef(kind, name) {
         if (repoTab.state !== "open" || repoTab.busyCount > 0)

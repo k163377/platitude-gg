@@ -117,6 +117,14 @@ pub struct RefLabel {
     /// remote branch, and for a tag that is only over there or that points
     /// somewhere this one does not.
     pub here: bool,
+    /// Whose reading this is, when it is not this repository's: the remote
+    /// names carrying the tag, comma-separated. Empty for everything else.
+    ///
+    /// A remote branch says it in its own name (`origin/main`); a tag has
+    /// no such namespace to say it in, and a drifted one puts the same
+    /// bare name on two rows. The hover card is where those two meet, and
+    /// this is what tells them apart there.
+    pub remote: String,
 }
 
 /// Display-ready row of the commit graph.
@@ -140,13 +148,21 @@ pub struct LogRow {
 }
 
 /// What the remotes last said they carry under `refs/tags/`: tag name →
-/// every commit some remote has it on, and whether the tag over there is
-/// annotated.
+/// every commit some remote has it on, and what is known about it there.
 ///
 /// Two commits under one name means the remotes disagree, which reads on
 /// screen exactly like a tag that drifted from the one here — the name
 /// standing on more than one row.
-type RemoteTagIndex = BTreeMap<String, BTreeMap<Oid, bool>>;
+type RemoteTagIndex = BTreeMap<String, BTreeMap<Oid, RemoteTagPlace>>;
+
+/// One reading of a tag: what the remotes holding it there call themselves,
+/// and whether it is annotated.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct RemoteTagPlace {
+    annotated: bool,
+    /// Sorted, and more than one when several remotes agree on the commit.
+    remotes: Vec<String>,
+}
 
 /// The same thing before it is merged, kept per remote so one that could
 /// not be reached keeps its last answer instead of dropping every badge it
@@ -544,6 +560,9 @@ pub struct RepoSession {
     /// one command the user already meant to spend it on, and before that
     /// every tag reads as one this repository alone has.
     remote_tags: Mutex<RemoteTagsByRemote>,
+    /// One permit for the background read of the above, so a second
+    /// permission-granting call cannot stack another on top of it.
+    remote_tags_slot: Arc<tokio::sync::Semaphore>,
     /// The running auto-fetch timer, if any.
     auto_fetch: Mutex<Option<AutoFetch>>,
     /// One permit: an auto fetch that is still queued or running holds it,
@@ -587,6 +606,7 @@ impl RepoSession {
             write_tx,
             network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
             remote_tags: Mutex::new(RemoteTagsByRemote::new()),
+            remote_tags_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             auto_fetch: Mutex::new(None),
             auto_fetch_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             refs_gate: OpGate::default(),
@@ -609,6 +629,12 @@ impl RepoSession {
                     s.refresh_author();
                     s.restart_log();
                     s.refresh_quick();
+                    // Not from `set_auto_fetch`, which the application
+                    // calls the instant this session is handed over —
+                    // there is no workdir to read from until the line
+                    // above, and the interval it installs is what grants
+                    // permission to look at all.
+                    s.catch_up_remote_tags();
                 }
                 Err(error) => {
                     if !error.is_cancelled() {
@@ -719,6 +745,56 @@ impl RepoSession {
                         }
                     }
                 }
+            }
+        });
+        self.catch_up_remote_tags();
+    }
+
+    /// Reads what the remotes carry under `refs/tags/` without waiting for
+    /// a fetch, when two things are true: automatic fetching is on, and the
+    /// graph is showing tags.
+    ///
+    /// The first is the permission — a repository whose owner turned the
+    /// timer off has said not to reach the network unasked, and a badge is
+    /// not the thing to break that for. The second is the priority: with
+    /// tags out of the walk the chips that carry this reading are not on
+    /// screen, and the timer will fill it in within the interval anyway.
+    ///
+    /// Deliberately **not** on the write queue. A request there sets
+    /// `write_busy`, which holds the poll out and puts every later write
+    /// behind this one — far too much to spend on a badge. It runs as a
+    /// plain background read instead, on the handle that keeps it out of
+    /// the command log, and only republishes if the answer moved.
+    ///
+    /// Entered twice: once the repository is open (the interval is already
+    /// installed by then — the application sets it the moment the session
+    /// is handed over), and from [`Self::set_auto_fetch`] afterwards, so
+    /// granting the permission in settings is itself a reason to look.
+    fn catch_up_remote_tags(self: &Arc<Self>) {
+        let interval_is_on = match self.auto_fetch.lock() {
+            Ok(g) => g.is_some(),
+            Err(e) => e.into_inner().is_some(),
+        };
+        if !interval_is_on || !self.log_options().include_tags {
+            return;
+        }
+        let Ok(permit) = Arc::clone(&self.remote_tags_slot).try_acquire_owned() else {
+            tracing::debug!("remote tags: the previous read has not finished");
+            return;
+        };
+        let s = Arc::clone(self);
+        let timeout = self.network_timeout();
+        self.runtime.spawn(async move {
+            let _permit = permit;
+            let Some(workdir) = s.workdir() else {
+                return;
+            };
+            let cancel = s.root_cancel.clone();
+            let before = s.remote_tag_index();
+            s.read_remote_tags(&s.executor, &workdir, None, timeout, &cancel)
+                .await;
+            if s.remote_tag_index() != before {
+                s.refresh_refs();
             }
         });
     }
@@ -1861,12 +1937,15 @@ impl RepoSession {
     /// The per-remote answers merged into the index the join reads.
     fn remote_tag_index(&self) -> RemoteTagIndex {
         let mut index = RemoteTagIndex::new();
-        for tags in self.lock_remote_tags().values() {
+        for (remote, tags) in self.lock_remote_tags().iter() {
             for tag in tags {
-                index
+                let place: &mut RemoteTagPlace = index
                     .entry(tag.name.clone())
                     .or_default()
-                    .insert(tag.commit, tag.annotated);
+                    .entry(tag.commit)
+                    .or_default();
+                place.annotated |= tag.annotated;
+                place.remotes.push(remote.clone());
             }
         }
         index
@@ -2795,6 +2874,7 @@ fn build_label_map(
             has_remote,
             is_head: r.is_head,
             here: r.kind != RefKind::RemoteBranch,
+            remote: String::new(),
         });
     }
     for (name, commits) in remote_tags {
@@ -2802,7 +2882,7 @@ fn build_label_map(
             .iter()
             .find(|r| r.kind == RefKind::Tag && r.short == *name)
             .map(RefEntry::commit_oid);
-        for oid in commits.keys() {
+        for (oid, place) in commits {
             // Where the two agree there is one tag to speak of, and the
             // local label is already carrying its cloud.
             if local == Some(*oid) {
@@ -2814,6 +2894,7 @@ fn build_label_map(
                 has_remote: true,
                 is_head: false,
                 here: false,
+                remote: place.remotes.join(", "),
             });
         }
     }
@@ -2826,6 +2907,7 @@ fn build_label_map(
             has_remote: false,
             is_head: true,
             here: true,
+            remote: String::new(),
         });
     }
     for labels in map.values_mut() {
@@ -2914,13 +2996,13 @@ fn build_snapshot(
         }
         // Remotes that disagree about a name still name one tag, and the
         // sidebar answers "does this name exist" rather than "where".
-        let Some((oid, annotated)) = commits.iter().next() else {
+        let Some((oid, place)) = commits.iter().next() else {
             continue;
         };
         snapshot.tags.push(TagItem {
             short: name.clone(),
             oid_hex: oid.to_hex(),
-            annotated: *annotated,
+            annotated: place.annotated,
             // An advertisement carries no date; these sort last, after
             // every tag whose creation this repository can see.
             created_unix: 0,

@@ -68,7 +68,7 @@ Popup {
                 // (§タグでは detach しない) and keeps its colour too.
                 readonly property bool current:
                     refRow.modelData[0] === "L"
-                    && refRow.modelData.substring(5) === refList.currentBranch
+                    && refRow.modelData.substring(5).split("\u001E")[0] === refList.currentBranch
                 // The detached-HEAD marker is the one row that is only a
                 // marker: nowhere to go and no ref to read, so it mutes.
                 readonly property bool unavailable: refRow.modelData[0] === "H"
@@ -77,6 +77,8 @@ Popup {
                     || refRow.modelData[0] === "T"
 
                 implicitWidth: rowChip.width + 2 * Theme.spaceSm
+                               + (whose.visible
+                                  ? whose.implicitWidth + Theme.spaceSm : 0)
                 width: rows.rowWidth
                 height: Theme.rowHeight
                 radius: Theme.radiusSm
@@ -92,6 +94,22 @@ Popup {
                     // Unstacking is only worth it if the names read; the
                     // window the popup opens over is the only limit.
                     maxWidth: refList.parent ? refList.parent.width : 400
+                }
+                // Whose reading this is. A tag has no namespace to say it
+                // in the way `origin/main` does, and a drifted one puts the
+                // same bare name on two rows — this card is where the two
+                // meet, so it is where the question gets answered. Meta
+                // about the row rather than part of the name, so it is
+                // written in the colour the `+N` is (§ref の種別).
+                Label {
+                    id: whose
+                    visible: rowChip.recWhere !== ""
+                    anchors.left: rowChip.right
+                    anchors.leftMargin: Theme.spaceSm
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: rowChip.recWhere
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSm
                 }
                 HoverHandler {
                     id: rowHover

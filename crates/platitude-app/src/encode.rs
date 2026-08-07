@@ -12,6 +12,11 @@ use platitude_core::session::{LabelKind, RefLabel};
 /// Record separator for label chips (cannot occur in refnames).
 pub const LABEL_SEP: char = '\u{1f}';
 
+/// Field separator inside one chip record, between the ref's name and the
+/// remotes it was read from. Present only when there are any, and like
+/// [`LABEL_SEP`] it cannot occur in a refname or a remote name.
+pub const LABEL_FIELD_SEP: char = '\u{1e}';
+
 /// Segments → `;`-joined draw tokens: `t<lane>.<color>` (through),
 /// `i<lane>.<color>` (into node), `o<lane>.<color>` (out of node).
 /// Uppercase letters mark dashed segments (the WIP edge).
@@ -52,8 +57,9 @@ pub(crate) fn fake_pr_set() -> &'static std::collections::HashSet<String> {
     SET.get_or_init(|| env_name_set("PG_FAKE_PR"))
 }
 
-/// Labels → `\u{1f}`-joined chip records: a kind letter, four flag digits
-/// and the text.
+/// Labels → `\u{1f}`-joined chip records: a kind letter, four flag digits,
+/// the name, and — only when the ref was read off a remote — the field
+/// separator and the remotes it came from.
 ///
 /// The letter is `H`ead / `L`ocal / `R`emote / `T`ag; the flags, in order,
 /// are is-head, has-remote, has-PR (preview via [`fake_pr_set`] until Phase
@@ -82,6 +88,10 @@ pub fn encode_labels(labels: &[RefLabel]) -> String {
         out.push(if pr { '1' } else { '0' });
         out.push(if l.here { '1' } else { '0' });
         out.push_str(&l.text);
+        if !l.remote.is_empty() {
+            out.push(LABEL_FIELD_SEP);
+            out.push_str(&l.remote);
+        }
     }
     out
 }
@@ -359,6 +369,7 @@ mod tests {
                 has_remote: true,
                 is_head: true,
                 here: true,
+                remote: String::new(),
             },
             RefLabel {
                 text: "v1.0".into(),
@@ -366,6 +377,7 @@ mod tests {
                 has_remote: false,
                 is_head: false,
                 here: true,
+                remote: String::new(),
             },
         ];
         assert_eq!(encode_labels(&labels), "L1101main\u{1f}T0001v1.0");
@@ -379,20 +391,37 @@ mod tests {
             has_remote: true,
             is_head: false,
             here: true,
+            remote: String::new(),
         }];
         assert_eq!(encode_labels(&labels), "T0101v1.0");
     }
 
     #[test]
-    fn a_tag_only_a_remote_has_says_it_is_not_here() {
+    fn a_tag_only_a_remote_has_says_it_is_not_here_and_whose_it_is() {
         let labels = [RefLabel {
             text: "v9.9".into(),
             kind: LabelKind::Tag,
             has_remote: true,
             is_head: false,
             here: false,
+            remote: "origin, fork".into(),
         }];
-        assert_eq!(encode_labels(&labels), "T0100v9.9");
+        assert_eq!(encode_labels(&labels), "T0100v9.9\u{1e}origin, fork");
+    }
+
+    #[test]
+    fn a_record_with_no_remote_carries_no_field_separator() {
+        // The name runs to the end of the record, which is what every
+        // reader assumes when the separator is absent.
+        let labels = [RefLabel {
+            text: "v9.9".into(),
+            kind: LabelKind::Tag,
+            has_remote: false,
+            is_head: false,
+            here: true,
+            remote: String::new(),
+        }];
+        assert!(!encode_labels(&labels).contains(LABEL_FIELD_SEP));
     }
 
     #[test]

@@ -39,6 +39,13 @@ Rectangle {
     readonly property bool recPr: rec.length > 3 && rec[3] === "1"
     readonly property bool recHere: rec.length > 4 && rec[4] === "1"
     readonly property bool tagStyle: recKind === "T"
+    // Name, and the remotes it was read from when it was not read here.
+    // The separator is absent whenever there are none, so the name runs
+    // to the end of the record (see encode.rs).
+    readonly property var recFields: rec.substring(5).split("\u001E")
+    readonly property string recName: chip.recFields[0]
+    readonly property string recWhere:
+        chip.recFields.length > 1 ? chip.recFields[1] : ""
     // One slot, one mark: on the remote, or on the remote with a PR
     // open (§ブランチ状態バッジ — the two never stack).
     readonly property bool hasBadge: recRemote || recPr
@@ -73,7 +80,7 @@ Rectangle {
         anchors.leftMargin: Theme.spaceXs
         spacing: Theme.spaceXs
         Label {
-            text: chip.rec.substring(5)
+            text: chip.recName
             color: chip.nameColor
             font.pixelSize: Theme.fontSm
             font.weight: chip.recHead ? Font.DemiBold : Font.Normal

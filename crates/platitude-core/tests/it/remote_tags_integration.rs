@@ -155,6 +155,15 @@ impl CaptureSink {
         })
     }
 
+    fn count(&self, pred: impl Fn(&SessionEvent) -> bool) -> usize {
+        self.events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|e| pred(e))
+            .count()
+    }
+
     async fn wait_for<T>(&self, what: &str, pred: impl Fn(&[SessionEvent]) -> Option<T>) -> T {
         let deadline = Instant::now() + Duration::from_secs(20);
         loop {
@@ -301,6 +310,88 @@ async fn the_fetch_is_what_tells_a_tag_whether_a_remote_has_it_too() {
     );
 }
 
+/// Waits for a refs snapshot whose tags satisfy `pred`, or reports that
+/// none did within the window. Used for a read nobody asked for: there is
+/// no event that says "and it did not happen", so the absence is timed.
+async fn tags_settle(
+    sink: &CaptureSink,
+    within: Duration,
+    pred: impl Fn(&[TagItem]) -> bool,
+) -> bool {
+    let deadline = Instant::now() + within;
+    loop {
+        {
+            let evs = sink.events.lock().unwrap();
+            let hit = evs.iter().any(|e| match e {
+                SessionEvent::RefsLoaded { snapshot } => pred(&snapshot.tags),
+                _ => false,
+            });
+            if hit {
+                return true;
+            }
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+fn some_tag_has_a_remote(tags: &[TagItem]) -> bool {
+    tags.iter().any(|t| t.has_remote)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interval_that_is_on_is_permission_to_look_without_being_asked() {
+    let (_bare, work, _root, _head) = tag_scenario();
+    let (sink, session) = opened(&work).await;
+    session.set_auto_fetch(Some(Duration::from_secs(600)));
+
+    assert!(
+        tags_settle(&sink, Duration::from_secs(20), some_tag_has_a_remote).await,
+        "opening with the interval on reads the remotes' tags on its own"
+    );
+    // Ten minutes out, so nothing here came from the timer firing.
+    assert_eq!(
+        sink.count(|e| matches!(e, SessionEvent::WriteStarted { .. })),
+        0,
+        "and it does not travel the write queue, which would hold up \
+         every write behind a badge"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn with_the_interval_off_nothing_reaches_the_network_unasked() {
+    let (_bare, work, _root, _head) = tag_scenario();
+    let (sink, session) = opened(&work).await;
+    session.set_auto_fetch(None);
+
+    assert!(
+        !tags_settle(&sink, Duration::from_secs(3), some_tag_has_a_remote).await,
+        "a repository whose owner turned the timer off is not reached \
+         into for a badge"
+    );
+    // Asking is still asking: the fetch reads them as it always did.
+    session.fetch(Some("origin".into()));
+    assert!(some_tag_has_a_remote(
+        &sink.snapshot_after_the_fetch().await.tags
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn tags_out_of_the_walk_are_not_worth_a_round_trip() {
+    let (_bare, work, _root, _head) = tag_scenario();
+    let (sink, session) = opened(&work).await;
+    session.set_include_tags(false);
+    session.set_auto_fetch(Some(Duration::from_secs(600)));
+
+    assert!(
+        !tags_settle(&sink, Duration::from_secs(3), some_tag_has_a_remote).await,
+        "with tags hidden the chips carrying this reading are not on \
+         screen, and the interval will fill it in soon enough"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_drifted_tag_puts_its_name_on_both_rows() {
     let (_bare, work, root, head) = tag_scenario();
@@ -323,6 +414,11 @@ async fn a_drifted_tag_puts_its_name_on_both_rows() {
             mine.has_remote && theirs.has_remote,
             "the remote has the name on both readings"
         );
+        // Which of the two is which cannot be read off the name — they
+        // are the same name — so the reading that came from over there
+        // says where it came from.
+        assert_eq!(theirs.remote, "origin");
+        assert_eq!(mine.remote, "", "this one was not read off anything");
         Some(())
     })
     .await;
