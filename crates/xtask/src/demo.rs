@@ -56,6 +56,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
         "behind" => behind(&mut repo)?,
         "diverged" => diverged(&mut repo)?,
         "unpublished" => unpublished(&mut repo)?,
+        "noremote" => noremote(&mut repo)?,
         "signed" => signed(&mut repo)?,
         "tags" => tags(&mut repo)?,
         "empty" => {}
@@ -373,6 +374,15 @@ fn unpublished(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["switch", "--create", "feature/new-thing"])?;
     repo.commit("src/new.txt", "new\n", "feat: draft the new thing")?;
     repo.commit("src/new.txt", "new v2\n", "feat: finish the new thing")?;
+    Ok(())
+}
+
+/// Commits and nowhere to send them: no remote at all. The first push
+/// cannot even pick a destination here — the remote dialog opens by
+/// itself, name prefilled `origin`, with the question standing behind it.
+fn noremote(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
     Ok(())
 }
 

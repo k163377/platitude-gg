@@ -508,6 +508,13 @@ Item {
         // changed does not push back.
         page.publishAsking = true
         page.refreshPublishCheck()
+        // No remote at all: the chooser holds nothing but its last row,
+        // so the dialog that row opens comes up unasked — the question
+        // keeps standing behind it and picks the new remote up when it
+        // lands, the same as when the row is clicked
+        // (デザイン規約 §はじめてリモートへ送る).
+        if (page.publishRemotes.length === 0)
+            page.choosePublishRemote(page.publishRemotes.length)
     }
     /// Automation: typing into the name box, which no injected key can
     /// reach on the offscreen platform.
@@ -1817,9 +1824,14 @@ Item {
                 publishAnswerTimer.start()
             else if (act === "publish-remotes")
                 page.openPublishRemotes()
+            // `dialog=` / `name=` say whether the remote dialog stands and
+            // what its name box holds — the no-remote push opens it by
+            // itself, and only this line can say so headless.
             AppBackend.report("publish state=" + page.pushState
                               + " remote=" + page.publishRemote
-                              + " branch=" + page.publishBranch)
+                              + " branch=" + page.publishBranch
+                              + " dialog=" + remoteDialog.visible
+                              + " name=" + remoteDialog.wantedName)
         } else if (act === "commit") {
             repoTab.stageAll()
             wipPane.setMessage(arg, "")

@@ -38,14 +38,24 @@ AppDialog {
     function start(name, url, takenNames) {
         remoteDialog.editing = name
         remoteDialog.taken = takenNames
-        nameField.text = name === "" ? "origin" : name
+        // `origin` is only offered while the repository has no remote at
+        // all: it is what a clone would have called its first one, and
+        // nothing standing there to clash with. Once anything exists the
+        // next name is not ours to guess — a prefill could only repeat a
+        // name that is taken or invent one. The word carries no standing
+        // of its own either way: whatever treats `origin` specially goes
+        // by the name a remote actually has, so editing the prefill away
+        // simply means no remote is called that.
+        nameField.text = name !== "" ? name
+                       : takenNames.length === 0 ? "origin" : ""
         urlField.text = url
         remoteDialog.open()
     }
-    // The URL is what there is to type in both cases — a new remote is
-    // called `origin` until somebody says otherwise, and one being
-    // corrected keeps the name it has.
-    onOpened: urlField.forceActiveFocus()
+    // The URL is what there is to type once the name is settled — kept on
+    // a correction, prefilled on a first remote. Only a name this dialog
+    // could not guess puts the caret on the name instead.
+    onOpened: (remoteDialog.editing === "" && nameField.text === ""
+               ? nameField : urlField).forceActiveFocus()
 
     /// Automation: typing, which no injected key reaches offscreen. An
     /// empty half leaves what `start` put there.
@@ -99,7 +109,14 @@ AppDialog {
             FormField {
                 id: nameField
                 Layout.fillWidth: true
-                placeholderText: "origin"
+                // Only while nothing is called that. The box is prefilled
+                // whenever the repository has no remote at all, so this
+                // shows in exactly the case a name already exists — and a
+                // greyed suggestion the Add button would refuse is worse
+                // than no suggestion. No second name is invented in its
+                // place: which one fits is the person's to know.
+                placeholderText: remoteDialog.taken.indexOf("origin") >= 0
+                                 ? "" : "origin"
                 onAccepted: remoteDialog.submit()
             }
             Label {

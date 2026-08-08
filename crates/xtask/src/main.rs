@@ -31,6 +31,7 @@ commands:
         behind    remote has commits fetch would bring in
         diverged  the same, fetched, with a commit of our own on top
         unpublished  a branch never sent anywhere, two remotes, one taken name
+        noremote  commits and no remote at all: the first push writes one down
         signed    ssh-signed commits: verified, unjudgeable, unsigned
         tags      a tag in every state a remote can put it in (fetch first)
         empty     `git init` and nothing else
