@@ -46,6 +46,11 @@ commands:
         --select          also set PG_AUTO_SELECT=1
         --quit-ms <n>     PG_AUTO_QUIT_MS (default 10000)
         --shot-dir <dir>  screenshot directory (default: temp, kept)
+        --config-dir <d>  settings.toml / state.toml directory. Fresh per
+                          run by default; name one to carry what a run
+                          wrote into the next one.
+        --restore         open the tabs the config directory remembers
+                          instead of a named repository
 
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads

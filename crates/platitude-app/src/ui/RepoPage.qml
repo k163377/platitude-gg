@@ -2604,10 +2604,76 @@ Item {
     NavSectionModel { id: stashesModel }
     NavSectionModel { id: tagsModel }
 
+    /// True on the one page the window is showing. A tab restored from the
+    /// last session has no repository behind it until this turns true —
+    /// the session is what costs, and it is not spent on pages nobody has
+    /// looked at.
+    property bool pageCurrent: false
+    onPageCurrentChanged: {
+        if (page.pageCurrent && !page.blank)
+            repoTab.activate()
+    }
+
+    /// The layout this page starts with: what the window is set to now,
+    /// which after a restart is what the last session left. Read once
+    /// rather than bound — from here on the splitters own these, and a
+    /// binding would fight the drag (規約 §左メニューを畳む).
+    function applySavedLayout() {
+        // The width first: while the list has never been folded, the
+        // splitter still reads it through a binding, so this is what puts
+        // an unfolded list at the width it was left. Folding after is what
+        // pins the rail (`applyFold`, through the sidebar's own binding on
+        // this property — calling it here as well would only run it twice).
+        sidebarPane.openWidth = AppBackend.startSidebarWidth()
+        page.sidebarCollapsed = AppBackend.startSidebarCollapsed()
+        page.commandsOpen = AppBackend.startCommandsShown()
+        rightPane.SplitView.preferredWidth = AppBackend.startDetailsWidth()
+        commandsPane.SplitView.preferredHeight = AppBackend.startCommandsHeight()
+        sidebarPane.expBranches = AppBackend.startSection("branches")
+        sidebarPane.expRemotes = AppBackend.startSection("remotes")
+        sidebarPane.expWorktree = AppBackend.startSection("worktree")
+        sidebarPane.expStashes = AppBackend.startSection("stashes")
+        sidebarPane.expTags = AppBackend.startSection("tags")
+        if (page.blank)
+            return
+        repoTab.setTagsShown(AppBackend.startTagsShown())
+        worktreeModel.setTreeView(AppBackend.startWipTree())
+        detailsModel.setTreeView(AppBackend.startDetailsTree())
+    }
+
+    /// Assigned, not bound — a drag writes the same attached property and
+    /// would be gone after the first one (規約 §左メニューを畳む).
+    function setDetailsWidth(w) {
+        rightPane.SplitView.preferredWidth = w
+    }
+
+    /// Hands the window's layout over to be remembered. Pulled on a timer
+    /// by the window rather than pushed as each value changes: a splitter
+    /// drag moves a width on every frame, and the point is to write what
+    /// it settled on.
+    function reportLayout() {
+        AppBackend.saveLayoutSizes(
+            // While the list is folded its width is the rail's; the width
+            // it goes back to is the one worth keeping.
+            page.sidebarCollapsed ? sidebarPane.openWidth : sidebarPane.width,
+            rightPane.width,
+            page.commandsOpen ? commandsPane.height
+                              : commandsPane.SplitView.preferredHeight)
+        AppBackend.saveLayoutFlags(page.sidebarCollapsed, page.commandsOpen,
+                                   repoTab.tagsShown, worktreeModel.treeView,
+                                   detailsModel.treeView)
+        AppBackend.saveSections(sidebarPane.expBranches, sidebarPane.expRemotes,
+                                sidebarPane.expWorktree, sidebarPane.expStashes,
+                                sidebarPane.expTags)
+    }
+
     Component.onCompleted: {
+        page.applySavedLayout()
         if (page.blank)
             return // no session to attach to; every model stays empty
         repoTab.attach(page.tab_id)
+        if (page.pageCurrent)
+            repoTab.activate()
         commandsModel.attach(page.tab_id)
         graphModel.attach(page.tab_id)
         workTree.attach(page.tab_id)
@@ -3081,6 +3147,9 @@ Item {
 
                 // Right side: working tree ⇄ commit details
                 Rectangle {
+                    id: rightPane
+                    // Where it starts; `applySavedLayout` assigns over this
+                    // with the width the window is set to.
                     SplitView.preferredWidth: 400
                     SplitView.minimumWidth: 300
                     color: Theme.bgSurface

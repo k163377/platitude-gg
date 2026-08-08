@@ -194,8 +194,89 @@ ApplicationWindow {
             AppBackend.report("picker folder=" + folderDialog.currentFolder)
     }
 
+    // The size and place the window was left in. Assigned rather than
+    // bound: from here on the window manager and the person dragging it
+    // own these. An unsaved position stays unset so the platform gets to
+    // place the window itself — a first run should not open at 0,0.
+    function applySavedWindow() {
+        root.width = AppBackend.startWindowWidth()
+        root.height = AppBackend.startWindowHeight()
+        const x = AppBackend.startWindowX()
+        const y = AppBackend.startWindowY()
+        if (x !== root.unplaced && y !== root.unplaced) {
+            root.x = x
+            root.y = y
+        }
+        if (AppBackend.startWindowMaximized())
+            root.visibility = Window.Maximized
+    }
+    /// What the store sends for a coordinate it has never been told.
+    readonly property int unplaced: -2147483648
+
+    /// Everything the next launch should come back to. One place, because
+    /// what is worth writing is the shape the window settled into, not
+    /// every value it passed through on the way (実装計画 §7).
+    function reportState() {
+        AppBackend.saveWindow(root.x, root.y, root.width, root.height,
+                              root.visibility === Window.Maximized)
+        if (root.curPage !== null)
+            root.curPage.reportLayout()
+        AppBackend.flushState()
+    }
+
+    Timer {
+        id: stateTimer
+        interval: Metrics.stateFlushMs
+        repeat: true
+        running: true
+        onTriggered: root.reportState()
+    }
+
+    // PG_AUTO_ACT=state: what a launch came back to, and (with the
+    // argument "change") something for the next one to come back to.
+    // Two runs sharing one --config-dir are what actually tests this —
+    // a single run can only ever agree with itself.
+    Timer {
+        id: stateActTimer
+        interval: 1200
+        onTriggered: {
+            if (AppBackend.autoActArg === "change" && root.curPage !== null) {
+                root.curPage.sidebarCollapsed = true
+                root.curPage.commandsOpen = true
+                root.curPage.setDetailsWidth(520)
+                // The other file: a decision, written out at once rather
+                // than on the state timer.
+                AppBackend.setAutoFetchMinutes(7)
+            }
+            stateReportTimer.start()
+        }
+    }
+    // The splitters have to have taken the new sizes before they can be
+    // read back off the panes.
+    Timer {
+        id: stateReportTimer
+        interval: 400
+        onTriggered: {
+            root.reportState()
+            AppBackend.report(
+                "state tabs=" + pageRepeater.count
+                + " active=" + tabsModel.currentIndex
+                + " opened=" + (root.curPage !== null ? root.curPage.pageTab.state : "-")
+                + " collapsed=" + (root.curPage !== null ? root.curPage.sidebarCollapsed : "-")
+                + " sidebar=" + AppBackend.startSidebarWidth()
+                + " details=" + AppBackend.startDetailsWidth()
+                + " commands=" + AppBackend.startCommandsShown()
+                + " maximized=" + (root.visibility === Window.Maximized)
+                + " autoFetch=" + AppBackend.autoFetchMinutes)
+        }
+    }
+
+    // Closing is the last chance: the timer will not come round again.
+    onClosing: root.reportState()
+
     Component.onCompleted: {
         AppBackend.initialize()
+        root.applySavedWindow()
         if (AppBackend.autoOpen !== "") {
             // Multiple repositories separated by ';' open as tabs in order.
             const paths = AppBackend.autoOpen.split(";")
@@ -203,7 +284,11 @@ ApplicationWindow {
                 if (paths[i] !== "")
                     tabsModel.openRepositoryPath(paths[i])
             }
+        } else {
+            tabsModel.restoreTabs()
         }
+        if (AppBackend.autoAct === "state")
+            stateActTimer.start()
         if (AppBackend.autoQuitMs > 0)
             quitTimer.start()
         if (AppBackend.shotDir !== "")
@@ -395,6 +480,7 @@ ApplicationWindow {
                 RepoPage {
                     focusEpoch: root.focusEpoch
                     onScreen: root.onScreen
+                    pageCurrent: index === tabsModel.currentIndex
                     onOpenRepositoryPicker: root.openRepositoryPicker()
                     onOpenRepositoryPathRequested: path => tabsModel.openRepositoryPath(path)
                     onSettingsDialogRequested: settingsDialog.open()

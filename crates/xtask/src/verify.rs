@@ -25,6 +25,13 @@ struct Options {
     select: bool,
     quit_ms: u64,
     shot_dir: Option<PathBuf>,
+    /// Where the run keeps its settings and state. A fresh directory per
+    /// run unless one is named, so a headless run never reads or writes
+    /// the settings of whoever is sitting at this machine.
+    config_dir: Option<PathBuf>,
+    /// Let the app put back the tabs its config directory remembers,
+    /// instead of being told which repository to open.
+    restore: bool,
 }
 
 fn parse(args: &[String]) -> Result<Options, String> {
@@ -37,6 +44,8 @@ fn parse(args: &[String]) -> Result<Options, String> {
         select: false,
         quit_ms: 10_000,
         shot_dir: None,
+        config_dir: None,
+        restore: false,
     };
     let mut positional: Vec<&str> = Vec::new();
     let mut it = args.iter();
@@ -56,6 +65,11 @@ fn parse(args: &[String]) -> Result<Options, String> {
             "--shot-dir" => {
                 opts.shot_dir = Some(PathBuf::from(it.next().ok_or("--shot-dir needs a path")?));
             }
+            "--config-dir" => {
+                opts.config_dir =
+                    Some(PathBuf::from(it.next().ok_or("--config-dir needs a path")?));
+            }
+            "--restore" => opts.restore = true,
             other => positional.push(other),
         }
     }
@@ -133,18 +147,34 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
     std::fs::create_dir_all(&shot_dir).map_err(|e| e.to_string())?;
 
+    // A run of its own unless told otherwise. The app would refuse the
+    // real files anyway once it sees a PG_* variable, but naming a
+    // directory is what lets one run read what the last one wrote — and
+    // what lets anyone look at the two files afterwards.
+    let config_dir = match &opts.config_dir {
+        Some(dir) => dir.clone(),
+        None => shot_dir.join("config"),
+    };
+    std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    println!("config dir: {}", config_dir.display());
+
     println!(
         "running: {} (arg: {}) against {}",
         opts.verb,
         if opts.arg.is_empty() { "-" } else { &opts.arg },
-        repo.display()
+        if opts.restore {
+            Path::new("the tabs it remembers")
+        } else {
+            repo.as_path()
+        }
+        .display()
     );
     let mut cmd = Command::new(&exe);
     cmd.current_dir(&root)
         .env("PATH", &path)
         .env("QT_QPA_PLATFORM", "offscreen")
         .env("QT_FORCE_STDERR_LOGGING", "1")
-        .env("PG_AUTO_OPEN", &repo)
+        .env("PG_CONFIG_DIR", &config_dir)
         .env("PG_AUTO_QUIT_MS", opts.quit_ms.to_string())
         .env("PG_SHOT_DIR", &shot_dir)
         .env("PG_AUTO_ACT", &opts.verb)
@@ -160,6 +190,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // their lines never reach the verdict output.
     if std::env::var_os("PG_LOG").is_none() {
         cmd.env("PG_LOG", "info");
+    }
+    if !opts.restore {
+        // Naming a repository is what turns tab restoring off (Main.qml):
+        // a run that is told what to open is not being asked what it
+        // remembers.
+        cmd.env("PG_AUTO_OPEN", &repo);
     }
     if opts.select {
         cmd.env("PG_AUTO_SELECT", "1");

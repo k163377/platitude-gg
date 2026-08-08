@@ -20,6 +20,7 @@ use platitude_core::process::{CommandEnd, GitExecutor};
 use platitude_core::session::{
     AUTO_FETCH_OP, LogRow, RefLabel, RefsSnapshot, RepoSession, SessionEvent, SessionSink,
 };
+use platitude_core::settings::{Settings, State, Store};
 use platitude_core::stash::StashEntry;
 use platitude_core::status::WorkTreeStatus;
 use qtbridge::QmlMethodInvoker;
@@ -554,7 +555,12 @@ impl SessionSink for BridgeSink {
 }
 
 struct Tab {
-    session: Arc<RepoSession>,
+    /// `None` until the tab is first looked at. Restoring a window full of
+    /// tabs must not spend a `RepoSession` — and the git it spawns — on
+    /// repositories nobody has asked to see yet.
+    session: Option<Arc<RepoSession>>,
+    /// The repository this tab will open, until it has.
+    pending: Option<PathBuf>,
     feeds: Arc<Feeds>,
 }
 
@@ -568,6 +574,14 @@ pub struct Hub {
     /// later. `None` is off. Application-wide because the answer is about
     /// how often this computer should talk to remotes at all.
     auto_fetch: Option<std::time::Duration>,
+    store: Store,
+    settings: Settings,
+    /// What the window looks like now, and what is already on disk. The
+    /// flush compares the two rather than trusting a dirty flag: the UI
+    /// reports the whole layout on a timer, so most reports say nothing
+    /// new and a flag would be set by all of them.
+    state: State,
+    saved_state: State,
 }
 
 thread_local! {
@@ -577,15 +591,25 @@ thread_local! {
 impl Hub {
     /// Installs the hub into the main thread. Call once before `QApp::run`.
     pub fn install(runtime: tokio::runtime::Runtime) {
+        let store = Store::discover();
+        let settings = store.load_settings();
+        let state = store.load_state();
+        tracing::info!(
+            settings = ?store.settings_path(),
+            state = ?store.state_path(),
+            "settings store"
+        );
         HUB.with(|h| {
             *h.borrow_mut() = Some(Hub {
                 runtime: Some(runtime),
                 executor: GitExecutor::new(),
                 tabs: HashMap::new(),
                 next_tab_id: 0,
-                auto_fetch: Some(std::time::Duration::from_secs(
-                    u64::from(platitude_core::session::AUTO_FETCH_DEFAULT_MINUTES) * 60,
-                )),
+                auto_fetch: minutes_to_interval(settings.defaults.auto_fetch_minutes),
+                store,
+                settings,
+                saved_state: state.clone(),
+                state,
             });
         });
     }
@@ -609,8 +633,13 @@ impl Hub {
     pub fn shutdown() {
         let hub = HUB.with(|h| h.borrow_mut().take());
         if let Some(mut hub) = hub {
+            // The window is already gone, so this is the last chance to
+            // keep whatever the timer had not reached yet.
+            hub.flush_state();
             for (_, tab) in hub.tabs.drain() {
-                tab.session.close();
+                if let Some(session) = tab.session {
+                    session.close();
+                }
             }
             if let Some(rt) = hub.runtime.take() {
                 rt.shutdown_timeout(std::time::Duration::from_secs(2));
@@ -628,32 +657,67 @@ impl Hub {
 
     /// Opens a repository in a new tab; returns the tab id.
     pub fn open_tab(&mut self, path: PathBuf) -> Option<i32> {
-        let handle = self.runtime_handle()?;
+        let id = self.reserve_tab(path)?;
+        self.ensure_open(id);
+        Some(id)
+    }
+
+    /// Takes a tab id for a repository without opening it. The feeds exist
+    /// from the start, so the page attaches to them as usual and simply
+    /// stays on "loading" until [`Hub::ensure_open`] fills them.
+    pub fn reserve_tab(&mut self, path: PathBuf) -> Option<i32> {
+        self.runtime_handle()?;
         self.next_tab_id += 1;
         let id = self.next_tab_id;
-        let feeds = Arc::new(Feeds::default());
-        let sink = Arc::new(BridgeSink {
-            feeds: Arc::clone(&feeds),
-        });
-        let session = RepoSession::open(self.executor.clone(), handle, path, sink);
-        session.set_auto_fetch(self.auto_fetch);
-        self.tabs.insert(id, Tab { session, feeds });
-        tracing::info!(tab = id, "opened repository tab");
+        self.tabs.insert(
+            id,
+            Tab {
+                session: None,
+                pending: Some(path),
+                feeds: Arc::new(Feeds::default()),
+            },
+        );
         Some(id)
+    }
+
+    /// Opens the session of a reserved tab, if it has not been opened yet.
+    pub fn ensure_open(&mut self, id: i32) {
+        let Some(handle) = self.runtime_handle() else {
+            return;
+        };
+        let executor = self.executor.clone();
+        let auto_fetch = self.auto_fetch;
+        let Some(tab) = self.tabs.get_mut(&id) else {
+            return;
+        };
+        let Some(path) = tab.pending.take() else {
+            return;
+        };
+        let sink = Arc::new(BridgeSink {
+            feeds: Arc::clone(&tab.feeds),
+        });
+        let session = RepoSession::open(executor, handle, path, sink);
+        session.set_auto_fetch(auto_fetch);
+        tab.session = Some(session);
+        tracing::info!(tab = id, "opened repository tab");
     }
 
     /// Changes the auto-fetch interval everywhere at once.
     pub fn set_auto_fetch(&mut self, interval: Option<std::time::Duration>) {
         self.auto_fetch = interval;
         for tab in self.tabs.values() {
-            tab.session.set_auto_fetch(interval);
+            if let Some(session) = &tab.session {
+                session.set_auto_fetch(interval);
+            }
         }
     }
 
     /// Closes a tab and cancels its session.
     pub fn close_tab(&mut self, id: i32) {
         if let Some(tab) = self.tabs.remove(&id) {
-            tab.session.close();
+            if let Some(session) = tab.session {
+                session.close();
+            }
             tracing::info!(tab = id, "closed repository tab");
         }
     }
@@ -663,15 +727,67 @@ impl Hub {
     /// outside them (the app-level identity screen) leaves them stale.
     pub fn refresh_authors(&self) {
         for tab in self.tabs.values() {
-            tab.session.refresh_author();
+            if let Some(session) = &tab.session {
+                session.refresh_author();
+            }
         }
     }
 
     pub fn session(&self, id: i32) -> Option<Arc<RepoSession>> {
-        self.tabs.get(&id).map(|t| Arc::clone(&t.session))
+        self.tabs.get(&id).and_then(|t| t.session.clone())
     }
 
     pub fn feeds(&self, id: i32) -> Option<Arc<Feeds>> {
         self.tabs.get(&id).map(|t| Arc::clone(&t.feeds))
     }
+
+    // -- settings and state -------------------------------------------------
+
+    pub fn settings(&self) -> &Settings {
+        &self.settings
+    }
+
+    pub fn state(&self) -> &State {
+        &self.state
+    }
+
+    /// Records the auto-fetch interval and puts it in force. Written out at
+    /// once rather than on the state timer: this is a decision somebody
+    /// made in a dialog, not a size that is still moving.
+    pub fn set_auto_fetch_minutes(&mut self, minutes: u32) {
+        self.settings.defaults.auto_fetch_minutes = minutes;
+        self.set_auto_fetch(minutes_to_interval(minutes));
+        if let Err(error) = self.store.save_settings(&self.settings) {
+            tracing::warn!(%error, "settings not saved");
+        }
+    }
+
+    pub fn set_window_state(&mut self, window: platitude_core::settings::WindowState) {
+        self.state.window = window;
+    }
+
+    pub fn set_layout_state(&mut self, layout: platitude_core::settings::LayoutState) {
+        self.state.layout = layout;
+    }
+
+    pub fn set_tabs_state(&mut self, tabs: platitude_core::settings::TabsState) {
+        self.state.tabs = tabs;
+    }
+
+    /// Writes the state out if it has moved since the last write.
+    pub fn flush_state(&mut self) {
+        if self.state == self.saved_state {
+            return;
+        }
+        match self.store.save_state(&self.state) {
+            Ok(()) => self.saved_state = self.state.clone(),
+            // Left unsaved on purpose: the next tick tries again, and until
+            // one succeeds the file on disk is still the last good one.
+            Err(error) => tracing::warn!(%error, "state not saved"),
+        }
+    }
+}
+
+fn minutes_to_interval(minutes: u32) -> Option<std::time::Duration> {
+    (minutes > 0).then(|| std::time::Duration::from_secs(u64::from(minutes) * 60))
 }

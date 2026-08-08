@@ -30,4 +30,8 @@ QtObject {
     readonly property var laneDash: [1, 1]
     readonly property real tailFade: 0.45
     readonly property int tipDelayMs: 600
+    // How often the window offers its shape to be written down. Nothing
+    // is written unless something moved, so this only has to be short
+    // enough that a crash loses a layout nobody would miss.
+    readonly property int stateFlushMs: 2000
 }

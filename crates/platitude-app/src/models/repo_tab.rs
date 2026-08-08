@@ -448,6 +448,17 @@ impl RepoTab {
         }
     }
 
+    /// Called when this page becomes the visible one. A tab restored from
+    /// the last session has no repository open behind it until then — the
+    /// feeds are already attached, so the page simply stops saying
+    /// "loading" once this fills them. Doing nothing on a tab that is
+    /// already open is the normal case.
+    #[qslot]
+    fn activate(&mut self) {
+        let id = self.tab_id;
+        Hub::with(|hub| hub.ensure_open(id));
+    }
+
     #[qslot]
     fn drain(&mut self) {
         let Some(feed) = self.feed.clone() else {

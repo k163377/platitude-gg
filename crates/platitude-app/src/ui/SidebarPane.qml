@@ -192,8 +192,10 @@ Rectangle {
     // rather than fixed, so one that has been widened comes back the
     // width it was left (規約 §レイアウト初期値 is only where it starts).
     property real openWidth: 260
+    /// Narrower than this is not a width anybody dragged to.
+    readonly property int minOpenWidth: 180
     SplitView.preferredWidth: sidebar.openWidth
-    SplitView.minimumWidth: 180
+    SplitView.minimumWidth: sidebar.minOpenWidth
     color: Theme.bgSurface
 
     // Folding is a size, and a size is the splitter's business: pinning
@@ -208,12 +210,18 @@ Rectangle {
         // row in that very section (startEdit).
         sidebar.closePeek()
         if (sidebar.collapsed) {
-            sidebar.openWidth = sidebar.width
+            // Only a width the splitter has actually handed over is worth
+            // going back to. A page built already folded — one restored
+            // from the last session — has not been laid out yet and
+            // reports 0, and folding that in would lose the width the
+            // session was left at.
+            if (sidebar.width >= sidebar.minOpenWidth)
+                sidebar.openWidth = sidebar.width
             sidebar.SplitView.minimumWidth = Theme.railWidth
             sidebar.SplitView.maximumWidth = Theme.railWidth
             sidebar.SplitView.preferredWidth = Theme.railWidth
         } else {
-            sidebar.SplitView.minimumWidth = 180
+            sidebar.SplitView.minimumWidth = sidebar.minOpenWidth
             sidebar.SplitView.maximumWidth = Number.POSITIVE_INFINITY
             sidebar.SplitView.preferredWidth = sidebar.openWidth
         }

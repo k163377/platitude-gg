@@ -78,10 +78,7 @@ impl TabsModel {
         if path_buf.as_os_str().is_empty() {
             return;
         }
-        let title = path_buf
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| path.clone());
+        let title = title_of(&path_buf, &path);
         let Some(Some(tab_id)) = Hub::with(|hub| hub.open_tab(path_buf)) else {
             return;
         };
@@ -92,6 +89,53 @@ impl TabsModel {
         });
         self.current_index = self.items.len() as i32 - 1;
         self.current_index_changed();
+        self.report();
+    }
+
+    /// Puts back the tabs the last session had open.
+    ///
+    /// Only the active one gets a session here: restoring a window of tabs
+    /// would otherwise spend one `git` startup per tab against the three
+    /// second budget, for repositories nobody has looked at yet. The rest
+    /// open when they are first selected.
+    ///
+    /// A path that is no longer a directory is dropped rather than shown
+    /// as a broken tab — it is not something the reader did. One that is
+    /// still there but is no longer a repository keeps its tab and reports
+    /// itself the usual way, because that one is worth seeing.
+    #[qslot]
+    fn restore_tabs(&mut self) {
+        let Some(saved) = Hub::with(|hub| hub.state().tabs.clone()) else {
+            return;
+        };
+        let mut wanted = saved.active;
+        for (position, path) in saved.paths.iter().enumerate() {
+            let path_buf = std::path::PathBuf::from(path);
+            if !path_buf.is_dir() {
+                tracing::info!(path = %path, "restored tab dropped: not there any more");
+                // Everything after it shifts left, and the active one with
+                // it if it was to the right.
+                if position < saved.active {
+                    wanted = wanted.saturating_sub(1);
+                }
+                continue;
+            }
+            let title = title_of(&path_buf, path);
+            let Some(Some(tab_id)) = Hub::with(|hub| hub.reserve_tab(path_buf)) else {
+                continue;
+            };
+            self.push(TabItem {
+                tab_id,
+                title,
+                repo_path: path.clone(),
+            });
+        }
+        if self.items.is_empty() {
+            return;
+        }
+        self.current_index = wanted.min(self.items.len() - 1) as i32;
+        self.current_index_changed();
+        self.report();
     }
 
     #[qslot]
@@ -110,6 +154,7 @@ impl TabsModel {
                 self.current_index = len - 1;
             }
             self.current_index_changed();
+            self.report();
         }
     }
 
@@ -118,7 +163,31 @@ impl TabsModel {
         if index != self.current_index && index >= -1 && index < self.items.len() as i32 {
             self.current_index = index;
             self.current_index_changed();
+            self.report();
         }
     }
+}
+
+impl TabsModel {
+    /// Hands the hub the tab strip as it stands. Opening, closing and
+    /// switching are single acts rather than something that moves under a
+    /// dragging hand, so they report as they happen; the file itself is
+    /// still only written by the flush.
+    fn report(&self) {
+        let paths = self
+            .items
+            .iter()
+            .map(|t| t.repo_path.clone())
+            .collect::<Vec<_>>();
+        let active = usize::try_from(self.current_index).unwrap_or(0);
+        Hub::with(|hub| hub.set_tabs_state(platitude_core::settings::TabsState { paths, active }));
+    }
+}
+
+/// The tab's label: the repository's own folder name.
+fn title_of(path: &std::path::Path, whole: &str) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| whole.to_string())
 }
 qml_register!(TabsModel, "TabsModel", singleton = false);

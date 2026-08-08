@@ -67,13 +67,27 @@ pub struct AppBackend {
     /// on equality; the argument passes through as the verb needs it.
     auto_act: String,
     auto_act_arg: String,
-    /// Auto-fetch interval in minutes; 0 is off. Application-wide, and not
-    /// persisted yet — settings storage is Phase 4, so this starts at the
-    /// default every launch.
+    /// Auto-fetch interval in minutes; 0 is off. Application-wide, because
+    /// the answer is about how often this computer should talk to remotes.
     auto_fetch_minutes: i32,
     /// Ceiling the settings input enforces.
     auto_fetch_max: i32,
     check_feed: Arc<Feed<AppMsg>>,
+}
+
+fn with_window(pick: impl Fn(&platitude_core::settings::WindowState) -> i32) -> i32 {
+    let fallback = platitude_core::settings::WindowState::default();
+    Hub::with(|hub| pick(&hub.state().window)).unwrap_or_else(|| pick(&fallback))
+}
+
+fn with_layout(pick: impl Fn(&platitude_core::settings::LayoutState) -> i32) -> i32 {
+    let fallback = platitude_core::settings::LayoutState::default();
+    Hub::with(|hub| pick(&hub.state().layout)).unwrap_or_else(|| pick(&fallback))
+}
+
+fn with_flag(pick: impl Fn(&platitude_core::settings::LayoutState) -> bool) -> bool {
+    let fallback = platitude_core::settings::LayoutState::default();
+    Hub::with(|hub| pick(&hub.state().layout)).unwrap_or_else(|| pick(&fallback))
 }
 
 /// Directory the identity check runs in. git resolves configuration from a
@@ -112,7 +126,8 @@ impl Default for AppBackend {
             scroll_to: std::env::var("PG_SCROLL_TO").unwrap_or_default(),
             auto_act: std::env::var("PG_AUTO_ACT").unwrap_or_default(),
             auto_act_arg: std::env::var("PG_AUTO_ACT_ARG").unwrap_or_default(),
-            auto_fetch_minutes: platitude_core::session::AUTO_FETCH_DEFAULT_MINUTES as i32,
+            auto_fetch_minutes: Hub::with(|hub| hub.settings().defaults.auto_fetch_minutes as i32)
+                .unwrap_or(platitude_core::session::AUTO_FETCH_DEFAULT_MINUTES as i32),
             auto_fetch_max: platitude_core::session::AUTO_FETCH_MAX_MINUTES as i32,
             check_feed: Arc::new(Feed::default()),
         }
@@ -191,9 +206,181 @@ impl AppBackend {
             return;
         }
         self.auto_fetch_minutes = minutes;
-        let interval = (minutes > 0).then(|| std::time::Duration::from_secs(minutes as u64 * 60));
-        Hub::with(|hub| hub.set_auto_fetch(interval));
+        Hub::with(|hub| hub.set_auto_fetch_minutes(minutes.unsigned_abs()));
         self.settings_changed();
+    }
+
+    // -- window state -------------------------------------------------------
+    //
+    // Read once as a page or the window is built, not bound: these are
+    // where something starts, and after that the UI owns the value. They
+    // are slots rather than properties for the same reason (規約 §QML
+    // バインディングはプロパティにしか反応しない — nothing here needs to
+    // react). Reading them off the hub rather than off a copy taken at
+    // startup is what makes a tab opened later pick up the layout that is
+    // in force now instead of the one the app launched with.
+
+    #[qslot]
+    fn start_window_x(&self) -> i32 {
+        Hub::with(|hub| hub.state().window.x.unwrap_or(i32::MIN)).unwrap_or(i32::MIN)
+    }
+
+    #[qslot]
+    fn start_window_y(&self) -> i32 {
+        Hub::with(|hub| hub.state().window.y.unwrap_or(i32::MIN)).unwrap_or(i32::MIN)
+    }
+
+    #[qslot]
+    fn start_window_width(&self) -> i32 {
+        with_window(|w| w.width)
+    }
+
+    #[qslot]
+    fn start_window_height(&self) -> i32 {
+        with_window(|w| w.height)
+    }
+
+    #[qslot]
+    fn start_window_maximized(&self) -> bool {
+        Hub::with(|hub| hub.state().window.maximized).unwrap_or(false)
+    }
+
+    #[qslot]
+    fn start_sidebar_width(&self) -> i32 {
+        with_layout(|l| l.sidebar_width)
+    }
+
+    #[qslot]
+    fn start_sidebar_collapsed(&self) -> bool {
+        with_flag(|l| l.sidebar_collapsed)
+    }
+
+    #[qslot]
+    fn start_details_width(&self) -> i32 {
+        with_layout(|l| l.details_width)
+    }
+
+    #[qslot]
+    fn start_commands_height(&self) -> i32 {
+        with_layout(|l| l.commands_height)
+    }
+
+    #[qslot]
+    fn start_commands_shown(&self) -> bool {
+        with_flag(|l| l.commands_shown)
+    }
+
+    #[qslot]
+    fn start_tags_shown(&self) -> bool {
+        with_flag(|l| l.tags_shown)
+    }
+
+    #[qslot]
+    fn start_wip_tree(&self) -> bool {
+        with_flag(|l| l.wip_tree)
+    }
+
+    #[qslot]
+    fn start_details_tree(&self) -> bool {
+        with_flag(|l| l.details_tree)
+    }
+
+    #[qslot]
+    fn start_section(&self, name: String) -> bool {
+        with_flag(|l| match name.as_str() {
+            "branches" => l.sections.branches,
+            "remotes" => l.sections.remotes,
+            "worktree" => l.sections.worktree,
+            "stashes" => l.sections.stashes,
+            "tags" => l.sections.tags,
+            _ => true,
+        })
+    }
+
+    /// Where the window is now. Reported on the same timer as the layout:
+    /// a drag across the desktop is as continuous as a pane drag.
+    #[qslot]
+    fn save_window(&self, x: i32, y: i32, width: i32, height: i32, maximized: bool) {
+        Hub::with(|hub| {
+            let previous = hub.state().window;
+            hub.set_window_state(platitude_core::settings::WindowState {
+                // A maximized window reports the size of the screen. Keeping
+                // the last unmaximized one is what lets restoring down go
+                // back to a window rather than to a full screen.
+                x: if maximized { previous.x } else { Some(x) },
+                y: if maximized { previous.y } else { Some(y) },
+                width: if maximized { previous.width } else { width },
+                height: if maximized { previous.height } else { height },
+                maximized,
+            });
+        });
+    }
+
+    /// The layout, from the one place that can see all of it. Reporting
+    /// each value as it changes would write on every frame of a splitter
+    /// drag; the window says what it looks like on a timer instead, and
+    /// the hub only writes a file when that differs from what is in one.
+    ///
+    /// Three calls rather than one because the layout has more parts than
+    /// a Qt slot takes arguments. Each merges into what the hub holds.
+    #[qslot]
+    fn save_layout_sizes(&self, sidebar_width: i32, details_width: i32, commands_height: i32) {
+        Hub::with(|hub| {
+            let mut layout = hub.state().layout;
+            layout.sidebar_width = sidebar_width;
+            layout.details_width = details_width;
+            layout.commands_height = commands_height;
+            hub.set_layout_state(layout);
+        });
+    }
+
+    #[qslot]
+    fn save_layout_flags(
+        &self,
+        sidebar_collapsed: bool,
+        commands_shown: bool,
+        tags_shown: bool,
+        wip_tree: bool,
+        details_tree: bool,
+    ) {
+        Hub::with(|hub| {
+            let mut layout = hub.state().layout;
+            layout.sidebar_collapsed = sidebar_collapsed;
+            layout.commands_shown = commands_shown;
+            layout.tags_shown = tags_shown;
+            layout.wip_tree = wip_tree;
+            layout.details_tree = details_tree;
+            hub.set_layout_state(layout);
+        });
+    }
+
+    #[qslot]
+    fn save_sections(
+        &self,
+        branches: bool,
+        remotes: bool,
+        worktree: bool,
+        stashes: bool,
+        tags: bool,
+    ) {
+        Hub::with(|hub| {
+            let mut layout = hub.state().layout;
+            layout.sections = platitude_core::settings::Sections {
+                branches,
+                remotes,
+                worktree,
+                stashes,
+                tags,
+            };
+            hub.set_layout_state(layout);
+        });
+    }
+
+    /// Writes the state out if anything moved. Driven by a timer in the
+    /// window and called once more as it closes.
+    #[qslot]
+    fn flush_state(&self) {
+        Hub::with(|hub| hub.flush_state());
     }
 
     /// Benchmark/automation reporting channel (QML → tracing).
