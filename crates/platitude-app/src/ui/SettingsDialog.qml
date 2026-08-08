@@ -161,11 +161,11 @@ AppDialog {
             wrapMode: Text.Wrap
             color: Theme.textMuted
             font.pixelSize: Theme.fontSm
-            // Two settings, two homes: one this app forgets on exit, one
-            // git keeps and every other git on this computer can see.
-            text: qsTr("The fetch interval is not stored yet, so it returns to "
-                       + "its default the next time Platitude GG starts. The "
-                       + "merge editor is stored by git as merge.guitool.")
+            // Two settings, two homes: one this app keeps for itself, one
+            // git keeps where every other git on this computer can see it.
+            text: qsTr("The fetch interval is stored by Platitude GG. The "
+                       + "merge editor is stored by git as merge.guitool, "
+                       + "where every other git on this computer sees it.")
         }
         RowLayout {
             Layout.alignment: Qt.AlignRight
