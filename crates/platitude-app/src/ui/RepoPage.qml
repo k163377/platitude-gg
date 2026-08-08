@@ -1737,6 +1737,49 @@ Item {
         onTriggered: AppBackend.report("ref_menu delete=" + refDeleteItem.text
                                        + " note=" + refDeleteItem.note)
     }
+    // The lane column has to have taken its narrower width before there
+    // is anywhere to pan to, or a bar worth wanting.
+    Timer {
+        id: graphPanTimer
+        interval: 400
+        onTriggered: {
+            // Where the pointer is, which is the whole of what puts the
+            // bar on screen. `-away` walks it back out again: a bar that
+            // comes when the pointer does proves nothing on its own
+            // unless it also goes when the pointer goes.
+            graphPane.restPointer(true)
+            if (AppBackend.autoAct !== "middle-scroll") {
+                if (AppBackend.autoAct === "graph-bar-away")
+                    graphPane.restPointer(false)
+                AppBackend.report(
+                    "graph_bar shown=" + graphPane.laneBarShown
+                    + " overflow=" + Math.round(graphPane.graphXMax))
+                return
+            }
+            // The middle click, then the pointer drifting sideways off
+            // it. The argument says which column the click landed in,
+            // which is the whole question — only the lanes take the
+            // sideways drift (デザイン規約 §グラフを横へ送る).
+            const y = graphPane.height / 2
+            const x = AppBackend.autoActArg === "message"
+                    ? graphPane.labelW + graphPane.graphColW + Theme.spaceXl
+                    : graphPane.labelW + Theme.spaceSm
+            graphPane.startAutoScroll(x, y)
+            graphPane.driftPointer(x + graphPane.width, y)
+            middleScrollTimer.start()
+        }
+    }
+    // Long enough for the 16ms ticker to have taken the lanes as far as
+    // they go: a pan that ran and a pan that was refused must not read
+    // alike in the report.
+    Timer {
+        id: middleScrollTimer
+        interval: 400
+        onTriggered: AppBackend.report(
+            "middle_scroll lanes=" + graphPane.autoPanning
+            + " x=" + Math.round(graphPane.graphX)
+            + " max=" + Math.round(graphPane.graphXMax))
+    }
     // The fetch has to land, and its answer reach the chips, before the
     // stacked ones are worth unstacking.
     Timer {
@@ -2218,6 +2261,15 @@ Item {
             // Opened and left standing, for a look at it. The argument is
             // the row, since the box only belongs on one with no chips.
             graphPane.startNaming(graphModel.oidAt(Number(arg)))
+        } else if (act === "graph-bar" || act === "graph-bar-away"
+                   || act === "middle-scroll") {
+            // Both want lanes that do not fit their column, and no demo
+            // repository has that many (the column starts wide enough for
+            // `graphDefaultLanes`). Pulling the divider in is what a
+            // person does, so the state these read is a real one.
+            page.setGraphColumns(graphPane.labelWManual,
+                                 Metrics.laneInset + 2 * Metrics.laneW)
+            graphPanTimer.start()
         } else if (act === "squash") {
             page.openRowMenu(branchesModel.headOid)
             page.squashCommit(branchesModel.headOid)

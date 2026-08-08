@@ -412,27 +412,44 @@ Rectangle {
     property real autoAnchorY: 0
     property real autoCurrentX: 0
     property real autoCurrentY: 0
+    /// Whether this autoscroll carries the lanes sideways as well. Decided
+    /// by where the middle click landed, and kept for the whole gesture
+    /// (デザイン規約 §グラフを横へ送る).
+    property bool autoPanning: false
+    /// Starts autoscroll from a point in this pane's frame. The press and
+    /// the automation hook both come through here, so which column offers
+    /// the sideways drift is answered in exactly one place.
+    function startAutoScroll(x, y) {
+        graphArea.autoAnchorX = x
+        graphArea.autoAnchorY = y
+        graphArea.autoCurrentX = x
+        graphArea.autoCurrentY = y
+        graphArea.autoPanning = x >= graphArea.labelW
+                                && x < graphArea.labelW + graphArea.graphColW
+        graphArea.autoScrolling = true
+    }
+    /// Where the pointer has drifted to since. Its distance from the
+    /// anchor is what the ticker below reads as speed — the moving
+    /// pointer and the automation hook write the same two values.
+    function driftPointer(x, y) {
+        graphArea.autoCurrentX = x
+        graphArea.autoCurrentY = y
+    }
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.MiddleButton
-        onClicked: mouse => {
-            graphArea.autoAnchorX = mouse.x
-            graphArea.autoAnchorY = mouse.y
-            graphArea.autoCurrentX = mouse.x
-            graphArea.autoCurrentY = mouse.y
-            graphArea.autoScrolling = true
-        }
+        onClicked: mouse => graphArea.startAutoScroll(mouse.x, mouse.y)
     }
     MouseArea {
         visible: graphArea.autoScrolling
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.AllButtons
-        cursorShape: Qt.SizeAllCursor
-        onPositionChanged: mouse => {
-            graphArea.autoCurrentX = mouse.x
-            graphArea.autoCurrentY = mouse.y
-        }
+        // The cursor says which ways this gesture goes, so a press that
+        // did not land on the lanes does not look broken when the lanes
+        // stay put under a sideways drift.
+        cursorShape: graphArea.autoPanning ? Qt.SizeAllCursor : Qt.SizeVerCursor
+        onPositionChanged: mouse => graphArea.driftPointer(mouse.x, mouse.y)
         onPressed: mouse => {
             graphArea.autoScrolling = false
             mouse.accepted = true
@@ -445,8 +462,9 @@ Rectangle {
                 const delta = (graphArea.autoCurrentY - graphArea.autoAnchorY)
                             * Metrics.middleScrollGain
                 graphList.contentY = graphList.clampY(graphList.contentY + delta)
-                // Sideways drift pans the lanes.
-                if (graphArea.graphXMax > 0) {
+                // Sideways drift pans the lanes — for a gesture that
+                // started on them.
+                if (graphArea.autoPanning && graphArea.graphXMax > 0) {
                     const dx = (graphArea.autoCurrentX - graphArea.autoAnchorX)
                              * Metrics.middleScrollGain
                     graphArea.graphX = Math.max(0, Math.min(graphArea.graphX + dx,
@@ -576,10 +594,38 @@ Rectangle {
                 Math.min(nx - graphArea.labelW, graphArea.graphColWMax))
         }
     }
+    /// Whether the pointer is anywhere in this pane. A `HoverHandler`
+    /// rather than a `MouseArea`: handlers are passive, so the rows',
+    /// chips' and dividers' own hover does not take this one away. Real
+    /// hover and the automation hook write the same property — hover
+    /// cannot be injected (verify-ui).
+    property bool pointerInside: false
+    HoverHandler {
+        onHoveredChanged: graphArea.pointerInside = hovered
+    }
+    /// Automation: the pointer resting in the pane, which is the only
+    /// thing that puts the lane bar on screen (`PG_AUTO_ACT=graph-bar`).
+    function restPointer(inside) {
+        graphArea.pointerInside = inside
+    }
+    /// What is drawn, not what was asked for: the automation hook reports
+    /// the bar itself so a broken binding cannot pass.
+    readonly property alias laneBarShown: laneBar.visible
     // Horizontal scroll of the lanes when the full graph is wider than
-    // its column.
+    // its column. The bar lies over the lanes of the last row, so it
+    // comes out only while the pointer is in the pane — and stays out
+    // for as long as it is being dragged, wherever that has taken the
+    // pointer (デザイン規約 §グラフを横へ送る).
     ScrollBar {
+        id: laneBar
         visible: graphArea.graphXMax > 0
+                 && (graphArea.pointerInside || pressed)
+        // Fusion draws its handle only in the style's "active" state,
+        // which for a bar that is not attached to a Flickable means while
+        // the pointer is on the bar itself — a 6px strip on the pane's
+        // bottom edge that nobody would find. When the bar is out it is
+        // because this pane put it there, so the style stops deciding.
+        policy: ScrollBar.AlwaysOn
         orientation: Qt.Horizontal
         x: graphArea.labelW
         width: graphArea.graphColW
