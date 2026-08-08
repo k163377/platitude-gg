@@ -11,22 +11,11 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
-            "command": "cargo xtask hook pre-git",
-            "if": "Bash(git *)"
-          }
-        ]
-      },
-      {
-        "matcher": "PowerShell",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cargo xtask hook pre-git",
-            "if": "PowerShell(git *)"
+            "command": "cargo xtask hook pre-shell"
           }
         ]
       }

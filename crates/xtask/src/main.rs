@@ -60,7 +60,7 @@ commands:
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads
       the hook payload from stdin). Events: pre-write, post-write,
-      pre-git, session-start.
+      pre-shell (pre-git on branches that predate it), session-start.
 ";
 
 fn main() -> ExitCode {

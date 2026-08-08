@@ -45,6 +45,7 @@ cargo fmt --all
 - **統合テストは 1 バイナリ**(`tests/it/` のモジュール。`cargo test` はバイナリを 1 つずつ走らせるので、`tests/` 直下に .rs を足すと別バイナリ = 直列実行とリンク 1 本分の後退。新しい統合テストは `it/` にモジュールとして足し `main.rs` へ登録)。部分実行は `cargo test -p platitude-core --test it <モジュール名>`
 - **並行セッション(複数エージェント)は git worktree で分ける** — 同一 checkout の共有は `target/` が単一障害点(cargo のビルドロックで直列化・incremental を相互に無効化・verify-ui が起動する release exe に別セッションの編集が焼き込まれた実績)。worktree なら target も demo / screenshot(temp 下の nanos 付きユニークパス)も自然に分離される
 - **worktree は固定名を使い回す**: `claude --worktree <固定名>`(`.claude/worktrees/<固定名>` に恒久作成・次回同名で再開。worktree ごとの `target/` = incremental キャッシュがセッションを跨いで温存される)。使い捨ての自動命名 worktree を乱造しない。ブランチは `worktree-<名前>` に切られる。**完了しても main へは戻さない**(§Git 運用)。**本体 checkout で実装作業をしない**(ドキュメント編集・レビューは可)
+- **worktree からのアプリ起動は headless だけ** — 実ウィンドウは画面を横取りし(別セッションの実ウィンドウ検証ごと)、終わり方を持たないプロセスは `target/release` の exe を掴んだままリンクを塞ぐ。`cargo xtask verify-ui` を使うか、自分で叩くなら `QT_QPA_PLATFORM=offscreen` + `PG_AUTO_QUIT_MS` + **自分の worktree の** exe。`cargo xtask hook pre-shell` が worktree セッションのそれ以外を deny する(ユーザーが窓を明示指示した時だけ `PG_ALLOW_GUI=1` を先頭に付ける)。本体 checkout からの起動は対象外 — ユーザー自身の起動で、重なることは許容
 - 開発補助ツール(検証・デモ環境生成等)を **Windows 専用形式(.ps1 / .bat)で作らない** — タスクランナーが要る時は `cargo xtask` パターン(ワークスペース内クレート + `.cargo/config.toml` の alias、依存は std のみ)で 3OS 同一に書き、OS 差(Qt の PATH / フォント等)はコード内の分岐に焼き込む。just / make 等の外部タスクランナーも導入しない
 
 ## Rust 規約

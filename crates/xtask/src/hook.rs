@@ -11,6 +11,12 @@ use std::io::Read;
 /// move. It rides in the command itself so the transcript records the ask.
 const MAIN_ESCAPE: &str = "PG_ALLOW_MAIN";
 
+/// The same, for an instruction that asked for a real window.
+const WINDOW_ESCAPE: &str = "PG_ALLOW_GUI";
+
+/// The directory every worktree of this repository sits under.
+const WORKTREES: &str = "/.claude/worktrees/";
+
 pub fn run(args: &[String]) -> Result<(), String> {
     let event = args.first().map(String::as_str).unwrap_or("");
     let mut input = String::new();
@@ -20,10 +26,24 @@ pub fn run(args: &[String]) -> Result<(), String> {
     match event {
         "pre-write" => pre_write(&input),
         "post-write" => post_write(&input),
-        "pre-git" => pre_git(&input),
+        "pre-shell" => pre_shell(&input),
+        // Worktrees whose branch predates pre-shell still name this event in
+        // their own .claude/settings.json, and they keep the git guard until
+        // they pick the new wiring up.
+        "pre-git" => pre_git(&input).map(|_| ()),
         "session-start" => session_start(&input),
         other => Err(format!("unknown hook event: {other:?}")),
     }
+}
+
+/// PreToolUse(Bash|PowerShell): every shell line passes through here. One
+/// decision per call — two JSON objects on stdout is not a payload — so the
+/// guards run in order and the first refusal is the answer.
+fn pre_shell(input: &str) -> Result<(), String> {
+    if pre_git(input)? {
+        return Ok(());
+    }
+    pre_launch(input)
 }
 
 /// PreToolUse(Write): a new .rs directly under crates/platitude-core/tests/
@@ -146,16 +166,17 @@ fn qml_font_notes(content: &str) -> Vec<String> {
 /// PreToolUse(Bash|PowerShell): putting a branch onto main is the user's
 /// call. Which worktree branches have landed and which have not is only
 /// answerable if every landing was asked for, so a session that merges on
-/// its own way out is the thing to stop (CLAUDE.md Git 運用).
-fn pre_git(input: &str) -> Result<(), String> {
+/// its own way out is the thing to stop (CLAUDE.md Git 運用). Answers
+/// whether it refused, so the guard after it stays quiet when it did.
+fn pre_git(input: &str) -> Result<bool, String> {
     let Some(command) = string_field(input, "command") else {
-        return Ok(());
+        return Ok(false);
     };
     if command.contains(MAIN_ESCAPE) {
-        return Ok(());
+        return Ok(false);
     }
     let Some(reflection) = reflection(&command) else {
-        return Ok(());
+        return Ok(false);
     };
     let cwd = string_field(input, "cwd").unwrap_or_default();
     let dir = reflection.dir.unwrap_or(&cwd);
@@ -165,15 +186,15 @@ fn pre_git(input: &str) -> Result<(), String> {
     // not a repository at all.
     let (Some(session_repo), Some(target_repo)) = (common_git_dir(&cwd), common_git_dir(dir))
     else {
-        return Ok(());
+        return Ok(false);
     };
     if !session_repo.eq_ignore_ascii_case(&target_repo) {
-        return Ok(());
+        return Ok(false);
     }
     if reflection.only_from_main
         && git_query(dir, &["rev-parse", "--abbrev-ref", "HEAD"]).as_deref() != Some("main")
     {
-        return Ok(());
+        return Ok(false);
     }
     println!(
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
@@ -185,7 +206,7 @@ fn pre_git(input: &str) -> Result<(), String> {
          it.\"}}}}",
         reflection.what, MAIN_ESCAPE
     );
-    Ok(())
+    Ok(true)
 }
 
 /// A git command in a shell line that would land commits on main.
@@ -308,6 +329,176 @@ fn git_query(dir: &str, arguments: &[&str]) -> Option<String> {
     })
 }
 
+/// PreToolUse(Bash|PowerShell): a worktree session exists so that it takes
+/// nothing from the sessions beside it, and there are two ways starting the
+/// app takes something anyway — a real window puts itself over whatever is
+/// on the screen (and over the window another session is trying to grab),
+/// and a process nothing ends keeps holding the exe it runs, so the build
+/// after it cannot link. Both have a form that takes neither: offscreen QPA
+/// wants no screen, PG_AUTO_QUIT_MS makes the process let go on its own.
+/// Only worktree sessions are held to it — a launch asked for in the primary
+/// checkout is the user's own, and two of those may collide (CLAUDE.md
+/// ビルド・テスト).
+fn pre_launch(input: &str) -> Result<(), String> {
+    let Some(command) = string_field(input, "command") else {
+        return Ok(());
+    };
+    if command.contains(WINDOW_ESCAPE) {
+        return Ok(());
+    }
+    let cwd = string_field(input, "cwd").unwrap_or_default();
+    let objections = launch_objections(&command, &cwd);
+    if objections.is_empty() {
+        return Ok(());
+    }
+    println!(
+        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
+         \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
+         \"Starting the app this way from a worktree takes something the \
+         sessions beside it need: {}. Headless takes nothing: \
+         `cargo xtask verify-ui <verb>` sets offscreen QPA and a quit timer \
+         and kills the run if it hangs (verify-ui skill). Running the binary \
+         by hand works too, with QT_QPA_PLATFORM=offscreen and \
+         PG_AUTO_QUIT_MS set and this worktree's own target/ as the path. If \
+         the user asked for a real window in so many words, run the same \
+         command again with {}=1 in front of it.\"}}}}",
+        objections.join("; "),
+        WINDOW_ESCAPE
+    );
+    Ok(())
+}
+
+/// What `command`, run from `cwd`, would take from the sessions beside it.
+/// Empty when it starts nothing, when it starts it the harmless way, or when
+/// the session is not in a worktree at all.
+fn launch_objections(command: &str, cwd: &str) -> Vec<String> {
+    let Some(root) = worktree_root(cwd) else {
+        return Vec::new();
+    };
+    let Some(launch) = launch(command) else {
+        return Vec::new();
+    };
+    let mut objections = Vec::new();
+    if !(command.contains("QT_QPA_PLATFORM") && command.contains("offscreen")) {
+        objections.push(
+            "it sets no QT_QPA_PLATFORM=offscreen, so it opens a real window \
+             over whatever is on the screen"
+                .to_string(),
+        );
+    }
+    if !command.contains("PG_AUTO_QUIT_MS") {
+        objections.push(
+            "it sets no PG_AUTO_QUIT_MS, so nothing ends the process and it \
+             holds the exe against the next build"
+                .to_string(),
+        );
+    }
+    if let Some(exe) = launch.exe {
+        let resolved = resolve(cwd, exe);
+        if !resolved.to_lowercase().starts_with(&root.to_lowercase()) {
+            objections.push(format!(
+                "the binary is {resolved}, outside this worktree — the tree \
+                 that owns it has to link that file"
+            ));
+        }
+    }
+    objections
+}
+
+/// A start of the app found in a shell line.
+struct Launch<'a> {
+    /// The binary as the command names it, when it names a path at all.
+    /// `cargo run` leaves the path to cargo, which builds in this tree.
+    exe: Option<&'a str>,
+}
+
+/// The first start of the app in `command`, if any. `cargo xtask verify-ui`
+/// is not one and needs no exception: it names no binary and is not
+/// `cargo run`, so nothing here sees it.
+fn launch(command: &str) -> Option<Launch<'_>> {
+    let tokens: Vec<&str> = command.split_whitespace().collect();
+    let mut index = 0;
+    while index < tokens.len() {
+        let token = unquote(tokens[index]);
+        index += 1;
+        if names_the_binary(token) {
+            return Some(Launch { exe: Some(token) });
+        }
+        if token != "cargo" || tokens.get(index).map(|t| unquote(t)) != Some("run") {
+            continue;
+        }
+        let arguments: Vec<&str> = tokens[index + 1..]
+            .iter()
+            .take_while(|token| !matches!(**token, "&&" | "||" | ";" | "|" | "--"))
+            .map(|token| unquote(token))
+            .collect();
+        // A named package that is not the app is someone else's binary — the
+        // task runner's, usually. Without one, the workspace's default
+        // members leave exactly one runnable target, which is the app.
+        let package = arguments
+            .iter()
+            .position(|argument| matches!(*argument, "-p" | "--package"))
+            .and_then(|at| arguments.get(at + 1));
+        if package.is_none_or(|package| *package == "platitude-app") {
+            return Some(Launch { exe: None });
+        }
+    }
+    None
+}
+
+/// Whether `token` names the app's binary. The repository directory is
+/// called platitude-gg as well, so a path that only ends in the bare name
+/// has to be a built one before it counts.
+fn names_the_binary(token: &str) -> bool {
+    let path = token.replace('\\', "/");
+    let Some(name) = path.rsplit('/').next() else {
+        return false;
+    };
+    name.eq_ignore_ascii_case("platitude-gg.exe")
+        || (name == "platitude-gg" && path.split('/').any(|segment| segment == "target"))
+}
+
+/// The worktree `cwd` sits in: the path down to the directory named under
+/// .claude/worktrees/, and None for the primary checkout.
+fn worktree_root(cwd: &str) -> Option<String> {
+    let cwd = cwd.replace('\\', "/");
+    let at = cwd.find(WORKTREES)? + WORKTREES.len();
+    if at >= cwd.len() {
+        return None;
+    }
+    let end = cwd[at..].find('/').map_or(cwd.len(), |slash| at + slash);
+    Some(cwd[..end].to_string())
+}
+
+/// `path` as the shell would reach it from `cwd`, with `.` and `..` folded
+/// out so that a way back up into another tree shows in the text.
+fn resolve(cwd: &str, path: &str) -> String {
+    let path = path.replace('\\', "/");
+    let rooted = path.starts_with('/');
+    // A drive letter is the other way a Windows path says it starts at a root.
+    let absolute = rooted || path.as_bytes().get(1) == Some(&b':');
+    let joined = if absolute {
+        path
+    } else {
+        format!("{}/{path}", cwd.replace('\\', "/"))
+    };
+    let mut segments: Vec<&str> = Vec::new();
+    for segment in joined.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                segments.pop();
+            }
+            other => segments.push(other),
+        }
+    }
+    let mut resolved = segments.join("/");
+    if joined.starts_with('/') {
+        resolved.insert(0, '/');
+    }
+    resolved
+}
+
 /// SessionStart: sessions opened in the primary checkout get the worktree
 /// rule injected while worktree sessions stay quiet. Plain stdout becomes
 /// session context for this event.
@@ -350,7 +541,85 @@ fn string_field(input: &str, key: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{qml_font_notes, reflection};
+    use super::{launch_objections, qml_font_notes, reflection, resolve};
+
+    const IN_WORKTREE: &str = "C:/Users/x/IdeaProjects/platitude-gg/.claude/worktrees/launch";
+    const PRIMARY: &str = "C:/Users/x/IdeaProjects/platitude-gg";
+
+    #[test]
+    fn refuses_a_worktree_launch_that_opens_a_window_or_keeps_the_exe() {
+        let window = launch_objections("./target/release/platitude-gg.exe", IN_WORKTREE);
+        assert_eq!(window.len(), 2, "{window:?}");
+        assert!(window[0].contains("QT_QPA_PLATFORM"));
+        assert!(window[1].contains("PG_AUTO_QUIT_MS"));
+
+        let offscreen_only = launch_objections(
+            "QT_QPA_PLATFORM=offscreen ./target/release/platitude-gg",
+            IN_WORKTREE,
+        );
+        assert_eq!(offscreen_only.len(), 1, "{offscreen_only:?}");
+        assert!(offscreen_only[0].contains("PG_AUTO_QUIT_MS"));
+
+        let by_cargo = launch_objections("cargo run --release", IN_WORKTREE);
+        assert_eq!(by_cargo.len(), 2, "{by_cargo:?}");
+    }
+
+    #[test]
+    fn lets_the_headless_shapes_through() {
+        for command in [
+            "cargo xtask verify-ui commit --preset basic",
+            "cargo xtask demo-repo basic",
+            "QT_QPA_PLATFORM=offscreen PG_AUTO_QUIT_MS=3000 ./target/release/platitude-gg.exe",
+            "cargo build --release",
+            "cargo run --quiet -p xtask -- hook pre-write",
+            "cd C:/Users/x/IdeaProjects/platitude-gg && git status",
+        ] {
+            assert!(
+                launch_objections(command, IN_WORKTREE).is_empty(),
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
+    fn refuses_the_binary_of_another_tree_and_leaves_this_one_alone() {
+        let elsewhere = launch_objections(
+            "QT_QPA_PLATFORM=offscreen PG_AUTO_QUIT_MS=3000 \
+             ../../../target/release/platitude-gg.exe",
+            IN_WORKTREE,
+        );
+        assert_eq!(elsewhere.len(), 1, "{elsewhere:?}");
+        assert!(
+            elsewhere[0].contains("outside this worktree"),
+            "{elsewhere:?}"
+        );
+
+        let named_absolutely = launch_objections(
+            "QT_QPA_PLATFORM=offscreen PG_AUTO_QUIT_MS=3000 \
+             \"C:\\Users\\x\\IdeaProjects\\platitude-gg\\.claude\\worktrees\\launch\\target\\release\\platitude-gg.exe\"",
+            IN_WORKTREE,
+        );
+        assert!(named_absolutely.is_empty(), "{named_absolutely:?}");
+    }
+
+    #[test]
+    fn holds_only_worktree_sessions_to_it() {
+        assert!(
+            launch_objections("./target/release/platitude-gg.exe", PRIMARY).is_empty(),
+            "a launch asked for in the primary checkout is the user's own"
+        );
+    }
+
+    #[test]
+    fn folds_a_way_back_up_out_of_the_path() {
+        assert_eq!(resolve("C:/a/b/c", "../../x/app.exe"), "C:/a/x/app.exe");
+        assert_eq!(
+            resolve("C:/a/b", "./target/app.exe"),
+            "C:/a/b/target/app.exe"
+        );
+        assert_eq!(resolve("/home/x/w", "../t/app"), "/home/x/t/app");
+        assert_eq!(resolve("/home/x/w", "/opt/app"), "/opt/app");
+    }
 
     #[test]
     fn flags_every_verb_that_writes_main() {
