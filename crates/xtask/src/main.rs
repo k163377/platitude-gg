@@ -39,6 +39,7 @@ commands:
         authorship  every way an author and a committer can be two
         tags      a tag in every state a remote can put it in (fetch first)
         manytags  basic, with more tags than any pane can show at once
+        edges     every string at both ends of what git allows, in Japanese
         empty     `git init` and nothing else
 
   verify-ui <verb> [arg] [options]

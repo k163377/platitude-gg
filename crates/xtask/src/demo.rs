@@ -63,6 +63,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
         "authorship" => authorship(&mut repo)?,
         "tags" => tags(&mut repo)?,
         "manytags" => manytags(&mut repo)?,
+        "edges" => edges(&mut repo)?,
         "empty" => {}
         other => return Err(format!("unknown preset: {other}")),
     }
@@ -420,6 +421,137 @@ fn retree_head(repo: &mut DemoRepo, tree: &str) -> Result<String, String> {
 
 /// Branches, a remote one commit behind, tags in both places, a stash,
 /// and a dirty working tree — the state most verbs can act on.
+/// Bytes a ref's last component may have. Measured in throwaway
+/// repositories on both systems: a loose ref is the file `<name>.lock`
+/// against a 255-byte filename, so Linux stops at 250 — while NTFS counts
+/// UTF-16 units and took 100 kanji (301 bytes) without complaint. The
+/// smaller wall is the shared one, and a repository that holds a ref only
+/// Windows can spell is a repository Linux cannot check out.
+const REF_WALL: usize = 250;
+/// Bytes a path component may have: 255 on both, and the worktree path
+/// has to fit MAX_PATH under a temp directory, so files stay well inside.
+const PATH_ROOM: usize = 120;
+
+/// `head`, then kanji until the whole is exactly `bytes` long. The point
+/// is the last character: it ends *on* the wall, so anything that slices
+/// by byte index cuts it in half there — which is how this project lost
+/// its graph once (core.md, the co-author key).
+fn to_the_byte(head: &str, bytes: usize) -> String {
+    const FILL: [char; 5] = ['長', 'い', '名', '前', 'の'];
+    let mut s = String::from(head);
+    let mut i = 0;
+    while s.len() + 3 <= bytes {
+        s.push(FILL[i % FILL.len()]);
+        i += 1;
+    }
+    while s.len() < bytes {
+        s.push('x');
+    }
+    s
+}
+
+/// A paragraph somebody pasted, in both scripts, *at least* `bytes` long.
+/// git puts no wall in front of a subject, a body, an author name or a URL
+/// — it took a megabyte of each in the same measurement — so what stands in
+/// for "the limit" here is the worst thing a person plausibly does.
+///
+/// At least, not at most: asking for less than one sentence used to return
+/// the two characters of the terminator, and a co-author whose name is
+/// `終端` tests nothing.
+fn pasted(bytes: usize) -> String {
+    let unit = "この行は長い日本語の文章で、折り返しと省略の両方を試すために置いてある。 \
+                And an English clause rides along so the run of Latin text is measured too. ";
+    let mut s = String::new();
+    while s.len() < bytes {
+        s.push_str(unit);
+    }
+    s.push_str("終端");
+    s
+}
+
+/// Every string the UI shows, at both ends of what git allows, with
+/// Japanese in all of them. Two repositories in one: the short end is a
+/// single character everywhere (including a commit with *no* message,
+/// which git accepts and reads back empty), the long end sits on the
+/// measured wall.
+fn edges(repo: &mut DemoRepo) -> Result<(), String> {
+    let wall_branch = to_the_byte("b", REF_WALL);
+    let wall_tag = to_the_byte("t", REF_WALL);
+    let wall_file = to_the_byte("f", PATH_ROOM);
+    let long_author = format!("{} <{}@example.com>", pasted(200), to_the_byte("m", 60));
+
+    // A履歴 that is ordinary enough to read, so the extremes stand out.
+    repo.commit(
+        "README.md",
+        "# 端\n\nちょうど端の値だけを集めたリポジトリ。\n",
+        "docs: 端の値を集める",
+    )?;
+
+    // The short end: one character of everything.
+    repo.commit("q", "x\n", "日")?;
+    // git takes a commit with no message at all and reads it back empty.
+    repo.git(&["commit", "--allow-empty", "--allow-empty-message", "-m", ""])?;
+    repo.git(&["commit", "--allow-empty", "--author=日 <あ>", "-m", "一"])?;
+
+    // The long end: a subject nobody meant to write, and a body under it.
+    let long_subject = pasted(2000);
+    let long_body = format!(
+        "{}\n\n{}\n\nCo-authored-by: {} <{}@example.com>\n",
+        pasted(400),
+        pasted(600),
+        pasted(120),
+        to_the_byte("c", 40)
+    );
+    repo.write(&wall_file, "端の名前のファイル\n")?;
+    repo.git(&["add", "--", &wall_file])?;
+    repo.git(&["commit", "-m", &long_subject, "-m", &long_body])?;
+
+    // A deep path, a name with a space, and one that is only Japanese.
+    repo.commit(
+        "第一階層/第二階層/第三階層/第四階層/深い場所のファイル.txt",
+        "deep\n",
+        "feat: 深い階層にファイルを置く",
+    )?;
+    repo.commit("名前に 空白 が入る.txt", "space\n", "feat: 空白入りの名前")?;
+
+    // An author whose name is a paragraph, on its own commit.
+    repo.git(&[
+        "commit",
+        "--allow-empty",
+        &format!("--author={long_author}"),
+        "-m",
+        "chore: 著者名が段落のコミット",
+    ])?;
+
+    // Refs at both ends. The one-character branch is non-ASCII on purpose.
+    repo.git(&["branch", "あ"])?;
+    repo.git(&["branch", &wall_branch])?;
+    repo.git(&["tag", "x"])?;
+    repo.git(&["tag", "-a", &wall_tag, "-m", &pasted(300)])?;
+
+    // Remotes: one that works, one whose name and URL are both absurd.
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+    repo.git(&["push", "origin", "あ", "x"])?;
+    let long_remote = to_the_byte("r", 90);
+    let long_url = format!("file:///{}", pasted(300).replace(' ', "-"));
+    repo.git(&["remote", "add", &long_remote, &long_url])?;
+
+    // Stashes at both ends.
+    repo.write("q", "x\nstashed\n")?;
+    repo.git(&["stash", "push", "-m", "日"])?;
+    repo.write("q", "x\nstashed again\n")?;
+    repo.git(&["stash", "push", "-m", &pasted(400)])?;
+
+    // A dirty tree whose file rows carry the same extremes.
+    repo.write(&wall_file, "端の名前のファイル\n編集した行\n")?;
+    repo.git(&["add", "--", &wall_file])?;
+    repo.write("名前に 空白 が入る.txt", "space\n編集\n")?;
+    repo.write(&to_the_byte("u", PATH_ROOM), "untracked\n")?;
+    repo.write("z", "")?;
+    Ok(())
+}
+
 fn basic(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
