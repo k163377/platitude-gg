@@ -10,6 +10,7 @@ mod support;
 
 mod commit_branch_integration;
 mod details_diff;
+mod edge_strings;
 mod exec;
 mod identity_integration;
 mod integrate_integration;
