@@ -167,10 +167,12 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        // The window's own buttons run to the very edge where the band is
-        // the title bar: the corner of a maximised window is the one
-        // target a pointer cannot overshoot.
-        anchors.rightMargin: topBar.captionMerged ? 0 : Theme.spaceMd
+        // The band's own right edge is not the window's: the client area
+        // reaches past what is drawn, so a row flush with it puts the
+        // close button's last few pixels off screen and its wash reads as
+        // clipped (measured: the cell ended 4.5px beyond the visible
+        // edge). `spaceXs` lands it flush instead.
+        anchors.rightMargin: topBar.captionMerged ? Theme.spaceXs : Theme.spaceMd
         // The tighter step between this row's controls. A browser's band
         // carries the window's buttons and nothing else; this one carries
         // the command log, fetch and push as well, so the same spacing a
