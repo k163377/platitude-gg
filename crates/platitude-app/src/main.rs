@@ -33,10 +33,13 @@ fn main() {
     Hub::install(runtime);
 
     let mut app = QApp::new();
-    // The name people read, not the repository slug: Qt hands this to the
-    // window manager and to its own dialogs. The slug stays where machines
-    // read it (crate, binary, config directory).
-    app.application_name("Platitude GG");
+    // The slug, not the product name `Platitude GG`: nothing shows this to a
+    // person (the window title is QML's, and the one Qt-built dialog names
+    // itself), while two machines read it verbatim — QStandardPaths joins it
+    // into `~/.cache/<name>/`, and the xcb plugin makes it the WM_CLASS
+    // class. A name with a space in it there buys nothing and costs a
+    // desktop-file match.
+    app.application_name("platitude-gg");
     // Embed the QML module (singletons + components + Main) as qrc
     // resources. Every file listed in ui/qmldir must be embedded here.
     qtbridge::include_bytes_qml!("ui/qmldir", "qt/qml/platitude");
