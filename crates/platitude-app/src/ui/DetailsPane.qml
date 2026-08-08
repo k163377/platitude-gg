@@ -356,7 +356,8 @@ ColumnLayout {
             // the pane and left the author row drawn over the window's
             // own footer (measured at a 2,000-byte subject).
             Layout.preferredHeight: Math.min(subjectArea.implicitHeight
-                                             + Theme.spaceSm, 120)
+                                             + Theme.spaceSm,
+                                             Theme.messageMaxHeight)
             color: Theme.bgBase
             radius: Theme.radiusMd
             // While the question stands, the boxes it is about carry it:
@@ -387,7 +388,8 @@ ColumnLayout {
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(Math.max(bodyArea.implicitHeight,
                                                       2 * Theme.fontMdLine)
-                                             + Theme.spaceSm, 120)
+                                             + Theme.spaceSm,
+                                             Theme.messageMaxHeight)
             color: Theme.bgBase
             radius: Theme.radiusMd
             border.color: detailsPane.asking ? Theme.warning : Theme.borderSubtle

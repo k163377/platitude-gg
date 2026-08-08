@@ -440,7 +440,8 @@ ColumnLayout {
             // paragraph into otherwise grows until the file list has no
             // pane left to be in.
             Layout.preferredHeight: Math.min(wipSubject.implicitHeight
-                                             + Theme.spaceSm, 120)
+                                             + Theme.spaceSm,
+                                             Theme.messageMaxHeight)
             color: Theme.bgBase
             radius: Theme.radiusMd
             border.color: Theme.borderDefault
@@ -462,7 +463,8 @@ ColumnLayout {
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(Math.max(wipBody.implicitHeight,
                                                       2 * Theme.fontMdLine)
-                                             + Theme.spaceSm, 120)
+                                             + Theme.spaceSm,
+                                             Theme.messageMaxHeight)
             color: Theme.bgBase
             radius: Theme.radiusMd
             border.color: Theme.borderSubtle
