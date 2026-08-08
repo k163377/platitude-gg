@@ -265,10 +265,26 @@ ApplicationWindow {
                 font.weight: Font.DemiBold
                 anchors.horizontalCenter: parent.horizontalCenter
             }
-            BusyIndicator {
+            // The drawn ring, not Fusion's BusyIndicator — the same
+            // turning mark as everywhere else in the window
+            // (規約 §進行中・長押しの定数).
+            NavIcon {
                 visible: AppBackend.gitState === "checking"
-                running: visible
+                width: Theme.iconLg
+                height: Theme.iconLg
+                kind: "spinner"
+                tint: Theme.textSecondary
                 anchors.horizontalCenter: parent.horizontalCenter
+                // On the render thread, so it keeps turning while the GUI
+                // thread drains models.
+                RotationAnimator on rotation {
+                    running: AppBackend.gitState === "checking"
+                             && AppBackend.shotDir === ""
+                    loops: Animation.Infinite
+                    from: 0
+                    to: 360
+                    duration: Metrics.spinMs
+                }
             }
             Label {
                 visible: AppBackend.gitState === "missing"

@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
+import platitude
 import platitude.ui
 
 // Center pane: the commit graph. Owns its column geometry (label /
@@ -586,9 +587,27 @@ Rectangle {
                     position * graphArea.graphFullW, graphArea.graphXMax))
         }
     }
-    BusyIndicator {
+    // First load, before any row exists. The drawn ring, not Fusion's
+    // BusyIndicator — the window has one turning mark and this is it
+    // (規約 §進行中・長押しの定数).
+    NavIcon {
         anchors.centerIn: parent
-        running: graphArea.graphModel.loading && graphArea.graphModel.rowTotal === 0
+        width: Theme.iconLg
+        height: Theme.iconLg
+        kind: "spinner"
+        tint: Theme.textSecondary
+        visible: graphArea.graphModel.loading && graphArea.graphModel.rowTotal === 0
+        // On the render thread, so it keeps turning while the GUI
+        // thread drains models.
+        RotationAnimator on rotation {
+            running: graphArea.graphModel.loading
+                     && graphArea.graphModel.rowTotal === 0
+                     && AppBackend.shotDir === ""
+            loops: Animation.Infinite
+            from: 0
+            to: 360
+            duration: Metrics.spinMs
+        }
     }
     Label {
         anchors.centerIn: parent
