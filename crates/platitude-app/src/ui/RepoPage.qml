@@ -1314,6 +1314,14 @@ Item {
                 diffPane.showLineTools(0, line)
                 return
             }
+            // The hunk heading with the pointer on it: its two words carry
+            // their own colours only there (デザイン規約 §diff の中の
+            // ステージ), and hover cannot be injected, so the row is named
+            // instead. A heading's own row is line -1 (`flatten_patches`).
+            if (act === "hunk-tools") {
+                diffPane.showLineTools(0, -1)
+                return
+            }
             if (act === "stage-hunk" || act === "stage-line") {
                 page.stageSelection(0, act === "stage-line" ? line : -1)
                 return
@@ -1831,14 +1839,15 @@ Item {
                 AppBackend.report("op_exit_held " + wipPane.completeOpExit(arg))
         } else if (act === "stage-hunk" || act === "stage-line"
                    || act === "discard-hunk" || act === "discard-hunk-go"
-                   || act === "diff-file" || act === "line-tools") {
+                   || act === "diff-file" || act === "line-tools"
+                   || act === "hunk-tools") {
             // All of them enter through the diff of one unstaged file and
-            // act on its first hunk: "diff-file" only opens it, and
+            // act on its first hunk: "diff-file" only opens it,
             // "line-tools" puts out the square a line shows under the
-            // pointer. "discard-hunk" leaves the held button standing for
-            // the shot and "-go" holds it to its end. The working tree
-            // comes up first, since its file list is where a diff is
-            // reached from.
+            // pointer, and "hunk-tools" wakes the heading's two words.
+            // "discard-hunk" leaves the held button standing for the shot
+            // and "-go" holds it to its end. The working tree comes up
+            // first, since its file list is where a diff is reached from.
             page.showWip()
             page.toggleDiff("unstaged", arg, "")
             stageRowTimer.start()

@@ -75,6 +75,17 @@ Rectangle {
             Layout.fillWidth: true
             implicitHeight: Theme.headerHeight
             color: Theme.bgElevated
+            // The hairline every pane header closes with (see PaneHeader).
+            // This is the band it was written for: the row under it is a
+            // hunk heading of the same colour.
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: Theme.borderWidth
+                color: Theme.borderSubtle
+                z: 1
+            }
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: Theme.spaceSm
@@ -88,18 +99,26 @@ Rectangle {
                     elide: Text.ElideMiddle
                     Layout.fillWidth: true
                 }
-                HoverToolButton {
+                // The file's own word, and the loudest thing in the pane:
+                // the pair colour the hunks and the file rows use, a step
+                // up in size, and lit whether or not the pointer is near
+                // (デザイン規約 §diff の中のステージ). It is the only
+                // standing colour word in the view — the hunks' wait for
+                // the pointer — which is what puts the scopes back in
+                // order: staging a file is the larger of the two.
+                ActionButton {
                     visible: diffPane.fromWorkTree
                     text: diffPane.staged ? qsTr("Unstage file")
                                           : qsTr("Stage file")
-                    font.pixelSize: Theme.fontSm
+                    tone: diffPane.staged ? Theme.diffRemovedFg
+                                          : Theme.diffAddedFg
                     enabled: !diffPane.busy
                     ToolTip.visible: hovered
                     ToolTip.delay: 300
                     ToolTip.text: diffPane.staged
                         ? qsTr("Unstage the whole file at once")
                         : qsTr("Stage the whole file at once")
-                    onClicked: diffPane.stageFileRequested()
+                    onActivated: diffPane.stageFileRequested()
                 }
                 HoverToolButton {
                     implicitWidth: Theme.iconLg
@@ -280,7 +299,12 @@ Rectangle {
                         visible: !diffPane.staged
                         text: qsTr("Discard hunk")
                         font.pixelSize: Theme.fontSm
-                        tone: Theme.danger
+                        // Asleep until the pointer is on this heading
+                        // (デザイン規約 §diff の中のステージ). The mark is
+                        // what still says this one is held rather than
+                        // clicked — the colour is saying something else.
+                        tone: diffRow.underPointer ? Theme.danger
+                                                   : Theme.textSecondary
                         holdTone: Theme.danger
                         holdMs: Metrics.holdMs
                         enabled: !diffPane.busy
@@ -290,13 +314,23 @@ Rectangle {
                     // own `+` and `−`: staging is the green half of the
                     // gesture and unstaging the red one, and the heading
                     // should not name them in a different voice than the
-                    // list does.
+                    // list does — but it says it at the volume of a
+                    // heading that is not being pointed at. At rest both
+                    // words wear `textSecondary`, which is the colour the
+                    // `@@` beside them already has, so the whole heading
+                    // reads as one grey line until the pointer arrives
+                    // (デザイン規約 §diff の中のステージ). A file diff
+                    // carries 2 hunks at the middle and 8 at the ninetieth
+                    // percentile — measured over 52 files — so leaving
+                    // them all lit puts 2 to 4 coloured words on screen
+                    // against the header's one.
                     ActionButton {
                         text: diffPane.staged ? qsTr("Unstage hunk")
                                               : qsTr("Stage hunk")
                         font.pixelSize: Theme.fontSm
-                        tone: diffPane.staged ? Theme.diffRemovedFg
-                                              : Theme.diffAddedFg
+                        tone: !diffRow.underPointer ? Theme.textSecondary
+                              : diffPane.staged ? Theme.diffRemovedFg
+                                                : Theme.diffAddedFg
                         enabled: !diffPane.busy
                         onActivated: diffPane.stageSelectionRequested(diffRow.hunk, -1)
                     }
