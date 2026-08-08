@@ -1295,9 +1295,12 @@ Item {
         // pane's own editable boxes. A second way in would say the same
         // thing twice, and every row here costs the ones still to come.
         AppMenuItem {
-            text: qsTr("Fold into the commit before it")
+            code: "squash"
+            //: Follows the `squash` chip: "squash this commit into the
+            //: one before it".
+            text: qsTr("this commit into the one before it")
             // Said, not asked (要望: rewriting a pushed commit shows a
-            // warning): the fold goes ahead, and this tag is the warning.
+            // warning): the squash goes ahead, and this tag is the warning.
             note: page.menuPublished ? qsTr("already pushed") : ""
             offered: page.menuCanEditHistory
             onTriggered: page.squashCommit(page.menuOid)
