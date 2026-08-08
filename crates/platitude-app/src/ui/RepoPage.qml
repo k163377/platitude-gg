@@ -2075,8 +2075,13 @@ Item {
                               + " dialog=" + remoteDialog.visible
                               + " name=" + remoteDialog.wantedName)
         } else if (act === "commit") {
+            // A message of its own when none was named: git refuses an
+            // empty one outright, and a run that asked for a commit and
+            // got a refusal is a picture of the history it did not write.
+            // Amend is the one below and needs no such fallback — there an
+            // empty message means "keep HEAD's" (`--no-edit`).
             repoTab.stageAll()
-            wipPane.setMessage(arg, "")
+            wipPane.setMessage(arg === "" ? "chore: commit from the headless run" : arg, "")
             page.commitNow()
         } else if (act === "amend") {
             // The message is supplied, so skip the prefill request
