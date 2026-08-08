@@ -29,6 +29,11 @@ Rectangle {
     property string conflictChange: ""
     property string sideOurs: ""
     property string sideTheirs: ""
+    /// The lane colour each side's branch has in the graph, as an index
+    /// into `Theme.graphLane`; -1 where the graph has none for it
+    /// (`GraphModel.colorOfRef`).
+    property int sideColorOurs: -1
+    property int sideColorTheirs: -1
     // A write is running: staging buttons disable.
     property bool busy: false
     /// Whether this diff has pieces worth naming. A file the repository is
@@ -52,11 +57,6 @@ Rectangle {
     /// This diff has more than one old side, so every row carries a marker
     /// column per side (`platitude_core::parse::diff`).
     readonly property bool combined: diffPane.diffModel.isCombined
-    /// Which of the three drawings of one to use. **Review hook** — the
-    /// three are photographed side by side and one is chosen; the others
-    /// go, and so does this.
-    readonly property string ccStyle: AppBackend.conflictStyle !== ""
-                                      ? AppBackend.conflictStyle : "markers"
     /// Which side a combined row's line came from, read off its markers:
     /// a column holds a space where that side has the line. A line both
     /// sides have is context, one neither has is a marker git wrote (or a
@@ -70,11 +70,21 @@ Rectangle {
             return ""
         return inOurs ? "ours" : "theirs"
     }
-    /// Width of the marker gutter — two mono columns and the gap after
-    /// them — or nothing at all when this drawing does not use one.
-    readonly property real markerColW:
-        diffPane.combined && diffPane.ccStyle === "markers"
-        ? Theme.spaceLg + Theme.spaceXs : 0
+    /// Whether the two sides can be told apart by colour at all. The
+    /// colours are borrowed from the graph, and the graph does not always
+    /// have two to lend: a branch outside the walk's window has none, and
+    /// the palette cycles, so two chains far enough apart share one. Where
+    /// it cannot say, it says nothing — the rows keep their own colours
+    /// and the fence git wrote is still in the text.
+    readonly property bool sidesTold: diffPane.combined
+                                      && diffPane.sideColorOurs >= 0
+                                      && diffPane.sideColorTheirs >= 0
+                                      && diffPane.sideColorOurs !== diffPane.sideColorTheirs
+    function sideColor(side) {
+        const index = side === "ours" ? diffPane.sideColorOurs
+                                      : diffPane.sideColorTheirs
+        return Theme.graphLane[index % Theme.graphLane.length]
+    }
 
     signal closeRequested()
     /// The side being read has nothing left in it — everything that was
@@ -352,24 +362,43 @@ Rectangle {
                                  diffPane.sideTheirs)
             color: Theme.textMuted
         }
-        // -- which branch each side of a combined diff is, where the
-        //    drawing leans on colour rather than on the marker columns.
-        //    Review stand-in, like the bar on the rows.
-        Label {
-            visible: diffPane.combined && diffPane.ccStyle === "sides"
-            Layout.margins: Theme.spaceSm
+        // -- which branch each of the two colours is. The colours are the
+        //    ones the graph already gives those branches, so this line is
+        //    the whole of what has to be learned; it is only here when
+        //    there are two colours to bind names to (`sidesTold`), since
+        //    otherwise it would explain a distinction the rows are not
+        //    making. The names swap over during a rebase and the model has
+        //    already sorted that out (デザイン規約 §conflict の ours /
+        //    theirs), so this says whatever it is handed.
+        RowLayout {
+            visible: diffPane.sidesTold
+            Layout.leftMargin: Theme.spaceSm
+            Layout.rightMargin: Theme.spaceSm
+            Layout.topMargin: Theme.spaceXs
+            Layout.bottomMargin: Theme.spaceXs
             Layout.fillWidth: true
-            elide: Text.ElideRight
-            font.pixelSize: Theme.fontSm
-            textFormat: Text.StyledText
-            text: qsTr("<font color='%1'>%2</font> · <font color='%3'>%4</font>")
-                  .arg(Theme.accent)
-                  .arg(diffPane.sideOurs !== "" ? diffPane.sideOurs
-                                                : qsTr("this branch"))
-                  .arg(Theme.warning)
-                  .arg(diffPane.sideTheirs !== "" ? diffPane.sideTheirs
-                                                  : qsTr("the incoming side"))
-            color: Theme.textMuted
+            spacing: Theme.spaceSm
+            Repeater {
+                model: [{ side: "ours", name: diffPane.sideOurs },
+                        { side: "theirs", name: diffPane.sideTheirs }]
+                delegate: RowLayout {
+                    required property var modelData
+                    spacing: Theme.spaceXs
+                    Rectangle {
+                        implicitWidth: Theme.spaceXs
+                        implicitHeight: Theme.fontSm
+                        color: diffPane.sideColor(parent.modelData.side)
+                    }
+                    Label {
+                        text: parent.modelData.name
+                        font.pixelSize: Theme.fontSm
+                        color: Theme.textSecondary
+                        elide: Text.ElideMiddle
+                        Layout.maximumWidth: diffPane.width / 3
+                    }
+                }
+            }
+            Item { Layout.fillWidth: true }
         }
         // -- content preview: binaries summarized by size, images
         //    rendered (added = After only, deleted = Before only,
@@ -488,38 +517,23 @@ Rectangle {
                     color: Theme.accent
                     visible: diffRow.picked
                 }
-                // Which side this line is from, where the drawing says it
-                // with a bar rather than with the marker columns. The
-                // colours here are stand-ins for the review — nothing in
-                // デザイン規約 names a pair for the two sides yet.
+                // Which side this line came from, in the colour that
+                // branch wears in the graph. The diff's own green cannot
+                // say it — git paints our side and theirs the same,
+                // because each is in the file and in neither of the
+                // other's — so the head of the row says it instead. It
+                // stands where the picked-line mark stands, which a
+                // conflicted file never has: nothing in one can be staged
+                // a piece at a time.
                 Rectangle {
-                    visible: diffPane.combined && diffPane.ccStyle === "sides"
-                             && diffRow.side !== ""
+                    visible: diffPane.sidesTold && diffRow.side !== ""
                     width: Theme.spaceXs
                     height: parent.height
-                    color: diffRow.side === "ours" ? Theme.accent
-                                                   : Theme.warning
+                    color: diffPane.sideColor(diffRow.side)
                 }
                 Row {
                     anchors.fill: parent
                     spacing: 0
-                    // The two columns git prints in front of every line of
-                    // a combined diff. They are the only place "which side
-                    // is this from" is written: our side and theirs are
-                    // both green, because both are in the file and in
-                    // neither of the other's.
-                    Label {
-                        width: diffPane.markerColW
-                        visible: width > 0
-                        height: parent.height
-                        verticalAlignment: Text.AlignVCenter
-                        text: diffRow.markers
-                        horizontalAlignment: Text.AlignLeft
-                        leftPadding: Theme.spaceXs
-                        color: Theme.textMuted
-                        font.family: Theme.monoFamily
-                        font.pixelSize: Theme.fontSm
-                    }
                     Label {
                         width: 42
                         height: parent.height
@@ -543,7 +557,7 @@ Rectangle {
                         font.pixelSize: Theme.fontSm
                     }
                     Label {
-                        width: parent.width - 84 - diffPane.markerColW
+                        width: parent.width - 84
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
                         text: diffRow.text

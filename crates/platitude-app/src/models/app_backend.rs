@@ -67,11 +67,6 @@ pub struct AppBackend {
     /// on equality; the argument passes through as the verb needs it.
     auto_act: String,
     auto_act_arg: String,
-    /// Review hook: which of the three ways of drawing a conflicted file's
-    /// combined diff to use (`markers` / `columns` / `sides`). Temporary —
-    /// it exists so the three can be photographed side by side and one
-    /// chosen; the loser goes, and so does this.
-    conflict_style: String,
     /// Auto-fetch interval in minutes; 0 is off. Application-wide, because
     /// the answer is about how often this computer should talk to remotes.
     auto_fetch_minutes: i32,
@@ -131,7 +126,6 @@ impl Default for AppBackend {
             scroll_to: std::env::var("PG_SCROLL_TO").unwrap_or_default(),
             auto_act: std::env::var("PG_AUTO_ACT").unwrap_or_default(),
             auto_act_arg: std::env::var("PG_AUTO_ACT_ARG").unwrap_or_default(),
-            conflict_style: std::env::var("PG_CONFLICT_STYLE").unwrap_or_default(),
             auto_fetch_minutes: Hub::with(|hub| hub.settings().defaults.auto_fetch_minutes as i32)
                 .unwrap_or(platitude_core::session::AUTO_FETCH_DEFAULT_MINUTES as i32),
             auto_fetch_max: platitude_core::session::AUTO_FETCH_MAX_MINUTES as i32,
@@ -185,7 +179,6 @@ impl AppBackend {
     qproperty!("scrollTo", Member = scroll_to, Constant);
     qproperty!("autoAct", Member = auto_act, Constant);
     qproperty!("autoActArg", Member = auto_act_arg, Constant);
-    qproperty!("conflictStyle", Member = conflict_style, Constant);
     qproperty!(
         "autoFetchMinutes",
         Member = auto_fetch_minutes,

@@ -97,6 +97,20 @@ pub fn encode_labels(labels: &[RefLabel]) -> String {
     out
 }
 
+/// The refnames in a chip record string, in order — the inverse of the
+/// name half of [`encode_labels`].
+///
+/// Written beside the encoder so the two cannot drift: a reader that
+/// guessed the layout would break the first time a flag is added.
+pub fn label_names(encoded: &str) -> impl Iterator<Item = &str> {
+    encoded.split(LABEL_SEP).filter_map(|record| {
+        // Kind letter plus four flag digits, then the name, then — only
+        // when the ref was read off a remote — the remotes it came from.
+        let rest = record.get(5..)?;
+        Some(rest.split(LABEL_FIELD_SEP).next().unwrap_or(rest))
+    })
+}
+
 /// Deterministic identicon code for an author (GitHub-style 5x5 pattern,
 /// generated locally — fetching real avatars would violate the
 /// no-network-except-git constraint).
@@ -499,6 +513,37 @@ mod tests {
             remote: "origin, fork".into(),
         }];
         assert_eq!(encode_labels(&labels), "T0100v9.9\u{1e}origin, fork");
+    }
+
+    #[test]
+    fn names_come_back_out_of_the_records_they_went_into() {
+        let labels = [
+            RefLabel {
+                text: "main".into(),
+                kind: LabelKind::LocalBranch,
+                has_remote: true,
+                is_head: true,
+                here: true,
+                remote: String::new(),
+            },
+            RefLabel {
+                text: "v9.9".into(),
+                kind: LabelKind::Tag,
+                has_remote: true,
+                is_head: false,
+                here: false,
+                remote: "origin, fork".into(),
+            },
+        ];
+        let encoded = encode_labels(&labels);
+        assert_eq!(
+            label_names(&encoded).collect::<Vec<_>>(),
+            vec!["main", "v9.9"],
+            "the remotes a record was read from are not part of its name"
+        );
+        assert_eq!(label_names("").count(), 0);
+        // A record too short to hold the fixed prefix is not a name.
+        assert_eq!(label_names("L11").count(), 0);
     }
 
     #[test]

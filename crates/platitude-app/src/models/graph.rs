@@ -343,6 +343,25 @@ impl GraphModel {
             .unwrap_or_default()
     }
 
+    /// The lane colour of the row a ref sits on, as an index into the
+    /// graph palette; -1 when no row on screen carries that name.
+    ///
+    /// What it is for: a conflicted file's diff paints each side in the
+    /// colour its branch already has in the graph, so the pane borrows an
+    /// answer rather than inventing a second one. -1 is a real answer —
+    /// the walk is a window (`--max-count`), and a branch outside it has
+    /// no colour to borrow.
+    #[qslot]
+    fn color_of_ref(&self, name: String) -> i32 {
+        if name.is_empty() {
+            return -1;
+        }
+        self.rows
+            .iter()
+            .find(|r| crate::encode::label_names(&r.labels).any(|n| n == name))
+            .map_or(-1, |r| r.node_color)
+    }
+
     /// Full commit id at a row (selection, its recovery after a rewrite,
     /// and the smoke hooks).
     #[qslot]

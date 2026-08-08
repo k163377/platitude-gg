@@ -2510,6 +2510,21 @@ Item {
     /// letters are all there is to say. A file stops being conflicted only
     /// by a write, and every write reads the diff again.
     property string diffChange: ""
+    /// The lane colour the graph gives each side of a conflict, so the
+    /// diff can paint its two sides in the colours those branches already
+    /// wear rather than in a second set of its own.
+    ///
+    /// A binding, not a one-off read: the graph arrives in two passes (the
+    /// chips land after the rows), and it is rebuilt whenever refs move.
+    /// `finishCount` is read only to depend on it — every graph property
+    /// shares one notify signal, so touching any of them is what makes
+    /// this re-run when the rows change.
+    readonly property int sideColorOurs:
+        graphModel.finishCount >= 0
+        ? graphModel.colorOfRef(workTree.sideOurs) : -1
+    readonly property int sideColorTheirs:
+        graphModel.finishCount >= 0
+        ? graphModel.colorOfRef(workTree.sideTheirs) : -1
     function toggleDiff(kind, path, origPath) {
         const key = kind + ":" + path
         if (page.diffShown && page.diffKey === key) {
@@ -3152,6 +3167,8 @@ Item {
                         // where that is already answered.
                         sideOurs: workTree.sideOurs
                         sideTheirs: workTree.sideTheirs
+                        sideColorOurs: page.sideColorOurs
+                        sideColorTheirs: page.sideColorTheirs
                         busy: repoTab.busyCount > 0
                         onCloseRequested: page.closeDiff()
                         onNothingLeft: page.closeDiff()
