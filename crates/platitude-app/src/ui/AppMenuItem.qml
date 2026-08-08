@@ -107,7 +107,7 @@ MenuItem {
                                                             : Theme.textPrimary
 
     ToolTip.visible: menuItem.hovered && itemLabel.truncated
-    ToolTip.delay: 600
+    ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: menuItem.code !== ""
                   ? menuItem.code + " " + menuItem.text : menuItem.text
 

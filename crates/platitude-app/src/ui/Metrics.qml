@@ -28,4 +28,6 @@ QtObject {
     readonly property int opticalDrop: 1
     readonly property int menuMinW: 160
     readonly property var laneDash: [1, 1]
+    readonly property real tailFade: 0.45
+    readonly property int tipDelayMs: 600
 }

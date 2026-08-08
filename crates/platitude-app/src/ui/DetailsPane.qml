@@ -150,8 +150,8 @@ ColumnLayout {
             NavIcon {
                 kind: "stash"
                 tint: Theme.textSecondary
-                width: Theme.iconSm + 2
-                height: Theme.iconSm + 2
+                width: Theme.iconMd
+                height: Theme.iconMd
             }
             Label {
                 text: detailsPane.stashRef
@@ -165,7 +165,7 @@ ColumnLayout {
                 text: qsTr("Apply")
                 font.pixelSize: Theme.fontSm
                 ToolTip.visible: hovered
-                ToolTip.delay: 600
+                ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: qsTr("Apply this stash, keeping it")
                 onClicked: detailsPane.applyStashRequested(detailsPane.stashRef)
             }
@@ -173,7 +173,7 @@ ColumnLayout {
                 text: qsTr("Pop")
                 font.pixelSize: Theme.fontSm
                 ToolTip.visible: hovered
-                ToolTip.delay: 600
+                ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: qsTr("Apply this stash and drop it")
                 onClicked: detailsPane.popStashRequested(detailsPane.stashRef)
             }
@@ -212,7 +212,7 @@ ColumnLayout {
                 readOnly: !detailsPane.editable
                 placeholderText: detailsPane.editable ? qsTr("Commit summary") : ""
                 ToolTip.visible: hovered && detailsPane.editBlocked !== ""
-                ToolTip.delay: 600
+                ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: detailsPane.editBlocked
             }
         }
@@ -297,7 +297,6 @@ ColumnLayout {
                 }
                 HoverButton {
                     visible: !detailsPane.asking
-                    implicitHeight: Theme.controlHeight
                     highlighted: true
                     text: qsTr("Save message")
                     enabled: !detailsPane.busy && subjectArea.text.trim() !== ""
@@ -313,7 +312,6 @@ ColumnLayout {
                 }
                 HoverButton {
                     visible: detailsPane.asking
-                    implicitHeight: Theme.controlHeight
                     highlighted: true
                     text: qsTr("Keep editing")
                     onClicked: detailsPane.leaveResolved(false)
@@ -341,7 +339,7 @@ ColumnLayout {
                     font.pixelSize: Theme.fontMd
                     font.weight: Font.DemiBold
                     ToolTip.visible: authorHover.containsMouse
-                    ToolTip.delay: 400
+                    ToolTip.delay: Metrics.tipDelayMs
                     ToolTip.text: qsTr("Author: %1 <%2>\nCommitter: %3")
                                   .arg(detailsPane.details.authorName)
                                   .arg(detailsPane.details.authorEmail)
@@ -382,8 +380,8 @@ ColumnLayout {
                             visible: detailsPane.signatureKind !== "signed"
                             kind: detailsPane.signatureKind === "bad" ? "bang" : "check"
                             tint: signatureMark.tone
-                            width: Theme.iconSm + 2
-                            height: Theme.iconSm + 2
+                            width: Theme.iconSm
+                            height: Theme.iconSm
                             Layout.alignment: Qt.AlignVCenter
                         }
                         Label {
@@ -395,7 +393,7 @@ ColumnLayout {
                             Layout.alignment: Qt.AlignVCenter
                         }
                         ToolTip.visible: signatureHover.hovered
-                        ToolTip.delay: 400
+                        ToolTip.delay: Metrics.tipDelayMs
                         ToolTip.text: detailsPane.signatureTip
                         // A handler, not a MouseArea: an item inside a
                         // layout is sized by the layout, and anchoring
@@ -425,7 +423,7 @@ ColumnLayout {
                     bottomPadding: 0
                     readonly property bool lit: hovered || visualFocus
                     ToolTip.visible: hovered
-                    ToolTip.delay: 600
+                    ToolTip.delay: Metrics.tipDelayMs
                     ToolTip.text: qsTr("Copy full hash")
                     onClicked: detailsPane.copyRequested(detailsPane.details.shaHex)
                     background: Rectangle {
@@ -480,7 +478,7 @@ ColumnLayout {
                     font.pixelSize: Theme.fontSm
                     font.underline: parentHover.containsMouse
                     ToolTip.visible: parentHover.containsMouse
-                    ToolTip.delay: 600
+                    ToolTip.delay: Metrics.tipDelayMs
                     ToolTip.text: qsTr("Go to parent commit")
                     MouseArea {
                         id: parentHover
@@ -516,7 +514,7 @@ ColumnLayout {
                 implicitWidth: Theme.iconLg
                 implicitHeight: Theme.iconLg
                 ToolTip.visible: hovered
-                ToolTip.delay: 600
+                ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: qsTr("Tree view")
                 onClicked: detailsPane.details.setTreeView(true)
                 contentItem: NavIcon {
@@ -534,7 +532,7 @@ ColumnLayout {
                 implicitWidth: Theme.iconLg
                 implicitHeight: Theme.iconLg
                 ToolTip.visible: hovered
-                ToolTip.delay: 600
+                ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: qsTr("Paths view")
                 onClicked: detailsPane.details.setTreeView(false)
                 contentItem: NavIcon {

@@ -9,6 +9,10 @@ import platitude.ui
 // visible.
 Button {
     id: hoverButtonSelf
+    // The one height every button, field and combo shares (デザイン規約
+    // §寸法 controlHeight) — here rather than at each use, so no caller
+    // can fall back to Fusion's own idea of a button.
+    implicitHeight: Theme.controlHeight
     Rectangle {
         anchors.fill: parent
         radius: Theme.radiusSm

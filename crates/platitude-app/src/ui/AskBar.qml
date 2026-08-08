@@ -251,7 +251,7 @@ Rectangle {
                 }
             }
             ToolTip.visible: bar.tip !== "" && acceptMouse.containsMouse
-            ToolTip.delay: 600
+            ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: bar.tip
             MouseArea {
                 id: acceptMouse

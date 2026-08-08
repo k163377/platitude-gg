@@ -248,7 +248,7 @@ Rectangle {
                                           : Theme.diffAddedFg
                     enabled: !diffPane.busy
                     ToolTip.visible: hovered
-                    ToolTip.delay: 300
+                    ToolTip.delay: Metrics.tipDelayMs
                     ToolTip.text: diffPane.staged
                         ? qsTr("Unstage the whole file at once")
                         : qsTr("Stage the whole file at once")
@@ -578,7 +578,7 @@ Rectangle {
                     color: stageLineHover.containsMouse ? Theme.bgHover
                                                         : "transparent"
                     ToolTip.visible: stageLineHover.containsMouse
-                    ToolTip.delay: 300
+                    ToolTip.delay: Metrics.tipDelayMs
                     ToolTip.text: diffPane.staged ? qsTr("Unstage this line")
                                                   : qsTr("Stage this line")
                     NavIcon {

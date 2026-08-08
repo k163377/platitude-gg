@@ -59,7 +59,7 @@ Item {
     // it, the way a menu row does — the elision is the pane running out
     // of width, not the row having less to say (`AppMenuItem`).
     ToolTip.visible: rowHover.containsMouse && rowLabel.truncated
-    ToolTip.delay: 600
+    ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: opRow.code + " " + opRow.text
 
     // One colour for every word in the row, so the chip cannot disagree
@@ -90,9 +90,11 @@ Item {
         }
     }
 
+    // At the row's own left edge, the way a menu row's mark stands
+    // (`AppMenuItem`): the card's padding is to its left, and it
+    // overhangs the seat the words leave for it on both sides.
     HoldIcon {
         anchors.left: parent.left
-        anchors.leftMargin: Theme.spaceXs
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: Metrics.opticalDrop
         progress: opRow.holdProgress
@@ -100,10 +102,12 @@ Item {
         visible: opRow.holdMs > 0
     }
 
+    // The menu row's own padding (`AppMenuItem` padding: spaceSm), so
+    // the card's rows and a menu's read as the same row.
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: Theme.spaceXs + opRow.holdIndent
-        anchors.rightMargin: Theme.spaceXs
+        anchors.leftMargin: Theme.spaceSm + opRow.holdIndent
+        anchors.rightMargin: Theme.spaceSm
         spacing: Theme.spaceSm
         Item {
             implicitWidth: Math.max(opRow.codeColW, codeLabel.implicitWidth)

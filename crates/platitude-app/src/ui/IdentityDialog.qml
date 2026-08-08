@@ -148,13 +148,11 @@ AppDialog {
             Layout.alignment: Qt.AlignRight
             spacing: Theme.spaceSm
             HoverButton {
-                implicitHeight: Theme.controlHeight
                 text: identityDialog.editing ? qsTr("Cancel") : qsTr("Not now")
                 onClicked: identityDialog.close()
             }
             HoverButton {
                 id: saveButton
-                implicitHeight: Theme.controlHeight
                 highlighted: true
                 text: AppBackend.identityBusy ? qsTr("Saving…") : qsTr("Save")
                 enabled: !AppBackend.identityBusy

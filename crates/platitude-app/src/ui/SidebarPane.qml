@@ -349,8 +349,8 @@ Rectangle {
                     // no mark of its own, but its name has to begin in
                     // the same column as the rows it rides above.
                     Item {
-                        Layout.preferredWidth: Theme.iconSm + 2
-                        Layout.preferredHeight: Theme.iconSm + 2
+                        Layout.preferredWidth: Theme.iconMd
+                        Layout.preferredHeight: Theme.iconMd
                         Layout.alignment: Qt.AlignVCenter
                     }
                     Label {
@@ -375,8 +375,8 @@ Rectangle {
                         kind: sidebar.branchesModel.headHasPr ? "pr" : "remote"
                         tint: sidebar.branchesModel.headHasPr ? Theme.success
                                                               : Theme.textSecondary
-                        width: Theme.iconSm + 2
-                        height: Theme.iconSm + 2
+                        width: Theme.iconSm
+                        height: Theme.iconSm
                     }
                 }
                 // Hairline on the side the scrolled rows pass under.

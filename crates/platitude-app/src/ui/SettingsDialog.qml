@@ -121,9 +121,12 @@ AppDialog {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceSm
+                // As wide as the dialog gives it: a tool's name has no
+                // fixed length, and an input only takes a fixed width
+                // when its content does (デザイン規約 §レイアウト初期値).
                 AppCombo {
                     id: toolField
-                    implicitWidth: 220
+                    Layout.fillWidth: true
                     placeholder: qsTr("none")
                     // Smoke hook: the popup is drawn here rather than by
                     // Fusion, so it needs its own look at (PG_AUTO_ACT).
@@ -139,7 +142,6 @@ AppDialog {
                     onWantedChanged: settingsDialog.toolTouched = true
                     onAccepted: settingsDialog.apply()
                 }
-                Item { Layout.fillWidth: true }
             }
             Label {
                 Layout.fillWidth: true
@@ -169,12 +171,10 @@ AppDialog {
             Layout.alignment: Qt.AlignRight
             spacing: Theme.spaceSm
             HoverButton {
-                implicitHeight: Theme.controlHeight
                 text: qsTr("Cancel")
                 onClicked: settingsDialog.close()
             }
             HoverButton {
-                implicitHeight: Theme.controlHeight
                 highlighted: true
                 text: qsTr("Save")
                 onClicked: settingsDialog.apply()

@@ -20,7 +20,7 @@ import platitude.ui
 Rectangle {
     id: chip
     property var records: []
-    property real maxWidth: 140
+    property real maxWidth: Metrics.labelColW
     // Nowhere to go from here (the branch already under the working
     // tree): §無効 — the words drop to the muted colour, frame included,
     // since the frame is how a branch chip is read at all.

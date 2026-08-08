@@ -149,8 +149,8 @@ Item {
         // collapse is what put a leaf's name to the *left* of the folder
         // it sits under (layouts drop invisible children entirely).
         Item {
-            Layout.preferredWidth: Theme.iconSm + 2
-            Layout.preferredHeight: Theme.iconSm + 2
+            Layout.preferredWidth: Theme.iconMd
+            Layout.preferredHeight: Theme.iconMd
             Layout.alignment: Qt.AlignVCenter
             NavIcon {
                 anchors.centerIn: parent
@@ -166,7 +166,7 @@ Item {
                 visible: !navRow.folder && navRow.kindHint === "wt"
                 change: navRow.change
                 ToolTip.visible: wtHover.containsMouse
-                ToolTip.delay: 600
+                ToolTip.delay: Metrics.tipDelayMs
                 // A conflict says what the two sides each did — that is
                 // what decides which way out of it to take, and "%1" is
                 // the branch each side actually is (they swap over during
@@ -231,7 +231,7 @@ Item {
             Keys.onEscapePressed: navRow.editCancelled()
             ToolTip.visible: navRow.editRefused && editField.activeFocus
                              && navRow.editRefusedWhy !== ""
-            ToolTip.delay: 300
+            ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: navRow.editRefusedWhy
         }
         // Worktree rows: checked-out branch on the right.
@@ -267,10 +267,12 @@ Item {
                              && navRow.has_pr))
             kind: navRow.has_pr ? "pr" : "remote"
             tint: navRow.has_pr ? Theme.success : Theme.textSecondary
-            width: Theme.iconSm + 2
-            height: Theme.iconSm + 2
+            // The size the graph's chips wear the same badge at: one
+            // question, one mark, one size (デザイン規約 §寸法).
+            width: Theme.iconSm
+            height: Theme.iconSm
             ToolTip.visible: remoteHover.containsMouse
-            ToolTip.delay: 600
+            ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: navRow.has_pr ? qsTr("Has an open pull request")
                           : navRow.kindHint === "tag" ? qsTr("Also on a remote")
                                                       : qsTr("Has a remote branch")
@@ -380,7 +382,7 @@ Item {
         implicitWidth: Theme.iconLg
         implicitHeight: Theme.iconLg
         ToolTip.visible: hovered
-        ToolTip.delay: 300
+        ToolTip.delay: Metrics.tipDelayMs
         ToolTip.text: navRow.bucket === "staged" ? qsTr("Unstage file")
                                                  : qsTr("Stage file")
         onClicked: navRow.stageClicked(
@@ -428,6 +430,6 @@ Item {
     }
     ToolTip.visible: itemMouse.containsMouse && !navRow.editing
                      && navRow.hoverText !== ""
-    ToolTip.delay: 700
+    ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: navRow.hoverText
 }

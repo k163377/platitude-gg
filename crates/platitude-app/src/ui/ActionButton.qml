@@ -207,8 +207,9 @@ HoverToolButton {
             visible: actionBtn.activeFocus
         }
     }
-    // The toolbar's size unless an instance says otherwise: the hunk
-    // header's buttons are the body size the rest of that row is.
+    // The toolbar's size unless an instance says otherwise — the hunk
+    // heading's words take fontSm there, a step under the file's own
+    // word (デザイン規約 §diff の中のステージ).
     font.pixelSize: Theme.fontMd
 
     // The row keeps its size while the network call runs — the toolbar

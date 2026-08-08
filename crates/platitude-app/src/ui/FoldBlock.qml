@@ -38,7 +38,7 @@ Rectangle {
             }
         }
         ToolTip.visible: hovered
-        ToolTip.delay: 600
+        ToolTip.delay: Metrics.tipDelayMs
         ToolTip.text: block.tip
         onClicked: block.activated()
     }

@@ -129,13 +129,11 @@ AppDialog {
             Layout.alignment: Qt.AlignRight
             spacing: Theme.spaceSm
             HoverButton {
-                implicitHeight: Theme.controlHeight
                 text: qsTr("Cancel")
                 onClicked: remoteDialog.close()
             }
             HoverButton {
                 id: saveButton
-                implicitHeight: Theme.controlHeight
                 highlighted: true
                 text: remoteDialog.editing === "" ? qsTr("Add") : qsTr("Save")
                 enabled: remoteDialog.wantedUrl !== ""

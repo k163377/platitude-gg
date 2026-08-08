@@ -307,7 +307,7 @@ Rectangle {
                 hoverEnabled: true
                 onClicked: topBar.identityEditRequested()
                 ToolTip.visible: containsMouse
-                ToolTip.delay: 600
+                ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: qsTr("No name or email set for commits")
             }
         }
@@ -352,7 +352,7 @@ Rectangle {
                 hoverEnabled: true
                 onClicked: topBar.curPage.toggleCommands()
                 ToolTip.visible: containsMouse
-                ToolTip.delay: 600
+                ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: commandsToggle.open
                               ? qsTr("Hide the git commands this window ran")
                               : commandsToggle.wrong
@@ -360,10 +360,11 @@ Rectangle {
                                 : qsTr("Show the git commands this window ran")
             }
         }
-        // Reserved: search box (backlog)
+        // Reserved: search box (backlog). Disabled looks like every other
+        // disabled control here — muted text on an unchanged frame
+        // (デザイン規約 §無効); no second vocabulary of fading.
         SlimField {
             enabled: false
-            opacity: 0.35
             placeholderText: qsTr("Search")
             implicitWidth: 160
         }
@@ -417,7 +418,7 @@ Rectangle {
                      && (fetchButton.stopped
                          || topBar.curPage.pageTab.busyCount === 0)
             ToolTip.visible: hovered
-            ToolTip.delay: 600
+            ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: {
                 if (topBar.curPage === null)
                     return ""
@@ -498,7 +499,7 @@ Rectangle {
                              && topBar.curPage.canForcePush))
             onHeld: topBar.curPage.forcePush()
             ToolTip.visible: hovered
-            ToolTip.delay: 600
+            ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: {
                 if (topBar.curPage === null)
                     return ""

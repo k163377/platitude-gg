@@ -47,10 +47,10 @@ Item {
         ChangeIcon {
             visible: !fileRow.isFolder
             change: fileRow.changeText
-            width: Theme.iconSm + 2
-            height: Theme.iconSm + 2
+            width: Theme.iconMd
+            height: Theme.iconMd
             ToolTip.visible: changeHover.containsMouse
-            ToolTip.delay: 600
+            ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: {
                 const c = fileRow.changeText.length > 0 ? fileRow.changeText[0] : ""
                 return c === "M" ? qsTr("Modified")
@@ -91,6 +91,6 @@ Item {
     // Tree leaves show only their file name; hover reveals the path.
     ToolTip.visible: fileMouse.containsMouse && !fileRow.isFolder
                      && fileRow.nameText !== fileRow.pathText
-    ToolTip.delay: 700
+    ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: fileRow.pathText
 }

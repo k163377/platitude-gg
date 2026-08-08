@@ -52,8 +52,8 @@ Rectangle {
         NavIcon {
             kind: header.iconKind
             tint: header.iconTint
-            width: Theme.iconSm + 2
-            height: Theme.iconSm + 2
+            width: Theme.iconMd
+            height: Theme.iconMd
         }
         Label {
             text: header.caption
@@ -84,7 +84,7 @@ Rectangle {
                 tint: header.tagsShown ? Theme.refTag : Theme.refTagDim
             }
             ToolTip.visible: hovered
-            ToolTip.delay: 600
+            ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: header.tagsShown ? qsTr("Hide tags in the graph")
                                            : qsTr("Show tags in the graph")
             onToggled: header.tagsToggled(checked)

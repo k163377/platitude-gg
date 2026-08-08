@@ -603,7 +603,10 @@ Item {
             AppCombo {
                 id: remotePick
                 pickOnly: true
-                Layout.preferredWidth: 180
+                // The fixed-input width every boxed field shares
+                // (デザイン規約 §レイアウト初期値 160) — not a width of
+                // its own.
+                Layout.preferredWidth: 160
                 model: page.publishChoices
                 wanted: page.publishRemote
                 onActivated: index => page.choosePublishRemote(index)
@@ -613,7 +616,7 @@ Item {
             // though there were nothing to send.
             SlimField {
                 id: publishBranchField
-                Layout.preferredWidth: 200
+                Layout.preferredWidth: 160
                 text: page.publishBranch
                 onTextEdited: {
                     page.publishBranch = text

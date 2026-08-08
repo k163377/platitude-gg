@@ -310,7 +310,7 @@ Rectangle {
                         if (graphArea.graphModel.tailGeometry === "")
                             return
                         ctx.lineWidth = Metrics.laneStroke
-                        ctx.globalAlpha = 0.45
+                        ctx.globalAlpha = Metrics.tailFade
                         // Same tokens as a row's geometry (uppercase =
                         // dashed leash): a stash or WIP row whose target
                         // sits past the cut keeps dotting through here.

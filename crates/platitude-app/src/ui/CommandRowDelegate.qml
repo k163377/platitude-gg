@@ -48,7 +48,7 @@ Rectangle {
         acceptedButtons: Qt.RightButton
         onClicked: rowMenu.popup()
         ToolTip.visible: containsMouse && row.state !== "running"
-        ToolTip.delay: 600
+        ToolTip.delay: Metrics.tipDelayMs
         // The reproducible form is long; it is here rather than in the
         // row so the log stays one line per command.
         ToolTip.text: row.full

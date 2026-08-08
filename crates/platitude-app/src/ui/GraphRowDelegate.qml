@@ -164,7 +164,7 @@ Item {
             }
             ToolTip.visible: labelHover.containsMouse
                              && rowItem.labelRecords.length > 0
-            ToolTip.delay: 300
+            ToolTip.delay: Metrics.tipDelayMs
             // The branch the working tree stands on is written here the
             // way the sidebar and the chips write it (textLink): the same
             // name must not read as "here" in one place and as any other
@@ -201,14 +201,14 @@ Item {
         // when the graph column scrolls horizontally.
         Item {
             Layout.preferredWidth: rowItem.ListView.view
-                                   ? rowItem.ListView.view.graphColWidth : 120
+                                   ? rowItem.ListView.view.graphColWidth : 0
             Layout.fillHeight: true
             clip: true
             Canvas {
                 id: laneCanvas
                 x: rowItem.ListView.view ? -rowItem.ListView.view.graphXOffset : 0
                 width: rowItem.ListView.view
-                       ? rowItem.ListView.view.graphFullWidth : 120
+                       ? rowItem.ListView.view.graphFullWidth : 0
                 height: parent.height
                 onPaint: {
                     const ctx = getContext("2d")
@@ -419,7 +419,7 @@ Item {
     }
     // Hover details: what the row no longer shows as columns.
     ToolTip.visible: rowMouse.containsMouse
-    ToolTip.delay: 700
+    ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: rowItem.isWip
                   ? qsTr("Working-tree changes — not committed yet")
                   : rowItem.author + "\n"

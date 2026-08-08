@@ -241,7 +241,7 @@ ColumnLayout {
                 enabled: wipPane.repoTab.busyCount === 0
                          && wipPane.worktreeModel.total > 0
                 ToolTip.visible: hovered
-                ToolTip.delay: 600
+                ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: qsTr("Set these changes aside for later")
                 onClicked: {
                     if (wipPane.stashPanelShown)
@@ -255,7 +255,7 @@ ColumnLayout {
                 implicitWidth: Theme.iconLg
                 implicitHeight: Theme.iconLg
                 ToolTip.visible: hovered
-                ToolTip.delay: 600
+                ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: qsTr("Tree view")
                 onClicked: wipPane.worktreeModel.setTreeView(true)
                 contentItem: NavIcon {
@@ -271,7 +271,7 @@ ColumnLayout {
                 implicitWidth: Theme.iconLg
                 implicitHeight: Theme.iconLg
                 ToolTip.visible: hovered
-                ToolTip.delay: 600
+                ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: qsTr("Paths view")
                 onClicked: wipPane.worktreeModel.setTreeView(false)
                 contentItem: NavIcon {
@@ -370,7 +370,6 @@ ColumnLayout {
                     onClicked: wipPane.closeStashPanel()
                 }
                 HoverButton {
-                    implicitHeight: Theme.controlHeight
                     highlighted: true
                     text: qsTr("Stash")
                     enabled: wipPane.repoTab.busyCount === 0
@@ -456,7 +455,7 @@ ColumnLayout {
                 implicitHeight: Theme.controlHeight
                 onVisibleChanged: if (!visible) checked = false
                 ToolTip.visible: hovered
-                ToolTip.delay: 400
+                ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: qsTr("Replaces the author %1 <%2> with you, "
                                    + "dated now")
                               .arg(wipPane.repoTab.headAuthorName)
@@ -476,7 +475,7 @@ ColumnLayout {
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
                 ToolTip.visible: signingHover.containsMouse
-                ToolTip.delay: 400
+                ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: wipPane.repoTab.signingFormat === "ssh"
                               ? qsTr("Signed with your ssh key")
                               : wipPane.repoTab.signingFormat === "x509"
@@ -498,7 +497,7 @@ ColumnLayout {
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
                 ToolTip.visible: amendPushedHover.containsMouse
-                ToolTip.delay: 400
+                ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: qsTr("Already on a remote — anyone who has it "
                                    + "will be out of step")
                 MouseArea {
@@ -525,7 +524,7 @@ ColumnLayout {
                      && (wipPane.amending || wipPane.workTree.stagedCount > 0)
             onClicked: wipPane.commitClicked()
             ToolTip.visible: commitHover.containsMouse && !enabled
-            ToolTip.delay: 300
+            ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: !wipPane.repoTab.identityReady
                           ? qsTr("No name or email set for commits")
                           : wipSubject.text.trim() === ""
@@ -560,10 +559,12 @@ ColumnLayout {
             // the sentences start on one x and the card reads down its
             // first letters — what `AppMenu` does for a menu's rows.
             // The mark's own seat, left on every row whether or not that
-            // row is a held one — the words start on one x either way
-            // (デザイン規約 §長押し). Wide enough for the mark and the gap
-            // after it, or the chip runs into the ring.
-            readonly property real holdIndent: Theme.iconSm + Theme.spaceXs
+            // row is a held one — the words start on one x either way,
+            // and the seat is the menu's exactly: narrower than the mark,
+            // which overhangs it into the row padding on one side and the
+            // word gap on the other (デザイン規約 §長押し — 語が払う
+            // 字下げは印 1 個分より小さい).
+            readonly property real holdIndent: Theme.iconMd - 2 * Theme.spaceXs
             /// Whether leaving the stopped commit out costs nothing.
             ///
             /// An interactive rebase stops on a commit that came out
@@ -745,7 +746,7 @@ ColumnLayout {
                           ? qsTr("Unstage all") : qsTr("Stage all")
                     font.pixelSize: Theme.fontSm
                     ToolTip.visible: hovered
-                    ToolTip.delay: 300
+                    ToolTip.delay: Metrics.tipDelayMs
                     ToolTip.text: bucketHeader.section === "staged"
                         ? qsTr("Unstage everything")
                         : qsTr("Stage everything, untracked included")
