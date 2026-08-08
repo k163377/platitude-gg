@@ -28,6 +28,7 @@ pub mod repo;
 pub mod scratch;
 pub mod sequencer;
 pub mod session;
+pub mod settings;
 pub mod stage;
 pub mod stash;
 pub mod status;

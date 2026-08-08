@@ -1,0 +1,33 @@
+---
+source: crates/platitude-core/src/settings.rs
+expression: state.to_table().to_string()
+---
+version = 1
+
+[layout]
+commands_height = 280
+commands_shown = false
+details_tree = true
+details_width = 400
+sidebar_collapsed = false
+sidebar_width = 260
+tags_shown = true
+wip_tree = true
+
+[layout.sections]
+branches = true
+remotes = true
+stashes = true
+tags = true
+worktree = true
+
+[tabs]
+active = 1
+paths = ["C:/Users/me/platitude-gg", "C:/Users/me/other"]
+
+[window]
+height = 980
+maximized = false
+width = 1600
+x = 120
+y = 80
