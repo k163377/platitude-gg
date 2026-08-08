@@ -15,35 +15,13 @@ UI の色・タイポグラフィ・寸法の正本は [デザイン規約.md](i
 - ライセンス: アプリ本体は MIT。依存追加は MIT / Apache-2.0 / BSD / Zlib / MPL-2.0 系のみ。**GPL 系依存は禁止**(Qt 本体と qtbridge は LGPL-3.0-only で利用 — 承認済みの例外)
 - 対応 git の最低バージョンは [要望.md](internal-docs/要望.md) の定めに従う。それ未満向けのフォールバックコードを書かない
 - UI はダークテーマ(青系)のみ。文言は英語のみ・ハードコード禁止(`qsTr()` 必須、将来の i18n に備える)
-- **内部コマンドと UI 表記は意図して分ける**。内部は最新 git の適切なコマンドを選ぶ(`switch` / `restore` 等)が、UI 文言は git のコマンド名に引きずられず「その操作が何をするか」を最も適切に表す語を選ぶ。用語の正本は [デザイン規約.md](internal-docs/デザイン規約.md) の用語表。**git 用語を出す時はコード表記**(メニュー行 = `AppMenuItem.code` とツールバーの fetch / push = `ActionButton.code`。チップ = 小文字・等幅・翻訳しない。**コマンドと 1 対 1 の時だけ**着せる — `Resume` / `Publish` は着せない。規約 §git 用語のコード表記)
+- **内部コマンドと UI 表記は意図して分ける**。内部は最新 git の適切なコマンドを選ぶ(`switch` / `restore` 等)が、UI 文言は git のコマンド名に引きずられず「その操作が何をするか」を最も適切に表す語を選ぶ。用語とコード表記(チップ)の正本は [デザイン規約.md](internal-docs/デザイン規約.md) の用語表・§git 用語のコード表記
 - UI の値は [デザイン規約.md](internal-docs/デザイン規約.md) のトークンのみ使用。QML への数値・色・フォント名の直書き禁止。トークンの追加・変更には人間の承認が必要
 
 ## 技術スタック
 
-| 項目 | 決定 |
-|---|---|
-| 言語 | Rust stable(最新) |
-| UI | Qt Quick (QML)。Qt の必要バージョンは qtbridge の要求に従う |
-| ブリッジ | **Qt Bridges**(`qtbridge` クレート)。通常の依存として追加、build.rs 不要 |
-| フォールバック | CXX-Qt(スパイク不合格時。QML と core は無変更で移行できる構成を守る) |
-| 並行処理 | tokio(公式 `host_monitor` example の構成を踏襲) |
-| ログ | `tracing`(`println!` / `eprintln!` 禁止) |
-| エラー | core は `thiserror` で型付き、app は `anyhow` 可 |
-| スナップショットテスト | `insta` |
-
-## ワークスペース構成(目標)
-
-```
-crates/
-  platitude-core/   # git 実行・出力パース・ドメインモデル。Qt 依存ゼロ、cargo test で完結
-  platitude-app/    # バイナリ。qtbridge ブリッジ + main + qml/
-```
-
-ブリッジ差し替え(Qt Bridges → CXX-Qt)を可能に保つためのルール:
-
-- core の API は純 Rust 型(`String` / `Vec` / serde DTO)のみ。`Rc<RefCell>` パターンや qtbridge の型を core に漏らさない
-- core → UI の通知は core 定義の trait / チャネルで抽象化し、app 側でブリッジ機構に接続する
-- QML にビジネスロジックを書かない(表示とインタラクションのみ。JS でのデータ加工禁止)
+- 言語は Rust stable、UI は Qt Quick (QML)、ブリッジは **Qt Bridges**(`qtbridge` クレート。通常の依存として追加、build.rs 不要)。Qt の必要バージョンは qtbridge の要求に従う。他の依存・バージョンは Cargo.toml が正
+- **CXX-Qt へ差し替えられる構成を守る**(QML と core を無変更で移せる形。条件は core.md / app-ui.md)。core は Qt 依存ゼロ・`cargo test` で完結
 
 ## ビルド・テスト
 
@@ -75,7 +53,7 @@ cargo fmt --all
 - `#[expect(...)]` を `#[allow(...)]` より優先
 - `unsafe` は原則禁止(やむを得ない場合は `// SAFETY:` コメント必須)
 - 依存追加は最小限(軽量が目標)。追加時はライセンス確認必須
-- 識別子・コメント・ログ・コミットメッセージは英語(設計メモ等の docs は日本語可)
+- 識別子・コメント・ログ・コミットメッセージは英語(設計メモ等の docs は日本語可)。ログは `tracing`(`println!` / `eprintln!` 禁止)
 - スナップショット(insta)の手編集禁止。再生成して差分をレビューする
 - パーサのテストは実 git の出力を fixture として保存して回す。git 実行系は一時ディレクトリに実リポジトリを作る統合テストで検証する
 - **git の挙動に確信が持てなければ、実装の前に使い捨てリポジトリで実測する**(`tests/it/support` の `TestRepo` = tempdir + 実 git + 決定的 SHA)。観測した挙動をテストへ固定してから実装する — 想定だけで書くと実装とテストが**同じ間違いで揃って緑のまま壊れる**。動確で壊れたら、直す前に再現する統合テストが赤になるのを確認する
@@ -98,11 +76,11 @@ cargo fmt --all
 ## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
 
 - Phase 1(読み取り専用ビューア)は**完了**。Done 条件の性能 4 項目は完了時点の最終確認でもクリア(first chunk 79ms / 詳細 75ms / 178fps / peak 269MB): [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)
-- **配線済み**: ステージング(ファイル / hunk / 行)・commit / amend・switch・fetch(手動 + auto)・push / force push・初回 push(行き先を訊く質問バー = リモートの選択 / 追加 + 向こうでの名前)・単体 cherry-pick・単体 squash・コミットメッセージ編集・amend の著者引き継ぎ・reset(soft / mixed / hard)・stash push・stash の Apply / Pop・discard / clean・ブランチ / タグ / stash / リモートブランチの改名と削除・identity・署名の表示・**co-author の表示**(trailer を読んで詳細ペインの日付行に出す)・設定(auto fetch 間隔)・diff プレビュー・コマンドログ・タグのリモート状態バッジ・**著者のアバター**(利用者が自分のディスクから選んだ画像をアドレス(小文字化 + `.mailmap` 適用)に紐づけ、詳細ペイン / 設定一覧 / グラフの全ノードに出す。取りに行かない = §絶対制約)・**設定 / 画面状態の永続化**(`settings.toml` + `state.toml` の 2 ファイル。タブ復元はアクティブのみ eager。`PG_CONFIG_DIR` で差し替え・`PG_*` が立つ実行は自動でファイル無し)。**各操作の意匠決定と実装対応は [.claude/rules/app-ui.md](.claude/rules/app-ui.md) が正**(app のファイルに触れると自動ロード)
+- **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules/app-ui.md](.claude/rules/app-ui.md) が正**(app のファイルに触れると自動ロード)。**本ファイルは未配線だけを持つ** — ここに一覧を置くと機能を足すたび太る
 - **未配線**: フル interactive rebase 画面(merge / rebase / revert / 単体 drop の起動、止まった操作の出口 = continue / skip / quit / abort、conflict の種別・片側採用・外部ツールへの受け渡しは配線済み)
 - 残作業と要判断事項は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読むこと**。配布準備期に検証する項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
 - CI(3OS + 完全オフライン job)は記述済みだが **GitHub リモート未設定のため一度も実行されていない**。push は相当先まで行わない方針(2026-08-02 ユーザー指示)のため、初回検証は**配布準備期(P5 目安)まで大幅後ろ倒し**
-- ネットワーク非通信の baseline 実測: [ci/baseline/windows-x64.md](ci/baseline/windows-x64.md)。**Qt6Network は Qt6Qml のロード時依存として同梱が必須** — 「同梱しない」ではなく「アプリ自身の import table に通信系なし + ネットワーク系プラグイン除外」を主張する
+- ネットワーク非通信の baseline 実測: [ci/baseline/windows-x64.md](ci/baseline/windows-x64.md)(主張の立て方は [P5-確認事項.md](internal-docs/P5-確認事項.md) §3)
 - mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ、実機検証は Phase 5 ゲート
 
 ## 規約の置き場所と本ファイルの運用
@@ -110,9 +88,4 @@ cargo fmt --all
 - ルール追加は「非自明・繰り返し発生・行動可能」を満たす場合のみ。置き場所: 全セッション共通の不変条件 → 本ファイル(**15KB 以下を維持** — 行数ではなくサイズ。常時ロードされ、肥大化すると遵守率が下がる)/ core 実装の規約・罠 → [.claude/rules/core.md](.claude/rules/core.md) / app・QML の規約・意匠 → [.claude/rules/app-ui.md](.claude/rules/app-ui.md) / 検証手順・自動化動詞 → verify-ui スキル / 機械で守れる禁止事項 → `.claude/settings.json` の hooks(実体は `cargo xtask hook`)
 - コードから読み取れるアーキテクチャ説明は書かない(陳腐化するため)。罠と決定事項のみを記す
 - **バージョン番号をハードコードしない**。ツールチェーン・依存の正確なバージョンは Cargo.toml / ロックファイルを、製品要件は [要望.md](internal-docs/要望.md) を正とする(方針は「最新から開始」)
-
-## 参照リンク
-
-- qtbridge ドキュメント: https://doc-snapshots.qt.io/qtbridge-rust/qtbridge/index.html
-- qtbridge リポジトリ / examples: https://github.com/qt/qtbridge-rust
-- CXX-Qt book(フォールバック): https://kdab.github.io/cxx-qt/book/
+- **増え続けるもの(機能一覧・確認事項・実測値)を本ファイルに置かない**。索引だけを置き、実体は分割先へ
