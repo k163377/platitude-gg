@@ -73,16 +73,30 @@ Rectangle {
              : kind === "stash" ? rail.stashesModel : rail.tagsModel
     }
 
-    /// Smoke hooks (PG_AUTO_ACT=nav-peek-away / nav-peek-shut): the
-    /// pointer walking off a cell, and a click landing on one. They go
-    /// through the signals rather than around them — what a headless run
-    /// has to be able to catch is a cell that reports the leaving without
-    /// saying which cell it was, which is a peek nothing ever closes.
+    /// What a cell does when the pointer arrives on it, leaves it, or is
+    /// clicked on it. The cells' own handlers call these and nothing else,
+    /// so the smoke hooks (PG_AUTO_ACT=nav-peek / nav-peek-away /
+    /// nav-peek-shut) reach the real answer by calling the same three —
+    /// neither hover nor a click can be injected (verify-ui スキル), and
+    /// a second copy of the answer for them to call is a second answer.
+    ///
+    /// `top` is where the cell sits; a hook that has no cell to read it
+    /// off asks `topOf`, which computes the same number.
+    function enterAt(kind, top) {
+        // An empty section opens nothing, and takes away what the cell
+        // before it opened: a list left standing beside a cell it does
+        // not belong to would be pointing at the wrong section.
+        if (rail.modelOf(kind).total === 0)
+            rail.peekLeft(kind)
+        else
+            rail.peekRequested(kind, top)
+    }
     function leaveAt(kind) {
         rail.peekLeft(kind)
     }
     function tapAt(kind) {
-        rail.peekToggled(kind, rail.topOf(kind))
+        if (rail.modelOf(kind).total > 0)
+            rail.peekToggled(kind, rail.topOf(kind))
     }
 
     /// Where a section's cell sits, for anything that has to line up with
@@ -137,13 +151,21 @@ Rectangle {
                 // are in it.
                 readonly property bool taggable: cell.modelData.kind === "tag"
                 readonly property bool offGraph: cell.taggable && !rail.tagsShown
+                /// Nothing in there, so there is nothing to open: a list
+                /// of no rows offers no operation, and the number under
+                /// the mark has already said as much. The cell keeps its
+                /// place — what is countable is worth counting at zero —
+                /// and goes unavailable (規約 §無効).
+                readonly property bool empty: cell.sectionModel.total === 0
 
                 width: Theme.railWidth
                 height: Theme.railWidth
                 // The open section keeps the hover wash while the pointer
                 // is away in its list: what is on screen has to say which
-                // cell put it there.
-                color: cellHover.hovered || cell.open ? Theme.bgHover : "transparent"
+                // cell put it there. An empty one washes for nobody —
+                // unavailable does not answer the pointer (規約 §無効).
+                color: (cellHover.hovered && !cell.empty) || cell.open
+                       ? Theme.bgHover : "transparent"
 
                 Column {
                     anchors.centerIn: parent
@@ -155,9 +177,11 @@ Rectangle {
                         // Off the graph is a state, and a state is said by
                         // dropping the mark a step, not by greying it —
                         // grey text is what unavailable looks like
-                        // (デザイン規約 §暗く落とした段).
-                        tint: cell.offGraph ? Theme.refTagDim
-                                            : cell.modelData.tint
+                        // (デザイン規約 §暗く落とした段). Which is what an
+                        // empty one is, so grey is exactly what it wears.
+                        tint: cell.empty ? Theme.textMuted
+                            : cell.offGraph ? Theme.refTagDim
+                            : cell.modelData.tint
                         width: Theme.iconLg
                         height: Theme.iconLg
                         // The eye the TAGS header carries, worn as a mark
@@ -185,7 +209,7 @@ Rectangle {
                     Label {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: cell.sectionModel.total
-                        color: Theme.textSecondary
+                        color: cell.empty ? Theme.textMuted : Theme.textSecondary
                         font.pixelSize: Theme.fontSm
                         lineHeightMode: Text.FixedHeight
                         lineHeight: Theme.fontSmLine
@@ -197,13 +221,13 @@ Rectangle {
                     id: cellHover
                     onHoveredChanged: {
                         if (cellHover.hovered)
-                            rail.peekRequested(cell.modelData.kind, cell.y)
+                            rail.enterAt(cell.modelData.kind, cell.y)
                         else
-                            rail.peekLeft(cell.modelData.kind)
+                            rail.leaveAt(cell.modelData.kind)
                     }
                 }
                 TapHandler {
-                    onTapped: rail.peekToggled(cell.modelData.kind, cell.y)
+                    onTapped: rail.tapAt(cell.modelData.kind)
                 }
             }
         }

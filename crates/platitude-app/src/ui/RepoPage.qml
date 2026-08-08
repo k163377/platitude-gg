@@ -1930,7 +1930,8 @@ Item {
                                     model.oidOfName(rowName))
         } else if (act === "nav-fold" || act === "nav-peek"
                    || act === "nav-unfold" || act === "nav-peek-rename"
-                   || act === "nav-peek-away" || act === "nav-peek-shut") {
+                   || act === "nav-peek-away" || act === "nav-peek-into"
+                   || act === "nav-peek-out" || act === "nav-peek-shut") {
             // The left menu folded to its icons, and one of them rested
             // on. The resting cannot be injected (hover never can), so
             // the section is named the way the diff's line tools are.
@@ -1938,9 +1939,16 @@ Item {
             // thing folding has to be able to do.
             // "nav-fold no-tags" takes the tags off the graph first, so
             // the mark the rail wears for that can be photographed.
-            // "-away" walks the pointer off the cell again and "-shut"
-            // clicks it: both have to leave the section closed, and the
-            // click has to leave the list folded (`collapsed=`).
+            // "-away" walks the pointer off the cell, "-into" walks it off
+            // the cell down into the list it opened, "-out" carries on out
+            // of the list the other way (the exit no cell can see) and
+            // "-shut" clicks the cell. Only "-into" leaves the section
+            // standing; the other three close it, and the click has to
+            // leave the list folded (`collapsed=`). "nav-peek" on a
+            // section with nothing in it must not open at all — the same
+            // verb answers both, because the cell decides
+            // (NavRail.enterAt), so point it at an empty section
+            // (`--preset empty`) to read that side.
             if (arg === "no-tags")
                 repoTab.setTagsShown(false)
             page.foldByHand(true)
@@ -1949,6 +1957,11 @@ Item {
             else if (act === "nav-peek-away") {
                 sidebarPane.peekAt(arg)
                 sidebarPane.peekAway(arg)
+            } else if (act === "nav-peek-into" || act === "nav-peek-out") {
+                sidebarPane.peekAt(arg)
+                sidebarPane.peekInto(arg)
+                if (act === "nav-peek-out")
+                    sidebarPane.peekOut()
             } else if (act === "nav-peek-shut") {
                 sidebarPane.peekAt(arg)
                 sidebarPane.peekTap(arg)

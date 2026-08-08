@@ -147,21 +147,37 @@ Rectangle {
         sidebar.startEdit("tag", "tag:" + id, "branch", id, oidHex, "")
     }
 
-    /// Smoke hook (PG_AUTO_ACT=nav-peek): open one section beside the
-    /// rail, the way resting on its cell does. Named rather than hovered
-    /// — hover cannot be injected (verify-ui スキル).
+    /// Smoke hook (PG_AUTO_ACT=nav-peek): rest on one section's cell.
+    /// Named rather than hovered — hover cannot be injected (verify-ui
+    /// スキル). Whether that opens anything is the cell's answer, not this
+    /// one's: an empty section is asked here the same way it is asked by a
+    /// pointer, and answers no.
     function peekAt(kind) {
-        sidebar.openPeek(kind, rail.topOf(kind))
+        rail.enterAt(kind, rail.topOf(kind))
     }
     /// Smoke hooks (PG_AUTO_ACT=nav-peek-away / nav-peek-shut): walk the
-    /// pointer off the cell that opened it, and click that cell. Both go
-    /// in at the rail, so the report the cells make is part of what is
-    /// being tested (NavRail.leaveAt).
+    /// pointer off the cell that opened it, and click that cell. All of
+    /// these go in at the rail, so what the cells decide and report is
+    /// part of what is being tested (NavRail.enterAt).
     function peekAway(kind) {
         rail.leaveAt(kind)
     }
     function peekTap(kind) {
         rail.tapAt(kind)
+    }
+    /// Smoke hooks (PG_AUTO_ACT=nav-peek-into / nav-peek-out): the pointer
+    /// walked off the cell down into the open section, and then out of the
+    /// section the other way (into the diff or the graph) instead of back
+    /// over the cell. They write the same `peekEntered` the popup's own
+    /// hover writes — the leaving and the being-inside are one state, and
+    /// a headless run that cannot say "inside" cannot tell the exit that
+    /// closes it from the one that must not.
+    function peekInto(kind) {
+        rail.leaveAt(kind)
+        sidebar.peekEntered = true
+    }
+    function peekOut() {
+        sidebar.peekEntered = false
     }
 
     /// Smoke hook (PG_SCROLL_TO=nav-bottom): jump the branches list to
@@ -499,6 +515,17 @@ Rectangle {
     property string peekKind: ""
     property real peekTop: 0
     property bool peekWanted: false
+    /// The pointer is down in the open section itself. The popup's own
+    /// hover writes this and so do the smoke hooks, so a headless run and
+    /// a real pointer come to one answer (the same shape as the diff's
+    /// hunk hover — 規約 §diff の中のステージ). What happens when it goes
+    /// false hangs off the change rather than off the hover, so there is
+    /// no way to say "gone" without the settle that has to follow.
+    property bool peekEntered: false
+    onPeekEnteredChanged: {
+        if (!sidebar.peekEntered)
+            sidebar.settlePeek()
+    }
     /// What holds it open with the pointer elsewhere: a menu raised from
     /// one of its rows is standing over it, and taking the row away from
     /// under an open menu reads as the row having gone.
@@ -549,7 +576,7 @@ Rectangle {
     // whichever of the two now holds the pointer has said so.
     function settlePeek() {
         Qt.callLater(function () {
-            if (!peek.pointerInside && !sidebar.peekWanted
+            if (!sidebar.peekEntered && !sidebar.peekWanted
                     && !sidebar.peekPinned)
                 sidebar.closePeek()
         })
@@ -558,6 +585,9 @@ Rectangle {
         peek.close()
         sidebar.peekKind = ""
         sidebar.peekWanted = false
+        // The list it was in has gone, so the pointer is not in it
+        // whatever the last hover said.
+        sidebar.peekEntered = false
     }
     // The menu that was standing over it has gone: whether the pointer
     // came back in the meantime decides what happens now.
@@ -572,8 +602,8 @@ Rectangle {
         y: Math.max(0, Math.min(sidebar.peekTop, sidebar.height - peek.height))
         width: sidebar.openWidth
         // As tall as it has rows, and never taller than the pane it comes
-        // out of. An empty section is its header and nothing else, which
-        // is the honest answer to hovering a zero.
+        // out of. It never opens with no rows at all — a cell holding a
+        // zero does not open (NavRail).
         height: Math.min(Theme.headerHeight + peekList.count * Theme.rowHeight
                          + Theme.borderWidth, sidebar.height)
         padding: 0
@@ -581,8 +611,6 @@ Rectangle {
         // Leaving it is what closes it (above). Escape is for the reader
         // whose pointer is already inside it.
         closePolicy: Popup.CloseOnEscape
-
-        readonly property alias pointerInside: peekHover.hovered
 
         // It keeps the list's own ground rather than a menu's: what is in
         // it is the sidebar, and the header band would be lost against
@@ -599,6 +627,12 @@ Rectangle {
             spacing: 0
             HoverHandler {
                 id: peekHover
+                // The other half of leaving. The cells can only see the
+                // way back over themselves; walking out of the list the
+                // other way — right into the diff or the graph, or off
+                // its top or bottom edge — is an exit no cell is told
+                // about, and without this it raises no event at all.
+                onHoveredChanged: sidebar.peekEntered = peekHover.hovered
             }
             NavHeader {
                 caption: sidebar.peekCaption
