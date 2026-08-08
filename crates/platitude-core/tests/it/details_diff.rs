@@ -226,3 +226,154 @@ async fn binary_file_diff_is_flagged() {
     assert!(patches[0].is_binary);
     assert!(patches[0].hunks.is_empty());
 }
+
+/// Stops a merge on four kinds of conflict at once: both changed it
+/// (`UU`), both added it (`AA`), we deleted / they changed (`DU`), and we
+/// changed / they deleted (`UD`). The first two have two blobs to compare
+/// and get a combined diff; the other two have one and get a bare
+/// `* Unmerged path` line.
+fn stopped_merge_of_four_kinds(repo: &mut TestRepo) {
+    repo.commit_file("both.txt", "one\ntwo\nthree\n", "base");
+    repo.commit_file("ours-del.txt", "base\n", "one we will drop");
+    repo.commit_file("theirs-del.txt", "base\n", "one they will drop");
+
+    repo.git(&["checkout", "-b", "side"]);
+    repo.write_file("both.txt", "one\nTHEIRS\nthree\n");
+    repo.write_file("ours-del.txt", "they keep editing\n");
+    repo.write_file("added.txt", "their new file\n");
+    std::fs::remove_file(repo.path.join("theirs-del.txt")).unwrap();
+    repo.git(&["add", "-A"]);
+    repo.git(&["commit", "-m", "the other side of all four"]);
+
+    repo.git(&["checkout", "main"]);
+    repo.write_file("both.txt", "one\nOURS\nthree\n");
+    repo.write_file("theirs-del.txt", "we keep editing\n");
+    repo.write_file("added.txt", "our new file\n");
+    std::fs::remove_file(repo.path.join("ours-del.txt")).unwrap();
+    repo.git(&["add", "-A"]);
+    repo.git(&["commit", "-m", "our side of all four"]);
+
+    repo.git_expect_failure(&["merge", "--no-edit", "side"]);
+}
+
+#[tokio::test]
+async fn a_conflicted_file_diffs_against_both_sides_at_once() {
+    let mut repo = TestRepo::init();
+    stopped_merge_of_four_kinds(&mut repo);
+
+    let executor = GitExecutor::new();
+    let cancel = CancellationToken::new();
+    let patches = details::file_diff(
+        &executor,
+        &repo.path,
+        &DiffTarget::Unstaged {
+            path: "both.txt".to_string(),
+        },
+        &cancel,
+    )
+    .await
+    .unwrap();
+    assert_eq!(patches.len(), 1);
+    let patch = &patches[0];
+    assert!(patch.is_combined, "a conflicted path has two old sides");
+    assert!(!patch.unmerged, "this one does have a patch");
+    assert_eq!(patch.path(), "both.txt");
+    assert_eq!(patch.hunks.len(), 1);
+    let hunk = &patch.hunks[0];
+    assert_eq!(
+        hunk.extra_old.len(),
+        1,
+        "one range per parent after the first"
+    );
+
+    // Every marker column git wrote, in order. This is the whole point of
+    // the parse: without it the pane has nothing to show on the one file
+    // someone opened it for.
+    let markers: Vec<&str> = hunk.lines.iter().map(|l| l.markers.as_str()).collect();
+    assert_eq!(
+        markers,
+        vec!["  ", "++", " +", "++", "+ ", "++", "  "],
+        "context, then our side and theirs fenced by the markers git left"
+    );
+    let text: Vec<&str> = hunk.lines.iter().map(|l| l.text.as_str()).collect();
+    assert_eq!(text[2], "OURS");
+    assert_eq!(text[4], "THEIRS");
+    assert!(text[1].starts_with("<<<<<<<"));
+    assert!(text[3].starts_with("======="));
+    assert!(text[5].starts_with(">>>>>>>"));
+
+    // The result's numbering runs unbroken down the pane — it is the file
+    // on disk, markers and all.
+    let result: Vec<Option<u32>> = hunk.lines.iter().map(|l| l.new_no).collect();
+    assert_eq!(
+        result,
+        vec![
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5),
+            Some(6),
+            Some(7)
+        ]
+    );
+    // Our side's numbering skips what only the other side (or neither) has.
+    let ours: Vec<Option<u32>> = hunk.lines.iter().map(|l| l.old_no).collect();
+    assert_eq!(
+        ours,
+        vec![Some(1), None, Some(2), None, None, None, Some(3)]
+    );
+}
+
+#[tokio::test]
+async fn a_conflict_both_sides_added_is_combined_too() {
+    let mut repo = TestRepo::init();
+    stopped_merge_of_four_kinds(&mut repo);
+
+    let executor = GitExecutor::new();
+    let cancel = CancellationToken::new();
+    let patches = details::file_diff(
+        &executor,
+        &repo.path,
+        &DiffTarget::Unstaged {
+            path: "added.txt".to_string(),
+        },
+        &cancel,
+    )
+    .await
+    .unwrap();
+    let patch = &patches[0];
+    assert!(patch.is_combined);
+    // Both sides invented the path, so neither is "the old side" — the one
+    // thing that must not happen is it being read as a new file, which
+    // would take the pane's pieces away for the wrong reason.
+    assert!(patch.old_path.is_some());
+    assert!(patch.new_path.is_some());
+    assert!(!patch.hunks.is_empty());
+}
+
+#[tokio::test]
+async fn a_conflict_with_only_one_side_left_has_no_diff_to_show() {
+    let mut repo = TestRepo::init();
+    stopped_merge_of_four_kinds(&mut repo);
+
+    let executor = GitExecutor::new();
+    let cancel = CancellationToken::new();
+    for path in ["ours-del.txt", "theirs-del.txt"] {
+        let patches = details::file_diff(
+            &executor,
+            &repo.path,
+            &DiffTarget::Unstaged {
+                path: path.to_string(),
+            },
+            &cancel,
+        )
+        .await
+        .unwrap();
+        assert_eq!(patches.len(), 1, "{path}");
+        assert!(patches[0].unmerged, "{path} is named but not diffed");
+        assert!(!patches[0].is_combined, "{path}");
+        assert!(patches[0].hunks.is_empty(), "{path}");
+        assert_eq!(patches[0].path(), path);
+    }
+}

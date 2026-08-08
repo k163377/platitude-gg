@@ -284,13 +284,40 @@ fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
 }
 
 /// A merge stopped on conflicts: MERGE_HEAD present, one unmerged path.
+///
+/// The file is long enough to be read as one: a conflicted path's diff is
+/// the combined form, which puts context, our side, their side and the
+/// markers git wrote in one hunk — a one-line file shows none of that.
+/// The two sides also disagree about one line and agree about another, so
+/// both the fenced part and the part that merged cleanly are on screen.
 fn conflict(repo: &mut DemoRepo) -> Result<(), String> {
-    repo.commit("shared.txt", "base\n", "feat: shared base")?;
+    const BASE: &str = "\
+Release checklist
+=================
+
+- pick the version number
+- write the notes
+- tag the commit
+- upload the archives
+";
+    repo.commit("shared.txt", BASE, "feat: shared base")?;
     repo.commit("other.txt", "calm\n", "feat: untouched elsewhere")?;
+
     repo.git(&["switch", "--create", "feature/clash"])?;
-    repo.commit("shared.txt", "feature side\n", "feat: change shared")?;
+    repo.commit(
+        "shared.txt",
+        &BASE
+            .replace("- pick the version number", "- agree the version number")
+            .replace("- upload the archives", "- upload the archives and checksums"),
+        "feat: change shared",
+    )?;
+
     repo.git(&["switch", "main"])?;
-    repo.commit("shared.txt", "main side\n", "fix: change shared too")?;
+    repo.commit(
+        "shared.txt",
+        &BASE.replace("- pick the version number", "- decide the version number"),
+        "fix: change shared too",
+    )?;
     repo.git_expecting_stop(&["merge", "--no-edit", "feature/clash"])?;
     Ok(())
 }

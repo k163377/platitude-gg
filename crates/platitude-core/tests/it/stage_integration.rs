@@ -883,3 +883,64 @@ async fn a_stale_untracked_selection_is_refused_before_the_mark() {
     );
     assert_eq!(untracked, vec!["new.txt"]);
 }
+
+/// A conflicted file's diff is the combined form, which has no single old
+/// side for a rebuilt patch to sit on — `git apply` refuses the shape
+/// outright. The pane withholds the pieces there, so nothing should ask;
+/// this is the floor under that, and it must say so in this app's words
+/// rather than let git complain about a fragment nobody wrote.
+#[tokio::test]
+async fn no_part_of_a_conflicted_file_can_be_taken_or_thrown_away() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\ntwo\nthree\n", "base");
+    repo.git(&["checkout", "-b", "side"]);
+    repo.write_file("f.txt", "one\nTHEIRS\nthree\n");
+    repo.git(&["commit", "-am", "their side"]);
+    repo.git(&["checkout", "main"]);
+    repo.write_file("f.txt", "one\nOURS\nthree\n");
+    repo.git(&["commit", "-am", "our side"]);
+    repo.git_expect_failure(&["merge", "--no-edit", "side"]);
+
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+    let target = DiffTarget::Unstaged {
+        path: "f.txt".into(),
+    };
+    let seen = fp(&repo_info, &target).await;
+
+    let err = stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        seen,
+        &cancel,
+    )
+    .await
+    .expect_err("a combined diff cannot be staged in pieces");
+    assert!(format!("{err}").contains("still conflicted"), "{err}");
+
+    let err = stage::discard_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        seen,
+        &cancel,
+    )
+    .await
+    .expect_err("nor thrown away in pieces");
+    assert!(format!("{err}").contains("still conflicted"), "{err}");
+
+    // Refused, not half-done: the path is still exactly as git left it.
+    let s = status::load(&exec, &repo.path, &cancel)
+        .await
+        .expect("status");
+    assert_eq!(s.conflicted().count(), 1, "still one unmerged path");
+    assert!(
+        std::fs::read_to_string(repo.path.join("f.txt"))
+            .unwrap()
+            .contains("<<<<<<<"),
+        "the markers are untouched"
+    );
+}

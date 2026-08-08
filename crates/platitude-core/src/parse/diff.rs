@@ -1,9 +1,36 @@
-//! Unified-diff (patch) parser.
+//! Diff (patch) parser: unified, and the **combined** form git prints for
+//! a path with more than one side.
 //!
 //! Produces line-classified data with old/new line numbers so the UI can
-//! render a unified diff without interpreting anything itself. Tolerant of
+//! render a diff without interpreting anything itself. Tolerant of
 //! multi-file patches; commands are expected to run with `--no-ext-diff`
 //! and default `a/` `b/` prefixes (the diff runners pin these).
+//!
+//! # Combined diffs
+//!
+//! A conflicted path has no single old side, so `git diff` compares the
+//! working tree against **every** stage at once and prints one marker
+//! column per parent (`diff --cc` / `@@@ -1,5 -1,5 +1,9 @@@`). Reading it
+//! is what keeps the pane from being empty on exactly the files someone
+//! opened it to look at.
+//!
+//! Measured against git 2.55 (the shapes below are all in the tests):
+//!
+//! - The combined form appears only where **both** stages exist (`UU` and
+//!   `AA`). With one side gone git has nothing to compare and says so in
+//!   one line — `* Unmerged path <path>` — which parses to a [`FilePatch`]
+//!   carrying [`FilePatch::unmerged`] and nothing else.
+//! - A column holds `-` where that parent has the line and the result does
+//!   not, `+` where the result has it and that parent does not, and a
+//!   space otherwise. A line is therefore in the result unless some column
+//!   says `-`.
+//! - git's own colouring follows from that and this parser matches it: any
+//!   `+` makes the line an addition, any `-` a deletion, all-spaces
+//!   context.
+//! - `\ No newline at end of file` is **never printed** in this form, and
+//!   a binary one says `Binary files differ` without naming either side.
+//! - A combined patch is not applyable — `git apply` refuses it — so
+//!   nothing rebuilt from these bytes can be staged piece by piece.
 
 /// Classification of one diff content line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,11 +46,17 @@ pub enum DiffLineKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffLine {
     pub kind: DiffLineKind,
-    /// Line number on the old side (context/deletion).
+    /// Line number on the old side (context/deletion). In a combined diff
+    /// this is the **first** parent's numbering, present only on the lines
+    /// that parent has.
     pub old_no: Option<u32>,
     /// Line number on the new side (context/addition).
     pub new_no: Option<u32>,
     pub text: String,
+    /// The marker column of every parent, as git printed them (`" +"`,
+    /// `"++"`, `"- "`). Empty for a unified diff, whose single marker is
+    /// already said by [`DiffLine::kind`].
+    pub markers: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +65,9 @@ pub struct DiffHunk {
     pub old_count: u32,
     pub new_start: u32,
     pub new_count: u32,
+    /// Ranges of the parents after the first, in git's order. Empty for a
+    /// unified diff, which has exactly one old side.
+    pub extra_old: Vec<(u32, u32)>,
     /// Function-context heading after the closing `@@` (may be empty).
     pub heading: String,
     pub lines: Vec<DiffLine>,
@@ -45,6 +81,14 @@ pub struct FilePatch {
     /// Path on the new side (`None` for deleted files).
     pub new_path: Option<String>,
     pub is_binary: bool,
+    /// The patch compares the result against more than one parent, so its
+    /// lines carry [`DiffLine::markers`] and none of it can be staged
+    /// (see the module note).
+    pub is_combined: bool,
+    /// git named the path as unmerged and printed no patch for it: one of
+    /// the two sides does not exist, so there is nothing to compare. The
+    /// entry carries the path and nothing else.
+    pub unmerged: bool,
     pub hunks: Vec<DiffHunk>,
 }
 
@@ -69,6 +113,10 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
     let mut hunk: Option<DiffHunk> = None;
     let mut old_no = 0u32;
     let mut new_no = 0u32;
+    // Where each parent of the hunk being read has got to. Empty for a
+    // unified diff, which counts its one old side in `old_no`; one entry
+    // per parent for a combined one.
+    let mut parent_no: Vec<u32> = Vec::new();
 
     fn flush_hunk(current: &mut Option<FilePatch>, hunk: &mut Option<DiffHunk>) {
         if let (Some(file), Some(h)) = (current.as_mut(), hunk.take()) {
@@ -98,6 +146,39 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
             continue;
         }
 
+        // A combined header names one path, not a pair: there is no single
+        // old side to name. `---`/`+++` follow and carry the prefixes.
+        if let Some(rest) = line
+            .strip_prefix("diff --cc ")
+            .or_else(|| line.strip_prefix("diff --combined "))
+        {
+            flush_hunk(&mut current, &mut hunk);
+            flush_file(&mut files, &mut current);
+            let path = rest.trim().to_string();
+            current = Some(FilePatch {
+                old_path: Some(path.clone()),
+                new_path: Some(path),
+                is_combined: true,
+                ..FilePatch::default()
+            });
+            continue;
+        }
+
+        // One of the two sides is missing, so git has nothing to compare
+        // and prints this instead of a patch. It stands on its own — no
+        // header, no hunks — and says only which path it is about.
+        if let Some(path) = line.strip_prefix("* Unmerged path ") {
+            flush_hunk(&mut current, &mut hunk);
+            flush_file(&mut files, &mut current);
+            files.push(FilePatch {
+                old_path: None,
+                new_path: Some(path.trim().to_string()),
+                unmerged: true,
+                ..FilePatch::default()
+            });
+            continue;
+        }
+
         if hunk.is_none() {
             // Pre-hunk header lines of the current file.
             if let Some(rest) = line.strip_prefix("--- ") {
@@ -120,16 +201,33 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
             }
         }
 
-        if let Some(rest) = line.strip_prefix("@@ ") {
+        // A body line always opens with its marker columns (` `, `+`, `-`
+        // or a lone `\`), so a run of `@` at the head is unambiguously a
+        // hunk header — of one `@` per parent plus one.
+        if line.starts_with("@@") {
             flush_hunk(&mut current, &mut hunk);
             if current.is_none() {
                 // Patch without a `diff --git` header (plain `git diff`
                 // between blobs); synthesize a file entry.
                 current = Some(FilePatch::default());
             }
-            if let Some(h) = parse_hunk_header(rest) {
+            if let Some(h) = parse_hunk_header(line) {
                 old_no = h.old_start;
                 new_no = h.new_start;
+                parent_no = if h.extra_old.is_empty() {
+                    Vec::new()
+                } else {
+                    std::iter::once(h.old_start)
+                        .chain(h.extra_old.iter().map(|(start, _)| *start))
+                        .collect()
+                };
+                if !parent_no.is_empty()
+                    && let Some(f) = current.as_mut()
+                {
+                    // A combined hunk under a synthesized file entry: the
+                    // shape says what the header would have.
+                    f.is_combined = true;
+                }
                 hunk = Some(h);
             } else {
                 tracing::trace!(line, "unparsable hunk header");
@@ -140,6 +238,10 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
         let Some(h) = hunk.as_mut() else {
             continue; // other header noise (index, mode, similarity, ...)
         };
+        if !parent_no.is_empty() {
+            read_combined_line(h, line, &mut parent_no, &mut new_no);
+            continue;
+        }
         let mut chars = line.chars();
         match chars.next() {
             Some(' ') => {
@@ -148,6 +250,7 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
                     old_no: Some(old_no),
                     new_no: Some(new_no),
                     text: chars.as_str().to_string(),
+                    markers: String::new(),
                 });
                 old_no += 1;
                 new_no += 1;
@@ -158,6 +261,7 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
                     old_no: None,
                     new_no: Some(new_no),
                     text: chars.as_str().to_string(),
+                    markers: String::new(),
                 });
                 new_no += 1;
             }
@@ -167,6 +271,7 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
                     old_no: Some(old_no),
                     new_no: None,
                     text: chars.as_str().to_string(),
+                    markers: String::new(),
                 });
                 old_no += 1;
             }
@@ -176,6 +281,7 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
                     old_no: None,
                     new_no: None,
                     text: line.to_string(),
+                    markers: String::new(),
                 });
             }
             None => {
@@ -187,6 +293,7 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
                     old_no: Some(old_no),
                     new_no: Some(new_no),
                     text: String::new(),
+                    markers: String::new(),
                 });
                 old_no += 1;
                 new_no += 1;
@@ -199,28 +306,114 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
     files
 }
 
-/// `-a,b +c,d @@ heading` (counts default to 1 when omitted).
-fn parse_hunk_header(rest: &str) -> Option<DiffHunk> {
-    let (ranges, heading) = match rest.split_once("@@") {
-        Some((r, h)) => (r.trim(), h.trim().to_string()),
+/// One content line of a combined hunk: `parent_no.len()` marker columns
+/// followed by the text.
+///
+/// A column says `-` where that parent has the line and the result does
+/// not, `+` where the result has it and that parent does not, and a space
+/// otherwise — so a line is in the result unless some column says `-`, and
+/// which parents it came from is read the opposite way round on each side.
+fn read_combined_line(h: &mut DiffHunk, line: &str, parent_no: &mut [u32], new_no: &mut u32) {
+    // git never prints the no-newline note in this form (measured), but
+    // reading one costs nothing and losing the line would cost a row.
+    if line.starts_with('\\') {
+        h.lines.push(DiffLine {
+            kind: DiffLineKind::NoNewline,
+            old_no: None,
+            new_no: None,
+            text: line.to_string(),
+            markers: String::new(),
+        });
+        return;
+    }
+    let n = parent_no.len();
+    // Short lines are tolerated the way the unified reader tolerates an
+    // empty context line: the missing columns are the spaces some tool
+    // trimmed off the end.
+    let bytes = line.as_bytes();
+    let markers: String = (0..n)
+        .map(|i| bytes.get(i).map_or(' ', |b| *b as char))
+        .collect();
+    if let Some(bad) = markers.chars().find(|c| !matches!(c, ' ' | '+' | '-')) {
+        tracing::trace!(line, marker = %bad, "unexpected line inside combined hunk");
+        return;
+    }
+    let text = line
+        .get(n.min(line.len())..)
+        .unwrap_or_default()
+        .to_string();
+
+    let removed = markers.contains('-');
+    // On a removed line a parent that has it is the one marked `-`; on a
+    // line that survived it is the one that is *not* marked `+`.
+    let has = |c: char| if removed { c == '-' } else { c == ' ' };
+    let first = markers.chars().next().is_some_and(has);
+
+    let kind = if removed {
+        DiffLineKind::Deletion
+    } else if markers.contains('+') {
+        DiffLineKind::Addition
+    } else {
+        DiffLineKind::Context
+    };
+    let old_no = first.then(|| parent_no[0]);
+    let at = (!removed).then_some(*new_no);
+    for (i, c) in markers.chars().enumerate() {
+        if has(c) {
+            parent_no[i] += 1;
+        }
+    }
+    if !removed {
+        *new_no += 1;
+    }
+    h.lines.push(DiffLine {
+        kind,
+        old_no,
+        new_no: at,
+        text,
+        markers,
+    });
+}
+
+/// `@@ -a,b +c,d @@ heading`, or the combined `@@@ -a,b -e,f +c,d @@@` with
+/// one `@` per parent plus one and one `-` range each (counts default to 1
+/// when omitted).
+fn parse_hunk_header(line: &str) -> Option<DiffHunk> {
+    let ats = line.bytes().take_while(|b| *b == b'@').count();
+    if ats < 2 {
+        return None;
+    }
+    let olds = ats - 1;
+    let rest = line.get(ats..)?;
+    // The first closing run is the real one: a heading that contains `@@`
+    // sits after it, and the ranges between never do.
+    let close = "@".repeat(ats);
+    let (ranges, heading) = match rest.find(&close) {
+        Some(at) => (
+            rest.get(..at)?.trim(),
+            rest.get(at + close.len()..)?.trim().to_string(),
+        ),
         None => (rest.trim(), String::new()),
     };
-    let mut parts = ranges.split_whitespace();
-    let old = parts.next()?.strip_prefix('-')?;
-    let new = parts.next()?.strip_prefix('+')?;
     let parse_range = |s: &str| -> Option<(u32, u32)> {
         match s.split_once(',') {
             Some((a, b)) => Some((a.parse().ok()?, b.parse().ok()?)),
             None => Some((s.parse().ok()?, 1)),
         }
     };
-    let (old_start, old_count) = parse_range(old)?;
-    let (new_start, new_count) = parse_range(new)?;
+    let mut parts = ranges.split_whitespace();
+    let mut old = Vec::with_capacity(olds);
+    for _ in 0..olds {
+        old.push(parse_range(parts.next()?.strip_prefix('-')?)?);
+    }
+    let (new_start, new_count) = parse_range(parts.next()?.strip_prefix('+')?)?;
+    let (old_start, old_count) = *old.first()?;
     Some(DiffHunk {
         old_start,
         old_count,
         new_start,
         new_count,
+        extra_old: old[1..].to_vec(),
         heading,
         lines: Vec::new(),
     })
@@ -394,5 +587,236 @@ diff --git a/has space.txt b/has space.txt
     #[test]
     fn empty_input_yields_no_files() {
         assert!(parse_patch(b"").is_empty());
+    }
+
+    // --- combined diffs -------------------------------------------------
+    // Every constant below is `git diff` output taken verbatim off git
+    // 2.55 in a throwaway repository (probe scripts, 2026-08-08).
+
+    /// A `UU` conflict left as git wrote it: markers in the file, two
+    /// parents, and one hunk that also carries a change neither side
+    /// disputed (`five` → `FIVE-theirs`).
+    const CONFLICTED: &str = "\
+diff --cc f.txt
+index 804ce7b,ba44bb1..0000000
+--- a/f.txt
++++ b/f.txt
+@@@ -1,5 -1,5 +1,9 @@@
+  one
+++<<<<<<< HEAD
+ +TWO-ours
+++=======
++ TWO-theirs
+++>>>>>>> topic
+  three
+  four
+- five
++ FIVE-theirs
+";
+
+    #[test]
+    fn reads_a_conflicted_file_as_one_combined_patch() {
+        let files = parse_patch(CONFLICTED.as_bytes());
+        assert_eq!(files.len(), 1);
+        let f = &files[0];
+        assert!(f.is_combined);
+        assert!(!f.unmerged);
+        assert_eq!(f.path(), "f.txt");
+        assert_eq!(f.hunks.len(), 1);
+        let h = &f.hunks[0];
+        assert_eq!((h.old_start, h.old_count), (1, 5), "first parent");
+        assert_eq!(h.extra_old, vec![(1, 5)], "second parent");
+        assert_eq!((h.new_start, h.new_count), (1, 9), "the result");
+        assert_eq!(h.lines.len(), 10);
+    }
+
+    #[test]
+    fn combined_lines_are_coloured_the_way_git_colours_them() {
+        // Measured with `color.ui=always`: any `+` column makes the line
+        // an addition, any `-` a deletion, all-spaces context.
+        let h = &parse_patch(CONFLICTED.as_bytes())[0].hunks[0];
+        let seen: Vec<(&str, DiffLineKind)> = h
+            .lines
+            .iter()
+            .map(|l| (l.markers.as_str(), l.kind))
+            .collect();
+        assert_eq!(
+            seen,
+            vec![
+                ("  ", DiffLineKind::Context),
+                ("++", DiffLineKind::Addition),
+                (" +", DiffLineKind::Addition),
+                ("++", DiffLineKind::Addition),
+                ("+ ", DiffLineKind::Addition),
+                ("++", DiffLineKind::Addition),
+                ("  ", DiffLineKind::Context),
+                ("  ", DiffLineKind::Context),
+                ("- ", DiffLineKind::Deletion),
+                ("+ ", DiffLineKind::Addition),
+            ]
+        );
+        assert_eq!(h.lines[1].text, "<<<<<<< HEAD", "markers are content");
+        assert_eq!(h.lines[2].text, "TWO-ours");
+    }
+
+    #[test]
+    fn combined_line_numbers_count_the_result_and_the_first_parent() {
+        let h = &parse_patch(CONFLICTED.as_bytes())[0].hunks[0];
+        let seen: Vec<(Option<u32>, Option<u32>)> =
+            h.lines.iter().map(|l| (l.old_no, l.new_no)).collect();
+        assert_eq!(
+            seen,
+            vec![
+                (Some(1), Some(1)), // `  one`   — in both
+                (None, Some(2)),    // `++<<<<<<<` — in neither parent
+                (Some(2), Some(3)), // ` +TWO-ours` — ours has it
+                (None, Some(4)),    // `++=======`
+                (None, Some(5)),    // `+ TWO-theirs` — theirs has it, not ours
+                (None, Some(6)),    // `++>>>>>>>`
+                (Some(3), Some(7)),
+                (Some(4), Some(8)),
+                (Some(5), None), // `- five` — ours had it, the result does not
+                (None, Some(9)), // `+ FIVE-theirs`
+            ]
+        );
+    }
+
+    #[test]
+    fn a_line_both_parents_lost_is_still_one_deletion() {
+        // `--one`: both sides had it and the result does not. Emptying a
+        // conflicted file is the shortest way to produce one.
+        let patch = "\
+diff --cc n.txt
+index 3e0f775,b81406d..0000000
+--- a/n.txt
++++ b/n.txt
+@@@ -1,2 -1,2 +1,0 @@@
+--one
+- OURS
+ -THEIRS
+";
+        let h = &parse_patch(patch.as_bytes())[0].hunks[0];
+        assert_eq!(h.lines[0].kind, DiffLineKind::Deletion);
+        assert_eq!(h.lines[0].old_no, Some(1), "the first parent had it");
+        assert_eq!(h.lines[0].new_no, None);
+        // The second parent's line only counts against the second parent,
+        // so the first parent's numbering does not move for it.
+        assert_eq!(h.lines[1].old_no, Some(2), "` OURS` is ours' line 2");
+        assert_eq!(h.lines[2].old_no, None, "`THEIRS` is not ours' at all");
+    }
+
+    #[test]
+    fn a_combined_heading_survives_the_extra_at_signs() {
+        // The heading git prints keeps its trailing space, and the closing
+        // run is three `@` rather than two.
+        let patch = "\
+diff --cc code.rs
+--- a/code.rs
++++ b/code.rs
+@@@ -5,5 -5,5 +5,9 @@@ fn main()
+      let f = 6;
+++<<<<<<< HEAD
+ +    let OURS = 7;
+";
+        let h = &parse_patch(patch.as_bytes())[0].hunks[0];
+        assert_eq!(h.heading, "fn main()");
+        assert_eq!(h.lines[0].text, "    let f = 6;", "content keeps indent");
+    }
+
+    #[test]
+    fn a_binary_conflict_names_neither_side() {
+        // Unlike the unified form, this one does not say `a/x and b/x`.
+        let patch = "\
+diff --cc bin.dat
+index 9a16380,9e992b9..0000000
+Binary files differ
+";
+        let files = parse_patch(patch.as_bytes());
+        assert!(files[0].is_binary);
+        assert!(files[0].is_combined);
+        assert!(files[0].hunks.is_empty());
+        assert_eq!(files[0].path(), "bin.dat");
+    }
+
+    #[test]
+    fn an_unmerged_path_with_no_patch_is_still_a_file() {
+        // Deleted on one side: there is no second blob to compare, so git
+        // says only this. It arrives among ordinary patches and must not
+        // swallow the one that follows.
+        let patch = "\
+diff --cc add.txt
+--- a/add.txt
++++ b/add.txt
+@@@ -1,1 -1,1 +1,3 @@@
+++<<<<<<< HEAD
+ +ours
++ theirs
+* Unmerged path del.txt
+diff --git a/plain.txt b/plain.txt
+--- a/plain.txt
++++ b/plain.txt
+@@ -1 +1 @@
+-x
++y
+";
+        let files = parse_patch(patch.as_bytes());
+        assert_eq!(files.len(), 3);
+        assert!(files[0].is_combined);
+        assert_eq!(files[1].path(), "del.txt");
+        assert!(files[1].unmerged);
+        assert!(files[1].hunks.is_empty());
+        assert!(!files[1].is_combined, "there was nothing to combine");
+        assert_eq!(files[2].path(), "plain.txt");
+        assert!(!files[2].is_combined);
+        assert_eq!(files[2].hunks[0].lines[0].kind, DiffLineKind::Deletion);
+    }
+
+    #[test]
+    fn a_conflicted_file_that_matches_one_side_has_a_header_and_no_hunks() {
+        // `--cc` prints only the hunks that differ from *every* parent, so
+        // resolving by taking one side wholesale empties the patch while
+        // the path stays unmerged. The file entry still has to exist —
+        // dropping it would read as "no such file" rather than "nothing
+        // left to decide".
+        let patch = "\
+diff --cc code.rs
+index 211b973,f7fe72f..0000000
+--- a/code.rs
++++ b/code.rs
+";
+        let files = parse_patch(patch.as_bytes());
+        assert_eq!(files.len(), 1);
+        assert!(files[0].is_combined);
+        assert!(files[0].hunks.is_empty());
+    }
+
+    #[test]
+    fn a_unified_patch_carries_no_markers() {
+        // The field is what tells the two forms apart downstream, so the
+        // ordinary case has to leave it empty rather than fill it in.
+        let files = parse_patch(PATCH.as_bytes());
+        assert!(!files[0].is_combined);
+        assert!(files[0].hunks[0].extra_old.is_empty());
+        assert!(files[0].hunks[0].lines.iter().all(|l| l.markers.is_empty()));
+    }
+
+    #[test]
+    fn three_parents_are_read_as_three_columns() {
+        // Not reachable from a conflicted working tree — git refuses to
+        // stop an octopus merge in one (measured) — but `diff-tree -c` on
+        // an octopus commit prints this, and the shape is the same one.
+        let patch = "\
+diff --combined f.txt
+@@@@ -1,1 -1,1 -1,1 +1,2 @@@@
+++ a
+  +b
+";
+        let h = &parse_patch(patch.as_bytes())[0].hunks[0];
+        assert_eq!(h.extra_old, vec![(1, 1), (1, 1)]);
+        assert_eq!(h.lines[0].markers, "++ ");
+        assert_eq!(h.lines[0].text, "a");
+        assert_eq!(h.lines[0].old_no, None, "the first parent lacks it");
+        assert_eq!(h.lines[1].markers, "  +");
+        assert_eq!(h.lines[1].old_no, Some(1));
     }
 }

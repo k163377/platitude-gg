@@ -256,6 +256,24 @@ pub async fn apply_partial(
     result
 }
 
+/// Refuses a conflicted file's diff, which has more than one old side and
+/// so cannot be cut into a patch that applies (`platitude_core::patch`).
+///
+/// The pane withholds the pieces on such a file, so nothing should ask —
+/// but a write that got here anyway must say why in this app's words. Left
+/// to git, the same refusal arrives as `git apply` complaining about a
+/// patch fragment nobody wrote.
+fn refuse_combined(raw: &[u8]) -> Result<(), GitError> {
+    if patch::is_combined(raw) {
+        return Err(GitError::Rejected {
+            message: "this file is still conflicted; \
+                      it has to be resolved before parts of it can be taken"
+                .to_string(),
+        });
+    }
+    Ok(())
+}
+
 /// Refuses a diff whose bytes are not the ones the selection indexed.
 fn verify_fingerprint(raw: &[u8], seen: u64) -> Result<(), GitError> {
     if details::fingerprint(raw) == seen {
@@ -286,6 +304,7 @@ async fn apply_prepared(
     if let Some(seen) = verify {
         verify_fingerprint(&raw, seen)?;
     }
+    refuse_combined(&raw)?;
     let Some(built) = patch::build_partial(&raw, selects, side) else {
         // The selection indexes a diff that no longer holds it — the file
         // changed under the open diff. Doing nothing must not read as the
@@ -350,6 +369,7 @@ pub async fn discard_partial(
     // Destructive and index-addressed: bytes that drifted since the
     // selection was made would throw away the wrong lines.
     verify_fingerprint(&raw, seen)?;
+    refuse_combined(&raw)?;
     let Some(built) = patch::build_partial(&raw, selects, PatchSide::Reverse) else {
         // As in apply_partial: a vanished selection is a refusal, not a
         // discard that quietly did nothing.

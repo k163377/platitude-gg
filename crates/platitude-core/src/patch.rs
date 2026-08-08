@@ -99,6 +99,26 @@ pub fn hunk_count(raw: &[u8]) -> usize {
     split_files(raw).iter().map(|f| f.hunks.len()).sum()
 }
 
+/// Whether these bytes are the **combined** form git prints for a path
+/// with more than one side (`diff --cc`, hunks headed `@@@`).
+///
+/// Nothing can be built from one: there is no single pre-image for a
+/// rebuilt patch to sit on, and `git apply` refuses the whole shape. The
+/// UI already withholds the pieces on a conflicted file
+/// ([`crate::parse::diff`]), and this is the check underneath that — a
+/// selection that reached here anyway must be refused rather than turned
+/// into a patch git will reject with its own wording.
+///
+/// Read off the bytes rather than the parsed model because that is what
+/// the staging path has in hand ([`build_partial`] never parses).
+pub fn is_combined(raw: &[u8]) -> bool {
+    lines(raw).any(|line| {
+        line.starts_with(b"@@@")
+            || line.starts_with(b"diff --cc ")
+            || line.starts_with(b"diff --combined ")
+    })
+}
+
 // --- raw splitting ------------------------------------------------------
 
 struct RawFile<'a> {
