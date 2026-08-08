@@ -350,6 +350,15 @@ impl AppBackend {
         crate::winframe::set_icon();
     }
 
+    /// Puts back what the platform may do with the window on its own —
+    /// Win+Arrow, the taskbar's menu, minimising from the taskbar button.
+    /// Asking for none of the drawn buttons is what takes them away, and
+    /// this app draws its own (P3-確認事項 §ウィンドウ chrome).
+    #[qslot]
+    fn keep_window_gestures(&self) {
+        crate::winframe::keep_system_gestures();
+    }
+
     // -- window state -------------------------------------------------------
     //
     // Read once as a page or the window is built, not bound: these are

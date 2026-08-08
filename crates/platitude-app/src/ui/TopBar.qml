@@ -15,9 +15,51 @@ Rectangle {
     required property var tabsModel
     // The RepoPage of the active tab (null while no tab is open).
     property var curPage: null
+    /// Whether this band is the window's title bar. When it is, the band
+    /// carries what a title bar carries — the window's own buttons, and
+    /// the two gestures its empty run answers.
+    property bool captionMerged: false
+    /// Which shape the middle button is in.
+    property bool windowMaximized: false
+
     signal openRepositoryRequested()
     signal identityEditRequested()
     signal settingsRequested()
+    signal windowDragRequested()
+    signal maximizeToggleRequested()
+    signal minimizeRequested()
+    signal closeRequested()
+
+    /// One of the window's own buttons: a cell the size of the one the app
+    /// menu sits in at the other end of the band, so both ends are built
+    /// the same way. The close button is the one exception to the wash —
+    /// red under the pointer is a convention old enough that departing
+    /// from it would read as a bug, not as a house style.
+    component WindowButton: Rectangle {
+        id: winBtn
+        property string kind: ""
+        property bool danger: false
+        signal triggered()
+
+        width: Theme.railWidth
+        height: parent ? parent.height : Theme.toolbarHeight
+        color: !winBtnMouse.containsMouse ? "transparent"
+               : winBtn.danger ? Theme.danger : Theme.bgHover
+        NavIcon {
+            anchors.centerIn: parent
+            width: Theme.iconLg
+            height: Theme.iconLg
+            kind: winBtn.kind
+            tint: winBtnMouse.containsMouse && winBtn.danger
+                  ? Theme.textOnAccent : Theme.textPrimary
+        }
+        MouseArea {
+            id: winBtnMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            onClicked: winBtn.triggered()
+        }
+    }
 
     /// Automation: run the push button's hold to its end. Does nothing
     /// unless the button is in the shape that arms it.
@@ -118,7 +160,10 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.rightMargin: Theme.spaceMd
+        // The window's own buttons run to the very edge where the band is
+        // the title bar: the corner of a maximised window is the one
+        // target a pointer cannot overshoot.
+        anchors.rightMargin: topBar.captionMerged ? 0 : Theme.spaceMd
         spacing: Theme.spaceSm
         // The strip: the app menu, the tabs, the way to open one more, and
         // whatever band is left over. Placed by hand rather than by a Row,
@@ -320,6 +365,33 @@ Rectangle {
                 text: "+"
                 font.pixelSize: Theme.fontLg
                 onClicked: topBar.openRepositoryRequested()
+            }
+            // The run of empty band past the last tab. Where this band is
+            // the title bar, it is also the only place left to take hold
+            // of the window, so it answers a drag by moving it and a
+            // double click by maximising it — the two things the bar it
+            // replaced did. Neither is wired anywhere else: a press that
+            // lands on a tab, a button or a badge belongs to that.
+            Item {
+                x: plusButton.x + plusButton.width
+                width: Math.max(0, tabStrip.width - x)
+                height: tabStrip.height
+                DragHandler {
+                    enabled: topBar.captionMerged
+                    // Nothing here follows the pointer: the platform takes
+                    // the press over and moves the window itself, which is
+                    // the only way a window can be dragged without fighting
+                    // the compositor.
+                    target: null
+                    onActiveChanged: if (active) topBar.windowDragRequested()
+                }
+                TapHandler {
+                    enabled: topBar.captionMerged
+                    // Lets go of the press as soon as it turns into a drag,
+                    // so the handler above can have it.
+                    gesturePolicy: TapHandler.DragThreshold
+                    onDoubleTapped: topBar.maximizeToggleRequested()
+                }
             }
         }
 
@@ -624,6 +696,44 @@ Rectangle {
                 return what
             }
             onActivated: topBar.curPage.pushNow()
+        }
+        // Where what the app owns ends and what the window owns begins.
+        // Without it the two groups read as one row of controls with an
+        // odd gap in it — the same mark a browser puts in the same place.
+        // `iconMd` tall rather than the whole band: a rule that reached
+        // the edges would be a second divider, and the one under the band
+        // already says where it stops.
+        Rectangle {
+            visible: topBar.captionMerged
+            Layout.alignment: Qt.AlignVCenter
+            Layout.leftMargin: Theme.spaceXs
+            implicitWidth: Theme.borderWidth
+            implicitHeight: Theme.iconMd
+            color: Theme.borderDefault
+        }
+        // The window's own three. Drawn here rather than left to the
+        // platform: its own are a fixed 32px in a 40px band, with a hover
+        // and glyphs that cannot be styled and a maximize mark that never
+        // becomes a restore mark (P3-確認事項 §ウィンドウ chrome).
+        WindowButton {
+            visible: topBar.captionMerged
+            Layout.leftMargin: Theme.spaceXs
+            kind: "window-minimize"
+            Accessible.name: qsTr("Minimize")
+            onTriggered: topBar.minimizeRequested()
+        }
+        WindowButton {
+            visible: topBar.captionMerged
+            kind: topBar.windowMaximized ? "window-restore" : "window-maximize"
+            Accessible.name: topBar.windowMaximized ? qsTr("Restore") : qsTr("Maximize")
+            onTriggered: topBar.maximizeToggleRequested()
+        }
+        WindowButton {
+            visible: topBar.captionMerged
+            kind: "close"
+            danger: true
+            Accessible.name: qsTr("Close")
+            onTriggered: topBar.closeRequested()
         }
     }
 }

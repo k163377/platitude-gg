@@ -19,8 +19,59 @@ ApplicationWindow {
     width: 1440
     height: 900
     visible: true
+    /// Whether the tab row is the window's title bar.
+    ///
+    /// Named by platform rather than worked out from what the hints did:
+    /// they are read when the window is created, and a window that came up
+    /// without a way to close it cannot be taken back. Windows is the one
+    /// that has been seen to work. Everywhere else keeps the platform's
+    /// own title bar above an ordinary tab row — the layout this app
+    /// already had, so the fallback is not new code (P3-確認事項
+    /// §ウィンドウ chrome).
+    readonly property bool captionMerged: Qt.platform.os === "windows"
+
+    // Three hints make the band the title bar, and the fourth thing that
+    // matters is what is *not* asked for:
+    //
+    //   ExpandedClientAreaHint    the client area reaches the top of the
+    //                             window instead of starting under a
+    //                             caption band (measured: the frame stops
+    //                             reserving 31px for one)
+    //   NoTitleBarBackgroundHint  the platform stops painting that band
+    //   CustomizeWindowHint       said without WindowTitleHint, which is
+    //                             what drops the title text and the icon
+    //                             the platform would paint over the tabs
+    //   no button hints           so the platform draws no buttons of its
+    //                             own. The app draws them, because theirs
+    //                             are a fixed 32px tall with their own
+    //                             hover and their own glyphs, and none of
+    //                             the three can be styled
+    //
+    // Dropping the button hints also drops the style bits that let the
+    // system minimise and maximise the window at all; `keepWindowGestures`
+    // puts those back without the drawing coming with them.
+    flags: root.captionMerged
+           ? (Qt.Window | Qt.CustomizeWindowHint
+              | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint)
+           : Qt.Window
     title: qsTr("Platitude GG")
     color: Theme.bgBase
+
+    // ---- what a title bar does, now that this band is one ----------------
+    /// Drags the window. Only the platform can move a window, and only
+    /// from inside the press that started it.
+    function dragWindow() {
+        root.startSystemMove()
+    }
+    /// Goes through `visibility`, which is also where the saved shape is
+    /// read from, so a window left maximised comes back that way.
+    function toggleMaximized() {
+        root.visibility = root.visibility === Window.Maximized
+                          ? Window.Windowed : Window.Maximized
+    }
+    function minimizeWindow() {
+        root.visibility = Window.Minimized
+    }
     font.family: Theme.uiFamily
     font.pixelSize: Theme.fontMd
 
@@ -297,6 +348,10 @@ ApplicationWindow {
         // Without this the window wears the shell's generic icon, in the
         // title bar and on the taskbar button alike.
         AppBackend.setWindowIcon()
+        // Asking for no drawn buttons took the system's own gestures with
+        // them; this puts those back (see `flags` above).
+        if (root.captionMerged)
+            AppBackend.keepWindowGestures()
         root.applySavedWindow()
         if (AppBackend.autoOpen !== "") {
             // Multiple repositories separated by ';' open as tabs in order.
@@ -439,6 +494,14 @@ ApplicationWindow {
     // ---- main ------------------------------------------------------------
     ColumnLayout {
         id: mainUi
+        // ApplicationWindow keeps its content item inside the window's
+        // safe area, and with the client area expanded that area starts
+        // below the title bar (measured on Windows: y = 31, the band's own
+        // height). So where the band is ours, the chrome hangs off the
+        // window's root item instead, which starts at 0. Where it is not,
+        // the content item is already the whole client area and
+        // ApplicationWindow's own handling is the one to keep.
+        parent: root.captionMerged ? root.contentItem.parent : root.contentItem
         anchors.fill: parent
         spacing: 0
         visible: AppBackend.gitState === "ok"
@@ -448,9 +511,15 @@ ApplicationWindow {
             Layout.fillWidth: true
             tabsModel: tabsModel
             curPage: root.curPage
+            captionMerged: root.captionMerged
+            windowMaximized: root.visibility === Window.Maximized
             onOpenRepositoryRequested: root.openRepositoryPicker()
             onIdentityEditRequested: root.identityEditing = true
             onSettingsRequested: settingsDialog.open()
+            onWindowDragRequested: root.dragWindow()
+            onMaximizeToggleRequested: root.toggleMaximized()
+            onMinimizeRequested: root.minimizeWindow()
+            onCloseRequested: root.close()
         }
         // Smoke hook (PG_AUTO_ACT=middle-close): the gesture is on the tab
         // strip, which lives up here rather than on the page where most of

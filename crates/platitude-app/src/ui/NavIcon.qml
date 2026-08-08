@@ -245,6 +245,30 @@ Canvas {
             ctx.moveTo(11.5 * s, 4.5 * s)
             ctx.lineTo(4.5 * s, 11.5 * s)
             ctx.stroke()
+        } else if (icon.kind === "window-minimize") {
+            // The three window marks are the platform's own shapes, drawn
+            // here because the band that carries them is ours now: a rule,
+            // a square, and a square standing in front of another. Kept on
+            // the same grid as every other mark so they sit level with the
+            // menu at the band's other end.
+            ctx.beginPath()
+            ctx.moveTo(3 * s, 8 * s)
+            ctx.lineTo(13 * s, 8 * s)
+            ctx.stroke()
+        } else if (icon.kind === "window-maximize") {
+            ctx.strokeRect(3.5 * s, 3.5 * s, 9 * s, 9 * s)
+        } else if (icon.kind === "window-restore") {
+            // Front pane, then the far corner of the one behind it — an
+            // outline rather than a second full square, so the two do not
+            // read as a single grid at this size.
+            ctx.strokeRect(3.5 * s, 5.5 * s, 7 * s, 7 * s)
+            ctx.beginPath()
+            ctx.moveTo(5.5 * s, 5.5 * s)
+            ctx.lineTo(5.5 * s, 3.5 * s)
+            ctx.lineTo(12.5 * s, 3.5 * s)
+            ctx.lineTo(12.5 * s, 10.5 * s)
+            ctx.lineTo(10.5 * s, 10.5 * s)
+            ctx.stroke()
         } else if (icon.kind === "eye" || icon.kind === "eye-off") {
             // Lens and pupil — the visibility mark every layer list has
             // used since Photoshop. Drawn rather than borrowed from a

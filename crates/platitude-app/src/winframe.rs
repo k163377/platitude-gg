@@ -25,6 +25,21 @@ pub fn set_icon() {
     win32::set_icon();
 }
 
+/// Puts back the styles that say what the system may do with the window.
+///
+/// The app draws the window's own buttons, so Qt is asked for none — and
+/// Qt drops `WS_MINIMIZEBOX`, `WS_MAXIMIZEBOX` and `WS_SYSMENU` along with
+/// them. Those three are not about buttons: without them the platform
+/// refuses Win+Arrow, the taskbar's own menu, and clicking the taskbar
+/// button to minimise. Putting them back does not bring the drawn buttons
+/// back with them (measured: style 0x96040000 → 0x960F0000, nothing
+/// appears), because the caption they would be drawn in is no longer part
+/// of this window's frame.
+pub fn keep_system_gestures() {
+    #[cfg(windows)]
+    win32::keep_system_gestures();
+}
+
 #[cfg(windows)]
 mod win32 {
     #![expect(
@@ -40,6 +55,18 @@ mod win32 {
     const CORNER_PREFERENCE: u32 = 33;
     /// `DWMWCP_DONOTROUND` (dwmapi.h).
     const DO_NOT_ROUND: u32 = 1;
+
+    /// `GWL_STYLE` and the three style bits the drawn buttons took with
+    /// them, plus the `SetWindowPos` flags that mean "nothing but the
+    /// frame changed" (winuser.h).
+    const GWL_STYLE: i32 = -16;
+    const WS_MAXIMIZEBOX: i32 = 0x0001_0000;
+    const WS_MINIMIZEBOX: i32 = 0x0002_0000;
+    const WS_SYSMENU: i32 = 0x0008_0000;
+    const SWP_NOSIZE: u32 = 0x0001;
+    const SWP_NOMOVE: u32 = 0x0002;
+    const SWP_NOZORDER: u32 = 0x0004;
+    const SWP_FRAMECHANGED: u32 = 0x0020;
 
     /// `WM_SETICON` and the two `wParam` values it takes (winuser.h).
     const WM_SETICON: u32 = 0x0080;
@@ -100,6 +127,17 @@ mod win32 {
     unsafe extern "system" {
         fn EnumThreadWindows(thread: u32, callback: EnumProc, param: isize) -> i32;
         fn GetSystemMetrics(index: i32) -> i32;
+        fn GetWindowLongW(window: *mut c_void, index: i32) -> i32;
+        fn SetWindowLongW(window: *mut c_void, index: i32, value: i32) -> i32;
+        fn SetWindowPos(
+            window: *mut c_void,
+            after: *mut c_void,
+            x: i32,
+            y: i32,
+            cx: i32,
+            cy: i32,
+            flags: u32,
+        ) -> i32;
         fn CreateIconFromResourceEx(
             bits: *const u8,
             size: u32,
@@ -140,6 +178,42 @@ mod win32 {
         unsafe {
             EnumThreadWindows(GetCurrentThreadId(), wear_one, 0);
         }
+    }
+
+    pub(super) fn keep_system_gestures() {
+        // SAFETY: as in `square_corners` — the same walk, and the callback
+        // only reads and writes the window it is handed.
+        unsafe {
+            EnumThreadWindows(GetCurrentThreadId(), allow_one, 0);
+        }
+    }
+
+    /// Runs for every top-level window the thread owns. Windows that
+    /// already carry the bits are left alone, so the frame is not told to
+    /// change for nothing.
+    extern "system" fn allow_one(window: *mut c_void, _param: isize) -> i32 {
+        let wanted = WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU;
+        // SAFETY: `window` is live for the length of this callback, and
+        // both calls take and return a plain integer.
+        let style = unsafe { GetWindowLongW(window, GWL_STYLE) };
+        if style == 0 || style & wanted == wanted {
+            return 1;
+        }
+        // SAFETY: as above. The reposition moves and resizes nothing; it
+        // is how Windows is told to read the style again.
+        unsafe {
+            SetWindowLongW(window, GWL_STYLE, style | wanted);
+            SetWindowPos(
+                window,
+                std::ptr::null_mut(),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED,
+            );
+        }
+        1
     }
 
     /// A system metric, or `fallback` if Windows declines to answer (it
