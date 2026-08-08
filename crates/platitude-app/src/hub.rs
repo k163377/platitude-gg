@@ -559,8 +559,10 @@ struct Tab {
     /// tabs must not spend a `RepoSession` — and the git it spawns — on
     /// repositories nobody has asked to see yet.
     session: Option<Arc<RepoSession>>,
-    /// The repository this tab will open, until it has.
-    pending: Option<PathBuf>,
+    /// Kept after opening too: it is the name a per-repository setting is
+    /// filed under, so a change to the defaults can be re-resolved against
+    /// every tab without asking the UI where they point.
+    path: PathBuf,
     feeds: Arc<Feeds>,
 }
 
@@ -570,10 +572,6 @@ pub struct Hub {
     executor: GitExecutor,
     tabs: HashMap<i32, Tab>,
     next_tab_id: i32,
-    /// Auto-fetch interval, applied to every session including tabs opened
-    /// later. `None` is off. Application-wide because the answer is about
-    /// how often this computer should talk to remotes at all.
-    auto_fetch: Option<std::time::Duration>,
     store: Store,
     settings: Settings,
     /// What the window looks like now, and what is already on disk. The
@@ -605,7 +603,6 @@ impl Hub {
                 executor: GitExecutor::new(),
                 tabs: HashMap::new(),
                 next_tab_id: 0,
-                auto_fetch: minutes_to_interval(settings.defaults.auto_fetch_minutes),
                 store,
                 settings,
                 saved_state: state.clone(),
@@ -673,7 +670,7 @@ impl Hub {
             id,
             Tab {
                 session: None,
-                pending: Some(path),
+                path,
                 feeds: Arc::new(Feeds::default()),
             },
         );
@@ -686,29 +683,41 @@ impl Hub {
             return;
         };
         let executor = self.executor.clone();
-        let auto_fetch = self.auto_fetch;
-        let Some(tab) = self.tabs.get_mut(&id) else {
+        let Some(tab) = self.tabs.get(&id) else {
             return;
         };
-        let Some(path) = tab.pending.take() else {
+        if tab.session.is_some() {
             return;
-        };
-        let sink = Arc::new(BridgeSink {
-            feeds: Arc::clone(&tab.feeds),
-        });
+        }
+        let path = tab.path.clone();
+        let feeds = Arc::clone(&tab.feeds);
+        let applied = self.settings.for_repo(&path.to_string_lossy());
+        let sink = Arc::new(BridgeSink { feeds });
         let session = RepoSession::open(executor, handle, path, sink);
-        session.set_auto_fetch(auto_fetch);
-        tab.session = Some(session);
-        tracing::info!(tab = id, "opened repository tab");
+        apply_repo_settings(&session, &applied);
+        if let Some(tab) = self.tabs.get_mut(&id) {
+            tab.session = Some(session);
+        }
+        tracing::info!(
+            tab = id,
+            auto_fetch_minutes = applied.auto_fetch_minutes,
+            network_timeout_secs = applied.network_timeout_secs,
+            "opened repository tab"
+        );
     }
 
-    /// Changes the auto-fetch interval everywhere at once.
-    pub fn set_auto_fetch(&mut self, interval: Option<std::time::Duration>) {
-        self.auto_fetch = interval;
+    /// Puts the settings in force on every open tab. A repository with a
+    /// setting of its own keeps it: the defaults moving is not an
+    /// instruction about the ones that were singled out.
+    fn reapply_settings(&self) {
         for tab in self.tabs.values() {
-            if let Some(session) = &tab.session {
-                session.set_auto_fetch(interval);
-            }
+            let Some(session) = &tab.session else {
+                continue;
+            };
+            apply_repo_settings(
+                session,
+                &self.settings.for_repo(&tab.path.to_string_lossy()),
+            );
         }
     }
 
@@ -756,7 +765,7 @@ impl Hub {
     /// made in a dialog, not a size that is still moving.
     pub fn set_auto_fetch_minutes(&mut self, minutes: u32) {
         self.settings.defaults.auto_fetch_minutes = minutes;
-        self.set_auto_fetch(minutes_to_interval(minutes));
+        self.reapply_settings();
         if let Err(error) = self.store.save_settings(&self.settings) {
             tracing::warn!(%error, "settings not saved");
         }
@@ -790,4 +799,15 @@ impl Hub {
 
 fn minutes_to_interval(minutes: u32) -> Option<std::time::Duration> {
     (minutes > 0).then(|| std::time::Duration::from_secs(u64::from(minutes) * 60))
+}
+
+/// Puts one repository's settings in force on its session. Every value the
+/// settings file holds passes through here, so a key that is written but
+/// never applied cannot go unnoticed.
+fn apply_repo_settings(
+    session: &Arc<RepoSession>,
+    applied: &platitude_core::settings::RepoSettings,
+) {
+    session.set_auto_fetch(minutes_to_interval(applied.auto_fetch_minutes));
+    session.set_network_timeout(std::time::Duration::from_secs(applied.network_timeout_secs));
 }
