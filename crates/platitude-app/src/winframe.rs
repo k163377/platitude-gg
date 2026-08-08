@@ -40,18 +40,19 @@ pub fn keep_system_gestures() {
     win32::keep_system_gestures();
 }
 
-/// Paints the hairline Windows 11 draws around the window.
+/// Paints the two things Windows 11 draws around the window: the hairline
+/// border, and the strip of frame between it and the client area.
 ///
-/// Left alone it is the system's border colour, which on a light system
-/// is a light line — and this window has no title bar to explain it, so
-/// it reads as a stray white edge across the top of the band. `rgb` is
-/// `0xRRGGBB`; the colour itself comes from the design tokens, because
-/// this is the app's own edge and not a system one.
-pub fn set_border_color(rgb: u32) {
+/// Left alone both are the system's, which on a light system is a white
+/// line and a white strip beside it — and this window has no title bar to
+/// explain either, so they read as stray edges around the band. Both are
+/// `0xRRGGBB` and both come from the design tokens, because this is the
+/// app's own edge and not a system one.
+pub fn set_border_color(border: u32, frame: u32) {
     #[cfg(windows)]
-    win32::set_border_color(rgb);
+    win32::set_border_color(border, frame);
     #[cfg(not(windows))]
-    let _ = rgb;
+    let _ = (border, frame);
 }
 
 #[cfg(windows)]
@@ -73,6 +74,16 @@ mod win32 {
     /// `COLORREF`, which is `0x00BBGGRR` — the reverse of how a colour is
     /// written everywhere else in this tree.
     const BORDER_COLOR: u32 = 34;
+    /// `DWMWA_CAPTION_COLOR` (dwmapi.h, Windows 11 22000+).
+    ///
+    /// Set alongside the border for the sake of anywhere it does apply.
+    /// It is **not** what paints the one white pixel between our border
+    /// and the client area: measured, that pixel is unmoved by this, by
+    /// the border colour, and by extending the frame across the client.
+    /// Taking it needs the non-client area removed in `WM_NCCALCSIZE`,
+    /// which means subclassing the window — the same machinery Snap
+    /// Layouts wants (P3-確認事項 §ウィンドウ chrome).
+    const CAPTION_COLOR: u32 = 35;
 
     /// `GWL_STYLE` and the three style bits the drawn buttons took with
     /// them, plus the `SetWindowPos` flags that mean "nothing but the
@@ -199,15 +210,19 @@ mod win32 {
     }
 
     thread_local! {
-        /// The colour the border walk is handing out, since the callback
-        /// takes no argument of its own.
-        static BORDER: Cell<u32> = const { Cell::new(0) };
+        /// The two colours the frame walk is handing out, since the
+        /// callback takes no argument of its own: the border's, and the
+        /// strip of frame between it and the client area.
+        static FRAME_COLORS: Cell<(u32, u32)> = const { Cell::new((0, 0)) };
     }
 
-    pub(super) fn set_border_color(rgb: u32) {
-        // COLORREF puts blue where a hex colour puts red.
-        let colorref = ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
-        BORDER.set(colorref);
+    /// `0x00BBGGRR` from `0xRRGGBB`.
+    fn colorref(rgb: u32) -> u32 {
+        ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF)
+    }
+
+    pub(super) fn set_border_color(border: u32, frame: u32) {
+        FRAME_COLORS.set((colorref(border), colorref(frame)));
         // SAFETY: as in `square_corners` — the same walk, and the callback
         // only writes an attribute on the window it is handed.
         unsafe {
@@ -218,20 +233,22 @@ mod win32 {
     /// Runs for every top-level window the thread owns; the ones with no
     /// border to paint report that they refused.
     extern "system" fn paint_one(window: *mut c_void, _param: isize) -> i32 {
-        let wanted = BORDER.get();
-        // SAFETY: `window` is live for the length of this callback, and
-        // `wanted` outlives the call, which copies the four bytes it
-        // points at.
-        let hr = unsafe {
-            DwmSetWindowAttribute(
-                window,
-                BORDER_COLOR,
-                std::ptr::from_ref(&wanted).cast(),
-                size_of::<u32>() as u32,
-            )
-        };
-        if hr != 0 {
-            tracing::debug!(hresult = hr, "a window kept the system's border colour");
+        let (border, frame) = FRAME_COLORS.get();
+        for (attribute, wanted) in [(BORDER_COLOR, border), (CAPTION_COLOR, frame)] {
+            // SAFETY: `window` is live for the length of this callback,
+            // and `wanted` outlives the call, which copies the four bytes
+            // it points at.
+            let hr = unsafe {
+                DwmSetWindowAttribute(
+                    window,
+                    attribute,
+                    std::ptr::from_ref(&wanted).cast(),
+                    size_of::<u32>() as u32,
+                )
+            };
+            if hr != 0 {
+                tracing::debug!(hresult = hr, attribute, "a window kept the system's colour");
+            }
         }
         1
     }

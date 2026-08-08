@@ -364,15 +364,16 @@ impl AppBackend {
     /// is the app's, not the system's, now that the band reaches the top.
     /// Anything that is not six hex digits is left to the system.
     #[qslot]
-    fn set_window_border(&self, color: String) {
-        let Some(rgb) = color
-            .strip_prefix('#')
-            .and_then(|c| u32::from_str_radix(c, 16).ok())
-        else {
-            tracing::debug!(%color, "window border colour not understood");
+    fn set_window_border(&self, border: String, frame: String) {
+        let hex = |c: &str| {
+            c.strip_prefix('#')
+                .and_then(|c| u32::from_str_radix(c, 16).ok())
+        };
+        let (Some(border_rgb), Some(frame_rgb)) = (hex(&border), hex(&frame)) else {
+            tracing::debug!(%border, %frame, "window edge colours not understood");
             return;
         };
-        crate::winframe::set_border_color(rgb);
+        crate::winframe::set_border_color(border_rgb, frame_rgb);
     }
 
     // -- window state -------------------------------------------------------

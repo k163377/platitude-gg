@@ -366,10 +366,12 @@ ApplicationWindow {
         // them; this puts those back (see `flags` above).
         if (root.captionMerged) {
             AppBackend.keepWindowGestures()
-            // The hairline Windows draws around the window. Left to the
-            // system it is a light line, and with no title bar to explain
-            // it, it reads as a stray white edge over the band.
-            AppBackend.setWindowBorder(Theme.borderDefault)
+            // The hairline Windows draws around the window, and the strip
+            // of frame just inside it. Left to the system both are light,
+            // and with no title bar to explain them they read as stray
+            // white edges around the band. The strip takes the band's own
+            // colour so it disappears into it; the hairline stays a line.
+            AppBackend.setWindowBorder(Theme.borderDefault, Theme.bgElevated)
         }
         root.applySavedWindow()
         if (AppBackend.autoOpen !== "") {
