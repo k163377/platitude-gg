@@ -275,12 +275,67 @@ fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
         &format!("feat: write this one under a long name\n\n{PAIR}"),
     ])?;
 
+    // Signed with a key nobody vouched for: git reads the signature and
+    // cannot judge it. Every SSH signature falls into this state when no
+    // allowedSigners file is configured at all, so it is not a corner.
+    keygen(repo, "stranger", "stranger@example.com")?;
+    let stranger_key = repo.root.join("stranger.pub");
+    repo.git(&["config", "user.signingkey", &config_path(&stranger_key)])?;
+    repo.commit(
+        "src/unjudged.txt",
+        "signed by a stranger\n",
+        &format!("feat: write this one signed by an unvouched key\n\n{PAIR}"),
+    )?;
+    repo.git(&["config", "user.signingkey", &config_path(&trusted_key)])?;
+
+    // A signature that no longer matches what it signed: sign properly,
+    // then swap the tree underneath. Nothing an ordinary repository does
+    // produces this, and it is the one state the pane spends words on,
+    // so it has to be reachable from a preset.
+    repo.commit(
+        "src/tampered.txt",
+        "before\n",
+        &format!("feat: write this one and then tamper with it\n\n{PAIR}"),
+    )?;
+    repo.write("src/tampered.txt", "after the signature was made\n")?;
+    repo.git(&["add", "--", "src/tampered.txt"])?;
+    let swapped_tree = repo.git(&["write-tree"])?;
+    let tampered = retree_head(repo, &swapped_tree)?;
+    repo.git(&["update-ref", "refs/heads/main", &tampered])?;
+    repo.git(&["reset", "--hard", "HEAD"])?;
+
     repo.commit(
         "src/pair.txt",
         "written by two, and signed\n",
         &format!("feat: write this one with company, signed\n\n{PAIR}"),
     )?;
     Ok(())
+}
+
+/// Rewrites HEAD's commit object with a different tree, keeping every
+/// other header — including the signature, which is what makes the
+/// result read as broken rather than as unsigned (measured: `%G?` goes
+/// from `G` to `B`).
+fn retree_head(repo: &mut DemoRepo, tree: &str) -> Result<String, String> {
+    let dir = repo.work.clone();
+    let out = crate::run_captured(&mut repo.command(&dir, &["cat-file", "commit", "HEAD"]))?;
+    if !out.status.success() {
+        return Err("git cat-file commit HEAD failed".to_string());
+    }
+    let patched = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|line| {
+            if line.starts_with("tree ") {
+                format!("tree {tree}")
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let path = repo.root.join("tampered-commit");
+    std::fs::write(&path, patched).map_err(|e| format!("writing tampered commit: {e}"))?;
+    repo.git(&["hash-object", "-w", "-t", "commit", &config_path(&path)])
 }
 
 /// Branches, a remote one commit behind, tags in both places, a stash,

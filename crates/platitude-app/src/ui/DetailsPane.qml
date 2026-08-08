@@ -503,6 +503,12 @@ ColumnLayout {
                     // (規約 §署名の表示). The broken case reads as the
                     // error message it is, and being the one wide thing
                     // on the row is how an error should read.
+                    //
+                    // Green stays with the signatures git actually
+                    // vouched for. One it could read but not judge gets
+                    // the same tick in textSecondary: the shape says a
+                    // signature is there, the colour says nobody here
+                    // checked it.
                     RowLayout {
                         id: signatureMark
                         visible: detailsPane.signatureKind !== ""
@@ -511,7 +517,9 @@ ColumnLayout {
                         readonly property bool broken:
                             detailsPane.signatureKind === "bad"
                         readonly property color tone:
-                            signatureMark.broken ? Theme.danger : Theme.success
+                            detailsPane.signatureKind === "verified" ? Theme.success
+                            : signatureMark.broken ? Theme.danger
+                            : Theme.textSecondary
                         NavIcon {
                             kind: signatureMark.broken ? "bang" : "check"
                             tint: signatureMark.tone
