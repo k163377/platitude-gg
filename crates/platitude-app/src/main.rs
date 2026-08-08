@@ -42,6 +42,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/qmldir", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/Theme.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/Metrics.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/Words.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ActionButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AppCombo.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AppDialog.qml", "qt/qml/platitude");

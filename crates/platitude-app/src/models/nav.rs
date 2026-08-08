@@ -663,5 +663,21 @@ impl NavSectionModel {
             .map(|item| item.full.clone())
             .unwrap_or_default()
     }
+
+    /// The two stage letters git reports for a working-tree path (`UU`,
+    /// `DU`, …); empty for any path that is not in this section.
+    ///
+    /// The diff pane asks for it by path because that is all it holds: it
+    /// is handed a file, not the row the file came from, and a conflict
+    /// git prints no patch for is a pane with nothing to say unless it can
+    /// name what the two sides did.
+    #[qslot]
+    fn change_of(&self, path: String) -> String {
+        self.all
+            .iter()
+            .find(|item| item.full == path && !item.folder)
+            .map(|item| item.change.clone())
+            .unwrap_or_default()
+    }
 }
 qml_register!(NavSectionModel, "NavSectionModel", singleton = false);

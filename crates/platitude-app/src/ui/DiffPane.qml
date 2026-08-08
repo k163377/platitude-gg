@@ -22,6 +22,13 @@ Rectangle {
     /// what it means there is "this is dealt with", not "this goes in the
     /// next commit", and the words follow that.
     property bool conflicted: false
+    /// The two stage letters git reports for this file (`UU`, `DU`, …) and
+    /// what each side is called — only a conflicted one has them. What
+    /// they are for: on the conflicts git prints no patch for, they are
+    /// the whole of what the pane can say.
+    property string conflictChange: ""
+    property string sideOurs: ""
+    property string sideTheirs: ""
     // A write is running: staging buttons disable.
     property bool busy: false
     /// Whether this diff has pieces worth naming. A file the repository is
@@ -30,8 +37,44 @@ Rectangle {
     /// time in a smaller voice, and the `+` on every row would be that
     /// same word again once per line (デザイン規約 §diff の中のステージ).
     /// What stays is the one word in the header.
+    ///
+    /// A conflicted file has none either, for a different reason: its diff
+    /// compares the working tree against **both** sides at once, and that
+    /// shape is not a patch — `git apply` refuses it, so there is no such
+    /// thing as staging a part of it (core refuses too, under
+    /// `stage::refuse_combined`). The one word that stays there is
+    /// `Mark resolved`.
     readonly property bool partial: diffPane.fromWorkTree
                                     && !diffPane.diffModel.isNewFile
+                                    && !diffPane.combined
+
+    // ---- a conflicted file's diff -----------------------------------
+    /// This diff has more than one old side, so every row carries a marker
+    /// column per side (`platitude_core::parse::diff`).
+    readonly property bool combined: diffPane.diffModel.isCombined
+    /// Which of the three drawings of one to use. **Review hook** — the
+    /// three are photographed side by side and one is chosen; the others
+    /// go, and so does this.
+    readonly property string ccStyle: AppBackend.conflictStyle !== ""
+                                      ? AppBackend.conflictStyle : "markers"
+    /// Which side a combined row's line came from, read off its markers:
+    /// a column holds a space where that side has the line. A line both
+    /// sides have is context, one neither has is a marker git wrote (or a
+    /// line typed while resolving), and both answer "".
+    function sideOf(markers) {
+        if (markers.length < 2 || markers.indexOf("-") >= 0)
+            return ""
+        const inOurs = markers.charAt(0) === " "
+        const inTheirs = markers.charAt(1) === " "
+        if (inOurs === inTheirs)
+            return ""
+        return inOurs ? "ours" : "theirs"
+    }
+    /// Width of the marker gutter — two mono columns and the gap after
+    /// them — or nothing at all when this drawing does not use one.
+    readonly property real markerColW:
+        diffPane.combined && diffPane.ccStyle === "markers"
+        ? Theme.spaceLg + Theme.spaceXs : 0
 
     signal closeRequested()
     /// The side being read has nothing left in it — everything that was
@@ -293,6 +336,41 @@ Rectangle {
         // No question bar here: the only thing this pane throws away is a
         // hunk, and that is held down on the hunk's own heading
         // (デザイン規約 §その他の操作).
+        // -- a conflict with only one side left: git has two versions of
+        //    the path but not the third to compare them against, so it
+        //    prints no patch at all (`* Unmerged path`). The one thing
+        //    worth saying is what the two sides each did — the same
+        //    sentence the file row's icon says, from the same place
+        //    (デザイン規約 §conflict の種別). Which way out to take is
+        //    still the file row's right-click, unchanged.
+        Label {
+            visible: diffPane.diffModel.unmerged
+            Layout.margins: Theme.spaceSm
+            Layout.fillWidth: true
+            elide: Text.ElideRight
+            text: Words.conflict(diffPane.conflictChange, diffPane.sideOurs,
+                                 diffPane.sideTheirs)
+            color: Theme.textMuted
+        }
+        // -- which branch each side of a combined diff is, where the
+        //    drawing leans on colour rather than on the marker columns.
+        //    Review stand-in, like the bar on the rows.
+        Label {
+            visible: diffPane.combined && diffPane.ccStyle === "sides"
+            Layout.margins: Theme.spaceSm
+            Layout.fillWidth: true
+            elide: Text.ElideRight
+            font.pixelSize: Theme.fontSm
+            textFormat: Text.StyledText
+            text: qsTr("<font color='%1'>%2</font> · <font color='%3'>%4</font>")
+                  .arg(Theme.accent)
+                  .arg(diffPane.sideOurs !== "" ? diffPane.sideOurs
+                                                : qsTr("this branch"))
+                  .arg(Theme.warning)
+                  .arg(diffPane.sideTheirs !== "" ? diffPane.sideTheirs
+                                                  : qsTr("the incoming side"))
+            color: Theme.textMuted
+        }
         // -- content preview: binaries summarized by size, images
         //    rendered (added = After only, deleted = Before only,
         //    modified = both).
@@ -362,6 +440,9 @@ Rectangle {
                 required property string text
                 required property int hunk
                 required property int line
+                required property string markers
+                /// "ours" / "theirs" / "" — see `DiffPane.sideOf`.
+                readonly property string side: diffPane.sideOf(diffRow.markers)
                 width: diffList.width
                 height: Theme.rowHeight
                 color: kind === "add" ? Theme.diffAddedBg
@@ -407,9 +488,38 @@ Rectangle {
                     color: Theme.accent
                     visible: diffRow.picked
                 }
+                // Which side this line is from, where the drawing says it
+                // with a bar rather than with the marker columns. The
+                // colours here are stand-ins for the review — nothing in
+                // デザイン規約 names a pair for the two sides yet.
+                Rectangle {
+                    visible: diffPane.combined && diffPane.ccStyle === "sides"
+                             && diffRow.side !== ""
+                    width: Theme.spaceXs
+                    height: parent.height
+                    color: diffRow.side === "ours" ? Theme.accent
+                                                   : Theme.warning
+                }
                 Row {
                     anchors.fill: parent
                     spacing: 0
+                    // The two columns git prints in front of every line of
+                    // a combined diff. They are the only place "which side
+                    // is this from" is written: our side and theirs are
+                    // both green, because both are in the file and in
+                    // neither of the other's.
+                    Label {
+                        width: diffPane.markerColW
+                        visible: width > 0
+                        height: parent.height
+                        verticalAlignment: Text.AlignVCenter
+                        text: diffRow.markers
+                        horizontalAlignment: Text.AlignLeft
+                        leftPadding: Theme.spaceXs
+                        color: Theme.textMuted
+                        font.family: Theme.monoFamily
+                        font.pixelSize: Theme.fontSm
+                    }
                     Label {
                         width: 42
                         height: parent.height
@@ -433,7 +543,7 @@ Rectangle {
                         font.pixelSize: Theme.fontSm
                     }
                     Label {
-                        width: parent.width - 84
+                        width: parent.width - 84 - diffPane.markerColW
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
                         text: diffRow.text

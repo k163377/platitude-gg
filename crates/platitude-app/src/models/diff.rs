@@ -6,7 +6,10 @@ use platitude_core::details::DiffTarget;
 use platitude_core::preview::{FilePreview, PreviewSide};
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::encode::{DiffRow, diff_key, flatten_patches, human_size, image_data_url, is_new_file};
+use crate::encode::{
+    DiffRow, diff_key, flatten_patches, human_size, image_data_url, is_combined, is_new_file,
+    is_unmerged_only,
+};
 use crate::hub::{Feed, Hub};
 
 use super::{impl_extend_notified, qml_register};
@@ -24,6 +27,10 @@ pub struct DiffLineItem {
     /// Where this row sits in the patch, so staging it needs no lookup.
     hunk: i32,
     line: i32,
+    /// One marker column per side of a combined diff, empty otherwise —
+    /// the only place "which side is this line from" is written down (see
+    /// `encode::DiffRow`).
+    markers: String,
 }
 
 #[derive(Default)]
@@ -35,6 +42,14 @@ pub struct DiffModel {
     /// being there at all. What the pane does with that is its business
     /// (see `encode::is_new_file`).
     is_new_file: bool,
+    /// The diff is the combined form git prints for a conflicted path: it
+    /// compares the working tree against both stages at once, its rows
+    /// carry marker columns, and none of it can be staged in pieces.
+    is_combined: bool,
+    /// git named the path unmerged and printed nothing else — one of the
+    /// two sides is gone, so there is no third thing to compare. There are
+    /// no rows, and the absence is the answer rather than a failure.
+    unmerged: bool,
     loading: bool,
     /// "" (text diff only) / "image" / "binary".
     preview_kind: String,
@@ -74,6 +89,8 @@ impl DiffModel {
     qproperty!("title", Member = title, Notify = changed);
     qproperty!("isBinary", Member = is_binary, Notify = changed);
     qproperty!("isNewFile", Member = is_new_file, Notify = changed);
+    qproperty!("isCombined", Member = is_combined, Notify = changed);
+    qproperty!("unmerged", Member = unmerged, Notify = changed);
     qproperty!("loading", Member = loading, Notify = changed);
     qproperty!("previewKind", Member = preview_kind, Notify = changed);
     qproperty!("previewOldUrl", Member = preview_old_url, Notify = changed);
@@ -147,6 +164,8 @@ impl DiffModel {
         self.title = String::new();
         self.is_binary = false;
         self.is_new_file = false;
+        self.is_combined = false;
+        self.unmerged = false;
         self.loading = false;
         self.apply_preview(None);
         self.reset();
@@ -167,6 +186,8 @@ impl DiffModel {
         self.loading = false;
         self.is_binary = msg.patches.iter().any(|p| p.is_binary);
         self.is_new_file = is_new_file(&msg.patches);
+        self.is_combined = is_combined(&msg.patches);
+        self.unmerged = is_unmerged_only(&msg.patches);
         self.fingerprint = format!("{:016x}", msg.fingerprint);
         self.apply_preview(msg.preview.as_ref());
         self.reset();
@@ -179,6 +200,7 @@ impl DiffModel {
                 text: r.text,
                 hunk: r.hunk,
                 line: r.line,
+                markers: r.markers,
             })
             .collect();
         self.extend_notified(rows);
@@ -208,6 +230,8 @@ impl DiffModel {
             // on screen the pane must keep offering — or keep withholding
             // — exactly what they are.
             self.is_new_file = false;
+            self.is_combined = false;
+            self.unmerged = false;
             self.apply_preview(None);
             self.reset();
         }

@@ -2504,6 +2504,12 @@ Item {
     // Whether the shown diff is a working-tree file (stageable).
     property bool diffFromWt: false
     readonly property bool diffStaged: page.diffKind === "staged"
+    /// The two stage letters git reports for the file being shown, read
+    /// once when it is opened: the pane is handed a path, not the row the
+    /// path came from, and on a conflict git prints no patch for those
+    /// letters are all there is to say. A file stops being conflicted only
+    /// by a write, and every write reads the diff again.
+    property string diffChange: ""
     function toggleDiff(kind, path, origPath) {
         const key = kind + ":" + path
         if (page.diffShown && page.diffKey === key) {
@@ -2515,6 +2521,7 @@ Item {
         page.diffPath = path
         page.diffOrigPath = origPath
         page.diffFromWt = kind !== "commit"
+        page.diffChange = kind === "conflicts" ? worktreeModel.changeOf(path) : ""
         if (kind === "commit")
             diffModel.requestCommitFile(detailsModel.shaHex, detailsModel.parentHex,
                                         path, origPath)
@@ -2583,6 +2590,7 @@ Item {
         page.diffPath = ""
         page.diffOrigPath = ""
         page.diffFromWt = false
+        page.diffChange = ""
         diffModel.clear()
     }
 
@@ -3139,6 +3147,11 @@ Item {
                         fromWorkTree: page.diffFromWt
                         staged: page.diffStaged
                         conflicted: page.diffKind === "conflicts"
+                        conflictChange: page.diffChange
+                        // The two swap over during a rebase; the model is
+                        // where that is already answered.
+                        sideOurs: workTree.sideOurs
+                        sideTheirs: workTree.sideTheirs
                         busy: repoTab.busyCount > 0
                         onCloseRequested: page.closeDiff()
                         onNothingLeft: page.closeDiff()

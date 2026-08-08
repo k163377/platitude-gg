@@ -45,24 +45,12 @@ Item {
     property string sideOurs: ""
     property string sideTheirs: ""
 
-    /// What the two sides each did to this file, from the two stage
-    /// letters git reports (デザイン規約 §conflict の種別). A side that
-    /// has a name is called by it; one that has none falls back to where
-    /// it stands.
+    /// What the two sides each did to this file (デザイン規約 §conflict
+    /// の種別). The sentence itself lives in `Words`: the diff pane says
+    /// the same one on the conflicts git prints no patch for, and two
+    /// copies of it would be two answers.
     function conflictWords() {
-        const ours = navRow.sideOurs !== "" ? navRow.sideOurs : qsTr("this branch")
-        const theirs = navRow.sideTheirs !== "" ? navRow.sideTheirs
-                                               : qsTr("the incoming side")
-        switch (navRow.change) {
-        case "UU": return qsTr("Both changed it")
-        case "AA": return qsTr("Both added it")
-        case "DD": return qsTr("Both deleted it")
-        case "DU": return qsTr("Deleted on %1, changed on %2").arg(ours).arg(theirs)
-        case "UD": return qsTr("Changed on %1, deleted on %2").arg(ours).arg(theirs)
-        case "AU": return qsTr("Added on %1 only").arg(ours)
-        case "UA": return qsTr("Added on %1 only").arg(theirs)
-        default: return qsTr("Conflicted")
-        }
+        return Words.conflict(navRow.change, navRow.sideOurs, navRow.sideTheirs)
     }
 
     // ---- the two-click gestures ------------------------------------

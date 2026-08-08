@@ -263,6 +263,11 @@ pub struct DiffRow {
     /// staged straight from what the pane is showing.
     pub hunk: i32,
     pub line: i32,
+    /// One marker column per side of a combined diff (`" +"`, `"++"`,
+    /// `"- "`), empty on every ordinary row. Which side a line came from
+    /// is in here and nowhere else: the colour cannot carry it, since git
+    /// paints our side and theirs the same green.
+    pub markers: String,
 }
 
 /// Whether the patch has a new side and no old one — a file the repository
@@ -281,9 +286,31 @@ pub struct DiffRow {
 /// rather than one that is known to be new.
 pub fn is_new_file(patches: &[FilePatch]) -> bool {
     !patches.is_empty()
-        && patches
-            .iter()
-            .all(|p| p.old_path.is_none() && p.new_path.is_some())
+        && patches.iter().all(|p| {
+            // A conflicted path is never one of these, however its sides
+            // read. `AA` — both branches invented the file — has no old
+            // side by construction, and an unmerged entry has neither
+            // side because git printed no patch at all; taking either for
+            // a new file would withhold the pane's pieces for a reason
+            // that is not this one.
+            !p.is_combined && !p.unmerged && p.old_path.is_none() && p.new_path.is_some()
+        })
+}
+
+/// Whether the diff compares its file against **more than one** side —
+/// the form git prints for a conflicted path. Nothing in it can be staged
+/// or thrown away piecemeal (`platitude_core::patch::is_combined` is the
+/// floor under that), and its rows carry [`DiffRow::markers`].
+pub fn is_combined(patches: &[FilePatch]) -> bool {
+    patches.iter().any(|p| p.is_combined)
+}
+
+/// Whether git named the path as unmerged and printed no patch for it:
+/// one of the two sides does not exist, so there is nothing to compare
+/// (`DU` / `UD` / `AU` / `UA`). The pane has no rows to show and says what
+/// the two sides did instead.
+pub fn is_unmerged_only(patches: &[FilePatch]) -> bool {
+    !patches.is_empty() && patches.iter().all(|p| p.unmerged)
 }
 
 /// Flattens parsed patches into displayable rows (hunk headers inline).
@@ -292,6 +319,12 @@ pub fn is_new_file(patches: &[FilePatch]) -> bool {
 pub fn flatten_patches(patches: &[FilePatch], binary_note: bool) -> Vec<DiffRow> {
     let mut rows = Vec::new();
     for patch in patches {
+        if patch.unmerged {
+            // No patch, and no words for one here: what the two sides did
+            // is a sentence the pane builds from the stage letters, in the
+            // one place that wording lives (`Words.conflict`).
+            continue;
+        }
         if patch.is_binary {
             if binary_note {
                 rows.push(DiffRow {
@@ -301,6 +334,7 @@ pub fn flatten_patches(patches: &[FilePatch], binary_note: bool) -> Vec<DiffRow>
                     text: String::from("(binary file)"),
                     hunk: -1,
                     line: -1,
+                    markers: String::new(),
                 });
             }
             continue;
@@ -316,12 +350,10 @@ pub fn flatten_patches(patches: &[FilePatch], binary_note: bool) -> Vec<DiffRow>
                 kind: "hunk",
                 old_no: -1,
                 new_no: -1,
-                text: format!(
-                    "@@ -{},{} +{},{} @@{heading}",
-                    hunk.old_start, hunk.old_count, hunk.new_start, hunk.new_count
-                ),
+                text: hunk_header(hunk, &heading),
                 hunk: hunk_index,
                 line: -1,
+                markers: String::new(),
             });
             for (line_index, line) in hunk.lines.iter().enumerate() {
                 let kind = match line.kind {
@@ -337,11 +369,27 @@ pub fn flatten_patches(patches: &[FilePatch], binary_note: bool) -> Vec<DiffRow>
                     text: line.text.clone(),
                     hunk: hunk_index,
                     line: i32::try_from(line_index).unwrap_or(-1),
+                    markers: line.markers.clone(),
                 });
             }
         }
     }
     rows
+}
+
+/// The `@@` line as git writes it: one range per old side, and a run of
+/// `@` one longer than that count on both ends.
+fn hunk_header(hunk: &platitude_core::parse::diff::DiffHunk, heading: &str) -> String {
+    let ats = "@".repeat(hunk.extra_old.len() + 2);
+    let mut out = format!("{ats} -{},{}", hunk.old_start, hunk.old_count);
+    for (start, count) in &hunk.extra_old {
+        out.push_str(&format!(" -{start},{count}"));
+    }
+    out.push_str(&format!(
+        " +{},{} {ats}{heading}",
+        hunk.new_start, hunk.new_count
+    ));
+    out
 }
 
 #[cfg(test)]
@@ -645,6 +693,100 @@ Binary files a/x.png and b/x.png differ
         assert_eq!(rows[0].kind, "meta");
         // With a preview covering the file, the note is dropped entirely.
         assert!(flatten_patches(&parse_patch(patch.as_bytes()), false).is_empty());
+    }
+
+    /// `git diff` on a conflicted path, verbatim (git 2.55).
+    const CONFLICTED: &str = "\
+diff --cc shared.txt
+index 804ce7b,ba44bb1..0000000
+--- a/shared.txt
++++ b/shared.txt
+@@@ -1,3 -1,3 +1,7 @@@ heading
+  one
+++<<<<<<< HEAD
+ +OURS
+++=======
++ THEIRS
+++>>>>>>> topic
+  three
+";
+
+    #[test]
+    fn a_combined_diff_flattens_with_its_marker_columns() {
+        let rows = flatten_patches(&parse_patch(CONFLICTED.as_bytes()), true);
+        // The heading counts its sides on both ends, so the row reads the
+        // way git printed it rather than as a unified one that lost a
+        // range.
+        assert_eq!(rows[0].kind, "hunk");
+        assert_eq!(rows[0].text, "@@@ -1,3 -1,3 +1,7 @@@ heading");
+        assert_eq!(rows[0].markers, "", "a heading has no side of its own");
+
+        let seen: Vec<(&str, &str, &str)> = rows[1..]
+            .iter()
+            .map(|r| (r.kind, r.markers.as_str(), r.text.as_str()))
+            .collect();
+        assert_eq!(
+            seen,
+            vec![
+                ("ctx", "  ", "one"),
+                ("add", "++", "<<<<<<< HEAD"),
+                ("add", " +", "OURS"),
+                ("add", "++", "======="),
+                ("add", "+ ", "THEIRS"),
+                ("add", "++", ">>>>>>> topic"),
+                ("ctx", "  ", "three"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_conflicted_diff_is_combined_and_not_a_new_file() {
+        let patches = parse_patch(CONFLICTED.as_bytes());
+        assert!(is_combined(&patches));
+        assert!(!is_unmerged_only(&patches));
+        assert!(!is_new_file(&patches));
+    }
+
+    #[test]
+    fn a_conflict_both_sides_added_is_not_read_as_a_new_file() {
+        // No old side at all — the shape `is_new_file` was written for —
+        // and yet it is a conflict, which has no pieces to offer for a
+        // different reason. Reading it as new would take them away with
+        // the wrong words attached.
+        let patch = "\
+diff --cc added.txt
+index 5b79a82,34a1fdf..0000000
+--- a/added.txt
++++ b/added.txt
+@@@ -1,1 -1,1 +1,5 @@@
+++<<<<<<< HEAD
+ +ours
+++=======
++ theirs
+++>>>>>>> topic
+";
+        let patches = parse_patch(patch.as_bytes());
+        assert!(is_combined(&patches));
+        assert!(!is_new_file(&patches));
+    }
+
+    #[test]
+    fn an_unmerged_path_contributes_no_rows() {
+        // git printed no patch, so there is nothing to flatten; the pane
+        // says what the two sides did instead, in the words the file row's
+        // icon already uses.
+        let patches = parse_patch(b"* Unmerged path ours-del.txt\n");
+        assert!(is_unmerged_only(&patches));
+        assert!(!is_combined(&patches));
+        assert!(!is_new_file(&patches), "it is not a new file either");
+        assert!(flatten_patches(&patches, true).is_empty());
+    }
+
+    #[test]
+    fn a_unified_hunk_heading_is_unchanged_by_the_combined_form() {
+        let rows = flatten_patches(&parse_patch(EDITED.as_bytes()), true);
+        assert_eq!(rows[0].text, "@@ -1,2 +1,2 @@");
+        assert!(rows.iter().all(|r| r.markers.is_empty()));
     }
 
     #[test]
