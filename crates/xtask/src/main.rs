@@ -34,6 +34,7 @@ commands:
         noremote  commits and no remote at all: the first push writes one down
         signed    ssh-signed commits: verified, unjudgeable, unsigned
         tags      a tag in every state a remote can put it in (fetch first)
+        manytags  basic, with more tags than any pane can show at once
         empty     `git init` and nothing else
 
   verify-ui <verb> [arg] [options]

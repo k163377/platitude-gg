@@ -1714,6 +1714,16 @@ Item {
             "nav_rail collapsed=" + page.sidebarCollapsed
             + " width=" + Math.round(sidebarPane.width)
             + " peek=" + sidebarPane.peekKind
+            // Where the open section stands. `cell` is the top edge of the
+            // mark that opened it and `top` where the panel begins — they
+            // are the same number or the list has walked away from its own
+            // cell, which is what a section too tall for the pane used to
+            // do. `end` against `pane` is the other half: it grows down
+            // into the pane and stops at the foot of it.
+            + " top=" + Math.round(sidebarPane.peekY)
+            + " cell=" + Math.round(sidebarPane.peekTop)
+            + " end=" + Math.round(sidebarPane.peekBottom)
+            + " pane=" + Math.round(sidebarPane.height)
             + " editing=" + sidebarPane.editKey
             // What the centre holds: the list coming back closes a file,
             // so the two are read together or not at all.

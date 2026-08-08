@@ -207,6 +207,13 @@ Rectangle {
         return head ? head.y : -1
     }
     readonly property real groundTop: ground.y
+    /// Where the section the folded rail has open begins and ends, for the
+    /// smoke hooks (PG_AUTO_ACT=nav-peek). The panel is a popup, so a
+    /// headless run reads its placement here rather than off the picture:
+    /// it starts at the top edge of the cell that opened it and stops
+    /// inside the pane, whatever the section's row count.
+    readonly property real peekY: peek.y
+    readonly property real peekBottom: peek.y + peek.height
 
     /// Smoke hook (PG_SCROLL_TO=nav-bottom): jump the branches list to
     /// its end. The current branch's sticky row only changes edges
@@ -653,15 +660,23 @@ Rectangle {
         id: peek
         parent: sidebar
         // Flush against the rail, with nothing in between for the pointer
-        // to fall through, and level with the cell that opened it.
+        // to fall through, and starting level with the cell that opened
+        // it. It only ever grows downwards from there: a section with more
+        // rows than the pane can hold would otherwise be laid out from the
+        // top edge of the pane, and a list that opens nowhere near the
+        // mark it came out of is one the pointer has to go and look for
+        // (a repository with 45,000 tags puts every peek up there —
+        // reported 2026-08-08). What it costs is height: the cells further
+        // down get less of it, and the rows that do not fit scroll.
         x: sidebar.width
-        y: Math.max(0, Math.min(sidebar.peekTop, sidebar.height - peek.height))
+        y: sidebar.peekTop
         width: sidebar.openWidth
-        // As tall as it has rows, and never taller than the pane it comes
-        // out of. It never opens with no rows at all — a cell holding a
-        // zero does not open (NavRail).
+        // As tall as it has rows, and never past the foot of the pane it
+        // comes out of. It never opens with no rows at all — a cell
+        // holding a zero does not open (NavRail).
         height: Math.min(Theme.headerHeight + peekList.count * Theme.rowHeight
-                         + Theme.borderWidth, sidebar.height)
+                         + Theme.borderWidth,
+                         Math.max(0, sidebar.height - sidebar.peekTop))
         padding: 0
         margins: 0
         // Leaving it is what closes it (above). Escape is for the reader

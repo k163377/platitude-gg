@@ -5,8 +5,9 @@
 //! prints its path. Nothing is ever reused: a sandbox whose state has
 //! drifted is worse than none, so the sandbox is always newly made.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn run(args: &[String]) -> Result<PathBuf, String> {
@@ -59,6 +60,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
         "noremote" => noremote(&mut repo)?,
         "signed" => signed(&mut repo)?,
         "tags" => tags(&mut repo)?,
+        "manytags" => manytags(&mut repo)?,
         "empty" => {}
         other => return Err(format!("unknown preset: {other}")),
     }
@@ -157,6 +159,35 @@ impl DemoRepo {
         self.write(rel, content)?;
         self.git(&["add", "--", rel])?;
         self.git(&["commit", "-m", message])?;
+        Ok(())
+    }
+
+    /// Runs git with `input` on its standard input. One process for a
+    /// batch of refs: a repository of thousands of tags built a `git tag`
+    /// at a time is minutes of process spawning on Windows.
+    fn git_stdin(&mut self, args: &[&str], input: &str) -> Result<(), String> {
+        let dir = self.work.clone();
+        let mut child = self
+            .command(&dir, args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("failed to spawn git {args:?}: {e}"))?;
+        let mut stdin = child.stdin.take().ok_or("git took no standard input")?;
+        stdin
+            .write_all(input.as_bytes())
+            .map_err(|e| format!("writing to git {args:?}: {e}"))?;
+        drop(stdin);
+        let out = child
+            .wait_with_output()
+            .map_err(|e| format!("waiting for git {args:?}: {e}"))?;
+        if !out.status.success() {
+            return Err(format!(
+                "git {args:?} failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
         Ok(())
     }
 
@@ -649,4 +680,30 @@ fn tags(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git_at(&seeder.clone(), &["push", "origin", "gone", "v0.9-theirs"])?;
     repo.git_at(&seeder.clone(), &["push", "origin", "--delete", "gone"])?;
     Ok(())
+}
+
+/// How many tags `manytags` puts on. Enough that TAGS cannot fit in the
+/// pane at any window height anybody works at — which is the whole point
+/// of the preset, and the shape a release-tagging repository really has
+/// (the reference repository carries 45,000).
+const MANY_TAGS: usize = 2000;
+
+/// `basic`, buried in tags. What the folded rail does when a section has
+/// more rows than the pane is tall can only be read here: with a handful
+/// of tags the peek is content-sized and every placement rule looks alike
+/// (デザイン規約 §左メニューを畳む).
+fn manytags(repo: &mut DemoRepo) -> Result<(), String> {
+    basic(repo)?;
+    let head = repo.git(&["rev-parse", "HEAD"])?;
+    let mut batch = String::new();
+    for n in 0..MANY_TAGS {
+        // Flat names on purpose: a `/` in a tag name is a folder in the
+        // list, and folded folders are fewer rows than tags.
+        batch.push_str(&format!(
+            "create refs/tags/v1.{}.{} {head}\n",
+            n / 100,
+            n % 100
+        ));
+    }
+    repo.git_stdin(&["update-ref", "--stdin"], &batch)
 }
