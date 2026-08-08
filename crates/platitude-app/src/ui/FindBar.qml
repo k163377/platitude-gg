@@ -5,40 +5,38 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// Ctrl+F over the graph: a bar that comes down from the top of the list
-// and pushes its rows down rather than covering them, the way a standing
-// question does (デザイン規約 §可否・警告の出し場所).
+// Ctrl+F over the graph: a card that hangs from the top-right corner of
+// the list, over it rather than above it.
 //
-// It is not a question, and the difference is worth keeping visible: no
-// answer is waited on, nothing is at stake, and nothing happens when it
-// is sent away. So it wears the accent line rather than a state colour,
-// carries no pill, and stays up until it is dismissed. Only one bar comes
-// down at a time — a question already standing keeps the place, because
-// it is one gesture away from being over.
+// Not the shape a standing question takes (デザイン規約 §可否・警告の出し場所).
+// A question pushes the rows down because what is being judged has to stay
+// in sight; a search has no target row yet, covers a corner nobody is
+// reading, and is gone the moment it is dismissed. Every browser puts it
+// here, and that is the gesture people arrive with.
 //
-// The frame only for now. What is typed here is not read yet and the
-// count stands at nothing; both are wired when the search behind them is
+// The frame only for now. What is typed here is not read yet and the count
+// stands at nothing; both are wired when the search behind them is
 // (P3-確認事項 §ウィンドウ chrome の要判断).
 Rectangle {
     id: findBar
 
-    /// Whether the bar is down. Nothing else opens or shuts it.
+    /// Whether the card is up. Nothing else opens or shuts it.
     property bool open: false
     /// What has been typed, for whoever comes to read it. Writable so the
     /// headless run can put something in the box — the key that opens this
-    /// bar cannot be pressed from there, and neither can the letters.
+    /// card cannot be pressed from there, and neither can the letters.
     property alias query: field.text
     /// How many rows the query matched, and which of them the view is on.
-    /// Both stay at zero while nothing is doing the matching, and the
-    /// count keeps its place empty rather than saying "0 / 0".
+    /// Both stay at zero while nothing is doing the matching, and the count
+    /// keeps its place empty rather than saying "0 / 0".
     property int matches: 0
     property int atMatch: 0
 
     signal dismissed()
 
-    /// Brings the bar down and puts the caret in it. Raising a bar that is
-    /// already down just takes the focus back and selects what is there,
-    /// which is what pressing the key twice should do.
+    /// Brings the card up and puts the caret in it. Raising one that is
+    /// already up takes the focus back and selects what is there, which is
+    /// what pressing the key twice should do.
     function raise() {
         findBar.open = true
         field.forceActiveFocus()
@@ -51,25 +49,29 @@ Rectangle {
         findBar.dismissed()
     }
 
-    implicitHeight: findBar.open ? Theme.headerHeight : 0
-    clip: true
+    // Hangs from the edge it is anchored to, so the corners that meet it
+    // stay square and the two below it are the card's own.
+    bottomLeftRadius: Theme.radiusMd
+    bottomRightRadius: Theme.radiusMd
     color: Theme.bgElevated
-    Behavior on implicitHeight {
-        NumberAnimation { duration: 200 }
-    }
+    border.width: Theme.borderWidth
+    border.color: Theme.borderDefault
 
-    // The line a bar that came down from an edge closes itself with. The
-    // accent rather than a state colour: this one is not reporting on
-    // anything (デザイン規約 §状態).
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: Theme.borderWidth
-        color: Theme.accent
+    implicitWidth: findRow.implicitWidth + 2 * Theme.spaceSm
+    implicitHeight: Theme.headerHeight
+
+    // Nothing is clipped on the way in or out — the card is there or it is
+    // not, and what fades is the whole of it. A height that animates while
+    // the contents keep their size is what makes an opening bar look
+    // broken halfway through.
+    visible: opacity > 0
+    opacity: findBar.open ? 1 : 0
+    Behavior on opacity {
+        NumberAnimation { duration: 120 }
     }
 
     RowLayout {
+        id: findRow
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceSm
         anchors.rightMargin: Theme.spaceXs
@@ -78,9 +80,7 @@ Rectangle {
         SlimField {
             id: field
             // The fixed width the design document gives a search box
-            // (§レイアウト初期値). Not filled to the bar: what goes in is a
-            // few words, and a box the width of the window would say
-            // otherwise.
+            // (§レイアウト初期値).
             implicitWidth: 160
             placeholderText: qsTr("Find commits")
             Keys.onEscapePressed: findBar.dismiss()
@@ -92,7 +92,6 @@ Rectangle {
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSm
         }
-        Item { Layout.fillWidth: true }
         HoverToolButton {
             padding: 0
             Layout.alignment: Qt.AlignVCenter

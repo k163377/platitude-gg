@@ -293,6 +293,20 @@ Rectangle {
                 // released delegate answers those walks with null. Tabs
                 // are counted in ones, so keeping them all costs nothing.
                 cacheBuffer: 65536
+                // A wheel over a strip that runs sideways should move it
+                // sideways, whichever way the wheel itself reports: a
+                // plain wheel only ever says "vertical", and it is the
+                // only wheel most people have.
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    onWheel: event => {
+                        const step = event.angleDelta.x !== 0
+                                     ? event.angleDelta.x : event.angleDelta.y
+                        tabs.contentX = Math.max(
+                            0, Math.min(tabs.contentWidth - tabs.width,
+                                        tabs.contentX - step))
+                    }
+                }
                 model: topBar.tabsModel
                 delegate: Rectangle {
                     id: tabItem

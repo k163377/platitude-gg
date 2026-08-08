@@ -245,22 +245,24 @@ Rectangle {
         onConfirmed: graphArea.askConfirmed()
         onCancelled: graphArea.askCancelled()
     }
-    // The other bar that comes down from this edge. Only one at a time: a
-    // question already standing keeps the place, since it is one gesture
-    // from being over and the find bar is not waiting on anything.
+    // Hangs from the top-right corner, over the list rather than above it
+    // — declared here rather than inside the view because a Flickable
+    // adopts what is declared in it and scrolls it away. Only one of the
+    // two is ever up: a question already standing keeps the place, since
+    // it is one gesture from being over.
     FindBar {
         id: findBar
-        anchors.left: parent.left
+        anchors.top: parent.top
         anchors.right: parent.right
-        anchors.top: askBar.bottom
-        z: 3
+        anchors.rightMargin: Theme.spaceLg
+        z: 4
     }
     ListView {
         id: graphList
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.top: findBar.bottom
+        anchors.top: askBar.bottom
         clip: true
         model: graphArea.graphModel
         reuseItems: true
