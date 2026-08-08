@@ -276,6 +276,13 @@ ApplicationWindow {
 
     Component.onCompleted: {
         AppBackend.initialize()
+        // Windows 11 rounds the window itself and leaves the corner pixels
+        // transparent, so the desktop shows through them. The window is up
+        // by now (`visible` is set above), which is all the switch needs.
+        AppBackend.squareWindowCorners()
+        // Without this the window wears the shell's generic icon, in the
+        // title bar and on the taskbar button alike.
+        AppBackend.setWindowIcon()
         root.applySavedWindow()
         if (AppBackend.autoOpen !== "") {
             // Multiple repositories separated by ';' open as tabs in order.

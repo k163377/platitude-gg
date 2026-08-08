@@ -8,6 +8,7 @@ mod encode;
 mod hub;
 mod models;
 mod urlpath;
+mod winframe;
 
 use hub::Hub;
 use models::{

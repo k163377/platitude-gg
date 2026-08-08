@@ -210,6 +210,21 @@ impl AppBackend {
         self.settings_changed();
     }
 
+    /// Asks Windows not to round the window's corners. A no-op on the
+    /// other two platforms, where the window manager is not doing it.
+    #[qslot]
+    fn square_window_corners(&self) {
+        crate::winframe::square_corners();
+    }
+
+    /// Gives the window the app's own icon, which is what the title bar,
+    /// the taskbar button and Alt+Tab read. Also Windows-only: elsewhere
+    /// the icon travels with the desktop entry or the bundle.
+    #[qslot]
+    fn set_window_icon(&self) {
+        crate::winframe::set_icon();
+    }
+
     // -- window state -------------------------------------------------------
     //
     // Read once as a page or the window is built, not bound: these are
