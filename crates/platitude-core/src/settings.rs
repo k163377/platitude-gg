@@ -1146,30 +1146,38 @@ graph_lanes_width = 3
     #[test]
     fn turning_the_logging_up_does_not_cost_you_your_settings() {
         let env = Env::from_pairs(&[
-            ("APPDATA", r"C:\Roaming"),
-            ("LOCALAPPDATA", r"C:\Local"),
+            ("APPDATA", "C:/Roaming"),
+            ("LOCALAPPDATA", "C:/Local"),
             ("PG_LOG", "info"),
         ]);
         assert_eq!(
             Store::locate(Platform::Windows, &env).settings_path(),
-            Some(Path::new(r"C:\Roaming\platitude-gg\settings.toml")),
+            Some(Path::new("C:/Roaming/platitude-gg/settings.toml")),
             "PG_LOG says how loud to be, not who is driving"
         );
     }
 
     #[test]
     fn each_platform_puts_the_files_where_it_keeps_them() {
+        // The Windows bases are spelled with forward slashes on purpose.
+        // `join` punctuates with the separator of the host the test runs on,
+        // so a `C:\Roaming` fixture comes back as `C:\Roaming/platitude-gg/…`
+        // on Linux — where a backslash is an ordinary character, not a
+        // separator — and the assertion could only ever hold on one of the
+        // three operating systems. Windows reads both separators, so this is
+        // the spelling every host agrees on, and what is under test is which
+        // base directory each file lands in, not how a path is punctuated.
         let windows = Store::locate(
             Platform::Windows,
-            &Env::from_pairs(&[("APPDATA", r"C:\Roaming"), ("LOCALAPPDATA", r"C:\Local")]),
+            &Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("LOCALAPPDATA", "C:/Local")]),
         );
         assert_eq!(
             windows.settings_path(),
-            Some(Path::new(r"C:\Roaming\platitude-gg\settings.toml"))
+            Some(Path::new("C:/Roaming/platitude-gg/settings.toml"))
         );
         assert_eq!(
             windows.state_path(),
-            Some(Path::new(r"C:\Local\platitude-gg\state.toml")),
+            Some(Path::new("C:/Local/platitude-gg/state.toml")),
             "a window position must not roam to another machine"
         );
 

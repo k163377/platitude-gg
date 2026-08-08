@@ -1505,8 +1505,17 @@ async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() 
     assert_eq!((progress.current, progress.total), (1, 2));
 
     session.resolve_current(platitude_core::integrate::Continuation::Abort);
+    // The clean status has to be one from *after* the abort. `wait_for`
+    // polls the whole event list and never drains it, so a bare "any clean
+    // StatusLoaded" also matches the one this repository emitted when it
+    // opened — the wait then returns before the abort has run and the
+    // assertion below races it. Windows loses that race slowly enough to
+    // pass; Linux does not (実測).
     sink.wait_for("clean again", |evs| {
-        evs.iter().rev().find_map(|e| match e {
+        let aborted = evs
+            .iter()
+            .position(|e| matches!(e, SessionEvent::WriteFinished { op: "resolve", .. }))?;
+        evs[aborted..].iter().rev().find_map(|e| match e {
             SessionEvent::StatusLoaded {
                 op_state, progress, ..
             } if !op_state.any() && progress.is_none() => Some(()),
