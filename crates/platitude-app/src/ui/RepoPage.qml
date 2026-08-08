@@ -3550,13 +3550,21 @@ Item {
                     // the corner of the pane that has room to spare. It
                     // sits here rather than at the window's edge so the
                     // command log can open without landing on top of it.
+                    //
+                    // A build made in a worktree adds which one: parallel
+                    // sessions each build their own exe and the windows are
+                    // otherwise identical. Empty for every other build, so
+                    // what ships reads plainly (デザイン規約 §アプリ名).
                     Label {
                         visible: AppBackend.gitVersion !== ""
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         anchors.rightMargin: Theme.spaceSm
                         anchors.bottomMargin: Theme.spaceXs
-                        text: qsTr("git %1").arg(AppBackend.gitVersion)
+                        text: AppBackend.buildTree === ""
+                              ? qsTr("git %1").arg(AppBackend.gitVersion)
+                              : qsTr("git %1 · %2").arg(AppBackend.gitVersion)
+                                                   .arg(AppBackend.buildTree)
                         color: Theme.textMuted
                         font.pixelSize: Theme.fontSm
                     }

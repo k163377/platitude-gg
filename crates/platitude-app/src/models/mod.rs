@@ -18,7 +18,7 @@ mod repo_tab;
 mod tabs;
 mod worktree;
 
-pub use app_backend::AppBackend;
+pub use app_backend::{AppBackend, build_tree};
 pub use commands::CommandsModel;
 pub use details::DetailsModel;
 pub use diff::DiffModel;

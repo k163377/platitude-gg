@@ -19,6 +19,14 @@ use qtbridge::QApp;
 
 fn main() {
     init_tracing();
+    // Said once, before anything else can fail: a run whose window never
+    // comes up, or whose stderr is all a verify-ui report keeps, still
+    // names the tree it was built from (CLAUDE.md ビルド・テスト).
+    let tree = models::build_tree();
+    tracing::info!(
+        tree = if tree.is_empty() { "-" } else { tree.as_str() },
+        "build tree"
+    );
 
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
