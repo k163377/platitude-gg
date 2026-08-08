@@ -1820,6 +1820,27 @@ Item {
             page.openFileMenu("unstaged", arg, "")
             page.sendPaths([arg])
             repoTab.stashPaths("")
+        } else if (act === "stage-many" || act === "stage-many-go") {
+            // The same two rows the discard verbs choose, and then the
+            // pointer put on the first one's own mark: the marks of every
+            // row that would move with it come out together. "-go" presses
+            // it, so the shot after is what one press moved.
+            page.showWip()
+            const head = wipPane.rowAt(0)
+            if (head)
+                wipPane.chooseOnly(head.bucket, head.fullName)
+            const mate = wipPane.rowFor(arg)
+            if (mate)
+                wipPane.applyClick(mate.bucket, mate.fullName, Qt.ControlModifier)
+            AppBackend.report("chosen count=" + wipPane.chosenCount)
+            if (head) {
+                wipPane.showStageTools(head.bucket, head.fullName)
+                if (act.endsWith("-go")) {
+                    const row = wipPane.rowAt(0)
+                    if (row)
+                        row.stageClicked(head.bucket, head.fullName)
+                }
+            }
         } else if (act === "discard-many" || act === "discard-many-go") {
             // Two rows chosen the way clicks choose them — the first row
             // plainly, the argument's row with Ctrl — and then the menu's

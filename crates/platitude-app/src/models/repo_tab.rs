@@ -627,6 +627,27 @@ impl RepoTab {
         self.with_session(|s| s.unstage_paths(vec![path.clone()]));
     }
 
+    /// The same two over the gathered set, for when several rows are
+    /// highlighted and the affordance on one of them is pressed: one git
+    /// command however many rows were chosen (デザイン規約 §その他の操作).
+    #[qslot]
+    fn stage_paths(&mut self) {
+        let paths = std::mem::take(&mut self.pending_paths);
+        if paths.is_empty() {
+            return;
+        }
+        self.with_session(move |s| s.stage_paths(paths.clone()));
+    }
+
+    #[qslot]
+    fn unstage_paths(&mut self) {
+        let paths = std::mem::take(&mut self.pending_paths);
+        if paths.is_empty() {
+            return;
+        }
+        self.with_session(move |s| s.unstage_paths(paths.clone()));
+    }
+
     /// Opens a set of paths for the next write, and adds to it. One call
     /// per path (see [`RepoTab::pending_paths`]); the write that follows
     /// takes them all in one git command, however many rows were chosen.

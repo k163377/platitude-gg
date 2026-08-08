@@ -134,6 +134,52 @@ ColumnLayout {
         wipPane.chosenCount = Object.keys(next).length
     }
 
+    // ---- the marks that come out together ---------------------------
+    // A press on one row's `+` moves every highlighted row that can go the
+    // same way, so the marks on those rows come out as soon as the pointer
+    // reaches one of them: what a press is about to move is seen before it
+    // is pressed (デザイン規約 §その他の操作). Held here, keyed the way the
+    // choice is, because a delegate is recycled the moment its row scrolls
+    // off. Automation writes it directly — hover cannot be injected.
+    property string stageHotKey: ""
+    function showStageTools(bucket, path) {
+        wipPane.stageHotKey = bucket + ":" + path
+    }
+    /// Whether a row should put its mark out because the pointer is on the
+    /// mark of another row that would move with it. Only rows on the same
+    /// side answer: `+` stages what is not staged, `−` takes back what is.
+    function stagePeerOf(bucket, path) {
+        const key = bucket + ":" + path
+        if (wipPane.stageHotKey === "")
+            return false
+        // The row the pointer is actually on answers too: under a real
+        // pointer it is already showing its mark, and this is the only way
+        // a headless run can put that mark on screen (hover cannot be
+        // injected — verify-ui スキル).
+        if (wipPane.stageHotKey === key)
+            return true
+        if (!wipPane.isChosen(bucket, path))
+            return false
+        const cut = wipPane.stageHotKey.indexOf(":")
+        const hotBucket = wipPane.stageHotKey.substring(0, cut)
+        if (!wipPane.isChosen(hotBucket, wipPane.stageHotKey.substring(cut + 1)))
+            return false
+        return (hotBucket === "staged") === (bucket === "staged")
+    }
+    /// The highlighted rows that would move with a press on `bucket`'s
+    /// side — the whole of what one press takes. A row that was not
+    /// highlighted takes only itself.
+    function stageTargets(bucket, path) {
+        if (!wipPane.isChosen(bucket, path))
+            return [path]
+        const out = []
+        const rows = wipPane.chosenRows()
+        for (let i = 0; i < rows.length; i++)
+            if ((rows[i].bucket === "staged") === (bucket === "staged"))
+                out.push(rows[i].fullName)
+        return out.length > 0 ? out : [path]
+    }
+
     /// The row at an index — automation, like `rowFor` below.
     function rowAt(index) {
         return wipList.itemAtIndex(index)
@@ -778,11 +824,32 @@ ColumnLayout {
                 wipPane.fileMenuRequested(bucket, path, origPath)
             }
             onFolderClicked: key => wipPane.worktreeModel.toggleFolder(key)
+            stagePeer: wipPane.stagePeerOf(bucket, fullName)
+            onStageHovered: (bucket, path, on) => {
+                if (on)
+                    wipPane.showStageTools(bucket, path)
+                else if (wipPane.stageHotKey === bucket + ":" + path)
+                    wipPane.stageHotKey = ""
+            }
+            // One press, every highlighted row that can go the same way —
+            // and one git command for the lot, whatever the count
+            // (デザイン規約 §その他の操作).
             onStageClicked: (bucket, path) => {
+                const paths = wipPane.stageTargets(bucket, path)
+                if (paths.length === 1) {
+                    if (bucket === "staged")
+                        wipPane.repoTab.unstagePath(paths[0])
+                    else
+                        wipPane.repoTab.stagePath(paths[0])
+                    return
+                }
+                wipPane.repoTab.beginPaths()
+                for (let i = 0; i < paths.length; i++)
+                    wipPane.repoTab.addPath(paths[i])
                 if (bucket === "staged")
-                    wipPane.repoTab.unstagePath(path)
+                    wipPane.repoTab.unstagePaths()
                 else
-                    wipPane.repoTab.stagePath(path)
+                    wipPane.repoTab.stagePaths()
             }
         }
     }

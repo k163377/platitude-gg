@@ -33,6 +33,11 @@ Item {
     /// by the list, since a delegate is recycled the moment its row
     /// scrolls off.
     property bool chosen: false
+    /// The pointer is on another chosen row's stage affordance, and this
+    /// row goes with it. The marks come out together so that what one
+    /// press moves is seen before it is pressed
+    /// (デザイン規約 §その他の操作).
+    property bool stagePeer: false
     /// What each side of a conflict is called. **The two swap over during
     /// a rebase**, so they are handed down from the model rather than
     /// worked out here (`WorkTreeModel.sideOurs` / `sideTheirs`); empty
@@ -86,6 +91,8 @@ Item {
     signal fileClicked(string bucket, string path, string origPath, int modifiers)
     signal folderClicked(string key)
     signal stageClicked(string bucket, string path)
+    /// The pointer arrived at (or left) this row's stage affordance.
+    signal stageHovered(string bucket, string path, bool on)
     /// A left click landed on this row, whatever it then meant.
     signal rowClicked()
     /// Double-click: go where this row leads.
@@ -373,14 +380,20 @@ Item {
     }
     // Hover stage/unstage affordance.
     HoverToolButton {
+        id: stageButton
         visible: navRow.showStage && !navRow.folder
-                 && (itemMouse.containsMouse || hovered)
+                 && (itemMouse.containsMouse || hovered || navRow.stagePeer)
         anchors.right: parent.right
         anchors.rightMargin: Theme.spaceXs
         anchors.verticalCenter: parent.verticalCenter
         padding: 0
         implicitWidth: Theme.iconLg
         implicitHeight: Theme.iconLg
+        // The list is told which row the pointer is on, so the rows that
+        // would go with it can put their own marks out.
+        onHoveredChanged: navRow.stageHovered(
+            navRow.bucket, navRow.full !== "" ? navRow.full : navRow.name,
+            stageButton.hovered)
         ToolTip.visible: hovered
         ToolTip.delay: Metrics.tipDelayMs
         // On a conflicted row the same `git add` means something else:
