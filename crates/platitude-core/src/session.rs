@@ -1063,6 +1063,16 @@ impl RepoSession {
             // go, so no message can describe a graph the consumer is not
             // on yet (see `apply_refs`).
             let mut shared = self.lock_shared();
+            // Whoever asked last owns the graph, and asking is what
+            // cancelled this token (both entry points swap it before
+            // spawning). Resetting for a stream nobody wants any more
+            // would blank the record of what is on screen and leave
+            // every later chip diff numbered for a graph that was never
+            // shown; the walk is cancelled and would deliver no rows to
+            // put back.
+            if cancel.is_cancelled() {
+                return Err(());
+            }
             shared.builder = GraphBuilder::new();
             shared.generation = generation;
             shared.applied.clear();
@@ -1127,8 +1137,13 @@ impl RepoSession {
         let total = rows.len() as u32;
         {
             let mut shared = self.lock_shared();
-            if self.log_gen.load(Ordering::SeqCst) != generation {
-                return; // superseded by a newer restart
+            // Superseded: someone asked for a graph after this pass was
+            // started, and that ask cancelled this token. Read here
+            // rather than the generation counter — that one is stamped
+            // when a pass begins running, which is not the order the
+            // asks came in.
+            if cancel.is_cancelled() {
+                return;
             }
             let elapsed_ms = started.elapsed().as_millis() as u64;
             let mut applied: HashMap<u32, Vec<RefLabel>> = HashMap::new();
@@ -2863,8 +2878,8 @@ impl RepoSession {
     /// Sends the synthetic WIP row (dirty working tree) as its own chunk.
     fn emit_wip_row(&self, generation: u64, head: &Oid) {
         let mut guard = self.lock_shared();
-        if self.log_gen.load(Ordering::SeqCst) != generation {
-            return;
+        if guard.generation != generation {
+            return; // this stream is not the graph on screen (see emit_rows)
         }
         let row = wip_row(head, &mut guard.builder);
         guard.sent_rows.push(row.clone());
@@ -2876,9 +2891,15 @@ impl RepoSession {
 
     /// Builds graph rows for a batch and sends them (holding the shared
     /// lock so generations cannot interleave).
+    ///
+    /// A stream may only add to the graph it reset: `generation` matching
+    /// the installed one is what says these rows belong to what the
+    /// consumer shows. The counter would answer a different question —
+    /// it moves for passes that never reach anybody, and a stream still
+    /// on screen would stop delivering halfway through.
     fn emit_rows(&self, generation: u64, batch: &[StreamItem], pool: &crate::model::StrPool) {
         let mut guard = self.lock_shared();
-        if self.log_gen.load(Ordering::SeqCst) != generation {
+        if guard.generation != generation {
             return;
         }
         let shared = &mut *guard;

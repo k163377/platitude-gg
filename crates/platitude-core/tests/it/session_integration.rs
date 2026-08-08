@@ -1823,6 +1823,82 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
     session.close();
 }
 
+/// A pass that was superseded before it could start leaves the graph
+/// alone. Which pass is in charge is decided when somebody asks (both
+/// entry points cancel the running token before spawning), not by the
+/// order the tasks happen to reach the lock — so a reset that arrives
+/// late must not clear what is on screen, wiping the record a rebuild
+/// compares against and leaving every later chip diff numbered for a
+/// graph nobody was ever shown.
+///
+/// Held under the graph lock, the interleaving is exact: the losing pass
+/// cannot reach its reset before the cancel that supersedes it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    repo.commit_file("f.txt", "1\n", "middle");
+    repo.commit_file("f.txt", "2\n", "head");
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    sink.settled_stream_gen(3).await;
+
+    // Park in the swap that adds the WIP row: it sends under the graph
+    // lock, so everything else is stopped at the door with the graph
+    // fully installed behind it.
+    let (arrived, at_the_window) = tokio::sync::oneshot::channel();
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    sink.hook_once(
+        |e| matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 4),
+        move || {
+            let _ = arrived.send(());
+            let _ = held.recv_timeout(Duration::from_secs(20));
+        },
+    );
+    repo.write_file("f.txt", "dirty\n");
+    session.refresh_status();
+    at_the_window.await.expect("the rebuild reached the window");
+    let settled = sink.count(|_| true);
+
+    // Asked for, then superseded while it waits for the lock.
+    session.restart_log();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    session.refresh_log();
+    release.send(()).expect("let the rebuild finish");
+
+    // Long enough for both to have run: the superseded stream (which
+    // only has to take the lock) and the rebuild behind it (a whole
+    // walk, which then finds the graph unchanged and skips its swap).
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+
+    let events = sink.events.lock().unwrap();
+    let after: Vec<&SessionEvent> = events[settled..]
+        .iter()
+        .filter(|e| {
+            matches!(
+                e,
+                SessionEvent::LogStarted { .. } | SessionEvent::LogReplaced { .. }
+            )
+        })
+        .collect();
+    assert!(
+        after.is_empty(),
+        "nothing repainted the graph: {after:?}\nall: {:?}",
+        events[settled..].iter().collect::<Vec<_>>()
+    );
+
+    let rows = crate::support::replay_graph(&events[..]);
+    assert_eq!(rows.len(), 4, "the WIP row and three commits: {rows:?}");
+    drop(events);
+    session.close();
+}
+
 /// One tick, one rebuild. A commit made outside the session moves a ref
 /// *and* turns the tree clean, and the poll reads both: walking the
 /// history once per reader would throw a whole pass away every time
