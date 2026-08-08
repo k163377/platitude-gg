@@ -42,6 +42,14 @@ HoverToolButton {
     /// is what says it is about this button rather than about the state
     /// the toolbar is in.
     property bool alert: false
+    /// Room kept for that mark whether it is showing or not. It is said
+    /// past the word, so on the longest of the wordings the box is
+    /// measured for there is nothing left for it to stand in and it ends
+    /// up on the frame (measured: one pixel clear of it, `push -f`). A
+    /// seat that came and went with the mark would move the button's edge
+    /// as its state changed, which is the one thing the shared box is
+    /// there to prevent (デザイン規約 §リモートへ送る).
+    property bool alertSeat: false
     /// The colour the hold fills the button with — the frame's, since a
     /// framed button fills the frame it drew. A bare one names its own
     /// (the hunk heading's `Discard hunk`, which fills edge to edge the
@@ -328,10 +336,16 @@ HoverToolButton {
                 // than the letter's. Adding the gap on top of it leaves the
                 // widest wording loose on the right while the chip all but
                 // touches the icon on the left (measured: 7px against 2px).
+                //
+                // The mark's seat is added on top of both, and to every
+                // state alike: it stands past the longest wording, and a
+                // gap after it so it clears the frame the way a letter
+                // does.
                 readonly property real box:
                     widest.implicitWidth > 0
                     ? widest.implicitWidth
                       + (actionBtn.widestCode ? 0 : Theme.spaceXs)
+                      + (actionBtn.alertSeat ? Theme.iconSm + Theme.spaceXs : 0)
                     : 0
                 text: actionBtn.text
                 color: actionBtn.fg

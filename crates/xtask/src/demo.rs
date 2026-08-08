@@ -54,6 +54,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
         "stashes" => stashes(&mut repo)?,
         "detached" => detached(&mut repo)?,
         "behind" => behind(&mut repo)?,
+        "diverged" => diverged(&mut repo)?,
         "signed" => signed(&mut repo)?,
         "tags" => tags(&mut repo)?,
         "empty" => {}
@@ -429,6 +430,20 @@ fn behind(repo: &mut DemoRepo) -> Result<(), String> {
         &["commit", "-m", "feat: pushed while you slept"],
     )?;
     repo.git_at(&seeder.clone(), &["push"])?;
+    Ok(())
+}
+
+/// Both sides moved on, and this repository has already seen it happen:
+/// the fetch is part of the preset, so the toolbar offers the overwrite
+/// (`push -f`) from the moment the window opens rather than after a verb.
+///
+/// Break the remote's URL afterwards (`.git/config`) and the overwrite
+/// fails without the tracking refs moving — which is how the refused shape
+/// of that button gets photographed.
+fn diverged(repo: &mut DemoRepo) -> Result<(), String> {
+    behind(repo)?;
+    repo.git(&["fetch", "origin"])?;
+    repo.commit("b.txt", "ours\n", "feat: work of our own")?;
     Ok(())
 }
 

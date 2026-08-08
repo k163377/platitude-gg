@@ -392,6 +392,9 @@ Rectangle {
             code: !fetchButton.stopped
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
+            // Both of the pair keep the seat, so they stay one width even
+            // though only one of them is wearing a mark at a time.
+            alertSeat: true
             tone: fetchButton.stopped ? Theme.danger
                   : fetchButton.fails > 0 ? Theme.warning
                   : Theme.textPrimary
@@ -449,6 +452,17 @@ Rectangle {
             id: pushButton
             readonly property string mode:
                 topBar.curPage !== null ? topBar.curPage.pushState : "closed"
+            /// The last go at sending this branch came back refused. The
+            /// same warning a fetch wears after one or two failures, and
+            /// for the same reason; there is no stopped step past it,
+            /// because nothing sends on its own to be stopped
+            /// (デザイン規約 §リモートへ送る).
+            readonly property bool failed: topBar.curPage !== null
+                                           && topBar.curPage.pushFailed
+            /// Warning colour, for either of the two things that call for
+            /// it: what an overwrite would do, and what the last go did.
+            readonly property bool warned: pushButton.mode === "diverged"
+                                           || pushButton.failed
             kind: "push"
             busy: topBar.curPage !== null
                   && topBar.curPage.pageTab.busyOp === "push"
@@ -470,12 +484,18 @@ Rectangle {
             // branch's standing with its remote changes under it.
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
-            tone: mode === "diverged" ? Theme.warning : Theme.textPrimary
-            // A force push on the wire is still a force push, so the ring
-            // and the frame keep the warning through the wait, a step down
-            // (デザイン規約 §暗く落とした段).
-            toneDim: mode === "diverged" ? Theme.warningDim : Theme.textMuted
-            frameColor: mode === "diverged" ? Theme.warning : "transparent"
+            alertSeat: true
+            tone: pushButton.warned ? Theme.warning : Theme.textPrimary
+            // A force push on the wire is still a force push, and a second
+            // go at one git turned down is still the button that was turned
+            // down, so the ring and the frame keep the warning through the
+            // wait, a step down (デザイン規約 §暗く落とした段).
+            toneDim: pushButton.warned ? Theme.warningDim : Theme.textMuted
+            frameColor: pushButton.warned ? Theme.warning : "transparent"
+            // Said past the word, where a fetch says it: the frame's colour
+            // is worn by the diverged shape as well, so on its own it would
+            // not tell "cannot land plainly" from "did not land".
+            alert: pushButton.failed
             // Diverged, the button stays live for the hold that is its
             // only gesture: a plain push cannot land there, so nothing
             // else is waiting on a click to be mistaken for.
@@ -487,27 +507,36 @@ Rectangle {
             onHeld: topBar.curPage.forcePush()
             ToolTip.visible: hovered
             ToolTip.delay: 600
-            ToolTip.text: topBar.curPage === null ? ""
-                          : mode === "publish"
-                            ? qsTr("Publish this branch as %1")
-                              .arg(topBar.curPage.pushTargetLabel)
-                          : mode === "ready"
-                            ? qsTr("Push %n commit(s) to %1", "",
-                                   topBar.curPage.pageWt.ahead)
-                              .arg(topBar.curPage.pushTargetLabel)
-                          : mode === "clean"
-                            ? qsTr("Nothing to push — %1 is up to date")
-                              .arg(topBar.curPage.pushTargetLabel)
-                          : mode === "behind"
-                            ? qsTr("Nothing to push — %1 has moved ahead")
-                              .arg(topBar.curPage.pushTargetLabel)
-                          : mode === "diverged"
-                            ? qsTr("Hold to overwrite %1, dropping %n "
-                                   + "commit(s) it has (as of the last "
-                                   + "fetch)", "",
-                                   topBar.curPage.pageWt.behind)
-                              .arg(topBar.curPage.pushTargetLabel)
-                          : ""
+            ToolTip.text: {
+                if (topBar.curPage === null)
+                    return ""
+                const to = topBar.curPage.pushTargetLabel
+                const what = pushButton.mode === "publish"
+                             ? qsTr("Publish this branch as %1").arg(to)
+                           : pushButton.mode === "ready"
+                             ? qsTr("Push %n commit(s) to %1", "",
+                                    topBar.curPage.pageWt.ahead).arg(to)
+                           : pushButton.mode === "clean"
+                             ? qsTr("Nothing to push — %1 is up to date")
+                               .arg(to)
+                           : pushButton.mode === "behind"
+                             ? qsTr("Nothing to push — %1 has moved ahead")
+                               .arg(to)
+                           : pushButton.mode === "diverged"
+                             ? qsTr("Hold to overwrite %1, dropping %n "
+                                    + "commit(s) it has (as of the last "
+                                    + "fetch)", "",
+                                    topBar.curPage.pageWt.behind).arg(to)
+                           : ""
+                // What git said, under what the button would do next —
+                // the mark says only that the last go failed, and this is
+                // the one place with room for why (the same two-part
+                // tooltip a failed fetch carries).
+                const why = topBar.curPage.pushFailReason
+                if (pushButton.failed && why !== "")
+                    return what + "\n\n" + why
+                return what
+            }
             onActivated: topBar.curPage.pushNow()
         }
     }

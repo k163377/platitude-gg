@@ -353,7 +353,22 @@ Item {
     readonly property bool canForcePush: (pushState === "ready"
                                           || pushState === "diverged")
                                          && repoTab.busyCount === 0
+    /// The branch a push of this button's is out for, from the send until
+    /// the answer. What comes back names the operation and not what it was
+    /// about, and `push` is also what a remote branch's rename and delete
+    /// report as — so this says both which branch the answer belongs to and
+    /// whether it belongs to this button at all.
+    property string pushSentBranch: ""
+    /// The branch whose last push git turned down, and what it said.
+    /// Remembered per branch: most refusals are about that branch's
+    /// standing with its remote and say nothing about the one beside it
+    /// (デザイン規約 §リモートへ送る).
+    property string pushFailBranch: ""
+    property string pushFailReason: ""
+    readonly property bool pushFailed:
+        page.pushFailBranch !== "" && page.pushFailBranch === workTree.branch
     function pushNow() {
+        page.pushSentBranch = workTree.branch
         repoTab.pushCurrent("", "")
     }
     /// Replace what the remote holds with this branch.
@@ -363,6 +378,7 @@ Item {
     /// must not turn this into a plain force. A remote that moved since is
     /// refused, and the refusal is answered by a fetch (core).
     function forcePush() {
+        page.pushSentBranch = workTree.branch
         repoTab.pushCurrent("lease", page.upstreamOid())
     }
     /// Commit the remote-tracking branch points at, as shown here.
@@ -1400,6 +1416,18 @@ Item {
                     stacked.chipItem.records, stacked.chipItem)
         }
     }
+    // The refusal has to be back and on the button before the second go
+    // is sent, and the report is what says it ever got there — the mark
+    // is gone again by the time the screenshot is taken.
+    Timer {
+        id: pushRetryTimer
+        interval: 1800
+        onTriggered: {
+            AppBackend.report("push_retry refused=" + page.pushFailed
+                              + " branch=" + page.pushFailBranch)
+            page.forcePush()
+        }
+    }
     // The message has to arrive before it can be typed over, and the
     // "is this commit ours to rewrite?" answer before it may be saved.
     Timer {
@@ -1903,6 +1931,13 @@ Item {
             page.pushNow()
         } else if (act === "force-push") {
             page.forcePush()
+        } else if (act === "push-retry") {
+            // One that cannot land, then one that can. What the picture
+            // cannot hold is the second half — a mark coming off is the
+            // absence of a thing — so the timer reports the state the
+            // refusal left before sending the go that clears it.
+            page.pushNow()
+            pushRetryTimer.start()
         } else if (act === "fetch") {
             repoTab.fetch("")
         } else if (act === "fetch-ref-list") {
@@ -1961,6 +1996,24 @@ Item {
         if (repoTab.writeSeq === page.seenWriteSeq)
             return
         page.seenWriteSeq = repoTab.writeSeq
+        // A push this button sent has come back. Nothing in the answer
+        // says which branch it was for, and a remote branch's rename and
+        // delete report under the same name — the slot filled at the send
+        // is what makes this the toolbar button's news
+        // (デザイン規約 §リモートへ送る).
+        if (repoTab.lastWriteOp === "push" && page.pushSentBranch !== "") {
+            const sent = page.pushSentBranch
+            page.pushSentBranch = ""
+            if (repoTab.lastWriteError !== "") {
+                page.pushFailBranch = sent
+                page.pushFailReason = repoTab.lastWriteError
+            } else if (page.pushFailBranch === sent) {
+                // Landed. The button that went through must not go on
+                // saying that the go before it did not.
+                page.pushFailBranch = ""
+                page.pushFailReason = ""
+            }
+        }
         if (repoTab.lastWriteError !== "") {
             // The one refusal this page has a second move for: a branch
             // delete git would not do on its own.
