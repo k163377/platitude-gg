@@ -164,7 +164,7 @@ AppDialog {
             // Two settings, two homes: one this app forgets on exit, one
             // git keeps and every other git on this computer can see.
             text: qsTr("The fetch interval is not stored yet, so it returns to "
-                       + "its default the next time platitude-gg starts. The "
+                       + "its default the next time Platitude GG starts. The "
                        + "merge editor is stored by git as merge.guitool.")
         }
         RowLayout {

@@ -625,7 +625,7 @@ Rectangle {
         visible: graphArea.blank
         spacing: Theme.spaceLg
         Label {
-            text: qsTr("platitude-gg")
+            text: qsTr("Platitude GG")
             font.pixelSize: Theme.fontXl
             font.weight: Font.DemiBold
             anchors.horizontalCenter: parent.horizontalCenter

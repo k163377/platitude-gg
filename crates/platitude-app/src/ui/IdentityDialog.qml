@@ -83,7 +83,7 @@ AppDialog {
             color: Theme.textSecondary
             text: qsTr("git records a name and an email address on every commit you "
                        + "make. They are stored in your git configuration — "
-                       + "platitude-gg keeps no copy of them.")
+                       + "Platitude GG keeps no copy of them.")
         }
 
         ColumnLayout {

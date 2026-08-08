@@ -19,7 +19,7 @@ ApplicationWindow {
     width: 1440
     height: 900
     visible: true
-    title: qsTr("platitude-gg")
+    title: qsTr("Platitude GG")
     color: Theme.bgBase
     font.family: Theme.uiFamily
     font.pixelSize: Theme.fontMd
@@ -345,7 +345,7 @@ ApplicationWindow {
             spacing: Theme.spaceLg
             width: Math.min(640, root.width - 2 * Theme.spaceXxl)
             Label {
-                text: qsTr("platitude-gg")
+                text: qsTr("Platitude GG")
                 font.pixelSize: Theme.fontXl
                 font.weight: Font.DemiBold
                 anchors.horizontalCenter: parent.horizontalCenter

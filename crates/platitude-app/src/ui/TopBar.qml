@@ -138,7 +138,7 @@ Rectangle {
                     onTriggered: topBar.settingsRequested()
                 }
                 AppMenuItem {
-                    text: qsTr("About platitude-gg")
+                    text: qsTr("About Platitude GG")
                     enabled: false
                 }
                 AppMenuSeparator {}

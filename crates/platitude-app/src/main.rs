@@ -33,7 +33,10 @@ fn main() {
     Hub::install(runtime);
 
     let mut app = QApp::new();
-    app.application_name("platitude-gg");
+    // The name people read, not the repository slug: Qt hands this to the
+    // window manager and to its own dialogs. The slug stays where machines
+    // read it (crate, binary, config directory).
+    app.application_name("Platitude GG");
     // Embed the QML module (singletons + components + Main) as qrc
     // resources. Every file listed in ui/qmldir must be embedded here.
     qtbridge::include_bytes_qml!("ui/qmldir", "qt/qml/platitude");
