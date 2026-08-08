@@ -1296,9 +1296,13 @@ Item {
         // thing twice, and every row here costs the ones still to come.
         AppMenuItem {
             code: "squash"
-            //: Follows the `squash` chip: "squash this commit into the
-            //: one before it".
-            text: qsTr("this commit into the one before it")
+            // Which commit is folded is not said, the way the reset
+            // submenu says "here": the row this menu was opened on is
+            // the one that was pointed at. What has to be named is the
+            // other end, and the details pane the same click fills in
+            // already calls it the parent (its `←` link).
+            //: Follows the `squash` chip: "squash into its parent".
+            text: qsTr("into its parent")
             // Said, not asked (要望: rewriting a pushed commit shows a
             // warning): the squash goes ahead, and this tag is the warning.
             note: page.menuPublished ? qsTr("already pushed") : ""
