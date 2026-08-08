@@ -9,6 +9,26 @@
             "command": "cargo xtask hook pre-write"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo xtask hook pre-git",
+            "if": "Bash(git *)"
+          }
+        ]
+      },
+      {
+        "matcher": "PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo xtask hook pre-git",
+            "if": "PowerShell(git *)"
+          }
+        ]
       }
     ],
     "PostToolUse": [

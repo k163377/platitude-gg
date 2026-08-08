@@ -66,7 +66,7 @@ cargo fmt --all
 - release ビルドしないと QML(exe 埋め込み)は反映されない — 起動確認前に必ず `cargo build --release`
 - **統合テストは 1 バイナリ**(`tests/it/` のモジュール。`cargo test` はバイナリを 1 つずつ走らせるので、`tests/` 直下に .rs を足すと別バイナリ = 直列実行とリンク 1 本分の後退。新しい統合テストは `it/` にモジュールとして足し `main.rs` へ登録)。部分実行は `cargo test -p platitude-core --test it <モジュール名>`
 - **並行セッション(複数エージェント)は git worktree で分ける** — 同一 checkout の共有は `target/` が単一障害点(cargo のビルドロックで直列化・incremental を相互に無効化・verify-ui が起動する release exe に別セッションの編集が焼き込まれた実績)。worktree なら target も demo / screenshot(temp 下の nanos 付きユニークパス)も自然に分離される
-- **worktree は固定名を使い回す**: `claude --worktree <固定名>`(`.claude/worktrees/<固定名>` に恒久作成・次回同名で再開。worktree ごとの `target/` = incremental キャッシュがセッションを跨いで温存される)。使い捨ての自動命名 worktree を乱造しない。ブランチは `worktree-<名前>` に切られるので、完了時は main へ ff-merge で戻す。**本体 checkout で実装作業をしない**(ドキュメント編集・レビューは可)
+- **worktree は固定名を使い回す**: `claude --worktree <固定名>`(`.claude/worktrees/<固定名>` に恒久作成・次回同名で再開。worktree ごとの `target/` = incremental キャッシュがセッションを跨いで温存される)。使い捨ての自動命名 worktree を乱造しない。ブランチは `worktree-<名前>` に切られる。**完了しても main へは戻さない**(§Git 運用)。**本体 checkout で実装作業をしない**(ドキュメント編集・レビューは可)
 - 開発補助ツール(検証・デモ環境生成等)を **Windows 専用形式(.ps1 / .bat)で作らない** — タスクランナーが要る時は `cargo xtask` パターン(ワークスペース内クレート + `.cargo/config.toml` の alias、依存は std のみ)で 3OS 同一に書き、OS 差(Qt の PATH / フォント等)はコード内の分岐に焼き込む。just / make 等の外部タスクランナーも導入しない
 
 ## Rust 規約
@@ -91,7 +91,9 @@ cargo fmt --all
 
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)、メッセージは英語
 - force push しない
-- 開発は **main 直コミット**(ユーザー指示)。worktree セッションは `worktree-<名前>` ブランチから main へ ff-merge で戻す
+- **main へブランチを反映するのは、その場でユーザーが指示した時だけ**(ユーザー指示)。セッションはコミットを `worktree-<名前>` に積んだまま「マージ可」と報告して終わる。自分の判断で ff-merge しない — 反映済みと未反映が混ざると管理できなくなる
+  - `cargo xtask hook pre-git` が main を書く git(`merge` / `:main` への refspec / `branch -f main` / `update-ref`)を deny する。**指示があった時だけ** `PG_ALLOW_MAIN=1` を先頭に付けて再実行する。使い捨てリポジトリと worktree ブランチ上のコミットは対象外
+- 本体 checkout での直コミットは可(ドキュメント等)。main の ref を動かす操作のうち止まるのは上記の反映系だけ
 
 ## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
 
