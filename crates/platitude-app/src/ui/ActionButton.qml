@@ -384,14 +384,21 @@ HoverToolButton {
                 // the shorter ones. Past the chip's edge where there is
                 // one — a mark crossing that edge reads as stuck to the
                 // chip rather than said after the word.
+                //
+                // Half a gap out for both. A command's chip already
+                // reaches that far, so this is its ground's edge; a plain
+                // word has nothing there and gets the gap itself. Pulling
+                // the mark back for the plain one — which nothing wore
+                // until push could be refused on its first go — sets it
+                // against the last letter, and `Publish` then reads as an
+                // exclamation rather than as a word with a mark after it.
                 NavIcon {
                     visible: actionBtn.alert
                     kind: "bang"
                     tint: actionBtn.fg
                     width: Theme.iconSm
                     height: Theme.iconSm
-                    x: btnLabel.implicitWidth
-                       + (actionBtn.code ? Theme.spaceXs / 2 : -Theme.spaceXs)
+                    x: btnLabel.implicitWidth + Theme.spaceXs / 2
                     y: -Theme.spaceXs
                 }
             }
