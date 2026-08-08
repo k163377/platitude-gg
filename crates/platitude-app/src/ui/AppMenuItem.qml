@@ -37,8 +37,7 @@ MenuItem {
     /// its chip's own glyphs, when words follow them. A chip that ends
     /// its row has nothing to line up with and asks for nothing.
     readonly property real codeColSeat:
-        menuItem.code !== "" && menuItem.text !== ""
-        ? codeLabel.implicitWidth : 0
+        menuItem.code !== "" ? codeLabel.implicitWidth : 0
 
     /// Held rather than clicked, for a row that would otherwise have to
     /// raise a question of its own (デザイン規約 §長押し). Zero is an
@@ -153,7 +152,7 @@ MenuItem {
             visible: menuItem.code !== ""
             implicitWidth: {
                 const own = codeLabel.implicitWidth
-                if (menuItem.text === "" || !menuItem.menu)
+                if (!menuItem.menu)
                     return own
                 const col = menuItem.menu.codeColW
                 return col !== undefined ? Math.max(col, own) : own

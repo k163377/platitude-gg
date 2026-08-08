@@ -1249,8 +1249,6 @@ Item {
         id: commitMenu
         AppMenuItem {
             code: "cherry-pick"
-            //: Follows the `cherry-pick` chip: "cherry-pick this commit".
-            text: qsTr("this commit")
             offered: page.menuCanSequence
             onTriggered: repoTab.cherryPick(page.menuOid)
         }
@@ -1259,8 +1257,6 @@ Item {
         // rewriting one, so neither is asked about or held.
         AppMenuItem {
             code: "revert"
-            //: Follows the `revert` chip: "revert this commit".
-            text: qsTr("this commit")
             offered: page.menuCanSequence
             onTriggered: repoTab.revert(page.menuOid)
         }
@@ -1271,15 +1267,15 @@ Item {
         // submenu does — the row is what was clicked.
         AppMenuItem {
             code: "merge"
-            //: Follows the `merge` chip: "merge this commit into main".
-            text: qsTr("this commit into %1").arg(workTree.branch)
+            //: Follows the `merge` chip: "merge into main".
+            text: qsTr("into %1").arg(workTree.branch)
             offered: page.menuCanIntegrate
             onTriggered: repoTab.merge(page.menuOid, false, false, "")
         }
         AppMenuItem {
             code: "rebase"
-            //: Follows the `rebase` chip: "rebase main onto this commit".
-            text: qsTr("%1 onto this commit").arg(workTree.branch)
+            //: Follows the `rebase` chip: "rebase main onto it".
+            text: qsTr("%1 onto it").arg(workTree.branch)
             note: page.menuPublished ? qsTr("rewrites pushed commits") : ""
             offered: page.menuCanIntegrate
             onTriggered: repoTab.rebase(page.menuOid, "", true, true)
@@ -1301,8 +1297,8 @@ Item {
             // the one that was pointed at. What has to be named is the
             // other end, and the details pane the same click fills in
             // already calls it the parent (its `←` link).
-            //: Follows the `squash` chip: "squash into its parent".
-            text: qsTr("into its parent")
+            //: Follows the `squash` chip: "squash into parent".
+            text: qsTr("into parent")
             // Said, not asked (要望: rewriting a pushed commit shows a
             // warning): the squash goes ahead, and this tag is the warning.
             note: page.menuPublished ? qsTr("already pushed") : ""
@@ -1326,8 +1322,6 @@ Item {
         AppMenuItem {
             id: dropCommitItem
             code: "drop"
-            //: Follows the `drop` chip: "drop this commit".
-            text: qsTr("this commit")
             note: page.menuPublished ? qsTr("already pushed") : ""
             offered: page.menuCanEditHistory
             holdMs: repoTab.headReachedElsewhere ? 0 : Metrics.holdMs
