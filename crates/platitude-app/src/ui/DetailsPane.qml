@@ -113,8 +113,16 @@ ColumnLayout {
             return
         const at = coBlock.mapToItem(detailsPane, 0, coBlock.height)
         mateCard.records = detailsPane.coAuthorRecords
+        // Measured from where it opens, not from the pane: the card
+        // starts partway across, so the pane's width is not what is
+        // left for it. Set on open rather than bound — the answer only
+        // matters at the moment it is asked.
+        mateCard.maxRowWidth = detailsPane.width - at.x - 2 * Theme.spaceSm
         mateCard.x = at.x
-        mateCard.y = at.y + Theme.spaceXs
+        // Flush against the underline: a gap is a band the pointer
+        // crosses while touching neither, and the card closes under it
+        // (2026-08-09 report). Same rule the ref list follows.
+        mateCard.y = at.y
         mateCard.open()
     }
     // The card opens flush under the stretch, so walking into it takes
@@ -122,10 +130,18 @@ ColumnLayout {
     // it on again. Both hovers change in the same frame and in no fixed
     // order, so the answer waits for the end of this round of events.
     function settleMateCard() {
-        Qt.callLater(function () {
+        mateSettle.restart()
+    }
+    // A beat, not a turn of the event loop: the two hovers change in
+    // different frames when the pointer walks from the line into the
+    // card, and `Qt.callLater` lands between them (2026-08-09 report).
+    Timer {
+        id: mateSettle
+        interval: Metrics.hoverKeepMs
+        onTriggered: {
             if (!mateCard.pointerInside && !detailsPane.matesPointed)
                 mateCard.close()
-        })
+        }
     }
     CoAuthorCard {
         id: mateCard

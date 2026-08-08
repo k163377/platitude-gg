@@ -367,6 +367,7 @@ mod tests {
             author: pool.intern("Test"),
             author_email: pool.intern("test@example.com"),
             co_authors: Box::new([]),
+            body: "".into(),
             time: 1_700_000_000 + i64::from(id),
             subject: format!("commit {id:02x}").into_boxed_str(),
         }

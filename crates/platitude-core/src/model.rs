@@ -65,6 +65,9 @@ pub struct CommitMeta {
     /// order. Not mailmapped — a trailer is message text, so the same
     /// person can be spelled differently here and in `author`.
     pub co_authors: Box<[(u32, u32)]>,
+    /// Everything after the subject, with the `Co-authored-by` lines
+    /// removed — what the row's hover reads out.
+    pub body: Box<str>,
     /// Author timestamp (seconds since epoch).
     pub time: i64,
     /// First line of the commit message.

@@ -40,6 +40,8 @@ pub struct GraphRowItem {
     /// the first draws the badge on the node, all of them are named in
     /// the row's hover.
     co_authors: String,
+    /// Message body without the co-author trailers — the row's hover.
+    body: String,
     geometry: String,
     labels: String,
     /// `stash@{n}` when the row is a stash; empty otherwise.
@@ -482,6 +484,7 @@ fn to_row_item(row: &LogRow, avatars: &crate::hub::AvatarUrls) -> GraphRowItem {
         avatar: crate::encode::avatar_code(&row.author),
         avatar_url: avatars.url_of(&row.author_email),
         co_authors: crate::encode::encode_co_authors(&row.co_authors),
+        body: row.body.clone(),
         geometry: encode_geometry(&row.segments),
         labels: encode_labels(&row.labels),
         stash_ref: row.stash_ref.clone(),

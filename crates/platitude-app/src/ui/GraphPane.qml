@@ -29,6 +29,10 @@ Rectangle {
     signal rowSwitchRequested(string oidHex, string record)
     /// A stacked chip was hovered: unstack it under the chip.
     signal chipExpandRequested(var records, var anchor)
+    /// The pointer settled on a row (or left it): open the commit card
+    /// under it. `row` is the delegate, which the page needs for its
+    /// position and its fields — it must not hold on to it.
+    signal rowHoverRequested(var row, bool inside)
     /// The pointer left that chip — put it back, unless it went into the
     /// list itself (only the owner can tell).
     signal chipCollapseRequested()
@@ -271,6 +275,7 @@ Rectangle {
         signal rowSwitchRequested(string oidHex, string record)
         signal chipExpandRequested(var records, var anchor)
         signal chipCollapseRequested()
+        signal rowHoverRequested(var row, bool inside)
         signal namingSubmitted(string oidHex, string name)
         signal namingCancelled()
         onRowMenuRequested: oidHex => graphArea.rowMenuOpenRequested(oidHex)
@@ -280,6 +285,8 @@ Rectangle {
         onChipExpandRequested: (records, anchor) =>
             graphArea.chipExpandRequested(records, anchor)
         onChipCollapseRequested: graphArea.chipCollapseRequested()
+        onRowHoverRequested: (row, inside) =>
+            graphArea.rowHoverRequested(row, inside)
         onNamingSubmitted: (oidHex, name) => {
             graphArea.stopNaming()
             // An empty box is the way out of the offer, not a branch

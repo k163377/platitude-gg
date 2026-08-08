@@ -145,6 +145,9 @@ pub struct LogRow {
     /// Author time (unix seconds); formatting is presentation.
     pub time: i64,
     pub subject: String,
+    /// Everything after the subject, minus the co-author trailers — what
+    /// the row's hover reads out. Empty on the WIP and stash rows.
+    pub body: String,
     pub node_lane: u16,
     pub node_color: u8,
     pub width: u16,
@@ -3189,6 +3192,7 @@ fn wip_row(head: &Oid, builder: &mut GraphBuilder) -> LogRow {
         co_authors: Vec::new(),
         time: 0,
         subject: String::new(),
+        body: String::new(),
         node_lane: g.node_lane,
         node_color: g.node_color,
         width: g.width,
@@ -3418,6 +3422,7 @@ fn make_row(
             .collect(),
         time: commit.time,
         subject: commit.subject.to_string(),
+        body: commit.body.to_string(),
         node_lane: g.node_lane,
         node_color: g.node_color,
         width: g.width,

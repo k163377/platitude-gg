@@ -29,11 +29,19 @@ use crate::oid::Oid;
 ///
 /// **No mailmap applies to these.** `%aN` folds the author, but a trailer
 /// is message text, so the same person can appear under two spellings.
+/// The body rides along too, for the row's hover. The window is 2,000
+/// rows, so carrying it costs about a megabyte and saves a `git show`
+/// per hover.
+///
+/// **`%b` still contains the trailers** (measured: it is `%B` minus the
+/// subject, nothing else), so the credited lines are taken back out
+/// here — the hover shows the writing, and the credits have their own
+/// place in the card.
 pub const LOG_FORMAT_ARG: &str = "--format=%H%x00%P%x00%aN%x00%aE%x00%at%x00\
-     %(trailers:key=Co-authored-by,valueonly,unfold,separator=%x1F)%x00%s";
+     %(trailers:key=Co-authored-by,valueonly,unfold,separator=%x1F)%x00%b%x00%s";
 
 /// Number of NUL-terminated tokens per record.
-pub const LOG_FIELDS: usize = 7;
+pub const LOG_FIELDS: usize = 8;
 
 /// Fatal parse error: the stream no longer matches the expected shape.
 /// (With NUL both separating fields and terminating records there is no way
@@ -66,8 +74,14 @@ pub struct LogParser {
     cur_author_email: u32,
     /// Pooled (name, address) of each `Co-authored-by` on this record.
     cur_mates: Vec<(u32, u32)>,
+    /// Message body with those trailer lines taken out.
+    cur_body: String,
     cur_time: i64,
 }
+
+/// What a `Co-authored-by` line starts with, for taking them back out of
+/// the body git hands over.
+const CO_AUTHOR_KEY: &str = "co-authored-by:";
 
 impl LogParser {
     pub fn new() -> Self {
@@ -149,6 +163,26 @@ impl LogParser {
                     .parse()
                     .map_err(|_| LogParseError::InvalidTimestamp { record })?;
             }
+            6 => {
+                // Only the lines git named as co-author trailers come
+                // out — a `Co-authored-by:` written in the middle of the
+                // prose is not one, and git already said so by not
+                // returning it in field 5.
+                let body = String::from_utf8_lossy(token);
+                let kept: Vec<&str> = body
+                    .lines()
+                    .filter(|line| {
+                        let l = line.trim();
+                        !(l.len() >= CO_AUTHOR_KEY.len()
+                            && l[..CO_AUTHOR_KEY.len()].eq_ignore_ascii_case(CO_AUTHOR_KEY)
+                            && self
+                                .cur_mates
+                                .iter()
+                                .any(|(name, _)| l.contains(self.pool.get(*name))))
+                    })
+                    .collect();
+                self.cur_body = kept.join("\n").trim().to_string();
+            }
             5 => {
                 // Pool ids like the author's: the same few names repeat
                 // down the whole history, so each costs one entry.
@@ -173,6 +207,7 @@ impl LogParser {
                     author: self.cur_author,
                     author_email: self.cur_author_email,
                     co_authors: self.cur_mates.drain(..).collect(),
+                    body: std::mem::take(&mut self.cur_body).into_boxed_str(),
                     time: self.cur_time,
                     subject,
                 });
@@ -209,9 +244,14 @@ mod tests {
         time: &str,
         subject: &str,
     ) -> Vec<u8> {
-        record_with_mates(oid, parents, author, email, time, "", subject)
+        record_with_mates(oid, parents, author, email, time, "", "", subject)
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one parameter per field of the record it builds; naming \
+                  them at each call site is what makes the fixtures read"
+    )]
     fn record_with_mates(
         oid: &str,
         parents: &str,
@@ -219,10 +259,11 @@ mod tests {
         email: &str,
         time: &str,
         mates: &str,
+        body: &str,
         subject: &str,
     ) -> Vec<u8> {
         let mut v = Vec::new();
-        for field in [oid, parents, author, email, time, mates, subject] {
+        for field in [oid, parents, author, email, time, mates, body, subject] {
             v.extend_from_slice(field.as_bytes());
             v.push(0);
         }
@@ -248,6 +289,8 @@ mod tests {
             "alice@example.com",
             "1700000000",
             "Claude Opus 5 <noreply@anthropic.com>\u{1f}Nameless",
+            "Why it was done.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\n\
+             Co-authored-by: Nameless",
             "pair on it",
         );
         let (commits, parser) = parse_all(&bytes, bytes.len());
@@ -258,6 +301,27 @@ mod tests {
         assert_eq!(parser.pool().get(mates[0].1), "noreply@anthropic.com");
         assert_eq!(parser.pool().get(mates[1].0), "Nameless");
         assert_eq!(parser.pool().get(mates[1].1), "");
+        // git hands the trailers back inside %b as well; the body the
+        // hover reads is the writing without them.
+        assert_eq!(&*commits[0].body, "Why it was done.");
+    }
+
+    #[test]
+    fn a_co_authored_by_in_the_prose_stays_in_the_body() {
+        // git did not call it a trailer (field 5 is empty), so neither
+        // does the filter — it is a sentence somebody wrote.
+        let bytes = record_with_mates(
+            A,
+            "",
+            "Alice",
+            "alice@example.com",
+            "1700000000",
+            "",
+            "I wrote Co-authored-by: nobody <n@e.com> in the body.",
+            "alone",
+        );
+        let (commits, _) = parse_all(&bytes, bytes.len());
+        assert!(commits[0].body.contains("Co-authored-by: nobody"));
     }
 
     #[test]

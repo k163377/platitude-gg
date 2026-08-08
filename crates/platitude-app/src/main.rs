@@ -59,6 +59,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/ClipboardHelper.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CoAuthorCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CoAuthorLine.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/CommitHoverCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CommandRowDelegate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CommandsPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DetailsPane.qml", "qt/qml/platitude");

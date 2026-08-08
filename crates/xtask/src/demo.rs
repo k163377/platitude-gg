@@ -224,10 +224,14 @@ fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
          Co-authored-by: Claude Opus 5 <noreply@anthropic.com>\n\
          Co-authored-by: Claude Fable 5 <noreply@anthropic.com>\n\
          Co-authored-by: Claude Opus 4.8 <noreply@anthropic.com>";
+    // The last address is deliberately long: an address has no length
+    // worth trusting, and a card that sizes itself to one has to elide
+    // rather than run off the window.
     const CROWD_SIGNED: &str = "feat: write this one with a crowd, signed\n\n\
          Co-authored-by: Claude Opus 5 <noreply@anthropic.com>\n\
          Co-authored-by: Claude Fable 5 <noreply@anthropic.com>\n\
-         Co-authored-by: Claude Opus 4.8 <noreply@anthropic.com>";
+         Co-authored-by: Claude Opus 4.8 \
+         <an.address.long.enough.to.need.eliding@subdomain.example.co.jp>";
     const PAIR: &str = "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>";
 
     repo.commit(

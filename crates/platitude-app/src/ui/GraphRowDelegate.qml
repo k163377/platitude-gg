@@ -18,6 +18,10 @@ Item {
     required property string author
     required property double atime
     required property string subject
+    /// Everything after the subject, minus the co-author trailers. Only
+    /// the hover card reads it — but the role has to be declared here or
+    /// it arrives as `undefined` and whoever touches it stops mid-way.
+    required property string body
     required property int node_lane
     required property int node_color
     required property int avatar
@@ -378,7 +382,7 @@ Item {
                     // face. Only the first — the rest are named in the
                     // row's hover.
                     const shared = rowItem.mateFace !== 0
-                    const ax = shared ? nodeX - 2 * Theme.borderWidth : nodeX
+                    const ax = shared ? nodeX - Theme.borderWidth : nodeX
                     const ay = shared ? midY - Theme.borderWidth : midY
                     laneCanvas.face(ctx, ax, ay, r, rowItem.avatar,
                                     rowItem.avatar_url)
@@ -501,12 +505,42 @@ Item {
                 rowItem.noteChipHover(-1, -1)
         }
     }
-    // Hover details: what the row no longer shows as columns.
-    ToolTip.visible: rowMouse.containsMouse
+    /// Where the pointer is along the row, so the card can open under it
+    /// rather than at the row's left edge — a row is the width of the
+    /// pane, and its left edge is nowhere near the pointer.
+    readonly property real pointerX: rowMouse.mouseX
+
+    // Hover details: what the row no longer shows as columns. The WIP
+    // row has no commit behind it, so it keeps the plain tooltip.
+    ToolTip.visible: rowMouse.containsMouse && rowItem.isWip
     ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: rowItem.isWip
-                  ? qsTr("Working-tree changes — not committed yet")
-                  : rowItem.author + "\n"
-                    + Qt.formatDateTime(new Date(rowItem.atime * 1000), "yyyy-MM-dd HH:mm") + "\n"
-                    + rowItem.oid_hex.substring(0, 8)
+    ToolTip.text: qsTr("Working-tree changes — not committed yet")
+
+    // Everything else opens the page's card after the same delay. The
+    // row reports; the page decides, because the card outlives this
+    // delegate (it is recycled the moment the row scrolls off).
+    Timer {
+        id: hoverDelay
+        interval: Metrics.tipDelayMs
+        onTriggered: {
+            if (rowMouse.containsMouse && rowItem.ListView.view)
+                rowItem.ListView.view.rowHoverRequested(rowItem, true)
+        }
+    }
+    onIsWipChanged: hoverDelay.stop()
+    ListView.onPooled: hoverDelay.stop()
+    Connections {
+        target: rowMouse
+        function onContainsMouseChanged() {
+            if (rowItem.isWip)
+                return
+            if (rowMouse.containsMouse) {
+                hoverDelay.restart()
+            } else {
+                hoverDelay.stop()
+                if (rowItem.ListView.view)
+                    rowItem.ListView.view.rowHoverRequested(rowItem, false)
+            }
+        }
+    }
 }

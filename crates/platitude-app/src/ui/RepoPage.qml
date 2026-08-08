@@ -1434,6 +1434,86 @@ Item {
         onClosed: page.refListWanted = false
         onPointerInsideChanged: page.settleRefList()
     }
+    // ---- the row's own card -----------------------------------------
+    // Opened by a row once the pointer has rested on it, closed when the
+    // pointer leaves both it and the row. Owned here because rows are
+    // recycled out from under it, the same reason the ref list is.
+    CommitHoverCard {
+        id: rowCard
+        textWidth: graphPane.width / 2
+        onPointerInsideChanged: page.settleRowCard()
+        onMatesPointed: inside => {
+            page.rowMatesPointed = inside
+            if (inside)
+                page.openRowMates()
+            else
+                page.settleRowMates()
+        }
+        matesLit: page.rowMatesLit
+    }
+    property bool rowCardWanted: false
+    /// The pointer is on the card's co-author stretch...
+    property bool rowMatesPointed: false
+    /// ...or on the list that stretch opened.
+    readonly property bool rowMatesLit:
+        page.rowMatesPointed || rowMateList.pointerInside
+    CoAuthorCard {
+        id: rowMateList
+        onPointerInsideChanged: page.settleRowMates()
+    }
+    function openRowCard(row) {
+        if (!row)
+            return
+        rowCard.subject = row.subject
+        rowCard.body = row.body
+        rowCard.author = row.author
+        rowCard.atime = row.atime
+        rowCard.mates = row.co_authors
+        // Under the pointer, not under the row: a row is as wide as the
+        // pane, so its left edge is nowhere near the hand.
+        const at = row.mapToItem(page, row.pointerX, row.height)
+        rowCard.x = at.x
+        rowCard.y = at.y
+        page.rowCardWanted = true
+        rowCard.open()
+    }
+    function settleRowCard() {
+        rowCardSettle.restart()
+    }
+    function openRowMates() {
+        if (rowCard.mates === "")
+            return
+        rowMateList.records = rowCard.mates.split(String.fromCharCode(31))
+        // Under the stretch that opened it, the way the ref list opens
+        // under its chip — the card's own left edge is somewhere else.
+        const line = rowCard.matesAnchor
+        const at = line.mapToItem(page, 0, line.height)
+        rowMateList.x = at.x
+        rowMateList.y = at.y
+        // What is left to the right of where it opens — see the details
+        // pane for why this is not simply the pane's width.
+        rowMateList.maxRowWidth = page.width - at.x - 2 * Theme.spaceSm
+        rowMateList.open()
+    }
+    function settleRowMates() {
+        rowCardSettle.restart()
+    }
+    // Closing waits a beat rather than a turn of the event loop. Walking
+    // from a line into the card it opened crosses a boundary where the
+    // two hovers change in different frames, and `Qt.callLater` runs
+    // between them — the card closed under the hand (2026-08-09 report).
+    Timer {
+        id: rowCardSettle
+        interval: Metrics.hoverKeepMs
+        onTriggered: {
+            if (!page.rowMatesLit)
+                rowMateList.close()
+            if (!rowCard.pointerInside && !page.rowCardWanted
+                && !page.rowMatesLit)
+                rowCard.close()
+        }
+    }
+
     property bool refListWanted: false
     function openRefList(records, anchor) {
         const at = anchor.mapToItem(page, 0, anchor.height)
@@ -1890,6 +1970,17 @@ Item {
             + " rows=" + graphModel.avatarRowCount()
             + " error=" + AppBackend.avatarError)
     }
+    // The card is opened synchronously; this just lets the layout settle
+    // before it is measured and photographed.
+    Timer {
+        id: rowCardTimer
+        interval: 400
+        onTriggered: AppBackend.report(
+            "row_card open=" + rowCard.opened
+            + " mates=" + rowMateList.opened
+            + " subject=" + (rowCard.subject !== "")
+            + " body=" + (rowCard.body !== ""))
+    }
     // The details have to arrive before the credit line they carry can
     // be opened or counted.
     Timer {
@@ -2338,6 +2429,22 @@ Item {
             // for it. The argument is the row.
             page.activateRow(graphModel.oidAt(Number(arg)))
             signatureTimer.start()
+        } else if (act === "row-card" || act === "row-card-mates") {
+            // Hover cannot be injected, so this enters where the row's
+            // delay timer would; `-mates` goes one step further, onto
+            // the co-author stretch inside the card. The argument is the
+            // row. Read the two as a pair: the second only means
+            // something next to a run where the list stayed shut.
+            const hovered = graphPane.view.itemAtIndex(Number(arg))
+            if (hovered) {
+                page.rowCardWanted = true
+                page.openRowCard(hovered)
+                if (act === "row-card-mates") {
+                    page.rowMatesPointed = true
+                    page.openRowMates()
+                }
+            }
+            rowCardTimer.start()
         } else if (act === "co-authors" || act === "co-authors-open") {
             // The credit line on the date row, and the card the pointer
             // opens under it. Hover cannot be injected, so `-open` writes
@@ -3365,6 +3472,13 @@ Item {
                         onChipExpandRequested: (records, anchor) =>
                             page.openRefList(records, anchor)
                         onChipCollapseRequested: page.closeRefListUnlessEntered()
+                        onRowHoverRequested: (row, inside) => {
+                            page.rowCardWanted = inside
+                            if (inside)
+                                page.openRowCard(row)
+                            else
+                                page.settleRowCard()
+                        }
                         onCreateBranchRequested: (oidHex, name) =>
                             repoTab.createBranch(name, oidHex, true)
                         onOpenRepositoryRequested: page.openRepositoryPicker()
