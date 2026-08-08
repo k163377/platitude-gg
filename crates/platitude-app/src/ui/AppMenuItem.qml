@@ -10,6 +10,18 @@ import platitude.ui
 MenuItem {
     id: menuItem
 
+    /// Whether this row is on offer for the thing the menu was opened on
+    /// — false where it cannot be chosen, and then it is not drawn at all
+    /// rather than greyed (デザイン規約 §メニュー).
+    ///
+    /// Kept apart from `visible`, which it drives, because `visible`
+    /// cannot be *asked*: a menu's list releases the rows it is not
+    /// showing and turns their visibility off behind the binding, so
+    /// every row of a closed menu reads as invisible. The menu and its
+    /// dividers have to know what is on offer before it opens.
+    property bool offered: true
+    visible: menuItem.offered
+
     /// A short warning said after the row's words ("already pushed").
     /// The row still runs on click — this is the tag that says what it
     /// costs, the same shape the amend editor uses.
@@ -82,7 +94,7 @@ MenuItem {
     // an empty row behind — a hole where the reader looks for the row
     // that is missing (measured on the file menu, whose two destructive
     // rows are one per bucket).
-    implicitHeight: menuItem.visible ? Theme.rowHeight : 0
+    implicitHeight: menuItem.offered ? Theme.rowHeight : 0
     implicitWidth: (menuItem.code !== ""
                       ? codeChip.implicitWidth + Theme.spaceSm : 0)
                    + itemLabel.implicitWidth

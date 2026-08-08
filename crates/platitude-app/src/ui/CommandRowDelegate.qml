@@ -46,7 +46,14 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.RightButton
-        onClicked: rowMenu.popup()
+        onClicked: {
+            // Read as the menu opens and left alone while it stands: a
+            // command still running has nothing to copy yet, and its
+            // output arriving must not push a second row in under the
+            // pointer (デザイン規約 §メニュー).
+            rowMenu.hasOutput = row.output !== ""
+            rowMenu.offer()
+        }
         ToolTip.visible: containsMouse && row.state !== "running"
         ToolTip.delay: Metrics.tipDelayMs
         // The reproducible form is long; it is here rather than in the
@@ -56,13 +63,15 @@ Rectangle {
 
     AppMenu {
         id: rowMenu
+        /// Whether git had said anything by the time the menu opened.
+        property bool hasOutput: false
         AppMenuItem {
             text: qsTr("Copy command")
             onTriggered: row.copyRequested(row.full)
         }
         AppMenuItem {
             text: qsTr("Copy output")
-            enabled: row.output !== ""
+            offered: rowMenu.hasOutput
             onTriggered: row.copyRequested(row.output)
         }
     }

@@ -644,6 +644,15 @@ Item {
     /// is still standing. Set only while its row is on screen to carry the
     /// answer; a fresh menu starts with nothing refused.
     property string forceDeleteBranch: ""
+    /// What this menu offers, worked out as it opens and left alone while
+    /// it stands — the same way the discard row's plan is (`discardPlan`).
+    /// The conditions behind them are live: a fetch on the timer alone
+    /// moves `busyCount`, and a refresh can land while the card is up. A
+    /// row that appears or vanishes under the pointer is a row clicked by
+    /// accident (デザイン規約 §メニュー).
+    property bool menuCanSwitch: false
+    property bool menuCanIntegrateFrom: false
+    property bool menuCanDelete: false
     function openRefMenu(kind, name, full, oidHex) {
         page.menuRefKind = kind
         page.menuRefName = name
@@ -651,9 +660,16 @@ Item {
         page.menuRefOid = oidHex
         page.forceDeleteBranch = ""
         page.rebasePublished = false
+        page.menuCanSwitch = (kind === "branch" || kind === "remote")
+                             && full !== workTree.branch
+        page.menuCanIntegrateFrom = page.canIntegrateFrom
+        // The branch the working tree is on cannot be deleted at all, and
+        // git says so rather than doing something else.
+        page.menuCanDelete = repoTab.busyCount === 0
+                             && !(kind === "branch" && full === workTree.branch)
         if (repoTab.state === "open" && page.rebaseRange !== "")
             repoTab.checkPublish(page.rebaseRange)
-        refMenu.popup()
+        refMenu.offer()
     }
 
     // ---- bringing two lines of history together --------------------
@@ -678,8 +694,7 @@ Item {
         onClosed: page.forceDeleteBranch = ""
         AppMenuItem {
             text: qsTr("Switch to %1").arg(page.menuRefId)
-            visible: page.menuRefKind === "branch" || page.menuRefKind === "remote"
-            enabled: page.menuRefId !== workTree.branch
+            offered: page.menuCanSwitch
             // Through the same dispatcher the graph's chips use: a remote
             // branch whose local one already exists cannot simply be
             // created, and that answer belongs in one place.
@@ -698,9 +713,10 @@ Item {
             code: "merge"
             //: Follows the `merge` chip: "merge topic into main".
             text: qsTr("%1 into %2").arg(page.menuRefId).arg(workTree.branch)
-            visible: page.menuRefKind === "branch" || page.menuRefKind === "remote"
-                     || page.menuRefKind === "tag"
-            enabled: page.canIntegrateFrom
+            offered: (page.menuRefKind === "branch"
+                      || page.menuRefKind === "remote"
+                      || page.menuRefKind === "tag")
+                     && page.menuCanIntegrateFrom
             onTriggered: repoTab.merge(page.menuRefId, false, false, "")
         }
         AppMenuItem {
@@ -710,20 +726,18 @@ Item {
             // Onto a tag as well would be a rebase onto a fixed point,
             // which is a thing to do — but the row that says it belongs
             // with the tag's own gestures, not squeezed in here.
-            visible: page.menuRefKind === "branch" || page.menuRefKind === "remote"
+            offered: (page.menuRefKind === "branch"
+                      || page.menuRefKind === "remote")
+                     && page.menuCanIntegrateFrom
             // Said, not asked (要望: rewriting a pushed commit shows a
             // warning): the rebase goes ahead, and this tag is the
             // warning. The count is the answer to this row's own range —
             // published means reachable from a remote-tracking ref, which
             // is only ever as fresh as the last fetch.
             note: page.rebasePublished ? qsTr("rewrites pushed commits") : ""
-            enabled: page.canIntegrateFrom
             onTriggered: repoTab.rebase(page.menuRefId, "", true, true)
         }
-        AppMenuSeparator {
-            visible: page.menuRefKind === "branch" || page.menuRefKind === "remote"
-                     || page.menuRefKind === "tag"
-        }
+        AppMenuSeparator {}
         // Nothing here repeats a gesture or a button: renaming and
         // creating a branch on a tag are a click away on the row itself,
         // and the commit's hash is on the pane the same click fills in.
@@ -763,12 +777,8 @@ Item {
             // What git said, in the row rather than on a bar: the branch
             // holds commits its reference point does not (§左メニューの所作).
             note: refusedRow ? qsTr("not merged") : ""
-            visible: page.menuRefKind === "branch" || heldRow
-            // The branch under the working tree cannot be deleted at all,
-            // and git says so rather than doing something else.
-            enabled: repoTab.busyCount === 0
-                     && !(page.menuRefKind === "branch"
-                          && page.menuRefId === workTree.branch)
+            offered: (page.menuRefKind === "branch" || heldRow)
+                     && page.menuCanDelete
             holdMs: heldRow ? Metrics.holdMs : 0
             // A branch's plain delete keeps the menu up: git's answer has
             // nowhere to land otherwise, and this row is where it lands.
@@ -870,6 +880,11 @@ Item {
     function deleteRow(kind, id, name, oidHex) {
         if (kind !== "branch")
             return
+        // The one row in any menu that outlives its own write (it stays
+        // open for git's answer), so it is also the one that can be
+        // clicked twice — the second click is the same request again.
+        if (repoTab.busyCount > 0)
+            return
         page.pendingDeleteBranch = id
         page.expectedRefusals++
         repoTab.deleteBranch(id, false)
@@ -914,6 +929,9 @@ Item {
     property string menuFileBucket: ""
     /// Where a staged rename came from ("" for every other row).
     property string menuFileOrig: ""
+    /// Whether this menu's writing rows were on offer as it opened, held
+    /// still for as long as it stands (`menuCanSwitch` and the rest).
+    property bool menuFileCanWrite: false
     function openFileMenu(bucket, path, origPath) {
         // A right-click is a click: it walks away from a question that
         // was standing, which may well be about another row.
@@ -921,16 +939,19 @@ Item {
         page.menuFileBucket = bucket
         page.menuFilePath = path
         page.menuFileOrig = origPath === undefined ? "" : origPath
+        page.menuFileCanWrite = repoTab.busyCount === 0
         // What the discard row would do, worked out once here: the choice
         // cannot change while the menu is up, so the words the row says
         // and the writes it runs are read off the same plan.
         page.discardPlan = page.planDiscard()
-        fileMenu.popup()
-        // Which rows the menu offers follows from the bucket, and a
-        // greyed or absent row is not something a screenshot can be
-        // trusted on.
+        fileMenu.offer()
+        // Which rows the menu offers follows from the bucket, and an
+        // absent row is not something a screenshot can be trusted on —
+        // least of all now that a row nobody can choose leaves no trace
+        // at all.
         if (AppBackend.autoAct !== "")
-            AppBackend.report("file_menu bucket=" + bucket)
+            AppBackend.report("file_menu bucket=" + bucket
+                              + " rows=" + fileMenu.offeredRows)
     }
     /// Undoing what happened to one file: what the chosen rows would cost
     /// and which git command each of them goes to.
@@ -1066,16 +1087,16 @@ Item {
             text: wipPane.workTree.sideOurs !== ""
                   ? qsTr("Keep %1's version").arg(wipPane.workTree.sideOurs)
                   : qsTr("Keep this branch's version")
-            visible: page.menuFileBucket === "conflicts"
-            enabled: repoTab.busyCount === 0
+            offered: page.menuFileBucket === "conflicts"
+                     && page.menuFileCanWrite
             onTriggered: page.takeSideNow("ours")
         }
         AppMenuItem {
             text: wipPane.workTree.sideTheirs !== ""
                   ? qsTr("Take %1's version").arg(wipPane.workTree.sideTheirs)
                   : qsTr("Take the incoming version")
-            visible: page.menuFileBucket === "conflicts"
-            enabled: repoTab.busyCount === 0
+            offered: page.menuFileBucket === "conflicts"
+                     && page.menuFileCanWrite
             onTriggered: page.takeSideNow("theirs")
         }
         // `Edit in`, not `Open in`: the two rows above say what the file
@@ -1098,19 +1119,19 @@ Item {
             text: wipPane.workTree.mergeTool !== ""
                   ? qsTr("Edit in %1").arg(wipPane.workTree.mergeTool)
                   : qsTr("Edit in <merge editor>…")
-            visible: page.menuFileBucket === "conflicts"
-            enabled: repoTab.busyCount === 0
+            offered: page.menuFileBucket === "conflicts"
+                     && page.menuFileCanWrite
             onTriggered: page.openInMergeTool()
         }
-        AppMenuSeparator { visible: page.menuFileBucket === "conflicts" }
+        AppMenuSeparator {}
         AppMenuItem {
             code: "stash"
             //: Follows the `stash` chip: "stash this file".
             text: wipPane.chosenCount > 1 ? qsTr("these files")
                                           : qsTr("this file")
             // git will not stash a tree with unresolved conflicts in it.
-            enabled: repoTab.busyCount === 0
-                     && page.menuFileBucket !== "conflicts"
+            offered: page.menuFileBucket !== "conflicts"
+                     && page.menuFileCanWrite
             onTriggered: {
                 const rows = wipPane.chosenRows()
                 const paths = []
@@ -1129,8 +1150,8 @@ Item {
             id: fileDiscardItem
             text: page.discardWords(page.discardPlan)
             note: page.discardNote(page.discardPlan)
-            visible: page.menuFileBucket !== "conflicts"
-            enabled: repoTab.busyCount === 0
+            offered: page.menuFileBucket !== "conflicts"
+                     && page.menuFileCanWrite
             holdMs: Metrics.holdMs
             onHeld: {
                 fileMenu.close()
@@ -1162,17 +1183,31 @@ Item {
     // wants it said, so the squash row carries a tag the way the amend
     // editor does. The answer lands a frame after the menu opens.
     property bool menuPublished: false
+    /// What these menus offer, held still for as long as they stand
+    /// (`menuCanSwitch` and the rest). `menuCanSequence` is the pair that
+    /// only add a commit, and so ask less of the repository than the rest.
+    property bool menuCanSequence: false
+    property bool menuCanIntegrate: false
+    property bool menuCanEditHistory: false
+    property bool menuCanMoveBranch: false
+    property bool menuStashCanWrite: false
     function openRowMenu(oidHex) {
         page.menuOid = oidHex
         page.menuStashRef = graphModel.stashRefOf(oidHex)
         if (page.menuStashRef !== "") {
-            stashMenu.popup()
+            page.menuStashCanWrite = repoTab.busyCount === 0
+            stashMenu.offer()
             return
         }
         page.menuPublished = false
+        page.menuCanSequence = repoTab.busyCount === 0
+                               && workTree.opText === ""
+        page.menuCanIntegrate = page.canIntegrateHere
+        page.menuCanEditHistory = page.canEditHistoryHere
+        page.menuCanMoveBranch = page.canMoveBranchHere
         if (repoTab.state === "open")
             repoTab.checkPublish(oidHex + "^!")
-        commitMenu.popup()
+        commitMenu.offer()
     }
 
     // The one thing a stash row has nowhere else: the click that opens
@@ -1182,12 +1217,12 @@ Item {
         id: stashMenu
         AppMenuItem {
             text: qsTr("Apply")
-            enabled: repoTab.busyCount === 0
+            offered: page.menuStashCanWrite
             onTriggered: repoTab.applyStash(page.menuStashRef)
         }
         AppMenuItem {
             text: qsTr("Pop")
-            enabled: repoTab.busyCount === 0
+            offered: page.menuStashCanWrite
             onTriggered: {
                 repoTab.popStash(page.menuStashRef)
                 page.selectedStashRef = ""
@@ -1201,7 +1236,7 @@ Item {
         AppMenuItem {
             id: stashDeleteItem
             text: qsTr("Delete")
-            enabled: repoTab.busyCount === 0
+            offered: page.menuStashCanWrite
             holdMs: Metrics.holdMs
             onHeld: {
                 stashMenu.close()
@@ -1216,7 +1251,7 @@ Item {
             code: "cherry-pick"
             //: Follows the `cherry-pick` chip: "cherry-pick this commit".
             text: qsTr("this commit")
-            enabled: repoTab.busyCount === 0 && workTree.opText === ""
+            offered: page.menuCanSequence
             onTriggered: repoTab.cherryPick(page.menuOid)
         }
         // The other half of the same pair: one copies the commit here,
@@ -1226,7 +1261,7 @@ Item {
             code: "revert"
             //: Follows the `revert` chip: "revert this commit".
             text: qsTr("this commit")
-            enabled: repoTab.busyCount === 0 && workTree.opText === ""
+            offered: page.menuCanSequence
             onTriggered: repoTab.revert(page.menuOid)
         }
         AppMenuSeparator {}
@@ -1238,7 +1273,7 @@ Item {
             code: "merge"
             //: Follows the `merge` chip: "merge this commit into main".
             text: qsTr("this commit into %1").arg(workTree.branch)
-            enabled: page.canIntegrateHere
+            offered: page.menuCanIntegrate
             onTriggered: repoTab.merge(page.menuOid, false, false, "")
         }
         AppMenuItem {
@@ -1246,7 +1281,7 @@ Item {
             //: Follows the `rebase` chip: "rebase main onto this commit".
             text: qsTr("%1 onto this commit").arg(workTree.branch)
             note: page.menuPublished ? qsTr("rewrites pushed commits") : ""
-            enabled: page.canIntegrateHere
+            offered: page.menuCanIntegrate
             onTriggered: repoTab.rebase(page.menuOid, "", true, true)
         }
         // No row for landing on the commit itself: doing so leaves HEAD
@@ -1264,7 +1299,7 @@ Item {
             // Said, not asked (要望: rewriting a pushed commit shows a
             // warning): the fold goes ahead, and this tag is the warning.
             note: page.menuPublished ? qsTr("already pushed") : ""
-            enabled: page.canEditHistoryHere
+            offered: page.menuCanEditHistory
             onTriggered: page.squashCommit(page.menuOid)
         }
         // The commit stops being part of the history, and what came after
@@ -1278,7 +1313,7 @@ Item {
             //: Follows the `drop` chip: "drop this commit".
             text: qsTr("this commit")
             note: page.menuPublished ? qsTr("already pushed") : ""
-            enabled: page.canEditHistoryHere
+            offered: page.menuCanEditHistory
             holdMs: Metrics.holdMs
             onHeld: {
                 commitMenu.close()
@@ -1292,9 +1327,9 @@ Item {
         // flag as a code chip (デザイン規約 §git 用語のコード表記) — the
         // hand that knows `reset --soft` finds its row at a glance and
         // the eye that does not reads the sentence alone. A submenu
-        // keeps the choice out of the way until it is asked for;
-        // disabling the submenu itself greys the row that opens it (its
-        // items are never reachable while it is off).
+        // keeps the choice out of the way until it is asked for; where
+        // there is no branch to move, the whole submenu goes and takes
+        // the row that opens it with it (`AppMenu.applies`).
         AppMenu {
             id: resetMenu
             titleCode: "reset"
@@ -1305,7 +1340,7 @@ Item {
             title: workTree.branch !== ""
                    ? qsTr("%1 here").arg(workTree.branch)
                    : qsTr("the branch here")
-            enabled: page.canMoveBranchHere
+            applies: page.menuCanMoveBranch
             AppMenuItem {
                 code: "--soft"
                 text: qsTr("Keep everything, staged")
@@ -2007,8 +2042,8 @@ Item {
             // That row is held rather than asked about, so there is no
             // question to stop at: the plain verb leaves the menu standing
             // for the shot, and "-go" runs the hold to its end. Which rows
-            // it offers is said in words too, since a greyed or absent row
-            // is not something a screenshot can be trusted on.
+            // it offers is said in words too, since a row that cannot be
+            // chosen leaves no trace in the picture at all.
             remotesModel.toggleFolder(arg.substring(0, arg.indexOf("/")))
             page.openRefMenu("remote", arg, arg, remotesModel.oidOfName(arg))
             AppBackend.report("ref_menu kind=remote delete=" + refDeleteItem.code
@@ -2110,17 +2145,29 @@ Item {
             // nothing has moved until the hold runs — and "reset-hard"
             // runs the hold to its end for the discarding write itself.
             page.openRowMenu(arg)
-            resetMenu.popup()
+            resetMenu.offer()
             if (act === "reset-hard")
                 hardResetItem.completeHold()
         } else if (act === "commit-menu" || act === "reset-menu") {
             // Nothing written: the menu is left standing for the overlay
             // shot. Which rows are offered is said in words as well — a
-            // greyed row is not something a screenshot can be trusted on.
-            page.openRowMenu(arg)
+            // row that cannot be chosen is not in the picture at all.
+            //
+            // With no row named, the row under HEAD's: most of this menu
+            // is about a commit the branch is *not* already standing on,
+            // so HEAD's own row would leave half of it out. Counted from
+            // where HEAD actually sits rather than from the top — the
+            // rows above it belong to whatever else the graph is showing
+            // (in the demo repository, a remote that is ahead).
+            let menuOid = arg
+            if (menuOid === "")
+                menuOid = graphModel.oidAt(
+                    graphModel.rowOf(workTree.headOid) + 1)
+            page.openRowMenu(menuOid)
             if (act === "reset-menu")
-                resetMenu.popup()
-            AppBackend.report("commit_menu can_move=" + page.canMoveBranchHere)
+                resetMenu.offer()
+            AppBackend.report("commit_menu rows=" + commitMenu.offeredRows
+                              + " can_move=" + page.menuCanMoveBranch)
         } else if (act === "wip") {
             // The working tree, as the row above the newest commit opens
             // it: the file list this pane's every other verb starts from.
