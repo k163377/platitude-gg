@@ -50,6 +50,7 @@ cargo fmt --all
 ## Rust 規約
 
 - production コードで `unwrap()` / `expect()` / `panic!` 禁止(テストは可)。`let _ =` で Result を捨てない
+- エラーは core が `thiserror` で型付き、app は `anyhow` 可
 - `#[expect(...)]` を `#[allow(...)]` より優先
 - `unsafe` は原則禁止(やむを得ない場合は `// SAFETY:` コメント必須)
 - 依存追加は最小限(軽量が目標)。追加時はライセンス確認必須
