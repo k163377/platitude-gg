@@ -187,8 +187,8 @@ ApplicationWindow {
     // back up inside the folder it last accepted — the repository — and
     // the next one is always a level up from there.
     function openRepositoryPicker() {
-        if (root.curPage !== null && root.curPage.pageTab.parentFolderUrl !== "")
-            folderDialog.currentFolder = root.curPage.pageTab.parentFolderUrl
+        if (root.curPage !== null && root.curPage.pageTab.pickerFolderUrl !== "")
+            folderDialog.currentFolder = root.curPage.pageTab.pickerFolderUrl
         folderDialog.open()
         if (AppBackend.autoAct !== "")
             AppBackend.report("picker folder=" + folderDialog.currentFolder)

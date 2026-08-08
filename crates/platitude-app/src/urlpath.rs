@@ -30,9 +30,16 @@ pub fn file_url_to_path(url: &str) -> PathBuf {
     }
 }
 
+/// The folder the picker opens at for a repository at `path`: the one it
+/// sits in — or the repository itself when it sits at a root, where there
+/// is nothing above to go up to and the root lists like any other folder.
+pub fn picker_folder_url(path: &Path) -> String {
+    path_to_file_url(path.parent().unwrap_or(path))
+}
+
 /// Converts a local path to a `file:` URL for QML. Empty for a path with
 /// no root: a dialog cannot be opened at a folder that is not one.
-pub fn path_to_file_url(path: &Path) -> String {
+fn path_to_file_url(path: &Path) -> String {
     let encoded = percent_encode(&path.to_string_lossy().replace('\\', "/"));
     if encoded.starts_with("//") {
         // UNC: the leading pair names the host, which the URL keeps.
@@ -148,6 +155,55 @@ mod tests {
             path_to_file_url(Path::new(r"\\server\share\repo")),
             "file://server/share/repo"
         );
+    }
+
+    #[test]
+    fn a_repository_opens_the_folder_it_sits_in() {
+        assert_eq!(
+            picker_folder_url(Path::new("C:/Users/dev/repo")),
+            "file:///C:/Users/dev"
+        );
+        assert_eq!(
+            picker_folder_url(Path::new("/home/dev/repo")),
+            "file:///home/dev"
+        );
+    }
+
+    // What counts as a root is the platform's own reading of the path, so
+    // the drive and UNC shapes are only roots where they mean anything.
+    #[test]
+    fn a_repository_at_a_root_opens_the_root() {
+        // Nothing is above a root, so the picker stays there rather than
+        // falling back on wherever the dialog happens to have been left.
+        assert_eq!(picker_folder_url(Path::new("/")), "file:///");
+        // A repository one step in still has the root to go up to.
+        assert_eq!(picker_folder_url(Path::new("/repo")), "file:///");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_repository_at_a_drive_root_opens_the_drive() {
+        assert_eq!(picker_folder_url(Path::new("C:/")), "file:///C:/");
+        assert_eq!(picker_folder_url(Path::new(r"C:\")), "file:///C:/");
+        assert_eq!(picker_folder_url(Path::new("C:/repo")), "file:///C:/");
+        // A share is a root of its own: `\\server` is not a folder. Handed
+        // back by `parent()` that root carries its separator and the URL
+        // keeps it, which is what a folder URL looks like anyway
+        // (`file:///C:/`); given as the repository itself it has none.
+        assert_eq!(
+            picker_folder_url(Path::new(r"\\server\share")),
+            "file://server/share"
+        );
+        assert_eq!(
+            picker_folder_url(Path::new(r"\\server\share\repo")),
+            "file://server/share/"
+        );
+    }
+
+    #[test]
+    fn a_path_with_no_root_has_no_folder_to_open() {
+        assert_eq!(picker_folder_url(Path::new("")), "");
+        assert_eq!(picker_folder_url(Path::new("repo")), "");
     }
 
     #[test]
