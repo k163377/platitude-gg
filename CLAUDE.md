@@ -42,6 +42,7 @@ cargo fmt --all
 **Done の基準**: fmt / clippy / test が全て通ること。テストを実行していないコードは動かないものとして扱う。UI 配線の Done は `cargo xtask verify-ui` が PASS し PNG を目視するまで(手順・動詞表・Windows の罠は **verify-ui スキル**を必ず呼ぶ)。
 
 - release ビルドしないと QML(exe 埋め込み)は反映されない — 起動確認前に必ず `cargo build --release`
+- **Linux での確認は `cargo xtask linux <cargo のコマンド>`** — Windows / mac ではコンテナ([ci/linux/Dockerfile](ci/linux/Dockerfile))、Linux ではその場で実行。ビルド先は docker volume でこの `target/` を汚さない。イメージは Qt 未搭載のため今は `-p platitude-core` のみ。ベースは CI の ubuntu-latest に揃えた LTS で、要望.md が定める最低 git バージョンを積んだ唯一の環境
 - **統合テストは 1 バイナリ**(`tests/it/` のモジュール。`cargo test` はバイナリを 1 つずつ走らせるので、`tests/` 直下に .rs を足すと別バイナリ = 直列実行とリンク 1 本分の後退。新しい統合テストは `it/` にモジュールとして足し `main.rs` へ登録)。部分実行は `cargo test -p platitude-core --test it <モジュール名>`
 - **並行セッション(複数エージェント)は git worktree で分ける** — 同一 checkout の共有は `target/` が単一障害点(cargo のビルドロックで直列化・incremental を相互に無効化・verify-ui が起動する release exe に別セッションの編集が焼き込まれた実績)。worktree なら target も demo / screenshot(temp 下の nanos 付きユニークパス)も自然に分離される
 - **worktree は固定名を使い回す**: `claude --worktree <固定名>`(`.claude/worktrees/<固定名>` に恒久作成・次回同名で再開。worktree ごとの `target/` = incremental キャッシュがセッションを跨いで温存される)。使い捨ての自動命名 worktree を乱造しない。ブランチは `worktree-<名前>` に切られる。**完了しても main へは戻さない**(§Git 運用)。**本体 checkout で実装作業をしない**(ドキュメント編集・レビューは可)

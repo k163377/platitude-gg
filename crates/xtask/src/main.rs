@@ -6,9 +6,11 @@
 
 mod demo;
 mod hook;
+mod linux;
 mod qt;
 mod verify;
 
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const USAGE: &str = "\
@@ -57,6 +59,19 @@ commands:
         --restore         open the tabs the config directory remembers
                           instead of a named repository
 
+  linux [--rebuild] [--shell] <cargo command…>
+      Run a cargo command against this checkout on Ubuntu, in a container
+      built from ci/linux/Dockerfile. On Linux it skips the container and
+      runs the command where it stands.
+        cargo xtask linux test -p platitude-core --test it
+      The image carries no Qt yet, so platitude-core is the package it can
+      build. Its build directory is a docker volume — this target/ is
+      untouched, and so is the host's git.
+      options:
+        --rebuild   build the image again even if one already matches
+                    ci/linux/Dockerfile
+        --shell     open a shell in the container instead of running cargo
+
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads
       the hook payload from stdin). Events: pre-write, post-write,
@@ -71,6 +86,7 @@ fn main() -> ExitCode {
             println!("{}", path.display());
         }),
         Some("verify-ui") => verify::run(&args[1..]),
+        Some("linux") => linux::run(&args[1..]),
         Some("hook") => hook::run(&args[1..]),
         _ => {
             print!("{USAGE}");
@@ -84,6 +100,16 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// The workspace root, resolved at compile time from this crate's location.
+/// A worktree builds its own task runner, so this is that worktree's root.
+pub(crate) fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap_or(Path::new("."))
+        .to_path_buf()
 }
 
 /// Runs a command to completion, capturing output; errors carry context.

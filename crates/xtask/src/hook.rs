@@ -569,6 +569,9 @@ mod tests {
         for command in [
             "cargo xtask verify-ui commit --preset basic",
             "cargo xtask demo-repo basic",
+            // A container start is headless by construction: it has no
+            // display to take and it holds this tree's exe not at all.
+            "cargo xtask linux test -p platitude-core",
             "QT_QPA_PLATFORM=offscreen PG_AUTO_QUIT_MS=3000 ./target/release/platitude-gg.exe",
             "cargo build --release",
             "cargo run --quiet -p xtask -- hook pre-write",

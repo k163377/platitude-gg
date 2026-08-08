@@ -8,7 +8,7 @@
 //! `screenshot saved=true` stderr line as the verdict.
 
 use std::io::BufRead;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -92,18 +92,9 @@ fn parse(args: &[String]) -> Result<Options, String> {
     Ok(opts)
 }
 
-/// The workspace root, resolved at compile time from this crate's location.
-fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .unwrap_or(Path::new("."))
-        .to_path_buf()
-}
-
 pub fn run(args: &[String]) -> Result<(), String> {
     let opts = parse(args)?;
-    let root = workspace_root();
+    let root = crate::workspace_root();
     let path = crate::qt::path_with_qt()?;
 
     // Named repositories win outright; otherwise one fresh demo repository
