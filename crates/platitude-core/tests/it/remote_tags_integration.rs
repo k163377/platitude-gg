@@ -217,38 +217,11 @@ async fn opened(work: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
 }
 
 /// The chips each row carries right now, keyed by commit.
-///
-/// Rows arrive with the walk and their chips are corrected afterwards:
-/// a fetch that moves no ref this repository holds rebuilds nothing, so
-/// what the remote turned out to have reaches the graph as `LabelsChanged`
-/// against rows already on screen. Reading only the walk would miss it.
 fn rows_now(events: &[SessionEvent]) -> HashMap<String, Vec<RefLabel>> {
-    let mut by_row: HashMap<u32, (String, Vec<RefLabel>)> = HashMap::new();
-    for e in events {
-        match e {
-            SessionEvent::LogStarted { .. } => by_row.clear(),
-            SessionEvent::LogReplaced { rows, .. } => {
-                by_row.clear();
-                for r in rows {
-                    by_row.insert(r.row, (r.oid_hex.clone(), r.labels.clone()));
-                }
-            }
-            SessionEvent::LogChunk { rows, .. } => {
-                for r in rows {
-                    by_row.insert(r.row, (r.oid_hex.clone(), r.labels.clone()));
-                }
-            }
-            SessionEvent::LabelsChanged { rows } => {
-                for (row, labels) in rows {
-                    if let Some(entry) = by_row.get_mut(row) {
-                        entry.1 = labels.clone();
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-    by_row.into_values().collect()
+    crate::support::replay_graph(events)
+        .into_values()
+        .map(|seen| (seen.oid_hex, seen.labels))
+        .collect()
 }
 
 fn tag<'a>(snapshot: &'a RefsSnapshot, name: &str) -> &'a TagItem {

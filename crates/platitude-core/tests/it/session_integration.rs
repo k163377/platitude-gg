@@ -12,15 +12,40 @@ use platitude_core::identity::SignatureStatus;
 use platitude_core::session::{RepoSession, SessionEvent, SessionSink};
 use platitude_core::{GitExecutor, Oid};
 
+/// Picks the event a [`CaptureSink`] hook fires on.
+type When = Box<dyn Fn(&SessionEvent) -> bool + Send>;
+/// What runs inside that event's delivery.
+type Then = Box<dyn FnOnce() + Send>;
+
 struct CaptureSink {
     events: Mutex<Vec<SessionEvent>>,
+    hook: Mutex<Option<(When, Then)>>,
 }
 
 impl CaptureSink {
     fn new() -> Arc<Self> {
         Arc::new(Self {
             events: Mutex::new(Vec::new()),
+            hook: Mutex::new(None),
         })
+    }
+
+    /// Runs `run` once, from inside the sink call that delivers the first
+    /// event `when` accepts — the only place a test can stand in the
+    /// middle of a read. Everything the session sends comes through here,
+    /// so a hook that parks holds the reader there while the test drives
+    /// the rest.
+    ///
+    /// A parked hook blocks the worker thread its reader runs on, and
+    /// tokio leaves a task queued there queued: whatever has to run
+    /// meanwhile must be started from the test's own thread, not from
+    /// inside the hook.
+    fn hook_once(
+        &self,
+        when: impl Fn(&SessionEvent) -> bool + Send + 'static,
+        run: impl FnOnce() + Send + 'static,
+    ) {
+        *self.hook.lock().unwrap() = Some((Box::new(when), Box::new(run)));
     }
 
     /// Number of recorded events matching `pred`.
@@ -114,7 +139,17 @@ impl CaptureSink {
 
 impl SessionSink for CaptureSink {
     fn event(&self, event: SessionEvent) {
+        let run = {
+            let mut slot = self.hook.lock().unwrap();
+            let fires = slot.as_ref().is_some_and(|(when, _)| when(&event));
+            fires.then(|| slot.take().map(|(_, run)| run)).flatten()
+        };
         self.events.lock().unwrap().push(event);
+        // Outside both locks: a parked hook must not hold the recording
+        // shut, or the events it is waiting on could never be written.
+        if let Some(run) = run {
+            run();
+        }
     }
 }
 
@@ -191,27 +226,12 @@ async fn open_streams_the_full_pipeline() {
     // Labels: the head row must end up carrying main (+ v1 tag), either
     // inline or via a LabelsChanged update.
     sink.wait_for("labels on head row", |evs| {
-        let mut latest: Vec<String> = Vec::new();
-        for e in evs {
-            match e {
-                SessionEvent::LogChunk { rows, .. } => {
-                    for r in rows {
-                        if r.row == 1 {
-                            latest = r.labels.iter().map(|l| l.text.clone()).collect();
-                        }
-                    }
-                }
-                SessionEvent::LabelsChanged { rows } => {
-                    for (row, labels) in rows {
-                        if *row == 1 {
-                            latest = labels.iter().map(|l| l.text.clone()).collect();
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-        (latest.contains(&"main".to_string()) && latest.contains(&"v1".to_string())).then_some(())
+        let seen = crate::support::replay_graph(evs);
+        let latest: Vec<&str> = seen
+            .get(&1)
+            .map(|row| row.labels.iter().map(|l| l.text.as_str()).collect())
+            .unwrap_or_default();
+        (latest.contains(&"main") && latest.contains(&"v1")).then_some(())
     })
     .await;
 
@@ -1712,6 +1732,92 @@ async fn an_external_ref_move_rebuilds_the_graph() {
         log_starts(&events[..]),
         1,
         "the rebuild replaced in place; only opening resets and streams"
+    );
+    drop(events);
+    session.close();
+}
+
+/// Chips are diffed against the graph that is on screen, so they are only
+/// ever sent for that one. A rebuild landing in the middle of a refs read
+/// moves every commit down a row (the WIP row goes in at the top), and row
+/// numbers taken before it name other commits after it. Nothing takes such
+/// a mistake back either: the session believes those chips are on screen,
+/// so the next read has nothing to say and the next rebuild nothing to
+/// swap.
+///
+/// The hook makes the interleaving exact rather than hoped for: it holds
+/// the read at the sink call that publishes its snapshot while the test
+/// rebuilds the graph under it.
+#[tokio::test(flavor = "multi_thread")]
+async fn chips_read_from_one_graph_do_not_land_on_another() {
+    let mut repo = TestRepo::init();
+    let root = repo.commit_file("f.txt", "0\n", "root");
+    repo.commit_file("f.txt", "1\n", "middle");
+    let head = repo.commit_file("f.txt", "2\n", "head");
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    sink.settled_stream_gen(3).await;
+
+    // Something for the read to find, on the last row of the graph it
+    // reads it from: a chip that travels as a diff instead of with a walk.
+    repo.git(&["tag", "v2", &root]);
+
+    let (arrived, at_the_window) = tokio::sync::oneshot::channel();
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    sink.hook_once(
+        |e| {
+            matches!(e, SessionEvent::RefsLoaded { snapshot }
+                if snapshot.tags.iter().any(|t| t.short == "v2"))
+        },
+        move || {
+            let _ = arrived.send(());
+            let _ = held.recv_timeout(Duration::from_secs(20));
+        },
+    );
+    session.refresh_refs();
+    at_the_window.await.expect("the read reached the window");
+
+    // Rebuilt from here, with the read held: dirtying the tree puts the
+    // WIP row at the top, so every row number that read took moves down
+    // one.
+    repo.write_file("f.txt", "dirty\n");
+    session.refresh_status();
+    sink.wait_for("the rebuild that adds the WIP row", |evs| {
+        evs.iter()
+            .any(|e| matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 4))
+            .then_some(())
+    })
+    .await;
+    release.send(()).expect("let the read finish");
+
+    sink.settled_stream_gen(4).await;
+    // Chips travel on an event of their own: let a late one land rather
+    // than reading the graph before it could have arrived.
+    tokio::time::sleep(Duration::from_millis(400)).await;
+
+    let events = sink.events.lock().unwrap();
+    let rows = crate::support::replay_graph(&events[..]);
+    let wearing = |name: &str| -> Vec<&str> {
+        rows.values()
+            .filter(|seen| seen.labels.iter().any(|l| l.text == name))
+            .map(|seen| seen.oid_hex.as_str())
+            .collect()
+    };
+    assert_eq!(
+        wearing("v2"),
+        vec![root.as_str()],
+        "the tag reached the commit it names, and only it: {rows:?}"
+    );
+    assert_eq!(
+        wearing("main"),
+        vec![head.as_str()],
+        "and the branch stayed where it was: {rows:?}"
     );
     drop(events);
     session.close();

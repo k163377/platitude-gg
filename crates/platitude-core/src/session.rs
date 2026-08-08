@@ -254,7 +254,11 @@ pub enum SessionEvent {
         truncated: bool,
     },
     /// Labels of already-delivered rows changed (refs arrived/refreshed).
+    /// `generation` names the graph the row numbers were read from, so a
+    /// consumer showing another one drops them instead of putting chips
+    /// on whatever commit now sits at those numbers.
     LabelsChanged {
+        generation: u64,
         rows: Vec<(u32, Vec<RefLabel>)>,
     },
     /// Shared rather than owned: every sidebar section is handed the whole
@@ -520,6 +524,12 @@ struct WriteRequest {
 #[derive(Default)]
 struct Shared {
     builder: GraphBuilder,
+    /// The graph the consumer is on — the last pass that reached it, in
+    /// the row numbers `builder`, `applied` and `sent_rows` speak in.
+    /// Not `log_gen`: that counter is bumped before a pass takes this
+    /// lock and bumped by passes that send nothing at all, and either way
+    /// everything here still belongs to the walk that was shown.
+    generation: u64,
     /// Label chips per commit id, derived from the last refs snapshot.
     label_map: HashMap<Oid, Vec<RefLabel>>,
     /// Labels currently shown per row (for diffing on refs refresh).
@@ -1047,13 +1057,18 @@ impl RepoSession {
     ) -> Result<(), ()> {
         let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
         {
-            // Reset graph state for the new stream under one lock.
+            // Reset graph state for the new stream and announce it under
+            // one lock: everything that reads row numbers out of `shared`
+            // takes the same lock and sends what it read before letting
+            // go, so no message can describe a graph the consumer is not
+            // on yet (see `apply_refs`).
             let mut shared = self.lock_shared();
             shared.builder = GraphBuilder::new();
+            shared.generation = generation;
             shared.applied.clear();
             shared.sent_rows.clear();
+            self.sink.event(SessionEvent::LogStarted { generation });
         }
-        self.sink.event(SessionEvent::LogStarted { generation });
         let started = Instant::now();
         match self.stream_log(workdir, generation, options, cancel).await {
             Ok(totals) => {
@@ -1115,6 +1130,7 @@ impl RepoSession {
             if self.log_gen.load(Ordering::SeqCst) != generation {
                 return; // superseded by a newer restart
             }
+            let elapsed_ms = started.elapsed().as_millis() as u64;
             let mut applied: HashMap<u32, Vec<RefLabel>> = HashMap::new();
             for row in &mut rows {
                 if let Ok(oid) = Oid::from_hex_str(&row.oid_hex)
@@ -1132,19 +1148,28 @@ impl RepoSession {
                 // reset the view (scroll anchor, selection re-resolve) for
                 // an identical picture. Background refreshes land here on
                 // every quiet auto-fetch tick.
+                //
+                // The generation stays behind with it. Nothing was sent,
+                // so the graph on screen is still the one before this
+                // pass — and this walk numbered its rows the same way, or
+                // it would not have compared equal.
                 tracing::debug!(generation, total, "graph rebuild unchanged; swap skipped");
                 return;
             }
             shared.sent_rows = rows.clone();
+            shared.generation = generation;
+            // Still under the lock (see run_direct_pass): a refs read that
+            // takes it next diffs chips against this graph, and its event
+            // must not overtake the rows it numbers.
+            self.sink.event(SessionEvent::LogReplaced {
+                generation,
+                rows,
+                elapsed_ms,
+                // See run_direct_pass: the walk decides truncation, not
+                // the shown row count.
+                truncated: options.limit.is_some_and(|n| walked >= n),
+            });
         }
-        self.sink.event(SessionEvent::LogReplaced {
-            generation,
-            rows,
-            elapsed_ms: started.elapsed().as_millis() as u64,
-            // See run_direct_pass: the walk decides truncation, not the
-            // shown row count.
-            truncated: options.limit.is_some_and(|n| walked >= n),
-        });
     }
 
     /// Refreshes refs, status(+op state), stashes and worktrees
@@ -1239,15 +1264,13 @@ impl RepoSession {
                 let mut snapshot = build_snapshot(&refs, &head, &remote_tags, &joins);
                 snapshot.remote_names = remotes.into_iter().map(|r| r.name).collect();
                 let label_map = build_label_map(&refs, &head, &remote_tags, &joins);
-                let label_updates = self.apply_refs(label_map);
                 self.sink.event(SessionEvent::RefsLoaded {
                     snapshot: self.share_snapshot(snapshot),
                 });
-                if !label_updates.is_empty() {
-                    self.sink.event(SessionEvent::LabelsChanged {
-                        rows: label_updates,
-                    });
-                }
+                // Last, and not before the snapshot: the chip diff is read
+                // and sent under the graph lock (see `apply_refs`), and
+                // nothing else may run inside it.
+                self.apply_refs(label_map);
                 previous.is_some_and(|previous| previous != key)
             }
             (Err(e), _) | (_, Err(e)) => {
@@ -2903,9 +2926,18 @@ impl RepoSession {
         shared
     }
 
-    /// Installs a new label map into the join and returns the rows whose
+    /// Installs a new label map into the join and sends the rows whose
     /// chips changed.
-    fn apply_refs(&self, label_map: HashMap<Oid, Vec<RefLabel>>) -> Vec<(u32, Vec<RefLabel>)> {
+    ///
+    /// Read and send happen under one lock, and the row numbers travel
+    /// with the graph they were read from: a log pass installs its own
+    /// state and announces it under the same lock, so a diff can neither
+    /// be invalidated between the two nor arrive ahead of the rows it
+    /// numbers. The generation covers what the lock cannot — a superseded
+    /// pass that installs late leaves `shared` describing a graph the
+    /// consumer already dropped, and its row numbers point at other
+    /// commits there.
+    fn apply_refs(&self, label_map: HashMap<Oid, Vec<RefLabel>>) {
         let mut shared = self.lock_shared();
         shared.label_map = label_map;
 
@@ -2936,7 +2968,13 @@ impl RepoSession {
                 sent.labels = labels.clone();
             }
         }
-        changed
+        if changed.is_empty() {
+            return;
+        }
+        self.sink.event(SessionEvent::LabelsChanged {
+            generation: shared.generation,
+            rows: changed,
+        });
     }
 }
 

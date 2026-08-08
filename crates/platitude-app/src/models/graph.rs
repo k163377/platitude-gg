@@ -230,7 +230,12 @@ impl GraphModel {
                     self.extend_notified(items);
                     self.row_total = self.rows.len() as i32;
                 }
-                GraphMsg::Labels { rows } => {
+                GraphMsg::Labels { generation, rows } => {
+                    if generation != self.generation {
+                        // Row numbers of a graph this model no longer
+                        // shows: the chips belong to other commits here.
+                        continue;
+                    }
                     for (row, labels) in rows {
                         let idx = row as usize;
                         if let Some(existing) = self.rows.get(idx) {

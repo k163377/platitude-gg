@@ -122,6 +122,7 @@ pub enum GraphMsg {
         rows: Vec<LogRow>,
     },
     Labels {
+        generation: u64,
         rows: Vec<(u32, Vec<RefLabel>)>,
     },
     Finished {
@@ -352,8 +353,8 @@ impl SessionSink for BridgeSink {
                 elapsed_ms,
                 truncated,
             }),
-            SessionEvent::LabelsChanged { rows } => {
-                self.feeds.graph.push(GraphMsg::Labels { rows });
+            SessionEvent::LabelsChanged { generation, rows } => {
+                self.feeds.graph.push(GraphMsg::Labels { generation, rows });
             }
             SessionEvent::RefsLoaded { snapshot } => {
                 self.feeds.tab.push(TabMsg::Remotes {
