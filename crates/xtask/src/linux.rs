@@ -19,7 +19,18 @@
 //! the host's. One target/ shared between two operating systems is two
 //! cargos on one build lock and two sets of fingerprints for the same paths
 //! — the serialized-and-rebuilding failure worktrees exist to avoid, one
-//! boundary further out.
+//! boundary further out. The cargo registry is a volume for the same
+//! reason, and the tests build their repositories under the container's own
+//! /tmp, so the only thing crossing the host filesystem is reading source.
+//!
+//! Docker says that much is slow, and it is: over the 162 source files,
+//! stat costs 331ms against 3ms on the container's own filesystem and
+//! reading them 438ms against 6ms (`cargo metadata` 151 against 56). A
+//! hundred times, and a third of a second — cargo pays it once per build to
+//! check fingerprints, against a compile measured in seconds. Keeping a
+//! second copy of the tree inside a volume would buy that back and cost a
+//! second answer to "which tree is the real one", so the source stays where
+//! it is edited.
 //!
 //! One thing does not survive the boundary: a worktree's `.git` is a file
 //! naming an absolute Windows path, which git inside reads as relative and
@@ -102,6 +113,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let tag = image_tag(&root, &stage)?;
     if rebuild || !image_exists(&tag)? {
         build_image(&root, &stage, &tag)?;
+        note_stale_images(&stage, &tag);
     }
     in_container(&root, &tag, &command, shell)
 }
@@ -224,6 +236,38 @@ fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
         return Err("docker build failed".into());
     }
     Ok(())
+}
+
+/// Says so when older images of this stage are still on disk. The tag is a
+/// fingerprint, so every edit to the Dockerfile leaves the last one behind
+/// — 1.5GB for the core stage, over 4GB for the app stage — and nothing
+/// else will ever mention them. Removing them here is not this command's
+/// call: a checkout next door may be answering with one of them, and an
+/// image is the user's disk.
+fn note_stale_images(stage: &str, keep: &str) {
+    let prefix = format!("{IMAGE}:{stage}-");
+    let Ok(out) = Command::new("docker")
+        .args(["images", IMAGE, "--format", "{{.Repository}}:{{.Tag}}"])
+        .stderr(Stdio::null())
+        .output()
+    else {
+        return;
+    };
+    let listed = String::from_utf8_lossy(&out.stdout);
+    let stale: Vec<&str> = listed
+        .lines()
+        .map(str::trim)
+        .filter(|tag| tag.starts_with(&prefix) && *tag != keep)
+        .collect();
+    if stale.is_empty() {
+        return;
+    }
+    println!(
+        "{} older {stage} image(s) are still on disk and nothing will use them \
+         again: docker image rm {}",
+        stale.len(),
+        stale.join(" ")
+    );
 }
 
 fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Result<(), String> {
