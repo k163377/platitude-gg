@@ -389,9 +389,6 @@ Rectangle {
             code: !fetchButton.stopped
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
-            // Both of the pair keep the seat, so they stay one width even
-            // though only one of them is wearing a mark at a time.
-            alertSeat: true
             tone: fetchButton.stopped ? Theme.danger
                   : fetchButton.fails > 0 ? Theme.warning
                   : Theme.textPrimary
@@ -480,7 +477,6 @@ Rectangle {
             // branch's standing with its remote changes under it.
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
-            alertSeat: true
             tone: pushButton.warned ? Theme.warning : Theme.textPrimary
             // A force push on the wire is still a force push, and a second
             // go at one git turned down is still the button that was turned
