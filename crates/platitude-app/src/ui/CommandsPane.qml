@@ -68,11 +68,17 @@ Rectangle {
                 }
                 // Why the panel is up, in git's own words. One line here;
                 // the row that failed keeps the whole of it.
+                //
+                // git's messages run to several lines, and eliding does
+                // not make text one line — it trims the last one. Without
+                // a cap the band grows to fit them and the message is
+                // painted over the rows below it.
                 Label {
                     Layout.fillWidth: true
                     visible: pane.errorText !== ""
                     text: "— " + pane.errorText
                     elide: Text.ElideRight
+                    maximumLineCount: 1
                     font.pixelSize: Theme.fontSm
                     color: Theme.danger
                     MouseArea {

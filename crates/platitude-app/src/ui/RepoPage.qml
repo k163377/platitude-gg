@@ -2279,7 +2279,18 @@ Item {
                 const refused = page.pendingDeleteBranch
                 page.pendingDeleteBranch = ""
                 page.noteForceDelete(refused)
+                page.pendingRenameRemote = ""
+                page.pendingRenameTo = ""
+                return
             }
+            // Nothing else on screen says what git said, so the log comes
+            // up (デザイン規約 §git が言ったことを読む場所). Raised from
+            // the answer rather than from the commands, because the ones
+            // that answer by their exit code do not raise it themselves —
+            // and whether an operation built out of several of them failed
+            // is a question only its own answer can settle.
+            page.commandsOpen = true
+            commandsPane.showLatest()
             // A rename that did not happen has nothing to carry over.
             page.pendingRenameRemote = ""
             page.pendingRenameTo = ""

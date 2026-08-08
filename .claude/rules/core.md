@@ -19,6 +19,7 @@ core のファイルを読み書きすると自動ロードされる。常時必
 - **`git stash pop` の非ゼロ終了は「何も起きなかった」を意味しない** — 作業ツリー側の conflict なら**マージ済み**でマーカーを残し stash も残す(`Index was not unstashed`)が、staged 側が衝突すると**丸ごと拒否**して何もしない(`conflicts in index. Try without --index.` → `--index` 無しで再試行する)。判定は exit code ではなく status の unmerged 有無で行う(実測)
 - 書き込みは**セッション単位のキューで直列化**する(ロックでは順序が保証されない — spawn したタスクが mutex を取る順は実行順と一致しない)
 - **複数コマンドの合成は 1 手目が失敗したら止める**(`?` で伝播。途中まで進めた状態で次を撃たない)。落とし穴は**失敗が `Ok` に化ける経路** — `switch` の拒否(`CheckoutOutcome::Blocked`)と `stash pop` の非ゼロ終了は成功として返るので、そこだけは明示的に判定し、**戻せるものは戻す**(`session::carry_across` は tree を空にしても拒まれたら stash を pop で戻す)。失敗後に走ってよいのは読み取りだけ(`catch_up_after` の fetch)
+- **終了コードを自分で読むコマンドには `answers_by_code()` を付ける** — 付けないとコマンドログが勝手に開く。対象は `switch`(exit 1 = 「作業が邪魔」= stash で回り直す合図)・`stash pop` / `pop --index`(exit 1 = conflict 着地か無処理かは tree が決める)・`rev-parse --verify --quiet refs/stash`(exit 1 = 「stash が 1 つも無い」。**stash を持ったことのない全リポジトリが返す**)。操作が本当に失敗したかは書き込みの答えが言う(規約 §git が言ったことを読む場所)
 - **`stash pop` の非ゼロを conflict と読んでよいのは、元の tree に unmerged が無かった時だけ** — git は unmerged なファイルがある index へは戻さず**丸ごと拒否**する(`could not write index` / `<path>: needs merge`)ので、後に残る conflict は元のもの。前後を比べずに `conflicts_now` だけを見ると、何もしなかった pop が成功に化ける(実測。`session::stash_pop` の `settled_first`)
 - `git config <key> <value>` に **`--` セパレータを付けない**(`--` 自体が値として保存される)。ダッシュ始まりの値はそのまま渡して通る
 - **identity(`user.name` / `user.email`)に独自バリデーションを足さない** — git が拒むのは**空の name だけ**(空 email は通り author 行が `<>` になる)。`<` `>` と改行は author 行から黙って落とされ、前後の空白・句読点は削られる。config 書き込み時に改行は `\n` にエスケープされるので設定注入は起きない(実測)

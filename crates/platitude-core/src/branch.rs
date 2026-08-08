@@ -86,7 +86,14 @@ pub async fn checkout(
     target: &CheckoutTarget,
     cancel: &CancellationToken,
 ) -> Result<CheckoutOutcome, GitError> {
-    let cmd = GitCommand::new().cwd(workdir).arg("switch");
+    // Exit 1 is this command answering "not while that work is there",
+    // which the caller acts on rather than reports (it goes round through
+    // a stash). Only 0 and 1 count as answers, so the 128 a name git does
+    // not know exits with still reads as the failure it is.
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .answers_by_code()
+        .arg("switch");
     let cmd = match target {
         CheckoutTarget::Branch { name } => cmd.args(["--", name.as_str()]),
         CheckoutTarget::Track { remote_ref, local } => {

@@ -106,10 +106,15 @@ pub async fn tip(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<Option<String>, GitError> {
-    let cmd =
-        GitCommand::new()
-            .cwd(workdir)
-            .args(["rev-parse", "--verify", "--quiet", "refs/stash"]);
+    // Exit 1 is the answer "there is no stash here", which every
+    // repository that has never had one gives. Left unmarked it reads as
+    // a failed command and raises the log over a question nobody asked.
+    let cmd = GitCommand::new().cwd(workdir).answers_by_code().args([
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        "refs/stash",
+    ]);
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code != 0 {
         return Ok(None);
@@ -149,13 +154,23 @@ pub async fn push(
 }
 
 /// `git stash pop <selector>`: restores and removes the entry.
+///
+/// Answers by code for the same reason [`pop_with_index`] does: exit 1
+/// covers both a restore that landed conflicted and one that did nothing,
+/// so it is data for the caller to weigh against the working tree, not a
+/// failure to report on sight. Whether it turns out to be one is said by
+/// the write it belongs to.
 pub async fn pop(
     executor: &GitExecutor,
     workdir: &Path,
     selector: &str,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    run_selector(executor, workdir, "pop", selector, cancel).await
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .answers_by_code()
+        .args(["stash", "pop", selector]);
+    executor.run(cmd, cancel).await.map(|_| ())
 }
 
 /// `git stash pop --index`: restores the entry *and* the split between
@@ -174,6 +189,7 @@ pub async fn pop_with_index(
 ) -> Result<(), GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
+        .answers_by_code()
         .args(["stash", "pop", "--index", selector]);
     executor.run(cmd, cancel).await.map(|_| ())
 }
