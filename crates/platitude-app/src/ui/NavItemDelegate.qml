@@ -383,8 +383,13 @@ Item {
         implicitHeight: Theme.iconLg
         ToolTip.visible: hovered
         ToolTip.delay: Metrics.tipDelayMs
-        ToolTip.text: navRow.bucket === "staged" ? qsTr("Unstage file")
-                                                 : qsTr("Stage file")
+        // On a conflicted row the same `git add` means something else:
+        // it does not move a change into the staging area, it tells git
+        // the conflict has been dealt with. The word says that rather
+        // than the command's other job (デザイン規約 §diff の中のステージ).
+        ToolTip.text: navRow.bucket === "conflicts" ? qsTr("Mark resolved")
+                      : navRow.bucket === "staged" ? qsTr("Unstage file")
+                                                   : qsTr("Stage file")
         onClicked: navRow.stageClicked(
             navRow.bucket, navRow.full !== "" ? navRow.full : navRow.name)
         contentItem: NavIcon {

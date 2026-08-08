@@ -18,6 +18,10 @@ Rectangle {
     property bool fromWorkTree: false
     // Whether it is the staged side (flips the affordance wording).
     property bool staged: false
+    /// Whether the file is one git stopped on. `git add` still runs, but
+    /// what it means there is "this is dealt with", not "this goes in the
+    /// next commit", and the words follow that.
+    property bool conflicted: false
     // A write is running: staging buttons disable.
     property bool busy: false
     /// Whether this diff has pieces worth naming. A file the repository is
@@ -250,14 +254,21 @@ Rectangle {
                 // order: staging a file is the larger of the two.
                 ActionButton {
                     visible: diffPane.fromWorkTree
-                    text: diffPane.staged ? qsTr("Unstage file")
-                                          : qsTr("Stage file")
+                    // The same `git add` on a conflicted file is not a
+                    // staging at all — it is how git is told the conflict
+                    // has been dealt with, so the word says that instead
+                    // (デザイン規約 §diff の中のステージ).
+                    text: diffPane.conflicted ? qsTr("Mark resolved")
+                          : diffPane.staged ? qsTr("Unstage file")
+                                            : qsTr("Stage file")
                     tone: diffPane.staged ? Theme.diffRemovedFg
                                           : Theme.diffAddedFg
                     enabled: !diffPane.busy
                     ToolTip.visible: hovered
                     ToolTip.delay: Metrics.tipDelayMs
-                    ToolTip.text: diffPane.staged
+                    ToolTip.text: diffPane.conflicted
+                        ? qsTr("Takes the file as it stands now")
+                        : diffPane.staged
                         ? qsTr("Unstage the whole file at once")
                         : qsTr("Stage the whole file at once")
                     onActivated: diffPane.stageFileRequested()

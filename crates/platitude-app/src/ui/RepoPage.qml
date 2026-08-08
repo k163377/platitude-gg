@@ -2222,12 +2222,14 @@ Item {
             // The bucket rides in front of the path (`<bucket>:<path>`, the
             // form `nav-dbl` uses) when it is not the usual unstaged one: a
             // file the repository has never seen has no unstaged diff at
-            // all — it is read from `untracked`. Only the three bucket
-            // names count as one, so a path carrying a colon still opens.
+            // all — it is read from `untracked`, and a file git stopped on
+            // from `conflicts` (which is where its words differ). Only the
+            // bucket names count as one, so a path carrying a colon still
+            // opens.
             const cut = arg.indexOf(":")
             const head = cut > 0 ? arg.substring(0, cut) : ""
             const named = head === "staged" || head === "unstaged"
-                          || head === "untracked"
+                          || head === "untracked" || head === "conflicts"
             page.showWip()
             page.toggleDiff(named ? head : "unstaged",
                             named ? arg.substring(cut + 1) : arg, "")
@@ -2995,6 +2997,7 @@ Item {
                         diffModel: diffModel
                         fromWorkTree: page.diffFromWt
                         staged: page.diffStaged
+                        conflicted: page.diffKind === "conflicts"
                         busy: repoTab.busyCount > 0
                         onCloseRequested: page.closeDiff()
                         onNothingLeft: page.closeDiff()
