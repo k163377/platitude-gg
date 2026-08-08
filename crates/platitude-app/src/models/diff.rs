@@ -182,13 +182,24 @@ qml_register!(DiffModel, "DiffModel", singleton = false);
 
 impl DiffModel {
     fn begin_request(&mut self, title: String, target: DiffTarget) {
-        self.current_key = diff_key(&target);
+        let key = diff_key(&target);
+        // Reading the same file again — which is what every partial write
+        // ends with — keeps the rows that are on screen until the new ones
+        // arrive. Emptying here would blank the pane for the length of the
+        // round trip and drop the view to the top, and on a diff of any
+        // size that reads as a flash rather than as an update. `drain`
+        // swaps the whole list inside one call, so the exchange is never
+        // seen half done.
+        let same_file = key == self.current_key;
+        self.current_key = key;
         self.title = title;
         self.is_binary = false;
         self.fingerprint = String::new();
         self.loading = true;
-        self.apply_preview(None);
-        self.reset();
+        if !same_file {
+            self.apply_preview(None);
+            self.reset();
+        }
         self.changed();
         if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
             session.load_diff(target);

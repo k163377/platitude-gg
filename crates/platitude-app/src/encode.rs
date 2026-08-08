@@ -8,6 +8,7 @@ use platitude_core::graph::{Segment, SegmentKind};
 use platitude_core::parse::diff::{DiffLineKind, FilePatch};
 use platitude_core::patch::HunkSelect;
 use platitude_core::session::{LabelKind, RefLabel};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Record separator for label chips (cannot occur in refnames).
 pub const LABEL_SEP: char = '\u{1f}';
@@ -163,6 +164,28 @@ pub fn hunk_selection(hunk: i32, line: i32) -> Vec<HunkSelect> {
         Ok(line) => vec![HunkSelect::lines(hunk, [line])],
         Err(_) => vec![HunkSelect::whole(hunk)],
     }
+}
+
+/// Groups hand-picked `(hunk, line)` pairs into one selection per hunk.
+///
+/// Sorted and de-duplicated on both keys: the patch builder addresses
+/// lines by position, so a repeated index would emit the same line twice,
+/// and hunks handed over out of order would build a patch git refuses.
+/// A pair with a negative index is dropped rather than taken for "the
+/// whole hunk" — this way in, unlike [`hunk_selection`], only ever means
+/// lines that were pointed at.
+pub fn line_selection(pairs: &[(i32, i32)]) -> Vec<HunkSelect> {
+    let mut by_hunk: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
+    for &(hunk, line) in pairs {
+        let (Ok(hunk), Ok(line)) = (usize::try_from(hunk), usize::try_from(line)) else {
+            continue;
+        };
+        by_hunk.entry(hunk).or_default().insert(line);
+    }
+    by_hunk
+        .into_iter()
+        .map(|(hunk, lines)| HunkSelect::lines(hunk, lines))
+        .collect()
 }
 
 /// Rebuilds the diff target a working-tree selection refers to.
@@ -457,6 +480,28 @@ mod tests {
         // staging one of those must not fall back to hunk zero.
         assert!(hunk_selection(-1, -1).is_empty());
         assert!(hunk_selection(-1, 2).is_empty());
+    }
+
+    #[test]
+    fn picked_lines_gather_into_one_selection_per_hunk() {
+        // Clicked in whatever order the hand went, twice on one line, and
+        // across two hunks: what comes out is one selection per hunk, in
+        // hunk order, with each hunk's lines in theirs.
+        let picked = [(1, 5), (0, 3), (1, 2), (0, 1), (1, 5)];
+        assert_eq!(
+            line_selection(&picked),
+            vec![HunkSelect::lines(0, [1, 3]), HunkSelect::lines(1, [2, 5])]
+        );
+    }
+
+    #[test]
+    fn picked_lines_never_stand_for_a_whole_hunk() {
+        // `hunk_selection` reads a negative line as "all of it"; this way
+        // in must not, or a row that carries -1 would quietly widen a
+        // choice made line by line.
+        assert!(line_selection(&[(0, -1)]).is_empty());
+        assert!(line_selection(&[(-1, 4)]).is_empty());
+        assert!(line_selection(&[]).is_empty());
     }
 
     #[test]

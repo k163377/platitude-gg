@@ -1322,6 +1322,29 @@ Item {
                 diffPane.showLineTools(0, -1)
                 return
             }
+            // Lines picked by hand, and the write that takes the lot. The
+            // argument says how many to pick (two by default), which is
+            // what makes the heading name a count.
+            // Reading part way down a long diff and then writing: the
+            // rebuild has to come back to the same place, or a file with
+            // any length to it throws the reader to the top on every
+            // partial stage. `diff_place` is reported by the restore.
+            if (act === "keep-place") {
+                diffPane.scrollTo(400)
+                page.stageSelection(0, diffPane.firstChangedLine(0))
+                return
+            }
+            if (act === "pick-lines" || act === "stage-lines") {
+                // The path came in as the argument, so how many lines to
+                // pick is not something this verb can be told: two is what
+                // makes a heading say a count rather than a hunk.
+                const want = 2
+                AppBackend.report("picked_lines "
+                                  + diffPane.chooseLines(0, want))
+                if (act === "stage-lines")
+                    page.stageChosenLines()
+                return
+            }
             if (act === "stage-hunk" || act === "stage-line") {
                 page.stageSelection(0, act === "stage-line" ? line : -1)
                 return
@@ -1840,7 +1863,8 @@ Item {
         } else if (act === "stage-hunk" || act === "stage-line"
                    || act === "discard-hunk" || act === "discard-hunk-go"
                    || act === "diff-file" || act === "line-tools"
-                   || act === "hunk-tools") {
+                   || act === "hunk-tools" || act === "pick-lines"
+                   || act === "stage-lines" || act === "keep-place") {
             // All of them enter through the diff of one unstaged file and
             // act on its first hunk: "diff-file" only opens it,
             // "line-tools" puts out the square a line shows under the
@@ -2031,8 +2055,26 @@ Item {
     function stageSelection(hunk, line) {
         // The shown diff's fingerprint rides along: the write refuses to
         // apply the indices to bytes that drifted since this was read.
+        diffPane.holdScroll()
         repoTab.stageSelection(page.diffKind, page.diffPath, page.diffOrigPath,
                                hunk, line, diffModel.fingerprint)
+        page.pendingDiffReload = true
+    }
+    /// The lines picked by hand, all of them in one write: the diff is
+    /// read once and rebuilt once, however many were chosen
+    /// (デザイン規約 §diff の中のステージ). The indices belong to the diff
+    /// on screen, so the choice goes down with the rebuild that follows.
+    function stageChosenLines() {
+        const pairs = diffPane.chosenPairs()
+        if (pairs.length === 0)
+            return
+        diffPane.holdScroll()
+        repoTab.beginLines()
+        for (let i = 0; i < pairs.length; i++)
+            repoTab.addLine(pairs[i][0], pairs[i][1])
+        repoTab.stageLines(page.diffKind, page.diffPath, page.diffOrigPath,
+                           diffModel.fingerprint)
+        diffPane.clearLines()
         page.pendingDiffReload = true
     }
     /// Throwing one hunk of the shown diff away, with no question in front
@@ -2041,6 +2083,7 @@ Item {
     /// be thrown away on its own — the hunk is the smallest piece — though
     /// it can still be staged on its own, which loses nothing.
     function discardHunkNow(hunk) {
+        diffPane.holdScroll()
         repoTab.discardSelection(page.diffKind, page.diffPath,
                                  page.diffOrigPath, hunk, -1,
                                  diffModel.fingerprint)
@@ -2051,6 +2094,8 @@ Item {
         if (!page.pendingDiffReload || !page.diffShown)
             return
         page.pendingDiffReload = false
+        // Whatever was picked addressed the diff that is being replaced.
+        diffPane.clearLines()
         diffModel.requestWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
     }
 
@@ -2560,6 +2605,7 @@ Item {
                                 repoTab.stagePath(page.diffPath)
                         }
                         onStageSelectionRequested: (hunk, line) => page.stageSelection(hunk, line)
+                        onStageChosenRequested: page.stageChosenLines()
                     }
                 }
 

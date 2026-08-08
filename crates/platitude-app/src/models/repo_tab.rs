@@ -63,6 +63,11 @@ pub struct RepoTab {
     /// (デザイン規約 §その他の操作). Emptied by whichever write consumes it, so a set
     /// left behind by an abandoned question cannot be spent later.
     pending_paths: Vec<String>,
+    /// Lines of the shown diff picked by hand, as `(hunk, line)` indices
+    /// into the diff they were read from. Gathered the same way and for
+    /// the same reason as `pending_paths`: the write takes the whole set
+    /// at once.
+    pending_lines: Vec<(i32, i32)>,
     /// Configured remote names — where a branch with no upstream can go.
     remotes: Vec<String>,
     /// Derived from `remotes` on arrival rather than computed on demand:
@@ -148,6 +153,7 @@ impl Default for RepoTab {
             signature_code: String::new(),
             signature_signer: String::new(),
             pending_paths: Vec::new(),
+            pending_lines: Vec::new(),
             remotes: Vec::new(),
             remote_count: 0,
             default_remote: String::new(),
@@ -592,6 +598,43 @@ impl RepoTab {
     #[qslot]
     fn add_path(&mut self, path: String) {
         self.pending_paths.push(path);
+    }
+
+    /// The same shape for the lines picked out of one diff: opened, added
+    /// to one pair at a time, and taken whole by the write that follows
+    /// (see [`RepoTab::pending_lines`]). Lines chosen by hand go over in
+    /// one write so the diff is read once and rebuilt once — clicking them
+    /// through one at a time would rebuild it under the pointer every
+    /// time.
+    #[qslot]
+    fn begin_lines(&mut self) {
+        self.pending_lines.clear();
+    }
+
+    #[qslot]
+    fn add_line(&mut self, hunk: i32, line: i32) {
+        self.pending_lines.push((hunk, line));
+    }
+
+    /// Stages (or unstages) the gathered lines of the shown diff. The
+    /// direction follows the side being looked at, the way
+    /// [`RepoTab::stage_selection`] does.
+    #[qslot]
+    fn stage_lines(&mut self, kind: String, path: String, orig_path: String, fingerprint: String) {
+        let lines = std::mem::take(&mut self.pending_lines);
+        let Some(target) = crate::encode::worktree_target(&kind, &path, &orig_path) else {
+            tracing::warn!(kind, "line staging asked for a non-worktree diff");
+            return;
+        };
+        let selects = crate::encode::line_selection(&lines);
+        if selects.is_empty() {
+            return;
+        }
+        let Ok(seen) = u64::from_str_radix(&fingerprint, 16) else {
+            tracing::warn!(fingerprint, "line staging without a diff fingerprint");
+            return;
+        };
+        self.with_session(|s| s.apply_partial(target.clone(), selects.clone(), seen));
     }
 
     /// Throws away unstaged modifications of the gathered files

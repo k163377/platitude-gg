@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
+import platitude
 import platitude.ui
 
 // Center pane, diff mode: one file's unified diff with per-file,
@@ -25,6 +26,61 @@ Rectangle {
     signal stageFileRequested()
     /// Stage or unstage one hunk (line < 0) or one line of it.
     signal stageSelectionRequested(int hunk, int line)
+    /// Stage or unstage the lines picked by hand — all of them, in one
+    /// write. The owner reads them back with `chosenPairs()`.
+    signal stageChosenRequested()
+
+    // ---- the lines picked by hand ----------------------------------
+    // A click on a changed line takes it or puts it back; the heading of
+    // the hunk it belongs to then names the count instead of the hunk
+    // (デザイン規約 §diff の中のステージ). Held here rather than on the
+    // rows because a delegate is recycled the moment its line scrolls off,
+    // and keyed `<hunk>:<line>` because that pair is what a patch is
+    // addressed by.
+    property var chosenLines: ({})
+    property int chosenCount: 0
+    function lineChosen(hunk, line) {
+        return diffPane.chosenLines[hunk + ":" + line] === true
+    }
+    /// How many lines of one hunk are picked — what its heading says.
+    function chosenIn(hunk) {
+        const head = hunk + ":"
+        let n = 0
+        for (const key in diffPane.chosenLines)
+            if (key.indexOf(head) === 0)
+                n++
+        return n
+    }
+    function toggleLine(hunk, line) {
+        // A fresh object every time: the rows follow this property, and
+        // assigning the same one back changes nothing to follow.
+        const key = hunk + ":" + line
+        const next = ({})
+        for (const k in diffPane.chosenLines)
+            next[k] = true
+        if (next[key] === true)
+            delete next[key]
+        else
+            next[key] = true
+        diffPane.chosenLines = next
+        diffPane.chosenCount = Object.keys(next).length
+    }
+    function clearLines() {
+        diffPane.chosenLines = ({})
+        diffPane.chosenCount = 0
+    }
+    /// The picked lines as `[hunk, line]` pairs, in the order a patch
+    /// wants them — for the owner to hand to the bridge.
+    function chosenPairs() {
+        const out = []
+        for (const key in diffPane.chosenLines) {
+            const cut = key.indexOf(":")
+            out.push([parseInt(key.substring(0, cut)),
+                      parseInt(key.substring(cut + 1))])
+        }
+        out.sort((a, b) => a[0] === b[0] ? a[1] - b[1] : a[0] - b[0])
+        return out
+    }
     /// Throw one hunk away. Offered on the unstaged side only — the
     /// staged side unstages first. No question comes before it: the
     /// heading's own button is held down (デザイン規約 §その他の操作).
@@ -49,6 +105,59 @@ Rectangle {
     function showLineTools(hunk, line) {
         diffPane.hoverHunk = hunk
         diffPane.hoverLine = line
+    }
+    /// Automation: pick the first `count` changed lines of a hunk, the way
+    /// a click on each of them would.
+    function chooseLines(hunk, count) {
+        diffPane.clearLines()
+        let taken = 0
+        for (let i = 0; i < diffList.count && taken < count; i++) {
+            const row = diffList.itemAtIndex(i)
+            if (row && row.hunk === hunk
+                    && (row.kind === "add" || row.kind === "del")) {
+                diffPane.toggleLine(hunk, row.line)
+                taken++
+            }
+        }
+        return taken
+    }
+
+    // ---- the view's place in a diff that is about to be rebuilt -------
+    // A partial write ends by reading the file again, and the answer
+    // arrives as a whole new list. Without this the view would come back
+    // at the top, which on a long diff loses the place being worked
+    // through — the same restore `GraphPane.shiftRows` does after a graph
+    // swap, and delayed for the same reason (`contentHeight` is still the
+    // old one on the frame the rows land).
+    property real heldY: -1
+    function holdScroll() {
+        diffPane.heldY = diffList.contentY
+    }
+    function restoreScroll() {
+        if (diffPane.heldY >= 0)
+            placeTimer.restart()
+    }
+    // The wait is the graph's (`Metrics.anchorDelayMs`, and `shiftRows`
+    // learned it the same way): on the frame the rows land the list has
+    // not laid them out yet, so `contentHeight` is still the old one and
+    // the clamp below would take the view to the top instead of back to
+    // its place.
+    Timer {
+        id: placeTimer
+        interval: Metrics.anchorDelayMs
+        onTriggered: {
+            const want = diffPane.heldY
+            diffPane.heldY = -1
+            diffList.contentY = Math.max(0, Math.min(want, diffList.contentHeight
+                                                     - diffList.height))
+            if (AppBackend.autoAct !== "")
+                AppBackend.report("diff_place " + Math.round(diffList.contentY))
+        }
+    }
+    /// Automation: read the view away from the top, so that a rebuild can
+    /// be seen to put it back where it was.
+    function scrollTo(y) {
+        diffList.contentY = y
     }
     /// The first line of a hunk that a partial write can act on. A hunk's
     /// lines are numbered through the context it carries, so line 0 is
@@ -193,6 +302,10 @@ Rectangle {
             reuseItems: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: AutoScrollBar {}
+            // The rows the write asked for have landed: put the view back
+            // where it was reading. The empty half of the swap is not it —
+            // a reset shows up here as a count of zero first.
+            onCountChanged: if (count > 0) diffPane.restoreScroll()
             // An image with no text rows hands its space to the preview
             // (SVG edits keep both).
             visible: diffPane.diffModel.previewKind !== "image"
@@ -216,6 +329,40 @@ Rectangle {
                 // in that heading. Reached from outside for the smoke run,
                 // which holds it the way a hand does.
                 readonly property alias discardButton: discardHunkButton
+                /// Picked by hand — this line goes with the next write.
+                readonly property bool picked:
+                    diffPane.fromWorkTree
+                    && diffPane.lineChosen(diffRow.hunk, diffRow.line)
+                    && (diffRow.kind === "add" || diffRow.kind === "del")
+                /// The pointer is on this hunk's heading, so the whole
+                /// hunk lights: the heading's two words act on exactly
+                /// these rows, and this is what says so
+                /// (デザイン規約 §diff の中のステージ). Only the heading
+                /// does it — a pointer resting on a line is reading, not
+                /// aiming at the hunk.
+                readonly property bool inAimedHunk:
+                    diffPane.fromWorkTree && diffPane.hoverLine < 0
+                    && diffPane.hoverHunk === diffRow.hunk
+                /// How many of this hunk's lines are picked (heading rows).
+                readonly property int pickedInHunk:
+                    diffPane.fromWorkTree && diffRow.kind === "hunk"
+                    ? diffPane.chosenIn(diffRow.hunk) : 0
+                // The hunk under the pointer, and every line picked by
+                // hand, wear the wash a row anywhere else in the app wears
+                // under the pointer. A picked line also carries the mark
+                // at its head — the diff's own colours own the row's
+                // ground, so the choice cannot be shown by filling it.
+                Rectangle {
+                    anchors.fill: parent
+                    color: Theme.bgHover
+                    visible: diffRow.picked || diffRow.inAimedHunk
+                }
+                Rectangle {
+                    width: Theme.spaceXs
+                    height: parent.height
+                    color: Theme.accent
+                    visible: diffRow.picked
+                }
                 Row {
                     anchors.fill: parent
                     spacing: 0
@@ -260,8 +407,33 @@ Rectangle {
                     id: lineHover
                     anchors.fill: parent
                     hoverEnabled: true
-                    acceptedButtons: Qt.NoButton
+                    acceptedButtons: Qt.LeftButton
                     enabled: diffPane.fromWorkTree
+                    // A heading under the pointer lights its own hunk, and
+                    // says so through the same pair the automation hook
+                    // writes — one answer to "which hunk is being aimed
+                    // at", whichever way the pointer got there.
+                    onContainsMouseChanged: {
+                        if (diffRow.kind !== "hunk")
+                            return
+                        if (containsMouse) {
+                            diffPane.hoverHunk = diffRow.hunk
+                            diffPane.hoverLine = -1
+                        } else if (diffPane.hoverHunk === diffRow.hunk) {
+                            diffPane.hoverHunk = -1
+                        }
+                    }
+                    // One click, one line: a changed line joins what the
+                    // next write takes, or leaves it. Anywhere else in the
+                    // diff puts the whole choice down — the rows carrying
+                    // it are on screen, so there is nothing to lose track
+                    // of (デザイン規約 §diff の中のステージ).
+                    onClicked: {
+                        if (diffRow.kind === "add" || diffRow.kind === "del")
+                            diffPane.toggleLine(diffRow.hunk, diffRow.line)
+                        else if (diffRow.kind !== "hunk")
+                            diffPane.clearLines()
+                    }
                 }
                 // Under the pointer, or named as if it were (see above).
                 readonly property bool underPointer:
@@ -325,19 +497,52 @@ Rectangle {
                     // them all lit puts 2 to 4 coloured words on screen
                     // against the header's one.
                     ActionButton {
-                        text: diffPane.staged ? qsTr("Unstage hunk")
-                                              : qsTr("Stage hunk")
+                        // With lines picked out of this hunk the word
+                        // names them instead: what is about to be written
+                        // is the choice, not the hunk. A choice is a
+                        // standing state, so the word is lit for as long
+                        // as it stands — the pointer is what wakes the
+                        // heading, but a choice keeps it awake.
+                        // Spelled out rather than left to `%n`: with no
+                        // translation loaded Qt keeps the source string as
+                        // it stands, and `2 line(s)` on a button is a
+                        // placeholder that shipped.
+                        text: diffRow.pickedInHunk === 0
+                              ? (diffPane.staged ? qsTr("Unstage hunk")
+                                                 : qsTr("Stage hunk"))
+                              : diffRow.pickedInHunk === 1
+                                ? (diffPane.staged ? qsTr("Unstage 1 line")
+                                                   : qsTr("Stage 1 line"))
+                                : (diffPane.staged
+                                   ? qsTr("Unstage %1 lines").arg(diffRow.pickedInHunk)
+                                   : qsTr("Stage %1 lines").arg(diffRow.pickedInHunk))
                         font.pixelSize: Theme.fontSm
-                        tone: !diffRow.underPointer ? Theme.textSecondary
+                        tone: !diffRow.underPointer && diffRow.pickedInHunk === 0
+                              ? Theme.textSecondary
                               : diffPane.staged ? Theme.diffRemovedFg
                                                 : Theme.diffAddedFg
                         enabled: !diffPane.busy
-                        onActivated: diffPane.stageSelectionRequested(diffRow.hunk, -1)
+                        onActivated: {
+                            if (diffRow.pickedInHunk > 0)
+                                diffPane.stageChosenRequested()
+                            else
+                                diffPane.stageSelectionRequested(diffRow.hunk, -1)
+                        }
                     }
                 }
-                // Line-level staging.
+                // The mark a changed line puts out for the hand: `+` where
+                // a click takes the line into the staging area and `−`
+                // where it takes it back out, in the pair of colours that
+                // gesture wears everywhere else (デザイン規約 §diff の中の
+                // ステージ). It names the *direction* of the write, not
+                // what the line did — an added and a deleted line are both
+                // staged by the same `+`. No frame: a box around a mark
+                // this size reads as a control that came loose from the
+                // toolbar, and the ground it needs is the one the pointer
+                // brings with it.
                 Rectangle {
-                    visible: diffPane.fromWorkTree && diffRow.underPointer
+                    visible: diffPane.fromWorkTree
+                             && (diffRow.underPointer || diffRow.picked)
                              && (diffRow.kind === "add"
                                  || diffRow.kind === "del")
                     x: Theme.spaceXs
@@ -345,32 +550,26 @@ Rectangle {
                     width: Theme.iconMd
                     height: Theme.iconMd
                     radius: Theme.radiusSm
-                    color: Theme.bgElevated
-                    border.color: Theme.borderStrong
-                    border.width: Theme.borderWidth
+                    color: stageLineHover.containsMouse ? Theme.bgHover
+                                                        : "transparent"
                     ToolTip.visible: stageLineHover.containsMouse
                     ToolTip.delay: 300
                     ToolTip.text: diffPane.staged ? qsTr("Unstage this line")
                                                   : qsTr("Stage this line")
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: Theme.radiusSm
-                        color: Theme.bgHover
-                        visible: stageLineHover.containsMouse
-                    }
                     NavIcon {
                         anchors.centerIn: parent
                         width: Theme.iconSm
                         height: Theme.iconSm
-                        kind: diffRow.kind === "add" ? "plus" : "minus"
-                        tint: Theme.textPrimary
+                        kind: diffPane.staged ? "minus" : "plus"
+                        tint: diffPane.staged ? Theme.diffRemovedFg
+                                              : Theme.diffAddedFg
                     }
                     MouseArea {
                         id: stageLineHover
                         anchors.fill: parent
                         hoverEnabled: true
-                        onClicked: diffPane.stageSelectionRequested(diffRow.hunk,
-                                                                   diffRow.line)
+                        onClicked: diffPane.toggleLine(diffRow.hunk,
+                                                       diffRow.line)
                     }
                 }
                 // No square for throwing one line away. A line can be
