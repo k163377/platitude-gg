@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="Platitude GG">
+  <title>Platitude GG</title>
+  <!--
+    The 16-20px cut of platitude.svg, on the same four tokens.
+
+    The three commit nodes are gone. At this size a filled 3px disc and a
+    2px stroke are the same mark, so drawing both only thickens the joint;
+    the round line caps stand in for the nodes at the ends.
+
+    Coordinates sit on half-pixels so a 1px frame and a 2px lane land on
+    whole device pixels at 100% scaling, instead of being smeared across
+    two rows each.
+  -->
+  <rect x="0.5" y="0.5" width="15" height="15" rx="3.5" fill="#0F172A" stroke="#475569"/>
+  <g fill="none" stroke-linecap="round" stroke-width="2">
+    <path d="M5 4.5V11.5" stroke="#3B82F6"/>
+    <path d="M11 5.5C11 9.5 8.5 9.5 6 11" stroke="#E69F00"/>
+  </g>
+</svg>
