@@ -1461,8 +1461,14 @@ Item {
         id: rowMateList
         onPointerInsideChanged: page.settleRowMates()
     }
+    /// The chip's list is up, or is about to be. Both open off the same
+    /// pointer and land in the same place, so only one of them is ever
+    /// out: the chip's, because it is the more particular of the two —
+    /// the row's card says what every row says (デザイン規約 §hover の
+    /// ツールチップ).
+    readonly property bool refListUp: page.refListWanted || refList.opened
     function openRowCard(row) {
-        if (!row)
+        if (!row || page.refListUp)
             return
         rowCard.subject = row.subject
         rowCard.body = row.body
@@ -1498,6 +1504,13 @@ Item {
     function settleRowMates() {
         rowCardSettle.restart()
     }
+    /// Down now, not in a beat's time: what makes way for the chip's
+    /// list has to be gone before it is drawn, or the two overlap for
+    /// as long as the wait.
+    function closeRowCard() {
+        rowMateList.close()
+        rowCard.close()
+    }
     // Closing waits a beat rather than a turn of the event loop. Walking
     // from a line into the card it opened crosses a boundary where the
     // two hovers change in different frames, and `Qt.callLater` runs
@@ -1517,7 +1530,13 @@ Item {
     property bool refListWanted: false
     function openRefList(records, anchor) {
         const at = anchor.mapToItem(page, 0, anchor.height)
+        // The row's card opens under the pointer, which is on the chip
+        // — it would be drawn over the list the chip is opening.
+        page.closeRowCard()
         refList.records = records
+        // Sized before it is shown, so it does not grow under the hand
+        // that is walking into it — see the function.
+        refList.layOutRows()
         refList.x = at.x
         refList.y = at.y
         page.refListWanted = true
@@ -1529,14 +1548,20 @@ Item {
     }
     // The list opens flush under the chip, so walking into it takes the
     // pointer off the chip on the way, and walking back out puts it on
-    // again. Both hovers change in the same frame and in no fixed order,
-    // so the answer waits for the end of this round of events, by which
-    // time whichever of the two now holds the pointer has said so.
+    // again. The two hovers change in different frames and in no fixed
+    // order, and `Qt.callLater` runs between them — the list shut under
+    // the hand on the way in (2026-08-09 report). So the answer waits a
+    // beat, the way the row's card does.
     function settleRefList() {
-        Qt.callLater(function () {
+        refListSettle.restart()
+    }
+    Timer {
+        id: refListSettle
+        interval: Metrics.hoverKeepMs
+        onTriggered: {
             if (!refList.pointerInside && !page.refListWanted)
                 refList.close()
-        })
+        }
     }
     Connections {
         // The row it hangs off is a delegate, and delegates travel: once
@@ -1978,6 +2003,7 @@ Item {
         onTriggered: AppBackend.report(
             "row_card open=" + rowCard.opened
             + " mates=" + rowMateList.opened
+            + " list=" + refList.opened
             + " subject=" + (rowCard.subject !== "")
             + " body=" + (rowCard.body !== ""))
     }
@@ -2435,14 +2461,28 @@ Item {
             // From the box's own accept onward — the page never sees the
             // typing, only a name and the row it belongs to.
             graphPane.view.namingSubmitted(graphModel.oidAt(0), arg)
-        } else if (act === "ref-list") {
+        } else if (act === "ref-list" || act === "ref-list-card") {
             // The unstacked chips, left standing. Hover cannot be
             // injected on Windows, so this enters where the hover timer
             // would; the argument is the row whose chip is stacked.
+            // `-card` walks the gesture the report came from: the hand
+            // rests on the row until its card is out, moves onto the
+            // chip, and the row asks once more from under the list. Both
+            // halves have to hold — the card that was already out is put
+            // away, and the one asked for afterwards is refused — and
+            // either failing leaves `open=true`. Read it against
+            // `row-card` on the same row, which is where it does open.
             const stacked = graphPane.view.itemAtIndex(Number(arg))
-            if (stacked)
+            if (stacked) {
+                if (act === "ref-list-card")
+                    graphPane.view.rowHoverRequested(stacked, true)
                 graphPane.view.chipExpandRequested(
                     stacked.chipItem.records, stacked.chipItem)
+                if (act === "ref-list-card") {
+                    graphPane.view.rowHoverRequested(stacked, true)
+                    rowCardTimer.start()
+                }
+            }
         } else if (act === "signature") {
             // Selecting a row is all the operating there is; the mark
             // appears when the verify comes back, so the report waits
@@ -2457,8 +2497,7 @@ Item {
             // something next to a run where the list stayed shut.
             const hovered = graphPane.view.itemAtIndex(Number(arg))
             if (hovered) {
-                page.rowCardWanted = true
-                page.openRowCard(hovered)
+                graphPane.view.rowHoverRequested(hovered, true)
                 if (act === "row-card-mates") {
                     page.rowMatesPointed = true
                     page.openRowMates()

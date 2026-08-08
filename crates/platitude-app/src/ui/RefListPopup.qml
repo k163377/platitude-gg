@@ -30,20 +30,62 @@ Popup {
     margins: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    /// Whether the pointer is over this. `HoverHandler` rather than a
-    /// `MouseArea`: handlers are passive, so the rows' own hover does not
-    /// take this one's away.
-    readonly property alias pointerInside: insideHover.hovered
+    /// Whether the pointer is over this — over the padding band the
+    /// background covers, or over the rows the content does. **Two
+    /// handlers, because the background and the content are siblings**:
+    /// "handlers are passive" holds between a parent and its children,
+    /// and the rows are children of the content, but the background is
+    /// not their parent — it is next to them. Measured: on a row, the
+    /// content's handler reads true and the background's reads false.
+    /// With only the background's, the list called itself empty of the
+    /// pointer the instant the hand reached a row — the row lit up and
+    /// the list went out from under it (2026-08-09 report).
+    readonly property bool pointerInside:
+        insideHover.hovered || contentHover.hovered
 
+    /// Lays the rows out now, for an owner that is about to show this in
+    /// the same turn it handed over the records. A `Column` positions in
+    /// the polish that runs after the turn, so without this the list is
+    /// shown at the size it had before the records arrived — measured at
+    /// 8x8, its padding and nothing else, growing to the real 111x80 a
+    /// frame later. That matters because **Qt works out what is hovered
+    /// from pointer events, not from geometry**: a list that grows after
+    /// it appears cannot tell that the hand is already inside it, and
+    /// the hand that walked down off the chip is exactly that hand
+    /// (2026-08-09 trace — the list took itself down under the pointer).
+    /// The height is what this buys, and the height is what matters: it
+    /// is the edge the hand crosses. The width still settles a frame
+    /// later (measured 97, then 111) because the rows and their column
+    /// size each other through bindings rather than through layout —
+    /// harmless, because it only ever grows, and growing to the right
+    /// takes no ground away from a hand that is already inside.
+    function layOutRows() {
+        rows.forceLayout()
+    }
+
+    // On the background, so the padding band counts as being inside.
+    // The content ends inside that band, and the hand walking down off
+    // the chip crosses it first: with the handler on the content the
+    // list read as "nobody is on me" for the width of the padding and
+    // shut under the pointer (2026-08-09 report; CommitHoverCard has
+    // the same note).
     background: Rectangle {
         color: Theme.bgElevated
         radius: Theme.radiusMd
         border.color: Theme.borderDefault
         border.width: Theme.borderWidth
+        HoverHandler {
+            id: insideHover
+        }
     }
 
     contentItem: Column {
         id: rows
+        // The rows' half of the answer above; the rows are its children,
+        // so their own hover leaves this one standing.
+        HoverHandler {
+            id: contentHover
+        }
         // A Column takes its width from the widest child, and the rows
         // have to reach that width for their highlight to line up.
         readonly property real rowWidth: {
@@ -51,9 +93,6 @@ Popup {
             for (let i = 0; i < rows.children.length; i++)
                 widest = Math.max(widest, rows.children[i].implicitWidth)
             return widest
-        }
-        HoverHandler {
-            id: insideHover
         }
         Repeater {
             model: refList.records

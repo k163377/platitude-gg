@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
+import platitude
 import platitude.ui
 
 // Commit-graph row: [branch/tag chips][lanes + identicon node][subject]
@@ -136,6 +137,7 @@ Item {
         // The row's chip, right-aligned against the graph — or, on a
         // row with no branch to move to, the box that names one here.
         Item {
+            id: labelColumn
             Layout.preferredWidth: rowItem.labelsW
             Layout.fillHeight: true
             RefChip {
@@ -406,24 +408,67 @@ Item {
     // rather than a hover area inside the chip: this one is on top, so it
     // is the one that hears about the pointer at all.
     property Item hoveredChip: null
+    /// This row's chip is the one with the list open under it.
+    property bool chipHeld: false
+    // A chip is `fontSmLine` tall — sixteen pixels in a row of twenty-six
+    // — and a hand that has just arrived is still settling. Landing takes
+    // the chip itself, but once the list is out the whole chip column
+    // holds it: drifting a dozen pixels inside the column the chips live
+    // in is not leaving them (2026-08-09 trace — the hand landed at row
+    // y 17 and was at y 2 eight milliseconds later, and the list went
+    // with it).
     function chipUnder(px, py) {
         if (!rowChip.visible || rowChip.records.length < 2)
             return null
         const p = rowItem.mapToItem(rowChip, px, py)
-        return rowChip.contains(Qt.point(p.x, p.y)) ? rowChip : null
+        if (rowChip.contains(Qt.point(p.x, p.y)))
+            return rowChip
+        if (!rowItem.chipHeld)
+            return null
+        const c = rowItem.mapToItem(labelColumn, px, py)
+        return labelColumn.contains(Qt.point(c.x, c.y)) ? rowChip : null
     }
-    // Opens and closes with the pointer, with no wait either way: only a
-    // chip with something stacked behind it answers at all, so there is
-    // nothing to open by accident on the way past.
+    // Opens on a rest, the way the row's own card does, and closes with
+    // the pointer. Not on landing: a pointer crossing the chip column on
+    // its way somewhere passes over every stacked chip on the way, and
+    // each one it touched used to put its list out and take it back a
+    // breath later — the flashing reported on 2026-08-09. Nothing else
+    // in the column answers a hover, so the wait costs the hand that
+    // means it nothing but the wait.
+    //
+    // The row's own card gives way to it: the two open off the same
+    // pointer and land in the same place, and the chip is the more
+    // particular thing to be standing on (デザイン規約 §hover のツール
+    // チップ). Stepping off the chip onto the rest of the row offers the
+    // card again from the beginning — the same as walking in from
+    // outside, because that is what the hand just did.
     function noteChipHover(px, py) {
         const chip = rowItem.naming ? null : rowItem.chipUnder(px, py)
         if (chip === rowItem.hoveredChip || !rowItem.ListView.view)
             return
         rowItem.hoveredChip = chip
-        if (chip)
-            rowItem.ListView.view.chipExpandRequested(chip.records, chip)
-        else
+        if (chip) {
+            hoverDelay.stop()
+            rowItem.ListView.view.rowHoverRequested(rowItem, false)
+            chipDelay.restart()
+        } else {
+            chipDelay.stop()
+            rowItem.chipHeld = false
             rowItem.ListView.view.chipCollapseRequested()
+            if (rowMouse.containsMouse && !rowItem.isWip)
+                hoverDelay.restart()
+        }
+    }
+    Timer {
+        id: chipDelay
+        interval: Metrics.tipDelayMs
+        onTriggered: {
+            if (!rowItem.hoveredChip || !rowItem.ListView.view)
+                return
+            rowItem.chipHeld = true
+            rowItem.ListView.view.chipExpandRequested(
+                rowItem.hoveredChip.records, rowItem.hoveredChip)
+        }
     }
 
     MouseArea {
@@ -481,7 +526,14 @@ Item {
         }
     }
     onIsWipChanged: hoverDelay.stop()
-    ListView.onPooled: hoverDelay.stop()
+    // A pooled row is under no pointer, and the row it comes back as has
+    // its own chips: anything this one was holding goes with it.
+    ListView.onPooled: {
+        hoverDelay.stop()
+        chipDelay.stop()
+        rowItem.hoveredChip = null
+        rowItem.chipHeld = false
+    }
     Connections {
         target: rowMouse
         function onContainsMouseChanged() {
