@@ -173,12 +173,18 @@ impl LogParser {
                     .lines()
                     .filter(|line| {
                         let l = line.trim();
-                        !(l.len() >= CO_AUTHOR_KEY.len()
-                            && l[..CO_AUTHOR_KEY.len()].eq_ignore_ascii_case(CO_AUTHOR_KEY)
-                            && self
-                                .cur_mates
-                                .iter()
-                                .any(|(name, _)| l.contains(self.pool.get(*name))))
+                        // Compared as bytes: the key is ASCII, and a line
+                        // of prose can have a character straddling the
+                        // byte the key ends on (an em dash, a CJK word).
+                        // Slicing the `str` there panics, and the panic
+                        // is on the walk's own worker — the graph would
+                        // stop at whatever it had streamed so far.
+                        !(l.as_bytes().get(..CO_AUTHOR_KEY.len()).is_some_and(|head| {
+                            head.eq_ignore_ascii_case(CO_AUTHOR_KEY.as_bytes())
+                        }) && self
+                            .cur_mates
+                            .iter()
+                            .any(|(name, _)| l.contains(self.pool.get(*name))))
                     })
                     .collect();
                 self.cur_body = kept.join("\n").trim().to_string();
@@ -322,6 +328,44 @@ mod tests {
         );
         let (commits, _) = parse_all(&bytes, bytes.len());
         assert!(commits[0].body.contains("Co-authored-by: nobody"));
+    }
+
+    #[test]
+    fn a_body_line_that_is_not_ascii_where_the_key_ends_is_kept() {
+        // The filter reads as many bytes as the key is long, so a line
+        // whose character *straddles* that byte is the one that matters
+        // — an em dash or a CJK character starting one or two bytes
+        // short of the end. Both are everyday writing (this repository's
+        // own history is full of the first), and slicing a `str` there
+        // took the whole walk down with it: the graph never left its
+        // loading ring (2026-08-09, on platitude-gg itself).
+        // The guard below is what keeps these honest: hand-counted bytes
+        // stop reproducing the moment somebody rewords them.
+        let bodies = [
+            "The reason is—said plainly",
+            "The reason is 版で書いてある",
+            "co-authored-b—not the key",
+        ];
+        for body in bodies {
+            assert!(
+                !body.is_char_boundary(CO_AUTHOR_KEY.len()),
+                "{body} does not reproduce: byte {} is a boundary",
+                CO_AUTHOR_KEY.len()
+            );
+            let bytes = record_with_mates(
+                A,
+                "",
+                "Alice",
+                "alice@example.com",
+                "1700000000",
+                "",
+                body,
+                "wrote prose",
+            );
+            let (commits, _) = parse_all(&bytes, bytes.len());
+            assert_eq!(commits.len(), 1, "{body}");
+            assert_eq!(&*commits[0].body, body);
+        }
     }
 
     #[test]
