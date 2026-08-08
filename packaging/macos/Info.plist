@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template for the .app bundle's Info.plist. Two fields are placeholders
+  the packaging step fills in, so this file is not a valid plist as it
+  stands:
+
+    @VERSION@    -- the workspace version (Cargo.toml is the source of
+                    truth; nothing here restates it)
+    @BUNDLE_ID@  -- reverse-DNS bundle identifier, still undecided
+                    (P5-確認事項). It has to be settled before anything is
+                    signed or notarised, because it is what the signature
+                    and the quarantine record are keyed to.
+
+  The bundle it belongs in:
+
+    Platitude GG.app/Contents/
+      Info.plist
+      MacOS/platitude-gg              <- the binary
+      Resources/platitude.icns        <- crates/platitude-app/assets/
+
+  CFBundleIconFile carries no extension on purpose: the loader appends
+  .icns itself. CFBundleExecutable is the slug, matching the binary's own
+  name; the product name lives in CFBundleName, which is what the Finder
+  and the menu bar read.
+
+  NSHighResolutionCapable is what lets the 2x entries in the .icns be
+  used at all -- without it the bundle is drawn from the 1x slots and
+  scaled, on every display.
+
+  No LSMinimumSystemVersion here: the floor is whatever Qt requires, and
+  restating a version in a second place is how the two drift apart.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>platitude-gg</string>
+	<key>CFBundleIconFile</key>
+	<string>platitude</string>
+	<key>CFBundleIdentifier</key>
+	<string>@BUNDLE_ID@</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Platitude GG</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@VERSION@</string>
+	<key>CFBundleVersion</key>
+	<string>@VERSION@</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+</dict>
+</plist>
