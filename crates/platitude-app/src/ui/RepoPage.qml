@@ -37,9 +37,10 @@ Item {
     // is the one thing on screen that has nothing to say about the file.
     property bool sidebarCollapsed: false
     /// The fold the diff put on. Closing the diff takes back exactly
-    /// that and nothing anybody did by hand: somebody who opens the list
-    /// while reading a file has said they want it, and somebody who folds
-    /// it themselves has said they want it folded after.
+    /// that and nothing anybody did by hand: somebody who folded the list
+    /// themselves has said they want it folded afterwards too. There is
+    /// no "opened it while reading" to remember — that is the one move
+    /// that closes the file (`foldByHand`).
     property bool foldedByDiff: false
     function foldForDiff(open) {
         if (open) {
@@ -57,6 +58,15 @@ Item {
         // A hand on it takes it over from the diff, whichever way it
         // moved it.
         page.foldedByDiff = false
+        // The list and a file never hold the window at once: asking for
+        // the list back is how somebody says they are done reading, so
+        // the centre goes back to the graph the list speaks about. Every
+        // way the list comes back arrives here — the block on the band,
+        // a cell on the rail, and the rename box that needs the keyboard
+        // (SidebarPane.startEdit) — so the rule has no exceptions to
+        // remember.
+        if (!collapse && page.diffShown)
+            page.closeDiff()
     }
 
     // Right pane switches to the working-tree (WIP) view.
@@ -1335,7 +1345,10 @@ Item {
             "nav_rail collapsed=" + page.sidebarCollapsed
             + " width=" + Math.round(sidebarPane.width)
             + " peek=" + sidebarPane.peekKind
-            + " editing=" + sidebarPane.editKey)
+            + " editing=" + sidebarPane.editKey
+            // What the centre holds: the list coming back closes a file,
+            // so the two are read together or not at all.
+            + " diff=" + page.diffShown)
     }
     Timer {
         id: refusedRowTimer
@@ -1831,20 +1844,26 @@ Item {
             stageRowTimer.start()
         } else if (act === "diff-fold" || act === "diff-unfold"
                    || act === "diff-fold-by-hand"
+                   || act === "diff-fold-by-rename"
                    || act === "diff-keep-folded") {
             // What opening a file does to the left menu on its own, and
-            // what closing it puts back — which is what the diff did and
-            // nothing else. "-by-hand" opens the list again while the
-            // diff is still up, and "-keep-folded" had it folded before
-            // the diff arrived: in both, the hand's answer is the one
-            // that survives closing it.
+            // what each way back does to the file. "-by-hand" asks for
+            // the list back with the block on the band; "-by-rename" gets
+            // it back as the side effect of typing a name into a peeked
+            // row — both take the diff down with them. "-keep-folded" had
+            // it folded before the diff arrived, so closing the diff
+            // leaves it folded.
             page.showWip()
             if (act === "diff-keep-folded")
                 page.foldByHand(true)
             page.toggleDiff("unstaged", arg, "")
             if (act === "diff-fold-by-hand")
                 page.foldByHand(false)
-            if (act !== "diff-fold")
+            else if (act === "diff-fold-by-rename") {
+                sidebarPane.peekAt("branch")
+                sidebarPane.beginRename("branch", workTree.branch,
+                                        workTree.branch)
+            } else if (act !== "diff-fold")
                 page.closeDiff()
             navRailTimer.start()
         } else if (act === "push") {
