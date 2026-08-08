@@ -359,6 +359,23 @@ impl AppBackend {
         crate::winframe::keep_system_gestures();
     }
 
+    /// Takes the window's frame over, so the band reaches the window's own
+    /// edge and nothing of the system's is drawn between the two. The
+    /// resize edges answer for themselves from there.
+    #[qslot]
+    fn own_window_frame(&self) {
+        crate::winframe::own_frame();
+    }
+
+    /// Opens the window menu where the pointer is — what a title bar
+    /// answers a right-click with. `x` and `y` are the scene's, and
+    /// `scale` turns them into the display's.
+    #[qslot]
+    fn show_system_menu(&self, x: f64, y: f64, scale: f64) {
+        let scale = if scale > 0.0 { scale } else { 1.0 };
+        crate::winframe::show_system_menu((x * scale).round() as i32, (y * scale).round() as i32);
+    }
+
     /// Paints the hairline the platform draws around the window. `color`
     /// is `#rrggbb` and comes from the design tokens — the window's edge
     /// is the app's, not the system's, now that the band reaches the top.

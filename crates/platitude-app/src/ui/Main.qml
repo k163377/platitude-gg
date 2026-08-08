@@ -72,6 +72,12 @@ ApplicationWindow {
     function minimizeWindow() {
         root.visibility = Window.Minimized
     }
+    /// The menu a title bar answers a right-click with. `x` and `y` are
+    /// the scene's; the platform wants the display's, and only the scene
+    /// knows the ratio between them.
+    function showWindowMenu(x, y) {
+        AppBackend.showSystemMenu(x, y, Screen.devicePixelRatio)
+    }
 
     /// How far a maximised window reaches past the screen.
     ///
@@ -372,6 +378,10 @@ ApplicationWindow {
             // white edges around the band. The strip takes the band's own
             // colour so it disappears into it; the hairline stays a line.
             AppBackend.setWindowBorder(Theme.borderDefault, Theme.bgElevated)
+            // And the frame between the two, which no colour reaches: the
+            // window keeps no non-client area at all from here, and
+            // answers for its own edges.
+            AppBackend.ownWindowFrame()
         }
         root.applySavedWindow()
         if (AppBackend.autoOpen !== "") {
@@ -544,6 +554,7 @@ ApplicationWindow {
             onMaximizeToggleRequested: root.toggleMaximized()
             onMinimizeRequested: root.minimizeWindow()
             onCloseRequested: root.close()
+            onWindowMenuRequested: (x, y) => root.showWindowMenu(x, y)
         }
         // Smoke hook (PG_AUTO_ACT=middle-close): the gesture is on the tab
         // strip, which lives up here rather than on the page where most of

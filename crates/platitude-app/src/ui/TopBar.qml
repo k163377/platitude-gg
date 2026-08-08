@@ -29,6 +29,8 @@ Rectangle {
     signal maximizeToggleRequested()
     signal minimizeRequested()
     signal closeRequested()
+    /// A right-click on the band, in scene coordinates.
+    signal windowMenuRequested(real x, real y)
 
     /// One of the window's own buttons: the same cell the app menu sits in
     /// at the other end of the band, so the two ends are built alike and
@@ -424,6 +426,20 @@ Rectangle {
                     // so the handler above can have it.
                     gesturePolicy: TapHandler.DragThreshold
                     onDoubleTapped: topBar.maximizeToggleRequested()
+                }
+                // The third thing a title bar does. The platform's own
+                // menu, opened where the pointer is, because the entries
+                // in it are the platform's to run (move, size, and the
+                // three this band already has buttons for).
+                TapHandler {
+                    enabled: topBar.captionMerged
+                    acceptedButtons: Qt.RightButton
+                    gesturePolicy: TapHandler.ReleaseWithinBounds
+                    onTapped: (point) => {
+                        const at = parent.mapToGlobal(point.position.x,
+                                                      point.position.y)
+                        topBar.windowMenuRequested(at.x, at.y)
+                    }
                 }
             }
         }
