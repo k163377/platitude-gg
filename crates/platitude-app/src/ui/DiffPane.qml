@@ -20,6 +20,14 @@ Rectangle {
     property bool staged: false
     // A write is running: staging buttons disable.
     property bool busy: false
+    /// Whether this diff has pieces worth naming. A file the repository is
+    /// seeing for the first time has none: its one hunk is the whole file,
+    /// so `Stage hunk` would be the header's `Stage file` said a second
+    /// time in a smaller voice, and the `+` on every row would be that
+    /// same word again once per line (デザイン規約 §diff の中のステージ).
+    /// What stays is the one word in the header.
+    readonly property bool partial: diffPane.fromWorkTree
+                                    && !diffPane.diffModel.isNewFile
 
     signal closeRequested()
     /// The side being read has nothing left in it — everything that was
@@ -356,7 +364,7 @@ Rectangle {
                 readonly property alias discardButton: discardHunkButton
                 /// Picked by hand — this line goes with the next write.
                 readonly property bool picked:
-                    diffPane.fromWorkTree
+                    diffPane.partial
                     && diffPane.lineChosen(diffRow.hunk, diffRow.line)
                     && (diffRow.kind === "add" || diffRow.kind === "del")
                 /// The pointer is on this hunk's heading, so the whole
@@ -366,11 +374,11 @@ Rectangle {
                 /// does it — a pointer resting on a line is reading, not
                 /// aiming at the hunk.
                 readonly property bool inAimedHunk:
-                    diffPane.fromWorkTree && diffPane.hoverLine < 0
+                    diffPane.partial && diffPane.hoverLine < 0
                     && diffPane.hoverHunk === diffRow.hunk
                 /// How many of this hunk's lines are picked (heading rows).
                 readonly property int pickedInHunk:
-                    diffPane.fromWorkTree && diffRow.kind === "hunk"
+                    diffPane.partial && diffRow.kind === "hunk"
                     ? diffPane.chosenIn(diffRow.hunk) : 0
                 // The hunk under the pointer, and every line picked by
                 // hand, wear the wash a row anywhere else in the app wears
@@ -433,7 +441,10 @@ Rectangle {
                     anchors.fill: parent
                     hoverEnabled: true
                     acceptedButtons: Qt.LeftButton
-                    enabled: diffPane.fromWorkTree
+                    // Off entirely on a diff with no pieces in it: with
+                    // nothing to aim at, a row lighting up under the
+                    // pointer would be an offer that is not there.
+                    enabled: diffPane.partial
                     // A heading under the pointer lights its own hunk, and
                     // says so through the same pair the automation hook
                     // writes — one answer to "which hunk is being aimed
@@ -467,9 +478,10 @@ Rectangle {
                         && diffPane.hoverLine === diffRow.line)
                 // Hunk-level staging. The row carries the hunk index the
                 // patch builder needs, so what is staged is exactly what
-                // is shown — and so is what is thrown away.
+                // is shown — and so is what is thrown away. Absent on a
+                // diff with no pieces in it (see `partial`).
                 Row {
-                    visible: diffPane.fromWorkTree && diffRow.kind === "hunk"
+                    visible: diffPane.partial && diffRow.kind === "hunk"
                     anchors.right: parent.right
                     anchors.rightMargin: Theme.spaceSm
                     anchors.verticalCenter: parent.verticalCenter
@@ -566,7 +578,7 @@ Rectangle {
                 // toolbar, and the ground it needs is the one the pointer
                 // brings with it.
                 Rectangle {
-                    visible: diffPane.fromWorkTree
+                    visible: diffPane.partial
                              && (diffRow.underPointer || diffRow.picked)
                              && (diffRow.kind === "add"
                                  || diffRow.kind === "del")

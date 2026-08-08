@@ -6,7 +6,7 @@ use platitude_core::details::DiffTarget;
 use platitude_core::preview::{FilePreview, PreviewSide};
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::encode::{DiffRow, diff_key, flatten_patches, human_size, image_data_url};
+use crate::encode::{DiffRow, diff_key, flatten_patches, human_size, image_data_url, is_new_file};
 use crate::hub::{Feed, Hub};
 
 use super::{impl_extend_notified, qml_register};
@@ -31,6 +31,10 @@ pub struct DiffModel {
     lines: Vec<DiffLineItem>,
     title: String,
     is_binary: bool,
+    /// The file has no old side: everything in the diff was added by it
+    /// being there at all. What the pane does with that is its business
+    /// (see `encode::is_new_file`).
+    is_new_file: bool,
     loading: bool,
     /// "" (text diff only) / "image" / "binary".
     preview_kind: String,
@@ -69,6 +73,7 @@ impl_extend_notified!(DiffModel, lines, DiffLineItem);
 impl DiffModel {
     qproperty!("title", Member = title, Notify = changed);
     qproperty!("isBinary", Member = is_binary, Notify = changed);
+    qproperty!("isNewFile", Member = is_new_file, Notify = changed);
     qproperty!("loading", Member = loading, Notify = changed);
     qproperty!("previewKind", Member = preview_kind, Notify = changed);
     qproperty!("previewOldUrl", Member = preview_old_url, Notify = changed);
@@ -141,6 +146,7 @@ impl DiffModel {
         self.current_key = String::new();
         self.title = String::new();
         self.is_binary = false;
+        self.is_new_file = false;
         self.loading = false;
         self.apply_preview(None);
         self.reset();
@@ -160,6 +166,7 @@ impl DiffModel {
         }
         self.loading = false;
         self.is_binary = msg.patches.iter().any(|p| p.is_binary);
+        self.is_new_file = is_new_file(&msg.patches);
         self.fingerprint = format!("{:016x}", msg.fingerprint);
         self.apply_preview(msg.preview.as_ref());
         self.reset();
@@ -197,6 +204,10 @@ impl DiffModel {
         self.fingerprint = String::new();
         self.loading = true;
         if !same_file {
+            // Goes down with the rows it describes: while they are still
+            // on screen the pane must keep offering — or keep withholding
+            // — exactly what they are.
+            self.is_new_file = false;
             self.apply_preview(None);
             self.reset();
         }

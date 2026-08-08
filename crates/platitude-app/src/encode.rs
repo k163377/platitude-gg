@@ -265,6 +265,27 @@ pub struct DiffRow {
     pub line: i32,
 }
 
+/// Whether the patch has a new side and no old one — a file the repository
+/// is seeing for the first time (untracked, or newly added to the index).
+///
+/// Such a diff is every line an addition under a single heading, so there
+/// is nothing in it smaller than the file itself: the pane reads this to
+/// drop the pieces it would otherwise offer (デザイン規約 §diff の中の
+/// ステージ). A deleted file is not one of these — its lines still exist
+/// on the old side, and a part of them can still be staged.
+///
+/// The new side has to be named, not merely inferred from a missing old
+/// one: a patch that carries no `diff --git` header at all parses with
+/// both sides empty ([`platitude_core::parse::diff::parse_patch`]
+/// synthesizes the file entry), and that is a diff whose shape is unknown
+/// rather than one that is known to be new.
+pub fn is_new_file(patches: &[FilePatch]) -> bool {
+    !patches.is_empty()
+        && patches
+            .iter()
+            .all(|p| p.old_path.is_none() && p.new_path.is_some())
+}
+
 /// Flattens parsed patches into displayable rows (hunk headers inline).
 /// `binary_note` inserts the "(binary file)" meta row; the caller turns it
 /// off when a preview (image / size summary) already covers that file.
@@ -544,6 +565,73 @@ mod tests {
             })
         );
         assert_eq!(worktree_target("commit", "f.txt", ""), None);
+    }
+
+    // The shapes below are `git diff` output as it stands, taken off git
+    // 2.55 in a throwaway repository. An untracked file read the way
+    // `details::file_diff` reads one (`--no-index` against `/dev/null`)
+    // and the same file once added come out **byte for byte the same** —
+    // git labels the old side `a/fresh.txt` in the header either way and
+    // only `---` tells the truth about it — so one constant covers both.
+    const ADDED: &str = "\
+diff --git a/fresh.txt b/fresh.txt
+new file mode 100644
+index 0000000..fbbee86
+--- /dev/null
++++ b/fresh.txt
+@@ -0,0 +1,2 @@
++alpha
++beta
+";
+    const EDITED: &str = "\
+diff --git a/kept.txt b/kept.txt
+index 814f4a4..879de50 100644
+--- a/kept.txt
++++ b/kept.txt
+@@ -1,2 +1,2 @@
+ one
+-two
++TWO
+";
+    const DELETED: &str = "\
+diff --git a/gone.txt b/gone.txt
+deleted file mode 100644
+index bd43ee2..0000000
+--- a/gone.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-doomed
+";
+
+    #[test]
+    fn a_file_with_only_a_new_side_is_a_new_file() {
+        let patches = parse_patch(ADDED.as_bytes());
+        assert!(is_new_file(&patches));
+        // The header names the old side too; `---` is what takes it away.
+        assert_eq!(patches[0].new_path.as_deref(), Some("fresh.txt"));
+        assert_eq!(patches[0].old_path, None);
+    }
+
+    #[test]
+    fn a_file_that_existed_before_is_not_a_new_one() {
+        assert!(!is_new_file(&parse_patch(EDITED.as_bytes())));
+        // A removal is the other way round: its lines all still exist on
+        // the old side, so a part of them can still be taken.
+        assert!(!is_new_file(&parse_patch(DELETED.as_bytes())));
+    }
+
+    #[test]
+    fn a_diff_of_unknown_shape_is_not_read_as_new() {
+        // Nothing parsed at all, and a patch with no `diff --git` header —
+        // which parses with both sides empty. Neither is known to be a new
+        // file, and reading them as one would take the pane's pieces away.
+        assert!(!is_new_file(&[]));
+        let headerless = "\
+@@ -1,1 +1,1 @@
+-old
++new
+";
+        assert!(!is_new_file(&parse_patch(headerless.as_bytes())));
     }
 
     #[test]
