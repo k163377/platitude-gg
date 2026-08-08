@@ -1129,7 +1129,8 @@ Item {
         // becomes the door to the setting instead (`…` = a question
         // stands). Changing the tool afterwards lives in settings rather
         // than in a second row here — the menu is the one surface where
-        // an extra row costs every reader (P3-確認事項 §B).
+        // an extra row costs every reader
+        // (規約 §conflict を外部ツールへ渡す).
         //
         // The name is left in plain type. A code chip would be the second
         // in this menu, and `stash` two rows below wears one to say "this

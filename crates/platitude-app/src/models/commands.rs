@@ -12,7 +12,7 @@ use super::qml_register;
 //
 // Nothing is written to disk and nothing survives the tab: this is the
 // record of what the app just did, kept only while there is someone to
-// read it (P3-確認事項 §コマンドログの保存).
+// read it (P3-確認事項「コマンドログに保存が無い」).
 // ---------------------------------------------------------------------------
 
 /// Rows kept per tab. The oldest fall off the end.
