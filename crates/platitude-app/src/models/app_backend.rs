@@ -276,6 +276,16 @@ impl AppBackend {
     }
 
     #[qslot]
+    fn start_graph_labels_width(&self) -> i32 {
+        with_layout(|l| l.graph_labels_width)
+    }
+
+    #[qslot]
+    fn start_graph_lanes_width(&self) -> i32 {
+        with_layout(|l| l.graph_lanes_width)
+    }
+
+    #[qslot]
     fn start_commands_height(&self) -> i32 {
         with_layout(|l| l.commands_height)
     }
@@ -339,12 +349,21 @@ impl AppBackend {
     /// Three calls rather than one because the layout has more parts than
     /// a Qt slot takes arguments. Each merges into what the hub holds.
     #[qslot]
-    fn save_layout_sizes(&self, sidebar_width: i32, details_width: i32, commands_height: i32) {
+    fn save_layout_sizes(
+        &self,
+        sidebar_width: i32,
+        details_width: i32,
+        commands_height: i32,
+        graph_labels_width: i32,
+        graph_lanes_width: i32,
+    ) {
         Hub::with(|hub| {
             let mut layout = hub.state().layout;
             layout.sidebar_width = sidebar_width;
             layout.details_width = details_width;
             layout.commands_height = commands_height;
+            layout.graph_labels_width = graph_labels_width;
+            layout.graph_lanes_width = graph_lanes_width;
             hub.set_layout_state(layout);
         });
     }

@@ -244,6 +244,7 @@ ApplicationWindow {
                 root.curPage.sidebarCollapsed = true
                 root.curPage.commandsOpen = true
                 root.curPage.setDetailsWidth(520)
+                root.curPage.setGraphColumns(190, 300)
                 // The other file: a decision, written out at once rather
                 // than on the state timer.
                 AppBackend.setAutoFetchMinutes(7)
@@ -265,6 +266,8 @@ ApplicationWindow {
                 + " collapsed=" + (root.curPage !== null ? root.curPage.sidebarCollapsed : "-")
                 + " sidebar=" + AppBackend.startSidebarWidth()
                 + " details=" + AppBackend.startDetailsWidth()
+                + " graphLabels=" + AppBackend.startGraphLabelsWidth()
+                + " graphLanes=" + AppBackend.startGraphLanesWidth()
                 + " commands=" + AppBackend.startCommandsShown()
                 + " maximized=" + (root.visibility === Window.Maximized)
                 + " autoFetch=" + AppBackend.autoFetchMinutes)

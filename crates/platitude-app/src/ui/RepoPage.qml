@@ -2663,6 +2663,11 @@ Item {
         page.commandsOpen = AppBackend.startCommandsShown()
         rightPane.SplitView.preferredWidth = AppBackend.startDetailsWidth()
         commandsPane.SplitView.preferredHeight = AppBackend.startCommandsHeight()
+        // -1 travels through unchanged: the pane reads it as "follow the
+        // default lane count", which is what a divider nobody has dragged
+        // has always done.
+        graphPane.labelWManual = AppBackend.startGraphLabelsWidth()
+        graphPane.graphColWManual = AppBackend.startGraphLanesWidth()
         sidebarPane.expBranches = AppBackend.startSection("branches")
         sidebarPane.expRemotes = AppBackend.startSection("remotes")
         sidebarPane.expWorktree = AppBackend.startSection("worktree")
@@ -2681,6 +2686,13 @@ Item {
         rightPane.SplitView.preferredWidth = w
     }
 
+    /// What dragging the two dividers inside the graph would leave. Only
+    /// the headless state check calls this; a person drags.
+    function setGraphColumns(labels, lanes) {
+        graphPane.labelWManual = labels
+        graphPane.graphColWManual = lanes
+    }
+
     /// Hands the window's layout over to be remembered. Pulled on a timer
     /// by the window rather than pushed as each value changes: a splitter
     /// drag moves a width on every frame, and the point is to write what
@@ -2692,7 +2704,11 @@ Item {
             page.sidebarCollapsed ? sidebarPane.openWidth : sidebarPane.width,
             rightPane.width,
             page.commandsOpen ? commandsPane.height
-                              : commandsPane.SplitView.preferredHeight)
+                              : commandsPane.SplitView.preferredHeight,
+            // The dragged values, not the widths on screen: a column that
+            // nobody has moved reports -1 and goes on following the
+            // default rather than freezing today's number into the file.
+            graphPane.labelWManual, graphPane.graphColWManual)
         AppBackend.saveLayoutFlags(page.sidebarCollapsed, page.commandsOpen,
                                    repoTab.tagsShown, worktreeModel.treeView,
                                    detailsModel.treeView)

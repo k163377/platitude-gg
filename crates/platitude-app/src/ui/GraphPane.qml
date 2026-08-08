@@ -170,7 +170,7 @@ Rectangle {
     }
 
     // Adjustable column widths (labels / graph); -1 = automatic. The
-    // graph column caps at a default lane count and scrolls
+    // graph column starts at a default lane count and scrolls
     // horizontally when the full graph is wider.
     property real labelWManual: -1
     property real graphColWManual: -1
@@ -178,7 +178,14 @@ Rectangle {
     readonly property real graphFullW: Metrics.laneInset
                                        + Math.max(1, graphModel.maxLanes) * Metrics.laneW
                                        + Theme.spaceSm
-    readonly property real graphColW: Math.min(graphFullW,
+    // How far the divider may be pulled: up to where the message column
+    // would stop showing that a message is there. Deliberately not the
+    // width of the lanes themselves — capping at the content leaves the
+    // divider on a repository with one lane grabbable but immovable
+    // (規約 §グラフ列は内容の幅に縛らない).
+    readonly property real graphColWMax: Math.max(Metrics.laneInset + Metrics.laneW,
+                                                  width - labelW - Metrics.messageMinW)
+    readonly property real graphColW: Math.min(graphColWMax,
         graphColWManual >= 0 ? Math.max(graphColWManual, Metrics.laneInset + Metrics.laneW)
                              : Metrics.laneInset + Metrics.graphDefaultLanes * Metrics.laneW
                                + Theme.spaceSm)
@@ -566,8 +573,7 @@ Rectangle {
             const nx = mapToItem(graphArea, mouse.x, 0).x
                           - Theme.spaceSm - Theme.borderWidth
             graphArea.graphColWManual = Math.max(Metrics.laneInset + Metrics.laneW,
-                Math.min(nx - graphArea.labelW,
-                         graphArea.width - graphArea.labelW - 2 * Theme.spaceXxl))
+                Math.min(nx - graphArea.labelW, graphArea.graphColWMax))
         }
     }
     // Horizontal scroll of the lanes when the full graph is wider than

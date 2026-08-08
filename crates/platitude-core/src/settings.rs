@@ -446,6 +446,12 @@ pub struct LayoutState {
     pub sidebar_width: i32,
     pub sidebar_collapsed: bool,
     pub details_width: i32,
+    /// Chip and lane columns inside the graph, or [`AUTO_WIDTH`] while
+    /// nobody has moved that divider — which is worth keeping apart from
+    /// a number, because a session that never touched it goes on
+    /// following the pane's default even when that default changes.
+    pub graph_labels_width: i32,
+    pub graph_lanes_width: i32,
     pub commands_height: i32,
     pub commands_shown: bool,
     pub tags_shown: bool,
@@ -460,6 +466,8 @@ impl Default for LayoutState {
             sidebar_width: 260,
             sidebar_collapsed: false,
             details_width: 400,
+            graph_labels_width: AUTO_WIDTH,
+            graph_lanes_width: AUTO_WIDTH,
             commands_height: 280,
             commands_shown: false,
             tags_shown: true,
@@ -469,6 +477,9 @@ impl Default for LayoutState {
         }
     }
 }
+
+/// "No width was chosen here" — see [`LayoutState::graph_labels_width`].
+pub const AUTO_WIDTH: i32 = -1;
 
 /// A cap on the tab list, so a file that has been hand-edited into
 /// something enormous cannot make startup crawl.
@@ -511,6 +522,8 @@ impl State {
                 sidebar_width: int_in(l, "sidebar_width", 180..=4_000, d.sidebar_width),
                 sidebar_collapsed: flag(l, "sidebar_collapsed", d.sidebar_collapsed),
                 details_width: int_in(l, "details_width", 300..=4_000, d.details_width),
+                graph_labels_width: width_or_auto(l, "graph_labels_width"),
+                graph_lanes_width: width_or_auto(l, "graph_lanes_width"),
                 commands_height: int_in(l, "commands_height", 120..=4_000, d.commands_height),
                 commands_shown: flag(l, "commands_shown", d.commands_shown),
                 tags_shown: flag(l, "tags_shown", d.tags_shown),
@@ -584,6 +597,14 @@ impl State {
         layout.insert(
             "details_width".into(),
             Value::Integer(l.details_width.into()),
+        );
+        layout.insert(
+            "graph_labels_width".into(),
+            Value::Integer(l.graph_labels_width.into()),
+        );
+        layout.insert(
+            "graph_lanes_width".into(),
+            Value::Integer(l.graph_lanes_width.into()),
         );
         layout.insert(
             "commands_height".into(),
@@ -729,6 +750,22 @@ fn int_in(table: &Table, key: &str, range: std::ops::RangeInclusive<i64>, fallba
         .unwrap_or(fallback)
 }
 
+/// A column width inside the graph: `AUTO_WIDTH` for "nobody moved this
+/// one", or a width wide enough to be one. Everything between the two —
+/// a stored 3, a stored 0 — is as unusable as a string would be, and
+/// falls back the same way (規約 §読みは Table からキーごとに取る).
+fn width_or_auto(table: &Table, key: &str) -> i32 {
+    /// Narrower than this and the column cannot hold what it is for: one
+    /// lane, or a chip clipped to nothing.
+    const NARROWEST: i64 = 24;
+    table
+        .get(key)
+        .and_then(Value::as_integer)
+        .filter(|v| *v == i64::from(AUTO_WIDTH) || (NARROWEST..=4_000).contains(v))
+        .and_then(|v| i32::try_from(v).ok())
+        .unwrap_or(AUTO_WIDTH)
+}
+
 /// A window coordinate, which may legitimately be negative (a second
 /// monitor to the left) but not absurd.
 fn coord(table: &Table, key: &str) -> Option<i32> {
@@ -793,6 +830,8 @@ mod tests {
                 sidebar_width: 320,
                 sidebar_collapsed: true,
                 details_width: 520,
+                graph_labels_width: 190,
+                graph_lanes_width: 300,
                 commands_height: 200,
                 commands_shown: true,
                 tags_shown: false,
@@ -943,6 +982,46 @@ colour = "midnight"
             "an unusable width falls back like a wrong type"
         );
         assert_eq!(state.layout.details_width, 640);
+    }
+
+    /// The graph's two columns carry a value below every real width that
+    /// still means something: nobody has moved this divider. It has to
+    /// survive the same range check that throws out a stored 3.
+    #[test]
+    fn an_untouched_graph_divider_is_not_a_width() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join(STATE_FILE),
+            r#"
+version = 1
+[layout]
+graph_labels_width = -1
+graph_lanes_width = 3
+"#,
+        )
+        .expect("write");
+
+        let state = dir_store(dir.path()).load_state();
+        assert_eq!(
+            state.layout.graph_labels_width, AUTO_WIDTH,
+            "-1 is a value, not a bad one"
+        );
+        assert_eq!(
+            state.layout.graph_lanes_width, AUTO_WIDTH,
+            "a column too narrow to hold a lane falls back like a wrong type"
+        );
+
+        // And the pair a person can actually leave behind comes back.
+        let mut moved = state;
+        moved.layout.graph_labels_width = 190;
+        moved.layout.graph_lanes_width = 300;
+        let store = dir_store(dir.path());
+        store.save_state(&moved).expect("save");
+        let back = store.load_state().layout;
+        assert_eq!(
+            (back.graph_labels_width, back.graph_lanes_width),
+            (190, 300)
+        );
     }
 
     #[test]
