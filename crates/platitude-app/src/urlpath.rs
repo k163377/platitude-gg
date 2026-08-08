@@ -1,9 +1,10 @@
-//! `file://` URL → local path conversion for QML FolderDialog results.
+//! `file://` URL ↔ local path conversion for the QML FolderDialog: its
+//! result comes back as a URL, and the folder it opens at is given as one.
 //!
 //! Kept dependency-free: only the shapes QML actually produces need to be
 //! handled (`file:///C:/dir`, `file:///home/user/dir`, percent-encoded).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Converts a QML `url` string to a local filesystem path.
 /// Non-`file:` inputs are returned as plain paths unchanged.
@@ -27,6 +28,45 @@ pub fn file_url_to_path(url: &str) -> PathBuf {
     {
         PathBuf::from(decoded)
     }
+}
+
+/// Converts a local path to a `file:` URL for QML. Empty for a path with
+/// no root: a dialog cannot be opened at a folder that is not one.
+pub fn path_to_file_url(path: &Path) -> String {
+    let encoded = percent_encode(&path.to_string_lossy().replace('\\', "/"));
+    if encoded.starts_with("//") {
+        // UNC: the leading pair names the host, which the URL keeps.
+        format!("file:{encoded}")
+    } else if encoded.starts_with('/') {
+        format!("file://{encoded}")
+    } else if encoded.as_bytes().get(1) == Some(&b':') {
+        // A drive letter is not a root the URL can borrow, so it brings
+        // its own slash: `C:/x` → `file:///C:/x`.
+        format!("file:///{encoded}")
+    } else {
+        String::new()
+    }
+}
+
+/// Percent-encodes a path for a `file:` URL, leaving the separators and
+/// the drive colon to be read as themselves. `#` and `?` are the ones
+/// that matter: unencoded, a folder named after either cuts the URL short.
+fn percent_encode(input: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut out = String::with_capacity(input.len());
+    for byte in input.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' | b':' => {
+                out.push(byte as char);
+            }
+            _ => {
+                out.push('%');
+                out.push(HEX[(byte >> 4) as usize] as char);
+                out.push(HEX[(byte & 0x0f) as usize] as char);
+            }
+        }
+    }
+    out
 }
 
 fn percent_decode(input: &str) -> String {
@@ -87,6 +127,60 @@ mod tests {
         assert_eq!(
             file_url_to_path("C:/plain/path"),
             PathBuf::from("C:/plain/path")
+        );
+    }
+
+    #[test]
+    fn paths_become_file_urls() {
+        assert_eq!(
+            path_to_file_url(Path::new("C:/Users/dev/repo")),
+            "file:///C:/Users/dev/repo"
+        );
+        assert_eq!(
+            path_to_file_url(Path::new(r"C:\Users\dev\repo")),
+            "file:///C:/Users/dev/repo"
+        );
+        assert_eq!(
+            path_to_file_url(Path::new("/home/dev/repo")),
+            "file:///home/dev/repo"
+        );
+        assert_eq!(
+            path_to_file_url(Path::new(r"\\server\share\repo")),
+            "file://server/share/repo"
+        );
+    }
+
+    #[test]
+    fn rootless_paths_have_no_url() {
+        assert_eq!(path_to_file_url(Path::new("repo/sub")), "");
+        assert_eq!(path_to_file_url(Path::new("")), "");
+    }
+
+    #[test]
+    fn url_form_survives_the_round_trip() {
+        for path in [
+            "/home/dev/with space/repo",
+            "/home/dev/日本語/repo",
+            "/home/dev/50%off/repo",
+            "/home/dev/a#b?c/repo",
+        ] {
+            let url = path_to_file_url(Path::new(path));
+            assert_eq!(file_url_to_path(&url), PathBuf::from(path), "{url}");
+        }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn drive_urls_survive_the_round_trip() {
+        let path = Path::new(r"C:\Users\dev\with space\日本語");
+        let url = path_to_file_url(path);
+        assert_eq!(
+            url,
+            "file:///C:/Users/dev/with%20space/%E6%97%A5%E6%9C%AC%E8%AA%9E"
+        );
+        assert_eq!(
+            file_url_to_path(&url),
+            PathBuf::from("C:/Users/dev/with space/日本語")
         );
     }
 

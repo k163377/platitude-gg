@@ -182,6 +182,18 @@ ApplicationWindow {
         onAccepted: tabsModel.openRepositoryUrl(selectedFolder.toString())
     }
 
+    // Every way in goes through here so the picker opens beside the
+    // repository that is already open. Left to itself the dialog comes
+    // back up inside the folder it last accepted — the repository — and
+    // the next one is always a level up from there.
+    function openRepositoryPicker() {
+        if (root.curPage !== null && root.curPage.pageTab.parentFolderUrl !== "")
+            folderDialog.currentFolder = root.curPage.pageTab.parentFolderUrl
+        folderDialog.open()
+        if (AppBackend.autoAct !== "")
+            AppBackend.report("picker folder=" + folderDialog.currentFolder)
+    }
+
     Component.onCompleted: {
         AppBackend.initialize()
         if (AppBackend.autoOpen !== "") {
@@ -314,7 +326,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             tabsModel: tabsModel
             curPage: root.curPage
-            onOpenRepositoryRequested: folderDialog.open()
+            onOpenRepositoryRequested: root.openRepositoryPicker()
             onIdentityEditRequested: root.identityEditing = true
             onSettingsRequested: settingsDialog.open()
         }
@@ -349,7 +361,7 @@ ApplicationWindow {
                 RepoPage {
                     index: -1
                     tab_id: -1
-                    onOpenRepositoryPicker: folderDialog.open()
+                    onOpenRepositoryPicker: root.openRepositoryPicker()
                 }
             }
         }
@@ -367,7 +379,7 @@ ApplicationWindow {
                 RepoPage {
                     focusEpoch: root.focusEpoch
                     onScreen: root.onScreen
-                    onOpenRepositoryPicker: folderDialog.open()
+                    onOpenRepositoryPicker: root.openRepositoryPicker()
                     onOpenRepositoryPathRequested: path => tabsModel.openRepositoryPath(path)
                     onSettingsDialogRequested: settingsDialog.open()
                     onCloseTabRequested: tabsModel.closeTab(tab_id)

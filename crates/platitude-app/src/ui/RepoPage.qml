@@ -2215,6 +2215,10 @@ Item {
             page.toggleDiff("unstaged", arg, "")
         } else if (act === "preview-staged") {
             page.toggleDiff("staged", arg, "")
+        } else if (act === "open-picker") {
+            // The window owns the dialog, so this asks for it the way the
+            // toolbar row does; the folder it opens at is reported there.
+            page.openRepositoryPicker()
         } else if (act === "settings" || act === "settings-tools") {
             // `-tools` goes on to open the candidate list from inside the
             // dialog, and leaves the fetch interval where it was.

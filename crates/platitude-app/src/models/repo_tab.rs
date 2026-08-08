@@ -3,6 +3,7 @@ use std::sync::Arc;
 use qtbridge::{QObjectHolder, qobject};
 
 use crate::hub::{Feed, Hub, TabMsg};
+use crate::urlpath::path_to_file_url;
 
 use super::qml_register;
 
@@ -20,6 +21,12 @@ pub struct RepoTab {
     state: String,
     title: String,
     repo_path: String,
+    /// The folder this repository sits in, as a URL for the picker to
+    /// open at. Repositories are kept side by side far more often than
+    /// inside one another, so the way to the next one starts here rather
+    /// than in the folder the dialog last left off in — which is the
+    /// repository itself, the one place with nothing to open.
+    parent_folder_url: String,
     error: String,
     last_error: String,
     tags_shown: bool,
@@ -136,6 +143,7 @@ impl Default for RepoTab {
             state: String::new(),
             title: String::new(),
             repo_path: String::new(),
+            parent_folder_url: String::new(),
             error: String::new(),
             last_error: String::new(),
             // Mirrors core LogOptions::default().
@@ -263,6 +271,11 @@ impl RepoTab {
     qproperty!("state", Member = state, Notify = changed);
     qproperty!("title", Member = title, Notify = changed);
     qproperty!("repoPath", Member = repo_path, Notify = changed);
+    qproperty!(
+        "parentFolderUrl",
+        Member = parent_folder_url,
+        Notify = changed
+    );
     qproperty!("error", Member = error, Notify = changed);
     qproperty!("lastError", Member = last_error, Notify = changed);
     qproperty!("tagsShown", Member = tags_shown, Notify = changed);
@@ -434,6 +447,10 @@ impl RepoTab {
                 TabMsg::Opened { title, path } => {
                     self.state = "open".into();
                     self.title = title;
+                    self.parent_folder_url = std::path::Path::new(&path)
+                        .parent()
+                        .map(path_to_file_url)
+                        .unwrap_or_default();
                     self.repo_path = path;
                 }
                 TabMsg::OpenFailed { message } => {
