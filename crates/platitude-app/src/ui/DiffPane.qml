@@ -22,6 +22,10 @@ Rectangle {
     property bool busy: false
 
     signal closeRequested()
+    /// The side being read has nothing left in it — everything that was
+    /// here has been staged (or unstaged, or thrown away), so what the
+    /// pane is standing on is gone.
+    signal nothingLeft()
     /// Stage or unstage the whole file (direction follows `staged`).
     signal stageFileRequested()
     /// Stage or unstage one hunk (line < 0) or one line of it.
@@ -158,6 +162,27 @@ Rectangle {
     /// be seen to put it back where it was.
     function scrollTo(y) {
         diffList.contentY = y
+    }
+
+    // ---- the side that ran out --------------------------------------
+    // A write empties the diff it was made in as soon as the last of it
+    // goes over to the other side, and an empty frame with a live
+    // `Stage file` in it is a pane standing on nothing. Only a rebuild
+    // asks the question — opening a file that has nothing to show is a
+    // different story and not one a close would explain.
+    property bool closeWhenEmpty: false
+    Connections {
+        target: diffPane.diffModel
+        // Sent once the swap is complete, so the count is the new one.
+        function onChanged() {
+            if (!diffPane.closeWhenEmpty || diffPane.diffModel.loading)
+                return
+            diffPane.closeWhenEmpty = false
+            // A picture is content even where there are no rows to count.
+            if (diffList.count === 0 && !diffPane.diffModel.isBinary
+                    && diffPane.diffModel.previewKind === "")
+                diffPane.nothingLeft()
+        }
     }
     /// The first line of a hunk that a partial write can act on. A hunk's
     /// lines are numbered through the context it carries, so line 0 is

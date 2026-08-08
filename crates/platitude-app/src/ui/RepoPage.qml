@@ -2096,6 +2096,10 @@ Item {
         page.pendingDiffReload = false
         // Whatever was picked addressed the diff that is being replaced.
         diffPane.clearLines()
+        // If this write took the last of what was on this side, the pane
+        // has nothing left to stand on and closes (デザイン規約 §diff の
+        // 中のステージ).
+        diffPane.closeWhenEmpty = true
         diffModel.requestWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
     }
 
@@ -2597,6 +2601,7 @@ Item {
                         staged: page.diffStaged
                         busy: repoTab.busyCount > 0
                         onCloseRequested: page.closeDiff()
+                        onNothingLeft: page.closeDiff()
                         onDiscardHunkRequested: hunk => page.discardHunkNow(hunk)
                         onStageFileRequested: {
                             if (page.diffStaged)
