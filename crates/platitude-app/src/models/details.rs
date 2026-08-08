@@ -112,6 +112,8 @@ pub struct DetailsModel {
     /// none. Refreshed on every details read and whenever an assignment
     /// changes, so the card follows the settings list without a reload.
     avatar_url: String,
+    /// Packed `Co-authored-by` trailers (see `encode::encode_co_authors`).
+    co_authors: String,
     committer: String,
     committer_time: i64,
     message_subject: String,
@@ -140,6 +142,7 @@ impl Default for DetailsModel {
             author_time: 0,
             avatar: 0,
             avatar_url: String::new(),
+            co_authors: String::new(),
             committer: String::new(),
             committer_time: 0,
             message_subject: String::new(),
@@ -186,6 +189,7 @@ impl DetailsModel {
     qproperty!("authorTime", Member = author_time, Notify = changed);
     qproperty!("avatar", Member = avatar, Notify = changed);
     qproperty!("avatarUrl", Member = avatar_url, Notify = changed);
+    qproperty!("coAuthors", Member = co_authors, Notify = changed);
     qproperty!("committer", Member = committer, Notify = changed);
     qproperty!("committerTime", Member = committer_time, Notify = changed);
     qproperty!("messageSubject", Member = message_subject, Notify = changed);
@@ -263,6 +267,7 @@ impl DetailsModel {
         self.avatar = crate::encode::avatar_code(&details.author_name);
         self.avatar_url =
             Hub::with(|hub| hub.avatar_url(&details.author_email)).unwrap_or_default();
+        self.co_authors = crate::encode::encode_co_authors(&details.co_authors);
         self.author_time = details.author_time;
         self.committer = format!("{} <{}>", details.committer_name, details.committer_email);
         self.committer_time = details.committer_time;

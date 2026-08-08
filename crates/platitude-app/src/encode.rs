@@ -10,13 +10,16 @@ use platitude_core::patch::HunkSelect;
 use platitude_core::session::{LabelKind, RefLabel};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Record separator for label chips (cannot occur in refnames).
-pub const LABEL_SEP: char = '\u{1f}';
+/// Record separator for the packed lists QML unpacks itself: label chips
+/// and co-authors. Neither a refname, a person's name nor an address can
+/// hold it.
+pub const RECORD_SEP: char = '\u{1f}';
 
-/// Field separator inside one chip record, between the ref's name and the
-/// remotes it was read from. Present only when there are any, and like
-/// [`LABEL_SEP`] it cannot occur in a refname or a remote name.
-pub const LABEL_FIELD_SEP: char = '\u{1e}';
+/// Field separator inside one record — a chip's name from the remotes it
+/// was read off, a co-author's name from their address. Present only when
+/// there is a second field, and like [`RECORD_SEP`] it cannot occur in any
+/// of those.
+pub const FIELD_SEP: char = '\u{1e}';
 
 /// Segments → `;`-joined draw tokens: `t<lane>.<color>` (through),
 /// `i<lane>.<color>` (into node), `o<lane>.<color>` (out of node).
@@ -75,7 +78,7 @@ pub fn encode_labels(labels: &[RefLabel]) -> String {
     let mut out = String::new();
     for (i, l) in labels.iter().enumerate() {
         if i > 0 {
-            out.push(LABEL_SEP);
+            out.push(RECORD_SEP);
         }
         out.push(match l.kind {
             LabelKind::Head => 'H',
@@ -90,7 +93,7 @@ pub fn encode_labels(labels: &[RefLabel]) -> String {
         out.push(if l.here { '1' } else { '0' });
         out.push_str(&l.text);
         if !l.remote.is_empty() {
-            out.push(LABEL_FIELD_SEP);
+            out.push(FIELD_SEP);
             out.push_str(&l.remote);
         }
     }
@@ -103,12 +106,34 @@ pub fn encode_labels(labels: &[RefLabel]) -> String {
 /// Written beside the encoder so the two cannot drift: a reader that
 /// guessed the layout would break the first time a flag is added.
 pub fn label_names(encoded: &str) -> impl Iterator<Item = &str> {
-    encoded.split(LABEL_SEP).filter_map(|record| {
+    encoded.split(RECORD_SEP).filter_map(|record| {
         // Kind letter plus four flag digits, then the name, then — only
         // when the ref was read off a remote — the remotes it came from.
         let rest = record.get(5..)?;
-        Some(rest.split(LABEL_FIELD_SEP).next().unwrap_or(rest))
+        Some(rest.split(FIELD_SEP).next().unwrap_or(rest))
     })
+}
+
+/// Co-authors → `\u{1f}`-joined records of name, address and identicon
+/// code, in that order, separated by [`FIELD_SEP`].
+///
+/// The identicon is computed here rather than in QML for the same reason
+/// the graph's is: [`avatar_code`] is what decides a person's face, and
+/// one decider is the whole point. A trailer with no address still gets
+/// its two separators, so the reader can index without counting.
+pub fn encode_co_authors(mates: &[platitude_core::details::CoAuthor]) -> String {
+    let mut out = String::new();
+    for (i, m) in mates.iter().enumerate() {
+        if i > 0 {
+            out.push(RECORD_SEP);
+        }
+        out.push_str(&m.name);
+        out.push(FIELD_SEP);
+        out.push_str(&m.email);
+        out.push(FIELD_SEP);
+        out.push_str(&avatar_code(&m.name).to_string());
+    }
+    out
 }
 
 /// FNV-1a 32-bit. Stands in for randomness wherever a name has to pick
@@ -532,6 +557,43 @@ mod tests {
     }
 
     #[test]
+    fn co_authors_pack_name_address_and_face_into_one_record_each() {
+        use platitude_core::details::CoAuthor;
+        let packed = encode_co_authors(&[
+            CoAuthor {
+                name: "Claude Opus 5".into(),
+                email: "noreply@anthropic.com".into(),
+            },
+            CoAuthor {
+                name: "Nameless".into(),
+                email: String::new(),
+            },
+        ]);
+        let records: Vec<&str> = packed.split(RECORD_SEP).collect();
+        assert_eq!(records.len(), 2);
+
+        let first: Vec<&str> = records[0].split(FIELD_SEP).collect();
+        assert_eq!(first[0], "Claude Opus 5");
+        assert_eq!(first[1], "noreply@anthropic.com");
+        assert_eq!(
+            first[2],
+            avatar_code("Claude Opus 5").to_string(),
+            "the face comes off the name, the way the graph rows' do"
+        );
+
+        // An address-less trailer still leaves three fields, so the
+        // reader indexes rather than counts.
+        let second: Vec<&str> = records[1].split(FIELD_SEP).collect();
+        assert_eq!(second.len(), 3);
+        assert_eq!(second[1], "");
+    }
+
+    #[test]
+    fn no_co_authors_pack_into_nothing() {
+        assert_eq!(encode_co_authors(&[]), "");
+    }
+
+    #[test]
     fn a_tag_carries_the_remote_bit_like_a_branch() {
         let labels = [RefLabel {
             text: "v1.0".into(),
@@ -600,7 +662,7 @@ mod tests {
             here: true,
             remote: String::new(),
         }];
-        assert!(!encode_labels(&labels).contains(LABEL_FIELD_SEP));
+        assert!(!encode_labels(&labels).contains(FIELD_SEP));
     }
 
     #[test]

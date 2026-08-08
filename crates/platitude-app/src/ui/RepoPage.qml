@@ -1889,6 +1889,23 @@ Item {
             + " rows=" + graphModel.avatarRowCount()
             + " error=" + AppBackend.avatarError)
     }
+    // The details have to arrive before the credit line they carry can
+    // be opened or counted.
+    Timer {
+        id: coAuthorTimer
+        interval: 800
+        onTriggered: {
+            if (AppBackend.autoAct === "co-authors-open")
+                detailsPane.showCoAuthors(true)
+            // `open` is the card's own visibility, not the input that
+            // asked for it: reporting the input would go green with the
+            // binding cut.
+            AppBackend.report(
+                "co_authors count=" + detailsPane.coAuthorRecords.length
+                + " first=" + detailsPane.coAuthorName(0)
+                + " open=" + detailsPane.matesCardOpen)
+        }
+    }
     // An assignment is not something git knows about, so nothing here is
     // waiting for a refresh to bring it: the rows and the card re-read
     // the store themselves.
@@ -2320,6 +2337,14 @@ Item {
             // for it. The argument is the row.
             page.activateRow(graphModel.oidAt(Number(arg)))
             signatureTimer.start()
+        } else if (act === "co-authors" || act === "co-authors-open") {
+            // The credit line on the date row, and the card the pointer
+            // opens under it. Hover cannot be injected, so `-open` writes
+            // the same property the handler writes; the two are read as a
+            // pair, because "the card stayed shut" only means something
+            // next to a run where it opened. The argument is the row.
+            page.activateRow(graphModel.oidAt(Number(arg)))
+            coAuthorTimer.start()
         } else if (act === "name-box") {
             // Opened and left standing, for a look at it. The argument is
             // the row, since the box only belongs on one with no chips.

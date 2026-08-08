@@ -77,6 +77,70 @@ ColumnLayout {
           ? qsTr("The signing key was revoked")
         : qsTr("Cannot be checked — no key here to check it against")
 
+    // ---- co-authors -------------------------------------------------
+    // Packed by encode::encode_co_authors; unpacked here the way the
+    // graph rows unpack their chips. A commit object holds one author,
+    // so everyone else arrives as a `Co-authored-by` trailer and is
+    // shown as what it is: a line the message credits, under the author
+    // rather than beside them (デザイン規約 §co-author).
+    readonly property var coAuthorRecords:
+        detailsPane.details.coAuthors === ""
+        ? [] : detailsPane.details.coAuthors.split(String.fromCharCode(31))
+    function coAuthorName(i) {
+        const record = detailsPane.coAuthorRecords[i]
+        return record === undefined
+               ? "" : record.split(String.fromCharCode(30))[0]
+    }
+    function coAuthorFace(i) {
+        const record = detailsPane.coAuthorRecords[i]
+        return record === undefined
+               ? 0 : parseInt(record.split(String.fromCharCode(30))[2])
+    }
+    /// Whether the pointer is on the underlined stretch. The real hover
+    /// and the automation hook write this same one, so a run cannot go
+    /// green with the hover unwired.
+    property bool matesPointed: false
+    /// ...or on the card it opened: walking down into the card takes the
+    /// pointer off the stretch, and the two must not fight over it.
+    readonly property bool matesLit:
+        detailsPane.matesPointed || mateCard.pointerInside
+    /// Smoke hook and hover handler both land here.
+    function showCoAuthors(on) {
+        detailsPane.matesPointed = on
+    }
+    /// Whether the card is on screen — what automation reports, since
+    /// the input side would read true with the binding cut.
+    readonly property bool matesCardOpen: mateCard.opened
+    onMatesLitChanged: {
+        if (detailsPane.matesLit)
+            detailsPane.openMateCard()
+        else
+            detailsPane.settleMateCard()
+    }
+    function openMateCard() {
+        if (detailsPane.coAuthorRecords.length === 0)
+            return
+        const at = coBlock.mapToItem(detailsPane, 0, coBlock.height)
+        mateCard.records = detailsPane.coAuthorRecords
+        mateCard.x = at.x
+        mateCard.y = at.y + Theme.spaceXs
+        mateCard.open()
+    }
+    // The card opens flush under the stretch, so walking into it takes
+    // the pointer off the stretch on the way and walking back out puts
+    // it on again. Both hovers change in the same frame and in no fixed
+    // order, so the answer waits for the end of this round of events.
+    function settleMateCard() {
+        Qt.callLater(function () {
+            if (!mateCard.pointerInside && !detailsPane.matesPointed)
+                mateCard.close()
+        })
+    }
+    CoAuthorCard {
+        id: mateCard
+        onPointerInsideChanged: detailsPane.settleMateCard()
+    }
+
     signal fileActivated(string path, string origPath)
     signal parentClicked(string oidHex)
     signal copyRequested(string text)
@@ -397,39 +461,36 @@ ColumnLayout {
             ColumnLayout {
                 spacing: 0
                 Layout.fillWidth: true
-                Label {
-                    id: authorLabel
-                    text: detailsPane.details.authorName
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                    color: Theme.textPrimary
-                    font.pixelSize: Theme.fontMd
-                    font.weight: Font.DemiBold
-                    ToolTip.visible: authorHover.containsMouse
-                    ToolTip.delay: Metrics.tipDelayMs
-                    ToolTip.text: qsTr("Author: %1 <%2>\nCommitter: %3")
-                                  .arg(detailsPane.details.authorName)
-                                  .arg(detailsPane.details.authorEmail)
-                                  .arg(detailsPane.details.committer)
-                    MouseArea {
-                        id: authorHover
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.NoButton
-                    }
-                }
-                // Date, and beside it what git makes of the signature.
+                // Name, and beside it what git makes of the signature.
                 // An unsigned commit gets nothing: the ordinary case
                 // carries no mark, the same rule the graph's state
-                // badges follow.
+                // badges follow. The verdict rides up here rather than
+                // sitting with the date because the date's row is where
+                // the co-authors go, and a signed commit with one would
+                // have had three things in ~230px (デザイン規約 §co-author).
                 RowLayout {
+                    Layout.fillWidth: true
                     spacing: Theme.spaceSm
                     Label {
-                        id: detailsDate
-                        text: Qt.formatDateTime(new Date(detailsPane.details.authorTime * 1000),
-                                                "yyyy-MM-dd HH:mm")
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSm
+                        id: authorLabel
+                        text: detailsPane.details.authorName
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontMd
+                        font.weight: Font.DemiBold
+                        ToolTip.visible: authorHover.containsMouse
+                        ToolTip.delay: Metrics.tipDelayMs
+                        ToolTip.text: qsTr("Author: %1 <%2>\nCommitter: %3")
+                                      .arg(detailsPane.details.authorName)
+                                      .arg(detailsPane.details.authorEmail)
+                                      .arg(detailsPane.details.committer)
+                        MouseArea {
+                            id: authorHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
+                        }
                     }
                     RowLayout {
                         id: signatureMark
@@ -467,6 +528,75 @@ ColumnLayout {
                         // one to fill its parent is undefined behaviour.
                         HoverHandler { id: signatureHover }
                     }
+                }
+                // Date, and beside it whoever the message credits along
+                // with the author. A commit with no trailer shows only
+                // the date, the way it always did.
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spaceSm
+                    Label {
+                        id: detailsDate
+                        text: Qt.formatDateTime(new Date(detailsPane.details.authorTime * 1000),
+                                                "yyyy-MM-dd HH:mm")
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSm
+                    }
+                    // The face and name of the first co-author, then a
+                    // count of the rest — the same "+N" the graph chips
+                    // use, so the row's width never moves. One rule runs
+                    // under the lot, the way the hash and its copy icon
+                    // share one: the two are one target.
+                    Item {
+                        id: coBlock
+                        visible: detailsPane.coAuthorRecords.length > 0
+                        implicitWidth: coRow.implicitWidth
+                        implicitHeight: coRow.implicitHeight
+                        Layout.alignment: Qt.AlignVCenter
+                        RowLayout {
+                            id: coRow
+                            anchors.fill: parent
+                            spacing: Theme.spaceXs
+                            IdentIcon {
+                                code: detailsPane.coAuthorFace(0)
+                                width: Theme.iconMd
+                                height: Theme.iconMd
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+                            Label {
+                                text: detailsPane.coAuthorName(0)
+                                color: Theme.textSecondary
+                                font.pixelSize: Theme.fontSm
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+                            Label {
+                                visible: detailsPane.coAuthorRecords.length > 1
+                                text: "+" + (detailsPane.coAuthorRecords.length - 1)
+                                color: Theme.textSecondary
+                                font.pixelSize: Theme.fontSm
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+                        }
+                        // Drawn at rest, one step down from the name it
+                        // underlines (デザイン規約 §暗く落とした段 names
+                        // borderStrong as textSecondary's step), and up to
+                        // the name's own value under the pointer — the
+                        // same answer the hash plate gives.
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            height: Theme.borderWidth
+                            color: detailsPane.matesLit ? Theme.textSecondary
+                                                        : Theme.borderStrong
+                        }
+                        HoverHandler {
+                            id: matesHover
+                            onHoveredChanged:
+                                detailsPane.showCoAuthors(matesHover.hovered)
+                        }
+                    }
+                    Item { Layout.fillWidth: true }
                 }
             }
             ColumnLayout {

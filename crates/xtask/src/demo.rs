@@ -59,6 +59,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
         "unpublished" => unpublished(&mut repo)?,
         "noremote" => noremote(&mut repo)?,
         "signed" => signed(&mut repo)?,
+        "co-authors" => co_authors(&mut repo)?,
         "tags" => tags(&mut repo)?,
         "manytags" => manytags(&mut repo)?,
         "empty" => {}
@@ -208,6 +209,41 @@ fn file_url(path: &Path) -> String {
         p.insert(0, '/');
     }
     format!("file://{p}")
+}
+
+/// The three shapes a `Co-authored-by` trailer comes in, newest first:
+/// one co-author (what ~96% of this project's own commits carry), three
+/// of them, and none at all.
+///
+/// The spellings differ on purpose — `Co-Authored-By` is what the tooling
+/// writes, `Co-authored-by` is what the convention documents — because
+/// git's `key=` matches either and the reader must not care.
+fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nA repository with credited company.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit(
+        "src/alone.txt",
+        "written by one\n",
+        "feat: write this one alone",
+    )?;
+    repo.commit(
+        "src/crowd.txt",
+        "written by four\n",
+        "feat: write this one with a crowd\n\nThe body sits above the trailers, the way it always does.\n\n\
+         Co-authored-by: Claude Opus 5 <noreply@anthropic.com>\n\
+         Co-authored-by: Claude Fable 5 <noreply@anthropic.com>\n\
+         Co-authored-by: Claude Opus 4.8 <noreply@anthropic.com>",
+    )?;
+    repo.commit(
+        "src/pair.txt",
+        "written by two\n",
+        "feat: write this one with company\n\n\
+         Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+    )?;
+    Ok(())
 }
 
 /// Branches, a remote one commit behind, tags in both places, a stash,
