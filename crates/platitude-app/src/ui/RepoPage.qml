@@ -27,6 +27,9 @@ Item {
     /// PG_AUTO_ACT=settings wants the window's settings dialog open
     /// for the screenshot.
     signal settingsDialogRequested()
+    /// The settings card, opened from an avatar and carrying whom it was
+    /// opened on.
+    signal avatarSettingsRequested(string name, string email)
 
     property string selectedOid: ""
 
@@ -1846,6 +1849,56 @@ Item {
             + " code=" + page.selectedSignatureCode
             + " signer=" + page.selectedSignatureSigner)
     }
+    // Automation: the details have to land before the author card can be
+    // worked, since it is that author the picture is filed against.
+    Timer {
+        id: avatarAssignTimer
+        interval: 400
+        onTriggered: {
+            AppBackend.assignAvatar(detailsModel.authorEmail,
+                                    detailsModel.authorName,
+                                    AppBackend.autoActArg)
+            avatarReportTimer.start()
+        }
+    }
+    Timer {
+        id: avatarBadgeTimer
+        interval: 400
+        onTriggered: detailsPane.avatarClicked()
+    }
+    // The store starts empty in every run, so the card's own verbs put a
+    // picture in it before opening on it.
+    Timer {
+        id: avatarSeedTimer
+        interval: 400
+        onTriggered: {
+            AppBackend.assignAvatar(detailsModel.authorEmail,
+                                    detailsModel.authorName,
+                                    AppBackend.autoActArg)
+            page.settingsDialogRequested()
+        }
+    }
+    // The picture is read off disk asynchronously, so what the shot wants
+    // is a beat after the write rather than the instant it returns.
+    Timer {
+        id: avatarReportTimer
+        interval: 600
+        onTriggered: AppBackend.report(
+            "avatar email=" + detailsModel.authorEmail
+            + " details=" + (detailsModel.avatarUrl !== "")
+            + " rows=" + graphModel.avatarRowCount()
+            + " error=" + AppBackend.avatarError)
+    }
+    // An assignment is not something git knows about, so nothing here is
+    // waiting for a refresh to bring it: the rows and the card re-read
+    // the store themselves.
+    Connections {
+        target: AppBackend
+        function onAvatarsChanged() {
+            graphModel.refreshAvatars()
+            detailsModel.refreshAvatar()
+        }
+    }
     /// Automation: how long a run of failed fetches the verb asked for,
     /// and whether to hold the button that resumes once it is there.
     property int fetchFailRuns: 0
@@ -2464,6 +2517,28 @@ Item {
             page.settingsDialogRequested()
             if (act === "settings")
                 AppBackend.setAutoFetchMinutes(Number(arg))
+        } else if (act === "avatar-rest" || act === "avatar-hover"
+                   || act === "avatar-assign" || act === "avatar-badge") {
+            // Select the first ordinary commit (row 0 is WIP), then work
+            // its author card. `PG_AUTO_ACT_ARG` is the picture to file
+            // where one is being filed.
+            page.activateRow(graphModel.oidAt(1))
+            if (act === "avatar-hover" || act === "avatar-assign")
+                detailsPane.avatarPointedAt = true
+            if (act === "avatar-assign")
+                avatarAssignTimer.start()
+            if (act === "avatar-badge")
+                avatarBadgeTimer.start()
+        } else if (act === "avatar-settings" || act === "avatar-combo"
+                   || act === "avatar-row-lit" || act === "avatar-remove") {
+            // The card on its own, rather than reached from a face. Each
+            // run starts with an empty store, so a picture to look at has
+            // to be filed first — the argument is the one to file.
+            page.activateRow(graphModel.oidAt(1))
+            if (arg !== "")
+                avatarSeedTimer.start()
+            else
+                page.settingsDialogRequested()
         } else if (act === "commands") {
             // Stage and unstage so the log has something in it, then
             // open it the way the toolbar does.
@@ -2709,6 +2784,9 @@ Item {
     readonly property var pageTab: repoTab
     readonly property var pageWt: workTree
     readonly property var pageCommands: commandsModel
+    /// For the settings card's avatar entry, which offers the authors of
+    /// the repository being looked at.
+    readonly property var pageGraph: graphModel
 
     /// Whether the command log is up. Closed is the resting state: the
     /// toolbar's `>_` opens it, and a failed command raises it.
@@ -3372,6 +3450,10 @@ Item {
                         onFileActivated: (path, origPath) =>
                             page.toggleDiff("commit", path, origPath)
                         onParentClicked: oidHex => page.jumpToRef(oidHex)
+                        // The badge's press goes to the window, which owns
+                        // the settings card.
+                        onAvatarEditRequested: (name, email) =>
+                            page.avatarSettingsRequested(name, email)
                         onCopyRequested: text => clipboard.copy(text)
                         onApplyStashRequested: selector => repoTab.applyStash(selector)
                         onPopStashRequested: selector => {

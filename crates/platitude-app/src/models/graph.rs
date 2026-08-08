@@ -22,12 +22,20 @@ use super::{impl_extend_notified, qml_register};
 pub struct GraphRowItem {
     oid_hex: String,
     author: String,
+    /// The address the picture is filed under — already folded and read
+    /// through mailmap by the log parser. Kept on the row so re-reading
+    /// the assignments needs no second pass over git.
+    author_email: String,
     atime: i64,
     subject: String,
     node_lane: i32,
     node_color: i32,
     row_width: i32,
     avatar: i32,
+    /// A `file:` URL when this author has a picture, empty otherwise —
+    /// resolved here rather than in QML so a delegate coming back from
+    /// the reuse pool has the answer already in its row.
+    avatar_url: String,
     geometry: String,
     labels: String,
     /// `stash@{n}` when the row is a stash; empty otherwise.
@@ -223,7 +231,9 @@ impl GraphModel {
                         self.first_chunk_ms = t0.elapsed().as_millis() as i32;
                         tracing::info!(first_chunk_ms = self.first_chunk_ms, "graph first chunk");
                     }
-                    let items: Vec<GraphRowItem> = rows.iter().map(to_row_item).collect();
+                    let avatars = crate::hub::AvatarUrls::current();
+                    let items: Vec<GraphRowItem> =
+                        rows.iter().map(|row| to_row_item(row, &avatars)).collect();
                     for item in &items {
                         self.max_lanes = self.max_lanes.max(item.row_width);
                     }
@@ -280,7 +290,9 @@ impl GraphModel {
                         continue; // superseded by a newer stream
                     }
                     self.generation = generation;
-                    let items: Vec<GraphRowItem> = rows.iter().map(to_row_item).collect();
+                    let avatars = crate::hub::AvatarUrls::current();
+                    let items: Vec<GraphRowItem> =
+                        rows.iter().map(|row| to_row_item(row, &avatars)).collect();
                     self.max_lanes = items
                         .iter()
                         .map(|item| item.row_width)
@@ -377,6 +389,59 @@ impl GraphModel {
         self.conflict_colors(&ours, &theirs).1
     }
 
+    /// Re-reads the assigned pictures onto the rows already loaded.
+    ///
+    /// Assigning one is not a thing git knows about, so nothing about the
+    /// repository changed and re-walking the history to find that out
+    /// would be the most expensive way to move a handful of pixels. The
+    /// splice only notifies the rows whose author actually got one.
+    #[qslot]
+    fn refresh_avatars(&mut self) {
+        let avatars = crate::hub::AvatarUrls::current();
+        let rows: Vec<GraphRowItem> = self
+            .rows
+            .iter()
+            .map(|row| GraphRowItem {
+                avatar_url: avatars.url_of(&row.author_email),
+                ..row.clone()
+            })
+            .collect();
+        self.splice_notified(rows);
+    }
+
+    /// How many loaded rows carry a picture. Automation only: QML cannot
+    /// walk this model's rows, so counting them there would be counting
+    /// nothing (measured — a helper doing exactly that reported zero
+    /// while the faces were on screen).
+    #[qslot]
+    fn avatar_row_count(&self) -> i32 {
+        self.rows
+            .iter()
+            .filter(|row| !row.avatar_url.is_empty())
+            .count() as i32
+    }
+
+    /// The authors of the loaded rows, one per address, packed as
+    /// `name\u{1f}email` and joined by `\u{1e}`.
+    ///
+    /// What the settings card offers instead of asking somebody to type an
+    /// address: the people whose commits are on screen are the people
+    /// whose faces are worth setting. Read when the card opens, off rows
+    /// already in memory — no git runs for it.
+    #[qslot]
+    fn author_choices(&self) -> String {
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        let mut out: Vec<String> = Vec::new();
+        for row in &self.rows {
+            if row.author_email.is_empty() || !seen.insert(&row.author_email) {
+                continue;
+            }
+            out.push(format!("{}\u{1f}{}", row.author, row.author_email));
+        }
+        out.sort();
+        out.join("\u{1e}")
+    }
+
     /// Full commit id at a row (selection, its recovery after a rewrite,
     /// and the smoke hooks).
     #[qslot]
@@ -400,16 +465,18 @@ impl GraphModel {
 
 qml_register!(GraphModel, "GraphModel", singleton = false);
 
-fn to_row_item(row: &LogRow) -> GraphRowItem {
+fn to_row_item(row: &LogRow, avatars: &crate::hub::AvatarUrls) -> GraphRowItem {
     GraphRowItem {
         oid_hex: row.oid_hex.clone(),
         author: row.author.clone(),
+        author_email: row.author_email.clone(),
         atime: row.time,
         subject: row.subject.clone(),
         node_lane: i32::from(row.node_lane),
         node_color: i32::from(row.node_color),
         row_width: i32::from(row.width),
         avatar: crate::encode::avatar_code(&row.author),
+        avatar_url: avatars.url_of(&row.author_email),
         geometry: encode_geometry(&row.segments),
         labels: encode_labels(&row.labels),
         stash_ref: row.stash_ref.clone(),

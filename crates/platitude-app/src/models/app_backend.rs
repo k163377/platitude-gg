@@ -72,7 +72,41 @@ pub struct AppBackend {
     auto_fetch_minutes: i32,
     /// Ceiling the settings input enforces.
     auto_fetch_max: i32,
+    /// Assigned pictures, packed one per record: address, name, URL.
+    /// The settings list is the only reader, and it is a handful of rows.
+    avatars: String,
+    /// git-style: empty means the last assignment worked.
+    avatar_error: String,
+    /// What the picker offers, built from the kinds the store accepts so
+    /// the dialog and the store cannot drift apart.
+    avatar_filters: String,
     check_feed: Arc<Feed<AppMsg>>,
+}
+
+/// Separators the packed records use, matching the graph's label records.
+const FIELD_SEP: char = '\u{1f}';
+const RECORD_SEP: char = '\u{1e}';
+
+/// Every assignment as `email\u{1f}name\u{1f}url`, records joined by
+/// `\u{1e}`, sorted by address (the store keeps them that way).
+fn packed_avatars() -> String {
+    Hub::with(|hub| {
+        let urls = hub.avatar_urls();
+        hub.avatars()
+            .list()
+            .iter()
+            .map(|entry| {
+                format!(
+                    "{}{FIELD_SEP}{}{FIELD_SEP}{}",
+                    entry.email,
+                    entry.name,
+                    urls.url_of(&entry.email)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(&RECORD_SEP.to_string())
+    })
+    .unwrap_or_default()
 }
 
 fn with_window(pick: impl Fn(&platitude_core::settings::WindowState) -> i32) -> i32 {
@@ -129,6 +163,16 @@ impl Default for AppBackend {
             auto_fetch_minutes: Hub::with(|hub| hub.settings().defaults.auto_fetch_minutes as i32)
                 .unwrap_or(platitude_core::session::AUTO_FETCH_DEFAULT_MINUTES as i32),
             auto_fetch_max: platitude_core::session::AUTO_FETCH_MAX_MINUTES as i32,
+            avatars: packed_avatars(),
+            avatar_error: String::new(),
+            avatar_filters: format!(
+                "Images ({})",
+                platitude_core::avatar::EXTENSIONS
+                    .iter()
+                    .map(|e| format!("*.{e}"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
             check_feed: Arc::new(Feed::default()),
         }
     }
@@ -185,6 +229,13 @@ impl AppBackend {
         Notify = settings_changed
     );
     qproperty!("autoFetchMaxMinutes", Member = auto_fetch_max, Constant);
+    qproperty!("avatars", Member = avatars, Notify = avatars_changed);
+    qproperty!(
+        "avatarError",
+        Member = avatar_error,
+        Notify = avatars_changed
+    );
+    qproperty!("avatarFilters", Member = avatar_filters, Constant);
 
     #[qsignal]
     fn git_state_changed(&mut self);
@@ -194,6 +245,50 @@ impl AppBackend {
 
     #[qsignal]
     fn settings_changed(&mut self);
+
+    /// An assignment was made or taken away. Every list already on screen
+    /// re-reads itself off this — the graph rows, the details card and
+    /// the settings list — because none of them can be told apart from
+    /// the repository not having changed, which it did not.
+    #[qsignal]
+    fn avatars_changed(&mut self);
+
+    /// Files a picture against an address. `file_url` comes from the
+    /// picker, so it arrives as a URL rather than a path.
+    ///
+    /// Writes at once. There is no Save on the card this is reached from
+    /// and no Cancel to undo it — the gesture that takes one away is a
+    /// hold instead (デザイン規約 §長押し).
+    #[qslot]
+    fn assign_avatar(&mut self, email: String, name: String, file_url: String) {
+        let source = crate::urlpath::file_url_to_path(&file_url);
+        self.avatar_error =
+            Hub::with(|hub| hub.assign_avatar(&email, &name, &source)).unwrap_or_default();
+        if !self.avatar_error.is_empty() {
+            tracing::warn!(error = %self.avatar_error, "avatar not assigned");
+        }
+        self.reload_avatars();
+    }
+
+    #[qslot]
+    fn remove_avatar(&mut self, email: String) {
+        Hub::with(|hub| hub.remove_avatar(&email));
+        self.avatar_error.clear();
+        self.reload_avatars();
+    }
+
+    /// The picture for an address, or empty. For the one place that asks
+    /// about a person it is not already showing: the settings card, when
+    /// an avatar's own badge opened it.
+    #[qslot]
+    fn avatar_url_for(&self, email: String) -> String {
+        Hub::with(|hub| hub.avatar_url(&email)).unwrap_or_default()
+    }
+
+    fn reload_avatars(&mut self) {
+        self.avatars = packed_avatars();
+        self.avatars_changed();
+    }
 
     /// Sets how often every open repository fetches, in minutes. Zero (the
     /// blank input) turns it off; anything above the ceiling is clamped,

@@ -494,6 +494,15 @@ ApplicationWindow {
                     onOpenRepositoryPicker: root.openRepositoryPicker()
                     onOpenRepositoryPathRequested: path => tabsModel.openRepositoryPath(path)
                     onSettingsDialogRequested: settingsDialog.open()
+                    // The same card, told whom it was opened on before it
+                    // opens — pictures are managed in one list, and an
+                    // avatar's badge is the way in that saves naming the
+                    // person (デザイン規約 §アバターを与える).
+                    onAvatarSettingsRequested: (name, email) => {
+                        settingsDialog.prefillName = name
+                        settingsDialog.prefillEmail = email
+                        settingsDialog.open()
+                    }
                     onCloseTabRequested: tabsModel.closeTab(tab_id)
                 }
             }

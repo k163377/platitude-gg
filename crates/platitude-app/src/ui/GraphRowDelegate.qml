@@ -21,6 +21,9 @@ Item {
     required property int node_lane
     required property int node_color
     required property int avatar
+    /// A picture this author was given, or empty for the generated
+    /// pattern. Resolved in Rust onto the row (models::graph).
+    required property string avatar_url
     required property string geometry
     required property string labels
     required property string stash_ref
@@ -108,11 +111,20 @@ Item {
     onGeometryChanged: laneCanvas.requestPaint()
     onNode_laneChanged: laneCanvas.requestPaint()
     onAvatarChanged: laneCanvas.requestPaint()
+    // Assigning a picture changes no history, so this role moves on rows
+    // that are otherwise untouched — and a canvas repaints only when it
+    // is asked to.
+    onAvatar_urlChanged: rowItem.loadFace()
+    function loadFace() {
+        if (rowItem.avatar_url !== "")
+            laneCanvas.loadImage(rowItem.avatar_url)
+        laneCanvas.requestPaint()
+    }
     // A row coming back out of the reuse pool has to redraw even when
     // none of the three roles above differs from the row it was last
     // used for: what it holds is the picture it was left with, and the
     // graph may have grown a lane in the meantime — see the canvas.
-    ListView.onReused: laneCanvas.requestPaint()
+    ListView.onReused: rowItem.loadFace()
 
     // Column widths come from the ListView (owner scope).
     readonly property real labelsW: ListView.view ? ListView.view.labelWidth : Metrics.labelColW
@@ -225,6 +237,10 @@ Item {
                 // where rows sit while another window is in front).
                 onWidthChanged: requestPaint()
                 onHeightChanged: requestPaint()
+                // A row coming back from the reuse pool carries a new
+                // author, so the picture it holds is loaded again before
+                // the paint that would draw it.
+                onImageLoaded: requestPaint()
                 onPaint: {
                     const ctx = getContext("2d")
                     ctx.clearRect(0, 0, width, height)
@@ -297,14 +313,29 @@ Item {
                         ctx.stroke()
                         return
                     }
-                    // The commit node is the author's identicon (5x5,
-                    // mirrored; local substitute for network avatars). The
-                    // pattern uses only the inner part of the circle so the
-                    // clip cuts less of it.
+                    // The commit node is the author's picture where they
+                    // were given one, and their identicon otherwise (5x5,
+                    // mirrored; what stands in for the avatar services
+                    // this application cannot use). The pattern uses only
+                    // the inner part of the circle so the clip cuts less
+                    // of it.
                     ctx.save()
                     ctx.beginPath()
                     ctx.arc(nodeX, midY, r, 0, 2 * Math.PI)
                     ctx.clip()
+                    if (rowItem.avatar_url !== "") {
+                        if (laneCanvas.isImageLoaded(rowItem.avatar_url)) {
+                            ctx.drawImage(rowItem.avatar_url,
+                                          nodeX - r, midY - r, 2 * r, 2 * r)
+                        }
+                        ctx.restore()
+                        ctx.strokeStyle = Theme.borderStrong
+                        ctx.lineWidth = Theme.borderWidth
+                        ctx.beginPath()
+                        ctx.arc(nodeX, midY, r, 0, 2 * Math.PI)
+                        ctx.stroke()
+                        return
+                    }
                     ctx.fillStyle = Theme.bgElevated
                     ctx.fillRect(nodeX - r, midY - r, 2 * r, 2 * r)
                     ctx.fillStyle = Theme.graphLane[(rowItem.avatar >> 15) & 0x7]
@@ -367,6 +398,7 @@ Item {
     onNamingChanged: rowItem.takeNamingFocus()
     Component.onCompleted: {
         rowItem.takeNamingFocus()
+        rowItem.loadFace()
     }
     function takeNamingFocus() {
         if (!rowItem.naming || !rowItem.ListView.view)

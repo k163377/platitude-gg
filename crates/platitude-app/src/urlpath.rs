@@ -37,6 +37,11 @@ pub fn picker_folder_url(path: &Path) -> String {
     path_to_file_url(path.parent().unwrap_or(path))
 }
 
+/// A `file:` URL for a file QML is to load — an assigned avatar.
+pub fn file_url(path: &Path) -> String {
+    path_to_file_url(path)
+}
+
 /// Converts a local path to a `file:` URL for QML. Empty for a path with
 /// no root: a dialog cannot be opened at a folder that is not one.
 fn path_to_file_url(path: &Path) -> String {

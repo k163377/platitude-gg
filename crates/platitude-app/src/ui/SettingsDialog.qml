@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Fusion
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import platitude
 import platitude.ui
@@ -23,6 +24,71 @@ AppDialog {
     /// Stops a late answer from overwriting something already typed.
     property bool toolTouched: false
 
+    /// Stands in for the pointer on one row, which headless cannot inject.
+    property int pointedAtRow: -1
+
+    /// The author an avatar's badge was pressed on. The card opens
+    /// already carrying whom it is about, so the only thing left to do is
+    /// name the picture.
+    property string prefillName: ""
+    property string prefillEmail: ""
+
+    /// Assignments as the settings file holds them: address, name, URL.
+    readonly property var assigned: {
+        const packed = AppBackend.avatars
+        if (packed === "")
+            return []
+        return packed.split(String.fromCharCode(30)).map(record => {
+            const parts = record.split(String.fromCharCode(31))
+            return { email: parts[0], name: parts[1] || parts[0], url: parts[2] }
+        })
+    }
+
+    /// Who the entry offers: the authors of the repository being looked
+    /// at. Read when the card opens rather than bound, because the graph
+    /// keeps moving and a list that reordered itself under an open popup
+    /// would be answering a question nobody asked.
+    property var authorChoices: []
+    function readAuthorChoices() {
+        const packed = settingsDialog.curPage
+                       ? settingsDialog.curPage.pageGraph.authorChoices() : ""
+        const seen = {}
+        const out = []
+        if (settingsDialog.prefillEmail !== "") {
+            out.push(settingsDialog.prefillName + " <"
+                     + settingsDialog.prefillEmail + ">")
+            seen[settingsDialog.prefillEmail] = true
+        }
+        if (packed !== "") {
+            for (const record of packed.split(String.fromCharCode(30))) {
+                const parts = record.split(String.fromCharCode(31))
+                if (seen[parts[1]])
+                    continue
+                seen[parts[1]] = true
+                out.push(parts[0] + " <" + parts[1] + ">")
+            }
+        }
+        settingsDialog.authorChoices = out
+    }
+
+    /// The address the picker will file under, pulled back out of what the
+    /// entry is showing. The list writes `Name <address>`; a person typing
+    /// their own may write either half, and an address is the one with an
+    /// `@` in it.
+    readonly property string chosenEmail: {
+        const text = avatarWho.wanted.trim()
+        const open = text.lastIndexOf("<")
+        const close = text.lastIndexOf(">")
+        const inner = (open >= 0 && close > open)
+                      ? text.substring(open + 1, close).trim() : text
+        return inner.indexOf("@") > 0 ? inner : ""
+    }
+    readonly property string chosenName: {
+        const text = avatarWho.wanted.trim()
+        const open = text.lastIndexOf("<")
+        return open > 0 ? text.substring(0, open).trim() : ""
+    }
+
     /// Smoke hook. The candidates arrive in two waves and the configured
     /// name in a third, so the value has three chances to be knocked out
     /// by something that is not a person — report it at each.
@@ -39,6 +105,11 @@ AppDialog {
                           ? String(AppBackend.autoFetchMinutes) : ""
         toolField.wanted = settingsDialog.mergeTool
         settingsDialog.toolTouched = false
+        // Headless has no pointer to put on a row, and the lit row is
+        // what the dim/bright pair is photographed by.
+        settingsDialog.pointedAtRow =
+            AppBackend.autoAct === "avatar-row-lit" ? 0 : -1
+        settingsDialog.readAuthorChoices()
         if (settingsDialog.curPage) {
             // The status refresh only names the configured tool where
             // something is conflicted, so ask for it. The candidates are
@@ -46,7 +117,26 @@ AppDialog {
             settingsDialog.curPage.pageTab.askMergeTool()
             settingsDialog.curPage.pageTab.askMergeTools()
         }
-        fetchField.forceActiveFocus()
+        // Opened from an avatar, the first thing left to do is name the
+        // picture, so the focus goes there rather than to the top field.
+        if (settingsDialog.prefillEmail !== "") {
+            const who = settingsDialog.prefillName + " <"
+                        + settingsDialog.prefillEmail + ">"
+            avatarWho.wanted = who
+            avatarWho.editText = who
+            chooseImage.forceActiveFocus()
+        } else {
+            avatarWho.wanted = ""
+            avatarWho.editText = ""
+            fetchField.forceActiveFocus()
+        }
+    }
+    // Escape and the button are the same exit, so both leave the fields
+    // written: with no Cancel there is nothing for a discard to mean.
+    onClosed: {
+        settingsDialog.applyFields()
+        settingsDialog.prefillName = ""
+        settingsDialog.prefillEmail = ""
     }
     onMergeToolChanged: {
         if (settingsDialog.opened && !settingsDialog.toolTouched) {
@@ -57,12 +147,16 @@ AppDialog {
     }
     // An empty field is the off switch — nothing to type is the
     // clearest way to say "do not do this".
-    function apply() {
+    //
+    // Nothing here waits for a button. A picture is assigned the moment
+    // it is named, so a Save that governed the other two would be telling
+    // the truth about half of this card; the fields write as they are
+    // finished with instead, and the one button left only dismisses it.
+    function applyFields() {
         AppBackend.setAutoFetchMinutes(fetchField.text === "" ? 0
                                                               : Number(fetchField.text))
         if (settingsDialog.toolTouched && settingsDialog.curPage)
             settingsDialog.curPage.pageTab.setMergeTool(toolField.wanted)
-        settingsDialog.close()
     }
     contentItem: ColumnLayout {
         spacing: Theme.spaceLg
@@ -91,7 +185,11 @@ AppDialog {
                         bottom: 1
                         top: AppBackend.autoFetchMaxMinutes
                     }
-                    onAccepted: settingsDialog.apply()
+                    // Written when the field is done with — on Enter, and
+                    // on the focus leaving it — rather than per keystroke,
+                    // which would run through "1" on the way to "10".
+                    onEditingFinished: settingsDialog.applyFields()
+                    onAccepted: settingsDialog.close()
                 }
                 Label {
                     text: qsTr("minutes")
@@ -123,7 +221,7 @@ AppDialog {
                 spacing: Theme.spaceSm
                 // As wide as the dialog gives it: a tool's name has no
                 // fixed length, and an input only takes a fixed width
-                // when its content does (デザイン規約 §レイアウト初期値).
+                // when its content does (繝・じ繧､繝ｳ隕冗ｴ・ﾂｧ繝ｬ繧､繧｢繧ｦ繝亥・譛溷､).
                 AppCombo {
                     id: toolField
                     Layout.fillWidth: true
@@ -140,7 +238,10 @@ AppDialog {
                              && settingsDialog.curPage.pageTab.mergeToolsLoading
                     model: settingsDialog.toolChoices
                     onWantedChanged: settingsDialog.toolTouched = true
-                    onAccepted: settingsDialog.apply()
+                    // A row picked from the list is a finished answer;
+                    // free text waits for Enter or for the card to close.
+                    onActivated: settingsDialog.applyFields()
+                    onAccepted: settingsDialog.close()
                 }
             }
             Label {
@@ -156,6 +257,156 @@ AppDialog {
                            + "vimdiff and its kind cannot run.")
             }
         }
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spaceXs
+            Label {
+                text: qsTr("Avatars")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+            }
+            Repeater {
+                id: avatarRepeater
+                /// The one column every row's name is laid into, as wide
+                /// as the widest of them, so the address beside it starts
+                /// on the same x down the whole list and the section reads
+                /// as a table rather than as a stack of sentences. The
+                /// same shape `AppMenu.codeColW` uses for its chips.
+                readonly property real nameColW: {
+                    let widest = 0
+                    for (let i = 0; i < avatarRepeater.count; i++) {
+                        const row = avatarRepeater.itemAt(i)
+                        if (row && row.nameSeat !== undefined)
+                            widest = Math.max(widest, row.nameSeat)
+                    }
+                    return widest
+                }
+                model: settingsDialog.assigned
+                delegate: RowLayout {
+                    id: avatarRow
+                    Layout.fillWidth: true
+                    spacing: Theme.spaceSm
+                    /// The pointer is on this row, or headless has put it
+                    /// there for a shot.
+                    readonly property bool lit:
+                        rowHover.hovered || settingsDialog.pointedAtRow === index
+                    // A handler, not a MouseArea: a MouseArea is an Item,
+                    // so a layout gives it a seat of its own and every
+                    // column after it starts a gap further right — 
+                    // anchoring it over the row only turns that into
+                    // undefined behaviour (the engine says so out loud).
+                    // A handler is not an Item and takes no seat.
+                    HoverHandler {
+                        id: rowHover
+                    }
+                    IdentIcon {
+                        imageUrl: modelData.url
+                        width: Theme.iconLg
+                        height: Theme.iconLg
+                        Layout.preferredWidth: Theme.iconLg
+                        Layout.preferredHeight: Theme.iconLg
+                    }
+                    /// The width this row asks the shared name column to
+                    /// hold — its own glyphs, and nothing for the column's
+                    /// spare width, which stays air.
+                    readonly property real nameSeat: nameLabel.implicitWidth
+                    Label {
+                        id: nameLabel
+                        text: modelData.name
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontMd
+                        Layout.preferredWidth: avatarRepeater.nameColW
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: modelData.email
+                        elide: Text.ElideRight
+                        color: Theme.textMuted
+                        font.pixelSize: Theme.fontSm
+                    }
+                    // Held, not clicked: this card writes as it is worked
+                    // rather than on a Save, so the gesture is the only
+                    // thing standing between a stray click and a picture
+                    // that has to be found again (繝・じ繧､繝ｳ隕冗ｴ・ﾂｧ髟ｷ謚ｼ縺・.
+                    //
+                    // Dimmed rather than hidden off the pointer: a list of
+                    // N assignments would otherwise stand N words of the
+                    // one colour reserved for what takes something away,
+                    // and 迥ｶ諷玖牡縺ｯ蜃ｺ迴ｾ謨ｰ縺悟ｰ代↑縺・⊇縺ｩ蜉ｹ縺・ Kept in the
+                    // layout either way, so the address beside it does not
+                    // re-elide as the pointer crosses the list.
+                    ActionButton {
+                        id: unsetButton
+                        text: qsTr("Remove")
+                        font.pixelSize: Theme.fontSm
+                        tone: avatarRow.lit ? Theme.danger : Theme.dangerDim
+                        holdMs: Metrics.holdMs
+                        holdTone: Theme.danger
+                        onHeld: AppBackend.removeAvatar(modelData.email)
+                        Timer {
+                            running: settingsDialog.opened
+                                     && AppBackend.autoAct === "avatar-remove"
+                                     && index === 0
+                            interval: 500
+                            onTriggered: unsetButton.completeHold()
+                        }
+                    }
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spaceSm
+                AppCombo {
+                    id: avatarWho
+                    Layout.fillWidth: true
+                    placeholder: qsTr("name or email")
+                    model: settingsDialog.authorChoices
+                    Timer {
+                        running: settingsDialog.opened
+                                 && AppBackend.autoAct === "avatar-combo"
+                        interval: 400
+                        onTriggered: avatarWho.popup.open()
+                    }
+                }
+                HoverButton {
+                    id: chooseImage
+                    text: qsTr("Choose image…")
+                    // Opened from an avatar this already holds the focus,
+                    // so the whole errand is one press and the picker.
+                    highlighted: settingsDialog.prefillEmail !== ""
+                    enabled: settingsDialog.chosenEmail !== ""
+                    onClicked: picturePicker.open()
+                }
+            }
+            Label {
+                Layout.fillWidth: true
+                visible: AppBackend.avatarError !== ""
+                wrapMode: Text.Wrap
+                color: Theme.danger
+                font.pixelSize: Theme.fontSm
+                text: AppBackend.avatarError
+            }
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: Theme.textMuted
+                font.pixelSize: Theme.fontSm
+                text: qsTr("A picture for anyone whose commits you read. "
+                           + "The list offers the authors of the repository "
+                           + "you are in. Nothing is fetched: the picture is "
+                           + "one of your own files, copied in beside these "
+                           + "settings.")
+            }
+        }
+        FileDialog {
+            id: picturePicker
+            title: qsTr("Choose a picture")
+            nameFilters: [AppBackend.avatarFilters]
+            onAccepted: AppBackend.assignAvatar(settingsDialog.chosenEmail,
+                                                settingsDialog.chosenName,
+                                                selectedFile.toString())
+        }
         Label {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
@@ -170,14 +421,14 @@ AppDialog {
         RowLayout {
             Layout.alignment: Qt.AlignRight
             spacing: Theme.spaceSm
+            // One button, because there is only one thing left for a
+            // button to do. A Cancel here would promise to put back a
+            // picture that was assigned the moment it was named, and a
+            // Save would claim credit for writes that already happened.
             HoverButton {
-                text: qsTr("Cancel")
+                highlighted: settingsDialog.prefillEmail === ""
+                text: qsTr("OK")
                 onClicked: settingsDialog.close()
-            }
-            HoverButton {
-                highlighted: true
-                text: qsTr("Save")
-                onClicked: settingsDialog.apply()
             }
         }
     }

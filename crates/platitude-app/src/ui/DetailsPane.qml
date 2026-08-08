@@ -43,6 +43,20 @@ ColumnLayout {
     property string signatureKind: ""
     property string signatureCode: ""
     property string signatureSigner: ""
+    /// The badge was pressed: the settings card opens already knowing whom
+    /// it is about. There is no menu in between and no second place
+    /// pictures are managed from — assigning, replacing and removing all
+    /// live in the one list, and this is the way in that saves naming the
+    /// person.
+    signal avatarEditRequested(string name, string email)
+    /// Stands in for the pointer where headless cannot put one, so the
+    /// badge can be photographed (PG_AUTO_ACT=avatar-hover).
+    property bool avatarPointedAt: false
+    function avatarClicked() {
+        if (detailsPane.details.authorEmail !== "")
+            detailsPane.avatarEditRequested(detailsPane.details.authorName,
+                                            detailsPane.details.authorEmail)
+    }
     /// Conclusion first, one line (デザイン規約 §hover のツールチップ).
     readonly property string signatureTip:
         detailsPane.signatureCode === "G"
@@ -322,10 +336,63 @@ ColumnLayout {
         // parent hash on the right (rows aligned) --
         RowLayout {
             spacing: Theme.spaceSm
-            IdentIcon {
-                code: detailsPane.details.avatar
+            // The one place a picture is reached from. A pointer resting on
+            // the face raises a badge saying so; pressing it opens the
+            // settings card with this author already named.
+            Item {
+                id: avatarBox
                 width: Metrics.detailsAvatar
                 height: Metrics.detailsAvatar
+                Layout.preferredWidth: Metrics.detailsAvatar
+                Layout.preferredHeight: Metrics.detailsAvatar
+                /// Nothing to assign a picture to on a row with no author:
+                /// the working tree's own row, and a commit not read yet.
+                readonly property bool editable:
+                    detailsPane.details.authorEmail !== ""
+                readonly property bool showBadge:
+                    avatarBox.editable
+                    && (avatarArea.containsMouse || detailsPane.avatarPointedAt)
+                IdentIcon {
+                    anchors.fill: parent
+                    code: detailsPane.details.avatar
+                    imageUrl: detailsPane.details.avatarUrl
+                }
+                // Pushed as far into the lower-right as the icon's own
+                // square allows — flush with its right and bottom edges,
+                // so the least of the face is covered and the layout
+                // beside it never moves (デザイン規約 §アバターを与える).
+                Rectangle {
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    width: Theme.iconSm + 2 * Theme.borderWidth
+                    height: width
+                    radius: width / 2
+                    color: Theme.bgElevated
+                    border.color: Theme.borderStrong
+                    border.width: Theme.borderWidth
+                    visible: avatarBox.showBadge
+                    NavIcon {
+                        anchors.centerIn: parent
+                        kind: "pen"
+                        tint: Theme.textPrimary
+                        width: Theme.iconSm
+                        height: Theme.iconSm
+                    }
+                }
+                MouseArea {
+                    id: avatarArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    enabled: avatarBox.editable
+                    onClicked: detailsPane.avatarClicked()
+                }
+                ToolTip.visible: avatarBox.showBadge
+                ToolTip.delay: Metrics.tipDelayMs
+                ToolTip.text: detailsPane.details.avatarUrl !== ""
+                              ? qsTr("Change the picture for %1")
+                                .arg(detailsPane.details.authorEmail)
+                              : qsTr("Choose a picture for %1")
+                                .arg(detailsPane.details.authorEmail)
             }
             ColumnLayout {
                 spacing: 0

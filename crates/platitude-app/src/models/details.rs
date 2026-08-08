@@ -108,6 +108,10 @@ pub struct DetailsModel {
     author_email: String,
     author_time: i64,
     avatar: i32,
+    /// `file:` URL of this author's assigned picture, empty when they have
+    /// none. Refreshed on every details read and whenever an assignment
+    /// changes, so the card follows the settings list without a reload.
+    avatar_url: String,
     committer: String,
     committer_time: i64,
     message_subject: String,
@@ -135,6 +139,7 @@ impl Default for DetailsModel {
             author_email: String::new(),
             author_time: 0,
             avatar: 0,
+            avatar_url: String::new(),
             committer: String::new(),
             committer_time: 0,
             message_subject: String::new(),
@@ -180,6 +185,7 @@ impl DetailsModel {
     qproperty!("authorEmail", Member = author_email, Notify = changed);
     qproperty!("authorTime", Member = author_time, Notify = changed);
     qproperty!("avatar", Member = avatar, Notify = changed);
+    qproperty!("avatarUrl", Member = avatar_url, Notify = changed);
     qproperty!("committer", Member = committer, Notify = changed);
     qproperty!("committerTime", Member = committer_time, Notify = changed);
     qproperty!("messageSubject", Member = message_subject, Notify = changed);
@@ -190,6 +196,18 @@ impl DetailsModel {
 
     #[qsignal]
     fn changed(&mut self);
+
+    /// Re-reads this author's assigned picture. Called when an assignment
+    /// changes: the commit on screen did not, so there is nothing to ask
+    /// git for.
+    #[qslot]
+    fn refresh_avatar(&mut self) {
+        let url = Hub::with(|hub| hub.avatar_url(&self.author_email)).unwrap_or_default();
+        if url != self.avatar_url {
+            self.avatar_url = url;
+            self.changed();
+        }
+    }
 
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
@@ -243,6 +261,8 @@ impl DetailsModel {
         self.author_email = details.author_email.clone();
         // Same input as the graph rows (author name) → same identicon.
         self.avatar = crate::encode::avatar_code(&details.author_name);
+        self.avatar_url =
+            Hub::with(|hub| hub.avatar_url(&details.author_email)).unwrap_or_default();
         self.author_time = details.author_time;
         self.committer = format!("{} <{}>", details.committer_name, details.committer_email);
         self.committer_time = details.committer_time;
