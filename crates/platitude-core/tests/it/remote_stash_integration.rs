@@ -531,3 +531,195 @@ async fn a_rename_whose_push_fails_deletes_nothing() {
         "and nothing was re-pointed"
     );
 }
+
+/// The first push of a branch goes where the question said, and records it
+/// so the question is asked once.
+#[tokio::test]
+async fn publishing_sends_the_branch_and_records_the_upstream() {
+    let (mut bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+
+    work.git(&["switch", "-c", "topic"]);
+    work.commit_file("b.txt", "b\n", "topic work");
+
+    let spec = remote::plan_publish(&exec, &work.path, "origin", "topic", &cancel)
+        .await
+        .expect("plan publish");
+    assert!(spec.set_upstream, "the answer is recorded, not re-asked");
+    remote::push(&exec, &work.path, &spec, NET, &cancel)
+        .await
+        .expect("publish");
+
+    assert_eq!(
+        bare.git(&["rev-parse", "topic"]),
+        work.git(&["rev-parse", "topic"]),
+        "the branch exists over there, at our tip"
+    );
+    assert_eq!(
+        work.git(&["config", "branch.topic.merge"]),
+        "refs/heads/topic"
+    );
+    assert_eq!(work.git(&["config", "branch.topic.remote"]), "origin");
+}
+
+/// The name over there is the question's to choose: it need not be the one
+/// the branch has here.
+#[tokio::test]
+async fn publishing_can_use_a_different_name_on_the_remote() {
+    let (mut bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+
+    work.git(&["switch", "-c", "topic"]);
+    work.commit_file("b.txt", "b\n", "topic work");
+
+    let spec = remote::plan_publish(&exec, &work.path, "origin", "feature/topic", &cancel)
+        .await
+        .expect("plan publish");
+    remote::push(&exec, &work.path, &spec, NET, &cancel)
+        .await
+        .expect("publish");
+
+    assert_eq!(
+        bare.git(&["rev-parse", "feature/topic"]),
+        work.git(&["rev-parse", "topic"])
+    );
+    assert_eq!(
+        work.git(&["config", "branch.topic.merge"]),
+        "refs/heads/feature/topic",
+        "the upstream is the name over there"
+    );
+}
+
+/// Why the UI has to ask before a first push lands on a name that is taken:
+/// git does not refuse it. Whenever the push fast-forwards, somebody else's
+/// branch quietly moves and we end up tracking it.
+#[tokio::test]
+async fn a_first_push_onto_a_taken_name_is_not_refused_when_it_fast_forwards() {
+    let (mut bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+
+    // `shared` exists on the remote already, one commit behind us, and
+    // nothing here records that it does.
+    work.git(&["switch", "-c", "shared"]);
+    work.commit_file("b.txt", "b\n", "theirs");
+    work.git(&["push", "origin", "shared"]);
+    let theirs = bare.git(&["rev-parse", "shared"]);
+    work.commit_file("b.txt", "b2\n", "ours");
+
+    assert!(
+        remote::has_branch(&exec, &work.path, "origin", "shared", NET, &cancel)
+            .await
+            .expect("ask"),
+        "the question the UI puts to the remote before it pushes"
+    );
+
+    let spec = remote::plan_publish(&exec, &work.path, "origin", "shared", &cancel)
+        .await
+        .expect("plan publish");
+    remote::push(&exec, &work.path, &spec, NET, &cancel)
+        .await
+        .expect("git takes it — this is the hole the hold covers");
+
+    assert_ne!(
+        bare.git(&["rev-parse", "shared"]),
+        theirs,
+        "their branch moved to our commit without git objecting"
+    );
+}
+
+/// `ls-remote` matches a bare name against the tail of a ref, so the check
+/// only means anything when it asks for the whole path.
+#[tokio::test]
+async fn the_remote_branch_check_answers_for_the_exact_name_only() {
+    let (_bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+
+    work.git(&["switch", "-c", "feature/topic"]);
+    work.commit_file("b.txt", "b\n", "topic work");
+    work.git(&["push", "origin", "feature/topic"]);
+
+    assert!(
+        remote::has_branch(&exec, &work.path, "origin", "feature/topic", NET, &cancel)
+            .await
+            .expect("ask")
+    );
+    assert!(
+        !remote::has_branch(&exec, &work.path, "origin", "topic", NET, &cancel)
+            .await
+            .expect("ask"),
+        "`topic` is not taken just because `feature/topic` is"
+    );
+    assert!(
+        !remote::has_branch(&exec, &work.path, "origin", "feature", NET, &cancel)
+            .await
+            .expect("ask")
+    );
+}
+
+/// Adding a remote is bookkeeping, not a connection: a URL that goes
+/// nowhere is accepted, which is why a failed push leaves the remote in
+/// place and `set-url` is the way back.
+#[tokio::test]
+async fn adding_a_remote_records_the_url_without_reaching_it() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+
+    let nowhere = "file:///nowhere/there-is-no-such-repository.git";
+    remote::add(&exec, &work.path, "fork", nowhere, &cancel)
+        .await
+        .expect("add a remote nothing answers for");
+    assert_eq!(work.git(&["remote", "get-url", "fork"]), nowhere);
+
+    let again = remote::add(&exec, &work.path, "fork", nowhere, &cancel)
+        .await
+        .expect_err("git keeps its own names unique");
+    assert!(matches!(again, GitError::Failed { .. }), "{again:?}");
+
+    remote::set_url(&exec, &work.path, "fork", &bare.file_url(), &cancel)
+        .await
+        .expect("correct the URL");
+    assert_eq!(work.git(&["remote", "get-url", "fork"]), bare.file_url());
+
+    // And the corrected remote is usable, which is the whole point of
+    // keeping it rather than undoing the add.
+    let spec = remote::plan_publish(&exec, &work.path, "fork", "main", &cancel)
+        .await
+        .expect("plan publish");
+    remote::push(&exec, &work.path, &spec, NET, &cancel)
+        .await
+        .expect("push to the corrected remote");
+}
+
+/// The first push to a remote made by the same answer: when the URL turns
+/// out to go nowhere, the push fails and the remote stays. Undoing the add
+/// would throw away the only part of the answer that was worth keeping.
+#[tokio::test]
+async fn a_push_to_a_remote_that_goes_nowhere_leaves_the_remote_behind() {
+    let (_bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+
+    let nowhere = "file:///nowhere/there-is-no-such-repository.git";
+    remote::add(&exec, &work.path, "fork", nowhere, &cancel)
+        .await
+        .expect("add");
+    let spec = remote::plan_publish(&exec, &work.path, "fork", "main", &cancel)
+        .await
+        .expect("plan publish");
+    let error = remote::push(&exec, &work.path, &spec, NET, &cancel)
+        .await
+        .expect_err("nothing answers there");
+    assert!(matches!(error, GitError::Failed { .. }), "{error:?}");
+
+    assert_eq!(
+        work.git(&["remote", "get-url", "fork"]),
+        nowhere,
+        "the remote is still here to be corrected"
+    );
+    assert_eq!(
+        // `--default` so an unset key is an empty answer rather than an
+        // exit code the harness reads as a broken command.
+        work.git(&["config", "--default", "", "--get", "branch.main.remote"]),
+        "",
+        "and a push that never landed recorded no upstream"
+    );
+}

@@ -26,6 +26,12 @@ Rectangle {
     /// Throwing away work in hand (danger) rather than reaching past this
     /// machine (warning) — §状態.
     property bool danger: false
+    /// The question asks for something rather than for consent: where to
+    /// send a branch, what to call it. Nothing is at stake until the answer
+    /// says otherwise, so it wears neither warning colour — and it turns
+    /// them back on by itself when what is typed would reach past this
+    /// machine after all (a name the remote already has).
+    property bool neutral: false
     /// What the pill says on hover: that it is held, and what the far side
     /// will make of what it does. The bar's own line has room for one
     /// thing only, and this is where §長押し puts the rest.
@@ -39,6 +45,20 @@ Rectangle {
     property bool hold: false
     /// How far into the hold the press has got, 0 to 1.
     property real holdProgress: 0
+    /// What the question needs in order to have an answer at all — a
+    /// chooser, a name box. Declared by whoever raises the question, since
+    /// only they know what is being asked; the bar just gives it a place
+    /// under the words and above nothing (デザイン規約 §可否・警告の出し場所:
+    /// the answer is given where the question is, not in a window of its
+    /// own). Null for the questions the pill alone can answer.
+    property Component form: null
+    /// The loaded form, so the owner can read what was put into it.
+    readonly property alias formItem: formLoader.item
+    /// Whether the pill can be pressed yet. A form that has nothing in it
+    /// is a question with no answer to give, and the pill says so by going
+    /// quiet rather than by disappearing — the shape of the bar must not
+    /// jump while it is being filled in.
+    property bool answerable: true
     /// Automation: run the hold to its end without a press behind it.
     function completeHold() {
         if (bar.hold) {
@@ -67,7 +87,8 @@ Rectangle {
     signal cancelled()
 
     readonly property bool open: bar.label !== ""
-    readonly property color tone: bar.danger ? Theme.danger : Theme.warning
+    readonly property color tone: bar.danger ? Theme.danger
+                                  : bar.neutral ? Theme.accent : Theme.warning
     // A question walked away from mid-press takes the press with it: a
     // fill left standing would carry on into whatever is asked next.
     //
@@ -79,11 +100,16 @@ Rectangle {
     // being delivered — a double-click on a graph row has a release and a
     // second click behind it — and the list it lands on takes the focus
     // back if the pill claims it first.
+    //
+    // A question with a form does not take the focus for its pill: the
+    // first thing to do there is type, and the form's own box asks for it.
     onOpenChanged: {
-        if (bar.open)
-            Qt.callLater(acceptPill.forceActiveFocus)
-        else
+        if (bar.open) {
+            if (bar.form === null)
+                Qt.callLater(acceptPill.forceActiveFocus)
+        } else {
             bar.blankHold()
+        }
     }
 
     // Sized by its own words, opened and closed with the standard 200ms.
@@ -125,6 +151,15 @@ Rectangle {
                 elide: Text.ElideRight
                 Layout.fillWidth: true
             }
+            // Built only while the question stands, so what was typed into
+            // the last one cannot come back with the next.
+            Loader {
+                id: formLoader
+                active: bar.open
+                sourceComponent: bar.form
+                Layout.fillWidth: true
+                Layout.topMargin: bar.form === null ? 0 : Theme.spaceXs
+            }
         }
         // This is the answer — by a click, or by a press held all the way
         // down where the question asks for one. It is the only thing on
@@ -149,7 +184,7 @@ Rectangle {
             // takes the focus away first, and the pill draws its own colours
             // rather than the palette's, so the collapse looks no different.
             activeFocusOnTab: true
-            enabled: bar.open
+            enabled: bar.open && bar.answerable
             // The pill draws itself rather than being a control, so it
             // has to name itself. The gesture is said here because the
             // words on it no longer carry it.
@@ -205,8 +240,13 @@ Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     text: bar.accept
                     // Lifted while the fill runs under it: the words cross
-                    // both the filled side and the bare one.
-                    color: bar.holdProgress > 0 ? Theme.textOnAccent : bar.tone
+                    // both the filled side and the bare one. With nothing
+                    // to send yet, only the word drops — the frame stays,
+                    // so the bar keeps its shape while it is filled in
+                    // (デザイン規約 §無効).
+                    color: !bar.answerable ? Theme.textMuted
+                           : bar.holdProgress > 0 ? Theme.textOnAccent
+                                                  : bar.tone
                     font.pixelSize: Theme.fontMd
                 }
             }

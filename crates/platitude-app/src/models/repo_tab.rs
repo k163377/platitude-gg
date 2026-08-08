@@ -35,6 +35,16 @@ pub struct RepoTab {
     /// eight seconds on Windows, so the field says so rather than looking
     /// like it has nothing.
     merge_tools_loading: bool,
+    /// Configured remote names joined by U+001F, so the publish question
+    /// can offer them without a model of its own (`remoteAt` answers one
+    /// at a time, and a slot is not something a binding can follow).
+    remote_names: String,
+    /// Last answer to `checkRemoteBranch`, as `<remote>\u{1f}<branch>`.
+    /// Empty while a read is out — the question the answer belongs to has
+    /// to be checked, because the box may have moved on to another name.
+    remote_branch_asked: String,
+    /// Whether that name is already taken on that remote.
+    remote_branch_taken: bool,
     /// Last answer to `checkPublish`: how much of a range a remote has.
     publish_range: String,
     publish_total: i32,
@@ -136,6 +146,9 @@ impl Default for RepoTab {
             busy_op: String::new(),
             merge_tools: String::new(),
             merge_tools_loading: false,
+            remote_names: String::new(),
+            remote_branch_asked: String::new(),
+            remote_branch_taken: false,
             publish_range: String::new(),
             publish_total: 0,
             publish_published: 0,
@@ -267,6 +280,17 @@ impl RepoTab {
     qproperty!(
         "mergeToolsLoading",
         Member = merge_tools_loading,
+        Notify = changed
+    );
+    qproperty!("remoteNames", Member = remote_names, Notify = changed);
+    qproperty!(
+        "remoteBranchAsked",
+        Member = remote_branch_asked,
+        Notify = changed
+    );
+    qproperty!(
+        "remoteBranchTaken",
+        Member = remote_branch_taken,
         Notify = changed
     );
     qproperty!("publishRange", Member = publish_range, Notify = changed);
@@ -459,7 +483,16 @@ impl RepoTab {
                         .cloned()
                         .unwrap_or_default();
                     self.remote_count = names.len() as i32;
+                    self.remote_names = names.join("\u{1f}");
                     self.remotes = names;
+                }
+                TabMsg::RemoteBranch {
+                    remote,
+                    branch,
+                    exists,
+                } => {
+                    self.remote_branch_asked = format!("{remote}\u{1f}{branch}");
+                    self.remote_branch_taken = exists;
                 }
                 TabMsg::HeadCommit {
                     message,
@@ -944,6 +977,47 @@ impl RepoTab {
         let fallback = self.default_remote.clone();
         let force = Self::push_force(&force, &lease_expect);
         self.with_session(|s| s.push_current(fallback.clone(), force.clone()));
+    }
+
+    /// The first push of a branch, to the remote and name the question
+    /// just took. Records the answer as the upstream, so the branch never
+    /// asks again.
+    #[qslot]
+    fn publish_current(&mut self, remote: String, remote_branch: String) {
+        self.with_session(|s| s.publish_current(remote.clone(), remote_branch.clone()));
+    }
+
+    /// The same first push, to a remote this answer also creates. One
+    /// write: a push never runs against a remote whose `add` was refused.
+    #[qslot]
+    fn publish_to_new_remote(&mut self, remote: String, url: String, remote_branch: String) {
+        self.with_session(|s| {
+            s.publish_to_new_remote(remote.clone(), url.clone(), remote_branch.clone())
+        });
+    }
+
+    /// `git remote add <name> <url>`. Contacts nothing — a URL that goes
+    /// nowhere is recorded just the same, and the push finds out.
+    #[qslot]
+    fn add_remote(&mut self, name: String, url: String) {
+        self.with_session(|s| s.add_remote(name.clone(), url.clone()));
+    }
+
+    /// `git remote set-url <name> <url>` — the way back from a typo.
+    #[qslot]
+    fn set_remote_url(&mut self, name: String, url: String) {
+        self.with_session(|s| s.set_remote_url(name.clone(), url.clone()));
+    }
+
+    /// Asks the remote whether it already carries a branch name. Reaches
+    /// the network, so it is asked while the question stands and not on a
+    /// poll. The answer arrives as `remoteBranchAsked` / `remoteBranchTaken`.
+    #[qslot]
+    fn check_remote_branch(&mut self, remote: String, branch: String) {
+        self.remote_branch_asked = String::new();
+        self.remote_branch_taken = false;
+        self.changed();
+        self.with_session(|s| s.check_remote_branch(remote.clone(), branch.clone()));
     }
 
     /// `git push`. `force` is `""` / `"lease"` / `"force"`; `lease_expect`

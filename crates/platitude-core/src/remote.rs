@@ -301,6 +301,100 @@ pub async fn plan_current_push(
     }
 }
 
+/// Where the branch that is checked out should go when the user has just
+/// said so, rather than when configuration already knows.
+///
+/// This is the first push of a branch: nothing local records a target, so
+/// both halves come from the question the UI asked, and the answer is
+/// recorded as the upstream so the next push needs no question.
+pub async fn plan_publish(
+    executor: &GitExecutor,
+    workdir: &Path,
+    remote: &str,
+    remote_branch: &str,
+    cancel: &CancellationToken,
+) -> Result<PushSpec, GitError> {
+    let branch = current_branch(executor, workdir, cancel).await?;
+    Ok(PushSpec {
+        remote: remote.to_string(),
+        remote_branch: remote_branch.to_string(),
+        local: branch,
+        set_upstream: true,
+        force: PushForce::None,
+    })
+}
+
+/// `git remote add <name> <url>`.
+///
+/// Nothing is contacted: git records the URL and reports success even for a
+/// host that does not exist, so a bad URL is only found out by the push that
+/// follows (実測). The remote survives that failure, which is why the UI
+/// offers a way to correct the URL rather than undoing the add.
+///
+/// Names are git's to judge — it refuses `bad name` (exit 128) and a name it
+/// already has (exit 3), and both refusals arrive as their own text.
+pub async fn add(
+    executor: &GitExecutor,
+    workdir: &Path,
+    name: &str,
+    url: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["remote", "add", "--end-of-options", name, url]);
+    executor.run(cmd, cancel).await?;
+    Ok(())
+}
+
+/// `git remote set-url <name> <url>` — the way back from a URL typed wrong.
+pub async fn set_url(
+    executor: &GitExecutor,
+    workdir: &Path,
+    name: &str,
+    url: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let cmd =
+        GitCommand::new()
+            .cwd(workdir)
+            .args(["remote", "set-url", "--end-of-options", name, url]);
+    executor.run(cmd, cancel).await?;
+    Ok(())
+}
+
+/// Whether a remote already carries a branch under this exact name.
+///
+/// Asked before a first push, because git will not refuse one that lands:
+/// pushing onto a name the remote already has succeeds whenever it can be
+/// fast-forwarded, silently advancing somebody else's branch (実測).
+///
+/// **The pattern has to be the full `refs/heads/<name>`.** `ls-remote`
+/// matches a bare name against the *tail* of a ref, so asking for `topic`
+/// answers yes when the remote only has `feature/topic` (実測).
+pub async fn has_branch(
+    executor: &GitExecutor,
+    workdir: &Path,
+    remote: &str,
+    branch: &str,
+    timeout: Duration,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let refname = format!("refs/heads/{branch}");
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["ls-remote", "--heads", "--end-of-options", remote, &refname])
+        .timeout(timeout);
+    let out = executor.run(cmd, cancel).await?;
+    // A remote that has nothing to say answers with an empty stdout and
+    // exit 0, so the absence is in the output rather than in the code.
+    Ok(out
+        .stdout
+        .split(|b| *b == b'\n')
+        .filter_map(split_ls_remote_line)
+        .any(|(_, name)| name == refname))
+}
+
 /// Short name of the checked-out branch; an error when HEAD is detached.
 async fn current_branch(
     executor: &GitExecutor,

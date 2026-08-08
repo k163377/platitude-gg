@@ -68,6 +68,14 @@ pub enum TabMsg {
         oid: String,
         in_history: bool,
     },
+    /// Whether a remote already carries a branch name, as of now rather
+    /// than as of the last fetch. The question rides along: the box that
+    /// asked may be on another name by the time this arrives.
+    RemoteBranch {
+        remote: String,
+        branch: String,
+        exists: bool,
+    },
     /// Merge tool names the settings field can offer. Empty is an answer.
     /// `settled` false is the fast half, with the slow read still out.
     MergeTools {
@@ -463,6 +471,17 @@ impl SessionSink for BridgeSink {
                     email: config.identity.email.unwrap_or_default(),
                     sign_commits: config.signing.sign_commits,
                     signing_format: config.signing.format.as_str().to_string(),
+                });
+            }
+            SessionEvent::RemoteBranchChecked {
+                remote,
+                branch,
+                exists,
+            } => {
+                self.feeds.tab.push(TabMsg::RemoteBranch {
+                    remote,
+                    branch,
+                    exists,
                 });
             }
             SessionEvent::SignatureChecked { oid, signature } => {

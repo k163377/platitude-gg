@@ -42,7 +42,7 @@ Rectangle {
     property bool widestActionCode: false
     Component.onCompleted: {
         let best = fetchCodeWidest
-        for (const m of [fetchWordWidest, pushCodeWidest, pushWordWidest])
+        for (const m of [fetchWordWidest, pushCodeWidest])
             if (m.implicitWidth > best.implicitWidth)
                 best = m
         topBar.widestAction = best.text
@@ -50,7 +50,8 @@ Rectangle {
     }
     // The longest each button can say, in each of the two voices it says
     // things in. `push` is inside `push -f`, and fetch says the command in
-    // every shape but the stopped one, so four cover all six states.
+    // every shape but the stopped one, so three cover all six states —
+    // push never leaves the command's voice (デザイン規約 §リモートへ送る).
     //
     // Labels rather than TextMetrics, and never drawn: the box these are
     // ranked for is a Label's, and TextMetrics reports a few pixels
@@ -77,10 +78,6 @@ Rectangle {
         id: pushCodeWidest
         code: true
         text: "push -f"
-    }
-    Widest {
-        id: pushWordWidest
-        text: qsTr("Publish")
     }
 
     implicitHeight: Theme.toolbarHeight
@@ -467,18 +464,17 @@ Rectangle {
             busy: topBar.curPage !== null
                   && topBar.curPage.pageTab.busyOp === "push"
             still: AppBackend.shotDir !== ""
-            // Three fixed wordings, no counts: how far ahead the branch is
+            // Two fixed wordings, no counts: how far ahead the branch is
             // stands in the sidebar and in this button's own tooltip, and
             // a number here would make the button a different width for
             // every value it took (デザイン規約 §リモートへ送る).
             //
-            // Two of them are the command and wear the chip; the first
-            // push is not `push` alone (it is what makes the branch exist
-            // over there), so that one is a word.
-            text: mode === "publish" ? qsTr("Publish")
-                  : mode === "diverged" ? "push -f"
-                    : "push"
-            code: mode !== "publish"
+            // The button says the command in every state, first push
+            // included: what makes that one different is not the command
+            // but that nothing here knows where it goes yet, and the
+            // question that opens is where that is said.
+            text: mode === "diverged" ? "push -f" : "push"
+            code: true
             // Every shape of both buttons measured against the longest of
             // them, so the toolbar's right-hand end sits still while the
             // branch's standing with its remote changes under it.
@@ -511,8 +507,11 @@ Rectangle {
                 if (topBar.curPage === null)
                     return ""
                 const to = topBar.curPage.pushTargetLabel
+                // Nothing to name a target with in the first state: where
+                // it goes is what the press is about to ask.
                 const what = pushButton.mode === "publish"
-                             ? qsTr("Publish this branch as %1").arg(to)
+                             ? qsTr("This branch has not been sent anywhere "
+                                    + "yet — asks where it goes")
                            : pushButton.mode === "ready"
                              ? qsTr("Push %n commit(s) to %1", "",
                                     topBar.curPage.pageWt.ahead).arg(to)

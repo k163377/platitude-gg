@@ -55,6 +55,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
         "detached" => detached(&mut repo)?,
         "behind" => behind(&mut repo)?,
         "diverged" => diverged(&mut repo)?,
+        "unpublished" => unpublished(&mut repo)?,
         "signed" => signed(&mut repo)?,
         "tags" => tags(&mut repo)?,
         "empty" => {}
@@ -296,6 +297,39 @@ fn rebase_conflict(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("shared.txt", "main side\n", "fix: change shared too")?;
     repo.git(&["switch", "feature/clash"])?;
     repo.git_expecting_stop(&["rebase", "main"])?;
+    Ok(())
+}
+
+/// A branch that has never been sent anywhere, in a repository with two
+/// remotes — so the question the first push raises has something to pick
+/// between, and a name on the far side to run into.
+///
+/// `taken` exists on `origin` one commit behind us, which is exactly the
+/// case git will not refuse: the push fast-forwards somebody else's
+/// branch. The checked-out branch has no upstream at all.
+fn unpublished(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+
+    // A second place to send things, so the chooser has a choice to make.
+    let fork = repo.root.join("fork.git");
+    std::fs::create_dir_all(&fork).map_err(|e| e.to_string())?;
+    repo.git_at(&fork.clone(), &["init", "--bare", "-b", "main"])?;
+    let fork_url = file_url(&fork);
+    repo.git(&["remote", "add", "fork", &fork_url])?;
+
+    // Somebody else's branch, already over there and behind us.
+    repo.git(&["switch", "--create", "taken"])?;
+    repo.commit("src/app.txt", "app v2\n", "feat: theirs")?;
+    // Pushed without `-u`, so nothing here records that it went anywhere.
+    repo.git(&["push", "origin", "taken"])?;
+
+    repo.git(&["switch", "main"])?;
+    repo.git(&["switch", "--create", "feature/new-thing"])?;
+    repo.commit("src/new.txt", "new\n", "feat: draft the new thing")?;
+    repo.commit("src/new.txt", "new v2\n", "feat: finish the new thing")?;
     Ok(())
 }
 

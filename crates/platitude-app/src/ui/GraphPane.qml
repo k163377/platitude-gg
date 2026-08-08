@@ -60,10 +60,18 @@ Rectangle {
     /// `hold` takes the answer as a press held down instead of a click,
     /// and `tip` is what the pill says on hover — the questions whose
     /// write leaves this machine ask that way (デザイン規約 §長押し).
+    /// `form` is what the question needs in order to take an answer at all
+    /// — a chooser, a name box. Most questions have none: they are
+    /// answered by the pill and nothing else.
     function startAsking(oidHex, label, detail, accept, danger,
-                         hold = false, tip = "") {
+                         hold = false, tip = "", form = null) {
         graphList.namingOid = ""
         graphList.namingText = ""
+        // Before the label, which is what opens the bar: the form has to
+        // exist by the time opening decides where the focus goes.
+        askBar.form = form
+        askBar.answerable = true
+        askBar.neutral = false
         askBar.label = label
         askBar.detail = detail
         askBar.accept = accept
@@ -73,6 +81,19 @@ Rectangle {
         graphList.askDanger = danger
         graphList.askOid = oidHex === undefined ? "" : oidHex
     }
+    /// Whether the standing question can be answered yet. A question with
+    /// a form turns this off until the form has something to send.
+    property alias askAnswerable: askBar.answerable
+    /// Whether it is asking for information rather than for consent, and
+    /// the words on its pill and its tooltip — all three change under a
+    /// publish question as the remote answers what the typed name means.
+    property alias askNeutral: askBar.neutral
+    property alias askAccept: askBar.accept
+    property alias askHold: askBar.hold
+    property alias askDetail: askBar.detail
+    property alias askTip: askBar.tip
+    /// The live form, so its owner can read what was typed into it.
+    readonly property alias askForm: askBar.formItem
     function stopAsking() {
         askBar.label = ""
         graphList.askOid = ""

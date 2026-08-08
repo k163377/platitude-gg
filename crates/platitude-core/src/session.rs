@@ -291,6 +291,15 @@ pub enum SessionEvent {
         names: Vec<String>,
         settled: bool,
     },
+    /// Answer to [`RepoSession::check_remote_branch`]: whether the remote
+    /// already carries that exact name, as of this moment rather than as of
+    /// the last fetch. The question is echoed back because the box that
+    /// asked it may have moved on to another name by the time this lands.
+    RemoteBranchChecked {
+        remote: String,
+        branch: String,
+        exists: bool,
+    },
     /// Answer to [`RepoSession::check_publish`].
     PublishChecked {
         range: String,
@@ -2201,6 +2210,129 @@ impl RepoSession {
                 result
             },
         );
+    }
+
+    /// The first push of a branch, to the target the user just named.
+    ///
+    /// Separate from [`Self::push_current`] because nothing local knows
+    /// where this goes: both halves come from the question, and the answer
+    /// becomes the upstream so the question is asked once per branch.
+    pub fn publish_current(self: &Arc<Self>, remote_name: String, remote_branch: String) {
+        let timeout = self.network_timeout();
+        let s = Arc::clone(self);
+        self.write(
+            "push",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                let spec = remote::plan_publish(
+                    &exec,
+                    &repo.workdir,
+                    &remote_name,
+                    &remote_branch,
+                    &cancel,
+                )
+                .await?;
+                let target = spec.remote.clone();
+                let result = remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await;
+                s.catch_up_after(&result, target);
+                result
+            },
+        );
+    }
+
+    /// The first push of a branch to a remote that does not exist yet:
+    /// record the remote, then send the branch to it.
+    ///
+    /// One write rather than two queued ones, so the push cannot run
+    /// against a remote whose `add` was refused. The reverse does happen —
+    /// `add` records a URL without contacting it, so a push to a URL typed
+    /// wrong fails with the remote already added. That is left standing on
+    /// purpose: the way back is to correct the URL, not to lose it.
+    pub fn publish_to_new_remote(
+        self: &Arc<Self>,
+        remote_name: String,
+        url: String,
+        remote_branch: String,
+    ) {
+        let timeout = self.network_timeout();
+        let s = Arc::clone(self);
+        self.write(
+            "push",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                remote::add(&exec, &repo.workdir, &remote_name, &url, &cancel).await?;
+                let spec = remote::plan_publish(
+                    &exec,
+                    &repo.workdir,
+                    &remote_name,
+                    &remote_branch,
+                    &cancel,
+                )
+                .await?;
+                let target = spec.remote.clone();
+                let result = remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await;
+                s.catch_up_after(&result, target);
+                result
+            },
+        );
+    }
+
+    /// `git remote add <name> <url>`.
+    ///
+    /// Nothing is contacted, so this succeeds on a URL that goes nowhere;
+    /// the push that follows is what finds out. The remote is left in place
+    /// when that happens — [`Self::set_remote_url`] is the way back.
+    pub fn add_remote(self: &Arc<Self>, name: String, url: String) {
+        self.write(
+            "remote",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                remote::add(&exec, &repo.workdir, &name, &url, &cancel).await
+            },
+        );
+    }
+
+    /// `git remote set-url <name> <url>` — correcting a URL typed wrong.
+    pub fn set_remote_url(self: &Arc<Self>, name: String, url: String) {
+        self.write(
+            "remote",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                remote::set_url(&exec, &repo.workdir, &name, &url, &cancel).await
+            },
+        );
+    }
+
+    /// Asks whether a remote already carries a branch name, so a first push
+    /// can tell "this creates a branch" from "this advances one somebody
+    /// else made". A read, not a write — but one that reaches the network,
+    /// which is why it is only asked while that question is on screen.
+    pub fn check_remote_branch(self: &Arc<Self>, remote_name: String, branch: String) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let timeout = self.network_timeout();
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            match remote::has_branch(
+                &s.executor,
+                &workdir,
+                &remote_name,
+                &branch,
+                timeout,
+                &cancel,
+            )
+            .await
+            {
+                Ok(exists) => s.sink.event(SessionEvent::RemoteBranchChecked {
+                    remote: remote_name,
+                    branch,
+                    exists,
+                }),
+                Err(e) => s.fail("ls-remote", e),
+            }
+        });
     }
 
     /// `git push <remote> --delete <branch>`.
