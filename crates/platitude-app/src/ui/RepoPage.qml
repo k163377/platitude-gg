@@ -1441,6 +1441,9 @@ Item {
     CommitHoverCard {
         id: rowCard
         textWidth: graphPane.width / 2
+        // A quarter each to the subject and the body, so the card can
+        // never pass half the pane however long a message is.
+        textHeight: graphPane.height / 4
         onPointerInsideChanged: page.settleRowCard()
         onMatesPointed: inside => {
             page.rowMatesPointed = inside

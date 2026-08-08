@@ -349,7 +349,14 @@ ColumnLayout {
         // box and a dimmer description box --
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: subjectArea.implicitHeight + Theme.spaceSm
+            // Capped and scrolled, the way the description box below it
+            // already is. Nothing in git bounds a summary — it took a
+            // megabyte in the same measurement — and one pasted paragraph
+            // grew this box to 650px, which pushed the description off
+            // the pane and left the author row drawn over the window's
+            // own footer (measured at a 2,000-byte subject).
+            Layout.preferredHeight: Math.min(subjectArea.implicitHeight
+                                             + Theme.spaceSm, 120)
             color: Theme.bgBase
             radius: Theme.radiusMd
             // While the question stands, the boxes it is about carry it:
@@ -357,15 +364,21 @@ ColumnLayout {
             // nothing else would draw the eye back here.
             border.color: detailsPane.asking ? Theme.warning : Theme.borderDefault
             border.width: Theme.borderWidth
-            SummaryArea {
-                id: subjectArea
+            ScrollView {
                 anchors.fill: parent
                 anchors.margins: Theme.spaceXs
-                readOnly: !detailsPane.editable
-                placeholderText: detailsPane.editable ? qsTr("Commit summary") : ""
-                ToolTip.visible: hovered && detailsPane.editBlocked !== ""
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: detailsPane.editBlocked
+                // ScrollView keeps its Flickable private -- reach it
+                // once it exists.
+                Component.onCompleted:
+                    contentItem.boundsBehavior = Flickable.StopAtBounds
+                SummaryArea {
+                    id: subjectArea
+                    readOnly: !detailsPane.editable
+                    placeholderText: detailsPane.editable ? qsTr("Commit summary") : ""
+                    ToolTip.visible: hovered && detailsPane.editBlocked !== ""
+                    ToolTip.delay: Metrics.tipDelayMs
+                    ToolTip.text: detailsPane.editBlocked
+                }
             }
         }
         // Always shown, even empty, and two lines tall from the start —
@@ -653,6 +666,10 @@ ColumnLayout {
                         id: coBlock
                         packed: detailsPane.details.coAuthors
                         lit: detailsPane.matesLit
+                        // Half the pane, the share the hover card gives
+                        // the same line out of the graph pane. The date
+                        // holds the left of this row; this is the rest.
+                        nameWidth: detailsPane.width / 2
                         Layout.alignment: Qt.AlignVCenter
                         onPointerChanged: inside => detailsPane.showCoAuthors(inside)
                     }

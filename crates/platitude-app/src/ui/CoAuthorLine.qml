@@ -16,6 +16,15 @@ Item {
     property string packed: ""
     /// Full weight on the rule — the owner sets this while its card is up.
     property bool lit: false
+    /// How wide the first name may run before it elides; 0 leaves it its
+    /// own width. A trailer's name is whatever the message says it is —
+    /// git enforces no length — and this line reports its own width to
+    /// whoever holds it, so an unbounded name widened both holders: the
+    /// hover card went from a share of the graph pane to 1,022px over it
+    /// (measured), and the details pane's date row runs past its column
+    /// the same way. The owner passes its share, the way the card passes
+    /// one for the message.
+    property real nameWidth: 0
     /// The pointer entered or left the underlined stretch.
     signal pointerChanged(bool inside)
 
@@ -51,6 +60,9 @@ Item {
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSm
             Layout.alignment: Qt.AlignVCenter
+            Layout.maximumWidth: line.nameWidth > 0
+                                 ? line.nameWidth : Number.POSITIVE_INFINITY
+            elide: Text.ElideRight
         }
         Label {
             visible: line.records.length > 1

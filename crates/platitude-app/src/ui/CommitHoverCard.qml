@@ -30,6 +30,14 @@ Popup {
     /// from the pane the card opens over — there is no token for it
     /// because it is not a fixed size, it is a share of what is there.
     property real textWidth: 0
+    /// How tall either of the two wrapping fields may grow before it
+    /// elides, from the same share of the same pane. A message has no
+    /// length git enforces, and a card that grows with one runs off the
+    /// screen and takes its own footer with it: measured at a 2,000-byte
+    /// subject, the date and the credit line ended below the window. This
+    /// card is the preview — the details pane is where a message is read
+    /// in full — so the two fields stop and say so with an ellipsis.
+    property real textHeight: 0
 
     /// The pointer is over the card itself.
     readonly property alias pointerInside: insideHover.hovered
@@ -62,25 +70,38 @@ Popup {
         Label {
             Layout.fillWidth: true
             Layout.maximumWidth: hoverCard.textWidth
+            Layout.maximumHeight: hoverCard.textHeight
             text: hoverCard.subject
             color: Theme.textPrimary
             font.pixelSize: Theme.fontMd
             font.weight: Font.DemiBold
             wrapMode: Text.Wrap
+            elide: Text.ElideRight
         }
         Label {
             visible: hoverCard.body !== ""
             Layout.fillWidth: true
             Layout.maximumWidth: hoverCard.textWidth
+            Layout.maximumHeight: hoverCard.textHeight
             text: hoverCard.body
             color: Theme.textSecondary
             font.pixelSize: Theme.fontMd
             wrapMode: Text.Wrap
+            elide: Text.ElideRight
         }
+        // The same width the message is held to. Nothing in git bounds an
+        // author's name either, and this one line was the only field here
+        // outside the share: a name of a couple of hundred characters
+        // widened the whole card past the pane it opens over (measured
+        // 1,031px over a 775px pane), because a Popup is as wide as its
+        // widest child no matter what the others were told.
         Label {
+            Layout.fillWidth: true
+            Layout.maximumWidth: hoverCard.textWidth
             text: hoverCard.author
             color: Theme.textPrimary
             font.pixelSize: Theme.fontMd
+            elide: Text.ElideRight
         }
         // Date, and beside it whoever the message credits — the same
         // pairing the details pane uses, drawn by the same component
@@ -98,6 +119,7 @@ Popup {
                 id: mateLine
                 packed: hoverCard.mates
                 lit: hoverCard.matesLit
+                nameWidth: hoverCard.textWidth
                 Layout.alignment: Qt.AlignVCenter
                 onPointerChanged: inside => hoverCard.matesPointed(inside)
             }

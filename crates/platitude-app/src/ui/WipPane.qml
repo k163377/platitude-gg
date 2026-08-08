@@ -435,16 +435,25 @@ ColumnLayout {
         spacing: Theme.spaceXs
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: wipSubject.implicitHeight + Theme.spaceSm
+            // Capped and scrolled like the description box below it, and
+            // like the details pane's pair: a summary somebody pastes a
+            // paragraph into otherwise grows until the file list has no
+            // pane left to be in.
+            Layout.preferredHeight: Math.min(wipSubject.implicitHeight
+                                             + Theme.spaceSm, 120)
             color: Theme.bgBase
             radius: Theme.radiusMd
             border.color: Theme.borderDefault
             border.width: Theme.borderWidth
-            SummaryArea {
-                id: wipSubject
+            ScrollView {
                 anchors.fill: parent
                 anchors.margins: Theme.spaceXs
-                placeholderText: qsTr("Commit summary")
+                Component.onCompleted:
+                    contentItem.boundsBehavior = Flickable.StopAtBounds
+                SummaryArea {
+                    id: wipSubject
+                    placeholderText: qsTr("Commit summary")
+                }
             }
         }
         // Two lines tall from the start (matches the details pane's
