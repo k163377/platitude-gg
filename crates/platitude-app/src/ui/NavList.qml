@@ -11,8 +11,12 @@ ListView {
     property var sectionModel
     property bool expanded: true
     property string kindHint: "branch"
-    // The stretching section absorbs the sidebar's leftover height;
-    // the others stay content-sized.
+    /// This list holds whatever height the panel it is in has over its
+    /// rows, instead of staying content-sized. Only the one section the
+    /// folded rail opens beside itself wants that — it is alone in its
+    /// panel, so the spare height has nowhere else to go. In the sidebar
+    /// proper the ground at the foot of the column takes it, and no
+    /// section stretches (SidebarPane).
     property bool stretch: false
     // "↑a ↓b" of the current branch (branches section only).
     property string headTrack: ""

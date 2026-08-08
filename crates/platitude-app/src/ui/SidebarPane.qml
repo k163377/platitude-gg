@@ -180,6 +180,34 @@ Rectangle {
         sidebar.peekEntered = false
     }
 
+    /// Smoke hook (PG_AUTO_ACT=nav-close): close one section, by raising
+    /// the signal its header band raises under a click — what closing
+    /// means is the header's to say and this pane's to hold, and a hook
+    /// that set `expTags` itself would be a second answer.
+    function closeSection(kind) {
+        const head = kind === "branch" ? branchHead
+            : kind === "remote" ? remoteHead
+            : kind === "worktree" ? worktreeHead
+            : kind === "stash" ? stashHead
+            : kind === "tag" ? tagHead : null
+        if (head)
+            head.toggled()
+    }
+    /// Where a section's header band has come to rest, and where the
+    /// ground under the last section begins. Read together they say the
+    /// sections are packed against the top: a closed section whose header
+    /// has been pushed to the foot of the pane is what this is watching
+    /// for (PG_AUTO_ACT=nav-close).
+    function headerTopOf(kind) {
+        const head = kind === "branch" ? branchHead
+            : kind === "remote" ? remoteHead
+            : kind === "worktree" ? worktreeHead
+            : kind === "stash" ? stashHead
+            : kind === "tag" ? tagHead : null
+        return head ? head.y : -1
+    }
+    readonly property real groundTop: ground.y
+
     /// Smoke hook (PG_SCROLL_TO=nav-bottom): jump the branches list to
     /// its end. The current branch's sticky row only changes edges
     /// under scroll, which a headless run cannot produce otherwise.
@@ -234,14 +262,18 @@ Rectangle {
     property bool expStashes: true
     property bool expTags: true
 
-    // The last expanded section absorbs the leftover height so the
-    // sidebar packs top to bottom.
-    readonly property string lastOpen: refFilter.text !== "" ? "tags"
-        : expTags ? "tags"
-        : expStashes ? "stashes"
-        : expWorktree ? "worktree"
-        : expRemotes ? "remotes"
-        : expBranches ? "branches" : ""
+    // How the height nobody needs is handed out. Every section takes
+    // what its own rows want and no more; the ground at the foot of the
+    // column takes the rest. It is not the last open section's to hold —
+    // spare height inside a section pushes everything under it down,
+    // and a closed section, being nothing but its header, would be
+    // pushed all the way to the bottom edge (which is what closing TAGS
+    // used to do). Both ends have to name a pull: Qt reads an unset one
+    // as a zero and hands it nothing at all. At this distance the ground
+    // keeps none of the height while any section still has rows it
+    // cannot show, on a pane of any height (measured).
+    readonly property int sectionPull: 10000
+    readonly property int groundPull: 1
 
     ColumnLayout {
         anchors.fill: parent
@@ -303,6 +335,7 @@ Rectangle {
         }
 
         NavHeader {
+            id: branchHead
             caption: qsTr("BRANCHES")
             iconKind: "branch"
             iconTint: Theme.accent
@@ -316,7 +349,7 @@ Rectangle {
             expanded: sidebar.expBranches || refFilter.text !== ""
             kindHint: "branch"
             gestures: sidebar
-            stretch: sidebar.lastOpen === "branches"
+            Layout.verticalStretchFactor: sidebar.sectionPull
             headTrack: sidebar.workTree.upstream !== ""
                        ? "↑" + sidebar.workTree.ahead + " ↓" + sidebar.workTree.behind : ""
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
@@ -417,6 +450,7 @@ Rectangle {
         }
 
         NavHeader {
+            id: remoteHead
             caption: qsTr("REMOTES")
             iconKind: "remote"
             iconTint: Theme.textSecondary
@@ -429,7 +463,7 @@ Rectangle {
             expanded: sidebar.expRemotes || refFilter.text !== ""
             kindHint: "remote"
             gestures: sidebar
-            stretch: sidebar.lastOpen === "remotes"
+            Layout.verticalStretchFactor: sidebar.sectionPull
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
             onRefMenuRequested: (kind, name, full, oidHex) =>
                 sidebar.refMenuRequested(kind, name, full, oidHex)
@@ -439,6 +473,7 @@ Rectangle {
         // lists live in the right pane's WIP view. Clicking one opens
         // it as a new tab.
         NavHeader {
+            id: worktreeHead
             caption: qsTr("WORKTREES")
             iconKind: "tree"
             iconTint: Theme.success
@@ -451,10 +486,11 @@ Rectangle {
             expanded: sidebar.expWorktree || refFilter.text !== ""
             kindHint: "worktree"
             gestures: sidebar
-            stretch: sidebar.lastOpen === "worktree"
+            Layout.verticalStretchFactor: sidebar.sectionPull
         }
 
         NavHeader {
+            id: stashHead
             caption: qsTr("STASHES")
             iconKind: "stash"
             iconTint: Theme.textSecondary
@@ -467,7 +503,7 @@ Rectangle {
             expanded: sidebar.expStashes || refFilter.text !== ""
             kindHint: "stash"
             gestures: sidebar
-            stretch: sidebar.lastOpen === "stashes"
+            Layout.verticalStretchFactor: sidebar.sectionPull
             // A stash is a commit: clicking shows its stashed changes
             // in the details pane.
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
@@ -476,6 +512,7 @@ Rectangle {
         }
 
         NavHeader {
+            id: tagHead
             caption: qsTr("TAGS")
             iconKind: "tag"
             iconTint: Theme.refTag
@@ -491,10 +528,21 @@ Rectangle {
             expanded: sidebar.expTags || refFilter.text !== ""
             kindHint: "tag"
             gestures: sidebar
-            stretch: sidebar.lastOpen === "tags"
+            Layout.verticalStretchFactor: sidebar.sectionPull
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
             onRefMenuRequested: (kind, name, full, oidHex) =>
                 sidebar.refMenuRequested(kind, name, full, oidHex)
+        }
+
+        // The ground under the last section. Nothing stands on it — it
+        // is here to be given the height the sections have no rows for,
+        // so that they stay packed against the top whichever of them
+        // are closed.
+        Item {
+            id: ground
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.verticalStretchFactor: sidebar.groundPull
         }
     }
 

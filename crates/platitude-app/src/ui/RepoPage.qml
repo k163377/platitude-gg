@@ -1719,6 +1719,18 @@ Item {
             // so the two are read together or not at all.
             + " diff=" + page.diffShown)
     }
+    // The column has to be laid out again before the header that was
+    // closed can say where it ended up.
+    Timer {
+        id: navSectionTimer
+        interval: 400
+        onTriggered: AppBackend.report(
+            "nav_section closed=" + AppBackend.autoActArg
+            + " header=" + Math.round(
+                sidebarPane.headerTopOf(AppBackend.autoActArg))
+            + " ground=" + Math.round(sidebarPane.groundTop)
+            + " pane=" + Math.round(sidebarPane.height))
+    }
     Timer {
         id: refusedRowTimer
         interval: 800
@@ -2043,6 +2055,14 @@ Item {
                                         workTree.branch)
             }
             navRailTimer.start()
+        } else if (act === "nav-close") {
+            // One section closed from its header band. The pane keeps
+            // the sections packed against the top whichever of them are
+            // closed, so what is read afterwards is where the header of
+            // the closed one came to rest — at the foot of the pane is
+            // the failure this watches for.
+            sidebarPane.closeSection(arg)
+            navSectionTimer.start()
         } else if (act === "nav-rename" || act === "rename-branch"
                    || act === "rename-tag" || act === "rename-stash") {
             // The box the second click opens, entered at the same place.
