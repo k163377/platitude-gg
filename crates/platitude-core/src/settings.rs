@@ -37,6 +37,11 @@ pub const CONFIG_DIR_ENV: &str = "PG_CONFIG_DIR";
 /// Automation knobs all share this prefix, and a person never sets one.
 const AUTOMATION_PREFIX: &str = "PG_";
 
+/// `PG_*` variables that say nothing about who is driving. Turning the
+/// logging up is something somebody does at their own window, and it must
+/// not cost them their settings.
+const NOT_AUTOMATION: [&str; 2] = [CONFIG_DIR_ENV, "PG_LOG"];
+
 /// Failure to write. Reading has no error type: it cannot fail loudly
 /// enough to matter, and the caller has nothing to do about it but carry
 /// on with defaults.
@@ -114,7 +119,7 @@ impl Env {
     fn automated(&self) -> bool {
         self.vars
             .iter()
-            .any(|(k, _)| k.starts_with(AUTOMATION_PREFIX) && k != CONFIG_DIR_ENV)
+            .any(|(k, _)| k.starts_with(AUTOMATION_PREFIX) && !NOT_AUTOMATION.contains(&k.as_str()))
     }
 }
 
@@ -994,6 +999,20 @@ colour = "midnight"
             Store::locate(Platform::Windows, &told).state_path(),
             Some(Path::new("/tmp/run-7/state.toml")),
             "a run that names a directory gets it"
+        );
+    }
+
+    #[test]
+    fn turning_the_logging_up_does_not_cost_you_your_settings() {
+        let env = Env::from_pairs(&[
+            ("APPDATA", r"C:\Roaming"),
+            ("LOCALAPPDATA", r"C:\Local"),
+            ("PG_LOG", "info"),
+        ]);
+        assert_eq!(
+            Store::locate(Platform::Windows, &env).settings_path(),
+            Some(Path::new(r"C:\Roaming\platitude-gg\settings.toml")),
+            "PG_LOG says how loud to be, not who is driving"
         );
     }
 
