@@ -397,7 +397,7 @@ Item {
     /// repository does not have yet. It opens the dialog that writes a
     /// remote down — the question stays standing behind it and picks the
     /// new remote up when it lands.
-    readonly property string publishAddChoice: qsTr("Add a remote…")
+    readonly property string publishAddChoice: qsTr("Add remote…")
     readonly property var publishChoices:
         page.publishRemotes.concat([page.publishAddChoice])
     function choosePublishRemote(index) {

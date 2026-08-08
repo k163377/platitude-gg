@@ -81,7 +81,7 @@ AppDialog {
 
         Label {
             text: remoteDialog.editing === ""
-                  ? qsTr("Add a remote")
+                  ? qsTr("Add remote")
                   : qsTr("Where %1 is").arg(remoteDialog.editing)
             font.pixelSize: Theme.fontXl
             font.weight: Font.DemiBold
@@ -90,9 +90,14 @@ AppDialog {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             color: Theme.textSecondary
-            text: qsTr("Create the repository on your host first, then paste "
-                       + "the URL it gives you. Nothing is contacted now — "
-                       + "the first push is what tries it.")
+            // The one thing the fields cannot ask for: where the URL comes
+            // from. Not "make one first" — the definite article already
+            // puts the repository over there, and nothing here could make
+            // it anyway. That the URL is untouched until the push is left
+            // unsaid; the push says it, at the moment it can be acted on.
+            // The same line has to fit a correction, where the repository
+            // plainly exists.
+            text: qsTr("Paste the URL of the repository on your host.")
         }
 
         // A remote being corrected keeps its name: renaming one belongs to
