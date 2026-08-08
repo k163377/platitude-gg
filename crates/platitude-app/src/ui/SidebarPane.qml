@@ -153,6 +153,16 @@ Rectangle {
     function peekAt(kind) {
         sidebar.openPeek(kind, rail.topOf(kind))
     }
+    /// Smoke hooks (PG_AUTO_ACT=nav-peek-away / nav-peek-shut): walk the
+    /// pointer off the cell that opened it, and click that cell. Both go
+    /// in at the rail, so the report the cells make is part of what is
+    /// being tested (NavRail.leaveAt).
+    function peekAway(kind) {
+        rail.leaveAt(kind)
+    }
+    function peekTap(kind) {
+        rail.tapAt(kind)
+    }
 
     /// Smoke hook (PG_SCROLL_TO=nav-bottom): jump the branches list to
     /// its end. The current branch's sticky row only changes edges
@@ -191,21 +201,6 @@ Rectangle {
             sidebar.SplitView.maximumWidth = Number.POSITIVE_INFINITY
             sidebar.SplitView.preferredWidth = sidebar.openWidth
         }
-    }
-    /// Open a section, for the click on a folded cell that names one: the
-    /// list coming back with the asked-for section shut would answer a
-    /// different question.
-    function expandSection(kind) {
-        if (kind === "branch")
-            sidebar.expBranches = true
-        else if (kind === "remote")
-            sidebar.expRemotes = true
-        else if (kind === "worktree")
-            sidebar.expWorktree = true
-        else if (kind === "stash")
-            sidebar.expStashes = true
-        else if (kind === "tag")
-            sidebar.expTags = true
     }
 
     // Section expansion (filter reveals collapsed sections).
@@ -493,10 +488,8 @@ Rectangle {
         openKind: peek.visible ? sidebar.peekKind : ""
         onPeekRequested: (kind, top) => sidebar.openPeek(kind, top)
         onPeekLeft: kind => sidebar.leavePeek(kind)
-        onUnfoldRequested: kind => {
-            sidebar.expandSection(kind)
-            sidebar.foldRequested(false)
-        }
+        onPeekToggled: (kind, top) => sidebar.togglePeek(kind, top)
+        onUnfoldRequested: sidebar.foldRequested(false)
     }
 
     // ---- the folded list's one open section --------------------------
@@ -526,6 +519,19 @@ Rectangle {
         sidebar.peekTop = top
         sidebar.peekWanted = true
         peek.open()
+    }
+    /// A click landed on the cell the pointer is resting on. The section
+    /// standing beside the rail goes away, and a second click brings it
+    /// back — the hover cannot, because the pointer has not moved and so
+    /// nothing about it has changed.
+    function togglePeek(kind, top) {
+        // Asked of `peekKind` rather than the popup: on the way out it is
+        // still visible, and a click that arrived then would close what it
+        // was meant to open.
+        if (sidebar.peekKind === kind)
+            sidebar.closePeek()
+        else
+            sidebar.openPeek(kind, top)
     }
     /// The pointer left a cell. Only the cell whose section is open can
     /// take it away — the one being left on the way to another has

@@ -33,11 +33,16 @@ Rectangle {
     /// The pointer came to rest on a cell. `top` is where that cell sits,
     /// so the section can open level with the icon it belongs to.
     signal peekRequested(string kind, real top)
-    /// It left a cell without arriving on another.
-    signal peekLeft()
-    /// Put the list back. `kind` is the section that was asked for, which
-    /// is the one that has to be open in it.
-    signal unfoldRequested(string kind)
+    /// It left a cell. Which one it was is the whole message: the cell
+    /// being left on the way to another has already been replaced, and
+    /// only the one whose section is open can take it away.
+    signal peekLeft(string kind)
+    /// A click landed on a cell: the section it opened goes away, and a
+    /// second click brings it back. It does not put the list back — a
+    /// stray click on the rail would take an open file down with it.
+    signal peekToggled(string kind, real top)
+    /// Put the list back, with whatever was open in it still open.
+    signal unfoldRequested()
 
     // The sections in the order the open sidebar stacks them, wearing the
     // tints their headers wear (NavHeader).
@@ -68,6 +73,18 @@ Rectangle {
              : kind === "stash" ? rail.stashesModel : rail.tagsModel
     }
 
+    /// Smoke hooks (PG_AUTO_ACT=nav-peek-away / nav-peek-shut): the
+    /// pointer walking off a cell, and a click landing on one. They go
+    /// through the signals rather than around them — what a headless run
+    /// has to be able to catch is a cell that reports the leaving without
+    /// saying which cell it was, which is a peek nothing ever closes.
+    function leaveAt(kind) {
+        rail.peekLeft(kind)
+    }
+    function tapAt(kind) {
+        rail.peekToggled(kind, rail.topOf(kind))
+    }
+
     /// Where a section's cell sits, for anything that has to line up with
     /// it without the pointer having been there (the smoke hook).
     function topOf(kind) {
@@ -96,8 +113,7 @@ Rectangle {
             folds: false
             tip: qsTr("Unfold the list")
             divided: false
-            // No section asked for: whatever was open stays open.
-            onActivated: rail.unfoldRequested("")
+            onActivated: rail.unfoldRequested()
             // The hairline the filter's underline leaves behind, so the
             // band reads as the same band it was before it folded.
             Rectangle {
@@ -183,11 +199,11 @@ Rectangle {
                         if (cellHover.hovered)
                             rail.peekRequested(cell.modelData.kind, cell.y)
                         else
-                            rail.peekLeft()
+                            rail.peekLeft(cell.modelData.kind)
                     }
                 }
                 TapHandler {
-                    onTapped: rail.unfoldRequested(cell.modelData.kind)
+                    onTapped: rail.peekToggled(cell.modelData.kind, cell.y)
                 }
             }
         }

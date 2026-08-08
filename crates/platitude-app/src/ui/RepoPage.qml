@@ -1894,7 +1894,8 @@ Item {
             sidebarPane.activateRow(section, rowName, rowName,
                                     model.oidOfName(rowName))
         } else if (act === "nav-fold" || act === "nav-peek"
-                   || act === "nav-unfold" || act === "nav-peek-rename") {
+                   || act === "nav-unfold" || act === "nav-peek-rename"
+                   || act === "nav-peek-away" || act === "nav-peek-shut") {
             // The left menu folded to its icons, and one of them rested
             // on. The resting cannot be injected (hover never can), so
             // the section is named the way the diff's line tools are.
@@ -1902,12 +1903,21 @@ Item {
             // thing folding has to be able to do.
             // "nav-fold no-tags" takes the tags off the graph first, so
             // the mark the rail wears for that can be photographed.
+            // "-away" walks the pointer off the cell again and "-shut"
+            // clicks it: both have to leave the section closed, and the
+            // click has to leave the list folded (`collapsed=`).
             if (arg === "no-tags")
                 repoTab.setTagsShown(false)
             page.foldByHand(true)
             if (act === "nav-peek")
                 sidebarPane.peekAt(arg)
-            else if (act === "nav-unfold")
+            else if (act === "nav-peek-away") {
+                sidebarPane.peekAt(arg)
+                sidebarPane.peekAway(arg)
+            } else if (act === "nav-peek-shut") {
+                sidebarPane.peekAt(arg)
+                sidebarPane.peekTap(arg)
+            } else if (act === "nav-unfold")
                 page.foldByHand(false)
             else if (act === "nav-peek-rename") {
                 // Typing a name into a peeked row: the list has to come
