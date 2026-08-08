@@ -160,36 +160,6 @@ Item {
                 anchors.fill: parent
                 visible: !navRow.folder && navRow.kindHint === "wt"
                 change: navRow.change
-                ToolTip.visible: wtHover.containsMouse
-                ToolTip.delay: Metrics.tipDelayMs
-                // A conflict says what the two sides each did — that is
-                // what decides which way out of it to take, and "%1" is
-                // the branch each side actually is (they swap over during
-                // a rebase, so the model is asked rather than guessed).
-                // The bucket is not repeated after it: the sentence
-                // already only makes sense for a conflict.
-                ToolTip.text: {
-                    const c = navRow.change.length > 0 ? navRow.change[0] : ""
-                    if (navRow.change.length === 2)
-                        return navRow.conflictWords()
-                    const what = c === "M" ? qsTr("Modified")
-                               : c === "A" ? qsTr("Added")
-                               : c === "D" ? qsTr("Deleted")
-                               : c === "R" ? qsTr("Renamed")
-                               : c === "C" ? qsTr("Copied")
-                               : c === "T" ? qsTr("Type changed")
-                               : c === "?" ? qsTr("Untracked") : navRow.change
-                    const where = navRow.bucket === "staged" ? qsTr("staged")
-                                : navRow.bucket === "unstaged" ? qsTr("unstaged")
-                                : qsTr("untracked")
-                    return what + " · " + where
-                }
-                MouseArea {
-                    id: wtHover
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.NoButton
-                }
             }
         }
         // The name says where the ref is, the way a chip's does: grey for
@@ -266,17 +236,6 @@ Item {
             // question, one mark, one size (デザイン規約 §寸法).
             width: Theme.iconSm
             height: Theme.iconSm
-            ToolTip.visible: remoteHover.containsMouse
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: navRow.has_pr ? qsTr("Has an open pull request")
-                          : navRow.kindHint === "tag" ? qsTr("Also on a remote")
-                                                      : qsTr("Has a remote branch")
-            MouseArea {
-                id: remoteHover
-                anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.NoButton
-            }
         }
     }
     // Rows whose name can be changed from here. A remote branch is one of

@@ -49,23 +49,6 @@ Item {
             change: fileRow.changeText
             width: Theme.iconMd
             height: Theme.iconMd
-            ToolTip.visible: changeHover.containsMouse
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: {
-                const c = fileRow.changeText.length > 0 ? fileRow.changeText[0] : ""
-                return c === "M" ? qsTr("Modified")
-                     : c === "A" ? qsTr("Added")
-                     : c === "D" ? qsTr("Deleted")
-                     : c === "R" ? qsTr("Renamed")
-                     : c === "C" ? qsTr("Copied")
-                     : c === "T" ? qsTr("Type changed") : fileRow.changeText
-            }
-            MouseArea {
-                id: changeHover
-                anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.NoButton
-            }
         }
         Label {
             Layout.fillWidth: true

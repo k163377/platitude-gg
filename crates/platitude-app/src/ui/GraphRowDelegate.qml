@@ -79,19 +79,6 @@ Item {
         rowItem.ListView.view ? rowItem.ListView.view.askOid === rowItem.oid_hex
                               : false
 
-    /// The record for the branch the working tree is on. The head flag
-    /// rides on the detached-HEAD marker as well, and that one is a state
-    /// rather than a branch, so it keeps its own colour.
-    function isCurrentRecord(record) {
-        return record[1] === "1" && record[0] !== "H"
-    }
-    /// Rich-text escaping, for names that share a tooltip with a coloured
-    /// line.
-    function escapeMarkup(text) {
-        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;")
-                   .replace(/>/g, "&gt;")
-    }
-
     Rectangle {
         anchors.fill: parent
         anchors.topMargin: -rowItem.topBleed
@@ -186,45 +173,11 @@ Item {
                 onTextEdited: rowItem.ListView.view.namingText = nameField.text
                 Keys.onEscapePressed: rowItem.ListView.view.namingCancelled()
             }
-            MouseArea {
-                id: labelHover
-                anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.NoButton
-            }
-            ToolTip.visible: labelHover.containsMouse
-                             && rowItem.labelRecords.length > 0
-            ToolTip.delay: Metrics.tipDelayMs
-            // The branch the working tree stands on is written here the
-            // way the sidebar and the chips write it (textLink): the same
-            // name must not read as "here" in one place and as any other
-            // branch in the next. Colouring one line puts the whole
-            // tooltip through rich text, so in that case every name is
-            // escaped first — a refname may hold & and <.
-            ToolTip.text: {
-                let lines = []
-                const colour = rowItem.labelRecords.some(rowItem.isCurrentRecord)
-                for (let i = 0; i < rowItem.labelRecords.length; i++) {
-                    const r = rowItem.labelRecords[i]
-                    // Kind words, not glyphs: a tooltip is a string, so
-                    // there is nothing to draw on, and ⚑ / ☁ / ⎇ are
-                    // exactly what the named families do not all carry
-                    // (デザイン規約 §QML実装ルール 印は描く).
-                    const kind = r[0] === "T" ? qsTr("tag")
-                               : r[0] === "R" ? qsTr("remote")
-                               : r[0] === "H" ? "HEAD" : qsTr("branch")
-                    // Aggregated records keep their PR mark visible here.
-                    const pr = r.length > 3 && r[3] === "1" ? qsTr(" · PR") : ""
-                    const bare = r.substring(5).split("\u001E")[0]
-                    const name = colour ? rowItem.escapeMarkup(bare) : bare
-                    const line = kind + " " + name + pr
-                    lines.push(rowItem.isCurrentRecord(r)
-                               ? "<font color=\"" + Theme.textLink + "\">"
-                                 + line + "</font>"
-                               : line)
-                }
-                return lines.join(colour ? "<br>" : "\n")
-            }
+            // Nothing in this column can be hovered on its own: rowMouse
+            // fills the row and is declared after it, so it takes every
+            // hover the chips would have seen (デザイン規約 §hover の
+            // ツールチップ). What the stacked chips hold is read from the
+            // RefListPopup that rowMouse opens under the pointer.
         }
 
         // Lanes viewport: the full-width canvas slides behind a clip
