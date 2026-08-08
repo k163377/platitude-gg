@@ -18,8 +18,13 @@ use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 
 /// Fields: id, parents, author name/email/time, committer name/email/time,
 /// full message body. NUL-separated, record NUL-terminated via `-z`.
+///
+/// Both sides are the mailmap spellings, for the same reason the graph log
+/// asks for them (`parse::log`) — and because these two have to agree: a
+/// person whose picture is drawn on their row in the graph would otherwise
+/// lose it the moment the row was clicked.
 const DETAILS_FORMAT_ARG: &str =
-    "--format=%H%x00%P%x00%an%x00%ae%x00%at%x00%cn%x00%ce%x00%ct%x00%B";
+    "--format=%H%x00%P%x00%aN%x00%aE%x00%at%x00%cN%x00%cE%x00%ct%x00%B";
 const DETAILS_FIELDS: usize = 9;
 
 /// Arguments pinning diff output shape against user configuration.

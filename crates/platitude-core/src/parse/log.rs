@@ -9,11 +9,22 @@ use crate::model::{CommitMeta, StrPool};
 use crate::oid::Oid;
 
 /// `--format=` argument matching [`LOG_FIELDS`]; keep the two in sync.
-/// Fields: full id, parent ids, author name, author time, subject.
-pub const LOG_FORMAT_ARG: &str = "--format=%H%x00%P%x00%an%x00%at%x00%s";
+/// Fields: full id, parent ids, author name, author address, author time,
+/// subject.
+///
+/// The two author fields are the **mailmap** spellings (`%aN` / `%aE`, not
+/// `%an` / `%ae`): one person committing under a laptop address and an
+/// office one is one person, and git already has the file that says so.
+/// Reimplementing that here would mean a second, worse answer to a
+/// question `.mailmap` answers for every other tool on the machine.
+///
+/// Anything that writes an identity back — the author an amend carries
+/// over — keeps reading the raw fields. A mapping made for display is not
+/// a thing to record in a commit.
+pub const LOG_FORMAT_ARG: &str = "--format=%H%x00%P%x00%aN%x00%aE%x00%at%x00%s";
 
 /// Number of NUL-terminated tokens per record.
-pub const LOG_FIELDS: usize = 5;
+pub const LOG_FIELDS: usize = 6;
 
 /// Fatal parse error: the stream no longer matches the expected shape.
 /// (With NUL both separating fields and terminating records there is no way
@@ -43,6 +54,7 @@ pub struct LogParser {
     cur_oid: Option<Oid>,
     cur_parents: Vec<Oid>,
     cur_author: u32,
+    cur_author_email: u32,
     cur_time: i64,
 }
 
@@ -111,6 +123,14 @@ impl LogParser {
                 self.cur_author = self.pool.intern(&name);
             }
             3 => {
+                // Folded on the way in by the one function that decides
+                // what counts as the same person, so a picture filed from
+                // the settings list and a row read out of the log cannot
+                // disagree about the key.
+                let email = crate::avatar::key(&String::from_utf8_lossy(token));
+                self.cur_author_email = self.pool.intern(&email);
+            }
+            4 => {
                 let text = std::str::from_utf8(token)
                     .map_err(|_| LogParseError::InvalidTimestamp { record })?;
                 self.cur_time = text
@@ -130,6 +150,7 @@ impl LogParser {
                     oid,
                     parents: self.cur_parents.drain(..).collect(),
                     author: self.cur_author,
+                    author_email: self.cur_author_email,
                     time: self.cur_time,
                     subject,
                 });
@@ -151,9 +172,23 @@ mod tests {
     const B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const C: &str = "cccccccccccccccccccccccccccccccccccccccc";
 
+    /// One record with an address derived from the name, for the tests
+    /// that are not about the address.
     fn record(oid: &str, parents: &str, author: &str, time: &str, subject: &str) -> Vec<u8> {
+        let email = format!("{}@example.com", author.to_lowercase());
+        record_with_email(oid, parents, author, &email, time, subject)
+    }
+
+    fn record_with_email(
+        oid: &str,
+        parents: &str,
+        author: &str,
+        email: &str,
+        time: &str,
+        subject: &str,
+    ) -> Vec<u8> {
         let mut v = Vec::new();
-        for field in [oid, parents, author, time, subject] {
+        for field in [oid, parents, author, email, time, subject] {
             v.extend_from_slice(field.as_bytes());
             v.push(0);
         }
@@ -185,6 +220,41 @@ mod tests {
         assert_eq!(&*commits[0].subject, "merge two");
         assert_eq!(commits[2].parents.len(), 0);
         assert_eq!(commits[0].author, commits[2].author, "author interned");
+    }
+
+    #[test]
+    fn the_address_is_lowercased_and_interned() {
+        // The same person, shouting on one commit and not the other. The
+        // key a picture is filed under has to come out the same either
+        // way, which is why case is dropped on the way in.
+        let mut bytes = record_with_email(A, "", "Alice", "Alice@Example.COM", "1", "one");
+        bytes.extend(record_with_email(
+            B,
+            A,
+            "Alice",
+            "alice@example.com",
+            "2",
+            "two",
+        ));
+        let (commits, parser) = parse_all(&bytes, 3);
+        assert_eq!(
+            parser.pool().get(commits[0].author_email),
+            "alice@example.com"
+        );
+        assert_eq!(
+            commits[0].author_email, commits[1].author_email,
+            "one address, one pool entry"
+        );
+    }
+
+    #[test]
+    fn an_empty_address_is_kept_as_one() {
+        // git writes `<>` for an author with no address, and `%aE` comes
+        // back empty. Nothing is a valid answer; it just matches no
+        // picture.
+        let bytes = record_with_email(A, "", "Nobody", "", "1", "one");
+        let (commits, parser) = parse_all(&bytes, 7);
+        assert_eq!(parser.pool().get(commits[0].author_email), "");
     }
 
     #[test]

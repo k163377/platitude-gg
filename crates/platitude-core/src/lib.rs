@@ -5,6 +5,7 @@
 //! can be unit-tested on any machine and reused unchanged if the QML bridge
 //! implementation is swapped (Qt Bridges -> CXX-Qt).
 
+pub mod avatar;
 pub mod branch;
 pub mod commit;
 pub mod conflict;

@@ -4,6 +4,11 @@ expression: settings.to_table().to_string()
 ---
 version = 1
 
+[[avatar]]
+email = "ada@example.com"
+file = "3f2a1c4e5b6d7089000004d2.png"
+name = "Ada Lovelace"
+
 [defaults]
 auto_fetch_minutes = 5
 network_timeout_secs = 300

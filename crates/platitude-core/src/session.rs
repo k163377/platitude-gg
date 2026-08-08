@@ -135,6 +135,10 @@ pub struct LogRow {
     pub oid_hex: String,
     pub short_sha: String,
     pub author: String,
+    /// The author's address, lowercased and mailmapped — what a locally
+    /// assigned picture is filed under. Empty on the WIP row, which has
+    /// no author until it is committed.
+    pub author_email: String,
     /// Author time (unix seconds); formatting is presentation.
     pub time: i64,
     pub subject: String,
@@ -3178,6 +3182,7 @@ fn wip_row(head: &Oid, builder: &mut GraphBuilder) -> LogRow {
         oid_hex: zero.to_hex(),
         short_sha: zero.short_hex(8),
         author: String::new(),
+        author_email: String::new(),
         time: 0,
         subject: String::new(),
         node_lane: g.node_lane,
@@ -3398,6 +3403,7 @@ fn make_row(
         oid_hex: commit.oid.to_hex(),
         short_sha: commit.oid.short_hex(8),
         author: pool.get(commit.author).to_string(),
+        author_email: pool.get(commit.author_email).to_string(),
         time: commit.time,
         subject: commit.subject.to_string(),
         node_lane: g.node_lane,

@@ -57,6 +57,10 @@ pub struct CommitMeta {
     pub parents: Box<[Oid]>,
     /// Author name id in the session's [`StrPool`].
     pub author: u32,
+    /// Author address id in the same pool, lowercased. What a locally
+    /// assigned picture is filed under — a name is what people change and
+    /// what two people share.
+    pub author_email: u32,
     /// Author timestamp (seconds since epoch).
     pub time: i64,
     /// First line of the commit message.

@@ -217,6 +217,16 @@ impl Store {
         self.state_path.as_deref()
     }
 
+    /// Where assigned pictures are kept: beside `settings.toml`, since that
+    /// is the file that indexes them. A store with no settings file has
+    /// nowhere to put them either.
+    pub fn avatars_dir(&self) -> Option<PathBuf> {
+        self.settings_path
+            .as_deref()
+            .and_then(Path::parent)
+            .map(|dir| dir.join(crate::avatar::DIR_NAME))
+    }
+
     /// True when this store is not backed by any file.
     pub fn is_ephemeral(&self) -> bool {
         self.settings_path.is_none() && self.state_path.is_none()
@@ -299,6 +309,11 @@ impl RepoOverride {
 pub struct Settings {
     pub defaults: RepoSettings,
     pub repos: Vec<RepoOverride>,
+    /// Pictures put against authors. Kept here rather than in a third file
+    /// because the split between the two is a write-rate one: an avatar is
+    /// assigned about as often as an interval is changed, and neither
+    /// happens while a pane is being dragged.
+    pub avatars: crate::avatar::Avatars,
 }
 
 impl Settings {
@@ -345,7 +360,16 @@ impl Settings {
                 }
             }
         }
-        Self { defaults, repos }
+        let avatars = table
+            .get("avatar")
+            .and_then(Value::as_array)
+            .map(|values| crate::avatar::Avatars::from_values(values))
+            .unwrap_or_default();
+        Self {
+            defaults,
+            repos,
+            avatars,
+        }
     }
 
     fn to_table(&self) -> Table {
@@ -382,6 +406,9 @@ impl Settings {
         }
         if !by_repo.is_empty() {
             root.insert("repo".into(), Value::Table(by_repo));
+        }
+        if !self.avatars.is_empty() {
+            root.insert("avatar".into(), Value::Array(self.avatars.to_values()));
         }
         root
     }
@@ -872,6 +899,16 @@ mod tests {
                 auto_fetch_minutes: Some(0),
                 network_timeout_secs: None,
             }],
+            avatars: crate::avatar::Avatars::from_values(&[toml::Value::Table({
+                let mut t = Table::new();
+                t.insert("email".into(), Value::String("ada@example.com".into()));
+                t.insert("name".into(), Value::String("Ada Lovelace".into()));
+                t.insert(
+                    "file".into(),
+                    Value::String("3f2a1c4e5b6d7089000004d2.png".into()),
+                );
+                t
+            })]),
         };
         insta::assert_snapshot!("settings_file", settings.to_table().to_string());
 
@@ -1059,6 +1096,7 @@ graph_lanes_width = 3
                 auto_fetch_minutes: 5,
                 network_timeout_secs: 300,
             },
+            avatars: crate::avatar::Avatars::default(),
             repos: vec![RepoOverride {
                 key: "C:/big".into(),
                 auto_fetch_minutes: Some(0),

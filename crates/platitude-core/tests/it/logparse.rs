@@ -83,6 +83,108 @@ async fn real_git_log_streams_through_the_parser() {
     assert!(root.time > 0);
 }
 
+/// Runs the log through the parser and hands back what came out.
+// The `allow-*-in-tests` clippy options only reach `#[test]` functions, and
+// a helper that cannot read the log it was asked for is the test failing.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper; panicking on setup failure is the point"
+)]
+async fn parse_log(
+    repo: &TestRepo,
+    extra: &[&str],
+) -> (Vec<platitude_core::CommitMeta>, LogParser) {
+    let executor = GitExecutor::new();
+    let cancel = CancellationToken::new();
+    let mut args: Vec<&str> = vec!["log", "-z", "--date-order", LOG_FORMAT_ARG];
+    args.extend_from_slice(extra);
+    let cmd = GitCommand::new().cwd(&repo.path).args(args);
+    let out = executor.run(cmd, &cancel).await.unwrap();
+    let mut parser = LogParser::new();
+    let mut commits = Vec::new();
+    parser.feed(&out.stdout, &mut commits).unwrap();
+    parser.finish().unwrap();
+    (commits, parser)
+}
+
+/// What `.mailmap` is for, and the reason the format asks for `%aN` /
+/// `%aE` rather than the raw pair: one person with two addresses comes
+/// back as one person, and the answer is git's rather than a second one
+/// of our own.
+#[tokio::test]
+async fn the_log_reads_the_authors_through_mailmap() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "before");
+    // `--author`, not `-c user.email`: the harness pins GIT_AUTHOR_EMAIL
+    // for reproducible ids, and that beats configuration — a commit made
+    // the other way would quietly carry the harness's address and leave
+    // this test agreeing with itself.
+    repo.git(&[
+        "commit",
+        "--allow-empty",
+        "--author=Other Name <other@example.com>",
+        "-m",
+        "under another address",
+    ]);
+    repo.write_file(
+        ".mailmap",
+        "Test User <test@example.com> <other@example.com>\n",
+    );
+    repo.git(&["add", "--", ".mailmap"]);
+    repo.git(&["commit", "-m", "add mailmap"]);
+
+    let (commits, parser) = parse_log(&repo, &["--all"]).await;
+    let names: Vec<&str> = commits
+        .iter()
+        .map(|c| parser.pool().get(c.author))
+        .collect();
+    assert!(
+        names.iter().all(|n| *n == "Test User"),
+        "every commit reads as the one person: {names:?}"
+    );
+    let emails: Vec<&str> = commits
+        .iter()
+        .map(|c| parser.pool().get(c.author_email))
+        .collect();
+    assert!(
+        emails.iter().all(|e| *e == "test@example.com"),
+        "and under the one address: {emails:?}"
+    );
+    // One address, one pool entry — which is what makes it usable as the
+    // key a picture is filed under.
+    assert_eq!(commits[0].author_email, commits[1].author_email);
+}
+
+/// git hands the address back exactly as the commit spelled it — mailmap
+/// matches without regard to case but does not rewrite what it did not
+/// map. Lowercasing is ours to do, or the same person shouting once would
+/// file under a second key.
+#[tokio::test]
+async fn an_address_is_lowercased_however_the_commit_spelled_it() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "first");
+    repo.git(&[
+        "commit",
+        "--allow-empty",
+        "--author=Test User <TEST@Example.COM>",
+        "-m",
+        "shouting",
+    ]);
+
+    let raw = repo.git(&["log", "-1", "--format=%aE"]);
+    assert_eq!(raw, "TEST@Example.COM", "git keeps the spelling");
+
+    let (commits, parser) = parse_log(&repo, &[]).await;
+    assert_eq!(
+        parser.pool().get(commits[0].author_email),
+        "test@example.com"
+    );
+    assert_eq!(
+        commits[0].author_email, commits[1].author_email,
+        "both spellings land on one key"
+    );
+}
+
 #[tokio::test]
 async fn parser_handles_tiny_chunks_from_real_output() {
     let (repo, _) = scenario();
