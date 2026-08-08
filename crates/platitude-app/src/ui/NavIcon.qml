@@ -229,6 +229,22 @@ Canvas {
                 ctx.lineTo(x * s, 12 * s)
                 ctx.stroke()
             }
+        } else if (icon.kind === "menu") {
+            for (const y of [4.5, 8, 11.5]) {
+                ctx.beginPath()
+                ctx.moveTo(3 * s, y * s)
+                ctx.lineTo(13 * s, y * s)
+                ctx.stroke()
+            }
+        } else if (icon.kind === "close") {
+            // Inset further than the straight-stroked marks: diagonals
+            // read heavier than bars of the same span.
+            ctx.beginPath()
+            ctx.moveTo(4.5 * s, 4.5 * s)
+            ctx.lineTo(11.5 * s, 11.5 * s)
+            ctx.moveTo(11.5 * s, 4.5 * s)
+            ctx.lineTo(4.5 * s, 11.5 * s)
+            ctx.stroke()
         } else if (icon.kind === "eye" || icon.kind === "eye-off") {
             // Lens and pupil — the visibility mark every layer list has
             // used since Photoshop. Drawn rather than borrowed from a

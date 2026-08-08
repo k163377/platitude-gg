@@ -292,12 +292,13 @@ Rectangle {
         // Escape and a click anywhere else walk away too; this is the
         // way out that can be seen, for a bar that stands until it is
         // answered.
-        Label {
+        NavIcon {
             Layout.alignment: Qt.AlignVCenter
-            text: "✕"
-            color: dismissMouse.containsMouse ? Theme.textPrimary
-                                              : Theme.textSecondary
-            font.pixelSize: Theme.fontMd
+            width: Theme.iconMd
+            height: Theme.iconMd
+            kind: "close"
+            tint: dismissMouse.containsMouse ? Theme.textPrimary
+                                             : Theme.textSecondary
             MouseArea {
                 id: dismissMouse
                 anchors.fill: parent

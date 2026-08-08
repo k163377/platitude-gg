@@ -41,11 +41,13 @@ Rectangle {
         anchors.leftMargin: Theme.spaceSm
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
-        Label {
+        NavIcon {
             visible: header.foldable
-            text: header.expanded ? "▾" : "▸"
-            color: Theme.textSecondary
-            font.pixelSize: Theme.fontSm
+            width: Theme.iconSm
+            height: Theme.iconSm
+            kind: "chevron"
+            rotation: header.expanded ? 90 : 0
+            tint: Theme.textSecondary
         }
         NavIcon {
             kind: header.iconKind

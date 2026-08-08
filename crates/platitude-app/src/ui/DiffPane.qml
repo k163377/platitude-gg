@@ -102,10 +102,18 @@ Rectangle {
                     onClicked: diffPane.stageFileRequested()
                 }
                 HoverToolButton {
-                    text: "×"
                     implicitWidth: Theme.iconLg
                     implicitHeight: Theme.iconLg
                     padding: 0
+                    contentItem: Item {
+                        NavIcon {
+                            anchors.centerIn: parent
+                            width: Theme.iconMd
+                            height: Theme.iconMd
+                            kind: "close"
+                            tint: Theme.textPrimary
+                        }
+                    }
                     onClicked: diffPane.closeRequested()
                 }
             }

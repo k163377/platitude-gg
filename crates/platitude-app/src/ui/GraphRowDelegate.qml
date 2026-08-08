@@ -176,13 +176,18 @@ Item {
                 const colour = rowItem.labelRecords.some(rowItem.isCurrentRecord)
                 for (let i = 0; i < rowItem.labelRecords.length; i++) {
                     const r = rowItem.labelRecords[i]
-                    const icon = r[0] === "T" ? "⚑" : r[0] === "R" ? "☁"
-                               : r[0] === "H" ? "HEAD" : "⎇"
+                    // Kind words, not glyphs: a tooltip is a string, so
+                    // there is nothing to draw on, and ⚑ / ☁ / ⎇ are
+                    // exactly what the named families do not all carry
+                    // (デザイン規約 §QML実装ルール 印は描く).
+                    const kind = r[0] === "T" ? qsTr("tag")
+                               : r[0] === "R" ? qsTr("remote")
+                               : r[0] === "H" ? "HEAD" : qsTr("branch")
                     // Aggregated records keep their PR mark visible here.
                     const pr = r.length > 3 && r[3] === "1" ? qsTr(" · PR") : ""
                     const bare = r.substring(5).split("\u001E")[0]
                     const name = colour ? rowItem.escapeMarkup(bare) : bare
-                    const line = icon + " " + name + pr
+                    const line = kind + " " + name + pr
                     lines.push(rowItem.isCurrentRecord(r)
                                ? "<font color=\"" + Theme.textLink + "\">"
                                  + line + "</font>"

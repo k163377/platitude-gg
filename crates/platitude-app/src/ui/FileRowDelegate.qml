@@ -36,11 +36,13 @@ Item {
         anchors.leftMargin: Theme.spaceSm + (fileRow.model.depth ?? 0) * Theme.spaceMd
         anchors.rightMargin: Theme.spaceSm
         spacing: Theme.spaceXs
-        Label {
+        NavIcon {
             visible: fileRow.isFolder
-            text: (fileRow.model.collapsed ?? false) ? "▸" : "▾"
-            color: Theme.textSecondary
-            font.pixelSize: Theme.fontSm
+            width: Theme.iconSm
+            height: Theme.iconSm
+            kind: "chevron"
+            rotation: (fileRow.model.collapsed ?? false) ? 0 : 90
+            tint: Theme.textSecondary
         }
         ChangeIcon {
             visible: !fileRow.isFolder

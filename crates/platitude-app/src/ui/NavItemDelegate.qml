@@ -152,14 +152,14 @@ Item {
             Layout.preferredWidth: Theme.iconSm + 2
             Layout.preferredHeight: Theme.iconSm + 2
             Layout.alignment: Qt.AlignVCenter
-            Label {
-                anchors.fill: parent
+            NavIcon {
+                anchors.centerIn: parent
                 visible: navRow.folder
-                text: navRow.collapsed ? "▸" : "▾"
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
+                width: Theme.iconSm
+                height: Theme.iconSm
+                kind: "chevron"
+                rotation: navRow.collapsed ? 0 : 90
+                tint: Theme.textSecondary
             }
             ChangeIcon {
                 anchors.fill: parent

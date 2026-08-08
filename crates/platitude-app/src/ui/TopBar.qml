@@ -94,13 +94,20 @@ Rectangle {
         // placeholders until their phases land.
         HoverToolButton {
             id: menuButton
-            text: "☰"
-            font.pixelSize: Theme.fontLg
             Layout.leftMargin: Theme.spaceXs
             Layout.alignment: Qt.AlignVCenter
             padding: 0
             implicitWidth: Theme.spaceXl
             implicitHeight: Theme.spaceXl
+            contentItem: Item {
+                NavIcon {
+                    anchors.centerIn: parent
+                    width: Theme.iconMd
+                    height: Theme.iconMd
+                    kind: "menu"
+                    tint: Theme.textPrimary
+                }
+            }
             onClicked: appMenu.open()
             AppMenu {
                 id: appMenu
@@ -199,11 +206,19 @@ Rectangle {
                                                    : Theme.textSecondary
                         }
                         HoverToolButton {
-                            text: "×"
                             padding: 0
                             Layout.alignment: Qt.AlignVCenter
                             implicitWidth: Theme.iconLg
                             implicitHeight: Theme.iconLg
+                            contentItem: Item {
+                                NavIcon {
+                                    anchors.centerIn: parent
+                                    width: Theme.iconMd
+                                    height: Theme.iconMd
+                                    kind: "close"
+                                    tint: Theme.textPrimary
+                                }
+                            }
                             onClicked: topBar.tabsModel.closeTab(tabItem.tab_id)
                         }
                     }

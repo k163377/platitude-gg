@@ -96,10 +96,18 @@ Rectangle {
                     onClicked: pane.commandsModel.clear()
                 }
                 HoverToolButton {
-                    text: "×"
                     padding: 0
                     implicitWidth: Theme.iconLg
                     implicitHeight: Theme.iconLg
+                    contentItem: Item {
+                        NavIcon {
+                            anchors.centerIn: parent
+                            width: Theme.iconMd
+                            height: Theme.iconMd
+                            kind: "close"
+                            tint: Theme.textPrimary
+                        }
+                    }
                     onClicked: pane.closeRequested()
                 }
             }
