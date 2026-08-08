@@ -139,6 +139,9 @@ pub struct LogRow {
     /// assigned picture is filed under. Empty on the WIP row, which has
     /// no author until it is committed.
     pub author_email: String,
+    /// Whoever the message credits alongside the author, in its order.
+    /// Empty on the WIP and stash rows.
+    pub co_authors: Vec<crate::details::CoAuthor>,
     /// Author time (unix seconds); formatting is presentation.
     pub time: i64,
     pub subject: String,
@@ -3183,6 +3186,7 @@ fn wip_row(head: &Oid, builder: &mut GraphBuilder) -> LogRow {
         short_sha: zero.short_hex(8),
         author: String::new(),
         author_email: String::new(),
+        co_authors: Vec::new(),
         time: 0,
         subject: String::new(),
         node_lane: g.node_lane,
@@ -3404,6 +3408,14 @@ fn make_row(
         short_sha: commit.oid.short_hex(8),
         author: pool.get(commit.author).to_string(),
         author_email: pool.get(commit.author_email).to_string(),
+        co_authors: commit
+            .co_authors
+            .iter()
+            .map(|(name, email)| crate::details::CoAuthor {
+                name: pool.get(*name).to_string(),
+                email: pool.get(*email).to_string(),
+            })
+            .collect(),
         time: commit.time,
         subject: commit.subject.to_string(),
         node_lane: g.node_lane,

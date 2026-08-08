@@ -61,6 +61,10 @@ pub struct CommitMeta {
     /// assigned picture is filed under — a name is what people change and
     /// what two people share.
     pub author_email: u32,
+    /// `Co-authored-by` trailers as (name, address) pool ids, in message
+    /// order. Not mailmapped — a trailer is message text, so the same
+    /// person can be spelled differently here and in `author`.
+    pub co_authors: Box<[(u32, u32)]>,
     /// Author timestamp (seconds since epoch).
     pub time: i64,
     /// First line of the commit message.

@@ -21,10 +21,19 @@ use crate::oid::Oid;
 /// Anything that writes an identity back — the author an amend carries
 /// over — keeps reading the raw fields. A mapping made for display is not
 /// a thing to record in a commit.
-pub const LOG_FORMAT_ARG: &str = "--format=%H%x00%P%x00%aN%x00%aE%x00%at%x00%s";
+/// The `Co-authored-by` trailers ride along in the same record: the graph
+/// draws the first of them on the node and the row's hover names the
+/// rest, and asking git for them here costs no extra process. git decides
+/// what counts as a trailer — see [`crate::details`], which reads the
+/// same field for one commit at a time.
+///
+/// **No mailmap applies to these.** `%aN` folds the author, but a trailer
+/// is message text, so the same person can appear under two spellings.
+pub const LOG_FORMAT_ARG: &str = "--format=%H%x00%P%x00%aN%x00%aE%x00%at%x00\
+     %(trailers:key=Co-authored-by,valueonly,unfold,separator=%x1F)%x00%s";
 
 /// Number of NUL-terminated tokens per record.
-pub const LOG_FIELDS: usize = 6;
+pub const LOG_FIELDS: usize = 7;
 
 /// Fatal parse error: the stream no longer matches the expected shape.
 /// (With NUL both separating fields and terminating records there is no way
@@ -55,6 +64,8 @@ pub struct LogParser {
     cur_parents: Vec<Oid>,
     cur_author: u32,
     cur_author_email: u32,
+    /// Pooled (name, address) of each `Co-authored-by` on this record.
+    cur_mates: Vec<(u32, u32)>,
     cur_time: i64,
 }
 
@@ -138,6 +149,16 @@ impl LogParser {
                     .parse()
                     .map_err(|_| LogParseError::InvalidTimestamp { record })?;
             }
+            5 => {
+                // Pool ids like the author's: the same few names repeat
+                // down the whole history, so each costs one entry.
+                self.cur_mates.clear();
+                for mate in crate::details::parse_co_authors(&String::from_utf8_lossy(token)) {
+                    let name = self.pool.intern(&mate.name);
+                    let email = self.pool.intern(&mate.email);
+                    self.cur_mates.push((name, email));
+                }
+            }
             _ => {
                 let subject = String::from_utf8_lossy(token).into_owned().into_boxed_str();
                 // Field 0 always ran before we get here, so cur_oid is set;
@@ -151,6 +172,7 @@ impl LogParser {
                     parents: self.cur_parents.drain(..).collect(),
                     author: self.cur_author,
                     author_email: self.cur_author_email,
+                    co_authors: self.cur_mates.drain(..).collect(),
                     time: self.cur_time,
                     subject,
                 });
@@ -187,8 +209,20 @@ mod tests {
         time: &str,
         subject: &str,
     ) -> Vec<u8> {
+        record_with_mates(oid, parents, author, email, time, "", subject)
+    }
+
+    fn record_with_mates(
+        oid: &str,
+        parents: &str,
+        author: &str,
+        email: &str,
+        time: &str,
+        mates: &str,
+        subject: &str,
+    ) -> Vec<u8> {
         let mut v = Vec::new();
-        for field in [oid, parents, author, email, time, subject] {
+        for field in [oid, parents, author, email, time, mates, subject] {
             v.extend_from_slice(field.as_bytes());
             v.push(0);
         }
@@ -203,6 +237,34 @@ mod tests {
         }
         parser.finish().unwrap();
         (out, parser)
+    }
+
+    #[test]
+    fn co_author_trailers_ride_along_in_the_record() {
+        let bytes = record_with_mates(
+            A,
+            "",
+            "Alice",
+            "alice@example.com",
+            "1700000000",
+            "Claude Opus 5 <noreply@anthropic.com>\u{1f}Nameless",
+            "pair on it",
+        );
+        let (commits, parser) = parse_all(&bytes, bytes.len());
+        assert_eq!(commits.len(), 1);
+        let mates = &commits[0].co_authors;
+        assert_eq!(mates.len(), 2);
+        assert_eq!(parser.pool().get(mates[0].0), "Claude Opus 5");
+        assert_eq!(parser.pool().get(mates[0].1), "noreply@anthropic.com");
+        assert_eq!(parser.pool().get(mates[1].0), "Nameless");
+        assert_eq!(parser.pool().get(mates[1].1), "");
+    }
+
+    #[test]
+    fn a_commit_with_no_trailer_credits_nobody() {
+        let bytes = record(A, "", "Alice", "1700000000", "alone");
+        let (commits, _) = parse_all(&bytes, bytes.len());
+        assert!(commits[0].co_authors.is_empty());
     }
 
     #[test]

@@ -168,7 +168,7 @@ fn parse_details(bytes: &[u8]) -> Option<CommitDetails> {
 /// colon. `Name <address>` is the convention every tool that reads these
 /// follows, so the address is taken from the last angle-bracketed run;
 /// anything else stays a name in full rather than being guessed at.
-fn parse_co_authors(field: &str) -> Vec<CoAuthor> {
+pub fn parse_co_authors(field: &str) -> Vec<CoAuthor> {
     field
         .split(TRAILER_SEP)
         .filter_map(|entry| {
