@@ -266,7 +266,20 @@ fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["add", "--", "c.txt"])?;
     repo.write("c.txt", "c v1\nstaged\nand unstaged on top\n")?;
     repo.git(&["mv", "renamed-from.txt", "renamed-to.txt"])?;
-    repo.write("untracked.txt", "new file\n")?;
+    // Long enough to be read as a file rather than as a line: the diff of
+    // something the repository has never seen is all additions under one
+    // heading, and one line of it cannot show what that looks like.
+    repo.write(
+        "untracked.txt",
+        "Notes for the next release\n\
+         \n\
+         - decide what goes in the first tag\n\
+         - write the install steps down\n\
+         - check the licence headers\n\
+         - measure the cold start once more\n\
+         \n\
+         Nothing here is recorded yet.\n",
+    )?;
     Ok(())
 }
 

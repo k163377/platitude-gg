@@ -2154,15 +2154,26 @@ Item {
                    || act === "diff-file" || act === "line-tools"
                    || act === "hunk-tools" || act === "pick-lines"
                    || act === "stage-lines" || act === "keep-place") {
-            // All of them enter through the diff of one unstaged file and
-            // act on its first hunk: "diff-file" only opens it,
-            // "line-tools" puts out the square a line shows under the
-            // pointer, and "hunk-tools" wakes the heading's two words.
-            // "discard-hunk" leaves the held button standing for the shot
-            // and "-go" holds it to its end. The working tree comes up
-            // first, since its file list is where a diff is reached from.
+            // All of them enter through the diff of one file and act on
+            // its first hunk: "diff-file" only opens it, "line-tools" puts
+            // out the square a line shows under the pointer, and
+            // "hunk-tools" wakes the heading's two words. "discard-hunk"
+            // leaves the held button standing for the shot and "-go" holds
+            // it to its end. The working tree comes up first, since its
+            // file list is where a diff is reached from.
+            //
+            // The bucket rides in front of the path (`<bucket>:<path>`, the
+            // form `nav-dbl` uses) when it is not the usual unstaged one: a
+            // file the repository has never seen has no unstaged diff at
+            // all — it is read from `untracked`. Only the three bucket
+            // names count as one, so a path carrying a colon still opens.
+            const cut = arg.indexOf(":")
+            const head = cut > 0 ? arg.substring(0, cut) : ""
+            const named = head === "staged" || head === "unstaged"
+                          || head === "untracked"
             page.showWip()
-            page.toggleDiff("unstaged", arg, "")
+            page.toggleDiff(named ? head : "unstaged",
+                            named ? arg.substring(cut + 1) : arg, "")
             stageRowTimer.start()
         } else if (act === "diff-fold" || act === "diff-unfold"
                    || act === "diff-fold-by-hand"
