@@ -17,6 +17,8 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 **開いたまま止める撮影用**は settings-tools(設定ダイアログを開いて Merge editor の候補一覧を開いたまま止める。`merge_editor wanted= shown= configured=` を報告する。**候補は 2 波で来る** — 自前定義は即・同梱分は `--tool-help` が Windows で約 8 秒なので、**リングが回っている絵は既定の `--quit-ms` を 3000 程度に詰めて**、**出揃った絵は 14000 に伸ばして**撮る。demo repo の `.git/config` に `[mergetool "名前"] cmd = …` を 2 つほど書いておくと 1 波目に中身が入る)/ stash-dialog(引数 staged-only でそのチェックをクリック済みの状態)/ file-menu / file-menu-untracked / file-menu-staged / file-menu-conflict(引数はパス。バケツごとに出る行が変わるので 4 つ。conflict は種別の文言を `conflict_kind` として報告する — hover は注入できないため。`--preset conflict-kinds` に 4 種が揃っている)/ amend-author / settings / commit-menu / reset-menu / stash-menu / name-box(引数は行番号)/ ref-list(引数は行番号)/ fetch-ref-list(引数は行番号。fetch を撃ってからその行のチップを展開する — タグの雲は fetch 後にしか出ない。`--preset tags` に 4 状態が揃っている)/ signature(引数は行番号。その行を選び、gpg / ssh-keygen が返すまで待って印を報告する。`--preset signed` に verified / signed / 無署名の 3 行がある)/ nav-rename / rename-remote-box(引数 `<remote>/<old>:<入れておく名前>`。畳みを開いて入力欄を出す — 既にリモートに在る名前を渡せば拒否された枠が撮れる)
 
+**アバターは `avatar-*`**(**引数は取り込む画像の `file:` URL** — 保管庫は実行ごとに空なので、見るものはまず入れる): `avatar-rest`(顔が identicon のまま)/ `avatar-hover`(ペンのバッジを出す — hover は注入できないので `DetailsPane.avatarPointedAt` を立てる)/ `avatar-assign`(選んだコミットの著者へ引数の画像を取り込み、**報告行 `avatar email= details= rows= error=`**。`rows=` は **Rust 側が数える**グラフ行の枚数 = 顔がグラフまで届いたかを言う。QML から数えると**画面に出ていても 0 になる**)/ `avatar-badge`(バッジを押して設定カードを開く = 入力欄にその人が入り `Choose image…` に焦点)/ `avatar-settings` / `avatar-row-lit`(一覧の 1 行目にポインタを置いた形 = `Remove` が明るい側。置かない側が `avatar-settings`)/ `avatar-remove`(その行の長押しを走らせる)/ `avatar-combo`(候補の一覧を開く)。**往復は 2 回の実行で読む** — `--config-dir` を共有し、1 回目に `avatar-assign`、2 回目は**何も割り当てない `avatar-settings`** で顔が出ていれば `settings.toml` の `[[avatar]]` と `avatars/` から戻っている。**画像の実体は中身のハッシュ名**(`avatar` モジュール)なので、ファイル名は毎回同じ = 絵は再現する。
+
 **通信中(リング)は `--quit-ms` で狙う**: 撮影は `quit-ms - 800`、動詞は 1200ms の
 固定タイマで走る(`Main.qml` の `shotTimer` / `RepoPage.qml` の `autoActTimer`。どちらも
 ほぼ同じ瞬間から数え始める)ので、**その差が撮影窓**。既定の 10000 では通信はとうに
@@ -55,6 +57,8 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 `!` の同居**はこれで撮る。
 
 **ダイアログ・メニューの見た目は headless で撮れる**: `PG_SHOT_DIR` 指定時、`Main.qml` のオーバーレイミラー(`ShaderEffectSource`)が **overlay.png** を app.png と並べて保存する(offscreen で成立・ロック状態と無関係 — 2026-08-05 実測)。オーバーレイ自体の grabToImage は "no QML engine" で不可、ミラーが唯一の経路。アンロック中の `PrintWindow` も引き続き可(実 hover 等、実ウィンドウが要る検証のみ)。
+
+**overlay.png は閉じたポップアップを写したままにする** — `ShaderEffectSource` はソースアイテムが描くものを失うと**新しいフレームを渡さなくなり、最後のテクスチャが残る**。つまり「メニューが閉じたか」を overlay.png で判定できない(閉じた後の絵は閉じる前と同じ)。**閉じたことを見たいなら QML に言わせる** — `Popup.opened` を `AppBackend.report()` で出し、報告行で読む(2026-08-08 実測: 報告は `open=false`、同じ瞬間の overlay.png にはカードが写っていた)。この状態を絵にする時は **app.png だけを使う**(合成すると消えたはずのカードが甦る)。
 
 ## Windows での実行・デバッグの罠
 
