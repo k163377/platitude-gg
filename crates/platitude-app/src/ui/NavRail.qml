@@ -73,6 +73,16 @@ Rectangle {
              : kind === "stash" ? rail.stashesModel : rail.tagsModel
     }
 
+    /// How many rows a section has — and none at all once there is no
+    /// model to ask. Closing a tab takes the page's models down before
+    /// the rail that reads them (a delegate's children go first), so
+    /// every binding here outlives what it is bound to; without this the
+    /// last thing a closed tab does is throw on `total` of null.
+    function countOf(kind) {
+        const section = rail.modelOf(kind)
+        return section ? section.total : 0
+    }
+
     /// What a cell does when the pointer arrives on it, leaves it, or is
     /// clicked on it. The cells' own handlers call these and nothing else,
     /// so the smoke hooks (PG_AUTO_ACT=nav-peek / nav-peek-away /
@@ -86,7 +96,7 @@ Rectangle {
         // An empty section opens nothing, and takes away what the cell
         // before it opened: a list left standing beside a cell it does
         // not belong to would be pointing at the wrong section.
-        if (rail.modelOf(kind).total === 0)
+        if (rail.countOf(kind) === 0)
             rail.peekLeft(kind)
         else
             rail.peekRequested(kind, top)
@@ -95,7 +105,7 @@ Rectangle {
         rail.peekLeft(kind)
     }
     function tapAt(kind) {
-        if (rail.modelOf(kind).total > 0)
+        if (rail.countOf(kind) > 0)
             rail.peekToggled(kind, rail.topOf(kind))
     }
 
@@ -144,7 +154,7 @@ Rectangle {
             delegate: Rectangle {
                 id: cell
                 required property var modelData
-                readonly property var sectionModel: rail.modelOf(cell.modelData.kind)
+                readonly property int sectionCount: rail.countOf(cell.modelData.kind)
                 readonly property bool open: rail.openKind === cell.modelData.kind
                 // Tags are the one section that can be kept out of the
                 // graph, so its cell is the one that says whether they
@@ -156,7 +166,7 @@ Rectangle {
                 /// the mark has already said as much. The cell keeps its
                 /// place — what is countable is worth counting at zero —
                 /// and goes unavailable (規約 §無効).
-                readonly property bool empty: cell.sectionModel.total === 0
+                readonly property bool empty: cell.sectionCount === 0
 
                 width: Theme.railWidth
                 height: Theme.railWidth
@@ -208,7 +218,7 @@ Rectangle {
                     // a word is already carrying the section (NavHeader).
                     Label {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: cell.sectionModel.total
+                        text: cell.sectionCount
                         color: cell.empty ? Theme.textMuted : Theme.textSecondary
                         font.pixelSize: Theme.fontSm
                         lineHeightMode: Text.FixedHeight

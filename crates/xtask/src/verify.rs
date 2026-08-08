@@ -19,8 +19,11 @@ const GRACE_MS: u64 = 20_000;
 struct Options {
     verb: String,
     arg: String,
-    repo: Option<PathBuf>,
-    preset: String,
+    /// Repositories to open, in tab order. Both flags repeat, because a
+    /// gesture on the tab strip needs a strip to land on — one tab can
+    /// only show that a tab closed, never that the neighbour stayed.
+    repo: Vec<PathBuf>,
+    preset: Vec<String>,
     build: bool,
     select: bool,
     quit_ms: u64,
@@ -38,8 +41,8 @@ fn parse(args: &[String]) -> Result<Options, String> {
     let mut opts = Options {
         verb: String::new(),
         arg: String::new(),
-        repo: None,
-        preset: "basic".into(),
+        repo: Vec::new(),
+        preset: Vec::new(),
         build: true,
         select: false,
         quit_ms: 10_000,
@@ -51,8 +54,12 @@ fn parse(args: &[String]) -> Result<Options, String> {
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
-            "--repo" => opts.repo = Some(PathBuf::from(it.next().ok_or("--repo needs a path")?)),
-            "--preset" => opts.preset = it.next().ok_or("--preset needs a name")?.clone(),
+            "--repo" => opts
+                .repo
+                .push(PathBuf::from(it.next().ok_or("--repo needs a path")?)),
+            "--preset" => opts
+                .preset
+                .push(it.next().ok_or("--preset needs a name")?.clone()),
             "--no-build" => opts.build = false,
             "--select" => opts.select = true,
             "--quit-ms" => {
@@ -99,13 +106,24 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let root = workspace_root();
     let path = crate::qt::path_with_qt()?;
 
-    let repo = match &opts.repo {
-        Some(dir) => dir.clone(),
-        None => {
-            let repo = crate::demo::create(&opts.preset, None)?;
-            println!("demo repo ({}): {}", opts.preset, repo.display());
-            repo
+    // Named repositories win outright; otherwise one fresh demo repository
+    // per preset, in the order they were asked for — which is the order
+    // the tabs come up in.
+    let repos = if opts.repo.is_empty() {
+        let presets: Vec<String> = if opts.preset.is_empty() {
+            vec!["basic".into()]
+        } else {
+            opts.preset.clone()
+        };
+        let mut made = Vec::with_capacity(presets.len());
+        for preset in &presets {
+            let repo = crate::demo::create(preset, None)?;
+            println!("demo repo ({preset}): {}", repo.display());
+            made.push(repo);
         }
+        made
+    } else {
+        opts.repo.clone()
     };
 
     if opts.build {
@@ -158,16 +176,20 @@ pub fn run(args: &[String]) -> Result<(), String> {
     std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
     println!("config dir: {}", config_dir.display());
 
+    let opened = repos
+        .iter()
+        .map(|r| r.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
     println!(
         "running: {} (arg: {}) against {}",
         opts.verb,
         if opts.arg.is_empty() { "-" } else { &opts.arg },
         if opts.restore {
-            Path::new("the tabs it remembers")
+            "the tabs it remembers"
         } else {
-            repo.as_path()
+            &opened
         }
-        .display()
     );
     let mut cmd = Command::new(&exe);
     cmd.current_dir(&root)
@@ -194,8 +216,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if !opts.restore {
         // Naming a repository is what turns tab restoring off (Main.qml):
         // a run that is told what to open is not being asked what it
-        // remembers.
-        cmd.env("PG_AUTO_OPEN", &repo);
+        // remembers. More than one opens a tab each, in this order —
+        // joined rather than formatted, so a path git accepts but UTF-8
+        // does not still reaches the app whole.
+        let mut open = std::ffi::OsString::new();
+        for (position, repo) in repos.iter().enumerate() {
+            if position > 0 {
+                open.push(";");
+            }
+            open.push(repo);
+        }
+        cmd.env("PG_AUTO_OPEN", &open);
     }
     if opts.select {
         cmd.env("PG_AUTO_SELECT", "1");

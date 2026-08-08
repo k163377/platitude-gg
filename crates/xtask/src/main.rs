@@ -45,6 +45,7 @@ commands:
       options:
         --repo <dir>      run against this repository
         --preset <name>   or against a fresh demo repo (default: basic)
+                          Both repeat: one tab per repository, in order.
         --no-build        reuse the existing release binary
         --select          also set PG_AUTO_SELECT=1
         --quit-ms <n>     PG_AUTO_QUIT_MS (default 10000)

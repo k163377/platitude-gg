@@ -27,6 +27,40 @@ Rectangle {
         AppBackend.report("push_hold mode=" + pushButton.mode)
     }
 
+    /// What a press on a tab does, in one place: the left button picks
+    /// the tab up, the middle one closes it (デザイン規約 §タブの所作).
+    /// The real press and the smoke hook both come through here, so the
+    /// two buttons are told apart once rather than twice.
+    function pressTab(index, id, button) {
+        if (button === Qt.MiddleButton)
+            topBar.tabsModel.closeTab(id)
+        else
+            topBar.tabsModel.setCurrentIndex(index)
+    }
+
+    /// Automation: the middle click, landed on the tab at `index`
+    /// (`PG_AUTO_ACT=middle-close`).
+    function middleClickTab(index) {
+        const tab = tabRepeater.itemAt(index)
+        if (tab)
+            topBar.pressTab(index, tab.tab_id, Qt.MiddleButton)
+    }
+
+    /// Automation: the strip as it stands now. A closed tab leaves
+    /// nothing of itself behind, so which repositories are still open is
+    /// what says the gesture took the tab it was aimed at — the paths
+    /// rather than the titles, because every demo repository is called
+    /// the same thing and a strip of one name proves nothing.
+    function tabPaths() {
+        let paths = []
+        for (let i = 0; i < tabRepeater.count; i++) {
+            const tab = tabRepeater.itemAt(i)
+            if (tab)
+                paths.push(tab.repo_path)
+        }
+        return paths.join(",")
+    }
+
     /// The word both toolbar buttons are measured for. They sit side by
     /// side and change wording independently, so one box for the pair is
     /// what keeps either of them from shifting the other — and which of
@@ -156,6 +190,7 @@ Rectangle {
             Layout.fillHeight: true
             spacing: 0
             Repeater {
+                id: tabRepeater
                 model: topBar.tabsModel
                 Rectangle {
                     id: tabItem
@@ -167,11 +202,20 @@ Rectangle {
                     width: tabContent.implicitWidth + 2 * Theme.spaceSm
                     height: tabRow.height
                     color: current ? Theme.bgSelected : "transparent"
+                    // The middle button is taken here rather than on the
+                    // `✕`: the whole tab answers to it, so closing one
+                    // never asks the hand to find a 16px target — and the
+                    // `✕` sits on top of this area without accepting the
+                    // middle button, so a press that lands on the mark
+                    // falls through to the same gesture.
                     MouseArea {
                         id: tabMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        onClicked: topBar.tabsModel.setCurrentIndex(tabItem.index)
+                        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+                        onClicked: mouse => topBar.pressTab(tabItem.index,
+                                                            tabItem.tab_id,
+                                                            mouse.button)
                     }
                     Rectangle {
                         anchors.fill: parent
@@ -319,8 +363,12 @@ Rectangle {
             id: commandsToggle
             readonly property var log: topBar.curPage !== null
                                        ? topBar.curPage.pageCommands : null
+            // Asked of the log rather than of the page: closing a tab
+            // takes the page's models down while the page itself is
+            // still standing, so `curPage !== null` is true for a beat
+            // after there is nothing left to read off it.
             readonly property bool wrong:
-                topBar.curPage !== null
+                commandsToggle.log !== null
                 && (commandsToggle.log.failed
                     || topBar.curPage.pageTab.lastError !== "")
             readonly property bool open: topBar.curPage !== null

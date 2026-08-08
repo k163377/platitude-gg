@@ -441,6 +441,22 @@ ApplicationWindow {
             onIdentityEditRequested: root.identityEditing = true
             onSettingsRequested: settingsDialog.open()
         }
+        // Smoke hook (PG_AUTO_ACT=middle-close): the gesture is on the tab
+        // strip, which lives up here rather than on the page where most of
+        // the verbs sit. The argument names the tab to aim at (the first
+        // one by default); what is still open afterwards is the report,
+        // since a closed tab leaves nothing of itself in the picture.
+        Timer {
+            interval: 1200
+            running: AppBackend.autoAct === "middle-close"
+            onTriggered: {
+                topBar.middleClickTab(Number(AppBackend.autoActArg))
+                AppBackend.report("middle_close tabs=" + pageRepeater.count
+                                  + " active=" + tabsModel.currentIndex
+                                  + " open=" + topBar.tabPaths())
+            }
+        }
+
         // Smoke hook (PG_AUTO_ACT=force-push-hold): the overwrite is only
         // reachable by holding the toolbar's button, which is here rather
         // than on the page where the other verbs live. Waits out the page's
