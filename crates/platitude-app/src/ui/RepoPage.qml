@@ -581,6 +581,10 @@ Item {
     }
 
     function answerPublish() {
+        // The same slot a plain push fills: a first push git turns down is
+        // still this button's news, and the mark it wears afterwards is
+        // the same one (デザイン規約 §リモートへ送る).
+        page.pushSentBranch = workTree.branch
         repoTab.publishCurrent(page.publishRemote, page.publishBranch)
     }
 
