@@ -4,7 +4,7 @@
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 use crate::support::TestRepo;
-use platitude_core::branch::{self, CheckoutBlock, CheckoutOutcome, CheckoutTarget, ResetMode};
+use platitude_core::branch::{self, CheckoutOutcome, CheckoutTarget, ResetMode};
 use platitude_core::commit::{self, CommitOptions};
 use platitude_core::process::GitExecutor;
 use platitude_core::repo::RepoInfo;
@@ -431,7 +431,7 @@ async fn a_move_carries_uncommitted_work_along() {
     let mut repo = two_branches();
     repo.write_file("same.txt", "mine\n");
 
-    assert_eq!(move_to_other(&repo).await, CheckoutOutcome::Moved);
+    assert!(matches!(move_to_other(&repo).await, CheckoutOutcome::Moved));
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
     assert_eq!(
         std::fs::read_to_string(repo.path.join("same.txt")).unwrap(),
@@ -441,15 +441,19 @@ async fn a_move_carries_uncommitted_work_along() {
 }
 
 /// Work that *is* in the way stops the move dead — git changes nothing,
-/// which is what makes it safe to ask the question afterwards.
+/// which is what makes it safe to go round the long way afterwards.
 #[tokio::test]
 async fn a_move_is_refused_when_the_changes_are_in_the_way() {
     let mut repo = two_branches();
     repo.write_file("both.txt", "mine\n");
 
-    assert_eq!(
-        move_to_other(&repo).await,
-        CheckoutOutcome::Blocked(CheckoutBlock::LocalChanges)
+    let outcome = move_to_other(&repo).await;
+    let CheckoutOutcome::Blocked(refusal) = outcome else {
+        panic!("expected a refusal, got {outcome:?}");
+    };
+    assert!(
+        refusal.to_string().contains("would be overwritten"),
+        "git's own words came back: {refusal}"
     );
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
     assert_eq!(
@@ -459,17 +463,22 @@ async fn a_move_is_refused_when_the_changes_are_in_the_way() {
     );
 }
 
-/// Untracked files are their own refusal, and the one nothing carries
-/// past: git will not write over a file it never recorded, so the only
-/// offer worth making is to leave them behind.
+/// Untracked files are refused in words of their own, and the session has
+/// to recognise those too: they are the case a stash gets *most* of the
+/// way past, carrying every tracked change while the untracked file stays
+/// behind in the entry.
 #[tokio::test]
-async fn untracked_files_in_the_way_are_a_refusal_of_their_own() {
+async fn untracked_files_in_the_way_are_a_refusal_too() {
     let mut repo = two_branches();
     repo.write_file("theirs.txt", "mine, uncommitted\n");
 
-    assert_eq!(
-        move_to_other(&repo).await,
-        CheckoutOutcome::Blocked(CheckoutBlock::UntrackedFiles)
+    let outcome = move_to_other(&repo).await;
+    let CheckoutOutcome::Blocked(refusal) = outcome else {
+        panic!("expected a refusal, got {outcome:?}");
+    };
+    assert!(
+        refusal.to_string().contains("untracked working tree file"),
+        "{refusal}"
     );
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
 }
@@ -583,7 +592,7 @@ async fn a_diverged_local_branch_is_moved_onto_the_remote_one() {
     .await
     .expect("force-create");
 
-    assert_eq!(outcome, CheckoutOutcome::Moved);
+    assert!(matches!(outcome, CheckoutOutcome::Moved));
     assert_eq!(clone.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
     assert_eq!(
         clone.git(&["rev-parse", "HEAD"]),

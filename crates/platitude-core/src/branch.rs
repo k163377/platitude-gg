@@ -34,62 +34,41 @@ pub enum CheckoutTarget {
     ForceCreate { local: String, start: String },
 }
 
-/// Why git refused a move: uncommitted work stands in the way. git aborts
-/// before touching anything, so the repository is exactly as it was.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CheckoutBlock {
-    /// Tracked files are modified here and different there. Stashing them
-    /// over the move and restoring them on the other side still gets them
-    /// across (`RepoSession::checkout_merging`).
-    LocalChanges,
-    /// Untracked files sit where the target keeps tracked ones. Nothing
-    /// carries those across — git refuses to write over a file it never
-    /// recorded, and a stash cannot be restored onto one either — so the
-    /// only way through is to leave them behind.
-    UntrackedFiles,
-}
-
 /// What a move did.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum CheckoutOutcome {
     /// HEAD moved, carrying whatever uncommitted work did not stand in
     /// the way.
     Moved,
-    /// git refused; nothing changed.
-    Blocked(CheckoutBlock),
+    /// git refused because uncommitted work stands in the way, and
+    /// aborted before touching anything, so the repository is exactly as
+    /// it was. Carries the refusal itself: the caller goes round again
+    /// through a stash (`RepoSession::checkout`), and a second refusal —
+    /// the tree is empty by then, so something git cannot see past is
+    /// holding it — has to say why it gave up, in git's own words.
+    Blocked(GitError),
 }
 
-impl CheckoutBlock {
-    /// Reads git's refusal out of its own message.
-    ///
-    /// Classifying human-facing output is otherwise off limits here, and
-    /// this is the one place that earns the exception: git offers no
-    /// machine-readable answer to "why can I not move", and the two
-    /// answers lead to different offers — a merge carries tracked changes
-    /// across, while untracked ones can only be stashed out of the way.
-    /// Every invocation runs under `LC_ALL=C`, so the C-locale wording is
-    /// what arrives.
-    ///
-    /// Anything unrecognised is `None` and travels on as an ordinary
-    /// error: a reworded message costs the follow-up dialog, never
-    /// correctness.
-    fn from_message(text: &str) -> Option<Self> {
-        let text = text.to_ascii_lowercase();
-        // "The following untracked working tree files would be overwritten
-        // by checkout:", and the singular "Untracked working tree file 'x'
-        // would be overwritten by merge." a restore runs into.
-        if text.contains("untracked working tree file")
-            || text.contains("would lose untracked files")
-        {
-            return Some(CheckoutBlock::UntrackedFiles);
-        }
-        // "Your local changes to the following files would be overwritten
-        // by checkout:"
-        if text.contains("would be overwritten by checkout") {
-            return Some(CheckoutBlock::LocalChanges);
-        }
-        None
-    }
+/// Whether git's refusal is the everyday "your work is in the way" one,
+/// which a stash gets past.
+///
+/// Classifying human-facing output is otherwise off limits here, and this
+/// is the one place that earns the exception: git offers no
+/// machine-readable answer to "why can I not move", and the answer decides
+/// whether the move is worth a second attempt. Every invocation runs under
+/// `LC_ALL=C`, so the C-locale wording is what arrives.
+///
+/// Anything unrecognised is `false` and travels on as an ordinary error: a
+/// reworded message costs the retry, never correctness.
+fn work_is_in_the_way(text: &str) -> bool {
+    let text = text.to_ascii_lowercase();
+    // "The following untracked working tree files would be overwritten by
+    // checkout:", the singular "Untracked working tree file 'x' would be
+    // overwritten by merge." a restore runs into, and "Your local changes
+    // to the following files would be overwritten by checkout:".
+    text.contains("untracked working tree file")
+        || text.contains("would lose untracked files")
+        || text.contains("would be overwritten by checkout")
 }
 
 /// Moves HEAD to `target`, taking uncommitted work along where git will
@@ -99,8 +78,8 @@ impl CheckoutBlock {
 /// changes in, but it reports a conflicted result as a *success* with no
 /// merge left to abort, and refuses to run at all while anything is
 /// staged. Carrying changes over a collision is done by stashing across
-/// the move instead (`RepoSession::checkout_merging`), which keeps both
-/// the staged/unstaged split and a way back.
+/// the move instead (`RepoSession::checkout`), which keeps both the
+/// staged/unstaged split and a way back.
 pub async fn checkout(
     executor: &GitExecutor,
     workdir: &Path,
@@ -123,14 +102,19 @@ pub async fn checkout(
             command,
             code,
             stderr,
-        }) => match CheckoutBlock::from_message(&stderr) {
-            Some(block) => Ok(CheckoutOutcome::Blocked(block)),
-            None => Err(GitError::Failed {
+        }) => {
+            let refusal = GitError::Failed {
                 command,
                 code,
                 stderr,
-            }),
-        },
+            };
+            match &refusal {
+                GitError::Failed { stderr, .. } if work_is_in_the_way(stderr) => {
+                    Ok(CheckoutOutcome::Blocked(refusal))
+                }
+                _ => Err(refusal),
+            }
+        }
         Err(other) => Err(other),
     }
 }
@@ -278,33 +262,26 @@ mod tests {
 
     // The messages git actually prints under LC_ALL=C. The integration
     // tests prove the installed git still says them; these pin down which
-    // offer each one leads to.
+    // ones are worth a second attempt through a stash.
 
     #[test]
-    fn tracked_collisions_leave_room_for_a_merge() {
+    fn tracked_collisions_are_worth_another_go() {
         let stderr = "error: Your local changes to the following files would \
                       be overwritten by checkout:\n\ta.txt\nPlease commit your \
                       changes or stash them before you switch branches.\nAborting";
-        assert_eq!(
-            CheckoutBlock::from_message(stderr),
-            Some(CheckoutBlock::LocalChanges)
-        );
+        assert!(work_is_in_the_way(stderr));
     }
 
     #[test]
-    fn untracked_collisions_do_not() {
+    fn untracked_collisions_are_too() {
         let plain = "error: The following untracked working tree files would \
                      be overwritten by checkout:\n\tc.txt\nPlease move or remove \
                      them before you switch branches.\nAborting";
         let merging = "error: Untracked working tree file 'c.txt' would be \
                        overwritten by merge.";
-        assert_eq!(
-            CheckoutBlock::from_message(plain),
-            Some(CheckoutBlock::UntrackedFiles)
-        );
-        assert_eq!(
-            CheckoutBlock::from_message(merging),
-            Some(CheckoutBlock::UntrackedFiles),
+        assert!(work_is_in_the_way(plain));
+        assert!(
+            work_is_in_the_way(merging),
             "the merging path names one file at a time"
         );
     }
@@ -316,7 +293,7 @@ mod tests {
             "error: you need to resolve your current index first\na.txt: needs merge",
             "fatal: cannot continue with staged changes in the following files:\na.txt",
         ] {
-            assert_eq!(CheckoutBlock::from_message(stderr), None, "{stderr}");
+            assert!(!work_is_in_the_way(stderr), "{stderr}");
         }
     }
 }

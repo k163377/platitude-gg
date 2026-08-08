@@ -46,12 +46,6 @@ pub enum TabMsg {
         running: bool,
         error: String,
     },
-    /// A move was refused: uncommitted work stands in the way and nothing
-    /// happened. `kind` says which way out is on offer — "changes" can be
-    /// merged across, "untracked" can only be stashed aside.
-    MoveBlocked {
-        kind: String,
-    },
     /// A branch move would leave commits unreachable and was not made.
     MoveNeedsAsk {
         local: String,
@@ -455,16 +449,6 @@ impl SessionSink for BridgeSink {
             }),
             SessionEvent::MoveNeedsAsk { local, start } => {
                 self.feeds.tab.push(TabMsg::MoveNeedsAsk { local, start })
-            }
-            SessionEvent::MoveBlocked { block } => {
-                use platitude_core::branch::CheckoutBlock;
-                self.feeds.tab.push(TabMsg::MoveBlocked {
-                    kind: match block {
-                        CheckoutBlock::LocalChanges => "changes",
-                        CheckoutBlock::UntrackedFiles => "untracked",
-                    }
-                    .to_string(),
-                });
             }
             SessionEvent::AuthorLoaded { config } => {
                 self.feeds.tab.push(TabMsg::Author {

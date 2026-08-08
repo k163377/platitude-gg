@@ -883,48 +883,17 @@ async fn write_result(sink: &CaptureSink, op: &'static str) -> Option<String> {
     .await
 }
 
-/// "Leave my changes on this branch": the stash and the switch are one
-/// job, so the changes stay behind instead of coming along.
+/// A move that fails for a reason a stash cannot help with — a name git
+/// rejects — stops there: nothing is stashed, so the uncommitted work is
+/// still in the tree where its owner left it.
 #[tokio::test(flavor = "multi_thread")]
-async fn switching_can_stash_the_working_tree_first() {
+async fn a_move_that_fails_outright_stashes_nothing() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "0\n", "root");
-    repo.git(&["branch", "other"]);
-    repo.write_file("f.txt", "uncommitted\n");
-    repo.write_file("untracked.txt", "also mine\n");
-
-    let (sink, session) = opened(&repo).await;
-    session.checkout_stashing(platitude_core::branch::CheckoutTarget::Branch {
-        name: "other".into(),
-    });
-    assert_eq!(write_result(&sink, "checkout").await, None);
-
-    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
-    assert_eq!(
-        std::fs::read_to_string(repo.path.join("f.txt")).unwrap(),
-        "0\n",
-        "the change stayed behind in the stash"
-    );
-    assert!(!repo.path.join("untracked.txt").exists(), "untracked too");
-    assert_eq!(repo.git(&["stash", "list"]).lines().count(), 1);
-    session.close();
-}
-
-/// A switch that fails outright — a name git rejects, not a `Blocked`
-/// refusal — must not move HEAD, and must put the freshly made stash
-/// back: it was only the room the switch needed, and leaving it stashed
-/// makes the user's uncommitted work vanish from the editor.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_switch_that_fails_outright_puts_the_stashed_work_back() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "0\n", "root");
-    repo.git(&["branch", "other"]);
-    // Nothing to stash: `git stash push` on a clean tree exits non-zero
-    // only with --staged/paths, so make the failure the switch's own.
     repo.write_file("f.txt", "uncommitted\n");
 
     let (sink, session) = opened(&repo).await;
-    session.checkout_stashing(platitude_core::branch::CheckoutTarget::Branch {
+    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
         name: "no-such-branch".into(),
     });
     assert!(
@@ -935,17 +904,17 @@ async fn a_switch_that_fails_outright_puts_the_stashed_work_back() {
     assert_eq!(
         std::fs::read_to_string(repo.path.join("f.txt")).unwrap(),
         "uncommitted\n",
-        "the stashed work came back to the tree"
+        "the work never left the tree"
     );
     assert_eq!(repo.git(&["stash", "list"]), "", "no entry left behind");
     session.close();
 }
 
-/// A move refused after the stash already ran: the entry was only the room
-/// the switch needed, so it goes back rather than leaving the work parked
-/// on the branch it never left.
+/// A move still refused once the tree has been emptied: whatever is
+/// holding it is not something a stash gets past, so the work goes back
+/// where it was and git's refusal is what comes out.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_refused_move_puts_the_stashed_work_back() {
+async fn a_move_nothing_can_unblock_puts_the_stashed_work_back() {
     let mut repo = TestRepo::init();
     repo.commit_file("x.txt", "base\n", "root");
     repo.git(&["switch", "-c", "other"]);
@@ -958,16 +927,14 @@ async fn a_refused_move_puts_the_stashed_work_back() {
     repo.write_file("left.txt", "mine too\n");
 
     let (sink, session) = opened(&repo).await;
-    session.checkout_stashing(platitude_core::branch::CheckoutTarget::Branch {
+    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
-    assert_eq!(write_result(&sink, "checkout").await, None, "not an error");
-    sink.wait_for("MoveBlocked", |evs| {
-        evs.iter()
-            .any(|e| matches!(e, SessionEvent::MoveBlocked { .. }))
-            .then_some(())
-    })
-    .await;
+    let error = write_result(&sink, "checkout").await;
+    assert!(
+        error.is_some_and(|e| e.contains("would be overwritten")),
+        "git's first refusal is the one worth reporting"
+    );
 
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
     assert!(
@@ -992,59 +959,55 @@ fn colliding_branches() -> TestRepo {
     repo
 }
 
-/// The default move carries uncommitted work along, and asks only when git
-/// will not have it: a refusal is reported as its own event, not as an
-/// error, because nothing went wrong and nothing changed.
+/// The move git will not make itself is made the long way round instead,
+/// with nothing asked: stash, switch, put back — the sequence a person
+/// would type (デザイン規約 §未コミット変更がある状態での移動).
 #[tokio::test(flavor = "multi_thread")]
-async fn a_move_that_cannot_carry_changes_asks_instead_of_failing() {
-    let mut repo = colliding_branches();
-    repo.write_file("both.txt", "mine\n");
-
-    let (sink, session) = opened(&repo).await;
-    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
-        name: "other".into(),
-    });
-    assert_eq!(write_result(&sink, "checkout").await, None, "not an error");
-    sink.wait_for("MoveBlocked", |evs| {
-        evs.iter()
-            .any(|e| {
-                matches!(
-                    e,
-                    SessionEvent::MoveBlocked {
-                        block: platitude_core::branch::CheckoutBlock::LocalChanges
-                    }
-                )
-            })
-            .then_some(())
-    })
-    .await;
-
-    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
-    assert_eq!(
-        std::fs::read_to_string(repo.path.join("both.txt")).unwrap(),
-        "mine\n"
-    );
-    session.close();
-}
-
-/// "Bring my changes" when the two sides can be combined: the changes
-/// land merged on the other side, and — this is why the move goes through
-/// a stash rather than `switch --merge` — what was staged is still staged.
-#[tokio::test(flavor = "multi_thread")]
-async fn bringing_changes_along_keeps_what_was_staged_staged() {
+async fn a_move_git_refuses_goes_round_through_a_stash() {
     let mut repo = TestRepo::init();
     repo.commit_file("both.txt", "l1\nl2\nl3\nl4\nl5\n", "root");
     repo.git(&["switch", "-c", "other"]);
     repo.commit_file("both.txt", "l1-THEIRS\nl2\nl3\nl4\nl5\n", "other");
     repo.git(&["switch", "main"]);
-    // Collides with `other` (the file differs there), but on another line,
-    // so the restore merges it cleanly.
+    // Collides with `other` (the file differs there), so the plain switch
+    // is refused — but on another line, so the restore merges it cleanly.
+    repo.write_file("both.txt", "l1\nl2\nl3\nl4\nl5-MINE\n");
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
+        name: "other".into(),
+    });
+    assert_eq!(write_result(&sink, "checkout").await, None);
+
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("both.txt")).unwrap(),
+        "l1-THEIRS\nl2\nl3\nl4\nl5-MINE\n",
+        "both sides of the file survived"
+    );
+    assert!(
+        repo.git(&["stash", "list"]).is_empty(),
+        "a clean restore takes the stash with it"
+    );
+    session.close();
+}
+
+/// Going round through the stash is what keeps the staged/unstaged split
+/// — the reason the move is not `switch --merge`, which refuses outright
+/// while anything is staged.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_move_that_goes_round_keeps_what_was_staged_staged() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("both.txt", "l1\nl2\nl3\nl4\nl5\n", "root");
+    repo.git(&["switch", "-c", "other"]);
+    repo.commit_file("both.txt", "l1-THEIRS\nl2\nl3\nl4\nl5\n", "other");
+    repo.git(&["switch", "main"]);
     repo.write_file("both.txt", "l1\nl2\nl3\nl4\nl5-MINE\n");
     repo.write_file("staged.txt", "staged\n");
     repo.git(&["add", "--", "staged.txt"]);
 
     let (sink, session) = opened(&repo).await;
-    session.checkout_merging(platitude_core::branch::CheckoutTarget::Branch {
+    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
     assert_eq!(write_result(&sink, "checkout").await, None);
@@ -1060,16 +1023,13 @@ async fn bringing_changes_along_keeps_what_was_staged_staged() {
         "staged.txt",
         "what was staged is staged still"
     );
-    assert!(
-        repo.git(&["stash", "list"]).is_empty(),
-        "a clean restore takes the stash with it"
-    );
     session.close();
 }
 
 /// The same move when the sides cannot be combined: git leaves the markers
 /// and keeps the stash, and neither is a failure to report — the work is
 /// across, waiting to be settled, and still recoverable from the stash.
+/// This is the display a person typing the three commands would land on.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_conflicting_carry_leaves_the_stash_as_the_way_back() {
     let mut repo = colliding_branches();
@@ -1077,7 +1037,7 @@ async fn a_conflicting_carry_leaves_the_stash_as_the_way_back() {
     repo.git(&["add", "--", "both.txt"]);
 
     let (sink, session) = opened(&repo).await;
-    session.checkout_merging(platitude_core::branch::CheckoutTarget::Branch {
+    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
     assert_eq!(
@@ -1101,44 +1061,35 @@ async fn a_conflicting_carry_leaves_the_stash_as_the_way_back() {
     session.close();
 }
 
-/// "Bring my changes" raced against a tree that was cleaned in between:
-/// `git stash push` saves nothing while exiting 0, so there is nothing of
-/// ours to restore — and the entry somebody parked earlier must not be
-/// popped in its place.
+/// Somebody else's entry sits at `stash@{0}` when the move begins. The one
+/// this makes goes on top and is the only one it may put back — pop the
+/// wrong one and work nobody asked about lands in the tree.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_carry_with_nothing_to_carry_leaves_other_stashes_alone() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("seed.txt", "seed\n", "root");
-    repo.git(&["switch", "-c", "other"]);
-    repo.commit_file("theirs.txt", "only over there\n", "other");
-    repo.git(&["switch", "main"]);
-    // Somebody's earlier work, sitting at stash@{0}.
-    repo.write_file("seed.txt", "parked work\n");
+async fn a_carry_leaves_other_stashes_alone() {
+    let mut repo = colliding_branches();
+    // Somebody's earlier work, parked before any of this.
+    repo.write_file("both.txt", "parked work\n");
     repo.git(&["stash", "push", "-m", "parked"]);
+    repo.write_file("both.txt", "mine\n");
 
     let (sink, session) = opened(&repo).await;
-    session.checkout_merging(platitude_core::branch::CheckoutTarget::Branch {
+    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
     assert_eq!(write_result(&sink, "checkout").await, None);
 
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
-    assert_eq!(
-        repo.git(&["stash", "list"]).lines().count(),
-        1,
-        "the parked entry was not ours to pop"
-    );
-    assert_eq!(
-        std::fs::read_to_string(repo.path.join("seed.txt")).unwrap(),
-        "seed\n",
-        "the parked work stays parked"
+    let list = repo.git(&["stash", "list"]);
+    assert!(
+        list.contains("parked"),
+        "the parked entry was not ours to pop: {list}"
     );
     session.close();
 }
 
-/// A restore that really fails still reports: the untracked file the
-/// target tracks has nowhere to go, and saying nothing would leave the
-/// changes sitting in a stash the user never asked for.
+/// A restore that really cannot land still reports. The untracked file the
+/// target tracks has nowhere to go — but every tracked change travels
+/// anyway, and the entry stays as the way back to the one that did not.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_carry_that_cannot_restore_reports_gits_message() {
     let mut repo = TestRepo::init();
@@ -1147,9 +1098,10 @@ async fn a_carry_that_cannot_restore_reports_gits_message() {
     repo.commit_file("theirs.txt", "only over there\n", "other");
     repo.git(&["switch", "main"]);
     repo.write_file("theirs.txt", "mine, uncommitted\n");
+    repo.write_file("seed.txt", "seed\nand a tracked edit\n");
 
     let (sink, session) = opened(&repo).await;
-    session.checkout_merging(platitude_core::branch::CheckoutTarget::Branch {
+    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
     let error = write_result(&sink, "checkout").await;
@@ -1157,7 +1109,84 @@ async fn a_carry_that_cannot_restore_reports_gits_message() {
         error.is_some_and(|e| e.contains("untracked")),
         "git's own wording goes through"
     );
-    assert_eq!(repo.git(&["stash", "list"]).lines().count(), 1);
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("seed.txt")).unwrap(),
+        "seed\nand a tracked edit\n",
+        "the tracked edit came across regardless"
+    );
+    assert_eq!(
+        repo.git(&["stash", "list"]).lines().count(),
+        1,
+        "the entry is the way back to the file that stayed behind"
+    );
+    session.close();
+}
+
+/// A pop whose restore conflicts lands exactly where an apply would have:
+/// git keeps the entry, and the conflict is the outcome that was asked
+/// for, not a failure to report (デザイン規約 §stash から戻す).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_conflicting_pop_keeps_the_entry_and_is_not_a_failure() {
+    let mut repo = colliding_branches();
+    repo.write_file("both.txt", "mine\n");
+    repo.git(&["stash", "push", "-u"]);
+    repo.git(&["switch", "other"]);
+
+    let (sink, session) = opened(&repo).await;
+    session.stash_pop("stash@{0}".into());
+    assert_eq!(
+        write_result(&sink, "stash").await,
+        None,
+        "the restore landed; it just needs settling"
+    );
+
+    let both = std::fs::read_to_string(repo.path.join("both.txt")).unwrap();
+    assert!(both.contains("<<<<<<<") && both.contains("mine"), "{both}");
+    assert!(
+        repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
+        "left unmerged to be settled"
+    );
+    assert_eq!(
+        repo.git(&["stash", "list"]).lines().count(),
+        1,
+        "kept, the way an apply would have kept it"
+    );
+    session.close();
+}
+
+/// The same reading must not swallow a pop that did nothing. git refuses
+/// to restore onto an index that already has unmerged paths, and the
+/// conflicts standing there afterwards are the old ones — so the tree
+/// alone cannot judge it, and what it was before decides.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pop_refused_by_a_conflicted_tree_is_still_a_failure() {
+    let mut repo = colliding_branches();
+    repo.git(&["switch", "-c", "mine", "main"]);
+    repo.commit_file("both.txt", "ours\n", "mine");
+    // An entry that has nothing to do with the conflict below.
+    repo.write_file("spare.txt", "parked\n");
+    repo.git(&["stash", "push", "-u"]);
+    // A conflicting merge exits 1, which is the point of it.
+    repo.git_expect_failure(&["merge", "other"]);
+    assert!(
+        repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
+        "the merge stopped on a conflict"
+    );
+
+    let (sink, session) = opened(&repo).await;
+    session.stash_pop("stash@{0}".into());
+    let error = write_result(&sink, "stash").await;
+    assert!(
+        error.is_some(),
+        "the refusal is not read as a landed conflict"
+    );
+    assert_eq!(
+        repo.git(&["stash", "list"]).lines().count(),
+        1,
+        "nothing was restored, so nothing was dropped"
+    );
+    assert!(!repo.path.join("spare.txt").exists(), "still in the entry");
     session.close();
 }
 

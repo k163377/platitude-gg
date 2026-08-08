@@ -108,11 +108,6 @@ pub struct RepoTab {
     last_write_op: String,
     last_write_error: String,
     write_seq: i32,
-    /// The last move git refused for want of a clean tree ("changes" /
-    /// "untracked"), with a counter of its own: the answer is a dialog, and
-    /// a second refusal of the same kind still has to raise it again.
-    move_block: String,
-    move_block_seq: i32,
     /// A branch move that would leave commits unreachable, waiting to be
     /// asked about. Nothing has happened yet.
     move_ask_local: String,
@@ -183,8 +178,6 @@ impl Default for RepoTab {
             last_write_op: String::new(),
             last_write_error: String::new(),
             write_seq: 0,
-            move_block: String::new(),
-            move_block_seq: 0,
             move_ask_local: String::new(),
             move_ask_start: String::new(),
             move_ask_seq: 0,
@@ -258,15 +251,10 @@ impl RepoTab {
         }
     }
 
-    /// Moves HEAD, deciding what becomes of uncommitted work: "carry" lets
-    /// git take it along (and report back when it cannot), "stash" leaves
-    /// it where it is, "merge" brings it across merged.
-    fn move_head(&self, target: platitude_core::branch::CheckoutTarget, carry: &str) {
-        self.with_session(|s| match carry {
-            "stash" => s.checkout_stashing(target.clone()),
-            "merge" => s.checkout_merging(target.clone()),
-            _ => s.checkout(target.clone()),
-        });
+    /// Moves HEAD, taking uncommitted work along — through a stash when
+    /// git will not carry it itself, which needs nothing asked here.
+    fn move_head(&self, target: platitude_core::branch::CheckoutTarget) {
+        self.with_session(|s| s.checkout(target.clone()));
     }
 }
 
@@ -351,8 +339,6 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!("writeSeq", Member = write_seq, Notify = changed);
-    qproperty!("moveBlock", Member = move_block, Notify = changed);
-    qproperty!("moveBlockSeq", Member = move_block_seq, Notify = changed);
     qproperty!("moveAskLocal", Member = move_ask_local, Notify = changed);
     qproperty!("moveAskStart", Member = move_ask_start, Notify = changed);
     qproperty!("moveAskSeq", Member = move_ask_seq, Notify = changed);
@@ -537,10 +523,6 @@ impl RepoTab {
                 TabMsg::InHistory { oid, in_history } => {
                     self.history_oid = oid;
                     self.history_in = in_history;
-                }
-                TabMsg::MoveBlocked { kind } => {
-                    self.move_block = kind;
-                    self.move_block_seq += 1;
                 }
                 TabMsg::MoveNeedsAsk { local, start } => {
                     self.move_ask_local = local;
@@ -807,22 +789,20 @@ impl RepoTab {
         self.with_session(|s| s.load_head_commit());
     }
 
-    // Every move carries the same `carry` word through: "carry" first, and
-    // then "stash" or "merge" if git says the changes are in the way. The
-    // stash and the merge each have to be one job, so a failed first half
+    // Every move is one job, whichever way it gets there: a failed half
     // cannot let the switch happen regardless.
 
     #[qslot]
-    fn checkout_branch(&mut self, name: String, carry: String) {
+    fn checkout_branch(&mut self, name: String) {
         let target = platitude_core::branch::CheckoutTarget::Branch { name };
-        self.move_head(target, &carry);
+        self.move_head(target);
     }
 
     /// Creates a local branch tracking a remote-tracking ref and switches.
     #[qslot]
-    fn checkout_remote(&mut self, remote_ref: String, local: String, carry: String) {
+    fn checkout_remote(&mut self, remote_ref: String, local: String) {
         let target = platitude_core::branch::CheckoutTarget::Track { remote_ref, local };
-        self.move_head(target, &carry);
+        self.move_head(target);
     }
 
     /// Moves an existing local branch to `start` and lands on it, but only
@@ -837,9 +817,9 @@ impl RepoTab {
     /// Moves an existing local branch to `start` and lands on it. What the
     /// branch alone had is left unreferenced, so the UI asks first.
     #[qslot]
-    fn checkout_force_create(&mut self, local: String, start: String, carry: String) {
+    fn checkout_force_create(&mut self, local: String, start: String) {
         let target = platitude_core::branch::CheckoutTarget::ForceCreate { local, start };
-        self.move_head(target, &carry);
+        self.move_head(target);
     }
 
     /// Moves the current branch to `rev`. `mode` says what becomes of the

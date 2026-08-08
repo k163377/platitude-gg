@@ -357,12 +357,6 @@ pub enum SessionEvent {
         op: &'static str,
         error: GitError,
     },
-    /// A move was refused because uncommitted work stands in the way.
-    /// Nothing changed; the UI asks how to get past it (デザイン規約
-    /// §未コミット変更がある状態での移動).
-    MoveBlocked {
-        block: branch::CheckoutBlock,
-    },
     /// A branch move would leave commits unreachable, so it was not made.
     /// Nothing changed; the UI asks before running it for real
     /// ([`RepoSession::checkout`] with [`CheckoutTarget::ForceCreate`]).
@@ -1725,24 +1719,22 @@ impl RepoSession {
         );
     }
 
-    /// Moves HEAD, taking uncommitted work along as far as git will carry
-    /// it (デザイン規約 §未コミット変更がある状態での移動).
+    /// Moves HEAD, taking uncommitted work along (デザイン規約
+    /// §未コミット変更がある状態での移動).
     ///
-    /// The everyday case needs no question asked: git carries the changes
-    /// wherever they do not stand in the way. Where they do, it refuses
-    /// and touches nothing — that refusal becomes
-    /// [`SessionEvent::MoveBlocked`], and the answer comes back as
-    /// [`RepoSession::checkout_stashing`] or
-    /// [`RepoSession::checkout_merging`].
+    /// The everyday case is one command: git carries the changes wherever
+    /// they do not stand in the way. Where they do it refuses and touches
+    /// nothing, and this goes round the long way instead — stash, move,
+    /// put back — which is the sequence a person would type. Nothing is
+    /// asked first: the refusal itself proved the repository is untouched,
+    /// and every outcome of the long way is one the working tree can show
+    /// and the stash can undo.
     pub fn checkout(self: &Arc<Self>, target: CheckoutTarget) {
-        let session = Arc::clone(self);
         self.write(
             "checkout",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
-                session.report_move(outcome);
-                Ok(())
+                move_carrying(&exec, &repo, &target, &cancel).await
             },
         );
     }
@@ -1771,127 +1763,9 @@ impl RepoSession {
                     return Ok(());
                 }
                 let target = CheckoutTarget::ForceCreate { local, start };
-                let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
-                session.report_move(outcome);
-                Ok(())
+                move_carrying(&exec, &repo, &target, &cancel).await
             },
         );
-    }
-
-    /// Stashes the working tree, then moves HEAD — "leave my changes here".
-    ///
-    /// One job rather than two queued ones. If the stash fails there is
-    /// nothing left behind, and switching regardless would carry the
-    /// changes to the other branch — the opposite of what was asked.
-    ///
-    /// The stash keeps git's own message ("WIP on `<branch>`: …"), which
-    /// already names where the changes came from.
-    ///
-    /// A move refused after all leaves neither half standing: the entry was
-    /// only ever the room the switch needed, so it goes back rather than
-    /// parking the work on the branch it never left.
-    pub fn checkout_stashing(self: &Arc<Self>, target: CheckoutTarget) {
-        let session = Arc::clone(self);
-        self.write(
-            "checkout",
-            AfterWrite::Graph,
-            move |exec, repo, cancel| async move {
-                let stashed = stash_everything(&exec, &repo, &cancel).await?;
-                let outcome = match branch::checkout(&exec, &repo.workdir, &target, &cancel).await {
-                    Ok(outcome) => outcome,
-                    Err(error) => {
-                        if stashed {
-                            pop_back_after_failed_switch(&exec, &repo, &cancel).await;
-                        }
-                        return Err(error);
-                    }
-                };
-                if stashed && matches!(outcome, branch::CheckoutOutcome::Blocked(_)) {
-                    stash::pop(&exec, &repo.workdir, STASH_TOP, &cancel).await?;
-                }
-                session.report_move(outcome);
-                Ok(())
-            },
-        );
-    }
-
-    /// Carries the working tree across the move — "bring my changes and
-    /// let me sort out the overlap".
-    ///
-    /// Stash, move, put back: the restore is a merge, so the changes land
-    /// on top of what the target has and only the parts git cannot combine
-    /// need settling. Going through the stash rather than `switch --merge`
-    /// buys two things that flag cannot give — **the staged/unstaged split
-    /// survives** (`--index`), and a conflict **keeps the stash entry**, so
-    /// the work still exists somewhere other than a marked-up file.
-    ///
-    /// A conflicting restore exits non-zero while having done exactly what
-    /// was asked, so the exit code alone cannot judge it: the working tree
-    /// decides. Unmerged paths mean the merge landed and is waiting to be
-    /// settled; a clean tree means the restore did nothing, and then the
-    /// split has to be given up on (see below) or git's message goes
-    /// through.
-    pub fn checkout_merging(self: &Arc<Self>, target: CheckoutTarget) {
-        let session = Arc::clone(self);
-        self.write(
-            "checkout",
-            AfterWrite::Graph,
-            move |exec, repo, cancel| async move {
-                // With nothing of ours stashed there is nothing to bring
-                // across, and the move alone is the whole job.
-                if !stash_everything(&exec, &repo, &cancel).await? {
-                    let outcome = branch::checkout(&exec, &repo.workdir, &target, &cancel).await?;
-                    session.report_move(outcome);
-                    return Ok(());
-                }
-                let outcome = match branch::checkout(&exec, &repo.workdir, &target, &cancel).await {
-                    Ok(outcome) => outcome,
-                    Err(error) => {
-                        pop_back_after_failed_switch(&exec, &repo, &cancel).await;
-                        return Err(error);
-                    }
-                };
-                if let branch::CheckoutOutcome::Blocked(_) = outcome {
-                    // Nothing should stand in the way of a tree that was
-                    // just emptied; put the work back rather than leave it
-                    // stashed behind a refusal.
-                    stash::pop(&exec, &repo.workdir, STASH_TOP, &cancel).await?;
-                    session.report_move(outcome);
-                    return Ok(());
-                }
-
-                let kept_index =
-                    stash::pop_with_index(&exec, &repo.workdir, STASH_TOP, &cancel).await;
-                if kept_index.is_ok() || conflicts_now(&exec, &repo, &cancel).await? {
-                    return Ok(());
-                }
-                // git refuses `--index` outright when the staged half is
-                // what collides ("conflicts in index. Try without
-                // --index.") and leaves everything where it was. Its own
-                // advice is the fallback: restore without the index, which
-                // brings the changes across merged and gives up only on
-                // the staged/unstaged split.
-                match stash::pop(&exec, &repo.workdir, STASH_TOP, &cancel).await {
-                    Ok(()) => Ok(()),
-                    Err(error) => {
-                        if conflicts_now(&exec, &repo, &cancel).await? {
-                            Ok(())
-                        } else {
-                            Err(error)
-                        }
-                    }
-                }
-            },
-        );
-    }
-
-    /// Passes a refused move on to the UI. A move that happened says
-    /// nothing extra: the refresh that follows every write shows it.
-    fn report_move(&self, outcome: branch::CheckoutOutcome) {
-        if let branch::CheckoutOutcome::Blocked(block) = outcome {
-            tracing::info!(?block, "move refused: uncommitted work in the way");
-            self.sink.event(SessionEvent::MoveBlocked { block });
-        }
     }
 
     /// Moves the current branch to `rev`, carrying the index and the
@@ -2004,12 +1878,34 @@ impl RepoSession {
     }
 
     /// `git stash pop <selector>` (drops the stash on success).
+    ///
+    /// A restore that conflicts is not a failure: the work is across,
+    /// waiting to be settled, and git keeps the entry in that case — so a
+    /// conflicting pop lands exactly where an apply would have, and the
+    /// way back is still in the list (デザイン規約 §変更を退避する).
+    /// The exit code cannot tell that apart from a refusal that did
+    /// nothing, so the working tree decides (`conflicts_now`).
+    ///
+    /// Only when the tree was settled to begin with, though: git will not
+    /// restore onto an index that already has unmerged paths — it refuses
+    /// outright and changes nothing (measured) — and the conflicts still
+    /// standing there afterwards are the old ones, not proof of anything.
     pub fn stash_pop(self: &Arc<Self>, selector: String) {
         self.write(
             "stash",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                stash::pop(&exec, &repo.workdir, &selector, &cancel).await
+                let settled_first = !conflicts_now(&exec, &repo, &cancel).await?;
+                match stash::pop(&exec, &repo.workdir, &selector, &cancel).await {
+                    Ok(()) => Ok(()),
+                    Err(error) => {
+                        if settled_first && conflicts_now(&exec, &repo, &cancel).await? {
+                            Ok(())
+                        } else {
+                            Err(error)
+                        }
+                    }
+                }
             },
         );
     }
@@ -3177,6 +3073,95 @@ struct LogTotals {
 /// The entry a [`stash_everything`] just made, for the moves that put it
 /// back.
 const STASH_TOP: &str = "stash@{0}";
+
+/// Moves HEAD to `target`, going round through a stash when the working
+/// tree is in the way (デザイン規約 §未コミット変更がある状態での移動).
+async fn move_carrying(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    target: &CheckoutTarget,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    match branch::checkout(executor, &repo.workdir, target, cancel).await? {
+        branch::CheckoutOutcome::Moved => Ok(()),
+        branch::CheckoutOutcome::Blocked(refusal) => {
+            tracing::info!(%refusal, "move refused: going round through a stash");
+            carry_across(executor, repo, target, refusal, cancel).await
+        }
+    }
+}
+
+/// Stash, move, put back — what a person would type when git will not
+/// carry the work itself. `refusal` is what git said the first time, kept
+/// for the dead ends that have nothing better to report.
+///
+/// The restore is a merge, so the changes land on top of what the target
+/// has and only the parts git cannot combine need settling. Going through
+/// a stash rather than `switch --merge` buys two things that flag cannot
+/// give — **the staged/unstaged split survives** (`--index`), and a
+/// conflict **keeps the stash entry**, so the work still exists somewhere
+/// other than a marked-up file.
+///
+/// A conflicting restore exits non-zero while having done exactly what was
+/// asked, so the exit code alone cannot judge it: the working tree decides.
+/// Unmerged paths mean the merge landed and is waiting to be settled; a
+/// clean tree means the restore did nothing, and then the split has to be
+/// given up on (see below) or git's message goes through. Nothing was
+/// unmerged when this began — the stash emptied the tree — so what is
+/// found afterwards can only have come from the restore.
+async fn carry_across(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    target: &CheckoutTarget,
+    refusal: GitError,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    if !stash_everything(executor, repo, cancel).await? {
+        // The tree was cleaned between the refusal and now, so there is
+        // nothing of ours to carry and nothing of anybody else's to
+        // touch: the move that was refused goes through as it stands.
+        return match branch::checkout(executor, &repo.workdir, target, cancel).await? {
+            branch::CheckoutOutcome::Moved => Ok(()),
+            branch::CheckoutOutcome::Blocked(again) => Err(again),
+        };
+    }
+    let outcome = match branch::checkout(executor, &repo.workdir, target, cancel).await {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            pop_back_after_failed_switch(executor, repo, cancel).await;
+            return Err(error);
+        }
+    };
+    if let branch::CheckoutOutcome::Blocked(_) = outcome {
+        // Nothing should stand in the way of a tree that was just
+        // emptied, so whatever is holding this one is not something a
+        // stash gets past (a `--skip-worktree` file, say). Put the work
+        // back and let git's first refusal say why — a failure to put it
+        // back is the more urgent news and goes through instead.
+        stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await?;
+        return Err(refusal);
+    }
+
+    let kept_index = stash::pop_with_index(executor, &repo.workdir, STASH_TOP, cancel).await;
+    if kept_index.is_ok() || conflicts_now(executor, repo, cancel).await? {
+        return Ok(());
+    }
+    // git refuses `--index` outright when the staged half is what collides
+    // ("conflicts in index. Try without --index.") and leaves everything
+    // where it was. Its own advice is the fallback: restore without the
+    // index, which brings the changes across merged and gives up only on
+    // the staged/unstaged split.
+    match stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            if conflicts_now(executor, repo, cancel).await? {
+                Ok(())
+            } else {
+                Err(error)
+            }
+        }
+    }
+}
 
 /// Stashes the whole working tree out of a move's way, and answers whether
 /// an entry of ours was really made.
