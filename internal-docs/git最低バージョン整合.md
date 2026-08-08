@@ -11,6 +11,8 @@
 
 **発行する全コマンド・全オプションが 2.43 に存在する。** 個別マニュアルに無いのは `cherry-pick --no-edit` 1 件のみで、gitcli(7) の「long option は `--no-` で否定できる」一般規定(§Negating options)+ 実測(CLAUDE.md の実測注記)でカバーされる。最も新しい依存は `rebase --update-refs`(2.38 — 要望.md が明示的に前提化)。
 
+**マニュアル照合が拾えない例外が 1 つある — `reset` は `--end-of-options` を受け付けない。** gitcli(7) の一般規定に載っていても、`git reset` は 2.43 で位置によらず `fatal: option '--end-of-options' must come before non-option arguments`(exit 128)を返す。アプリが発行する動詞のうちこれだけで、`branch` / `switch` / `tag` / `remote add` / `remote set-url` / `rev-parse --verify --quiet` / `log -1 --format=` / `stash list` は全て通る(2.43 実測)。名前を渡したい経路が将来できたら、`rev-parse --end-of-options` で解決してから object id を渡す。**この差は開発機の git(新しい版は受け付ける)では出ない** — 最低バージョンを積んだ Linux コンテナ(`cargo xtask linux`)が唯一の検出点。
+
 **同梱物にもバージョン差がある。** git が持つのはマージツールの**起動レシピだけ**(`$(git --exec-path)/mergetools/` の数十行のシェル。ツール本体は利用者が入れる)で、その顔ぶれが版で変わる — **2.43.0 は 23 個で `vscode` を含まない**(追加は 2.47.0 = `6b77283f mergetools: vscode: new tool`)。`smerge` は 2.22 から在る。**アプリはツール名を利用者から受け取るだけで候補を持たない**ので現状これに依存しないが、将来「既定を提案する」を作るなら名前を書くだけでは 2.43 で外れる(`mergetool.vscode.cmd` を自前で書く形になる)。なお Git for Windows は vim を同梱するため `vimdiff` 系だけは常に「利用可能」と表示されるが、`CREATE_NO_WINDOW` のため**このアプリからは起動できない**。
 
 ## 毎回付くもの(process.rs)
@@ -53,7 +55,7 @@
 | `-c` | `mergetool.writeToTemp=true`(mergetool 実行時) | 2.43.0 ✓(`keepBackup` / `guiDefault` / `hideResolved` も同じ config 文書に在る) |
 | `push` | `--porcelain` / `--set-upstream` / `--force-with-lease=<ref>:<oid>` / `--force` / `--delete` | 2.43.0 ✓(値付き lease 形式まで記載確認) |
 | `rebase` | `--interactive` / `--onto` / `--root` / `--autostash` / `--update-refs` / `--continue` `--abort` `--skip` `--quit` | 2.43.0 ✓(`--update-refs` 2.38 = **最も新しい依存**) |
-| `reset` | `--quiet` / `--soft` `--mixed` `--hard` / `--end-of-options` | 古参 |
+| `reset` | `--quiet` / `--soft` `--mixed` `--hard` | 古参。**`--end-of-options` は付けられない**(下記) |
 | `restore` | `--staged` / `--worktree`(併用) | 2.43.0 ✓(2.23 導入。2.43 時点 EXPERIMENTAL 表記 — 存在と記載は確認済) |
 | `rev-list` | `--count` / `--merges` / `--not` / `--remotes` | 古参(1.7.2) |
 | `rev-parse` | `--verify` / `-q` / `--git-path` / `--show-toplevel` / `--absolute-git-dir` / `--show-object-format` / `--end-of-options` / `<rev>^{commit}` | 2.43.0 ✓ |

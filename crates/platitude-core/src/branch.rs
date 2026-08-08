@@ -155,7 +155,15 @@ impl ResetMode {
 ///
 /// `rev` is a commit, never a path, so it goes *before* any `--`: to
 /// `git reset` a `--` opens the pathspec form, which takes no mode flag
-/// at all. `--end-of-options` does the guarding a `--` does elsewhere.
+/// at all. It carries no `--end-of-options` either, and that one is not
+/// an oversight: the minimum git refuses the option here in *every*
+/// position ("must come before non-option arguments", exit 128), alone
+/// among the verbs this crate issues — branch, switch, tag, remote,
+/// rev-parse, log and stash all take it (実測 on 2.43, which is the
+/// floor 要望.md sets). Nothing is lost, because what reaches this is an
+/// object id off a graph row and an object id cannot read as an option.
+/// A caller that ever wants to pass a *name* has to resolve it first
+/// with `rev-parse --end-of-options`, since reset itself cannot say it.
 ///
 /// Not a way out of an operation in progress, and the UI does not offer
 /// it as one: mid-merge, `Soft` refuses outright ("Cannot do a soft reset
@@ -168,13 +176,9 @@ pub async fn reset(
     mode: ResetMode,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let cmd = GitCommand::new().cwd(workdir).args([
-        "reset",
-        "--quiet",
-        mode.flag(),
-        "--end-of-options",
-        rev,
-    ]);
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["reset", "--quiet", mode.flag(), rev]);
     executor.run(cmd, cancel).await.map(drop)
 }
 
