@@ -55,19 +55,21 @@ pub fn set_border_color(border: u32, frame: u32) {
     let _ = (border, frame);
 }
 
-/// Takes the window's frame over: the client area becomes the whole
-/// window, and the edges answer for themselves.
-///
-/// The band already reaches the top, but a strip of frame stayed between
-/// it and the window's border, painted in the system's colour and beyond
-/// the reach of every attribute that names a colour (measured). The only
-/// way past it is to tell Windows the window has no non-client area at
-/// all — and once told, Windows stops hit-testing the resize edges too,
-/// so this hands those answers back itself.
-pub fn own_frame() {
-    #[cfg(windows)]
-    win32::own_frame();
-}
+// Taking the frame over — answering `WM_NCCALCSIZE` with "the client is
+// the whole window" — does remove the one strip of system-coloured frame
+// that no attribute reaches, and the resize edges can be answered from a
+// subclass in its place (both measured, and both worked).
+//
+// It is not here because Qt cannot be told. The subclass sits in front of
+// Qt's own window procedure, so Qt never sees the message and keeps the
+// frame margins it cached at creation: the client grew and the scene did
+// not, leaving the strip it gained unpainted (measured: frame and client
+// both 1450x908 with the scene still drawing 1434x900, black down the
+// right-hand edge and along the bottom). Nudging the size, asking for the
+// frame to be recalculated and letting the message through first were all
+// tried; none of them make Qt re-measure. What would is a way to set the
+// window's custom margins, which the bridge does not expose
+// (P3-確認事項 §ウィンドウ chrome).
 
 /// Opens the window menu — move, size, minimise, maximise, close — where
 /// the pointer is. What a title bar answers a right-click with, and this
@@ -120,32 +122,6 @@ mod win32 {
     const SWP_NOMOVE: u32 = 0x0002;
     const SWP_NOZORDER: u32 = 0x0004;
     const SWP_FRAMECHANGED: u32 = 0x0020;
-
-    /// Frame messages and the hit-test answers this window gives for
-    /// itself once it has no non-client area left (winuser.h).
-    const WM_NCCALCSIZE: u32 = 0x0083;
-    const WM_NCHITTEST: u32 = 0x0084;
-    const HTCLIENT: isize = 1;
-    const HTLEFT: isize = 10;
-    const HTRIGHT: isize = 11;
-    const HTTOP: isize = 12;
-    const HTTOPLEFT: isize = 13;
-    const HTTOPRIGHT: isize = 14;
-    const HTBOTTOM: isize = 15;
-    const HTBOTTOMLEFT: isize = 16;
-    const HTBOTTOMRIGHT: isize = 17;
-
-    /// `SM_CXSIZEFRAME` / `SM_CXPADDEDBORDER`: together, how wide the grip
-    /// on a window's edge is (winuser.h).
-    const SM_CXSIZEFRAME: i32 = 32;
-    const SM_CXPADDEDBORDER: i32 = 92;
-
-    /// Which subclass this is, so the same window is never wrapped twice.
-    const SUBCLASS_ID: usize = 1;
-
-    /// The dpi every system metric is quoted at (windef.h's
-    /// `USER_DEFAULT_SCREEN_DPI`), for when the window will not say.
-    const DPI_96: u32 = 96;
 
     /// `RECT` (windef.h).
     #[repr(C)]
@@ -252,34 +228,9 @@ mod win32 {
         fn GetCurrentThreadId() -> u32;
     }
 
-    /// `SUBCLASSPROC` (commctrl.h).
-    type SubclassProc = extern "system" fn(*mut c_void, u32, usize, isize, usize, usize) -> isize;
-
-    // SAFETY: as above. The subclass pair is the documented way to sit in
-    // front of a window's procedure without owning it.
-    #[link(name = "comctl32")]
-    unsafe extern "system" {
-        fn SetWindowSubclass(
-            window: *mut c_void,
-            proc: SubclassProc,
-            id: usize,
-            data: usize,
-        ) -> i32;
-        fn DefSubclassProc(
-            window: *mut c_void,
-            message: u32,
-            wparam: usize,
-            lparam: isize,
-        ) -> isize;
-    }
-
     // SAFETY: as above.
     #[link(name = "user32")]
     unsafe extern "system" {
-        fn GetSystemMetricsForDpi(index: i32, dpi: u32) -> i32;
-        fn GetDpiForWindow(window: *mut c_void) -> u32;
-        fn GetWindowRect(window: *mut c_void, rect: *mut Rect) -> i32;
-        fn IsZoomed(window: *mut c_void) -> i32;
         fn WindowFromPoint(point: Point) -> *mut c_void;
         fn GetSystemMenu(window: *mut c_void, revert: i32) -> *mut c_void;
         fn TrackPopupMenu(
@@ -371,103 +322,6 @@ mod win32 {
         1
     }
 
-    pub(super) fn own_frame() {
-        // SAFETY: as in `square_corners` — the same walk, and the callback
-        // only wraps the window it is handed.
-        unsafe {
-            EnumThreadWindows(GetCurrentThreadId(), wrap_one, 0);
-        }
-    }
-
-    extern "system" fn wrap_one(window: *mut c_void, _param: isize) -> i32 {
-        // SAFETY: `window` is live for the length of this callback, and
-        // `frame_proc` is a real `extern "system"` function of the shape
-        // the subclass expects. Asking twice for the same id is a no-op.
-        //
-        // The reposition moves and resizes nothing; it is how Windows is
-        // told to work the frame out again. Without it the client keeps
-        // the size it was given before the subclass was in place, and the
-        // strip it just gained goes unpainted (measured: black down the
-        // right-hand edge).
-        unsafe {
-            SetWindowSubclass(window, frame_proc, SUBCLASS_ID, 0);
-            SetWindowPos(
-                window,
-                std::ptr::null_mut(),
-                0,
-                0,
-                0,
-                0,
-                SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED,
-            );
-        }
-        1
-    }
-
-    /// Sits in front of the window's own procedure for the two messages
-    /// that decide where the window ends.
-    extern "system" fn frame_proc(
-        window: *mut c_void,
-        message: u32,
-        wparam: usize,
-        lparam: isize,
-        _id: usize,
-        _data: usize,
-    ) -> isize {
-        match message {
-            // Leaving the proposed rectangle untouched and answering zero
-            // is how a window says "all of me is client area". Windows
-            // then draws no frame inside the border, which is the one
-            // pixel this is here for.
-            WM_NCCALCSIZE if wparam != 0 => 0,
-            // And having said that, nothing is left for Windows to
-            // hit-test the edges with, so the grip is ours to answer.
-            WM_NCHITTEST => hit_test(window, lparam),
-            // SAFETY: passing the message on untouched.
-            _ => unsafe { DefSubclassProc(window, message, wparam, lparam) },
-        }
-    }
-
-    /// Which edge, if any, the pointer is on. Anything that is not an edge
-    /// is the client's, and the app answers for it as usual.
-    fn hit_test(window: *mut c_void, lparam: isize) -> isize {
-        let x = (lparam & 0xFFFF) as u16 as i16 as i32;
-        let y = ((lparam >> 16) & 0xFFFF) as u16 as i16 as i32;
-        let mut frame = Rect::default();
-        // SAFETY: `window` is live for the length of the message, and the
-        // rect is ours for the call to fill.
-        if unsafe { GetWindowRect(window, std::ptr::from_mut(&mut frame)) } == 0 {
-            return HTCLIENT;
-        }
-        // SAFETY: both read one integer.
-        let (dpi, zoomed) = unsafe { (GetDpiForWindow(window), IsZoomed(window)) };
-        // A maximised window has no edge to take hold of.
-        if zoomed != 0 {
-            return HTCLIENT;
-        }
-        let dpi = if dpi > 0 { dpi } else { DPI_96 };
-        // SAFETY: as above.
-        let grip = unsafe {
-            GetSystemMetricsForDpi(SM_CXSIZEFRAME, dpi)
-                + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi)
-        };
-        let left = x < frame.left + grip;
-        let right = x >= frame.right - grip;
-        let top = y < frame.top + grip;
-        let bottom = y >= frame.bottom - grip;
-        match (top, bottom, left, right) {
-            (true, _, true, _) => HTTOPLEFT,
-            (true, _, _, true) => HTTOPRIGHT,
-            (_, true, true, _) => HTBOTTOMLEFT,
-            (_, true, _, true) => HTBOTTOMRIGHT,
-            (true, ..) => HTTOP,
-            (_, true, ..) => HTBOTTOM,
-            (_, _, true, _) => HTLEFT,
-            (_, _, _, true) => HTRIGHT,
-            _ => HTCLIENT,
-        }
-    }
-
     pub(super) fn show_system_menu(x: i32, y: i32) {
         let point = Point { x, y };
         // SAFETY: each call takes plain integers or a handle Windows just
@@ -511,6 +365,9 @@ mod win32 {
     /// already carry the bits are left alone, so the frame is not told to
     /// change for nothing.
     extern "system" fn allow_one(window: *mut c_void, _param: isize) -> i32 {
+        // Not `WS_CAPTION`, though the window menu's Move and Size want
+        // it: with the non-client area still there, saying the window has
+        // a caption is saying the platform may draw one over the band.
         let wanted = WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU;
         // SAFETY: `window` is live for the length of this callback, and
         // both calls take and return a plain integer.

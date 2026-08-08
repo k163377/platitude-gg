@@ -359,14 +359,6 @@ impl AppBackend {
         crate::winframe::keep_system_gestures();
     }
 
-    /// Takes the window's frame over, so the band reaches the window's own
-    /// edge and nothing of the system's is drawn between the two. The
-    /// resize edges answer for themselves from there.
-    #[qslot]
-    fn own_window_frame(&self) {
-        crate::winframe::own_frame();
-    }
-
     /// Opens the window menu where the pointer is — what a title bar
     /// answers a right-click with. `x` and `y` are the scene's, and
     /// `scale` turns them into the display's.

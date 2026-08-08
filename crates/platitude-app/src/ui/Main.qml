@@ -378,10 +378,6 @@ ApplicationWindow {
             // white edges around the band. The strip takes the band's own
             // colour so it disappears into it; the hairline stays a line.
             AppBackend.setWindowBorder(Theme.borderDefault, Theme.bgElevated)
-            // And the frame between the two, which no colour reaches: the
-            // window keeps no non-client area at all from here, and
-            // answers for its own edges.
-            AppBackend.ownWindowFrame()
         }
         root.applySavedWindow()
         if (AppBackend.autoOpen !== "") {
