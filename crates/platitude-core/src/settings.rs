@@ -39,8 +39,11 @@ const AUTOMATION_PREFIX: &str = "PG_";
 
 /// `PG_*` variables that say nothing about who is driving. Turning the
 /// logging up is something somebody does at their own window, and it must
-/// not cost them their settings.
-const NOT_AUTOMATION: [&str; 2] = [CONFIG_DIR_ENV, "PG_LOG"];
+/// not cost them their settings. `PG_ALLOW_GUI` is the same shape from
+/// the other end: it is how somebody says "I asked for a window" to the
+/// pre-shell guard (CLAUDE.md ビルド・テスト), so it rides on the launch
+/// that most needs the person's own tabs to come back.
+const NOT_AUTOMATION: [&str; 3] = [CONFIG_DIR_ENV, "PG_LOG", "PG_ALLOW_GUI"];
 
 /// Failure to write. Reading has no error type: it cannot fail loudly
 /// enough to matter, and the caller has nothing to do about it but carry
@@ -1154,6 +1157,24 @@ graph_lanes_width = 3
             Store::locate(Platform::Windows, &env).settings_path(),
             Some(Path::new("C:/Roaming/platitude-gg/settings.toml")),
             "PG_LOG says how loud to be, not who is driving"
+        );
+    }
+
+    #[test]
+    fn asking_for_a_window_does_not_cost_you_your_tabs() {
+        // The pre-shell guard is told "the user asked for a window" by a
+        // variable in front of the launch (CLAUDE.md ビルド・テスト), and
+        // that launch is the one that most needs the person's own tabs to
+        // come back — so it must not read as a driven run.
+        let env = Env::from_pairs(&[
+            ("APPDATA", "C:/Roaming"),
+            ("LOCALAPPDATA", "C:/Local"),
+            ("PG_ALLOW_GUI", "1"),
+        ]);
+        assert_eq!(
+            Store::locate(Platform::Windows, &env).state_path(),
+            Some(Path::new("C:/Local/platitude-gg/state.toml")),
+            "the window a person asked for opens on the tabs they left"
         );
     }
 
