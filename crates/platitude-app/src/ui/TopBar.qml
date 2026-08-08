@@ -360,14 +360,6 @@ Rectangle {
                                 : qsTr("Show the git commands this window ran")
             }
         }
-        // Reserved: search box (backlog). Disabled looks like every other
-        // disabled control here — muted text on an unchanged frame
-        // (デザイン規約 §無効); no second vocabulary of fading.
-        SlimField {
-            enabled: false
-            placeholderText: qsTr("Search")
-            implicitWidth: 160
-        }
         // Fetch, and everything the network has to say about fetching.
         // There is no indicator beside it: a second thing on the toolbar
         // saying the same three states was one place too many for the
