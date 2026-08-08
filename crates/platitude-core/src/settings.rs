@@ -884,6 +884,30 @@ mod tests {
         );
     }
 
+    /// Saving normalises paths, so a value built with native separators is
+    /// not what comes back. Callers hand over [`repo_key`] output for that
+    /// reason; this pins the one round trip it takes to settle, so nothing
+    /// downstream can start comparing a held state against the file and
+    /// find a difference every time.
+    #[test]
+    fn a_raw_path_settles_after_one_round_trip() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = dir_store(dir.path());
+        let raw = State {
+            tabs: TabsState {
+                paths: vec![r"C:\Users\me\proj".into()],
+                active: 0,
+            },
+            ..State::default()
+        };
+        store.save_state(&raw).expect("save");
+        let settled = store.load_state();
+        assert_ne!(settled, raw, "the separators moved");
+
+        store.save_state(&settled).expect("save again");
+        assert_eq!(store.load_state(), settled, "and then stop moving");
+    }
+
     #[test]
     fn an_extended_length_path_keeps_its_backslashes() {
         // The `\\?\` prefix is addressed to Windows, not to a reader: it

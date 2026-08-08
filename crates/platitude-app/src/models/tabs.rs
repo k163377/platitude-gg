@@ -174,10 +174,15 @@ impl TabsModel {
     /// dragging hand, so they report as they happen; the file itself is
     /// still only written by the flush.
     fn report(&self) {
+        // Named the way the file names it. The store normalises separators
+        // on the way out anyway, so handing it the raw path would leave the
+        // state held here unequal to the one on disk — harmless today only
+        // because the flush compares against what it last wrote rather than
+        // against the file.
         let paths = self
             .items
             .iter()
-            .map(|t| t.repo_path.clone())
+            .map(|t| platitude_core::settings::repo_key(&t.repo_path))
             .collect::<Vec<_>>();
         let active = usize::try_from(self.current_index).unwrap_or(0);
         Hub::with(|hub| hub.set_tabs_state(platitude_core::settings::TabsState { paths, active }));
