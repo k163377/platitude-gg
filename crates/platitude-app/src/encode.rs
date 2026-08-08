@@ -111,6 +111,17 @@ pub fn label_names(encoded: &str) -> impl Iterator<Item = &str> {
     })
 }
 
+/// FNV-1a 32-bit. Stands in for randomness wherever a name has to pick
+/// something arbitrary but has to pick the *same* thing every time.
+fn fnv1a(text: &str) -> u32 {
+    let mut hash: u32 = 0x811c_9dc5;
+    for b in text.as_bytes() {
+        hash ^= u32::from(*b);
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    hash
+}
+
 /// Deterministic identicon code for an author (GitHub-style 5x5 pattern,
 /// generated locally — fetching real avatars would violate the
 /// no-network-except-git constraint).
@@ -118,18 +129,49 @@ pub fn label_names(encoded: &str) -> impl Iterator<Item = &str> {
 /// Layout: bits 0..15 = left 3 columns of a 5x5 grid (row-major, mirrored
 /// to the right by the renderer), bits 15..18 = palette index (0..8).
 pub fn avatar_code(author: &str) -> i32 {
-    // FNV-1a 32-bit.
-    let mut hash: u32 = 0x811c_9dc5;
-    for b in author.as_bytes() {
-        hash ^= u32::from(*b);
-        hash = hash.wrapping_mul(0x0100_0193);
-    }
+    let hash = fnv1a(author);
     let mut pattern = hash & 0x7fff;
     if pattern == 0 {
         pattern = 0b00000_00100_00000; // center dot fallback
     }
     let color = (hash >> 15) % 8;
     (pattern | (color << 15)) as i32
+}
+
+/// The palette indices a conflict's two sides are drawn with, given what
+/// the graph could lend (`-1` = nothing) and what each side is called.
+///
+/// The two must never come out the same — that is the whole job of the
+/// colour, and a conflicted file is the worst place to be told "these are
+/// different" by two identical marks. So:
+///
+/// - the graph's answer is kept wherever it has one;
+/// - a side it has none for takes a colour off its own name, which is
+///   arbitrary the way a colour with no meaning should be, and **stable**
+///   the way a random one would not: the same conflict reopens in the same
+///   colours, and a screenshot of it is reproducible;
+/// - if the two still land together, **ours keeps its colour and theirs
+///   moves on by one**. The side already in place is the one worth leaving
+///   alone (during a rebase that is the upstream — `conflict::sides()` has
+///   already sorted out which is which).
+///
+/// An unnamed side still gets a colour: the bar says *which of the two*,
+/// and the legend beside it is where the naming happens.
+pub fn conflict_side_colors(ours: (i32, &str), theirs: (i32, &str)) -> (i32, i32) {
+    let size = i32::try_from(platitude_core::graph::GRAPH_PALETTE_SIZE).unwrap_or(8);
+    let borrowed_or_named = |(color, name): (i32, &str)| -> i32 {
+        if (0..size).contains(&color) {
+            color
+        } else {
+            (fnv1a(name) % size.unsigned_abs()) as i32
+        }
+    };
+    let ours = borrowed_or_named(ours);
+    let mut theirs = borrowed_or_named(theirs);
+    if theirs == ours {
+        theirs = (theirs + 1) % size;
+    }
+    (ours, theirs)
 }
 
 /// Lanes that touch the bottom edge of a row (from its geometry tokens):
@@ -755,6 +797,54 @@ index 804ce7b,ba44bb1..0000000
 ++>>>>>>> topic
   three
 ";
+
+    #[test]
+    fn conflict_sides_keep_the_colours_the_graph_lent_them() {
+        assert_eq!(conflict_side_colors((3, "main"), (5, "topic")), (3, 5));
+    }
+
+    #[test]
+    fn conflict_sides_that_landed_together_move_theirs_on() {
+        // The palette cycles, so two chains far enough apart share one
+        // colour. Ours is the side already in place and keeps it.
+        assert_eq!(conflict_side_colors((3, "main"), (3, "topic")), (3, 4));
+        // And the move wraps rather than running off the end.
+        let size = i32::try_from(platitude_core::graph::GRAPH_PALETTE_SIZE).unwrap();
+        assert_eq!(
+            conflict_side_colors((size - 1, "main"), (size - 1, "topic")),
+            (size - 1, 0)
+        );
+    }
+
+    #[test]
+    fn a_side_the_graph_has_no_colour_for_takes_one_off_its_name() {
+        // Outside the walk's window, or named something no chip carries
+        // (`main~3`, which is what a rebase onto an older commit reports).
+        let (ours, theirs) = conflict_side_colors((-1, "main~3"), (5, "topic"));
+        assert_eq!(theirs, 5, "the side that had one keeps it");
+        assert_ne!(ours, theirs);
+        let size = i32::try_from(platitude_core::graph::GRAPH_PALETTE_SIZE).unwrap();
+        assert!((0..size).contains(&ours));
+        // Same name, same colour, every time — a reopened conflict must
+        // not repaint itself, and a screenshot of one has to be repeatable.
+        assert_eq!(
+            conflict_side_colors((-1, "main~3"), (5, "topic")),
+            (ours, 5)
+        );
+    }
+
+    #[test]
+    fn two_colourless_sides_still_come_out_apart() {
+        let (a, b) = conflict_side_colors((-1, "main"), (-1, "topic"));
+        assert_ne!(a, b);
+        // Including when git could not name either of them, which hashes
+        // both to the same place before the move.
+        let (a, b) = conflict_side_colors((-1, ""), (-1, ""));
+        assert_ne!(a, b);
+        // And when the colour handed in is nonsense rather than -1.
+        let (a, b) = conflict_side_colors((99, "main"), (-7, "main"));
+        assert_ne!(a, b);
+    }
 
     #[test]
     fn a_combined_diff_flattens_with_its_marker_columns() {

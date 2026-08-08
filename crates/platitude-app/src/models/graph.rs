@@ -362,6 +362,21 @@ impl GraphModel {
             .map_or(-1, |r| r.node_color)
     }
 
+    /// The colour each side of a conflict is drawn in — the graph's answer
+    /// where it has one, a stable one off the name where it does not, and
+    /// never the same on both sides
+    /// (`encode::conflict_side_colors` decides; these two only pick a half
+    /// out of its answer, since a slot cannot hand back a pair).
+    #[qslot]
+    fn conflict_color_ours(&self, ours: String, theirs: String) -> i32 {
+        self.conflict_colors(&ours, &theirs).0
+    }
+
+    #[qslot]
+    fn conflict_color_theirs(&self, ours: String, theirs: String) -> i32 {
+        self.conflict_colors(&ours, &theirs).1
+    }
+
     /// Full commit id at a row (selection, its recovery after a rewrite,
     /// and the smoke hooks).
     #[qslot]
@@ -373,6 +388,16 @@ impl GraphModel {
             .unwrap_or_default()
     }
 }
+impl GraphModel {
+    /// Shared by the two slots above, so the pair is decided once.
+    fn conflict_colors(&self, ours: &str, theirs: &str) -> (i32, i32) {
+        crate::encode::conflict_side_colors(
+            (self.color_of_ref(ours.to_string()), ours),
+            (self.color_of_ref(theirs.to_string()), theirs),
+        )
+    }
+}
+
 qml_register!(GraphModel, "GraphModel", singleton = false);
 
 fn to_row_item(row: &LogRow) -> GraphRowItem {

@@ -13,9 +13,18 @@ QtObject {
     ///
     /// Said by the file row's icon (hover) and by the diff pane on the
     /// conflicts git prints no patch for.
+    /// What to call a side git left nothing to name. Reached from a
+    /// cherry-pick of a commit no branch can see, among others.
+    function ourSide(name) {
+        return name !== "" ? name : qsTr("this branch")
+    }
+    function theirSide(name) {
+        return name !== "" ? name : qsTr("the incoming side")
+    }
+
     function conflict(change, ours, theirs) {
-        const us = ours !== "" ? ours : qsTr("this branch")
-        const them = theirs !== "" ? theirs : qsTr("the incoming side")
+        const us = Words.ourSide(ours)
+        const them = Words.theirSide(theirs)
         switch (change) {
         case "UU": return qsTr("Both changed it")
         case "AA": return qsTr("Both added it")

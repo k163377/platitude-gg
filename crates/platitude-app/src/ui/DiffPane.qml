@@ -29,9 +29,10 @@ Rectangle {
     property string conflictChange: ""
     property string sideOurs: ""
     property string sideTheirs: ""
-    /// The lane colour each side's branch has in the graph, as an index
-    /// into `Theme.graphLane`; -1 where the graph has none for it
-    /// (`GraphModel.colorOfRef`).
+    /// The colour each side is drawn in, as an index into
+    /// `Theme.graphLane` — the graph's own lane colour for that branch
+    /// where it has one, and never the same on both sides
+    /// (`encode::conflict_side_colors` decides both).
     property int sideColorOurs: -1
     property int sideColorTheirs: -1
     // A write is running: staging buttons disable.
@@ -70,16 +71,15 @@ Rectangle {
             return ""
         return inOurs ? "ours" : "theirs"
     }
-    /// Whether the two sides can be told apart by colour at all. The
-    /// colours are borrowed from the graph, and the graph does not always
-    /// have two to lend: a branch outside the walk's window has none, and
-    /// the palette cycles, so two chains far enough apart share one. Where
-    /// it cannot say, it says nothing — the rows keep their own colours
-    /// and the fence git wrote is still in the text.
+    /// Whether the two sides are being told apart by colour. Always, on a
+    /// conflicted file: the graph does not always have two colours to lend
+    /// (a branch outside the walk's window has none, and the palette
+    /// cycles, so two chains far enough apart share one), and where it
+    /// falls short the pair is completed rather than dropped
+    /// (`encode::conflict_side_colors`).
     readonly property bool sidesTold: diffPane.combined
                                       && diffPane.sideColorOurs >= 0
                                       && diffPane.sideColorTheirs >= 0
-                                      && diffPane.sideColorOurs !== diffPane.sideColorTheirs
     function sideColor(side) {
         const index = side === "ours" ? diffPane.sideColorOurs
                                       : diffPane.sideColorTheirs
@@ -379,8 +379,10 @@ Rectangle {
             Layout.fillWidth: true
             spacing: Theme.spaceSm
             Repeater {
-                model: [{ side: "ours", name: diffPane.sideOurs },
-                        { side: "theirs", name: diffPane.sideTheirs }]
+                model: [{ side: "ours",
+                          name: Words.ourSide(diffPane.sideOurs) },
+                        { side: "theirs",
+                          name: Words.theirSide(diffPane.sideTheirs) }]
                 delegate: RowLayout {
                     required property var modelData
                     spacing: Theme.spaceXs
