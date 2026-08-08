@@ -108,6 +108,11 @@ Item {
     onGeometryChanged: laneCanvas.requestPaint()
     onNode_laneChanged: laneCanvas.requestPaint()
     onAvatarChanged: laneCanvas.requestPaint()
+    // A row coming back out of the reuse pool has to redraw even when
+    // none of the three roles above differs from the row it was last
+    // used for: what it holds is the picture it was left with, and the
+    // graph may have grown a lane in the meantime — see the canvas.
+    ListView.onReused: laneCanvas.requestPaint()
 
     // Column widths come from the ListView (owner scope).
     readonly property real labelsW: ListView.view ? ListView.view.labelWidth : Metrics.labelColW
@@ -210,6 +215,16 @@ Item {
                 width: rowItem.ListView.view
                        ? rowItem.ListView.view.graphFullWidth : 0
                 height: parent.height
+                // Resizing a canvas scales what it already holds; only a
+                // repaint redraws it. Qt asks for that repaint itself,
+                // but only for a canvas that is visible — and a row
+                // waiting in the ListView's reuse pool is not. So a graph
+                // that grows a lane while a row is pooled brings that row
+                // back with its lanes and node stretched sideways
+                // (2026-08-08, seen after switching windows: the pool is
+                // where rows sit while another window is in front).
+                onWidthChanged: requestPaint()
+                onHeightChanged: requestPaint()
                 onPaint: {
                     const ctx = getContext("2d")
                     ctx.clearRect(0, 0, width, height)
