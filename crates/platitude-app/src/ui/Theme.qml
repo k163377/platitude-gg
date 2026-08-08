@@ -90,8 +90,11 @@ QtObject {
     readonly property int fontLgLine: 24
     readonly property int fontXl: 20
     readonly property int fontXlLine: 28
-    readonly property var fontFamilyUi: ["Segoe UI", "SF Pro Text", "Ubuntu", "Noto Sans", "DejaVu Sans"]
-    readonly property var fontFamilyMono: ["Cascadia Mono", "Consolas", "SF Mono", "Menlo", "Noto Sans Mono", "DejaVu Sans Mono"]
+    // Families each OS ships that also carry Japanese: a glyph missing
+    // from the named family falls back by OS locale, which is where
+    // kanji turn Chinese (デザイン規約 §タイポグラフィ, 2026-08-08).
+    readonly property var fontFamilyUi: ["Yu Gothic UI", "Hiragino Sans", "Noto Sans CJK JP", "Noto Sans JP", "Noto Sans", "DejaVu Sans"]
+    readonly property var fontFamilyMono: ["Cascadia Mono", "Consolas", "Menlo", "Noto Sans Mono CJK JP", "Noto Sans Mono", "DejaVu Sans Mono"]
 
     // The QML font value type has no `families` list, so the fallback
     // chains above are resolved once against the installed fonts here.
