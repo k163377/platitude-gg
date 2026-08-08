@@ -74,9 +74,9 @@ pub const DEFAULT_LOG_LIMIT: u32 = 2000;
 /// What the log stream walks.
 ///
 /// Tags are shown by default (product decision). On tag-heavy repositories
-/// they dominate the `--topo-order` frontier setup (JetBrains/kotlin: 44k
-/// tags cost ~1.7s extra before the first byte even with a commit-graph),
-/// which is why the toggle exists.
+/// they dominate the walk's frontier setup (JetBrains/kotlin: 44k tags cost
+/// ~1.7s extra before the first byte even with a commit-graph), which is
+/// why the toggle exists.
 #[derive(Debug, Clone, Copy)]
 pub struct LogOptions {
     pub include_tags: bool,
@@ -1027,8 +1027,8 @@ impl RepoSession {
     /// Restarts the log → graph stream (used by manual full refresh).
     ///
     /// With tags enabled this runs **two passes**: a fast tag-less pass
-    /// paints immediately (tag tips make `--topo-order` frontier setup
-    /// cost seconds on tag-heavy repositories), then a tag-inclusive pass
+    /// paints immediately (tag tips make the walk's frontier setup cost
+    /// seconds on tag-heavy repositories), then a tag-inclusive pass
     /// rebuilds in the background and atomically replaces the graph.
     pub fn restart_log(self: &Arc<Self>) {
         let Some(workdir) = self.workdir() else {
@@ -2808,7 +2808,7 @@ impl RepoSession {
 
         let mut cmd = GitCommand::new()
             .cwd(workdir)
-            .args(["log", "-z", "--topo-order", LOG_FORMAT_ARG])
+            .args(["log", "-z", "--date-order", LOG_FORMAT_ARG])
             .args(["HEAD", "--branches", "--remotes"])
             .no_timeout();
         if options.include_tags {
@@ -2935,7 +2935,7 @@ impl RepoSession {
 
         let mut cmd = GitCommand::new()
             .cwd(workdir)
-            .args(["log", "-z", "--topo-order", LOG_FORMAT_ARG])
+            .args(["log", "-z", "--date-order", LOG_FORMAT_ARG])
             .args(["HEAD", "--branches", "--remotes"])
             .no_timeout();
         if options.include_tags {
@@ -3361,7 +3361,8 @@ struct StreamItem {
 /// Filters a parsed batch for display: stash commits keep only their
 /// first-parent edge (the base commit), and their synthetic index /
 /// untracked parent commits are recorded and dropped when they arrive
-/// later (topo order guarantees the stash row streams first).
+/// later (the walk shows no parent before all of its children, so the
+/// stash row always streams first).
 fn sift_batch(
     batch: Vec<CommitMeta>,
     stash_refs: &HashMap<Oid, String>,

@@ -45,7 +45,7 @@
 | `diff-tree` | `-r` / `--no-commit-id` / `-z` / `--name-status` / `--find-renames` / `--root` / `--no-ext-diff` | 2.43.0 ✓ |
 | `fetch` | `--prune` / `--all` | 古参(1.6.5 / 1.6.6) |
 | `for-each-ref` | `--format=`(`refname` `objecttype` `objectname` `*objectname` `upstream` `HEAD` `creatordate:unix`) | 2.43.0 ✓(`:unix` は `--date=unix` 委譲、git-log 2.43.0 ✓) |
-| `log` | `-z` / `-1` / `--topo-order` / `--branches` `--remotes` `--tags` / `--max-count=` / `--ignore-missing` / `--reverse` / `--format=` / `--end-of-options` | 2.43.0 ✓。`-z` は diff-options.txt の `ifdef::git-log`「Separate the commits with NULs instead of newlines」を v2.43.0 ソースで確認 |
+| `log` | `-z` / `-1` / `--date-order` / `--branches` `--remotes` `--tags` / `--max-count=` / `--ignore-missing` / `--reverse` / `--format=` / `--end-of-options` | 2.43.0 ✓。`-z` は diff-options.txt の `ifdef::git-log`「Separate the commits with NULs instead of newlines」を v2.43.0 ソースで確認。`--date-order` は古参(1.5 系から rev-list-options.txt に在る) |
 | `merge` | `--no-edit` / `--no-ff` / `--ff-only` / `--squash` / `--continue` `--abort` `--quit` | 2.43.0 ✓ |
 | `merge-base` | `--is-ancestor` | 古参(1.8.0) |
 | `mergetool` | `--no-prompt` / `--gui` / `--tool=` / `--tool-help` | 2.43.0 ✓(`--gui` は guitool → tool のフォールバックまで記載を確認) |

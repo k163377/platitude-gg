@@ -1,6 +1,6 @@
 //! Commit-graph lane assignment (gitk-style greedy allocation).
 //!
-//! Consumes commits in `--topo-order` (children before parents) and emits,
+//! Consumes commits in `--date-order` (children before parents) and emits,
 //! per row, everything the UI needs to draw that row in isolation: the node
 //! position/color plus straight and curved lane segments. QML only draws;
 //! no layout decisions happen on the UI side (実装計画 §2.4).
@@ -99,7 +99,7 @@ impl GraphBuilder {
         self.max_width
     }
 
-    /// Processes the next commit of the topo-ordered stream.
+    /// Processes the next commit of the stream (children before parents).
     pub fn push(&mut self, commit: &CommitMeta) -> GraphRow {
         self.push_with_edge_style(commit, false)
     }

@@ -2075,3 +2075,78 @@ fn log_starts(events: &[SessionEvent]) -> usize {
         .filter(|e| matches!(e, SessionEvent::LogStarted { .. }))
         .count()
 }
+
+/// A `gh-pages`-shaped ref: a parentless commit that only a
+/// remote-tracking ref names, sharing no history with anything else.
+///
+/// The walk offers it either way — `--remotes` names it — but the row it
+/// lands on is the whole point. `--topo-order` refuses to intermix
+/// independent lines of history, so it emits every commit of the main
+/// chain before starting this one and the newest commit in the repository
+/// arrives dead last. `--date-order` keeps the same parents-after-children
+/// guarantee the graph builder needs and puts it where its timestamp says.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_independent_history_sits_where_its_date_puts_it() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    repo.commit_file("f.txt", "1\n", "second");
+    repo.commit_file("f.txt", "2\n", "third");
+
+    repo.git(&["checkout", "--orphan", "gh-pages"]);
+    repo.git(&["rm", "-rf", "."]);
+    repo.write_file("index.html", "docs\n");
+    repo.git(&["add", "index.html"]);
+    repo.git(&["commit", "-m", "docs: api documentation"]);
+    let orphan = repo.git(&["rev-parse", "HEAD"]);
+    // Only the remote-tracking ref keeps it: no local branch, and nothing
+    // reaches it from HEAD.
+    repo.git(&["update-ref", "refs/remotes/origin/gh-pages", &orphan]);
+    repo.git(&["checkout", "-f", "main"]);
+    repo.git(&["branch", "-D", "gh-pages"]);
+    repo.git(&["clean", "-fd"]);
+    // One more on main *after* the orphan: it is now neither the newest
+    // commit nor the oldest, which is what buries it. A tip that is newest
+    // of all gets emitted first under either ordering, so a repository
+    // shaped that way proves nothing.
+    repo.commit_file("f.txt", "3\n", "fourth");
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    let total = sink
+        .wait_for("LogFinished", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::LogFinished { total, .. } => Some(*total),
+                _ => None,
+            })
+        })
+        .await;
+    assert_eq!(total, 5, "four on main plus the orphan");
+
+    // Chips are what make a row unreachable from every branch findable at
+    // all, so the row number and the chip are asserted together.
+    let seen = sink
+        .wait_for("its chip", |evs| {
+            let rows = crate::support::replay_graph(evs);
+            rows.iter()
+                .find(|(_, r)| r.oid_hex == orphan)
+                .filter(|(_, r)| !r.labels.is_empty())
+                .map(|(row, r)| (*row, r.clone()))
+        })
+        .await;
+    let (row, seen) = seen;
+    assert_eq!(
+        row, 1,
+        "the second-newest commit belongs on the second row, not {row} rows down"
+    );
+    assert!(
+        seen.labels.iter().any(|l| l.text == "origin/gh-pages"),
+        "the orphan carries no chip naming it: {:?}",
+        seen.labels
+    );
+    session.close();
+}
