@@ -1310,10 +1310,19 @@ Item {
             onTriggered: page.squashCommit(page.menuOid)
         }
         // The commit stops being part of the history, and what came after
-        // it is replayed over the gap. Held rather than asked about: every
-        // other row here either adds a commit or moves one, and this is
-        // the only one that takes a commit away — afterwards nothing but
-        // the reflog reaches it (デザイン規約 §長押し).
+        // it is replayed over the gap. Every other row here either adds a
+        // commit or moves one; this is the only one that takes a commit
+        // away, so it is the only one that can leave the old chain with
+        // nothing but the reflog reaching it — and the mark follows that
+        // rather than the row (デザイン規約 §長押し). Held while this
+        // branch is the only thing holding its tip; a plain click once
+        // something else does, because then the replaced commits stay
+        // drawn and a cherry-pick brings any of them back.
+        //
+        // The answer is a property of the branch, not of the row, so it
+        // is already in hand when the menu opens: a mark that appeared a
+        // moment later would re-indent every row in the menu
+        // (`AppMenu.holdColW`) with the hand already on its way.
         AppMenuItem {
             id: dropCommitItem
             code: "drop"
@@ -1321,10 +1330,11 @@ Item {
             text: qsTr("this commit")
             note: page.menuPublished ? qsTr("already pushed") : ""
             offered: page.menuCanEditHistory
-            holdMs: Metrics.holdMs
+            holdMs: repoTab.headReachedElsewhere ? 0 : Metrics.holdMs
+            onTriggered: page.dropCommit(page.menuOid)
             onHeld: {
                 commitMenu.close()
-                repoTab.dropCommit(page.menuOid)
+                page.dropCommit(page.menuOid)
             }
         }
         // Three ways to take the branch back to this commit, told apart
@@ -1441,6 +1451,14 @@ Item {
     // asked about on its own.
     function squashCommit(oidHex) {
         repoTab.squashIntoParent(oidHex)
+    }
+
+    /// Leaves the commit out of the history. One place for both ways in:
+    /// the row is a hold or a click depending on whether anything else
+    /// still holds the branch tip, and what it runs must not depend on
+    /// which of the two the reader got (デザイン規約 §履歴を合流させる).
+    function dropCommit(oidHex) {
+        repoTab.dropCommit(oidHex)
     }
 
     // ---- taking the branch back to an earlier commit ----------------
@@ -2214,16 +2232,23 @@ Item {
             // it: the file list this pane's every other verb starts from.
             page.showWip()
         } else if (act === "drop-commit" || act === "drop-commit-go") {
-            // Through the graph row's menu, where the row is held rather
-            // than asked about: the plain verb leaves the menu standing
-            // for the shot and "-go" runs the hold to its end. The plan
-            // is built by object name, the way a graph row hands one
-            // over, so a symbolic name is not what this takes.
+            // Through the graph row's menu, where the row is held or
+            // clicked depending on what still holds the branch tip: the
+            // plain verb leaves the menu standing for the shot and "-go"
+            // takes whichever of the two the row is offering. The plan is
+            // built by object name, the way a graph row hands one over,
+            // so a symbolic name is not what this takes.
             page.openRowMenu(arg !== "" ? arg : branchesModel.headOid)
             AppBackend.report("drop_row " + dropCommitItem.code
-                              + " " + dropCommitItem.text)
-            if (act === "drop-commit-go")
-                dropCommitItem.completeHold()
+                              + " " + dropCommitItem.text
+                              + " hold=" + (dropCommitItem.holdMs > 0)
+                              + " reached=" + repoTab.headReachedElsewhere)
+            if (act === "drop-commit-go") {
+                if (dropCommitItem.holdMs > 0)
+                    dropCommitItem.completeHold()
+                else
+                    page.dropCommit(page.menuOid)
+            }
         } else if (act === "merge-branch" || act === "rebase-onto"
                    || act === "revert-commit" || act === "integrate-menu") {
             // Through the menus a right-click opens, so the rows' own

@@ -41,6 +41,7 @@ use crate::patch::HunkSelect;
 use crate::preview::{self, FilePreview};
 use crate::process::{CommandEnd, GitCommand, GitExecutor};
 use crate::publish;
+use crate::reachable;
 use crate::refs::{self, HeadState, RefEntry, RefKind};
 use crate::remote;
 use crate::repo::{self, RepoInfo};
@@ -316,6 +317,13 @@ pub enum SessionEvent {
         oid: String,
         in_history: bool,
     },
+    /// Whether anything besides the branch HEAD is on still reaches its
+    /// tip, so the rows that rewrite history can tell a rewrite that
+    /// leaves the old commits drawn from one that leaves them to the
+    /// reflog (see [`crate::reachable`]). Sent when the answer moves.
+    HeadReachChecked {
+        reached_elsewhere: bool,
+    },
     /// Answer to [`RepoSession::check_signature`].
     SignatureChecked {
         oid: String,
@@ -453,6 +461,19 @@ impl crate::process::CommandObserver for CommandFeed {
             message: message.to_string(),
         });
     }
+}
+
+/// What the refs read last saw of the branch tip, which is everything the
+/// reachability walk needs to start (see [`crate::reachable`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct HeadHold {
+    /// The commit HEAD is on.
+    tip: Oid,
+    /// Short name of the branch HEAD is on; empty when detached.
+    branch: String,
+    /// Some other ref already sits exactly on `tip`, which the listing
+    /// answers on its own — no walk needed.
+    on_a_ref: bool,
 }
 
 /// What a write invalidates once it succeeds.
@@ -622,6 +643,16 @@ pub struct RepoSession {
     /// One permit for the background read of the above, so a second
     /// permission-granting call cannot stack another on top of it.
     remote_tags_slot: Arc<tokio::sync::Semaphore>,
+    /// What the last refs read saw of the branch tip, so the walk behind
+    /// [`reachable`] can be started without reading the listing again.
+    head_hold: Mutex<Option<HeadHold>>,
+    /// The last answer sent, so a re-check landing on the same one says
+    /// nothing.
+    head_reach_seen: Mutex<Option<bool>>,
+    /// One permit: the walk is the only part of a refresh that scales with
+    /// the history rather than the refs, and a tick arriving mid-walk is
+    /// dropped rather than stacked.
+    head_reach_slot: Arc<tokio::sync::Semaphore>,
     /// One merge-tool candidate read at a time. Opening settings twice in
     /// a row must not start a second eight-second walk of the registry.
     merge_tools_slot: Arc<tokio::sync::Semaphore>,
@@ -676,6 +707,9 @@ impl RepoSession {
             remote_tags: Mutex::new(RemoteTagsByRemote::new()),
             remote_tag_index: Mutex::new(Arc::new(RemoteTagIndex::new())),
             remote_tags_slot: Arc::new(tokio::sync::Semaphore::new(1)),
+            head_hold: Mutex::new(None),
+            head_reach_seen: Mutex::new(None),
+            head_reach_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             merge_tools_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             auto_fetch: Mutex::new(None),
             auto_fetch_interval: Mutex::new(None),
@@ -1237,6 +1271,86 @@ impl RepoSession {
         });
     }
 
+    /// Records what the refs read just saw of the branch tip, including
+    /// the half of the reachability question the listing answers by
+    /// itself: some other ref sitting exactly on the tip.
+    ///
+    /// That half is what makes tags count without paying for them. Tags
+    /// are left out of the walk (`JetBrains/kotlin`: 45,846 of 53,672
+    /// refs, 478ms of 504ms — ci/baseline/head-reach-windows-x64.md), and
+    /// a tag on the tip is the shape that actually turns up; one strictly
+    /// ahead of it is missed, which costs a hold mark on a row that could
+    /// have been a click.
+    fn remember_head_hold(&self, refs: &[RefEntry], head: &HeadState) {
+        let hold = head.oid.map(|tip| HeadHold {
+            tip,
+            branch: head.branch.clone().unwrap_or_default(),
+            on_a_ref: reachable::a_ref_sits_on_head(refs, head),
+        });
+        if let Ok(mut slot) = self.head_hold.lock() {
+            *slot = hold;
+        }
+    }
+
+    /// Answers whether the branch HEAD is on is the only thing holding its
+    /// tip, and sends the answer if it moved.
+    ///
+    /// Runs off the write queue and off the poll's two-process budget: it
+    /// is started where the graph is rebuilt, because it describes the
+    /// same picture — whether a rewrite here leaves the old commits drawn.
+    fn settle_head_reach(self: &Arc<Self>) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let Ok(Some(hold)) = self.head_hold.lock().map(|slot| slot.clone()) else {
+            // No tip (an unborn branch): nothing to lose, nothing to ask.
+            self.publish_head_reach(false);
+            return;
+        };
+        if hold.on_a_ref {
+            self.publish_head_reach(true);
+            return;
+        }
+        let Ok(permit) = Arc::clone(&self.head_reach_slot).try_acquire_owned() else {
+            tracing::trace!("head reach skipped: the previous walk has not finished");
+            return;
+        };
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let _permit = permit;
+            let cancel = s.root_cancel.clone();
+            match reachable::reached_without_branch(
+                &s.executor,
+                &workdir,
+                &hold.tip.to_hex(),
+                &hold.branch,
+                &cancel,
+            )
+            .await
+            {
+                Ok(reached) => s.publish_head_reach(reached),
+                // A failed walk must not claim the tip is held: the mark
+                // is the safe answer, and the next refresh asks again.
+                Err(e) => {
+                    tracing::warn!(error = %e, "could not tell whether the branch tip is held");
+                    s.publish_head_reach(false);
+                }
+            }
+        });
+    }
+
+    fn publish_head_reach(&self, reached_elsewhere: bool) {
+        let moved = self
+            .head_reach_seen
+            .lock()
+            .map(|mut slot| slot.replace(reached_elsewhere) != Some(reached_elsewhere))
+            .unwrap_or(true);
+        if moved {
+            self.sink
+                .event(SessionEvent::HeadReachChecked { reached_elsewhere });
+        }
+    }
+
     pub fn refresh_refs(self: &Arc<Self>) {
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
@@ -1288,6 +1402,11 @@ impl RepoSession {
                 let mut snapshot = build_snapshot(&refs, &head, &remote_tags, &joins);
                 snapshot.remote_names = remotes.into_iter().map(|r| r.name).collect();
                 let label_map = build_label_map(&refs, &head, &remote_tags, &joins);
+                // The listing is here and the answer is one pass over it,
+                // so the cheap half of the reachability question is taken
+                // now and the walk is spared whenever a ref already sits
+                // on the tip (see `settle_head_reach`).
+                self.remember_head_hold(&refs, &head);
                 self.sink.event(SessionEvent::RefsLoaded {
                     snapshot: self.share_snapshot(snapshot),
                 });
@@ -1295,6 +1414,12 @@ impl RepoSession {
                 // and sent under the graph lock (see `apply_refs`), and
                 // nothing else may run inside it.
                 self.apply_refs(label_map);
+                // A tip that nothing else holds is a property of where the
+                // refs point, so it is re-asked when they move — and on
+                // the first read, which has nothing to compare against.
+                if previous != Some(key) {
+                    self.settle_head_reach();
+                }
                 previous.is_some_and(|previous| previous != key)
             }
             (Err(e), _) | (_, Err(e)) => {
@@ -1584,6 +1709,12 @@ impl RepoSession {
             // until the finished one swaps in (or nothing changed and
             // nothing repaints — the auto-fetch common case).
             self.refresh_log();
+        }
+        // A stash push, pop or drop moves no ref, so the refs read has no
+        // reason to ask again — and it is exactly what changes whether
+        // something other than this branch still holds the tip.
+        if !refs_moved {
+            self.settle_head_reach();
         }
         self.refresh_stashes();
         self.refresh_worktrees();

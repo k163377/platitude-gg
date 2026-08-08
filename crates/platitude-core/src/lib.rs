@@ -21,6 +21,7 @@ pub mod patch;
 pub mod preview;
 pub mod process;
 pub mod publish;
+pub mod reachable;
 pub mod refs;
 pub mod remote;
 pub mod repo;

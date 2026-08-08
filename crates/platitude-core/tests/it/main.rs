@@ -15,6 +15,7 @@ mod identity_integration;
 mod integrate_integration;
 mod logparse;
 mod preview_integration;
+mod reachable_integration;
 mod refs_integration;
 mod remote_stash_integration;
 mod remote_tags_integration;

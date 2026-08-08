@@ -63,6 +63,11 @@ pub struct RepoTab {
     /// HEAD can reach it. Empty oid means nothing has been asked yet.
     history_oid: String,
     history_in: bool,
+    /// Whether something other than the current branch still reaches its
+    /// tip — whether a rewrite here leaves the old commits drawn or leaves
+    /// them to the reflog. False until the session says otherwise, which
+    /// is the answer that asks more of the person doing it.
+    head_reached_elsewhere: bool,
     /// Author identity; `identityReady` false means git cannot commit yet
     /// and the UI should ask for a name and address.
     author_name: String,
@@ -161,6 +166,7 @@ impl Default for RepoTab {
             publish_published: 0,
             history_oid: String::new(),
             history_in: false,
+            head_reached_elsewhere: false,
             author_name: String::new(),
             author_email: String::new(),
             // Assumed fine until the check says otherwise, so nothing
@@ -312,6 +318,11 @@ impl RepoTab {
     );
     qproperty!("historyOid", Member = history_oid, Notify = changed);
     qproperty!("historyIn", Member = history_in, Notify = changed);
+    qproperty!(
+        "headReachedElsewhere",
+        Member = head_reached_elsewhere,
+        Notify = changed
+    );
     qproperty!("authorName", Member = author_name, Notify = changed);
     qproperty!("authorEmail", Member = author_email, Notify = changed);
     qproperty!("identityReady", Member = identity_ready, Notify = changed);
@@ -537,6 +548,9 @@ impl RepoTab {
                 TabMsg::InHistory { oid, in_history } => {
                     self.history_oid = oid;
                     self.history_in = in_history;
+                }
+                TabMsg::HeadReach { reached_elsewhere } => {
+                    self.head_reached_elsewhere = reached_elsewhere;
                 }
                 TabMsg::MoveNeedsAsk { local, start } => {
                     self.move_ask_local = local;

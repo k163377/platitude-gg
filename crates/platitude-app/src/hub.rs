@@ -62,6 +62,11 @@ pub enum TabMsg {
         oid: String,
         in_history: bool,
     },
+    /// Whether anything besides the current branch still reaches its tip,
+    /// which is what a rewrite here would cost.
+    HeadReach {
+        reached_elsewhere: bool,
+    },
     /// Whether a remote already carries a branch name, as of now rather
     /// than as of the last fetch. The question rides along: the box that
     /// asked may be on another name by the time this arrives.
@@ -501,6 +506,9 @@ impl SessionSink for BridgeSink {
             }
             SessionEvent::InHistoryChecked { oid, in_history } => {
                 self.feeds.tab.push(TabMsg::InHistory { oid, in_history });
+            }
+            SessionEvent::HeadReachChecked { reached_elsewhere } => {
+                self.feeds.tab.push(TabMsg::HeadReach { reached_elsewhere });
             }
             SessionEvent::MergeToolsLoaded { names, settled } => {
                 self.feeds.tab.push(TabMsg::MergeTools { names, settled });
