@@ -64,18 +64,22 @@ commands:
                           it does not sink the run (delete-branch-refused,
                           commands-fail, fetch-fail, push-retry)
 
-  linux [--rebuild] [--shell] <cargo command…>
-      Run a cargo command against this checkout on Ubuntu, in a container
-      built from ci/linux/Dockerfile. On Linux it skips the container and
-      runs the command where it stands.
+  linux [--rebuild] [--shell] [--stage core|app] <command…>
+      Run a command against this checkout on Ubuntu, in a container built
+      from ci/linux/Dockerfile. On Linux it skips the container and runs
+      the command where it stands.
         cargo xtask linux test -p platitude-core --test it
-      The image carries no Qt yet, so platitude-core is the package it can
-      build. Its build directory is a docker volume — this target/ is
-      untouched, and so is the host's git.
+        cargo xtask linux verify-ui commit --preset basic
+      A cargo command goes to cargo; an xtask verb goes to cargo xtask.
+      Which image it runs in follows what the command needs: core is
+      Ubuntu and the toolchain, app adds Qt, a software GL stack and the
+      fonts デザイン規約 names for Ubuntu. The build directory is a docker
+      volume, so this target/ is untouched, and a verify-ui run is handed
+      a host directory to leave its screenshot in.
       options:
-        --rebuild   build the image again even if one already matches
-                    ci/linux/Dockerfile
-        --shell     open a shell in the container instead of running cargo
+        --rebuild        build the image again even if one already matches
+        --shell          open a shell in the container instead
+        --stage <name>   core or app, when the guess is not the one wanted
 
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads

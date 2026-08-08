@@ -1,42 +1,79 @@
-//! `cargo xtask linux <cargo command…>` — the workspace on Linux, from a
+//! `cargo xtask linux <command…>` — the workspace on Linux, from a
 //! workstation that has none.
 //!
 //! Everything after the options goes to cargo inside a container built from
 //! ci/linux/Dockerfile, so `cargo xtask linux test -p platitude-core` is
-//! `cargo test -p platitude-core` on Ubuntu. Run on Linux the container
-//! drops out and the same line runs where it stands: one verb, three
-//! operating systems (CLAUDE.md: no Windows-only dev tooling).
+//! `cargo test -p platitude-core` on Ubuntu. Naming an xtask verb puts
+//! `cargo xtask` in front of it instead, so `cargo xtask linux verify-ui
+//! commit` is the line a person already knows, run somewhere else. On Linux
+//! the container drops out and the command runs where it stands: one verb,
+//! three operating systems (CLAUDE.md: no Windows-only dev tooling).
+//!
+//! Two images, chosen by what the command needs. The core stage is Ubuntu
+//! and the toolchain; the app stage adds Qt, a software GL stack and the
+//! fonts デザイン規約 names for Ubuntu. Asking for the small one when it
+//! will do is the difference between a run that starts now and one that
+//! downloads Qt first.
 //!
 //! The build directory is a docker volume mounted over /work/target, never
 //! the host's. One target/ shared between two operating systems is two
 //! cargos on one build lock and two sets of fingerprints for the same paths
 //! — the serialized-and-rebuilding failure worktrees exist to avoid, one
 //! boundary further out.
+//!
+//! One thing does not survive the boundary: a worktree's `.git` is a file
+//! naming an absolute Windows path, which git inside reads as relative and
+//! cannot follow, so a run from a worktree logs "not a git repository"
+//! about /work once. Nothing depends on it — the app is handed the
+//! repositories it opens, and the identity it looks for in the checkout is
+//! not in a container anyway.
 
 use std::io::IsTerminal;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-/// The image, and the stage of the Dockerfile built into it.
+/// The image. Its tag names the stage and fingerprints what built it.
 const IMAGE: &str = "pg-linux";
-const STAGE: &str = "core";
 
-/// Where the checkout, the build directory and the download cache land
-/// inside the container.
+/// Where the checkout, the build directory, the download cache and anything
+/// a run means to leave behind land inside the container.
 const WORK: &str = "/work";
 const TARGET_MOUNT: &str = "/work/target";
 const REGISTRY_MOUNT: &str = "/usr/local/cargo/registry";
+const OUT_MOUNT: &str = "/out";
+
+/// Task-runner verbs worth running in there. Naming one means `cargo xtask
+/// <verb>`, so the command reads the same as on the host.
+const XTASK_VERBS: [&str; 2] = ["verify-ui", "demo-repo"];
+
+/// Cargo verbs that build something, and so care which stage they run in.
+const BUILD_VERBS: [&str; 7] = ["build", "check", "test", "clippy", "bench", "run", "doc"];
+
+/// The packages that hold no Qt. A build restricted to these needs no Qt
+/// either; anything else reaches platitude-app, including a bare `cargo
+/// test`, whose default members have the app in them.
+const QT_FREE: [&str; 2] = ["platitude-core", "xtask"];
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut rebuild = false;
     let mut shell = false;
+    let mut forced_stage: Option<String> = None;
     // Options are the leading tokens only: everything from the first one
-    // that is not ours belongs to cargo, `--` and all.
+    // that is not ours belongs to the command, `--` and all.
     let mut at = 0;
     while let Some(arg) = args.get(at) {
         match arg.as_str() {
             "--rebuild" => rebuild = true,
             "--shell" => shell = true,
+            "--stage" => {
+                at += 1;
+                let name = args.get(at).ok_or("--stage needs core or app")?;
+                if !matches!(name.as_str(), "core" | "app") {
+                    return Err(format!("unknown stage {name:?}: core or app"));
+                }
+                forced_stage = Some(name.clone());
+            }
             _ => break,
         }
         at += 1;
@@ -44,62 +81,86 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let rest = &args[at..];
     if !shell && rest.is_empty() {
         return Err(
-            "linux needs a cargo command, e.g. `cargo xtask linux test -p platitude-core`".into(),
+            "linux needs a command, e.g. `cargo xtask linux test -p platitude-core`".into(),
         );
-    }
-    if let Some(objection) = would_need_qt(rest) {
-        return Err(objection);
     }
 
     let root = crate::workspace_root();
+    let command = command_line(rest);
     if cfg!(target_os = "linux") {
         if shell {
             return Err("--shell has nothing to enter: this is already Linux".into());
         }
         println!("already on Linux — running here, no container");
-        return cargo_here(&root, rest);
+        return here(&root, &command);
     }
 
-    let tag = image_tag(&root)?;
+    let stage = match &forced_stage {
+        Some(name) => name.clone(),
+        None => stage_for(rest).to_string(),
+    };
+    let tag = image_tag(&root, &stage)?;
     if rebuild || !image_exists(&tag)? {
-        build_image(&root, &tag)?;
+        build_image(&root, &stage, &tag)?;
     }
-    run_in_container(&root, &tag, rest, shell)
+    in_container(&root, &tag, &command, shell)
 }
 
-/// The core image carries no Qt, so a build that reaches platitude-app dies
-/// somewhere inside qtbridge with nothing in the message about why. Say it
-/// here, before the twenty minutes.
-fn would_need_qt(rest: &[String]) -> Option<String> {
-    let verb = rest.first()?.as_str();
-    if !matches!(
-        verb,
-        "build" | "check" | "test" | "clippy" | "bench" | "run"
-    ) {
-        return None;
+/// What to run inside: a cargo command, with `xtask` folded in when the
+/// first word is one of the task runner's own verbs.
+fn command_line(rest: &[String]) -> Vec<String> {
+    let mut line = vec!["cargo".to_string()];
+    if rest
+        .first()
+        .is_some_and(|verb| XTASK_VERBS.contains(&verb.as_str()))
+    {
+        line.push("xtask".to_string());
     }
-    let names_core = rest
+    line.extend(rest.iter().cloned());
+    line
+}
+
+/// Which image the command needs. Nothing here is a guess about Qt itself:
+/// either the command names only Qt-free packages, or it can reach the app.
+fn stage_for(rest: &[String]) -> &'static str {
+    let Some(verb) = rest.first().map(String::as_str) else {
+        // A bare `--shell`. The small image opens now; --stage app asks for
+        // the other one.
+        return "core";
+    };
+    if XTASK_VERBS.contains(&verb) {
+        // verify-ui builds the app and runs it; demo-repo only wants git,
+        // but it is not worth a second answer.
+        return "app";
+    }
+    if !BUILD_VERBS.contains(&verb) {
+        return "core";
+    }
+    let packages: Vec<&str> = rest
         .windows(2)
-        .any(|pair| matches!(pair[0].as_str(), "-p" | "--package") && pair[1] == "platitude-core");
-    if names_core {
-        return None;
+        .filter(|pair| matches!(pair[0].as_str(), "-p" | "--package"))
+        .map(|pair| pair[1].as_str())
+        .collect();
+    if !packages.is_empty() && packages.iter().all(|p| QT_FREE.contains(p)) {
+        "core"
+    } else {
+        "app"
     }
-    Some(format!(
-        "`cargo {verb}` without `-p platitude-core` reaches platitude-app, and \
-         the {STAGE} image carries no Qt. Name the package. (The Qt-carrying \
-         stage lands with the app work.)"
-    ))
 }
 
-/// The image is named after what builds it: change the Dockerfile or the
-/// toolchain pin and the tag changes with it, so a stale image can never be
-/// the one that answers. Docker's layer cache keeps the rebuild cheap. FNV-1a
-/// over both files — a fingerprint, not a security claim, and the tree is LF
-/// everywhere (.gitattributes) so the same tree hashes the same on all three
-/// operating systems.
-fn image_tag(root: &Path) -> Result<String, String> {
+/// The image is named after what builds it: change the Dockerfile, the
+/// toolchain pin or (for the app stage) the Qt version and the tag changes
+/// with it, so a stale image can never be the one that answers. Docker's
+/// layer cache keeps the rebuild cheap. FNV-1a over the files — a
+/// fingerprint, not a security claim, and the tree is LF everywhere
+/// (.gitattributes) so it comes out the same on all three systems.
+fn image_tag(root: &Path, stage: &str) -> Result<String, String> {
+    let mut inputs = vec!["ci/linux/Dockerfile", "rust-toolchain.toml"];
+    if stage == "app" {
+        inputs.push(".github/workflows/ci.yml");
+    }
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for relative in ["ci/linux/Dockerfile", "rust-toolchain.toml"] {
+    for relative in inputs {
         let path = root.join(relative);
         let bytes =
             std::fs::read(&path).map_err(|e| format!("failed to read {}: {e}", path.display()))?;
@@ -108,7 +169,22 @@ fn image_tag(root: &Path) -> Result<String, String> {
             hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
         }
     }
-    Ok(format!("{IMAGE}:{STAGE}-{hash:016x}"))
+    Ok(format!("{IMAGE}:{stage}-{hash:016x}"))
+}
+
+/// The Qt version, read from CI's workflow — which names itself this
+/// project's place to pin a toolchain. A copy in the Dockerfile would be a
+/// second place to forget.
+fn qt_version(root: &Path) -> Result<String, String> {
+    let path = root.join(".github").join("workflows").join("ci.yml");
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
+    text.lines()
+        .filter_map(|line| line.trim().strip_prefix("QT_VERSION:"))
+        .map(|value| value.trim().trim_matches('"').trim_matches('\''))
+        .find(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| format!("no QT_VERSION in {}", path.display()))
 }
 
 fn image_exists(tag: &str) -> Result<bool, String> {
@@ -126,16 +202,21 @@ fn image_exists(tag: &str) -> Result<bool, String> {
     Ok(status.success())
 }
 
-fn build_image(root: &Path, tag: &str) -> Result<(), String> {
-    println!("building {tag} — first time takes a few minutes (Ubuntu + the pinned toolchain)");
-    let status = Command::new("docker")
-        .arg("build")
+fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
+    println!("building {tag} — the first one takes a while");
+    let mut cmd = Command::new("docker");
+    cmd.arg("build")
         .arg("--file")
         .arg(root.join("ci").join("linux").join("Dockerfile"))
         .arg("--target")
-        .arg(STAGE)
+        .arg(stage)
         .arg("--tag")
-        .arg(tag)
+        .arg(tag);
+    if stage == "app" {
+        cmd.arg("--build-arg")
+            .arg(format!("QT_VERSION={}", qt_version(root)?));
+    }
+    let status = cmd
         .arg(root)
         .status()
         .map_err(|e| format!("failed to run docker build: {e}"))?;
@@ -145,7 +226,7 @@ fn build_image(root: &Path, tag: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn run_in_container(root: &Path, tag: &str, rest: &[String], shell: bool) -> Result<(), String> {
+fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Result<(), String> {
     let mut cmd = Command::new("docker");
     cmd.arg("run").arg("--rm");
     // A terminal only when there is one to attach: docker refuses --tty
@@ -160,12 +241,22 @@ fn run_in_container(root: &Path, tag: &str, rest: &[String], shell: bool) -> Res
         .arg("--volume")
         .arg(format!("{IMAGE}-registry:{REGISTRY_MOUNT}"))
         .arg("--workdir")
-        .arg(WORK)
-        .arg(tag);
+        .arg(WORK);
+
+    let mut command = command.to_vec();
+    if let Some(out) = keepsakes(&command)? {
+        cmd.arg("--volume")
+            .arg(format!("{}:{OUT_MOUNT}", mount_path(&out)));
+        command.push("--shot-dir".to_string());
+        command.push(OUT_MOUNT.to_string());
+        println!("screenshots and settings: {}", out.display());
+    }
+
+    cmd.arg(tag);
     if shell {
         cmd.arg("bash");
     } else {
-        cmd.arg("cargo").args(rest);
+        cmd.args(&command);
     }
     let status = cmd
         .status()
@@ -179,16 +270,40 @@ fn run_in_container(root: &Path, tag: &str, rest: &[String], shell: bool) -> Res
     })
 }
 
-fn cargo_here(root: &Path, rest: &[String]) -> Result<(), String> {
-    let status = Command::new("cargo")
-        .args(rest)
+/// A host directory for what a run means to be looked at afterwards, or
+/// None when the command leaves nothing. verify-ui writes its screenshot
+/// and the settings it ran with into --shot-dir; inside a container that is
+/// a place nobody can open, and the whole verdict is a PNG.
+fn keepsakes(command: &[String]) -> Result<Option<PathBuf>, String> {
+    if !command.iter().any(|word| word == "verify-ui") {
+        return Ok(None);
+    }
+    if command.iter().any(|word| word == "--shot-dir") {
+        // Named by the caller, who then owns where it lands.
+        return Ok(None);
+    }
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_nanos();
+    let dir = std::env::temp_dir()
+        .join("pg-linux")
+        .join(format!("shots-{nanos}"));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("failed to make {}: {e}", dir.display()))?;
+    Ok(Some(dir))
+}
+
+fn here(root: &Path, command: &[String]) -> Result<(), String> {
+    let (program, arguments) = command.split_first().ok_or("nothing to run")?;
+    let status = Command::new(program)
+        .args(arguments)
         .current_dir(root)
         .status()
-        .map_err(|e| format!("failed to run cargo: {e}"))?;
+        .map_err(|e| format!("failed to run {program}: {e}"))?;
     if status.success() {
         return Ok(());
     }
-    Err("the cargo command failed".into())
+    Err("the command failed".into())
 }
 
 /// A host path as docker wants it in --volume: forward slashes, drive letter
@@ -223,18 +338,56 @@ fn volume(root: &Path, kind: &str) -> String {
 mod tests {
     use super::*;
 
-    #[test]
-    fn refuses_a_build_that_would_reach_the_app() {
-        assert!(would_need_qt(&["test".to_string()]).is_some());
-        assert!(would_need_qt(&["build".to_string(), "--workspace".to_string()]).is_some());
+    fn words(line: &str) -> Vec<String> {
+        line.split_whitespace().map(String::from).collect()
     }
 
     #[test]
-    fn lets_a_core_only_build_and_the_commands_that_need_nothing_through() {
-        let core = ["test", "-p", "platitude-core", "--test", "it"].map(String::from);
-        assert_eq!(would_need_qt(&core), None);
-        let fmt = ["fmt", "--all", "--check"].map(String::from);
-        assert_eq!(would_need_qt(&fmt), None);
+    fn the_small_image_takes_everything_that_holds_no_qt() {
+        assert_eq!(
+            stage_for(&words("test -p platitude-core --test it")),
+            "core"
+        );
+        assert_eq!(stage_for(&words("test -p xtask -p platitude-core")), "core");
+        assert_eq!(stage_for(&words("fmt --all --check")), "core");
+        assert_eq!(stage_for(&[]), "core");
+    }
+
+    #[test]
+    fn anything_that_can_reach_the_app_takes_the_other_one() {
+        assert_eq!(stage_for(&words("test")), "app");
+        assert_eq!(stage_for(&words("build --workspace")), "app");
+        assert_eq!(stage_for(&words("clippy -p platitude-app")), "app");
+        assert_eq!(stage_for(&words("verify-ui commit --preset basic")), "app");
+    }
+
+    #[test]
+    fn an_xtask_verb_is_run_through_the_task_runner() {
+        assert_eq!(
+            command_line(&words("verify-ui commit --preset basic")),
+            words("cargo xtask verify-ui commit --preset basic")
+        );
+        assert_eq!(
+            command_line(&words("test -p platitude-core")),
+            words("cargo test -p platitude-core")
+        );
+    }
+
+    #[test]
+    fn only_a_verify_run_without_a_directory_of_its_own_gets_one() {
+        assert!(
+            keepsakes(&words("cargo xtask verify-ui commit"))
+                .expect("temp dir")
+                .is_some()
+        );
+        assert_eq!(
+            keepsakes(&words("cargo xtask verify-ui commit --shot-dir /somewhere")).expect("none"),
+            None
+        );
+        assert_eq!(
+            keepsakes(&words("cargo test -p platitude-core")).expect("none"),
+            None
+        );
     }
 
     #[test]
@@ -253,6 +406,16 @@ mod tests {
         assert_eq!(
             mount_path(Path::new("C:\\Users\\x\\platitude-gg")),
             "C:/Users/x/platitude-gg"
+        );
+    }
+
+    #[test]
+    fn the_qt_version_comes_from_the_workflow() {
+        let root = crate::workspace_root();
+        let version = qt_version(&root).expect("QT_VERSION in ci.yml");
+        assert!(
+            version.split('.').all(|part| part.parse::<u32>().is_ok()),
+            "{version:?} does not look like a version"
         );
     }
 }
