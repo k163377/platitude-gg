@@ -693,7 +693,10 @@ Item {
         // Walking away from a refused delete takes the offer with it.
         onClosed: page.forceDeleteBranch = ""
         AppMenuItem {
-            text: qsTr("Switch to %1").arg(page.menuRefId)
+            // The verb alone: this menu was opened on the row it means,
+            // and the row is already showing that name (デザイン規約
+            // §メニュー). `Delete` below it has always read this way.
+            text: qsTr("Switch")
             offered: page.menuCanSwitch
             // Through the same dispatcher the graph's chips use: a remote
             // branch whose local one already exists cannot simply be
@@ -711,8 +714,8 @@ Item {
         // and the reset flags are (§git 用語のコード表記).
         AppMenuItem {
             code: "merge"
-            //: Follows the `merge` chip: "merge topic into main".
-            text: qsTr("%1 into %2").arg(page.menuRefId).arg(workTree.branch)
+            //: Follows the `merge` chip: "merge into main".
+            text: qsTr("into %1").arg(workTree.branch)
             offered: (page.menuRefKind === "branch"
                       || page.menuRefKind === "remote"
                       || page.menuRefKind === "tag")
@@ -721,8 +724,8 @@ Item {
         }
         AppMenuItem {
             code: "rebase"
-            //: Follows the `rebase` chip: "rebase main onto topic".
-            text: qsTr("%1 onto %2").arg(workTree.branch).arg(page.menuRefId)
+            //: Follows the `rebase` chip: "rebase main onto it".
+            text: qsTr("%1 onto it").arg(workTree.branch)
             // Onto a tag as well would be a rebase onto a fixed point,
             // which is a thing to do — but the row that says it belongs
             // with the tag's own gestures, not squeezed in here.
@@ -932,6 +935,12 @@ Item {
     /// Whether this menu's writing rows were on offer as it opened, held
     /// still for as long as it stands (`menuCanSwitch` and the rest).
     property bool menuFileCanWrite: false
+    /// How many files the rows here would touch, counted the way the
+    /// writes count them (`chosenRows()` skips folder rows, which nothing
+    /// in this menu acts on). Not `chosenCount` — that counts chosen
+    /// keys, so a folder in the choice would put a file on the tag that
+    /// no command is going to reach.
+    property int menuFileCount: 0
     function openFileMenu(bucket, path, origPath) {
         // A right-click is a click: it walks away from a question that
         // was standing, which may well be about another row.
@@ -944,6 +953,7 @@ Item {
         // cannot change while the menu is up, so the words the row says
         // and the writes it runs are read off the same plan.
         page.discardPlan = page.planDiscard()
+        page.menuFileCount = wipPane.chosenRows().length
         fileMenu.offer()
         // Which rows the menu offers follows from the bucket, and an
         // absent row is not something a screenshot can be trusted on —
@@ -1126,9 +1136,12 @@ Item {
         AppMenuSeparator {}
         AppMenuItem {
             code: "stash"
-            //: Follows the `stash` chip: "stash this file".
-            text: wipPane.chosenCount > 1 ? qsTr("these files")
-                                          : qsTr("this file")
+            // The rows this menu was opened on are the ones lit in the
+            // list, so how many there are is the only thing left to say —
+            // and `Discard` below already says it on the tag rather than
+            // in the words (デザイン規約 §メニュー).
+            note: page.menuFileCount > 1
+                  ? qsTr("%n files", "", page.menuFileCount) : ""
             // git will not stash a tree with unresolved conflicts in it.
             offered: page.menuFileBucket !== "conflicts"
                      && page.menuFileCanWrite
@@ -1160,7 +1173,9 @@ Item {
         }
         AppMenuSeparator {}
         AppMenuItem {
-            text: wipPane.chosenCount > 1 ? qsTr("Copy paths") : qsTr("Copy path")
+            // Plural by what will land on the clipboard, not by how many
+            // rows are lit (`menuFileCount`).
+            text: page.menuFileCount > 1 ? qsTr("Copy paths") : qsTr("Copy path")
             onTriggered: {
                 const rows = wipPane.chosenRows()
                 const paths = []
