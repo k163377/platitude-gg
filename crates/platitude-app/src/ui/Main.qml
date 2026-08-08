@@ -72,6 +72,20 @@ ApplicationWindow {
     function minimizeWindow() {
         root.visibility = Window.Minimized
     }
+
+    /// How far a maximised window reaches past the screen.
+    ///
+    /// Windows inflates a maximised frame by the width of its invisible
+    /// resize border on every side — the platform's own title bar used to
+    /// absorb that at the top, and there is no title bar here to do it
+    /// (measured: a 1936x1048 frame on a 1920x1032 work area, so 8 all
+    /// round, which was taking the top of the band and the outer edge of
+    /// the close button off screen with it). Read from the two sizes
+    /// rather than from a metric, so whatever the border turns out to be
+    /// on a given display is what comes back.
+    readonly property real maximizedInset:
+        root.captionMerged && root.visibility === Window.Maximized
+        ? Math.max(0, (root.width - Screen.desktopAvailableWidth) / 2) : 0
     font.family: Theme.uiFamily
     font.pixelSize: Theme.fontMd
 
@@ -503,6 +517,9 @@ ApplicationWindow {
         // ApplicationWindow's own handling is the one to keep.
         parent: root.captionMerged ? root.contentItem.parent : root.contentItem
         anchors.fill: parent
+        // Everything the band carries stays inside the screen when the
+        // window is maximised (see `maximizedInset`).
+        anchors.margins: root.maximizedInset
         spacing: 0
         visible: AppBackend.gitState === "ok"
 

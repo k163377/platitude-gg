@@ -30,25 +30,29 @@ Rectangle {
     signal minimizeRequested()
     signal closeRequested()
 
-    /// One of the window's own buttons: a cell the size of the one the app
-    /// menu sits in at the other end of the band, so both ends are built
-    /// the same way. The close button is the one exception to the wash —
-    /// red under the pointer is a convention old enough that departing
-    /// from it would read as a bug, not as a house style.
+    /// One of the window's own buttons. Narrower than the cell the app
+    /// menu sits in, and carrying the smaller mark: this end of the band
+    /// already holds fetch and push, which a browser's does not, so the
+    /// three have to give up the room a browser can spend on them. Full
+    /// band height still, so the column of hit areas is unbroken.
+    ///
+    /// The close button is the one exception to the wash — red under the
+    /// pointer is a convention old enough that departing from it would
+    /// read as a bug, not as a house style.
     component WindowButton: Rectangle {
         id: winBtn
         property string kind: ""
         property bool danger: false
         signal triggered()
 
-        width: Theme.railWidth
+        width: Theme.controlHeight
         height: parent ? parent.height : Theme.toolbarHeight
         color: !winBtnMouse.containsMouse ? "transparent"
                : winBtn.danger ? Theme.danger : Theme.bgHover
         NavIcon {
             anchors.centerIn: parent
-            width: Theme.iconLg
-            height: Theme.iconLg
+            width: Theme.iconMd
+            height: Theme.iconMd
             kind: winBtn.kind
             tint: winBtnMouse.containsMouse && winBtn.danger
                   ? Theme.textOnAccent : Theme.textPrimary
@@ -164,7 +168,12 @@ Rectangle {
         // the title bar: the corner of a maximised window is the one
         // target a pointer cannot overshoot.
         anchors.rightMargin: topBar.captionMerged ? 0 : Theme.spaceMd
-        spacing: Theme.spaceSm
+        // The tighter step between this row's controls. A browser's band
+        // carries the window's buttons and nothing else; this one carries
+        // the command log, fetch and push as well, so the same spacing a
+        // browser can afford would push the three off the end of what the
+        // eye reads as one group.
+        spacing: Theme.spaceXs
         // The strip: the app menu, the tabs, the way to open one more, and
         // whatever band is left over. Placed by hand rather than by a Row,
         // because the first three have to touch and the leftover has to be
