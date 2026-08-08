@@ -314,7 +314,7 @@ HoverToolButton {
                 font.wordSpacing: actionBtn.widestCode ? -Theme.spaceXs : 0
                 font.pixelSize: actionBtn.font.pixelSize
             }
-            Label {
+            Item {
                 id: btnLabel
                 // The box is the widest wording plus one gap, so the last
                 // letter stands off the frame the way the first stands off
@@ -328,26 +328,102 @@ HoverToolButton {
                 // than the letter's. Adding the gap on top of it leaves the
                 // widest wording loose on the right while the chip all but
                 // touches the icon on the left (measured: 7px against 2px).
+                //
+                // Measured from the font even where the flag is drawn (see
+                // below) — the box is what holds the toolbar still, and it
+                // must not move when a shorter rule is chosen for the flag.
                 readonly property real box:
                     widest.implicitWidth > 0
                     ? widest.implicitWidth
                       + (actionBtn.widestCode ? 0 : Theme.spaceXs)
                     : 0
-                text: actionBtn.text
-                color: actionBtn.fg
-                font.family: actionBtn.code ? Theme.monoFamily
-                                            : Theme.uiFamily
-                // A command and its flag are one thing said, and a mono
-                // space is far wider than the air the chip keeps at its own
-                // ends — left alone, `-f` drifts away from the `push` it
-                // belongs to and the chip reads as two words on one ground
-                // (デザイン規約 §git 用語のコード表記).
-                font.wordSpacing: actionBtn.code ? -Theme.spaceXs : 0
-                font.pixelSize: actionBtn.font.pixelSize
-                elide: Text.ElideRight
+                /// A command's flag, set apart from the command itself so
+                /// its dashes can be drawn rather than typed. Every dash
+                /// the mono family carries is the same 7px rule in an 8px
+                /// cell (measured over U+002D / 2010 / 2011 / 2212), and
+                /// on the wording the shared box was measured for that is
+                /// what leaves the mark no room past the word. Drawn, the
+                /// rule's length and the air either side are ours to pick
+                /// (デザイン規約 §git 用語のコード表記).
+                readonly property int flagAt: actionBtn.code
+                                              ? actionBtn.text.indexOf(" -") : -1
+                readonly property bool splitFlag: btnLabel.flagAt > 0
+                readonly property string head: btnLabel.splitFlag
+                    ? actionBtn.text.substring(0, btnLabel.flagAt) : actionBtn.text
+                /// The flag with its leading dashes taken off, and how
+                /// many of them there were.
+                readonly property string flagRest: btnLabel.splitFlag
+                    ? actionBtn.text.substring(btnLabel.flagAt + 1).replace(/^-+/, "") : ""
+                readonly property int dashCount: btnLabel.splitFlag
+                    ? actionBtn.text.substring(btnLabel.flagAt + 1).length
+                      - btnLabel.flagRest.length : 0
+
+                implicitWidth: headText.width
+                               + (btnLabel.splitFlag ? flagRow.width : 0)
+                implicitHeight: headText.implicitHeight
                 Layout.maximumWidth: 240
-                Layout.preferredWidth: Math.max(implicitWidth, box)
+                Layout.preferredWidth: Math.max(btnLabel.implicitWidth, btnLabel.box)
                 Layout.alignment: Qt.AlignVCenter
+
+                // The command, or the whole wording where there is no flag
+                // to take off it.
+                Label {
+                    id: headText
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    // Bounded by the cell's own ceiling rather than by its
+                    // width: the width comes from this, so reading it back
+                    // would close a loop.
+                    width: Math.min(implicitWidth, btnLabel.Layout.maximumWidth)
+                    text: btnLabel.head
+                    color: actionBtn.fg
+                    font.family: actionBtn.code ? Theme.monoFamily
+                                                : Theme.uiFamily
+                    // A command and its flag are one thing said, and a mono
+                    // space is far wider than the air the chip keeps at its
+                    // own ends — left alone, `-f` drifts away from the
+                    // `push` it belongs to and the chip reads as two words
+                    // on one ground (デザイン規約 §git 用語のコード表記).
+                    font.wordSpacing: actionBtn.code ? -Theme.spaceXs : 0
+                    font.pixelSize: actionBtn.font.pixelSize
+                    elide: Text.ElideRight
+                }
+                // The flag: the air the mono space held, a drawn rule for
+                // each dash, and the letters after them in the font. The
+                // rule is `borderWidth` thick because that is what the
+                // font's own dash measures at this size, and a hair of air
+                // follows it so the letter does not touch.
+                Row {
+                    id: flagRow
+                    visible: btnLabel.splitFlag
+                    anchors.left: headText.right
+                    anchors.verticalCenter: headText.verticalCenter
+                    spacing: 0
+                    Item {
+                        width: Theme.spaceXs
+                        height: headText.height
+                    }
+                    Repeater {
+                        model: btnLabel.dashCount
+                        Item {
+                            width: Theme.spaceXs + Theme.borderWidth
+                            height: headText.height
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: Theme.spaceXs
+                                height: Theme.borderWidth
+                                color: actionBtn.fg
+                            }
+                        }
+                    }
+                    Label {
+                        text: btnLabel.flagRest
+                        color: actionBtn.fg
+                        font.family: Theme.monoFamily
+                        font.pixelSize: actionBtn.font.pixelSize
+                    }
+                }
                 // The chip a command wears, behind the glyphs and only as
                 // wide as they are — the box around them is measured for
                 // the longest wording of the pair, and a ground stretched
@@ -371,20 +447,21 @@ HoverToolButton {
                 // one — a mark crossing that edge reads as stuck to the
                 // chip rather than said after the word.
                 //
-                // Half a gap out for both. A command's chip already
-                // reaches that far, so this is its ground's edge; a plain
-                // word has nothing there and gets the gap itself. Pulling
-                // the mark back for the plain one — which nothing wore
-                // until push could be refused on its first go — sets it
-                // against the last letter, and `Publish` then reads as an
-                // exclamation rather than as a word with a mark after it.
+                // Set close to it, though: the air a chip's ground keeps
+                // at its own end is already enough to tell the two apart,
+                // and further out the mark starts to read as the toolbar's
+                // rather than this button's. Closer still after a flag —
+                // that is the longest thing the button says and the one
+                // wording whose right-hand side is short of room
+                // (デザイン規約 §リモートへ送る).
                 NavIcon {
                     visible: actionBtn.alert
                     kind: "bang"
                     tint: actionBtn.fg
                     width: Theme.iconSm
                     height: Theme.iconSm
-                    x: btnLabel.implicitWidth + Theme.spaceXs / 2
+                    x: btnLabel.implicitWidth
+                       - (btnLabel.splitFlag ? Theme.spaceXs / 2 : 0)
                     y: -Theme.spaceXs
                 }
             }
