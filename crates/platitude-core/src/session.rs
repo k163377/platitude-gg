@@ -299,6 +299,12 @@ pub enum SessionEvent {
         remote: String,
         branch: String,
         exists: bool,
+        /// Whether the remote answered at all. It may be unreachable — a
+        /// URL typed wrong, credentials that are not there, no network —
+        /// and "could not ask" is an answer the question has to be able to
+        /// stand on. Treating silence as "not taken" would send on the
+        /// assumption git refuses what it does not.
+        reached: bool,
     },
     /// Answer to [`RepoSession::check_publish`].
     PublishChecked {
@@ -2240,43 +2246,6 @@ impl RepoSession {
         );
     }
 
-    /// The first push of a branch to a remote that does not exist yet:
-    /// record the remote, then send the branch to it.
-    ///
-    /// One write rather than two queued ones, so the push cannot run
-    /// against a remote whose `add` was refused. The reverse does happen —
-    /// `add` records a URL without contacting it, so a push to a URL typed
-    /// wrong fails with the remote already added. That is left standing on
-    /// purpose: the way back is to correct the URL, not to lose it.
-    pub fn publish_to_new_remote(
-        self: &Arc<Self>,
-        remote_name: String,
-        url: String,
-        remote_branch: String,
-    ) {
-        let timeout = self.network_timeout();
-        let s = Arc::clone(self);
-        self.write(
-            "push",
-            AfterWrite::Graph,
-            move |exec, repo, cancel| async move {
-                remote::add(&exec, &repo.workdir, &remote_name, &url, &cancel).await?;
-                let spec = remote::plan_publish(
-                    &exec,
-                    &repo.workdir,
-                    &remote_name,
-                    &remote_branch,
-                    &cancel,
-                )
-                .await?;
-                let target = spec.remote.clone();
-                let result = remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await;
-                s.catch_up_after(&result, target);
-                result
-            },
-        );
-    }
-
     /// `git remote add <name> <url>`.
     ///
     /// Nothing is contacted, so this succeeds on a URL that goes nowhere;
@@ -2325,12 +2294,23 @@ impl RepoSession {
             )
             .await
             {
+                // A remote that cannot be reached answers too, and the
+                // failure is not raised as one: the question is standing
+                // and about to say so itself, so opening the command log
+                // over it would say the same thing twice (the command is
+                // recorded either way).
                 Ok(exists) => s.sink.event(SessionEvent::RemoteBranchChecked {
                     remote: remote_name,
                     branch,
                     exists,
+                    reached: true,
                 }),
-                Err(e) => s.fail("ls-remote", e),
+                Err(_) => s.sink.event(SessionEvent::RemoteBranchChecked {
+                    remote: remote_name,
+                    branch,
+                    exists: false,
+                    reached: false,
+                }),
             }
         });
     }

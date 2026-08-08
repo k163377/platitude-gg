@@ -74,6 +74,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/PaneHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefChip.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefListPopup.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/RemoteDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RepoPage.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SidebarPane.qml", "qt/qml/platitude");

@@ -45,6 +45,9 @@ pub struct RepoTab {
     remote_branch_asked: String,
     /// Whether that name is already taken on that remote.
     remote_branch_taken: bool,
+    /// Whether the remote answered at all. Unreachable is its own answer:
+    /// "not taken" cannot be assumed from silence.
+    remote_branch_reached: bool,
     /// Last answer to `checkPublish`: how much of a range a remote has.
     publish_range: String,
     publish_total: i32,
@@ -149,6 +152,7 @@ impl Default for RepoTab {
             remote_names: String::new(),
             remote_branch_asked: String::new(),
             remote_branch_taken: false,
+            remote_branch_reached: false,
             publish_range: String::new(),
             publish_total: 0,
             publish_published: 0,
@@ -291,6 +295,11 @@ impl RepoTab {
     qproperty!(
         "remoteBranchTaken",
         Member = remote_branch_taken,
+        Notify = changed
+    );
+    qproperty!(
+        "remoteBranchReached",
+        Member = remote_branch_reached,
         Notify = changed
     );
     qproperty!("publishRange", Member = publish_range, Notify = changed);
@@ -490,9 +499,11 @@ impl RepoTab {
                     remote,
                     branch,
                     exists,
+                    reached,
                 } => {
                     self.remote_branch_asked = format!("{remote}\u{1f}{branch}");
                     self.remote_branch_taken = exists;
+                    self.remote_branch_reached = reached;
                 }
                 TabMsg::HeadCommit {
                     message,
@@ -987,15 +998,6 @@ impl RepoTab {
         self.with_session(|s| s.publish_current(remote.clone(), remote_branch.clone()));
     }
 
-    /// The same first push, to a remote this answer also creates. One
-    /// write: a push never runs against a remote whose `add` was refused.
-    #[qslot]
-    fn publish_to_new_remote(&mut self, remote: String, url: String, remote_branch: String) {
-        self.with_session(|s| {
-            s.publish_to_new_remote(remote.clone(), url.clone(), remote_branch.clone())
-        });
-    }
-
     /// `git remote add <name> <url>`. Contacts nothing — a URL that goes
     /// nowhere is recorded just the same, and the push finds out.
     #[qslot]
@@ -1016,6 +1018,7 @@ impl RepoTab {
     fn check_remote_branch(&mut self, remote: String, branch: String) {
         self.remote_branch_asked = String::new();
         self.remote_branch_taken = false;
+        self.remote_branch_reached = false;
         self.changed();
         self.with_session(|s| s.check_remote_branch(remote.clone(), branch.clone()));
     }

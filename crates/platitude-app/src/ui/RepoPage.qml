@@ -407,11 +407,8 @@ Item {
     // things raise it — this button, a graph row, a REMOTES row — and a
     // question that moves house by who asked it cannot be read.
     property bool publishAsking: false
-    /// The remote the answer picks. Empty while it is making one instead.
+    /// The remote the answer picks.
     property string publishRemote: ""
-    property bool publishAdding: false
-    property string publishNewName: ""
-    property string publishNewUrl: ""
     /// What the branch is to be called over there — its own name unless
     /// the answer says otherwise.
     property string publishBranch: ""
@@ -420,27 +417,43 @@ Item {
         const packed = repoTab.remoteNames
         return packed === "" ? [] : packed.split(String.fromCharCode(31))
     }
+    /// The last row of the chooser: not a remote, but the way to one this
+    /// repository does not have yet. It opens the dialog that writes a
+    /// remote down — the question stays standing behind it and picks the
+    /// new remote up when it lands.
+    readonly property string publishAddChoice: qsTr("Add a remote…")
+    readonly property var publishChoices:
+        page.publishRemotes.concat([page.publishAddChoice])
+    function choosePublishRemote(index) {
+        if (index >= page.publishRemotes.length) {
+            remoteDialog.start("", "", page.publishRemotes)
+            return
+        }
+        page.publishRemote = page.publishRemotes[index]
+        page.refreshPublishCheck()
+    }
+
     readonly property string publishTarget:
-        (page.publishAdding ? page.publishNewName : page.publishRemote)
-        + "/" + page.publishBranch
+        page.publishRemote + "/" + page.publishBranch
     /// Enough of an answer to send anything at all.
     readonly property bool publishFilled:
-        page.publishBranch !== ""
-        && (page.publishAdding
-            ? page.publishNewName !== "" && page.publishNewUrl !== ""
-            : page.publishRemote !== "")
-    /// The remote has answered for exactly what is typed now. A remote
-    /// being made has nobody to ask, so nothing is waited for.
+        page.publishBranch !== "" && page.publishRemote !== ""
+    /// The remote has answered for exactly what is typed now.
     readonly property bool publishChecked:
-        page.publishAdding
-        || repoTab.remoteBranchAsked === page.publishRemote
-           + String.fromCharCode(31) + page.publishBranch
+        repoTab.remoteBranchAsked === page.publishRemote
+        + String.fromCharCode(31) + page.publishBranch
     /// …and the answer was yes: this name is already over there, so
     /// sending advances a branch somebody else made instead of making one.
     /// git does not refuse that when it fast-forwards (実測), so the hold
     /// is what stands in for the refusal.
     readonly property bool publishTaken:
-        page.publishChecked && !page.publishAdding && repoTab.remoteBranchTaken
+        page.publishChecked && repoTab.remoteBranchTaken
+    /// The remote never answered — unreachable URL, credentials that are
+    /// not there, no network. Sending is still allowed (only a push finds
+    /// out what a remote really holds) but it takes the hold: what could
+    /// not be ruled out is that the name is already over there.
+    readonly property bool publishUnsure:
+        page.publishChecked && !repoTab.remoteBranchReached
 
     /// The remote is asked once the typing settles, not per keystroke: it
     /// is a round trip to the network, and the person pressed a button
@@ -449,8 +462,8 @@ Item {
         id: publishCheckTimer
         interval: 350
         onTriggered: {
-            if (page.publishAsking && !page.publishAdding
-                    && page.publishRemote !== "" && page.publishBranch !== "")
+            if (page.publishAsking && page.publishRemote !== ""
+                    && page.publishBranch !== "")
                 repoTab.checkRemoteBranch(page.publishRemote, page.publishBranch)
         }
     }
@@ -470,28 +483,29 @@ Item {
     Binding {
         target: graphPane
         property: "askHold"
-        value: page.publishTaken
+        value: page.publishTaken || page.publishUnsure
         when: page.publishAsking
     }
     Binding {
         target: graphPane
         property: "askNeutral"
-        value: !page.publishTaken
+        value: !page.publishTaken && !page.publishUnsure
         when: page.publishAsking
     }
     Binding {
         target: graphPane
         property: "askDetail"
-        value: page.publishAdding
-               ? qsTr("The URL is recorded here; nothing is contacted until the push.")
-               : !page.publishFilled ? qsTr("Pick where it goes.")
+        value: !page.publishFilled ? qsTr("Pick where it goes.")
                : !page.publishChecked
                  ? qsTr("Asking %1 what it has…").arg(page.publishRemote)
-                 : page.publishTaken
-                   ? qsTr("%1 already exists — your commits go on top of it.")
-                     .arg(page.publishTarget)
-                   : qsTr("%1 does not exist yet; this makes it.")
-                     .arg(page.publishTarget)
+                 : page.publishUnsure
+                   ? qsTr("%1 did not answer — it may already have that branch.")
+                     .arg(page.publishRemote)
+                   : page.publishTaken
+                     ? qsTr("%1 already exists — your commits go on top of it.")
+                       .arg(page.publishTarget)
+                     : qsTr("%1 does not exist yet; this makes it.")
+                       .arg(page.publishTarget)
         when: page.publishAsking
     }
     Binding {
@@ -500,15 +514,15 @@ Item {
         value: page.publishTaken
                ? qsTr("Nobody is asked over there: a branch that can be "
                       + "fast-forwarded simply moves.")
-               : ""
+               : page.publishUnsure
+                 ? qsTr("The push will say what went wrong; the command log "
+                        + "has what was run.")
+                 : ""
         when: page.publishAsking
     }
 
     function startPublishAsk() {
-        page.publishAdding = repoTab.remoteCount === 0
-        page.publishRemote = page.publishAdding ? "" : repoTab.defaultRemote
-        page.publishNewName = page.publishAdding ? "origin" : ""
-        page.publishNewUrl = ""
+        page.publishRemote = repoTab.defaultRemote
         page.publishBranch = workTree.branch
         page.startRowAsk("", qsTr("Send %1 where?").arg(workTree.branch), "",
                          false, qsTr("Send"), page.answerPublish, false, "",
@@ -525,14 +539,28 @@ Item {
         page.publishBranch = name
         page.refreshPublishCheck()
     }
-    /// Automation: the `Add a remote…` chip, and what gets typed into the
-    /// two boxes it opens (`<name>|<url>`, either half may be empty).
+    /// Automation: the chooser's last row, and what gets typed into the
+    /// dialog it opens (`<name>|<url>`, either half may be empty).
     function startPublishAddRemote(spec) {
         const parts = spec === "" ? [] : spec.split("|")
-        page.publishAdding = true
-        page.publishRemote = ""
-        page.publishNewName = parts.length > 0 && parts[0] !== "" ? parts[0] : "origin"
-        page.publishNewUrl = parts.length > 1 ? parts[1] : ""
+        page.choosePublishRemote(page.publishRemotes.length)
+        remoteDialog.setFields(parts.length > 0 ? parts[0] : "",
+                               parts.length > 1 ? parts[1] : "")
+    }
+    /// Automation: the dialog's own button, once it is up.
+    Timer {
+        id: publishAddTimer
+        interval: 600
+        onTriggered: {
+            remoteDialog.submit()
+            publishAnswerTimer.start()
+        }
+    }
+    /// Automation: the chooser's list, which no injected click can reach.
+    function openPublishRemotes() {
+        const form = graphPane.askForm
+        if (form && form.remotePick)
+            form.remotePick.popup.open()
     }
     /// Automation: the answer, given after the remote has had time to say
     /// what it has — the pill is dead until it has.
@@ -541,8 +569,11 @@ Item {
         interval: 1200
         onTriggered: {
             AppBackend.report("publish answering taken=" + page.publishTaken
+                              + " unsure=" + page.publishUnsure
                               + " answerable=" + graphPane.askAnswerable)
-            if (page.publishTaken)
+            // The same gesture a person is given: a hold cannot be
+            // answered by a click here either.
+            if (page.publishTaken || page.publishUnsure)
                 graphPane.completeHold()
             else
                 page.answerRowAsk()
@@ -550,11 +581,24 @@ Item {
     }
 
     function answerPublish() {
-        if (page.publishAdding)
-            repoTab.publishToNewRemote(page.publishNewName, page.publishNewUrl,
-                                       page.publishBranch)
-        else
-            repoTab.publishCurrent(page.publishRemote, page.publishBranch)
+        repoTab.publishCurrent(page.publishRemote, page.publishBranch)
+    }
+
+    // Writing a remote down, and correcting one. The question that sent us
+    // here keeps standing: the new remote lands in the chooser and is
+    // picked, so the answer carries on where it left off.
+    RemoteDialog {
+        id: remoteDialog
+        onSubmitted: (name, url) => {
+            if (remoteDialog.editing === "")
+                repoTab.addRemote(name, url)
+            else
+                repoTab.setRemoteUrl(name, url)
+            if (page.publishAsking) {
+                page.publishRemote = name
+                page.refreshPublishCheck()
+            }
+        }
     }
 
     /// The controls the question needs: which remote, and what the branch
@@ -564,64 +608,25 @@ Item {
         id: publishForm
         ColumnLayout {
             spacing: Theme.spaceXs
+            /// Automation only: the list cannot be opened by an injected
+            /// click on the offscreen platform.
+            property alias remotePick: remotePick
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceSm
-            // Every remote this repository has, and the way to one it does
-            // not. Picking is the whole interaction where a remote exists;
-            // the boxes only appear for the case that has none.
-            Repeater {
-                model: page.publishRemotes
-                Rectangle {
-                    required property string modelData
-                    readonly property bool picked: !page.publishAdding
-                                                   && page.publishRemote === modelData
-                    implicitWidth: pickLabel.implicitWidth + 2 * Theme.spaceSm
-                    implicitHeight: Theme.iconLg
-                    radius: Theme.radiusSm
-                    color: picked ? Theme.bgSelected : "transparent"
-                    border.color: picked ? Theme.accent : Theme.borderDefault
-                    border.width: Theme.borderWidth
-                    Label {
-                        id: pickLabel
-                        anchors.centerIn: parent
-                        text: parent.modelData
-                        color: parent.picked ? Theme.textPrimary : Theme.textSecondary
-                        font.pixelSize: Theme.fontSm
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: {
-                            page.publishAdding = false
-                            page.publishRemote = parent.modelData
-                            page.refreshPublishCheck()
-                        }
-                    }
-                }
-            }
-            Rectangle {
-                implicitWidth: addLabel.implicitWidth + 2 * Theme.spaceSm
-                implicitHeight: Theme.iconLg
-                radius: Theme.radiusSm
-                color: page.publishAdding ? Theme.bgSelected : "transparent"
-                border.color: page.publishAdding ? Theme.accent : Theme.borderDefault
-                border.width: Theme.borderWidth
-                Label {
-                    id: addLabel
-                    anchors.centerIn: parent
-                    text: qsTr("Add a remote…")
-                    color: page.publishAdding ? Theme.textPrimary : Theme.textSecondary
-                    font.pixelSize: Theme.fontSm
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        page.publishAdding = true
-                        page.publishRemote = ""
-                        if (page.publishNewName === "")
-                            page.publishNewName = "origin"
-                    }
-                }
+            // Every remote this repository has, with the way to one it
+            // does not on the end of the same list. A list rather than a
+            // row of chips: a fork-and-upstream working copy has several,
+            // and chips grow sideways until they push the name out of the
+            // pane, while a list stays one control wide however many there
+            // are (デザイン規約 §はじめてリモートへ送る).
+            AppCombo {
+                id: remotePick
+                pickOnly: true
+                Layout.preferredWidth: 180
+                model: page.publishChoices
+                wanted: page.publishRemote
+                onActivated: index => page.choosePublishRemote(index)
             }
             // Never a placeholder: the branch's own name is the answer
             // unless somebody changes it, and an empty box would read as
@@ -640,26 +645,6 @@ Item {
             // the row, not between the chips and the name.
             Item {
                 Layout.fillWidth: true
-            }
-        }
-        // A remote being made needs a line of its own: a URL and a name
-        // and a branch do not fit across one pane, and a URL squeezed into
-        // what is left of a row cannot be read back.
-        RowLayout {
-            Layout.fillWidth: true
-            visible: page.publishAdding
-            spacing: Theme.spaceSm
-            SlimField {
-                Layout.preferredWidth: 140
-                text: page.publishNewName
-                placeholderText: qsTr("name")
-                onTextEdited: page.publishNewName = text
-            }
-            SlimField {
-                Layout.fillWidth: true
-                text: page.publishNewUrl
-                placeholderText: qsTr("URL to push to")
-                onTextEdited: page.publishNewUrl = text
             }
         }
         }
@@ -1764,7 +1749,7 @@ Item {
         const arg = AppBackend.autoActArg
         if (act === "publish" || act === "publish-taken"
                 || act === "publish-add" || act === "publish-go"
-                || act === "publish-new-go") {
+                || act === "publish-new-go" || act === "publish-remotes") {
             // The button's own path, so the state machine in front of the
             // question is exercised too, not just the question.
             page.pushNow()
@@ -1774,11 +1759,14 @@ Item {
                 page.startPublishAddRemote(arg)
             else if (arg !== "")
                 page.setPublishBranch(arg)
-            if (act === "publish-go" || act === "publish-new-go")
+            if (act === "publish-new-go")
+                publishAddTimer.start()
+            else if (act === "publish-go")
                 publishAnswerTimer.start()
+            else if (act === "publish-remotes")
+                page.openPublishRemotes()
             AppBackend.report("publish state=" + page.pushState
                               + " remote=" + page.publishRemote
-                              + " adding=" + page.publishAdding
                               + " branch=" + page.publishBranch)
         } else if (act === "commit") {
             repoTab.stageAll()

@@ -36,6 +36,7 @@ OpExitRow 1.0 OpExitRow.qml
 PaneHeader 1.0 PaneHeader.qml
 RefChip 1.0 RefChip.qml
 RefListPopup 1.0 RefListPopup.qml
+RemoteDialog 1.0 RemoteDialog.qml
 RepoPage 1.0 RepoPage.qml
 SettingsDialog 1.0 SettingsDialog.qml
 SidebarPane 1.0 SidebarPane.qml

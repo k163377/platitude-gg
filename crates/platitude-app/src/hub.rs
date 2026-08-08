@@ -75,6 +75,8 @@ pub enum TabMsg {
         remote: String,
         branch: String,
         exists: bool,
+        /// False when the remote could not be asked at all.
+        reached: bool,
     },
     /// Merge tool names the settings field can offer. Empty is an answer.
     /// `settled` false is the fast half, with the slow read still out.
@@ -477,11 +479,13 @@ impl SessionSink for BridgeSink {
                 remote,
                 branch,
                 exists,
+                reached,
             } => {
                 self.feeds.tab.push(TabMsg::RemoteBranch {
                     remote,
                     branch,
                     exists,
+                    reached,
                 });
             }
             SessionEvent::SignatureChecked { oid, signature } => {

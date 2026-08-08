@@ -20,6 +20,14 @@ ComboBox {
     /// empty means "unset" or "not read yet".
     property string placeholder: ""
 
+    /// The list is the whole set of answers rather than a shortcut past
+    /// typing one: nothing outside it means anything (a branch goes to a
+    /// remote this repository has, or to one the same question makes). The
+    /// field stops taking text and becomes the value it shows, and the
+    /// owner keeps `wanted` — picking a row reports the choice instead of
+    /// writing it, so a binding on `wanted` is not overwritten from here.
+    property bool pickOnly: false
+
     /// A read is out for the list. The seat the arrow sits in turns
     /// instead — the list can take seconds to arrive, and an arrow over an
     /// empty list says "nothing" where "not yet" is the truth.
@@ -41,14 +49,19 @@ ComboBox {
     /// popup is up, so neither focus nor a flag set here can tell that
     /// reset from typing.
     property string wanted: ""
-    onWantedChanged: if (combo.editText !== combo.wanted) combo.editText = combo.wanted
-    onActivated: index => combo.wanted = combo.textAt(index)
+    onWantedChanged: if (!combo.pickOnly && combo.editText !== combo.wanted)
+        combo.editText = combo.wanted
+    onActivated: index => {
+        if (!combo.pickOnly)
+            combo.wanted = combo.textAt(index)
+    }
     // Undo the reset the swap caused, once it has finished happening.
     onModelChanged: Qt.callLater(() => {
-        combo.editText = combo.wanted
+        if (!combo.pickOnly)
+            combo.editText = combo.wanted
     })
 
-    editable: true
+    editable: !combo.pickOnly
     implicitHeight: Theme.controlHeight
     font.pixelSize: Theme.fontMd
 
@@ -62,17 +75,32 @@ ComboBox {
     // Own contentItem, so it does not go through palette (§無効).
     contentItem: TextInput {
         id: input
-        text: combo.editText
+        // Picking only, the value is the owner's and never `editText`:
+        // ComboBox does not maintain that outside an editable field.
+        text: combo.pickOnly ? combo.wanted : combo.editText
         color: combo.enabled ? Theme.textPrimary : Theme.textMuted
         font: combo.font
         leftPadding: Theme.spaceSm
         rightPadding: Theme.spaceSm
         verticalAlignment: Text.AlignVCenter
-        selectByMouse: true
+        readOnly: combo.pickOnly
+        selectByMouse: !combo.pickOnly
         selectionColor: Theme.bgSelected
         selectedTextColor: Theme.textPrimary
-        onTextChanged: combo.editText = text
+        onTextChanged: if (!combo.pickOnly) combo.editText = text
         onTextEdited: combo.wanted = text
+        // A read-only input still takes the press, so the control it sits
+        // in would never see the click that opens its list.
+        MouseArea {
+            anchors.fill: parent
+            enabled: combo.pickOnly
+            onClicked: {
+                if (combo.popup.opened)
+                    combo.popup.close()
+                else
+                    combo.popup.open()
+            }
+        }
         Label {
             anchors.fill: parent
             visible: input.text === ""
