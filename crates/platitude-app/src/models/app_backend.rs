@@ -359,6 +359,22 @@ impl AppBackend {
         crate::winframe::keep_system_gestures();
     }
 
+    /// Paints the hairline the platform draws around the window. `color`
+    /// is `#rrggbb` and comes from the design tokens — the window's edge
+    /// is the app's, not the system's, now that the band reaches the top.
+    /// Anything that is not six hex digits is left to the system.
+    #[qslot]
+    fn set_window_border(&self, color: String) {
+        let Some(rgb) = color
+            .strip_prefix('#')
+            .and_then(|c| u32::from_str_radix(c, 16).ok())
+        else {
+            tracing::debug!(%color, "window border colour not understood");
+            return;
+        };
+        crate::winframe::set_border_color(rgb);
+    }
+
     // -- window state -------------------------------------------------------
     //
     // Read once as a page or the window is built, not bound: these are

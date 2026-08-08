@@ -30,11 +30,12 @@ Rectangle {
     signal minimizeRequested()
     signal closeRequested()
 
-    /// One of the window's own buttons. Narrower than the cell the app
-    /// menu sits in, and carrying the smaller mark: this end of the band
-    /// already holds fetch and push, which a browser's does not, so the
-    /// three have to give up the room a browser can spend on them. Full
-    /// band height still, so the column of hit areas is unbroken.
+    /// One of the window's own buttons: the same cell the app menu sits in
+    /// at the other end of the band, so the two ends are built alike and
+    /// the outer one keeps its distance from the window's edge. The mark
+    /// inside is a step down from the menu's — the platform's own three
+    /// are smaller than an app's marks, and at `iconLg` they read as the
+    /// loudest thing in the band.
     ///
     /// The close button is the one exception to the wash — red under the
     /// pointer is a convention old enough that departing from it would
@@ -45,7 +46,7 @@ Rectangle {
         property bool danger: false
         signal triggered()
 
-        width: Theme.controlHeight
+        width: Theme.railWidth
         height: parent ? parent.height : Theme.toolbarHeight
         color: !winBtnMouse.containsMouse ? "transparent"
                : winBtn.danger ? Theme.danger : Theme.bgHover

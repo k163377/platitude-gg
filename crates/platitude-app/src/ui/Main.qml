@@ -364,8 +364,13 @@ ApplicationWindow {
         AppBackend.setWindowIcon()
         // Asking for no drawn buttons took the system's own gestures with
         // them; this puts those back (see `flags` above).
-        if (root.captionMerged)
+        if (root.captionMerged) {
             AppBackend.keepWindowGestures()
+            // The hairline Windows draws around the window. Left to the
+            // system it is a light line, and with no title bar to explain
+            // it, it reads as a stray white edge over the band.
+            AppBackend.setWindowBorder(Theme.borderDefault)
+        }
         root.applySavedWindow()
         if (AppBackend.autoOpen !== "") {
             // Multiple repositories separated by ';' open as tabs in order.

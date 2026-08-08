@@ -40,6 +40,20 @@ pub fn keep_system_gestures() {
     win32::keep_system_gestures();
 }
 
+/// Paints the hairline Windows 11 draws around the window.
+///
+/// Left alone it is the system's border colour, which on a light system
+/// is a light line — and this window has no title bar to explain it, so
+/// it reads as a stray white edge across the top of the band. `rgb` is
+/// `0xRRGGBB`; the colour itself comes from the design tokens, because
+/// this is the app's own edge and not a system one.
+pub fn set_border_color(rgb: u32) {
+    #[cfg(windows)]
+    win32::set_border_color(rgb);
+    #[cfg(not(windows))]
+    let _ = rgb;
+}
+
 #[cfg(windows)]
 mod win32 {
     #![expect(
@@ -55,6 +69,10 @@ mod win32 {
     const CORNER_PREFERENCE: u32 = 33;
     /// `DWMWCP_DONOTROUND` (dwmapi.h).
     const DO_NOT_ROUND: u32 = 1;
+    /// `DWMWA_BORDER_COLOR` (dwmapi.h, Windows 11 22000+). Takes a
+    /// `COLORREF`, which is `0x00BBGGRR` — the reverse of how a colour is
+    /// written everywhere else in this tree.
+    const BORDER_COLOR: u32 = 34;
 
     /// `GWL_STYLE` and the three style bits the drawn buttons took with
     /// them, plus the `SetWindowPos` flags that mean "nothing but the
@@ -178,6 +196,44 @@ mod win32 {
         unsafe {
             EnumThreadWindows(GetCurrentThreadId(), wear_one, 0);
         }
+    }
+
+    thread_local! {
+        /// The colour the border walk is handing out, since the callback
+        /// takes no argument of its own.
+        static BORDER: Cell<u32> = const { Cell::new(0) };
+    }
+
+    pub(super) fn set_border_color(rgb: u32) {
+        // COLORREF puts blue where a hex colour puts red.
+        let colorref = ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
+        BORDER.set(colorref);
+        // SAFETY: as in `square_corners` — the same walk, and the callback
+        // only writes an attribute on the window it is handed.
+        unsafe {
+            EnumThreadWindows(GetCurrentThreadId(), paint_one, 0);
+        }
+    }
+
+    /// Runs for every top-level window the thread owns; the ones with no
+    /// border to paint report that they refused.
+    extern "system" fn paint_one(window: *mut c_void, _param: isize) -> i32 {
+        let wanted = BORDER.get();
+        // SAFETY: `window` is live for the length of this callback, and
+        // `wanted` outlives the call, which copies the four bytes it
+        // points at.
+        let hr = unsafe {
+            DwmSetWindowAttribute(
+                window,
+                BORDER_COLOR,
+                std::ptr::from_ref(&wanted).cast(),
+                size_of::<u32>() as u32,
+            )
+        };
+        if hr != 0 {
+            tracing::debug!(hresult = hr, "a window kept the system's border colour");
+        }
+        1
     }
 
     pub(super) fn keep_system_gestures() {
