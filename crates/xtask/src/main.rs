@@ -44,7 +44,8 @@ commands:
   verify-ui <verb> [arg] [options]
       Build the app (release), run it headless (offscreen QPA) against a
       repository, fire PG_AUTO_ACT=<verb> / PG_AUTO_ACT_ARG=<arg>, and
-      judge the run by its 'screenshot saved=true' stderr line.
+      judge the run by its 'screenshot saved=true' stderr line and by
+      whether git refused any of the writes it made.
       options:
         --repo <dir>      run against this repository
         --preset <name>   or against a fresh demo repo (default: basic)
@@ -58,6 +59,10 @@ commands:
                           wrote into the next one.
         --restore         open the tabs the config directory remembers
                           instead of a named repository
+        --allow-write-failure
+                          a write git refused is what this verb shows, so
+                          it does not sink the run (delete-branch-refused,
+                          commands-fail, fetch-fail, push-retry)
 
   linux [--rebuild] [--shell] <cargo command…>
       Run a cargo command against this checkout on Ubuntu, in a container

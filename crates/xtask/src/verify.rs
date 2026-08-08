@@ -35,6 +35,36 @@ struct Options {
     /// Let the app put back the tabs its config directory remembers,
     /// instead of being told which repository to open.
     restore: bool,
+    /// Whether a write git refused is part of what the verb is showing.
+    allow_write_failure: bool,
+}
+
+/// What the run is judged on.
+///
+/// A refused write counts against it: the verb asked for one, and a
+/// picture of the state it never reached proves nothing — a `commit` that
+/// sent an empty message read as PASS for as long as this was only
+/// printed. Verbs that exist to walk a refusal (`fetch-fail`,
+/// `delete-branch-refused`) say so with `--allow-write-failure`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Outcome {
+    exit_ok: bool,
+    saved: bool,
+    timed_out: bool,
+    write_failures: usize,
+    allow_write_failure: bool,
+}
+
+impl Outcome {
+    fn passed(self) -> bool {
+        self.exit_ok && self.saved && !self.timed_out && !self.write_sank_it()
+    }
+
+    /// Whether the failing writes are what the verdict turns on — the one
+    /// reason worth a line of its own, since the run looks well otherwise.
+    fn write_sank_it(self) -> bool {
+        self.write_failures > 0 && !self.allow_write_failure
+    }
 }
 
 fn parse(args: &[String]) -> Result<Options, String> {
@@ -49,6 +79,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         shot_dir: None,
         config_dir: None,
         restore: false,
+        allow_write_failure: false,
     };
     let mut positional: Vec<&str> = Vec::new();
     let mut it = args.iter();
@@ -77,6 +108,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
                     Some(PathBuf::from(it.next().ok_or("--config-dir needs a path")?));
             }
             "--restore" => opts.restore = true,
+            "--allow-write-failure" => opts.allow_write_failure = true,
             other => positional.push(other),
         }
     }
@@ -252,17 +284,19 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let err_lines = join(stderr);
     let elapsed = started.elapsed();
 
-    let saved = err_lines
-        .iter()
-        .chain(out_lines.iter())
-        .any(|l| l.contains("screenshot saved=true"));
-    let exit_ok = status.as_ref().is_some_and(|s| s.success());
-    // Not part of the verdict — some verbs *exist* to walk a refusal path
-    // (delete-branch on an unmerged branch) — but always worth eyes.
-    let write_failures = err_lines
-        .iter()
-        .filter(|l| l.contains("write failed"))
-        .count();
+    let outcome = Outcome {
+        exit_ok: status.as_ref().is_some_and(|s| s.success()),
+        saved: err_lines
+            .iter()
+            .chain(out_lines.iter())
+            .any(|l| l.contains("screenshot saved=true")),
+        timed_out,
+        write_failures: err_lines
+            .iter()
+            .filter(|l| l.contains("write failed"))
+            .count(),
+        allow_write_failure: opts.allow_write_failure,
+    };
 
     for line in err_lines.iter().chain(out_lines.iter()) {
         println!("  | {line}");
@@ -280,21 +314,27 @@ pub fn run(args: &[String]) -> Result<(), String> {
         println!("shot: {}", shot.display());
     }
 
-    let verdict_ok = exit_ok && saved && !timed_out;
     println!(
         "{}: {} in {:.1}s (exit {}, screenshot saved={}, write-failures {}{})",
-        if verdict_ok { "PASS" } else { "FAIL" },
+        if outcome.passed() { "PASS" } else { "FAIL" },
         opts.verb,
         elapsed.as_secs_f32(),
         status.map_or_else(
             || "?".into(),
             |s| s.code().map_or("signal".into(), |c| c.to_string())
         ),
-        saved,
-        write_failures,
+        outcome.saved,
+        outcome.write_failures,
         if timed_out { ", TIMED OUT" } else { "" },
     );
-    if verdict_ok {
+    if outcome.write_sank_it() {
+        println!(
+            "  git refused the write this verb asked for — the shot is of the state it \
+             never reached. If the refusal is what the verb shows, say so with \
+             --allow-write-failure."
+        );
+    }
+    if outcome.passed() {
         Ok(())
     } else {
         Err(format!("verify-ui {} failed", opts.verb))
@@ -312,4 +352,79 @@ fn collect_lines<R: std::io::Read + Send + 'static>(
             .map_while(Result::ok)
             .collect()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Outcome, parse};
+
+    /// A run that reached the end and took its picture.
+    const WELL: Outcome = Outcome {
+        exit_ok: true,
+        saved: true,
+        timed_out: false,
+        write_failures: 0,
+        allow_write_failure: false,
+    };
+
+    #[test]
+    fn a_refused_write_sinks_the_run_however_good_the_picture() {
+        assert!(WELL.passed());
+        // The shape `verify-ui commit` came up in: the app started, quit
+        // by itself and saved a screenshot, and git had refused the one
+        // write the verb exists to make.
+        let refused = Outcome {
+            write_failures: 1,
+            ..WELL
+        };
+        assert!(!refused.passed());
+        assert!(refused.write_sank_it());
+    }
+
+    #[test]
+    fn a_verb_that_walks_a_refusal_says_so_and_passes() {
+        let expected = Outcome {
+            write_failures: 3,
+            allow_write_failure: true,
+            ..WELL
+        };
+        assert!(expected.passed());
+        assert!(!expected.write_sank_it());
+    }
+
+    #[test]
+    fn the_other_ways_to_fail_are_not_blamed_on_the_write() {
+        for broken in [
+            Outcome {
+                exit_ok: false,
+                ..WELL
+            },
+            Outcome {
+                saved: false,
+                ..WELL
+            },
+            Outcome {
+                timed_out: true,
+                ..WELL
+            },
+        ] {
+            assert!(!broken.passed(), "{broken:?}");
+            assert!(!broken.write_sank_it(), "{broken:?}");
+        }
+    }
+
+    #[test]
+    fn the_flag_is_off_until_it_is_asked_for() {
+        let plain = parse(&["commit".to_string()]).expect("verb only");
+        assert!(!plain.allow_write_failure);
+        let asked = parse(&[
+            "fetch-fail".to_string(),
+            "3".to_string(),
+            "--allow-write-failure".to_string(),
+        ])
+        .expect("verb, arg and flag");
+        assert!(asked.allow_write_failure);
+        assert_eq!(asked.verb, "fetch-fail");
+        assert_eq!(asked.arg, "3");
+    }
 }
