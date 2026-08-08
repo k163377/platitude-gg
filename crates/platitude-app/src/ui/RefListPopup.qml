@@ -24,6 +24,17 @@ Popup {
     /// One was chosen; the whole record, so its kind travels with it.
     signal picked(string record)
 
+    /// What a row has to divide between the chip and the reading's remote
+    /// — the window this opens over, less the padding and the gaps. Both
+    /// of those strings are ref components and can run to the same wall
+    /// (250 bytes, measured), so a row that just added them together grew
+    /// until it left the window: a wall-length tag beside a 90-byte
+    /// remote already reached edge to edge, and the remote may be as long
+    /// as the tag.
+    readonly property real room:
+        (refList.parent ? refList.parent.width : 400)
+        - 2 * Theme.spaceXs - 3 * Theme.spaceSm
+
     padding: Theme.spaceXs
     // Nothing stands between the chip and this: the pointer has to be
     // able to walk down into it without leaving both.
@@ -117,7 +128,7 @@ Popup {
 
                 implicitWidth: rowChip.width + 2 * Theme.spaceSm
                                + (whose.visible
-                                  ? whose.implicitWidth + Theme.spaceSm : 0)
+                                  ? whose.width + Theme.spaceSm : 0)
                 width: rows.rowWidth
                 height: Theme.rowHeight
                 radius: Theme.radiusSm
@@ -130,9 +141,11 @@ Popup {
                     x: Theme.spaceSm
                     records: [refRow.modelData]
                     muted: refRow.unavailable
-                    // Unstacking is only worth it if the names read; the
-                    // window the popup opens over is the only limit.
-                    maxWidth: refList.parent ? refList.parent.width : 400
+                    // Unstacking is only worth it if the names read, so
+                    // the chip takes everything the row has left once
+                    // the reading's remote has its seat.
+                    maxWidth: refList.room
+                              - (whose.visible ? whose.width + Theme.spaceSm : 0)
                 }
                 // Whose reading this is. A tag has no namespace to say it
                 // in the way `origin/main` does, and a drifted one puts the
@@ -149,6 +162,10 @@ Popup {
                     text: rowChip.recWhere
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSm
+                    // A third of the row at most: this is meta about the
+                    // reading, and the name it qualifies comes first.
+                    width: Math.min(implicitWidth, refList.room / 3)
+                    elide: Text.ElideRight
                 }
                 HoverHandler {
                     id: rowHover

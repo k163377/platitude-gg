@@ -529,13 +529,45 @@ fn edges(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["tag", "x"])?;
     repo.git(&["tag", "-a", &wall_tag, "-m", &pasted(300)])?;
 
-    // Remotes: one that works, one whose name and URL are both absurd.
+    // Remotes: an ordinary one, one whose *name* is absurd and which
+    // really answers, and one whose *URL* is absurd and is never asked.
     repo.add_origin()?;
     repo.git(&["push", "--set-upstream", "origin", "main"])?;
     repo.git(&["push", "origin", "あ", "x"])?;
-    let long_remote = to_the_byte("r", 90);
-    let long_url = format!("file:///{}", pasted(300).replace(' ', "-"));
-    repo.git(&["remote", "add", &long_remote, &long_url])?;
+
+    // The wall-length tag drifts away from the long-named remote's copy:
+    // push it, then move the local one. A drift is what puts the same
+    // name on two chips, and the second chip is the only place in the UI
+    // that says *which* remote a reading came from — the last string
+    // anywhere that carries a repository's own name for something.
+    //
+    // Drift rather than remote-only, because a tag a fetch can reach is
+    // one auto-follow brings down: only a tag on a commit nobody here
+    // has stays away, and such a tag is on no row to hang a chip from
+    // (core.md, タグのリモート状態のデータ).
+    //
+    // And no unreachable remote lives here: `fetch --prune --all` walks
+    // every one of them, so a single absurd URL would turn every fetch
+    // in this repository into a failure and every fetch verb into a
+    // FAIL. A URL has no pane to be too long in anyway.
+    // At the wall, like the tag it will qualify: a remote's name is a ref
+    // component too, and the two together are what the chip list has to
+    // divide a row between. At 90 bytes the pair merely reached the
+    // window's edge and proved nothing.
+    let long_remote = to_the_byte("r", REF_WALL);
+    let bare = repo.root.join("long.git");
+    std::fs::create_dir_all(&bare).map_err(|e| e.to_string())?;
+    repo.git_at(&bare.clone(), &["init", "--bare", "-b", "main"])?;
+    let long_remote_url = file_url(&bare);
+    repo.git(&["remote", "add", &long_remote, &long_remote_url])?;
+    repo.git(&["push", &long_remote, "main", &wall_tag])?;
+    repo.git(&[
+        "commit",
+        "--allow-empty",
+        "-m",
+        "chore: タグを動かす前の一手",
+    ])?;
+    repo.git(&["tag", "--force", &wall_tag])?;
 
     // Stashes at both ends.
     repo.write("q", "x\nstashed\n")?;
