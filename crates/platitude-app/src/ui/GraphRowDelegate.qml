@@ -24,6 +24,15 @@ Item {
     /// A picture this author was given, or empty for the generated
     /// pattern. Resolved in Rust onto the row (models::graph).
     required property string avatar_url
+    /// Packed `Co-authored-by` records; the first one badges the node.
+    required property string co_authors
+    readonly property var mateRecords:
+        rowItem.co_authors === ""
+        ? [] : rowItem.co_authors.split(String.fromCharCode(31))
+    /// Identicon code of the first co-author, or 0 when nobody is credited.
+    readonly property int mateFace:
+        rowItem.mateRecords.length === 0
+        ? 0 : parseInt(rowItem.mateRecords[0].split(String.fromCharCode(30))[2])
     required property string geometry
     required property string labels
     required property string stash_ref
@@ -241,6 +250,49 @@ Item {
                 // author, so the picture it holds is loaded again before
                 // the paint that would draw it.
                 onImageLoaded: requestPaint()
+                /// One round face: the assigned picture when there is a
+                /// url for it, the generated pattern otherwise. Shared by
+                /// the node and the co-author badge so the two cannot
+                /// drift apart in shape or outline.
+                function face(ctx, cx, cy, radius, code, url) {
+                    ctx.save()
+                    ctx.beginPath()
+                    ctx.arc(cx, cy, radius, 0, 2 * Math.PI)
+                    ctx.clip()
+                    if (url !== "") {
+                        if (laneCanvas.isImageLoaded(url)) {
+                            ctx.drawImage(url, cx - radius, cy - radius,
+                                          2 * radius, 2 * radius)
+                        }
+                    } else {
+                        ctx.fillStyle = Theme.bgElevated
+                        ctx.fillRect(cx - radius, cy - radius,
+                                     2 * radius, 2 * radius)
+                        ctx.fillStyle = Theme.graphLane[(code >> 15) & 0x7]
+                        const inner = 2 * radius * Metrics.identiconFill
+                        const cell = inner / 5
+                        const ox = cx - inner / 2
+                        const oy = cy - inner / 2
+                        for (let row = 0; row < 5; row++) {
+                            for (let col = 0; col < 3; col++) {
+                                if ((code >> (row * 3 + col)) & 1) {
+                                    ctx.fillRect(ox + col * cell, oy + row * cell,
+                                                 cell + 0.5, cell + 0.5)
+                                    if (col < 2)
+                                        ctx.fillRect(ox + (4 - col) * cell,
+                                                     oy + row * cell,
+                                                     cell + 0.5, cell + 0.5)
+                                }
+                            }
+                        }
+                    }
+                    ctx.restore()
+                    ctx.strokeStyle = Theme.borderStrong
+                    ctx.lineWidth = Theme.borderWidth
+                    ctx.beginPath()
+                    ctx.arc(cx, cy, radius, 0, 2 * Math.PI)
+                    ctx.stroke()
+                }
                 onPaint: {
                     const ctx = getContext("2d")
                     ctx.clearRect(0, 0, width, height)
@@ -319,47 +371,32 @@ Item {
                     // this application cannot use). The pattern uses only
                     // the inner part of the circle so the clip cuts less
                     // of it.
-                    ctx.save()
-                    ctx.beginPath()
-                    ctx.arc(nodeX, midY, r, 0, 2 * Math.PI)
-                    ctx.clip()
-                    if (rowItem.avatar_url !== "") {
-                        if (laneCanvas.isImageLoaded(rowItem.avatar_url)) {
-                            ctx.drawImage(rowItem.avatar_url,
-                                          nodeX - r, midY - r, 2 * r, 2 * r)
-                        }
-                        ctx.restore()
-                        ctx.strokeStyle = Theme.borderStrong
-                        ctx.lineWidth = Theme.borderWidth
+                    // A commit somebody shares steps its author up and
+                    // left by a hair, and badges the first co-author at
+                    // the lower right (規約 §co-author の表示): the pair
+                    // straddles the lane and the author stays the bigger
+                    // face. Only the first — the rest are named in the
+                    // row's hover.
+                    const shared = rowItem.mateFace !== 0
+                    const ax = shared ? nodeX - 2 * Theme.borderWidth : nodeX
+                    const ay = shared ? midY - Theme.borderWidth : midY
+                    laneCanvas.face(ctx, ax, ay, r, rowItem.avatar,
+                                    rowItem.avatar_url)
+                    if (shared) {
+                        const br = Theme.iconSm / 2
+                        const bx = ax + r - Theme.borderWidth
+                        const by = ay + r + Theme.borderWidth
+                        // Punched out of what is already drawn, so the
+                        // smaller face reads as being in front of the
+                        // node rather than blended into it.
+                        ctx.save()
+                        ctx.globalCompositeOperation = "destination-out"
                         ctx.beginPath()
-                        ctx.arc(nodeX, midY, r, 0, 2 * Math.PI)
-                        ctx.stroke()
-                        return
+                        ctx.arc(bx, by, br + Theme.borderWidth, 0, 2 * Math.PI)
+                        ctx.fill()
+                        ctx.restore()
+                        laneCanvas.face(ctx, bx, by, br, rowItem.mateFace, "")
                     }
-                    ctx.fillStyle = Theme.bgElevated
-                    ctx.fillRect(nodeX - r, midY - r, 2 * r, 2 * r)
-                    ctx.fillStyle = Theme.graphLane[(rowItem.avatar >> 15) & 0x7]
-                    const inner = 2 * r * Metrics.identiconFill
-                    const cell = inner / 5
-                    const ox = nodeX - inner / 2
-                    const oy = midY - inner / 2
-                    for (let row = 0; row < 5; row++) {
-                        for (let col = 0; col < 3; col++) {
-                            if ((rowItem.avatar >> (row * 3 + col)) & 1) {
-                                ctx.fillRect(ox + col * cell, oy + row * cell,
-                                             cell + 0.5, cell + 0.5)
-                                if (col < 2)
-                                    ctx.fillRect(ox + (4 - col) * cell, oy + row * cell,
-                                                 cell + 0.5, cell + 0.5)
-                            }
-                        }
-                    }
-                    ctx.restore()
-                    ctx.strokeStyle = Theme.borderStrong
-                    ctx.lineWidth = Theme.borderWidth
-                    ctx.beginPath()
-                    ctx.arc(nodeX, midY, r, 0, 2 * Math.PI)
-                    ctx.stroke()
                 }
             }
         }

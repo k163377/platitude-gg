@@ -83,18 +83,9 @@ ColumnLayout {
     // so everyone else arrives as a `Co-authored-by` trailer and is
     // shown as what it is: a line the message credits, under the author
     // rather than beside them (デザイン規約 §co-author).
-    readonly property var coAuthorRecords:
-        detailsPane.details.coAuthors === ""
-        ? [] : detailsPane.details.coAuthors.split(String.fromCharCode(31))
+    readonly property var coAuthorRecords: coBlock.records
     function coAuthorName(i) {
-        const record = detailsPane.coAuthorRecords[i]
-        return record === undefined
-               ? "" : record.split(String.fromCharCode(30))[0]
-    }
-    function coAuthorFace(i) {
-        const record = detailsPane.coAuthorRecords[i]
-        return record === undefined
-               ? 0 : parseInt(record.split(String.fromCharCode(30))[2])
+        return coBlock.nameAt(i)
     }
     /// Whether the pointer is on the underlined stretch. The real hover
     /// and the automation hook write this same one, so a run cannot go
@@ -564,54 +555,12 @@ ColumnLayout {
                     // use, so the row's width never moves. One rule runs
                     // under the lot, the way the hash and its copy icon
                     // share one: the two are one target.
-                    Item {
+                    CoAuthorLine {
                         id: coBlock
-                        visible: detailsPane.coAuthorRecords.length > 0
-                        implicitWidth: coRow.implicitWidth
-                        implicitHeight: coRow.implicitHeight
+                        packed: detailsPane.details.coAuthors
+                        lit: detailsPane.matesLit
                         Layout.alignment: Qt.AlignVCenter
-                        RowLayout {
-                            id: coRow
-                            anchors.fill: parent
-                            spacing: Theme.spaceXs
-                            IdentIcon {
-                                code: detailsPane.coAuthorFace(0)
-                                width: Theme.iconMd
-                                height: Theme.iconMd
-                                Layout.alignment: Qt.AlignVCenter
-                            }
-                            Label {
-                                text: detailsPane.coAuthorName(0)
-                                color: Theme.textSecondary
-                                font.pixelSize: Theme.fontSm
-                                Layout.alignment: Qt.AlignVCenter
-                            }
-                            Label {
-                                visible: detailsPane.coAuthorRecords.length > 1
-                                text: "+" + (detailsPane.coAuthorRecords.length - 1)
-                                color: Theme.textSecondary
-                                font.pixelSize: Theme.fontSm
-                                Layout.alignment: Qt.AlignVCenter
-                            }
-                        }
-                        // Drawn at rest, one step down from the name it
-                        // underlines (デザイン規約 §暗く落とした段 names
-                        // borderStrong as textSecondary's step), and up to
-                        // the name's own value under the pointer — the
-                        // same answer the hash plate gives.
-                        Rectangle {
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            height: Theme.borderWidth
-                            color: detailsPane.matesLit ? Theme.textSecondary
-                                                        : Theme.borderStrong
-                        }
-                        HoverHandler {
-                            id: matesHover
-                            onHoveredChanged:
-                                detailsPane.showCoAuthors(matesHover.hovered)
-                        }
+                        onPointerChanged: inside => detailsPane.showCoAuthors(inside)
                     }
                     Item { Layout.fillWidth: true }
                 }

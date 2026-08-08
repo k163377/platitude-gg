@@ -36,6 +36,10 @@ pub struct GraphRowItem {
     /// resolved here rather than in QML so a delegate coming back from
     /// the reuse pool has the answer already in its row.
     avatar_url: String,
+    /// Packed `Co-authored-by` records (see `encode::encode_co_authors`) —
+    /// the first draws the badge on the node, all of them are named in
+    /// the row's hover.
+    co_authors: String,
     geometry: String,
     labels: String,
     /// `stash@{n}` when the row is a stash; empty otherwise.
@@ -477,6 +481,7 @@ fn to_row_item(row: &LogRow, avatars: &crate::hub::AvatarUrls) -> GraphRowItem {
         row_width: i32::from(row.width),
         avatar: crate::encode::avatar_code(&row.author),
         avatar_url: avatars.url_of(&row.author_email),
+        co_authors: crate::encode::encode_co_authors(&row.co_authors),
         geometry: encode_geometry(&row.segments),
         labels: encode_labels(&row.labels),
         stash_ref: row.stash_ref.clone(),
