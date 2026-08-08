@@ -470,12 +470,18 @@ ColumnLayout {
                 // have had three things in ~230px (デザイン規約 §co-author).
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Theme.spaceSm
+                    spacing: Theme.spaceXs
                     Label {
                         id: authorLabel
                         text: detailsPane.details.authorName
                         elide: Text.ElideRight
+                        // Grows no further than the name itself, so the
+                        // mark sits against the name rather than being
+                        // pushed across to the hash — and shrinks, with
+                        // the name eliding, when a long one would
+                        // otherwise crowd the mark out.
                         Layout.fillWidth: true
+                        Layout.maximumWidth: authorLabel.implicitWidth
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontMd
                         font.weight: Font.DemiBold
@@ -492,30 +498,30 @@ ColumnLayout {
                             acceptedButtons: Qt.NoButton
                         }
                     }
+                    // A signature that holds is a tick and nothing more;
+                    // only one that contradicts the content spends words
+                    // (規約 §署名の表示). The broken case reads as the
+                    // error message it is, and being the one wide thing
+                    // on the row is how an error should read.
                     RowLayout {
                         id: signatureMark
                         visible: detailsPane.signatureKind !== ""
                         spacing: Theme.spaceXs
-                        // Only a signature git trusts is green, and only
-                        // one that contradicts the content is red; the
-                        // rest are signatures nobody here can judge, and
-                        // a mark that judged them would be a lie.
+                        Layout.alignment: Qt.AlignVCenter
+                        readonly property bool broken:
+                            detailsPane.signatureKind === "bad"
                         readonly property color tone:
-                            detailsPane.signatureKind === "verified" ? Theme.success
-                            : detailsPane.signatureKind === "bad" ? Theme.danger
-                            : Theme.textSecondary
+                            signatureMark.broken ? Theme.danger : Theme.success
                         NavIcon {
-                            visible: detailsPane.signatureKind !== "signed"
-                            kind: detailsPane.signatureKind === "bad" ? "bang" : "check"
+                            kind: signatureMark.broken ? "bang" : "check"
                             tint: signatureMark.tone
                             width: Theme.iconSm
                             height: Theme.iconSm
                             Layout.alignment: Qt.AlignVCenter
                         }
                         Label {
-                            text: detailsPane.signatureKind === "verified" ? qsTr("Verified")
-                                  : detailsPane.signatureKind === "bad" ? qsTr("Bad signature")
-                                  : qsTr("Signed")
+                            visible: signatureMark.broken
+                            text: qsTr("Bad signature")
                             color: signatureMark.tone
                             font.pixelSize: Theme.fontSm
                             Layout.alignment: Qt.AlignVCenter
@@ -528,6 +534,9 @@ ColumnLayout {
                         // one to fill its parent is undefined behaviour.
                         HoverHandler { id: signatureHover }
                     }
+                    // The slack lives here, past both of them, so the
+                    // mark stays against the name.
+                    Item { Layout.fillWidth: true }
                 }
                 // Date, and beside it whoever the message credits along
                 // with the author. A commit with no trailer shows only
