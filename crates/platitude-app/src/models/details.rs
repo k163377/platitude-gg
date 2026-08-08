@@ -114,7 +114,17 @@ pub struct DetailsModel {
     avatar_url: String,
     /// Packed `Co-authored-by` trailers (see `encode::encode_co_authors`).
     co_authors: String,
-    committer: String,
+    committer_name: String,
+    committer_email: String,
+    committer_avatar: i32,
+    committer_avatar_url: String,
+    /// Whether the commit was put here by somebody other than its author,
+    /// and whether that happened at another moment than it was written.
+    /// Both are answered here rather than in QML: the address is what
+    /// tells two people apart (デザイン規約 §アバターを与える), and the
+    /// card that reads these must not carry a second copy of that rule.
+    committer_differs: bool,
+    commit_time_differs: bool,
     committer_time: i64,
     message_subject: String,
     message_body: String,
@@ -143,7 +153,12 @@ impl Default for DetailsModel {
             avatar: 0,
             avatar_url: String::new(),
             co_authors: String::new(),
-            committer: String::new(),
+            committer_name: String::new(),
+            committer_email: String::new(),
+            committer_avatar: 0,
+            committer_avatar_url: String::new(),
+            committer_differs: false,
+            commit_time_differs: false,
             committer_time: 0,
             message_subject: String::new(),
             message_body: String::new(),
@@ -190,7 +205,28 @@ impl DetailsModel {
     qproperty!("avatar", Member = avatar, Notify = changed);
     qproperty!("avatarUrl", Member = avatar_url, Notify = changed);
     qproperty!("coAuthors", Member = co_authors, Notify = changed);
-    qproperty!("committer", Member = committer, Notify = changed);
+    qproperty!("committerName", Member = committer_name, Notify = changed);
+    qproperty!("committerEmail", Member = committer_email, Notify = changed);
+    qproperty!(
+        "committerAvatar",
+        Member = committer_avatar,
+        Notify = changed
+    );
+    qproperty!(
+        "committerAvatarUrl",
+        Member = committer_avatar_url,
+        Notify = changed
+    );
+    qproperty!(
+        "committerDiffers",
+        Member = committer_differs,
+        Notify = changed
+    );
+    qproperty!(
+        "commitTimeDiffers",
+        Member = commit_time_differs,
+        Notify = changed
+    );
     qproperty!("committerTime", Member = committer_time, Notify = changed);
     qproperty!("messageSubject", Member = message_subject, Notify = changed);
     qproperty!("messageBody", Member = message_body, Notify = changed);
@@ -206,9 +242,13 @@ impl DetailsModel {
     /// git for.
     #[qslot]
     fn refresh_avatar(&mut self) {
-        let url = Hub::with(|hub| hub.avatar_url(&self.author_email)).unwrap_or_default();
-        if url != self.avatar_url {
-            self.avatar_url = url;
+        let author = Hub::with(|hub| hub.avatar_url(&self.author_email)).unwrap_or_default();
+        // The committer wears a face of their own in the author card, and
+        // it comes from the same store, so an assignment reaches both.
+        let committer = Hub::with(|hub| hub.avatar_url(&self.committer_email)).unwrap_or_default();
+        if author != self.avatar_url || committer != self.committer_avatar_url {
+            self.avatar_url = author;
+            self.committer_avatar_url = committer;
             self.changed();
         }
     }
@@ -269,7 +309,20 @@ impl DetailsModel {
             Hub::with(|hub| hub.avatar_url(&details.author_email)).unwrap_or_default();
         self.co_authors = crate::encode::encode_co_authors(&details.co_authors);
         self.author_time = details.author_time;
-        self.committer = format!("{} <{}>", details.committer_name, details.committer_email);
+        self.committer_name = details.committer_name.clone();
+        self.committer_email = details.committer_email.clone();
+        self.committer_avatar = crate::encode::avatar_code(&details.committer_name);
+        self.committer_avatar_url =
+            Hub::with(|hub| hub.avatar_url(&details.committer_email)).unwrap_or_default();
+        // Who wrote it and who put it here are the same person on an
+        // ordinary commit; a patch applied by somebody else, a web merge
+        // or a rebase is what makes them two. The address decides, the
+        // way it decides everywhere a person is identified here — the
+        // spellings are already mailmapped by the time they arrive.
+        self.committer_differs = !details
+            .committer_email
+            .eq_ignore_ascii_case(&details.author_email);
+        self.commit_time_differs = details.committer_time != details.author_time;
         self.committer_time = details.committer_time;
         // Subject / body split mirrors the commit-editor fields.
         let (subject, body) = details

@@ -60,6 +60,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
         "noremote" => noremote(&mut repo)?,
         "signed" => signed(&mut repo)?,
         "co-authors" => co_authors(&mut repo)?,
+        "authorship" => authorship(&mut repo)?,
         "tags" => tags(&mut repo)?,
         "manytags" => manytags(&mut repo)?,
         "empty" => {}
@@ -160,6 +161,35 @@ impl DemoRepo {
         self.write(rel, content)?;
         self.git(&["add", "--", rel])?;
         self.git(&["commit", "-m", message])?;
+        Ok(())
+    }
+
+    /// Commits something written `earlier` seconds before it was
+    /// committed, optionally by somebody other than this repository's
+    /// own identity. `--date` beats the `GIT_AUTHOR_DATE` every command
+    /// here carries — the committer date keeps the marching stamp, so
+    /// the two moments come out apart by exactly what was asked for.
+    fn commit_written_earlier(
+        &mut self,
+        rel: &str,
+        content: &str,
+        message: &str,
+        author: Option<&str>,
+        earlier: u64,
+    ) -> Result<(), String> {
+        self.write(rel, content)?;
+        self.git(&["add", "--", rel])?;
+        // Two commands from now is what the commit itself will carry;
+        // reading the base rather than the clock keeps it reproducible.
+        let written = self.base_epoch + (self.tick + 2) * TICK_SECS - earlier;
+        let date = format!("--date={written} +0000");
+        let mut args = vec!["commit", &date];
+        let author_arg = author.map(|a| format!("--author={a}"));
+        if let Some(arg) = author_arg.as_deref() {
+            args.push(arg);
+        }
+        args.extend(["-m", message]);
+        self.git(&args)?;
         Ok(())
     }
 
@@ -312,6 +342,52 @@ fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
         "src/pair.txt",
         "written by two, and signed\n",
         &format!("feat: write this one with company, signed\n\n{PAIR}"),
+    )?;
+    Ok(())
+}
+
+/// Every way the person who wrote a commit and the person who put it
+/// here can be two, newest first: a patch applied by somebody else days
+/// after it was written, one applied by somebody else the moment it
+/// arrived (a squash merge on a forge), one the same hand committed
+/// later than it wrote it (an amend, a rebase), and two ordinary
+/// commits, where the two are one person at one moment.
+///
+/// Measured shares of the divergent shapes, so the card is not being
+/// built for a corner (2026-08-09, `author != committer` / `author date
+/// != commit date`): kotlinx.coroutines 47.5% / 34.3%, JetBrains/kotlin
+/// 47.5% / 89.9%, jackson-module-kotlin 16.8% / 9.2%.
+fn authorship(repo: &mut DemoRepo) -> Result<(), String> {
+    const MAILED: &str = "Yuki Tanaka <yuki.tanaka@example.com>";
+    const DAY: u64 = 24 * 60 * 60;
+
+    repo.commit(
+        "README.md",
+        "# demo\n\nA repository where the credit is split.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.commit_written_earlier(
+        "src/app.txt",
+        "app v1, and it waits for slow disks\n",
+        "fix: hold the door open for slow disks",
+        None,
+        2 * DAY,
+    )?;
+    repo.write("src/merged.txt", "came in through the web\n")?;
+    repo.git(&["add", "--", "src/merged.txt"])?;
+    repo.git(&[
+        "commit",
+        &format!("--author={MAILED}"),
+        "-m",
+        "feat: take the config out into a file",
+    ])?;
+    repo.commit_written_earlier(
+        "src/mailed.txt",
+        "arrived as a patch\n",
+        "perf: stop reading the index twice",
+        Some(MAILED),
+        3 * DAY,
     )?;
     Ok(())
 }

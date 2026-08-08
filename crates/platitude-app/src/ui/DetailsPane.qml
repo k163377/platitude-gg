@@ -148,6 +148,73 @@ ColumnLayout {
         onPointerInsideChanged: detailsPane.settleMateCard()
     }
 
+    // ---- the author's own card --------------------------------------
+    // The name says who; the card under it says which address that is,
+    // and — only when they are two — who put the commit here and when
+    // (デザイン規約 §author の hover). Everything here is the shape the
+    // co-author card already established, including how it is opened,
+    // so the pane has one way of naming a person rather than two.
+    /// Whether the pointer is on the name. The real hover and the
+    /// automation hook write this same one, so a run cannot go green
+    /// with the hover unwired.
+    property bool authorPointed: false
+    readonly property bool authorLit:
+        detailsPane.authorPointed || authorCard.pointerInside
+    /// Smoke hook and hover handler both land here.
+    function showAuthor(on) {
+        detailsPane.authorPointed = on
+    }
+    /// Whether the card is on screen — what automation reports, since
+    /// the input side would read true with the binding cut.
+    readonly property bool authorCardOpen: authorCard.opened
+    onAuthorLitChanged: {
+        if (detailsPane.authorLit)
+            detailsPane.openAuthorCard()
+        else
+            authorSettle.restart()
+    }
+    function openAuthorCard() {
+        if (detailsPane.details.authorName === "")
+            return
+        const at = authorLabel.mapToItem(detailsPane, 0, authorLabel.height)
+        // Measured from where it opens, not from the pane: the card
+        // starts partway across, so the pane's width is not what is left
+        // for it.
+        authorCard.maxRowWidth = detailsPane.width - at.x - 2 * Theme.spaceSm
+        authorCard.x = at.x
+        // Flush against the name: a gap is a band the pointer crosses
+        // while touching neither, and the card closes under it.
+        authorCard.y = at.y
+        authorCard.open()
+    }
+    // A beat, not a turn of the event loop: the name's hover and the
+    // card's change in different frames when the pointer walks from one
+    // into the other, and `Qt.callLater` lands between them.
+    Timer {
+        id: authorSettle
+        interval: Metrics.hoverKeepMs
+        onTriggered: {
+            if (!authorCard.pointerInside && !detailsPane.authorPointed)
+                authorCard.close()
+        }
+    }
+    AuthorCard {
+        id: authorCard
+        authorName: detailsPane.details.authorName
+        authorEmail: detailsPane.details.authorEmail
+        authorFace: detailsPane.details.avatar
+        authorFaceUrl: detailsPane.details.avatarUrl
+        authoredAt: detailsPane.details.authorTime
+        committerName: detailsPane.details.committerName
+        committerEmail: detailsPane.details.committerEmail
+        committerFace: detailsPane.details.committerAvatar
+        committerFaceUrl: detailsPane.details.committerAvatarUrl
+        committedAt: detailsPane.details.committerTime
+        committerDiffers: detailsPane.details.committerDiffers
+        timeDiffers: detailsPane.details.commitTimeDiffers
+        onPointerInsideChanged: authorSettle.restart()
+    }
+
     signal fileActivated(string path, string origPath)
     signal parentClicked(string oidHex)
     signal copyRequested(string text)
@@ -492,17 +559,28 @@ ColumnLayout {
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontMd
                         font.weight: Font.DemiBold
-                        ToolTip.visible: authorHover.containsMouse
-                        ToolTip.delay: Metrics.tipDelayMs
-                        ToolTip.text: qsTr("Author: %1 <%2>\nCommitter: %3")
-                                      .arg(detailsPane.details.authorName)
-                                      .arg(detailsPane.details.authorEmail)
-                                      .arg(detailsPane.details.committer)
-                        MouseArea {
+                        // Drawn at rest one step down from the name it
+                        // underlines, and up to the name's own value
+                        // under the pointer — the same rule the credit
+                        // line carries, because it says the same thing:
+                        // there is more here, and hovering opens it
+                        // (規約 §co-author の表示).
+                        Rectangle {
+                            visible: authorLabel.text !== ""
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            height: Theme.borderWidth
+                            color: detailsPane.authorLit ? Theme.textPrimary
+                                                         : Theme.borderStrong
+                        }
+                        // A handler, not a `MouseArea`: handlers are
+                        // passive, so the card it opens keeps its own
+                        // hover (規約 §hover のツールチップ).
+                        HoverHandler {
                             id: authorHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            acceptedButtons: Qt.NoButton
+                            onHoveredChanged:
+                                detailsPane.showAuthor(authorHover.hovered)
                         }
                     }
                     // A signature that holds is a tick and nothing more;

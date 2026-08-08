@@ -1981,6 +1981,21 @@ Item {
             + " subject=" + (rowCard.subject !== "")
             + " body=" + (rowCard.body !== ""))
     }
+    // The details have to arrive before the name can name anybody.
+    Timer {
+        id: authorCardTimer
+        interval: 800
+        onTriggered: {
+            if (AppBackend.autoAct === "author-card-open")
+                detailsPane.showAuthor(true)
+            AppBackend.report(
+                "author_card open=" + detailsPane.authorCardOpen
+                + " author=" + detailsPane.details.authorEmail
+                + " committer=" + detailsPane.details.committerEmail
+                + " other=" + detailsPane.details.committerDiffers
+                + " later=" + detailsPane.details.commitTimeDiffers)
+        }
+    }
     // The details have to arrive before the credit line they carry can
     // be opened or counted.
     Timer {
@@ -2445,6 +2460,14 @@ Item {
                 }
             }
             rowCardTimer.start()
+        } else if (act === "author-card" || act === "author-card-open") {
+            // The author's name at rest, and the card the pointer opens
+            // under it. Hover cannot be injected, so `-open` writes the
+            // same property the handler writes; read the two as a pair,
+            // because "the card stayed shut" only means something next
+            // to a run where it opened. The argument is the row.
+            page.activateRow(graphModel.oidAt(Number(arg)))
+            authorCardTimer.start()
         } else if (act === "co-authors" || act === "co-authors-open") {
             // The credit line on the date row, and the card the pointer
             // opens under it. Hover cannot be injected, so `-open` writes
