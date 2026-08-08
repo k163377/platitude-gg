@@ -308,7 +308,10 @@ Release checklist
         "shared.txt",
         &BASE
             .replace("- pick the version number", "- agree the version number")
-            .replace("- upload the archives", "- upload the archives and checksums"),
+            .replace(
+                "- upload the archives",
+                "- upload the archives and checksums",
+            ),
         "feat: change shared",
     )?;
 
