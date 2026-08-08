@@ -273,6 +273,12 @@ Item {
     // named thing away — a file's changes, a hunk, a stash, a branch on a
     // remote, `reset --hard` — is held down where the hand already is, on
     // the row or button that names it (デザイン規約 §長押し).
+    /// Ctrl+F. The bar belongs to the graph — that is the list being
+    /// searched — so the window only has to know which page to ask.
+    function startFind() {
+        graphPane.startFind()
+    }
+
     property var rowAskRun: null
     function startRowAsk(oidHex, label, detail, danger, acceptText, run,
                          hold = false, tip = "", form = null) {
@@ -2751,6 +2757,15 @@ Item {
                 avatarSeedTimer.start()
             else
                 page.settingsDialogRequested()
+        } else if (act === "find") {
+            // The key cannot be pressed from here, so the page opens the
+            // bar the way the key would. The argument goes into the box so
+            // the shot has something in it.
+            page.startFind()
+            if (arg !== "")
+                graphPane.findQuery = arg
+            AppBackend.report("find open=" + graphPane.findOpen
+                              + " query=" + graphPane.findQuery)
         } else if (act === "commands") {
             // Stage and unstage so the log has something in it, then
             // open it the way the toolbar does.

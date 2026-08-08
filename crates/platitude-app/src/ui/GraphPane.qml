@@ -73,6 +73,20 @@ Rectangle {
     /// `form` is what the question needs in order to take an answer at all
     /// — a chooser, a name box. Most questions have none: they are
     /// answered by the pill and nothing else.
+    /// The find bar's state, and its box, for the headless run — the key
+    /// that opens it cannot be pressed from there.
+    readonly property alias findOpen: findBar.open
+    property alias findQuery: findBar.query
+
+    /// Brings the find bar down over this list. Refused while a question
+    /// is standing: two bars from one edge would leave neither readable,
+    /// and the question is the one with something waiting on it.
+    function startFind() {
+        if (askBar.label !== "")
+            return
+        findBar.raise()
+    }
+
     function startAsking(oidHex, label, detail, accept, danger,
                          hold = false, tip = "", form = null) {
         graphList.namingOid = ""
@@ -231,12 +245,22 @@ Rectangle {
         onConfirmed: graphArea.askConfirmed()
         onCancelled: graphArea.askCancelled()
     }
+    // The other bar that comes down from this edge. Only one at a time: a
+    // question already standing keeps the place, since it is one gesture
+    // from being over and the find bar is not waiting on anything.
+    FindBar {
+        id: findBar
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: askBar.bottom
+        z: 3
+    }
     ListView {
         id: graphList
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.top: askBar.bottom
+        anchors.top: findBar.bottom
         clip: true
         model: graphArea.graphModel
         reuseItems: true

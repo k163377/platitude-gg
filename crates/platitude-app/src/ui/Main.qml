@@ -160,6 +160,17 @@ ApplicationWindow {
         onActivated: root.curPage.pageTab.refreshAll()
     }
 
+    // Search comes down over the graph on the key rather than standing in
+    // the toolbar: a box that is only wanted now and then does not earn a
+    // permanent place in the band.
+    Shortcut {
+        // The plural: the platform's "find" is more than one key on some
+        // of them, and `sequence` would take only the first and say so.
+        sequences: [StandardKey.Find]
+        enabled: root.curPage !== null
+        onActivated: root.curPage.startFind()
+    }
+
     // Frame counter for the scroll benchmark (PG_AUTO_SCROLL=1); the
     // page's bench reads it through Window.window.
     property int frameCounter: 0

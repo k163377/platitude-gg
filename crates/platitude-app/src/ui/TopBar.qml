@@ -15,7 +15,6 @@ Rectangle {
     required property var tabsModel
     // The RepoPage of the active tab (null while no tab is open).
     property var curPage: null
-
     signal openRepositoryRequested()
     signal identityEditRequested()
     signal settingsRequested()
@@ -41,7 +40,7 @@ Rectangle {
     /// Automation: the middle click, landed on the tab at `index`
     /// (`PG_AUTO_ACT=middle-close`).
     function middleClickTab(index) {
-        const tab = tabRepeater.itemAt(index)
+        const tab = tabs.itemAtIndex(index)
         if (tab)
             topBar.pressTab(index, tab.tab_id, Qt.MiddleButton)
     }
@@ -53,8 +52,8 @@ Rectangle {
     /// the same thing and a strip of one name proves nothing.
     function tabPaths() {
         let paths = []
-        for (let i = 0; i < tabRepeater.count; i++) {
-            const tab = tabRepeater.itemAt(i)
+        for (let i = 0; i < tabs.count; i++) {
+            const tab = tabs.itemAtIndex(i)
             if (tab)
                 paths.push(tab.repo_path)
         }
@@ -121,78 +120,127 @@ Rectangle {
         anchors.fill: parent
         anchors.rightMargin: Theme.spaceMd
         spacing: Theme.spaceSm
-        // App menu (Claude-Desktop-style hamburger); most entries are
-        // placeholders until their phases land.
-        HoverToolButton {
-            id: menuButton
-            Layout.leftMargin: Theme.spaceXs
-            Layout.alignment: Qt.AlignVCenter
-            padding: 0
-            implicitWidth: Theme.spaceXl
-            implicitHeight: Theme.spaceXl
-            contentItem: Item {
-                NavIcon {
-                    anchors.centerIn: parent
-                    width: Theme.iconMd
-                    height: Theme.iconMd
-                    kind: "menu"
-                    tint: Theme.textPrimary
-                }
-            }
-            onClicked: appMenu.open()
-            AppMenu {
-                id: appMenu
-                y: menuButton.height
-                AppMenuItem {
-                    text: qsTr("Open repository…")
-                    onTriggered: topBar.openRepositoryRequested()
-                }
-                AppMenuItem {
-                    text: qsTr("Clone repository…")
-                    enabled: false
-                }
-                AppMenuSeparator {}
-                // A local re-read (no network). The page re-reads itself
-                // on a tick while it is on screen, so this is here for
-                // where that cannot reach — a repository on a share that
-                // reads slowly, or a read that failed — rather than for
-                // everyday use, and it costs no toolbar room to keep.
-                AppMenuItem {
-                    text: qsTr("Reload")
-                    enabled: topBar.curPage !== null
-                    onTriggered: topBar.curPage.pageTab.refreshAll()
-                }
-                AppMenuSeparator {}
-                AppMenuItem {
-                    text: qsTr("Identity…")
-                    onTriggered: topBar.identityEditRequested()
-                }
-                AppMenuItem {
-                    text: qsTr("Settings…")
-                    onTriggered: topBar.settingsRequested()
-                }
-                AppMenuItem {
-                    text: qsTr("About Platitude GG")
-                    enabled: false
-                }
-                AppMenuSeparator {}
-                AppMenuItem {
-                    text: qsTr("Exit")
-                    onTriggered: Qt.quit()
-                }
-            }
-        }
-        // Plain Row tabs (no TabBar): full control of the geometry so
-        // the selected underline sits exactly on the toolbar's bottom
-        // edge with no styling leftovers beneath it.
-        Row {
-            id: tabRow
+        // The strip: the app menu, the tabs, the way to open one more, and
+        // whatever band is left over. Placed by hand rather than by a Row,
+        // because the first three have to touch and the leftover has to be
+        // measurable — it is both what the tabs may grow into and where
+        // the window is taken hold of.
+        //
+        // No TabBar either: full control of the geometry is what puts the
+        // selected tab's underline exactly on the band's bottom edge with
+        // no styling leftovers beneath it.
+        Item {
+            id: tabStrip
+            Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 0
-            Repeater {
-                id: tabRepeater
+            // App menu (Claude-Desktop-style hamburger); most entries are
+            // placeholders until their phases land.
+            //
+            // The head of the folded sidebar's column rather than a member
+            // of the tab strip: `railWidth` wide, the band's full height,
+            // and the same square wash the rail's cells wear, so this mark
+            // and the section marks under it stand on one line. `iconLg`
+            // rather than `iconMd` because the step follows the height of
+            // the band the mark sits in — what `menu` actually draws is
+            // 10px wide inside a 16px box (P3-確認事項 §ハンバーガーのサイズ).
+            ToolButton {
+                id: menuButton
+                width: Theme.railWidth
+                height: tabStrip.height
+                padding: 0
+                Accessible.name: qsTr("Application menu")
+                // Written out instead of borrowing HoverToolButton: that
+                // one rounds its wash and the rail's cells do not. An open
+                // menu keeps the wash — what is on screen has to say which
+                // mark put it there (`NavRail`).
+                background: Rectangle {
+                    color: menuButton.hovered || appMenu.opened
+                           ? Theme.bgHover : "transparent"
+                }
+                contentItem: Item {
+                    NavIcon {
+                        anchors.centerIn: parent
+                        width: Theme.iconLg
+                        height: Theme.iconLg
+                        kind: "menu"
+                        tint: Theme.textPrimary
+                    }
+                }
+                onClicked: appMenu.open()
+                AppMenu {
+                    id: appMenu
+                    // A full-height cell ends where the band does, so the
+                    // card would otherwise open on top of the divider.
+                    y: menuButton.height + Theme.splitterWidth
+                    AppMenuItem {
+                        text: qsTr("Open repository…")
+                        onTriggered: topBar.openRepositoryRequested()
+                    }
+                    AppMenuItem {
+                        text: qsTr("Clone repository…")
+                        enabled: false
+                    }
+                    AppMenuSeparator {}
+                    // A local re-read (no network). The page re-reads
+                    // itself on a tick while it is on screen, so this is
+                    // here for where that cannot reach — a repository on a
+                    // share that reads slowly, or a read that failed —
+                    // rather than for everyday use, and it costs no
+                    // toolbar room to keep.
+                    AppMenuItem {
+                        text: qsTr("Reload")
+                        enabled: topBar.curPage !== null
+                        onTriggered: topBar.curPage.pageTab.refreshAll()
+                    }
+                    AppMenuSeparator {}
+                    AppMenuItem {
+                        text: qsTr("Identity…")
+                        onTriggered: topBar.identityEditRequested()
+                    }
+                    AppMenuItem {
+                        text: qsTr("Settings…")
+                        onTriggered: topBar.settingsRequested()
+                    }
+                    AppMenuItem {
+                        text: qsTr("About Platitude GG")
+                        enabled: false
+                    }
+                    AppMenuSeparator {}
+                    AppMenuItem {
+                        text: qsTr("Exit")
+                        onTriggered: Qt.quit()
+                    }
+                }
+            }
+            // As wide as the tabs it holds, up to what the strip has left
+            // once the menu and the `+` have their places. Past that it
+            // scrolls: the alternative is the tabs pushing the repository's
+            // own controls off the end of the band, and those are the ones
+            // that have to stay where the hand expects them.
+            //
+            // Tabs keep their natural width for now — narrowing them needs
+            // a floor to narrow towards, and that is a number the design
+            // document does not have yet (P3-確認事項 §ウィンドウ chrome).
+            ListView {
+                id: tabs
+                x: menuButton.width
+                height: tabStrip.height
+                width: Math.max(0, Math.min(contentWidth,
+                                            tabStrip.width - menuButton.width
+                                            - plusButton.width))
+                orientation: ListView.Horizontal
+                // Hard stop at the ends, as everywhere else that scrolls
+                // (デザイン規約 §QML 実装ルール).
+                boundsBehavior: Flickable.StopAtBounds
+                clip: true
+                // Every delegate stays alive however far the strip is
+                // scrolled: the automation walks the items for their
+                // paths and ids (`tabPaths` / `middleClickTab`), and a
+                // released delegate answers those walks with null. Tabs
+                // are counted in ones, so keeping them all costs nothing.
+                cacheBuffer: 65536
                 model: topBar.tabsModel
-                Rectangle {
+                delegate: Rectangle {
                     id: tabItem
                     required property int index
                     required property int tab_id
@@ -200,7 +248,7 @@ Rectangle {
                     required property string repo_path
                     readonly property bool current: topBar.tabsModel.currentIndex === index
                     width: tabContent.implicitWidth + 2 * Theme.spaceSm
-                    height: tabRow.height
+                    height: tabs.height
                     color: current ? Theme.bgSelected : "transparent"
                     // The middle button is taken here rather than on the
                     // `✕`: the whole tab answers to it, so closing one
@@ -265,13 +313,15 @@ Rectangle {
                     }
                 }
             }
+            HoverToolButton {
+                id: plusButton
+                x: tabs.x + tabs.width
+                anchors.verticalCenter: parent.verticalCenter
+                text: "+"
+                font.pixelSize: Theme.fontLg
+                onClicked: topBar.openRepositoryRequested()
+            }
         }
-        HoverToolButton {
-            text: "+"
-            font.pixelSize: Theme.fontLg
-            onClicked: topBar.openRepositoryRequested()
-        }
-        Item { Layout.fillWidth: true }
 
         // Transient state of the current repository. The badge says what
         // is stopped and how far it got; the ways out of it stand in the

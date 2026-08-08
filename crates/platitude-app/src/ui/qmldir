@@ -21,6 +21,7 @@ CommandsPane 1.0 CommandsPane.qml
 DetailsPane 1.0 DetailsPane.qml
 DiffPane 1.0 DiffPane.qml
 FileRowDelegate 1.0 FileRowDelegate.qml
+FindBar 1.0 FindBar.qml
 FoldBlock 1.0 FoldBlock.qml
 FormField 1.0 FormField.qml
 GraphPane 1.0 GraphPane.qml
