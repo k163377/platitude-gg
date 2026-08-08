@@ -63,6 +63,57 @@ async fn details_of_the_root_commit_show_created_files() {
 }
 
 #[tokio::test]
+async fn details_read_co_authors_whatever_case_the_trailer_used() {
+    let mut repo = TestRepo::init();
+    // The spelling tools actually write is `Co-Authored-By`; the one the
+    // convention documents is `Co-authored-by`. git's `key=` matches
+    // either, and both have to land here.
+    let sha = repo.commit_file(
+        "a.txt",
+        "one\n",
+        "feat: two hands on it\n\nbody\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\n\
+         co-authored-by: Bob Builder <bob@example.com>",
+    );
+
+    let executor = GitExecutor::new();
+    let cancel = CancellationToken::new();
+    let oid = Oid::from_hex_str(&sha).unwrap();
+    let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
+        .await
+        .unwrap();
+
+    assert_eq!(d.co_authors.len(), 2);
+    assert_eq!(d.co_authors[0].name, "Claude Opus 5");
+    assert_eq!(d.co_authors[0].email, "noreply@anthropic.com");
+    assert_eq!(d.co_authors[1].name, "Bob Builder");
+    assert_eq!(d.co_authors[1].email, "bob@example.com");
+    // The trailer stays part of the message: the description box is the
+    // editor for what gets saved, so nothing is taken out of it.
+    assert!(d.message.contains("Co-Authored-By: Claude Opus 5"));
+}
+
+#[tokio::test]
+async fn details_of_a_commit_without_the_trailer_credit_nobody() {
+    let mut repo = TestRepo::init();
+    // A `Co-authored-by` in the middle of the prose is not a trailer, and
+    // git is the one that decides that -- this is the case that would go
+    // wrong if the message were scanned by hand instead.
+    let sha = repo.commit_file(
+        "a.txt",
+        "one\n",
+        "feat: alone\n\nI wrote Co-authored-by: nobody <n@e.com> in the body\n\nand kept going.",
+    );
+
+    let executor = GitExecutor::new();
+    let cancel = CancellationToken::new();
+    let oid = Oid::from_hex_str(&sha).unwrap();
+    let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
+        .await
+        .unwrap();
+    assert!(d.co_authors.is_empty(), "got {:?}", d.co_authors);
+}
+
+#[tokio::test]
 async fn details_report_renames_with_scores() {
     let mut repo = TestRepo::init();
     repo.commit_file("before.txt", "stable content here\n", "add file");

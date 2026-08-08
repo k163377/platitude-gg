@@ -59,7 +59,7 @@
 | `rev-parse` | `--verify` / `-q` / `--git-path` / `--show-toplevel` / `--absolute-git-dir` / `--show-object-format` / `--end-of-options` / `<rev>^{commit}` | 2.43.0 ✓ |
 | `revert` | `--no-edit` | 2.43.0 ✓ |
 | `rm` | `--cached` / `-r` / `-f` / `--quiet` | 古参 |
-| `show` | `--no-patch` / `-z` / `--format=` | 古参(`--no-patch` 1.8.4) |
+| `show` | `--no-patch` / `-z` / `--format=` / `--format=%(trailers:key=,valueonly,unfold,separator=)` | 古参(`--no-patch` 1.8.4)。**trailers の 4 オプションとも 2.43.0 ✓**(pretty-formats に `key=<key>`「Matching is done case-insensitively」= `Co-Authored-By` も拾う・`valueonly`・`unfold`・`separator=<sep>`「may contain the literal formatting codes described above」= `%x1F` が書ける、を確認) |
 | `stash` | `list -z --format=` / `push -m --include-untracked --keep-index --staged` / `pop --index` / `apply` / `drop` / `store -m` | 2.43.0 ✓(`push --staged` 2.35) |
 | `status` | `--porcelain=v2` / `-z` / `--branch` / `-uall` | 2.43.0 ✓(v2 は 2.11) |
 | `switch` | `--create` / `--force-create` / `--track` | 2.43.0 ✓(2.23 導入。EXPERIMENTAL 表記は restore と同様) |
