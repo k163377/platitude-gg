@@ -270,9 +270,18 @@ Rectangle {
                 id: tabs
                 x: menuButton.width
                 height: tabStrip.height
+                /// Band the tabs may not grow into. Where this row is the
+                /// title bar, the empty run past the last tab is the only
+                /// place left to take hold of the window, and a run that
+                /// can be squeezed to nothing by opening one more tab is
+                /// not somewhere anyone would think to reach for. Two of
+                /// the menu's cells is enough to read as a gap rather than
+                /// as spacing.
+                readonly property real grabRun: topBar.captionMerged
+                                                ? 2 * Theme.railWidth : 0
                 width: Math.max(0, Math.min(contentWidth,
                                             tabStrip.width - menuButton.width
-                                            - plusButton.width))
+                                            - plusButton.width - grabRun))
                 orientation: ListView.Horizontal
                 // Hard stop at the ends, as everywhere else that scrolls
                 // (デザイン規約 §QML 実装ルール).
