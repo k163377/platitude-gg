@@ -376,4 +376,3 @@ async fn a_drifted_tag_puts_its_name_on_both_rows() {
     })
     .await;
 }
-

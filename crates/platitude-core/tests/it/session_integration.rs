@@ -2054,8 +2054,7 @@ async fn settled_and_silent(
 /// interval (or any other background refresh) from flickering the graph.
 #[tokio::test(flavor = "multi_thread")]
 async fn background_refresh_swaps_only_on_change() {
-    let (mut repo, sink, session, baseline) =
-        settled_and_silent(|s| s.refresh_log()).await;
+    let (mut repo, sink, session, baseline) = settled_and_silent(|s| s.refresh_log()).await;
 
     // History moved outside the session: the same call now delivers one
     // atomic replacement — a single LogReplaced carrying every row, so
@@ -2089,8 +2088,7 @@ async fn background_refresh_swaps_only_on_change() {
 /// them. A re-read that finds every ref where it left it stays silent.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_external_ref_move_rebuilds_the_graph() {
-    let (mut repo, sink, session, _) =
-        settled_and_silent(|s| s.refresh_refs()).await;
+    let (mut repo, sink, session, _) = settled_and_silent(|s| s.refresh_refs()).await;
 
     // Now main moves under the session, with the working tree clean on
     // both sides: nothing but the refs can report this.
