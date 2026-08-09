@@ -2518,10 +2518,14 @@ Item {
                                  Metrics.laneInset + 2 * Metrics.laneW)
             graphPanTimer.start()
         } else if (act === "graph-divider") {
-            // Whether the column offers a drag at all. Read against two
-            // repositories: gone on a linear history is only an answer
-            // next to a run where the same verb finds it there.
+            // What the divider answers with the pointer on it. Read
+            // against two repositories: a line withheld on a linear
+            // history is only an answer next to a run where the same
+            // verb draws it.
+            graphPane.restDividerPointer(true)
             AppBackend.report("graph_divider shown=" + graphPane.graphDividerShown
+                              + " line=" + graphPane.graphDividerLineShown
+                              + " refuses=" + graphPane.graphDividerRefuses
                               + " lanes=" + graphModel.maxLanes
                               + " max=" + Math.round(graphPane.graphColWMax)
                               + " min=" + Math.round(graphPane.graphColWMin))

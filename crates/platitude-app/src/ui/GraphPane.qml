@@ -214,8 +214,9 @@ Rectangle {
         Math.min(graphFullW, width - labelW - Metrics.messageMinW))
     /// Whether the column is the only width it can be. One lane and its
     /// gutter is the whole of what a linear history has to show, so the
-    /// divider is not offered rather than standing there taking drags
-    /// that come to nothing (規約 §グラフ列は最も広い所のレーンまで).
+    /// divider draws no line and turns the cursor away rather than
+    /// taking drags that come to nothing
+    /// (規約 §グラフ列は最も広い所のレーンまで).
     readonly property bool graphColWFixed: graphColWMax <= graphColWMin + Theme.spaceSm
     readonly property real graphColW: Math.min(graphColWMax,
         graphColWManual >= 0 ? Math.max(graphColWManual, graphColWMin)
@@ -237,11 +238,16 @@ Rectangle {
         visible: labelDivider.containsMouse || labelDivider.pressed
     }
     Rectangle {
+        id: graphDividerLine
         x: graphDivider.x + Theme.borderWidth
         width: Theme.splitterWidth - 2 * Theme.borderWidth
         height: parent.height
         color: Theme.borderStrong
-        visible: graphDivider.containsMouse || graphDivider.pressed
+        // The line says "this moves". A column with one width does not,
+        // so it stays out and the cursor speaks instead
+        // (規約 §グラフ列は最も広い所のレーンまで).
+        visible: !graphArea.graphColWFixed
+                 && (graphArea.dividerPointed || graphDivider.pressed)
     }
     // The list starts under the bar — the graph moves down rather than
     // losing its top rows behind it.
@@ -630,16 +636,18 @@ Rectangle {
         width: Theme.splitterWidth
         height: parent.height
         z: 2
-        // Gone, not disabled, when the column has nowhere to go: the
-        // hover line and the resize cursor both hang off this one, and
-        // either of them on a width that cannot change is a promise the
-        // drag does not keep.
-        visible: !graphArea.blank && !graphArea.graphColWFixed
+        visible: !graphArea.blank
         hoverEnabled: true
-        cursorShape: Qt.SplitHCursor
+        // A column with one width still answers the hand, and what it
+        // says is no. Qt has no barred double arrow, so the standard
+        // refusal stands in — the shape people already read as "not
+        // here" (規約 §グラフ列は最も広い所のレーンまで).
+        cursorShape: graphArea.graphColWFixed ? Qt.ForbiddenCursor
+                                              : Qt.SplitHCursor
         preventStealing: true
+        onContainsMouseChanged: graphArea.dividerPointed = containsMouse
         onPositionChanged: mouse => {
-            if (!pressed)
+            if (!pressed || graphArea.graphColWFixed)
                 return
             const nx = mapToItem(graphArea, mouse.x, 0).x
                           - Theme.spaceSm - Theme.borderWidth
@@ -647,10 +655,23 @@ Rectangle {
                 Math.min(nx - graphArea.labelW, graphArea.graphColWMax))
         }
     }
+    /// Whether the pointer is on the graph divider. Real hover and the
+    /// automation hook write this one property — hover cannot be
+    /// injected (verify-ui), and the line has to be provable.
+    property bool dividerPointed: false
+    /// Automation: the pointer resting on the divider, which is the only
+    /// thing that draws its line (`PG_AUTO_ACT=graph-divider`).
+    function restDividerPointer(inside) {
+        graphArea.dividerPointed = inside
+    }
     /// What is drawn, not what was asked for: the automation hook reports
-    /// the divider itself, so a column that cannot be resized but still
-    /// offers the grab cannot pass (`PG_AUTO_ACT=graph-divider`).
+    /// the line itself and the shape the cursor actually took, so a
+    /// column that cannot be resized but still promises a drag cannot
+    /// pass.
     readonly property alias graphDividerShown: graphDivider.visible
+    readonly property alias graphDividerLineShown: graphDividerLine.visible
+    readonly property bool graphDividerRefuses:
+        graphDivider.cursorShape === Qt.ForbiddenCursor
     /// Whether the pointer is anywhere in this pane. A `HoverHandler`
     /// rather than a `MouseArea`: handlers are passive, so the rows',
     /// chips' and dividers' own hover does not take this one away. Real
