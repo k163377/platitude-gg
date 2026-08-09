@@ -1,11 +1,11 @@
 //! `cargo xtask verify-ui` — one command from source to a judged
 //! headless run.
 //!
-//! Wraps what CLAUDE.md prescribes for write-path verification: release
-//! build (QML is embedded in the exe), offscreen QPA with an explicit
-//! font dir, the PG_AUTO_* hooks, a bounded wait with a kill guard (never
-//! an unbounded one — the lessons of the locked-screen hangs), and the
-//! `screenshot saved=true` stderr line as the verdict.
+//! Wraps what the verify-ui skill prescribes for write-path verification:
+//! release build (QML is embedded in the exe), offscreen QPA with an
+//! explicit font dir, the PG_AUTO_* hooks, a bounded wait with a kill
+//! guard (never an unbounded one — the lessons of the locked-screen
+//! hangs), and the `screenshot saved=true` stderr line as the verdict.
 
 use std::io::BufRead;
 use std::path::PathBuf;
@@ -243,7 +243,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         .stderr(Stdio::piped());
     if cfg!(windows) {
         // Offscreen Qt does not discover system fonts on Windows; without
-        // this every glyph is a box (CLAUDE.md).
+        // this every glyph is a box (verify-ui skill).
         cmd.env("QT_QPA_FONTDIR", "C:\\Windows\\Fonts");
     }
     // The automation hooks report through tracing at info; without this

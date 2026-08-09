@@ -164,7 +164,7 @@ Rectangle {
     }
 
     // ---- automation: the tools a line only shows under the pointer ----
-    // Hover cannot be injected on Windows (CLAUDE.md), so the squares a
+    // Hover cannot be injected on Windows (verify-ui skill), so the squares a
     // line puts out — stage this line, throw it away — have no headless
     // way to be seen. These name a row as though the pointer were on it,
     // the way `ref-list` enters where the hover timer would. Nothing in

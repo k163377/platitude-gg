@@ -44,7 +44,7 @@ pub(crate) use qml_register;
 
 /// Batch append with one begin/endInsertRows pair (qtbridge has no batch
 /// insert; this mirrors QListModelBase::push via the public proxy API —
-/// see CLAUDE.md "Qt Bridges の要点").
+/// see .claude/rules/app-ui.md "Qt Bridges の要点(罠)").
 macro_rules! impl_extend_notified {
     ($ty:ty, $field:ident, $item:ty) => {
         impl $ty {
