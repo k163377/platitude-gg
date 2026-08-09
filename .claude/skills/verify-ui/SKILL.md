@@ -1,11 +1,11 @@
 ---
 name: verify-ui
-description: platitude-gg の UI 動作確認・スクリーンショット検証をする時に必ず読む。cargo xtask verify-ui の使い方、PG_AUTO_ACT 動詞の全表、headless(offscreen)起動と Windows での GUI 検証の罠(フォント・画面ロック・PrintWindow・PostMessage・hover)を全部ここに置く。「rebase して起動」等、起動だけの要求の手順も §起動 fast path が正(テストは起動報告の後ろへ)。
+description: platitude-gg の UI 動作確認・スクリーンショット検証をする時に必ず読む。cargo xtask verify-ui の使い方、PG_AUTO_ACT 動詞の全表、headless(offscreen)起動と Windows での GUI 検証の罠(フォント・画面ロック・PrintWindow・PostMessage・hover)を全部ここに置く。Done は両 OS — Linux 側は cargo xtask linux verify-ui で、差分は §Linux での動確。「rebase して起動」等、起動だけの要求の手順も §起動 fast path が正(テストは起動報告の後ろへ)。
 ---
 
 # UI 動作確認(ヘッドレス検証)
 
-**ヘッドレス動確は `cargo xtask verify-ui <動詞> [引数]`** — release ビルド → 使い捨て demo リポジトリ生成 → offscreen 起動 → `PG_AUTO_ACT` → `screenshot saved=true` 判定と PNG 保存まで 1 コマンド。`--no-build` で連続実行、`--preset` / `--repo` で対象指定、素材だけ欲しければ `cargo xtask demo-repo <preset>`。**UI 配線の Done はこれが PASS し PNG を目視するまで**(CLAUDE.md ビルド・テスト)。
+**ヘッドレス動確は `cargo xtask verify-ui <動詞> [引数]`** — release ビルド → 使い捨て demo リポジトリ生成 → offscreen 起動 → `PG_AUTO_ACT` → `screenshot saved=true` 判定と PNG 保存まで 1 コマンド。`--no-build` で連続実行、`--preset` / `--repo` で対象指定、素材だけ欲しければ `cargo xtask demo-repo <preset>`。**UI 配線の Done は、これと `cargo xtask linux verify-ui` が同じ動詞で PASS し、両方の PNG を目視するまで**(CLAUDE.md ビルド・テスト。Linux 側の差分は §Linux での動確)。
 
 presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正。
 
@@ -81,6 +81,17 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 **ダイアログ・メニューの見た目は headless で撮れる**: `PG_SHOT_DIR` 指定時、`Main.qml` のオーバーレイミラー(`ShaderEffectSource`)が **overlay.png** を app.png と並べて保存する(offscreen で成立・ロック状態と無関係 — 2026-08-05 実測)。オーバーレイ自体の grabToImage は "no QML engine" で不可、ミラーが唯一の経路。アンロック中の `PrintWindow` も引き続き可(実 hover 等、実ウィンドウが要る検証のみ)。
 
 **overlay.png は閉じたポップアップを写したままにする** — `ShaderEffectSource` はソースアイテムが描くものを失うと**新しいフレームを渡さなくなり、最後のテクスチャが残る**。つまり「メニューが閉じたか」を overlay.png で判定できない(閉じた後の絵は閉じる前と同じ)。**閉じたことを見たいなら QML に言わせる** — `Popup.opened` を `AppBackend.report()` で出し、報告行で読む(2026-08-08 実測: 報告は `open=false`、同じ瞬間の overlay.png にはカードが写っていた)。この状態を絵にする時は **app.png だけを使う**(合成すると消えたはずのカードが甦る)。
+
+## Linux(コンテナ)での動確 — Done は両 OS
+
+**`cargo xtask linux verify-ui <動詞> [引数]`** が Ubuntu 側の同じ 1 コマンド。オプションも動詞も**上の表がそのまま通る**(`--preset` / `--repo` / `--no-build` / `--quit-ms` / `--select` …)。**UI 配線の Done は両 OS で同じ動詞が PASS し、両方の PNG を目視するまで**(CLAUDE.md ビルド・テスト)。片方だけでは足りない理由は、フォントスタックも Qt のビルドも別物だから — 実際、この形にした最初の一巡で 5 件のレイアウト破損が出た。
+
+- **スクショはホスト側の一時ディレクトリに出る**。パスは実行時に `screenshots and settings: <path>` として印字されるので、そこを読む(コンテナ内の `/out` を見に行かない)。`--shot-dir` を明示した時はそちらが優先され、この橋渡しは行われない
+- **offscreen はコンテナでは既定の姿**。Windows のような `QT_QPA_FONTDIR` の指定は要らず、**.ttc の罠も無い**(fontconfig 経由)。イメージが `fonts-noto-cjk` を持つので**日本語はそのまま出る** — デザイン規約が Ubuntu 側に名指ししている `Noto Sans CJK JP` が完全一致で解決することは実測済み
+- **2 つの PNG を画素で突き合わせない**。フォントのラスタライズが違うので一致しないのが正常。判定は各 OS で `screenshot saved=true` + 目視
+- **worktree から走らせると「not a git repository」が 1 回出る** — worktree の `.git` は Windows の絶対パスを書いたファイルで、コンテナ側の git が辿れないため。**無害**(アプリは渡されたリポジトリを開くだけで、この行が指すのは `/work`)
+- イメージは自動で選ばれる(verify-ui は Qt を積んだ app ステージ)。初回だけ Qt の取得で時間がかかり、以後はキャッシュ
+- **`cargo xtask linux bare` は verify-ui ではない** — 宣言した依存だけを入れた Ubuntu で起動するかを見る別物で、動詞を取らない(CLAUDE.md の段 2)
 
 ## Windows での実行・デバッグの罠
 
