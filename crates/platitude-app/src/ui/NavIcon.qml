@@ -297,28 +297,38 @@ Canvas {
                 ctx.stroke()
             }
         } else if (icon.kind === "size-h-no") {
-            // A cursor, not a row's mark: the platform's double arrow
-            // with a barred circle worn at its lower right, for a
-            // divider that will not move (規約 §グラフ列は最も広い所の
-            // レーンまで). Drawn because no platform cursor carries a
-            // refusal on the resize shape, and the one refusal they do
-            // carry is a sign, not an aside. The arrow sits up and left
-            // so the badge has its own corner to stand in.
+            // A cursor, not a row's mark: the splitter cursor every
+            // platform draws — arrows out from a pair of bars, not a
+            // plain double arrow — with a barred circle worn at its
+            // lower right, for a divider that will not move (規約
+            // §グラフ列は最も広い所のレーンまで). Drawn because no
+            // platform cursor carries a refusal on that shape, and the
+            // one refusal they do carry is a sign, not an aside. The
+            // arrow rides a little high so the badge has a clear corner.
             ctx.lineJoin = "round"
             ctx.beginPath()
-            ctx.moveTo(1 * s, 6.5 * s)
-            ctx.lineTo(11 * s, 6.5 * s)
-            ctx.moveTo(3.4 * s, 4.1 * s)
-            ctx.lineTo(1 * s, 6.5 * s)
-            ctx.lineTo(3.4 * s, 8.9 * s)
-            ctx.moveTo(8.6 * s, 4.1 * s)
-            ctx.lineTo(11 * s, 6.5 * s)
-            ctx.lineTo(8.6 * s, 8.9 * s)
+            ctx.moveTo(1.2 * s, 6 * s)
+            ctx.lineTo(5.8 * s, 6 * s)
+            ctx.moveTo(3.4 * s, 3.9 * s)
+            ctx.lineTo(1.2 * s, 6 * s)
+            ctx.lineTo(3.4 * s, 8.1 * s)
+            ctx.moveTo(10.2 * s, 6 * s)
+            ctx.lineTo(14.8 * s, 6 * s)
+            ctx.moveTo(12.6 * s, 3.9 * s)
+            ctx.lineTo(14.8 * s, 6 * s)
+            ctx.lineTo(12.6 * s, 8.1 * s)
+            // The bars the arrows part around: taller than the heads,
+            // which is what makes the shape read as a handle rather
+            // than as a direction.
+            ctx.moveTo(7.2 * s, 3.4 * s)
+            ctx.lineTo(7.2 * s, 8.6 * s)
+            ctx.moveTo(8.8 * s, 3.4 * s)
+            ctx.lineTo(8.8 * s, 8.6 * s)
             ctx.stroke()
             ctx.beginPath()
-            ctx.arc(12.3 * s, 12.3 * s, 3 * s, 0, 2 * Math.PI)
-            ctx.moveTo(10.18 * s, 10.18 * s)
-            ctx.lineTo(14.42 * s, 14.42 * s)
+            ctx.arc(12.6 * s, 12.4 * s, 2.7 * s, 0, 2 * Math.PI)
+            ctx.moveTo(10.69 * s, 10.49 * s)
+            ctx.lineTo(14.51 * s, 14.31 * s)
             ctx.stroke()
         } else if (icon.kind === "clock") {
             ctx.beginPath()
