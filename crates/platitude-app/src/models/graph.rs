@@ -220,10 +220,12 @@ impl GraphModel {
         if !item.stash_ref.is_empty() {
             tokens.push(item.stash_ref.as_str());
         }
+        // `body` is not passed: the description is not searched (see
+        // `platitude-core::find`). The row still carries it for the hover
+        // card.
         query.matches(&Row {
             oid_hex: &item.oid_hex,
             subject: &item.subject,
-            body: &item.body,
             people: &people,
             addresses: &addresses,
             tokens: &tokens,

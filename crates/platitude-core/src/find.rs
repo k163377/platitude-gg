@@ -18,6 +18,23 @@
 //! prose that happens to be hex. Each field below says which shape of
 //! query it can answer, so a query that answers none of them lights
 //! nothing instead of lighting everything.
+//!
+//! **What is searched is what the row is, not everything it has.** Two
+//! things are deliberately out:
+//!
+//! - **The description** (everything after the subject). Measured on this
+//!   repository at 466 commits: searching it too multiplies the hits by
+//!   3–7× for ordinary words — `row` goes from 55 rows to 238, which is
+//!   half the history lit at once. And the description is not on the row,
+//!   so every one of those extra rows is lit for a reason nothing on
+//!   screen gives. Both complaints — too many, and no reason — are the
+//!   same field.
+//! - **The domain half of an address.** Everybody in one repository tends
+//!   to share it, so any part of it lights every row. Addresses match
+//!   from the start instead, which is how somebody pastes one.
+//!
+//! Both come back by name in the advanced search (P3-確認事項), where
+//! asking for them is the point rather than the accident.
 
 /// One typed line, ready to be asked of a row.
 ///
@@ -39,25 +56,28 @@ pub struct Query {
 /// The fields of one row a search can look at — all of them already in
 /// memory, none of them needing git.
 ///
-/// The three groups are the three rules: prose is searched anywhere
-/// inside, tokens the same way but they cannot hold whitespace so a query
-/// with one never lands there, and the object name only from its start.
+/// Three groups, three rules: **short prose** is searched anywhere
+/// inside, **identifiers** only from their start (a shared tail is what
+/// makes them useless to search from the middle), and **names** anywhere
+/// inside again, since a refname is short and few rows carry one.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Row<'a> {
     /// Full object name in lowercase hex. Empty for a row that is not a
     /// commit (the working-tree row), which matches nothing at all.
     pub oid_hex: &'a str,
-    /// The message: first line, then the rest.
+    /// The first line of the message — the whole of what the row shows of
+    /// it. The rest is the description, and it is not searched (see the
+    /// module note).
     pub subject: &'a str,
-    pub body: &'a str,
     /// Everyone the row names — the author, then whoever the message
     /// credits. Prose: a name holds spaces, and people search for them.
     pub people: &'a [&'a str],
-    /// Their addresses. Tokens.
+    /// Their addresses. Identifiers: matched from the start.
     pub addresses: &'a [&'a str],
     /// The names standing on this row: branches, tags, the HEAD marker,
-    /// and `stash@{n}` where the row is a stash. Tokens — git refuses a
-    /// refname with whitespace in it (`check-ref-format`).
+    /// and `stash@{n}` where the row is a stash. Searched anywhere
+    /// inside, but a query with whitespace can never land here — git
+    /// refuses a refname with any in it (`check-ref-format`).
     pub tokens: &'a [&'a str],
 }
 
@@ -94,10 +114,19 @@ impl Query {
         }
         self.at_start_of(row.oid_hex)
             || self.inside(row.subject)
-            || self.inside(row.body)
             || row.people.iter().any(|p| self.inside(p))
-            || row.addresses.iter().any(|a| self.inside(a))
+            || row.addresses.iter().any(|a| self.starts(a))
             || row.tokens.iter().any(|t| self.inside(t))
+    }
+
+    /// From the start, ignoring case. What an address takes: one
+    /// repository's addresses share a domain, so anywhere-inside answers
+    /// every row to any part of it, while the way somebody actually
+    /// searches for a person is by pasting or typing the front.
+    fn starts(&self, hay: &str) -> bool {
+        hay.as_bytes()
+            .get(..self.needle.len())
+            .is_some_and(|head| head.eq_ignore_ascii_case(self.needle.as_bytes()))
     }
 
     /// Anywhere inside, ignoring case.
@@ -148,7 +177,6 @@ mod tests {
 
     fn row<'a>(
         subject: &'a str,
-        body: &'a str,
         people: &'a [&'a str],
         addresses: &'a [&'a str],
         tokens: &'a [&'a str],
@@ -156,7 +184,6 @@ mod tests {
         Row {
             oid_hex: OID,
             subject,
-            body,
             people,
             addresses,
             tokens,
@@ -164,7 +191,7 @@ mod tests {
     }
 
     fn plain(subject: &str) -> Row<'_> {
-        row(subject, "", &[], &[], &[])
+        row(subject, &[], &[], &[])
     }
 
     fn hits(query: &str, r: &Row<'_>) -> bool {
@@ -182,13 +209,22 @@ mod tests {
     }
 
     #[test]
-    fn the_message_matches_anywhere_and_ignores_case() {
-        let r = row("Fix the PARSER", "and the writer too", &[], &[], &[]);
+    fn the_subject_matches_anywhere_and_ignores_case() {
+        let r = plain("Fix the PARSER");
         assert!(hits("fix", &r));
         assert!(hits("parser", &r));
         assert!(hits("PaRsEr", &r));
-        assert!(hits("writer", &r), "the body counts as the message");
         assert!(!hits("reader", &r));
+    }
+
+    #[test]
+    fn the_description_is_not_searched() {
+        // It is not on the row, and searching it multiplies the hits by
+        // 3–7× (module note). A row has no field for it at all, so this
+        // test is here to say the omission is the decision rather than an
+        // oversight: the words below are what such a description holds.
+        let r = plain("fix: harden the parser");
+        assert!(!hits("the writer too", &r));
     }
 
     #[test]
@@ -206,21 +242,23 @@ mod tests {
     }
 
     #[test]
-    fn people_are_prose_and_addresses_are_tokens() {
-        let r = row(
-            "",
-            "",
-            &["山田 太郎", "Ada Lovelace"],
-            &["ada@example.com"],
-            &[],
-        );
+    fn a_name_matches_anywhere_inside() {
+        let r = row("", &["山田 太郎", "Ada Lovelace"], &[], &[]);
         assert!(hits("山田 太郎", &r), "a name holds a space");
-        assert!(hits("lovelace", &r));
-        assert!(hits("ada@", &r));
-        assert!(hits("example.com", &r));
-        // An address cannot hold whitespace, so a query with one can
-        // never be answered by this field — no gate needed for that, the
-        // characters are simply not there.
+        assert!(hits("lovelace", &r), "and is searched from anywhere");
+    }
+
+    #[test]
+    fn an_address_matches_from_its_start() {
+        let r = row("", &[], &["ada@example.com"], &[]);
+        assert!(hits("ada", &r));
+        assert!(hits("ada@example.com", &r), "however it was pasted");
+        assert!(hits("ADA@Example.com", &r));
+        // The domain is shared by everybody in one repository, so from
+        // the middle it would answer every row.
+        assert!(!hits("example.com", &r));
+        assert!(!hits("gmail", &row("", &[], &["someone@gmail.com"], &[])));
+        // An address cannot hold whitespace either way.
         assert!(!hits("ada example", &r));
     }
 
@@ -228,7 +266,6 @@ mod tests {
     fn co_authors_are_searched_like_the_author() {
         let r = row(
             "feat: share the work",
-            "",
             &["Ada Lovelace", "Grace Hopper"],
             &["ada@example.com", "grace@example.com"],
             &[],
@@ -239,7 +276,7 @@ mod tests {
 
     #[test]
     fn ref_names_match_anywhere_inside() {
-        let r = row("", "", &[], &[], &["feature/topic-a", "v0.3-local", "HEAD"]);
+        let r = row("", &[], &[], &["feature/topic-a", "v0.3-local", "HEAD"]);
         assert!(hits("topic", &r));
         assert!(hits("v0.3", &r));
         assert!(hits("head", &r), "the HEAD marker is a name on the row");
@@ -247,8 +284,17 @@ mod tests {
     }
 
     #[test]
+    fn a_remote_branch_is_found_by_its_remote() {
+        // The name carries the namespace, so the remote is searchable
+        // without a field of its own (session::RefLabel).
+        let r = row("", &[], &[], &["origin/main"]);
+        assert!(hits("origin", &r));
+        assert!(hits("origin/main", &r));
+    }
+
+    #[test]
     fn a_stash_is_found_by_its_selector() {
-        let r = row("WIP on main", "", &[], &[], &["stash@{0}"]);
+        let r = row("WIP on main", &[], &[], &["stash@{0}"]);
         assert!(hits("stash@{0}", &r));
         assert!(hits("stash@", &r));
     }
