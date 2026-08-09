@@ -2429,14 +2429,8 @@ impl RepoSession {
             "rebase",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let helper = sequencer::helper_path().map_err(|source| GitError::Io {
-                    command: "git rebase --interactive".to_string(),
-                    source,
-                })?;
-                sequencer::rebase_interactive(
-                    &exec, &repo, &upstream, &steps, &options, &helper, &cancel,
-                )
-                .await
+                let replay = Replay::of(&upstream, &steps, options)?;
+                replay_carrying(&exec, &repo, &replay, &cancel).await
             },
         );
     }
@@ -3154,6 +3148,54 @@ impl Drop for RepoSession {
     }
 }
 
+/// Everything one `git rebase --interactive` needs, held together so the
+/// two attempts a carry makes are the same command twice over.
+struct Replay<'a> {
+    upstream: &'a str,
+    steps: &'a [sequencer::RebaseStep],
+    options: integrate::RebaseOptions,
+    /// The todo-editor binary shipped beside the application.
+    helper: PathBuf,
+}
+
+impl Replay<'_> {
+    /// Locates the helper, which packaging must keep beside the app.
+    fn of<'a>(
+        upstream: &'a str,
+        steps: &'a [sequencer::RebaseStep],
+        options: integrate::RebaseOptions,
+    ) -> Result<Replay<'a>, GitError> {
+        let helper = sequencer::helper_path().map_err(|source| GitError::Io {
+            command: "git rebase --interactive".to_string(),
+            source,
+        })?;
+        Ok(Replay {
+            upstream,
+            steps,
+            options,
+            helper,
+        })
+    }
+
+    async fn run(
+        &self,
+        executor: &GitExecutor,
+        repo: &RepoInfo,
+        cancel: &CancellationToken,
+    ) -> Result<sequencer::ReplayOutcome, GitError> {
+        sequencer::rebase_interactive(
+            executor,
+            repo,
+            self.upstream,
+            self.steps,
+            &self.options,
+            &self.helper,
+            cancel,
+        )
+        .await
+    }
+}
+
 /// Replays a one-commit edit plan through `git rebase --interactive`.
 async fn run_plan(
     executor: &GitExecutor,
@@ -3161,20 +3203,104 @@ async fn run_plan(
     plan: &sequencer::EditPlan,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let helper = sequencer::helper_path().map_err(|source| GitError::Io {
-        command: "git rebase --interactive".to_string(),
-        source,
-    })?;
-    sequencer::rebase_interactive(
-        executor,
-        repo,
-        &plan.upstream,
-        &plan.steps,
-        &plan.options(),
-        &helper,
-        cancel,
-    )
-    .await
+    let replay = Replay::of(&plan.upstream, &plan.steps, plan.options())?;
+    replay_carrying(executor, repo, &replay, cancel).await
+}
+
+/// Replays `replay`, going round through a stash when the working tree is
+/// in the way (デザイン規約 §未コミット変更がある状態での書き換え).
+async fn replay_carrying(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    replay: &Replay<'_>,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    match replay.run(executor, repo, cancel).await? {
+        sequencer::ReplayOutcome::Replayed => Ok(()),
+        sequencer::ReplayOutcome::Blocked(refusal) => {
+            tracing::info!(%refusal, "replay refused: going round through a stash");
+            carry_across_replay(executor, repo, replay, refusal, cancel).await
+        }
+    }
+}
+
+/// Stash, replay, put back — the same three steps [`carry_across`] takes
+/// around a move, with the replay in the middle. `--autostash` is not
+/// what runs them, for two measured reasons: it restores with a plain
+/// `stash apply`, so **everything that was staged comes back unstaged**,
+/// and when the replay stops part-way it parks the work in
+/// `.git/rebase-merge/autostash`, where `stash list` cannot see it and
+/// neither can the graph.
+///
+/// The restore is skipped when the replay stopped part-way, and that is
+/// the whole difference from a move: git will not write into an index
+/// that already holds unmerged paths, so a `pop` there does nothing at
+/// all while reporting the conflict it walked into (実測 — 規約 §`stash
+/// pop` の非ゼロを conflict と読んでよいのは). The entry stays in the
+/// stash list, drawn as its own row in the graph, and the person settling
+/// the conflict puts it back when the operation is over — which is where
+/// the same three commands typed by hand would leave it.
+async fn carry_across_replay(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    replay: &Replay<'_>,
+    refusal: GitError,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    if !stash_everything(executor, repo, cancel).await? {
+        // The tree was cleaned between the refusal and now, so there is
+        // nothing of ours to carry and nothing of anybody else's to
+        // touch: the replay that was refused goes through as it stands.
+        return match replay.run(executor, repo, cancel).await? {
+            sequencer::ReplayOutcome::Replayed => Ok(()),
+            sequencer::ReplayOutcome::Blocked(again) => Err(again),
+        };
+    }
+    match replay.run(executor, repo, cancel).await {
+        Ok(sequencer::ReplayOutcome::Replayed) => {}
+        Ok(sequencer::ReplayOutcome::Blocked(_)) => {
+            // Nothing should stand in the way of a tree that was just
+            // emptied, so whatever is holding this one is not something a
+            // stash gets past. Put the work back and let git's first
+            // refusal say why — a failure to put it back is the more
+            // urgent news and goes through instead.
+            stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await?;
+            return Err(refusal);
+        }
+        Err(error) => {
+            // A replay that stopped part-way is holding the tree; the
+            // work stays in the stash until the operation is over. One
+            // that failed without starting leaves the emptied tree, and
+            // then the stash was only the room it needed.
+            if !opstate::detect(executor, &repo.workdir, cancel)
+                .await?
+                .any()
+            {
+                pop_back_after_failure(executor, repo, cancel).await;
+            }
+            return Err(error);
+        }
+    }
+
+    let kept_index = stash::pop_with_index(executor, &repo.workdir, STASH_TOP, cancel).await;
+    if kept_index.is_ok() || conflicts_now(executor, repo, cancel).await? {
+        return Ok(());
+    }
+    // git refuses `--index` outright when the staged half is what collides
+    // ("conflicts in index. Try without --index.") and leaves everything
+    // where it was. Its own advice is the fallback: restore without the
+    // index, which brings the changes across merged and gives up only on
+    // the staged/unstaged split.
+    match stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            if conflicts_now(executor, repo, cancel).await? {
+                Ok(())
+            } else {
+                Err(error)
+            }
+        }
+    }
 }
 
 /// Builds the synthetic row for uncommitted changes: zero id, no author,
@@ -3272,7 +3398,7 @@ async fn carry_across(
     let outcome = match branch::checkout(executor, &repo.workdir, target, cancel).await {
         Ok(outcome) => outcome,
         Err(error) => {
-            pop_back_after_failed_switch(executor, repo, cancel).await;
+            pop_back_after_failure(executor, repo, cancel).await;
             return Err(error);
         }
     };
@@ -3329,14 +3455,14 @@ async fn stash_everything(
     Ok(stash::tip(executor, &repo.workdir, cancel).await? != before)
 }
 
-/// Best-effort restore after a switch that failed outright (an `Err`,
-/// not a `Blocked` refusal — a refusal git words in a way
-/// `CheckoutBlock` does not know arrives here). The switch did nothing,
-/// so the stash was only the room it needed: put the work back before
-/// the caller surfaces the switch's own error. If even the pop fails,
-/// that is logged and the entry stays in the stash list, where the work
-/// is still recoverable — the switch error is the one worth showing.
-async fn pop_back_after_failed_switch(
+/// Best-effort restore after a move or a replay that failed outright (an
+/// `Err`, not a `Blocked` refusal — a refusal git words in a way the
+/// classifiers do not know arrives here). It did nothing, so the stash
+/// was only the room it needed: put the work back before the caller
+/// surfaces git's own error. If even the pop fails, that is logged and
+/// the entry stays in the stash list, where the work is still
+/// recoverable — the original error is the one worth showing.
+async fn pop_back_after_failure(
     executor: &GitExecutor,
     repo: &RepoInfo,
     cancel: &CancellationToken,

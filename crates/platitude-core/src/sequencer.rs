@@ -402,6 +402,45 @@ async fn plan_for_range(
     Ok(steps)
 }
 
+/// What a replay did.
+#[derive(Debug)]
+pub enum ReplayOutcome {
+    /// git took the plan through to the end. A replay that stopped
+    /// part-way is *not* this: git exits non-zero and the error carries
+    /// its message, with the sequencer state left for the UI to read.
+    Replayed,
+    /// git refused before touching anything, because uncommitted work is
+    /// in the way, so the repository is exactly as it was. Carries the
+    /// refusal itself: the caller goes round again through a stash
+    /// (`RepoSession`'s replay path), and a second refusal — the tree is
+    /// empty by then, so something git cannot see past is holding it —
+    /// has to say why it gave up, in git's own words.
+    Blocked(GitError),
+}
+
+/// Whether git's refusal is the "commit or stash them" one it gives
+/// before touching anything, which a stash gets past.
+///
+/// Classifying human-facing output is otherwise off limits here, and this
+/// earns the same exception [`crate::branch`] takes for `switch`: git
+/// offers no machine-readable answer to "why will you not replay", and
+/// the answer decides whether the replay is worth a second attempt. Every
+/// invocation runs under `LC_ALL=C`, so the C-locale wording arrives.
+///
+/// The two wordings are the halves of git's own clean-tree check —
+/// "cannot rebase: You have unstaged changes." and "cannot rebase: Your
+/// index contains uncommitted changes." (実測 2.55). Untracked files are
+/// not in the way at all: a replay over a tree holding only those goes
+/// straight through, so nothing is stashed for them.
+///
+/// Anything unrecognised is `false` and travels on as an ordinary error:
+/// a reworded message costs the retry, never correctness.
+fn work_is_in_the_way(text: &str) -> bool {
+    let text = text.to_ascii_lowercase();
+    text.contains("cannot rebase:")
+        && (text.contains("unstaged changes") || text.contains("uncommitted changes"))
+}
+
 /// Runs `git rebase --interactive` with `steps` as the todo list.
 ///
 /// `helper` is the executable that understands [`TODO_EDITOR_FLAG`] —
@@ -414,9 +453,9 @@ pub async fn rebase_interactive(
     options: &RebaseOptions,
     helper: &Path,
     cancel: &CancellationToken,
-) -> Result<(), GitError> {
+) -> Result<ReplayOutcome, GitError> {
     if steps.is_empty() {
-        return Ok(());
+        return Ok(ReplayOutcome::Replayed);
     }
     if steps.iter().all(|s| s.action == TodoAction::Drop) {
         return Err(GitError::UnexpectedOutput {
@@ -463,12 +502,30 @@ pub async fn rebase_interactive(
     let plan = ScratchFile::create(&repo.git_dir, "rebase-todo", render_todo(&lines).as_bytes())
         .map_err(io_error)?;
     let editor = sequence_editor_command(helper, plan.path());
-    let cmd = rebase_command(&repo.workdir, upstream, options, Some(&editor));
-    let result = executor.run(cmd, cancel).await.map(drop);
+    // Exit 1 is this command answering rather than failing, and both
+    // answers have a landing of their own on screen: "your work is in the
+    // way" sends the caller round through a stash, and a replay that
+    // stopped part-way raises the badge and the exit card. Only 0 and 1
+    // are answers, so the 128 a name git does not know exits with still
+    // reads as the failure it is (規約 §終了コードで答える問い合わせ).
+    let cmd = rebase_command(&repo.workdir, upstream, options, Some(&editor)).answers_by_code();
+    let result = executor.run(cmd, cancel).await;
     // Keep both sets of scratch files alive until git is done with them.
     drop(plan);
     drop(message_files);
-    result
+    match result {
+        Ok(_) => Ok(ReplayOutcome::Replayed),
+        Err(GitError::Failed {
+            command,
+            code,
+            stderr,
+        }) if work_is_in_the_way(&stderr) => Ok(ReplayOutcome::Blocked(GitError::Failed {
+            command,
+            code,
+            stderr,
+        })),
+        Err(other) => Err(other),
+    }
 }
 
 /// The `GIT_SEQUENCE_EDITOR` value that installs `plan` as the todo list.
@@ -624,6 +681,37 @@ noop-command 4444444 ignored
     #[test]
     fn single_quotes_in_a_path_are_escaped() {
         assert_eq!(sh_quote("it's"), r"'it'\''s'");
+    }
+
+    /// Both halves of git's clean-tree check, word for word as 2.55 wrote
+    /// them; the integration tests run the real thing.
+    #[test]
+    fn the_two_refusals_a_stash_gets_past() {
+        assert!(work_is_in_the_way(
+            "error: cannot rebase: You have unstaged changes.\n\
+             error: Please commit or stash them."
+        ));
+        assert!(work_is_in_the_way(
+            "error: cannot rebase: Your index contains uncommitted changes.\n\
+             error: Please commit or stash them."
+        ));
+    }
+
+    /// Anything else is an ordinary failure: a stash would not help, and
+    /// retrying would replay over a repository git has already touched.
+    #[test]
+    fn a_stopped_replay_is_not_a_refusal() {
+        assert!(!work_is_in_the_way(
+            "error: could not apply 36726c1... c3\n\
+             hint: Resolve all conflicts manually"
+        ));
+        assert!(!work_is_in_the_way(
+            "fatal: It seems that there is already a rebase-merge directory"
+        ));
+        assert!(!work_is_in_the_way(
+            "error: cannot rebase onto multiple branches"
+        ));
+        assert!(!work_is_in_the_way(""));
     }
 
     #[test]
