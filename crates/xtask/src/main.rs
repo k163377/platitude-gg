@@ -42,6 +42,8 @@ commands:
         tags      a tag in every state a remote can put it in (fetch first)
         manytags  basic, with more tags than any pane can show at once
         edges     every string at both ends of what git allows, in Japanese
+        long      a message, a commit and a work tree that all run past
+                  the pane they are shown in (80 files, 60-odd unstaged)
         empty     `git init` and nothing else
 
   verify-ui <verb> [arg] [options]

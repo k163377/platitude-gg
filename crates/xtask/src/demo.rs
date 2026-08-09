@@ -76,6 +76,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "tags" => tags(&mut repo)?,
         "manytags" => manytags(&mut repo)?,
         "edges" => edges(&mut repo)?,
+        "long" => long(&mut repo)?,
         "empty" => {}
         other => return Err(format!("unknown preset: {other}")),
     }
@@ -479,6 +480,133 @@ pub(crate) fn pasted(bytes: usize) -> String {
     }
     s.push_str("終端");
     s
+}
+
+/// The message a release actually gets written with: paragraphs, a list,
+/// and a note in Japanese. Long enough that no pane shows it whole —
+/// which is what the description box's grip is pulled for — but written
+/// rather than repeated, because a wall of the same sentence tells you
+/// nothing about how a real message wraps
+/// (デザイン規約 §コミットメッセージの 2 つの枠).
+///
+/// Some paragraphs are wrapped at 72 columns and some are one long line,
+/// because both turn up in real repositories — one from an editor, the
+/// other pasted in — and they are the two things a box that wraps has to
+/// be looked at doing.
+const LONG_MESSAGE: &str = "\
+refactor: move the whole store behind one interface
+
+Every reader of the store used to reach into it its own way: some took a
+lock and walked the map, some asked the index and then went back for the
+row, and two of them cached what they found. That was fine while there
+was one writer and nothing to invalidate, and it stopped being fine the
+moment the background walk started landing rows while a pane was reading
+them.
+
+So the store has an interface now, and nothing outside it knows how the rows are held. What that costs is a hop through a trait object on every read; what it buys is that invalidation happens in one place, and that the next change to how rows are stored touches one file rather than eleven — this paragraph is one long line on purpose, the way a pasted one arrives, so the box is seen wrapping text that nobody wrapped for it.
+
+The parts worth knowing about:
+
+- Readers take a snapshot, not a lock. A snapshot is cheap (it clones a
+  handle, not the rows) and it never blocks the writer, so a pane that
+  is halfway through drawing cannot stall the walk that feeds it.
+- Writes go through one method, which is also where the notification is
+  raised. There is no way left to change a row without saying so.
+- The two caches are gone. Both existed to skip a lookup that is now a
+  vector index, and both had a way to go stale that nobody had noticed
+  because the tests seeded them in order.
+- The index is built once per batch instead of once per row. On the
+  reference repository that is the difference between 40ms and 3ms, and
+  it is the only reason this is worth doing at all rather than leaving
+  the interface for later.
+
+読み手が増えるたびに同じ罠を踏み直していたので、入口を 1 つにまとめた。
+ここから先の変更は、行の持ち方を変えても呼ぶ側に出ない。逆に言えば、
+この 1 ファイルの外に置き場所を作った時点で同じ話が戻ってくる。
+
+What is deliberately not in here: the on-disk format is untouched, the
+walk still produces rows in the same order, and nothing about how the
+panes ask for a range has changed. Those are three separate arguments
+and this commit is already the wrong size for having any of them in it.
+";
+
+/// Where the bulk of one commit lands, and how many files each place
+/// takes. Spread over real-looking directories rather than one flat
+/// heap: the file list is a tree first, and a tree of one folder is not
+/// a tree.
+const SPRAWL: [(&str, usize, &str); 6] = [
+    ("src/core", 18, "rs"),
+    ("src/ui", 14, "rs"),
+    ("src/net", 9, "rs"),
+    ("tests", 16, "rs"),
+    ("docs", 12, "md"),
+    ("assets/icons", 11, "svg"),
+];
+
+/// A commit nobody can read at a glance, over a tree nobody can scroll at
+/// a glance, in a work tree of the same. Everything here is long on
+/// purpose: the message runs past any pane, the commit touches 80 files,
+/// and the working tree carries 60-odd changes of its own — which is the
+/// state the description box's grip, the CHANGES list and the WIP list
+/// are all hard to look at without.
+fn long(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nA repository with more in every commit than fits on screen.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit("src/core/store.rs", "// the store\n", "feat: add the store")?;
+    repo.commit(
+        "src/ui/pane.rs",
+        "// a pane that reads the store\n",
+        "feat: add a pane that reads it",
+    )?;
+
+    // A remote, and the ordinary history sent to it before the wall goes
+    // on top: a repository with nothing to fetch from reads as a broken
+    // window rather than as a preset about something else, and leaving
+    // the wall unpushed is what makes sending 80 files something that
+    // can be tried here.
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+
+    // The wall: one commit that touches every file in the sprawl.
+    for (dir, count, ext) in SPRAWL {
+        for i in 0..count {
+            repo.write(
+                &format!("{dir}/part_{i:02}.{ext}"),
+                &format!("// {dir} part {i:02}, before the rewrite\n"),
+            )?;
+        }
+    }
+    repo.git(&["add", "--all"])?;
+    repo.git(&["commit", "-m", LONG_MESSAGE])?;
+
+    // And a work tree in the same state: most of the sprawl edited, a
+    // few files nobody has added yet, one gone, one renamed. The mix is
+    // what makes the list worth scrolling — every row is a different
+    // icon — but the point of this preset is the length.
+    for (dir, count, ext) in SPRAWL {
+        for i in (0..count).step_by(4).flat_map(|s| [s, s + 1, s + 2]) {
+            if i >= count {
+                continue;
+            }
+            repo.write(
+                &format!("{dir}/part_{i:02}.{ext}"),
+                &format!("// {dir} part {i:02}, after the rewrite\n\n// and a second thought\n"),
+            )?;
+        }
+    }
+    for i in 0..8 {
+        repo.write(
+            &format!("src/core/sketch_{i:02}.rs"),
+            &format!("// sketch {i:02}, not added yet\n"),
+        )?;
+    }
+    std::fs::remove_file(repo.work.join("src/net/part_08.rs"))
+        .map_err(|e| format!("removing src/net/part_08.rs: {e}"))?;
+    repo.git(&["mv", "docs/part_00.md", "docs/renamed.md"])?;
+    Ok(())
 }
 
 /// Every string the UI shows, at both ends of what git allows, with
