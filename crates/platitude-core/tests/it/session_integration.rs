@@ -1347,7 +1347,7 @@ fn stopped_part_way(repo: &TestRepo) -> bool {
 /// A squash fired over a dirty tree neither stops nor asks: git refuses to
 /// replay while the work is in the tree, so the session goes round the way
 /// a person typing the three commands would (デザイン規約
-/// §未コミット変更がある状態での書き換え). What lands is what `stash` →
+/// §未コミット変更がある状態で履歴を書き換える). What lands is what `stash` →
 /// `squash` → `stash pop --index` leaves — **the staged and unstaged
 /// halves still told apart**, which is the one thing `--autostash` cannot
 /// do: it restores with a plain apply and everything comes back unstaged

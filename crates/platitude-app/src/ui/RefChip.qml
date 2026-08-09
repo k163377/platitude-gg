@@ -47,7 +47,7 @@ Rectangle {
     readonly property string recWhere:
         chip.recFields.length > 1 ? chip.recFields[1] : ""
     // One slot, one mark: on the remote, or on the remote with a PR
-    // open (§ブランチ状態バッジ — the two never stack).
+    // open (規約 §グラフ行のダブルクリック — the two never stack).
     readonly property bool hasBadge: recRemote || recPr
     // A tag this repository does not hold keeps the tag hue and only
     // drops a step (§暗く落とした段): still a tag, read somewhere else.

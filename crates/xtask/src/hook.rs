@@ -126,7 +126,7 @@ fn post_write(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The font rules of デザイン規約 §QML実装ルール, checked line by line:
+/// The font rules of デザイン規約 §QML 実装ルール, checked line by line:
 /// pointSize drifts with each OS's logical DPI, and a family named
 /// outside Theme skips the per-OS fallback chain Theme resolves — both
 /// look right on the machine they were written on and break on another.
@@ -141,7 +141,7 @@ fn qml_font_notes(content: &str) -> Vec<String> {
             notes.push(format!(
                 "line {}: font.pointSize drifts with each OS's logical DPI; \
                  use font.pixelSize with a Theme token \
-                 (デザイン規約 §QML実装ルール).",
+                 (デザイン規約 §QML 実装ルール).",
                 number + 1
             ));
         }
@@ -155,7 +155,7 @@ fn qml_font_notes(content: &str) -> Vec<String> {
             notes.push(format!(
                 "line {}: font.family may only take a family Theme resolved \
                  (Theme.uiFamily / Theme.monoFamily) — anything else skips \
-                 the per-OS fallback chain (デザイン規約 §QML実装ルール).",
+                 the per-OS fallback chain (デザイン規約 §QML 実装ルール).",
                 number + 1
             ));
         }

@@ -1,6 +1,6 @@
 //! git subprocess execution — the single place that spawns `git`.
 //!
-//! Policy (.claude/rules/core.md / 実装計画 §2.2):
+//! Policy (.claude/rules/core.md / 実装計画 §2):
 //! - argument vectors only, never shell strings
 //! - fixed config arguments and environment keep output machine-readable,
 //!   prompt-free and lock-friendly

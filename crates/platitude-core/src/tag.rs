@@ -74,7 +74,7 @@ pub async fn delete(
 /// (which is also what `refs/tags/<name>` allows). Checked here rather
 /// than by running git per keystroke: this is the answer an input box
 /// needs on every character, and it is a pure function of the string.
-/// `tests/refname_rules.rs` holds it to what real git says.
+/// `tests/it/rename_integration.rs` holds it to what real git says.
 pub fn is_valid_name(name: &str) -> bool {
     if name.is_empty() {
         return false;

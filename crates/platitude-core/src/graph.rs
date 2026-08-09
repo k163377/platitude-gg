@@ -3,7 +3,7 @@
 //! Consumes commits in `--date-order` (children before parents) and emits,
 //! per row, everything the UI needs to draw that row in isolation: the node
 //! position/color plus straight and curved lane segments. QML only draws;
-//! no layout decisions happen on the UI side (実装計画 §2.4).
+//! no layout decisions happen on the UI side (実装計画 §2).
 //!
 //! The engine is incremental: rows stream out while `git log` is still
 //! running, so the first chunk can be painted immediately.

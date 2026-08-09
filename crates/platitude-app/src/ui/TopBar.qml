@@ -382,7 +382,7 @@ Rectangle {
             // and the section marks under it stand on one line. `iconLg`
             // rather than `iconMd` because the step follows the height of
             // the band the mark sits in — what `menu` actually draws is
-            // 10px wide inside a 16px box (P3-確認事項 §ハンバーガーのサイズ).
+            // 10px wide inside a 16px box (デザイン規約 §寸法).
             ToolButton {
                 id: menuButton
                 width: Theme.railWidth

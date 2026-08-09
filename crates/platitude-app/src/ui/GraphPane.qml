@@ -723,7 +723,7 @@ Rectangle {
         z: 4
         visible: graphArea.graphColWFixed && graphArea.dividerPointed
         // A Canvas that was never visible was never asked to paint, and
-        // the first thing this one does is appear (規約 §Canvas).
+        // the first thing this one does is appear (app-ui.md).
         onVisibleChanged: if (visible) requestPaint()
     }
     /// What is drawn, not what was asked for: the automation hook reports

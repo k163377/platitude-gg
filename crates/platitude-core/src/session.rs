@@ -1,4 +1,4 @@
-//! RepoSession: one open repository = one session (実装計画 §2.3).
+//! RepoSession: one open repository = one session (実装計画 §2).
 //!
 //! Owns all git activity for a repository: the streaming log → graph
 //! pipeline, parallel snapshot refreshes (refs / status / stash) and
@@ -9,7 +9,7 @@
 //!
 //! Reads run concurrently; writes go through a single queue so two commands
 //! can never touch one repository's index or refs at the same time
-//! (実装計画 §2.3). A queue rather than a lock, because order is part of
+//! (実装計画 §2). A queue rather than a lock, because order is part of
 //! the contract: "stage this, now commit" must not run the other way round,
 //! and independently spawned tasks racing for a mutex give no such
 //! guarantee. Every write refreshes afterwards — including a failed one,
@@ -3574,7 +3574,7 @@ async fn run_plan(
 }
 
 /// Runs `rewrite`, going round through a stash when the working tree is
-/// in the way (デザイン規約 §未コミット変更がある状態での書き換え).
+/// in the way (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
 async fn rewrite_carrying(
     executor: &GitExecutor,
     repo: &RepoInfo,

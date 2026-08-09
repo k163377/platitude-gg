@@ -1,5 +1,5 @@
 //! QML-facing objects. This layer only maps platitude-core results onto Qt
-//! models/properties (thin bridge, swappable per 実装計画 §2.1).
+//! models/properties (thin bridge, swappable per 実装計画 §2).
 //!
 //! Conventions:
 //! - every object is registered under the `platitude` QML module via the

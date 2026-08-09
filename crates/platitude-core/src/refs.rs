@@ -203,7 +203,7 @@ impl<'a> RemoteBranches<'a> {
 
     /// Remote branches a local branch on the **same commit** already
     /// speaks for. Listing one again in the row's chip says twice what the
-    /// badge says once, so the row folds it away (デザイン規約 §グラフ行のチップ).
+    /// badge says once, so the row folds it away (デザイン規約 §グラフ行のダブルクリック).
     ///
     /// Co-location is half the condition: a branch that has drifted from
     /// its upstream leaves the remote on a row of its own, and that row
