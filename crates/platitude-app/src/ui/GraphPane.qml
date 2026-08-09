@@ -639,14 +639,20 @@ Rectangle {
         visible: !graphArea.blank
         hoverEnabled: true
         // A column with one width still answers the hand, and what it
-        // says is no. Qt has no barred double arrow, so the standard
-        // refusal stands in — the shape people already read as "not
-        // here" (規約 §グラフ列は最も広い所のレーンまで).
-        cursorShape: graphArea.graphColWFixed ? Qt.ForbiddenCursor
+        // says is no — but in our own hand, below. The platform's cursor
+        // steps aside for it (規約 §グラフ列は最も広い所のレーンまで).
+        cursorShape: graphArea.graphColWFixed ? Qt.BlankCursor
                                               : Qt.SplitHCursor
         preventStealing: true
-        onContainsMouseChanged: graphArea.dividerPointed = containsMouse
+        onContainsMouseChanged: {
+            graphArea.dividerPointed = containsMouse
+            // Entering does not always bring a move with it, and the
+            // mark is drawn where this says the hand is.
+            if (containsMouse)
+                graphArea.dividerPoint = Qt.point(graphDivider.x + mouseX, mouseY)
+        }
         onPositionChanged: mouse => {
+            graphArea.dividerPoint = Qt.point(graphDivider.x + mouse.x, mouse.y)
             if (!pressed || graphArea.graphColWFixed)
                 return
             const nx = mapToItem(graphArea, mouse.x, 0).x
@@ -655,23 +661,54 @@ Rectangle {
                 Math.min(nx - graphArea.labelW, graphArea.graphColWMax))
         }
     }
-    /// Whether the pointer is on the graph divider. Real hover and the
-    /// automation hook write this one property — hover cannot be
-    /// injected (verify-ui), and the line has to be provable.
+    /// Whether the pointer is on the graph divider, and where. Real hover
+    /// and the automation hook write the same two — hover cannot be
+    /// injected (verify-ui), and both the line and the mark have to be
+    /// provable.
     property bool dividerPointed: false
-    /// Automation: the pointer resting on the divider, which is the only
-    /// thing that draws its line (`PG_AUTO_ACT=graph-divider`).
+    property point dividerPoint: Qt.point(0, 0)
+    /// Automation: the pointer resting on the divider, at its middle
+    /// (`PG_AUTO_ACT=graph-divider`). Where that is stays here rather
+    /// than in the hook — one answer, not a second one to keep in step.
     function restDividerPointer(inside) {
         graphArea.dividerPointed = inside
+        if (inside)
+            graphArea.dividerPoint = Qt.point(graphDivider.x + graphDivider.width / 2,
+                                              graphArea.height / 2)
+    }
+    // The cursor for a column that will not move: the double arrow with
+    // a refusal worn on it, drawn because no platform cursor carries
+    // one (規約 §グラフ列は最も広い所のレーンまで). Centred on the
+    // pointer — a resize cursor's hotspot is its middle, and this one
+    // aims at nothing anyway.
+    NavIcon {
+        id: refusedCursor
+        kind: "size-h-no"
+        tint: Theme.textPrimary
+        // Two icon grids across, because it stands next to the
+        // platform's own double arrow on the divider one column over:
+        // an `iconLg` mark reads as a small one, and a cursor that is
+        // smaller than the cursor beside it looks like a slip.
+        width: 2 * Theme.iconMd
+        height: 2 * Theme.iconMd
+        x: graphArea.dividerPoint.x - width / 2
+        y: graphArea.dividerPoint.y - height / 2
+        z: 4
+        visible: graphArea.graphColWFixed && graphArea.dividerPointed
+        // A Canvas that was never visible was never asked to paint, and
+        // the first thing this one does is appear (規約 §Canvas).
+        onVisibleChanged: if (visible) requestPaint()
     }
     /// What is drawn, not what was asked for: the automation hook reports
-    /// the line itself and the shape the cursor actually took, so a
-    /// column that cannot be resized but still promises a drag cannot
-    /// pass.
+    /// the line and the mark themselves, so a column that cannot be
+    /// resized but still promises a drag cannot pass. `graphDividerBlank`
+    /// is the other half of the mark — with the platform's cursor still
+    /// on, the hand would see both.
     readonly property alias graphDividerShown: graphDivider.visible
     readonly property alias graphDividerLineShown: graphDividerLine.visible
-    readonly property bool graphDividerRefuses:
-        graphDivider.cursorShape === Qt.ForbiddenCursor
+    readonly property alias graphDividerRefuses: refusedCursor.visible
+    readonly property bool graphDividerBlank:
+        graphDivider.cursorShape === Qt.BlankCursor
     /// Whether the pointer is anywhere in this pane. A `HoverHandler`
     /// rather than a `MouseArea`: handlers are passive, so the rows',
     /// chips' and dividers' own hover does not take this one away. Real
