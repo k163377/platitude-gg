@@ -55,7 +55,11 @@ ApplicationWindow {
     //
     // Dropping the button hints also drops the style bits that let the
     // system minimise and maximise the window at all; `keepWindowGestures`
-    // puts those back without the drawing coming with them.
+    // puts those back without the drawing coming with them — and takes
+    // `WM_NCHITTEST` away from Qt while it is at it, because Qt 6.10's
+    // own answer for this flag set synthesises input from a poll and
+    // loses track of it (the story is on `winframe::take_frame_hit_test`;
+    // the symptom was the first click landing dead and hover freezing).
     flags: root.captionMerged
            ? (Qt.Window | Qt.CustomizeWindowHint
               | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint)
@@ -64,11 +68,6 @@ ApplicationWindow {
     color: Theme.bgBase
 
     // ---- what a title bar does, now that this band is one ----------------
-    /// Drags the window. Only the platform can move a window, and only
-    /// from inside the press that started it.
-    function dragWindow() {
-        root.startSystemMove()
-    }
     /// Goes through `visibility`, which is also where the saved shape is
     /// read from, so a window left maximised comes back that way.
     function toggleMaximized() {
@@ -78,12 +77,21 @@ ApplicationWindow {
     function minimizeWindow() {
         root.visibility = Window.Minimized
     }
-    /// The menu a title bar answers a right-click with. `x` and `y` are
-    /// the scene's; the platform wants the display's, and only the scene
-    /// knows the ratio between them.
-    function showWindowMenu(x, y) {
-        AppBackend.showSystemMenu(x, y, Screen.devicePixelRatio)
+    /// Tells the hit test where the band's grab-run is, in scene
+    /// coordinates — the one stretch it answers HTCAPTION for, which is
+    /// what makes it drag, snap, maximise on a double-click and open the
+    /// window menu, all as the platform's own gestures. Called from the
+    /// strip's own layout changes and from the shifts the strip cannot
+    /// see: the maximised inset, and the window resizing.
+    function reportCaptionStrip() {
+        if (!root.captionMerged || topBar.grabRunItem === null)
+            return
+        const run = topBar.grabRunItem
+        const at = run.mapToItem(null, 0, 0)
+        AppBackend.setCaptionStrip(at.x, at.x + run.width, at.y + run.height)
     }
+    onWidthChanged: root.reportCaptionStrip()
+    onMaximizedInsetChanged: root.reportCaptionStrip()
 
     /// How far a maximised window reaches past the screen.
     ///
@@ -404,6 +412,9 @@ ApplicationWindow {
             // white edges around the band. The strip takes the band's own
             // colour so it disappears into it; the hairline stays a line.
             AppBackend.setWindowBorder(Theme.borderDefault, Theme.bgElevated)
+            // The hit test just installed reads the strip from here on;
+            // hand it the shape the band settled into while loading.
+            root.reportCaptionStrip()
         }
         root.applySavedWindow()
         if (AppBackend.autoOpen !== "") {
@@ -582,11 +593,10 @@ ApplicationWindow {
             onOpenRepositoryRequested: root.openRepositoryPicker()
             onIdentityEditRequested: root.identityEditing = true
             onSettingsRequested: settingsDialog.open()
-            onWindowDragRequested: root.dragWindow()
             onMaximizeToggleRequested: root.toggleMaximized()
             onMinimizeRequested: root.minimizeWindow()
             onCloseRequested: root.close()
-            onWindowMenuRequested: (x, y) => root.showWindowMenu(x, y)
+            onCaptionStripMoved: root.reportCaptionStrip()
         }
         // Smoke hook (PG_AUTO_ACT=middle-close): the gesture is on the tab
         // strip, which lives up here rather than on the page where most of

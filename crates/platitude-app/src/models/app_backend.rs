@@ -364,15 +364,20 @@ impl AppBackend {
     #[qslot]
     fn keep_window_gestures(&self) {
         crate::winframe::keep_system_gestures();
+        // And answer WM_NCHITTEST ourselves from here on: Qt 6.10's own
+        // answer for this flag set synthesises input from a poll and
+        // loses track of it, which is the dead first click and the
+        // stuck hover (the whole story is on `take_frame_hit_test`).
+        crate::winframe::take_frame_hit_test();
     }
 
-    /// Opens the window menu where the pointer is — what a title bar
-    /// answers a right-click with. `x` and `y` are the scene's, and
-    /// `scale` turns them into the display's.
+    /// Where the band's empty run sits, in logical scene pixels — the
+    /// one stretch of the window the hit test calls caption, which is
+    /// what makes it drag, snap and answer a right-click with the
+    /// window menu. The scene reports it; the platform does the rest.
     #[qslot]
-    fn show_system_menu(&self, x: f64, y: f64, scale: f64) {
-        let scale = if scale > 0.0 { scale } else { 1.0 };
-        crate::winframe::show_system_menu((x * scale).round() as i32, (y * scale).round() as i32);
+    fn set_caption_strip(&self, x0: f64, x1: f64, bottom: f64) {
+        crate::winframe::set_caption_strip(x0, x1, bottom);
     }
 
     /// Paints the hairline the platform draws around the window. `color`

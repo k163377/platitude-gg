@@ -71,14 +71,50 @@ pub fn set_border_color(border: u32, frame: u32) {
 // window's custom margins, which the bridge does not expose
 // (P3-確認事項 §ウィンドウ chrome).
 
-/// Opens the window menu — move, size, minimise, maximise, close — where
-/// the pointer is. What a title bar answers a right-click with, and this
-/// band is one now. `x` and `y` are in screen pixels.
-pub fn show_system_menu(x: i32, y: i32) {
+/// Takes `WM_NCHITTEST` away from Qt for the windows that are up, and
+/// answers it from the strip `set_caption_strip` describes.
+///
+/// This is not an optimisation, it is the bug fix. Qt 6.10's own answer
+/// for an `ExpandedClientAreaHint` + `CustomizeWindowHint` window
+/// (`QWindowsWindow::handleNonClientHitTest`) polls `GetAsyncKeyState`
+/// on *every* hit test, compares it against one `static` button state,
+/// and on an edge delivers a synthesised press or release straight into
+/// the scene — the hit-test answer is then whatever that synthetic event
+/// came back with, `HTCAPTION` if nothing accepted it. That static
+/// desyncs whenever a press and its release are not both seen by this
+/// window (a click that lands in another window, a popup open at press
+/// time), and from then on the scene holds a phantom press: the next
+/// real click is swallowed as a caption click (logged live: the dead
+/// clicks answered `WM_MOUSEACTIVATE` with hit=HTCAPTION), and the
+/// phantom grab keeps hover pinned to one item, which is the wash that
+/// stopped following the pointer and the highlights that stayed lit.
+/// Synthetic clicks (`PostMessage`) never move `GetAsyncKeyState`, so
+/// none of this reproduces under automation — only under a hand.
+///
+/// Answering the message ourselves starves that whole branch: every
+/// point is client except the resize borders and the one strip the QML
+/// side says is grab-run, and those get the platform's own caption
+/// behaviour — drag, snap, double-click, and the window menu on
+/// right-click — through the front door.
+///
+/// This does not cross the `WM_NCCALCSIZE` finding above: that message
+/// feeds frame metrics Qt caches and must keep seeing, while this one
+/// is a pure query answered fresh every time, with no Qt state behind
+/// it.
+pub fn take_frame_hit_test() {
     #[cfg(windows)]
-    win32::show_system_menu(x, y);
+    win32::take_frame_hit_test();
+}
+
+/// Where the band's empty run sits, in logical scene pixels: from `x0`
+/// to `x1`, reaching down from the window's top edge to `bottom`. The
+/// subclass turns it into device pixels itself, per hit test, so a DPI
+/// change needs no new report.
+pub fn set_caption_strip(x0: f64, x1: f64, bottom: f64) {
+    #[cfg(windows)]
+    win32::set_caption_strip(x0, x1, bottom);
     #[cfg(not(windows))]
-    let _ = (x, y);
+    let _ = (x0, x1, bottom);
 }
 
 #[cfg(windows)]
@@ -231,7 +267,6 @@ mod win32 {
     // SAFETY: as above.
     #[link(name = "user32")]
     unsafe extern "system" {
-        fn WindowFromPoint(point: Point) -> *mut c_void;
         fn GetSystemMenu(window: *mut c_void, revert: i32) -> *mut c_void;
         fn TrackPopupMenu(
             menu: *mut c_void,
@@ -322,15 +357,196 @@ mod win32 {
         1
     }
 
-    pub(super) fn show_system_menu(x: i32, y: i32) {
-        let point = Point { x, y };
+    // ---- the frame's answers, owned (see `take_frame_hit_test`) --------
+
+    const WM_NCHITTEST: u32 = 0x0084;
+    const WM_NCRBUTTONUP: u32 = 0x00A5;
+    /// The hit-test answers this window hands out (winuser.h). Client,
+    /// caption, and the eight resize edges; nothing else exists here —
+    /// no drawn system buttons, no icon box.
+    const HTCLIENT: isize = 1;
+    const HTCAPTION: isize = 2;
+    const HTLEFT: isize = 10;
+    const HTRIGHT: isize = 11;
+    const HTTOP: isize = 12;
+    const HTTOPLEFT: isize = 13;
+    const HTTOPRIGHT: isize = 14;
+    const HTBOTTOM: isize = 15;
+    const HTBOTTOMLEFT: isize = 16;
+    const HTBOTTOMRIGHT: isize = 17;
+    /// `SM_CXSIZEFRAME` + `SM_CXPADDEDBORDER` (winuser.h) is how wide
+    /// the invisible resize border actually is — the first alone is the
+    /// pre-Vista number.
+    const SM_CXSIZEFRAME: i32 = 32;
+    const SM_CXPADDEDBORDER: i32 = 92;
+    const FRAME_SUBCLASS_ID: usize = 7;
+
+    /// `SUBCLASSPROC` (commctrl.h).
+    type SubclassProc = extern "system" fn(*mut c_void, u32, usize, isize, usize, usize) -> isize;
+
+    // SAFETY: transcribed from commctrl.h; the pair is the documented way
+    // to sit in front of a window's procedure without owning it.
+    #[link(name = "comctl32")]
+    unsafe extern "system" {
+        fn SetWindowSubclass(
+            window: *mut c_void,
+            proc: SubclassProc,
+            id: usize,
+            data: usize,
+        ) -> i32;
+        fn DefSubclassProc(
+            window: *mut c_void,
+            message: u32,
+            wparam: usize,
+            lparam: isize,
+        ) -> isize;
+    }
+
+    // SAFETY: as the other user32 blocks — plain integers and pointers
+    // the callee only reads or fills.
+    #[link(name = "user32")]
+    unsafe extern "system" {
+        fn GetWindowRect(window: *mut c_void, rect: *mut Rect) -> i32;
+        fn ScreenToClient(window: *mut c_void, point: *mut Point) -> i32;
+        fn IsZoomed(window: *mut c_void) -> i32;
+        fn IsWindowVisible(window: *mut c_void) -> i32;
+        fn GetDpiForWindow(window: *mut c_void) -> u32;
+        fn GetSystemMetricsForDpi(index: i32, dpi: u32) -> i32;
+    }
+
+    thread_local! {
+        /// The grab-run strip, in logical scene pixels: left edge, right
+        /// edge, bottom. Scene x0 is client x0, so no origin shift is
+        /// owed — only the DPI scale, taken fresh per hit test.
+        static STRIP: Cell<(f64, f64, f64)> = const { Cell::new((0.0, 0.0, 0.0)) };
+    }
+
+    pub(super) fn set_caption_strip(x0: f64, x1: f64, bottom: f64) {
+        STRIP.set((x0, x1, bottom));
+    }
+
+    pub(super) fn take_frame_hit_test() {
+        // SAFETY: as in `square_corners` — the same walk.
+        unsafe {
+            EnumThreadWindows(GetCurrentThreadId(), claim_one, 0);
+        }
+    }
+
+    /// Only the windows that are up: Qt keeps hidden helper windows on
+    /// this thread, and those never meet a pointer.
+    extern "system" fn claim_one(window: *mut c_void, _param: isize) -> i32 {
+        // SAFETY: `window` is live for the callback, and the proc is a real
+        // `extern "system"` function of the shape the subclass expects.
+        unsafe {
+            if IsWindowVisible(window) != 0 {
+                SetWindowSubclass(window, frame_proc, FRAME_SUBCLASS_ID, 0);
+            }
+        }
+        1
+    }
+
+    /// Answers `WM_NCHITTEST` without letting Qt see it (the point of
+    /// the whole exercise — see `take_frame_hit_test`), opens the window
+    /// menu on a right-click in the strip, and forwards everything else.
+    extern "system" fn frame_proc(
+        window: *mut c_void,
+        message: u32,
+        wparam: usize,
+        lparam: isize,
+        _id: usize,
+        _data: usize,
+    ) -> isize {
+        if message == WM_NCHITTEST {
+            return hit_test(window, lparam);
+        }
+        if message == WM_NCRBUTTONUP && wparam as isize == HTCAPTION {
+            let (x, y) = screen_point(lparam);
+            open_system_menu(window, x, y);
+            return 0;
+        }
+        // SAFETY: passing the message on is what a subclass does.
+        unsafe { DefSubclassProc(window, message, wparam, lparam) }
+    }
+
+    /// Both halves of an `lParam` that carries a screen point — signed,
+    /// because a second monitor to the left is negative territory.
+    fn screen_point(lparam: isize) -> (i32, i32) {
+        let x = (lparam & 0xFFFF) as u16 as i16 as i32;
+        let y = ((lparam >> 16) & 0xFFFF) as u16 as i16 as i32;
+        (x, y)
+    }
+
+    /// Resize borders first, then the strip, then client. The borders
+    /// mirror what Qt would have answered: gone while maximised, and
+    /// measured at the window's own DPI while not.
+    fn hit_test(window: *mut c_void, lparam: isize) -> isize {
+        let (x, y) = screen_point(lparam);
+        let mut rect = Rect::default();
+        // SAFETY: `window` is the live handle this message arrived on,
+        // and `rect` is a local the call fills in.
+        let (maximized, dpi) = unsafe {
+            GetWindowRect(window, &mut rect);
+            (IsZoomed(window) != 0, GetDpiForWindow(window))
+        };
+        let dpi = if dpi > 0 { dpi } else { 96 };
+        if !maximized {
+            // SAFETY: reads two system-wide integers.
+            let border = unsafe {
+                GetSystemMetricsForDpi(SM_CXSIZEFRAME, dpi)
+                    + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi)
+            };
+            let left = x >= rect.left && x < rect.left + border;
+            let right = x > rect.right - border && x <= rect.right;
+            let top = y >= rect.top && y < rect.top + border;
+            let bottom = y > rect.bottom - border && y <= rect.bottom;
+            if left {
+                return if top {
+                    HTTOPLEFT
+                } else if bottom {
+                    HTBOTTOMLEFT
+                } else {
+                    HTLEFT
+                };
+            }
+            if right {
+                return if top {
+                    HTTOPRIGHT
+                } else if bottom {
+                    HTBOTTOMRIGHT
+                } else {
+                    HTRIGHT
+                };
+            }
+            if top {
+                return HTTOP;
+            }
+            if bottom {
+                return HTBOTTOM;
+            }
+        }
+        let mut point = Point { x, y };
+        // SAFETY: as above.
+        unsafe {
+            ScreenToClient(window, &mut point);
+        }
+        let scale = f64::from(dpi) / 96.0;
+        let (x0, x1, strip_bottom) = STRIP.get();
+        let (x, y) = (f64::from(point.x), f64::from(point.y));
+        if x1 > x0 && y < strip_bottom * scale && x >= x0 * scale && x < x1 * scale {
+            return HTCAPTION;
+        }
+        HTCLIENT
+    }
+
+    /// The window menu — move, size, minimise, maximise, close — where
+    /// the pointer is. What a title bar answers a right-click with, and
+    /// the strip is one now. Not left to `DefWindowProc`, so showing it
+    /// does not depend on the caption behaviour of a window that has no
+    /// `WS_CAPTION`.
+    fn open_system_menu(window: *mut c_void, x: i32, y: i32) {
         // SAFETY: each call takes plain integers or a handle Windows just
         // handed back, and none of them takes ownership of anything.
         unsafe {
-            let window = WindowFromPoint(point);
-            if window.is_null() {
-                return;
-            }
             let menu = GetSystemMenu(window, 0);
             if menu.is_null() {
                 return;

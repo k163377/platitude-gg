@@ -16,8 +16,10 @@ Rectangle {
     // The RepoPage of the active tab (null while no tab is open).
     property var curPage: null
     /// Whether this band is the window's title bar. When it is, the band
-    /// carries what a title bar carries — the window's own buttons, and
-    /// the two gestures its empty run answers.
+    /// carries the window's own buttons, and tells the platform where
+    /// its empty run sits — the gestures on that run (drag, snap, the
+    /// double-click, the window menu) are the platform's own, because
+    /// the hit test calls it caption (`AppBackend.setCaptionStrip`).
     property bool captionMerged: false
     /// Which shape the middle button is in.
     property bool windowMaximized: false
@@ -33,12 +35,15 @@ Rectangle {
     signal openRepositoryRequested()
     signal identityEditRequested()
     signal settingsRequested()
-    signal windowDragRequested()
     signal maximizeToggleRequested()
     signal minimizeRequested()
     signal closeRequested()
-    /// A right-click on the band, in scene coordinates.
-    signal windowMenuRequested(real x, real y)
+    /// The grab-run moved or changed size in this band's own layout.
+    /// `Main` folds in the shifts this band cannot see from here (the
+    /// maximised inset, the window resizing) and reports the strip on.
+    signal captionStripMoved()
+    /// The run itself, for `Main` to measure in scene coordinates.
+    readonly property Item grabRunItem: grabRun
 
     /// One of the window's own buttons: the same cell the app menu sits in
     /// at the other end of the band, so the two ends are built alike and
@@ -424,44 +429,20 @@ Rectangle {
             }
             // The run of empty band past the last tab. Where this band is
             // the title bar, it is also the only place left to take hold
-            // of the window, so it answers a drag by moving it and a
-            // double click by maximising it — the two things the bar it
-            // replaced did. Neither is wired anywhere else: a press that
-            // lands on a tab, a button or a badge belongs to that.
+            // of the window — and it is a real title bar, not an imitation
+            // of one: the hit test answers HTCAPTION for this rectangle
+            // (`winframe::hit_test`), so a press here never reaches the
+            // scene, and the drag, the snap, the double-click and the
+            // right-click menu are all the platform's own. No handlers —
+            // the scene's only job is saying where the run is.
             Item {
+                id: grabRun
                 x: plusButton.x + plusButton.width
                 width: Math.max(0, tabStrip.width - x)
                 height: tabStrip.height
-                DragHandler {
-                    enabled: topBar.captionMerged
-                    // Nothing here follows the pointer: the platform takes
-                    // the press over and moves the window itself, which is
-                    // the only way a window can be dragged without fighting
-                    // the compositor.
-                    target: null
-                    onActiveChanged: if (active) topBar.windowDragRequested()
-                }
-                TapHandler {
-                    enabled: topBar.captionMerged
-                    // Lets go of the press as soon as it turns into a drag,
-                    // so the handler above can have it.
-                    gesturePolicy: TapHandler.DragThreshold
-                    onDoubleTapped: topBar.maximizeToggleRequested()
-                }
-                // The third thing a title bar does. The platform's own
-                // menu, opened where the pointer is, because the entries
-                // in it are the platform's to run (move, size, and the
-                // three this band already has buttons for).
-                TapHandler {
-                    enabled: topBar.captionMerged
-                    acceptedButtons: Qt.RightButton
-                    gesturePolicy: TapHandler.ReleaseWithinBounds
-                    onTapped: (point) => {
-                        const at = parent.mapToGlobal(point.position.x,
-                                                      point.position.y)
-                        topBar.windowMenuRequested(at.x, at.y)
-                    }
-                }
+                onXChanged: topBar.captionStripMoved()
+                onWidthChanged: topBar.captionStripMoved()
+                Component.onCompleted: topBar.captionStripMoved()
             }
         }
 
