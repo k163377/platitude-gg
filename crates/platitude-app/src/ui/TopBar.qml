@@ -371,7 +371,24 @@ Rectangle {
                     required property string title
                     required property string repo_path
                     readonly property bool current: topBar.tabsModel.currentIndex === index
-                    width: tabContent.implicitWidth + 2 * Theme.spaceSm
+                    /// Air the `✕` brings with it: the `iconMd` mark stands
+                    /// centred in an `iconLg` button, and the glyph is drawn
+                    /// inset again inside that (`NavIcon` "close" — diagonals
+                    /// read heavier, so it sits further in than the bars do).
+                    readonly property int markAir: (Theme.iconLg - Theme.iconMd) / 2
+                                                   + Theme.spaceXs
+                    // What the eye measures is ink, not boxes. So the mark's
+                    // seat is given only the air it has not already taken
+                    // (`spaceSm − markAir`), and the run to the name is left
+                    // to the mark alone — otherwise both are spent twice and
+                    // the gap inside the tab reads wider than the tab's own
+                    // margins (実測 13px between name and mark against 9px to
+                    // the edge). The width is the exact fit rather than
+                    // `implicitWidth + 2 * spaceSm`: anything the layout
+                    // cannot hand out lands past the last item, which is to
+                    // say on the right margin, where nobody wrote it down.
+                    width: tabContent.implicitWidth + Theme.spaceSm
+                           + (Theme.spaceSm - markAir)
                     height: tabs.height
                     color: current ? Theme.bgSelected : "transparent"
                     // The middle button is taken here rather than on the
@@ -406,8 +423,8 @@ Rectangle {
                         id: tabContent
                         anchors.fill: parent
                         anchors.leftMargin: Theme.spaceSm
-                        anchors.rightMargin: Theme.spaceXs
-                        spacing: Theme.spaceXs
+                        anchors.rightMargin: Theme.spaceSm - tabItem.markAir
+                        spacing: 0
                         Label {
                             text: tabItem.title
                             elide: Text.ElideRight
