@@ -634,15 +634,22 @@ Rectangle {
     }
     // The section opens flush against the rail, so walking into it takes
     // the pointer off the cell, and walking back out puts it on again.
-    // Both hovers change in the same frame and in no fixed order, so the
-    // answer waits for the end of this round of events, by which time
+    // The two hovers change in different frames and in no fixed order —
+    // between them the pointer is on neither, and `Qt.callLater` lands
+    // there and closes the section under the hand. So the answer waits
+    // a beat (デザイン規約 §hover のツールチップ), by which time
     // whichever of the two now holds the pointer has said so.
     function settlePeek() {
-        Qt.callLater(function () {
+        peekSettle.restart()
+    }
+    Timer {
+        id: peekSettle
+        interval: Metrics.hoverKeepMs
+        onTriggered: {
             if (!sidebar.peekEntered && !sidebar.peekWanted
                     && !sidebar.peekPinned)
                 sidebar.closePeek()
-        })
+        }
     }
     function closePeek() {
         peek.close()
