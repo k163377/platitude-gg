@@ -110,6 +110,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/SlimField.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SummaryArea.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TopBar.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/WipBucketHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/Main.qml", "qt/qml/platitude");
     let code = app

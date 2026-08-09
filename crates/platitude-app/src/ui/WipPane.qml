@@ -736,85 +736,27 @@ ColumnLayout {
         // GitKraken grouping: unstaged (incl. untracked) above, staged
         // below.
         section.property: "group"
-        section.delegate: Rectangle {
-            id: bucketHeader
-            required property string section
-            /// An external merge tool holds the write queue until it is
-            /// closed, which is the longest wait in the app and the only
-            /// one with no upper bound.
-            readonly property bool waitingForTool:
-                bucketHeader.section === "conflicts"
-                && wipPane.repoTab.busyOp === "mergetool"
-            width: wipList.width
-            height: Theme.rowHeight
-            color: Theme.bgElevated
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: Theme.spaceSm
-                anchors.rightMargin: Theme.spaceXs
-                spacing: Theme.spaceXs
-                Label {
-                    text: bucketHeader.section === "staged"
-                          ? qsTr("STAGED FILES (%1)").arg(wipPane.workTree.stagedCount)
-                          : bucketHeader.section === "unstaged"
-                          ? qsTr("UNSTAGED FILES (%1)")
-                            .arg(wipPane.workTree.unstagedCount + wipPane.workTree.untrackedCount)
-                          : qsTr("CONFLICTS")
-                    font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
-                    color: bucketHeader.section === "conflicts"
-                           ? Theme.danger : Theme.textSecondary
-                }
-                Item { Layout.fillWidth: true }
-                // The seat `Stage all` takes on the other two buckets.
-                // The words stay — nothing else in view names the tool
-                // being waited on — and the ring says it is still running.
-                // No `…`: that is the word for a question standing, and
-                // progress is the ring's job (規約 §進行中・長押しの定数).
-                //
-                // Nothing to press: killing `git mergetool` would leave
-                // the editor it started running and its scratch behind.
-                Label {
-                    visible: bucketHeader.waitingForTool
-                    text: qsTr("Waiting for %1").arg(wipPane.workTree.mergeTool)
-                    font.pixelSize: Theme.fontSm
-                    color: Theme.textSecondary
-                }
-                NavIcon {
-                    visible: bucketHeader.waitingForTool
-                    Layout.preferredWidth: Theme.iconSm
-                    Layout.preferredHeight: Theme.iconSm
-                    kind: "spinner"
-                    tint: Theme.textSecondary
-                    // On the render thread, so it keeps turning while the
-                    // GUI thread drains models.
-                    RotationAnimator on rotation {
-                        running: bucketHeader.waitingForTool
-                                 && AppBackend.shotDir === ""
-                        loops: Animation.Infinite
-                        from: 0
-                        to: 360
-                        duration: Metrics.spinMs
-                    }
-                }
-                HoverToolButton {
-                    visible: bucketHeader.section !== "conflicts"
-                    text: bucketHeader.section === "staged"
-                          ? qsTr("Unstage all") : qsTr("Stage all")
-                    font.pixelSize: Theme.fontSm
-                    ToolTip.visible: hovered
-                    ToolTip.delay: Metrics.tipDelayMs
-                    ToolTip.text: bucketHeader.section === "staged"
-                        ? qsTr("Unstage everything")
-                        : qsTr("Stage everything, untracked included")
-                    onClicked: {
-                        if (bucketHeader.section === "staged")
-                            wipPane.repoTab.unstageAll()
-                        else
-                            wipPane.repoTab.stageAll()
-                    }
-                }
-            }
+        section.delegate: WipBucketHeader {
+            listWidth: wipList.width
+            repoTab: wipPane.repoTab
+            workTree: wipPane.workTree
+        }
+        // The staged heading stands even with nothing under it: a section
+        // with no rows has no heading, so the pane would otherwise never
+        // name the place a staged file goes, and the band would grow in
+        // under the hand at the first `+` (デザイン規約 §その他の操作). It
+        // rides in the footer because staged is the last bucket — the seat
+        // an empty one would take is exactly the end of the list.
+        //
+        // Only while something is uncommitted: on a clean tree the whole
+        // list is empty and a lone `(0)` heads nothing.
+        footer: WipBucketHeader {
+            section: "staged"
+            listWidth: wipList.width
+            repoTab: wipPane.repoTab
+            workTree: wipPane.workTree
+            visible: wipPane.workTree.stagedCount === 0
+                     && wipPane.worktreeModel.total > 0
         }
         delegate: NavItemDelegate {
             listWidth: wipList.width
