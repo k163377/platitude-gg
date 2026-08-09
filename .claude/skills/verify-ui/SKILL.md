@@ -96,6 +96,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 - **offscreen はコンテナでは既定の姿**。Windows のような `QT_QPA_FONTDIR` の指定は要らず、**.ttc の罠も無い**(fontconfig 経由)。イメージが `fonts-noto-cjk` を持つので**日本語はそのまま出る** — デザイン規約が Ubuntu 側に名指ししている `Noto Sans CJK JP` が完全一致で解決することは実測済み
 - **2 つの PNG を画素で突き合わせない**。フォントのラスタライズが違うので一致しないのが正常。判定は各 OS で `screenshot saved=true` + 目視
 - **worktree から走らせると「not a git repository」が 1 回出る** — worktree の `.git` は Windows の絶対パスを書いたファイルで、コンテナ側の git が辿れないため。**無害**(アプリは渡されたリポジトリを開くだけで、この行が指すのは `/work`)
+- **`--repo` にコンテナ内のパスを渡す時は Git Bash の変換を止める** — `--repo /work/…` は MSYS に `C:/Program Files/Git/work/…` へ書き換えられ、アプリは**開けないフォルダの画面**を撮る。そして `screenshot saved=true` は出るので **PASS する**(実測 2026-08-09。`write-failures 0` と、絵が「Not a git repository」であることだけが手掛かり)。`MSYS_NO_PATHCONV=1` を立てるか PowerShell から叩く。**`--preset` だけの run は当たらない**(パスを渡さないため)。届かないリモートが要る動詞(`fetch-fail` / 黄の `push`)を Linux で撮るには**リポジトリを worktree の中に建てる** — `demo-repo <preset> --at <worktree>/<名前>` で作れば origin が `file:///C:/…` を指すので、コンテナからは**そのまま届かないリモート**になる(撮り終えたら消す)
 - イメージは自動で選ばれる(verify-ui は Qt を積んだ app ステージ)。初回だけ Qt の取得で時間がかかり、以後はキャッシュ
 - **`cargo xtask linux bare` は verify-ui ではない** — 宣言した依存だけを入れた Ubuntu で起動するかを見る別物で、動詞を取らない(CLAUDE.md の段 2)
 
