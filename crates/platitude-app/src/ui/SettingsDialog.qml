@@ -221,7 +221,7 @@ AppDialog {
                 spacing: Theme.spaceSm
                 // As wide as the dialog gives it: a tool's name has no
                 // fixed length, and an input only takes a fixed width
-                // when its content does (繝・じ繧､繝ｳ隕冗ｴ・ﾂｧ繝ｬ繧､繧｢繧ｦ繝亥・譛溷､).
+                // when its content does (デザイン規約 §レイアウト初期値).
                 AppCombo {
                     id: toolField
                     Layout.fillWidth: true
@@ -286,10 +286,13 @@ AppDialog {
                     id: avatarRow
                     Layout.fillWidth: true
                     spacing: Theme.spaceSm
-                    /// The pointer is on this row, or headless has put it
-                    /// there for a shot.
+                    /// The hand is on this row: the pointer, the keyboard's
+                    /// focus (the hold's other hand — デザイン規約 §長押し,
+                    /// and the row it is about is just as settled), or
+                    /// headless having put it there for a shot.
                     readonly property bool lit:
-                        rowHover.hovered || settingsDialog.pointedAtRow === index
+                        rowHover.hovered || unsetButton.activeFocus
+                        || settingsDialog.pointedAtRow === index
                     // A handler, not a MouseArea: a MouseArea is an Item,
                     // so a layout gives it a seat of its own and every
                     // column after it starts a gap further right — 
@@ -328,19 +331,28 @@ AppDialog {
                     // Held, not clicked: this card writes as it is worked
                     // rather than on a Save, so the gesture is the only
                     // thing standing between a stray click and a picture
-                    // that has to be found again (繝・じ繧､繝ｳ隕冗ｴ・ﾂｧ髟ｷ謚ｼ縺・.
+                    // that has to be found again (デザイン規約 §長押し).
                     //
-                    // Dimmed rather than hidden off the pointer: a list of
-                    // N assignments would otherwise stand N words of the
-                    // one colour reserved for what takes something away,
-                    // and 迥ｶ諷玖牡縺ｯ蜃ｺ迴ｾ謨ｰ縺悟ｰ代↑縺・⊇縺ｩ蜉ｹ縺・ Kept in the
-                    // layout either way, so the address beside it does not
+                    // Red only where the hand is (デザイン規約 §状態): a
+                    // standing state colour is for saying that the usual
+                    // move is not available, and everything a settings card
+                    // does is the usual move — a red word per row says
+                    // nothing and thins out the warnings that mean it. The
+                    // frame is what carries "this is a control" at rest:
+                    // the other three columns are data, and a bare word
+                    // among them reads as a fourth one. `*Dim` belongs on
+                    // that frame rather than on the word, which is the one
+                    // use §暗く落とした段 allows for it. Kept in the layout
+                    // either way, so the address beside it does not
                     // re-elide as the pointer crosses the list.
                     ActionButton {
                         id: unsetButton
                         text: qsTr("Remove")
                         font.pixelSize: Theme.fontSm
-                        tone: avatarRow.lit ? Theme.danger : Theme.dangerDim
+                        tone: avatarRow.lit ? Theme.danger
+                                            : Theme.textSecondary
+                        frameColor: avatarRow.lit ? Theme.dangerDim
+                                                  : Theme.borderSubtle
                         holdMs: Metrics.holdMs
                         holdTone: Theme.danger
                         onHeld: AppBackend.removeAvatar(modelData.email)
