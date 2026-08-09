@@ -74,6 +74,7 @@ cargo fmt --all
 - force push しない
 - **main へブランチを反映するのは、その場でユーザーが指示した時だけ**(ユーザー指示)。セッションはコミットを `worktree-<名前>` に積んだまま「マージ可」と報告して終わる。自分の判断で ff-merge しない — 反映済みと未反映が混ざると管理できなくなる
   - `cargo xtask hook pre-git` が main を書く git(`merge` / `:main` への refspec / `branch -f main` / `update-ref`)を deny する。**指示があった時だけ** `PG_ALLOW_MAIN=1` を先頭に付けて再実行する。使い捨てリポジトリと worktree ブランチ上のコミットは対象外
+  - **反映は本体 checkout の `git merge` で行う** — `update-ref` / `branch -f` で ref だけ進めると本体の index と作業ツリーが置き去りになり、落差が staged として見える。**「コミットし損ねた作業」に見えて中身は HEAD より後ろ**なので、コミットすると反映済みの仕事が消える。診断は `git reflog show main`(`merge …: Fast-forward` でない行が始まり)、復旧は `git restore --source=HEAD --staged --worktree -- .`
 - 本体 checkout での直コミットは可(ドキュメント等)。main の ref を動かす操作のうち止まるのは上記の反映系だけ
 
 ## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
