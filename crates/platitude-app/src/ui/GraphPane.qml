@@ -197,7 +197,33 @@ Rectangle {
     // horizontally when the full graph is wider.
     property real labelWManual: -1
     property real graphColWManual: -1
-    readonly property real labelW: labelWManual >= 0 ? labelWManual : Metrics.labelColW
+    // The narrowest the chip column goes, and the widest. `spaceXxl` is
+    // where the divider has always refused to be dragged any further in;
+    // the automatic squeeze below stops at the same place, so a column
+    // narrowed by the window and one narrowed by hand come to rest on one
+    // width. The far end is where the two columns after it would stop
+    // being able to say anything: one lane, and enough message column to
+    // show that there is a message (規約 §グラフ列は最も広い所のレーンまで).
+    readonly property real labelColWMin: Theme.spaceXxl
+    readonly property real labelColWMax: Math.max(labelColWMin,
+        width - graphColWMin - Metrics.messageMinW)
+    // What the column would be if the pane had the room: what somebody
+    // dragged it to, or the default nobody has moved.
+    readonly property real labelWWanted:
+        labelWManual >= 0 ? labelWManual : Metrics.labelColW
+    // A pane too narrow for all three columns takes it out of this one
+    // first, and only then out of the lanes (`graphColWMax` reads this,
+    // so the order is in the arithmetic rather than in a rule). The chips
+    // are what gives first because the left menu already lists every name
+    // in them, and because `labelWManual` keeps what was dragged — a pane
+    // that gets its room back puts the column back where the hand left it.
+    readonly property real labelW: Math.max(labelColWMin,
+        Math.min(labelWWanted, labelColWMax))
+    // The narrowest this pane can be laid out with all three columns still
+    // saying something. The page's floor is built on it (RepoPage), which
+    // is what keeps the window from being dragged past it.
+    readonly property real contentMinW:
+        labelColWMin + graphColWMin + Metrics.messageMinW
     readonly property real graphFullW: Metrics.laneInset
                                        + Math.max(1, graphModel.maxLanes) * Metrics.laneW
                                        + Theme.spaceSm
@@ -623,8 +649,10 @@ Rectangle {
             if (!pressed)
                 return
             const nx = mapToItem(graphArea, mouse.x, 0).x
-            graphArea.labelWManual = Math.max(Theme.spaceXxl,
-                Math.min(nx, graphArea.width - 2 * Theme.spaceXxl))
+            // The same pair the column itself is clamped to, so a drag
+            // cannot leave a width the pane would not lay out.
+            graphArea.labelWManual = Math.max(graphArea.labelColWMin,
+                Math.min(nx, graphArea.labelColWMax))
         }
     }
     MouseArea {

@@ -243,6 +243,22 @@ pub fn run(args: &[String]) -> Result<(), String> {
     std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
     println!("config dir: {}", config_dir.display());
 
+    // The one verb that needs the configuration to say something before
+    // the run starts: a window smaller than any floor the layout has. It
+    // is what a file written before there was a floor looks like, and the
+    // way in is the only place that can put it right. Written here rather
+    // than by hand in the app, because the app never writes a shape it
+    // could not take — so nothing inside it could produce this state.
+    if opts.verb == "window-floor" {
+        let state = config_dir.join("state.toml");
+        std::fs::write(
+            &state,
+            "version = 1\n\n[window]\nwidth = 320\nheight = 240\nmaximized = false\n",
+        )
+        .map_err(|e| format!("could not write {}: {e}", state.display()))?;
+        println!("seeded window: 320x240 (under every floor)");
+    }
+
     let arg = match opts.arg.is_empty() {
         true => match body_for(&opts.verb) {
             Some(body) => body,
@@ -417,6 +433,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // edge would land off the screen is a question about a real
         // monitor, and the offscreen platform has none to answer with.
         "window-fill" => Some("window_fill fills=true"),
+        // A window held at its floor and one let past it frame alike — the
+        // picture is of the panes either way, and the one that went past
+        // simply has a pane outside the frame, where a screenshot cannot
+        // follow. What the floor came to is a number or it is nothing.
+        "window-floor" => Some("window_floor fits=true"),
         _ => None,
     };
     let outcome = Outcome {

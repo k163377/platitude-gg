@@ -3249,6 +3249,41 @@ Item {
         detailsModel.setTreeView(AppBackend.startDetailsTree())
     }
 
+    // ---- how narrow and how short this page may be laid out ------------
+    // Under these the panes stop giving: `SplitView` does not shrink an
+    // item past its minimum, it lays the rest out beyond its own edge, and
+    // nothing in this window scrolls to reach what went over (measured
+    // 2026-08-09: a 640px window left 32px of the right pane on screen and
+    // no way to the other 268). So the window is held to them instead
+    // (`Main.floorWidth` / `floorHeight`).
+    //
+    // Every number here is one §レイアウト初期値 already carries; naming
+    // them is what lets the item that obeys one and the floor that is
+    // built on it read the same value.
+    readonly property int rightMinWidth: 300
+    readonly property int panesMinHeight: 200
+    readonly property int commandsMinHeight: 120
+    /// The middle column's floor. The graph gives up its own columns
+    /// first — the chips, then the lanes (`GraphPane.contentMinW`) — and
+    /// stops where all three of them would stop saying anything. Never
+    /// under what a side pane may be, so that three columns still read as
+    /// three at the floor (2026-08-09 ユーザー指示).
+    readonly property real centreMinWidth:
+        Math.max(graphPane.contentMinW, sidebarPane.minOpenWidth)
+    /// What the folded list costs is the rail, so folding lowers this and
+    /// unfolding raises it — and a window standing at the old floor is
+    /// grown by the new one rather than cutting the list off (Main).
+    readonly property real floorWidth:
+        (page.sidebarCollapsed ? Theme.railWidth : sidebarPane.minOpenWidth)
+        + Theme.splitterWidth + page.centreMinWidth
+        + Theme.splitterWidth + page.rightMinWidth
+    /// The log is a second row when it is open, and it brings its own
+    /// floor with it — so opening it raises this the same way.
+    readonly property real floorHeight:
+        page.panesMinHeight
+        + (page.commandsOpen
+           ? Theme.splitterWidth + page.commandsMinHeight : 0)
+
     /// Assigned, not bound — a drag writes the same attached property and
     /// would be gone after the first one (規約 §左メニューを畳む).
     function setDetailsWidth(w) {
@@ -3272,8 +3307,15 @@ Item {
             // it goes back to is the one worth keeping.
             page.sidebarCollapsed ? sidebarPane.openWidth : sidebarPane.width,
             rightPane.width,
-            page.commandsOpen ? commandsPane.height
-                              : commandsPane.SplitView.preferredHeight,
+            // The height it asks for, open or closed — not the one it was
+            // laid out at. A drag writes this same property, so what a
+            // hand set is here; what a short window squeezed it to is not
+            // (the same rule the folded list keeps: a size nobody chose is
+            // not a size to come back to. Measured before the window had a
+            // floor: opening the log in a 420px window wrote 168 over the
+            // 280 that had been asked for, and every launch after came
+            // back to the smaller one).
+            commandsPane.SplitView.preferredHeight,
             // The dragged values, not the widths on screen: a column that
             // nobody has moved reports -1 and goes on following the
             // default rather than freezing today's number into the file.
@@ -3673,7 +3715,7 @@ Item {
             Item {
                 visible: page.openFailed
                 SplitView.fillHeight: true
-                SplitView.minimumHeight: 200
+                SplitView.minimumHeight: page.panesMinHeight
                 Column {
                     anchors.centerIn: parent
                     spacing: Theme.spaceMd
@@ -3719,7 +3761,7 @@ Item {
             SplitView {
                 visible: !page.openFailed
                 SplitView.fillHeight: true
-                SplitView.minimumHeight: 200
+                SplitView.minimumHeight: page.panesMinHeight
                 orientation: Qt.Horizontal
                 handle: Rectangle {
                     implicitWidth: Theme.splitterWidth
@@ -3756,7 +3798,11 @@ Item {
                 // Center: commit graph ⇄ file diff
                 StackLayout {
                     SplitView.fillWidth: true
-                    SplitView.minimumWidth: 420
+                    // Not a number of its own: what the graph's own columns
+                    // come to once they have both given everything they can,
+                    // held up to a side pane's width so the middle never
+                    // reads as the thinnest of the three (page.centreMinWidth).
+                    SplitView.minimumWidth: page.centreMinWidth
                     currentIndex: page.diffShown ? 1 : 0
 
                     GraphPane {
@@ -3820,7 +3866,7 @@ Item {
                     // Where it starts; `applySavedLayout` assigns over this
                     // with the width the window is set to.
                     SplitView.preferredWidth: 400
-                    SplitView.minimumWidth: 300
+                    SplitView.minimumWidth: page.rightMinWidth
                     color: Theme.bgSurface
 
                     // Which git is doing all this, as faint bare text in
@@ -3926,7 +3972,7 @@ Item {
                 commandsModel: commandsModel
                 errorText: repoTab.lastError
                 SplitView.preferredHeight: 280
-                SplitView.minimumHeight: 120
+                SplitView.minimumHeight: page.commandsMinHeight
                 onCloseRequested: page.commandsOpen = false
                 onErrorCleared: repoTab.clearLastError()
                 onCopyRequested: text => clipboard.copy(text)

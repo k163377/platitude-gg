@@ -62,6 +62,17 @@ Rectangle {
     /// The run itself, for `Main` to measure in scene coordinates.
     readonly property Item grabRunItem: grabArea
 
+    /// The narrowest this band can be laid out at — one of the two numbers
+    /// the window's floor is the larger of (`Main.floorWidth`).
+    ///
+    /// Read off the row's own preferred width rather than summed here: the
+    /// strip is the only part of the band that gives, so what the row asks
+    /// for with the strip at its floor *is* the floor, and a control added
+    /// to the band later is counted without anybody remembering to. The
+    /// margin is the row's own, which the fill does not cover.
+    readonly property real floorWidth:
+        bandRow.implicitWidth + bandRow.anchors.rightMargin
+
     /// One of the window's own buttons: the same cell the app menu sits in
     /// at the other end of the band, so the two ends are built alike and
     /// the outer one keeps its distance from the window's edge. The mark
@@ -350,6 +361,18 @@ Rectangle {
             id: tabStrip
             Layout.fillWidth: true
             Layout.fillHeight: true
+            // What the strip costs when everything in it has given all it
+            // can: the menu cell, one tab with its name cut to the three
+            // characters the table allows, the way to open another, and
+            // the run the window is taken hold of (デザイン規約 §ウィンドウ
+            // の縁). It fills, so this is only what it asks for and not a
+            // floor the row enforces — it is here so the band can say what
+            // it costs, which is one half of the window's own floor
+            // (`floorWidth`). Measured before there was one: at 320px the
+            // close button was outside the window.
+            implicitWidth: menuButton.width + tabs.tabFixedW
+                           + topBar.tabTitleMinW + plusButton.width
+                           + tabs.grabRun
             // App menu (Claude-Desktop-style hamburger); most entries are
             // placeholders until their phases land.
             //

@@ -72,6 +72,75 @@ ApplicationWindow {
     title: qsTr("Platitude GG")
     color: Theme.bgBase
 
+    // ---- the floor the window may not be dragged under --------------------
+    // Qt Quick hands nothing up: a widget window takes its children's
+    // minimum size for its own, but `SplitView` and the layouts here stop
+    // shrinking their items at the minimum and lay the rest out past their
+    // own edge — and nothing in this window scrolls sideways to reach what
+    // went over. Measured 2026-08-09: at 640px wide the right pane had 32
+    // of its 300 on screen and the other 268 were unreachable; at 320 the
+    // window's own close button was outside the window.
+    //
+    // The number is read off what is on screen rather than written down,
+    // because two things move it: the list folding (the rail costs less
+    // than the list) and the command log opening (a second row with a
+    // floor of its own). Qt grows a window when a floor rises under it, so
+    // putting the list back in a window too narrow for it widens the
+    // window instead of cutting the pane off — which is the way back from
+    // fold → shrink → unfold (2026-08-09 ユーザー指示).
+    //
+    // No exemption for automated runs, unlike `insideScreen` below: the
+    // offscreen platform's screen is 800x800 and every floor here is
+    // under that, so the headless runs stand where they always did — and
+    // that is also what lets one of them prove the floor holds.
+    //
+    // `minimumWidth` alone is only half of it. It is what the platform
+    // asks about while a person drags an edge — and that is the only path
+    // it covers: `QWindow::resize` hands the size straight to the platform
+    // without looking at the hints (measured: asked for 200x150 against a
+    // 704x245 floor, the window took it). So every size this application
+    // sets itself goes through `holdFloor` below, which is what the
+    // remembered shape and the two floors that move are put through.
+    readonly property real floorWidth:
+        Math.max(topBar.floorWidth,
+                 root.curPage !== null ? root.curPage.floorWidth : 0)
+    readonly property real floorHeight:
+        // The band, the divider under it, and the line the window's bottom
+        // edge is drawn as — the three rows of `mainUi` that are not the
+        // page (they carry their own heights; the page's is its own floor).
+        Theme.toolbarHeight + Theme.splitterWidth + Theme.borderWidth
+        + (root.curPage !== null ? root.curPage.floorHeight : 0)
+    minimumWidth: Math.ceil(root.floorWidth)
+    minimumHeight: Math.ceil(root.floorHeight)
+    /// Puts a window that is standing under its floor back on it. The two
+    /// ways under one are a floor that rose (the list being put back, the
+    /// log opening) and a size this application set from somewhere else
+    /// (a shape remembered from a session whose floor was lower, or from
+    /// before there was one).
+    ///
+    /// Only a window in its own shape: maximised and minimised ones are
+    /// the platform's to size, and the state written down for the next
+    /// launch comes from the windowed one anyway.
+    /// A size this puts up is a size this asked for, so the frame slop
+    /// keeps measuring the difference between the two — without this the
+    /// growth itself reads as slop, and every launch after writes the
+    /// window down that much smaller (measured: a window lifted from a
+    /// 320-wide file stood at 704 and 510 went into the file).
+    function holdFloor() {
+        if (root.visibility !== Window.Windowed)
+            return
+        if (root.width < root.floorWidth) {
+            root.width = Math.ceil(root.floorWidth)
+            root.askedWidth = root.width
+        }
+        if (root.height < root.floorHeight) {
+            root.height = Math.ceil(root.floorHeight)
+            root.askedHeight = root.height
+        }
+    }
+    onFloorWidthChanged: root.holdFloor()
+    onFloorHeightChanged: root.holdFloor()
+
     // ---- what a title bar does, now that this band is one ----------------
     /// The button and the band's double-click have to mean the same
     /// thing, so both go to the platform.
@@ -440,10 +509,19 @@ ApplicationWindow {
     // own these. An unsaved position stays unset so the platform gets to
     // place the window itself — a first run should not open at 0,0.
     function applySavedWindow() {
-        const wantWidth = root.insideScreen(AppBackend.startWindowWidth(),
-                                            Screen.width)
-        const wantHeight = root.insideScreen(AppBackend.startWindowHeight(),
-                                             Screen.height)
+        // Over the floor on the way in, not after: what is assigned here
+        // is what `settleTimer` measures the frame slop from, and what a
+        // maximise would come back to. A file written by a session whose
+        // floor was lower — or by a build that had none — is the one case
+        // where the remembered shape is not a shape this window can take,
+        // and it puts itself right on the next launch (`holdFloor` is the
+        // same rule for the floors that move while the window is up).
+        const wantWidth = Math.max(
+            root.insideScreen(AppBackend.startWindowWidth(), Screen.width),
+            Math.ceil(root.floorWidth))
+        const wantHeight = Math.max(
+            root.insideScreen(AppBackend.startWindowHeight(), Screen.height),
+            Math.ceil(root.floorHeight))
         root.width = wantWidth
         root.height = wantHeight
         root.askedWidth = wantWidth
@@ -720,6 +798,93 @@ ApplicationWindow {
             + " held=" + (AppBackend.heldElsewhere !== "")
             + " gate=" + gate.visible
             + " main=" + mainUi.visible)
+    }
+
+    // PG_AUTO_ACT=window-floor: what the window does when it is asked to
+    // be smaller than what it is holding. Nothing else can answer it — a
+    // window standing at its floor frames exactly like one that was let
+    // past it, and what the floor *is* moves with the fold and with the
+    // log, so the numbers are the whole of the answer.
+    //
+    //   (no argument)  the shape remembered in the configuration
+    //                  directory, which xtask writes at 320x240 — under
+    //                  every floor there is, so what comes up says
+    //                  whether the way in lifts it
+    //   fold           folded, put down exactly on that floor, then the
+    //                  list put back: the floor rises under a window
+    //                  already standing on it (2026-08-09 ユーザー指示)
+    //   log            the same rise in the other direction — the window
+    //                  put down on the floor it has without the log, and
+    //                  then the log opened under it
+    Timer {
+        id: floorActTimer
+        interval: 1200
+        running: AppBackend.autoAct === "window-floor"
+        onTriggered: {
+            if (root.curPage === null || AppBackend.autoActArg === "") {
+                root.reportFloor()
+                return
+            }
+            if (AppBackend.autoActArg === "fold")
+                root.curPage.sidebarCollapsed = true
+            floorShrinkTimer.start()
+        }
+    }
+    // Put down on the floor as it stands — a size this application sets,
+    // so it goes through the same door the remembered shape does. A beat
+    // apart from the fold above, which has to have reached the layout
+    // before the floor it leaves can be read off.
+    Timer {
+        id: floorShrinkTimer
+        interval: Metrics.anchorDelayMs
+        onTriggered: {
+            root.width = Math.ceil(root.floorWidth)
+            root.height = Math.ceil(root.floorHeight)
+            root.floorStoodAt = root.width + "x" + root.height
+            floorRaiseTimer.start()
+        }
+    }
+    /// Automation: where the window was standing before the floor moved
+    /// under it. Without it the run cannot tell a window that came back up
+    /// from one that was never let down (`fold` ends at the width it
+    /// started at either way).
+    property string floorStoodAt: ""
+    // …and now the half this verb is really about: something that moves
+    // the floor, under a window with nothing left to give.
+    Timer {
+        id: floorRaiseTimer
+        interval: Metrics.anchorDelayMs
+        onTriggered: {
+            if (AppBackend.autoActArg === "fold")
+                root.curPage.sidebarCollapsed = false
+            else if (AppBackend.autoActArg === "log")
+                root.curPage.commandsOpen = true
+            floorReportTimer.start()
+        }
+    }
+    Timer {
+        id: floorReportTimer
+        interval: Metrics.anchorDelayMs
+        onTriggered: root.reportFloor()
+    }
+    /// What the floor came to and where the window came to rest. `fits=`
+    /// is the whole verdict: reporting the floor alone would pass with the
+    /// window nowhere near it.
+    function reportFloor() {
+        const floorW = Math.ceil(root.floorWidth)
+        const floorH = Math.ceil(root.floorHeight)
+        AppBackend.report(
+            // The verdict leads, the way `details_fit` does: what has to
+            // be caught in one substring is the pair "this verb" and "it
+            // held", and only neighbours can be caught in one.
+            "window_floor fits="
+            + (root.width >= floorW && root.height >= floorH)
+            + " floorW=" + floorW + " floorH=" + floorH
+            + " w=" + root.width + " h=" + root.height
+            + " from=" + (root.floorStoodAt === "" ? "-" : root.floorStoodAt)
+            + " folded=" + (root.curPage !== null
+                            && root.curPage.sidebarCollapsed)
+            + " log=" + (root.curPage !== null && root.curPage.commandsOpen))
     }
 
     // PG_AUTO_ACT=state: what a launch came back to, and (with the
