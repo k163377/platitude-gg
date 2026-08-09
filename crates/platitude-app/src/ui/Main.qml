@@ -572,6 +572,44 @@ ApplicationWindow {
             + " rightMargin=" + topBar.bandRightMargin)
     }
 
+    // PG_AUTO_ACT=tab-widths: what the tabs made of the run they share.
+    // Numbers again, and for the same reason as the band's — a strip that
+    // narrowed the wrong tabs, or narrowed them all when only the long
+    // ones had to give, comes out looking like a strip that got it right.
+    // `widths=` is the answer: the tabs left alone are the ones still at
+    // their own length, and the ones that gave way all read alike.
+    Timer {
+        id: tabWidthActTimer
+        interval: 1200
+        onTriggered: AppBackend.report(
+            "tab_widths tabs=" + topBar.bandTabCount
+            + " run=" + Math.round(topBar.bandTabRun)
+            + " cap=" + Math.round(topBar.tabTitleCap)
+            + " floor=" + topBar.tabTitleMinW
+            + " max=" + topBar.tabTitleMaxW
+            + " content=" + Math.round(topBar.bandTabContent)
+            + " view=" + Math.round(topBar.bandTabsWidth)
+            + " scrolls=" + topBar.bandTabScrolls
+            + " widths=" + topBar.tabWidths())
+    }
+
+    // PG_AUTO_ACT=tab-mark: the `✕` is out on the tab in front and on the
+    // tab under the hand. The argument is which tab the hand is on — one
+    // that is not in front, or the run says nothing the picture of any
+    // other verb does not already say.
+    Timer {
+        id: tabMarkActTimer
+        interval: 1200
+        onTriggered: {
+            topBar.pointAtTab(Number(AppBackend.autoActArg || 1))
+            AppBackend.report(
+                "tab_marks tabs=" + topBar.bandTabCount
+                + " current=" + tabsModel.currentIndex
+                + " pointed=" + Number(AppBackend.autoActArg || 1)
+                + " marks=" + topBar.tabMarks())
+        }
+    }
+
     // PG_AUTO_ACT=solo: the window a run that was turned away puts up.
     // The harness has to be part of this one — it holds the real lock on
     // the config directory before it starts this process, so the picture
@@ -686,6 +724,10 @@ ApplicationWindow {
             stateActTimer.start()
         if (AppBackend.autoAct === "band")
             bandActTimer.start()
+        if (AppBackend.autoAct === "tab-widths")
+            tabWidthActTimer.start()
+        if (AppBackend.autoAct === "tab-mark")
+            tabMarkActTimer.start()
         if (AppBackend.autoAct === "solo")
             soloActTimer.start()
         if (AppBackend.autoQuitMs > 0)

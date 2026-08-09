@@ -142,7 +142,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // Named repositories win outright; otherwise one fresh demo repository
     // per preset, in the order they were asked for — which is the order
     // the tabs come up in.
-    let repos = if opts.repo.is_empty() {
+    let repos = if !opts.repo.is_empty() {
+        opts.repo.clone()
+    } else if opts.verb == "tab-widths" {
+        tab_width_repos(&opts.arg)?
+    } else if opts.verb == "tab-mark" {
+        // Same strip; the argument here names a tab in it rather than
+        // how many there are.
+        tab_width_repos("")?
+    } else {
         let presets: Vec<String> = if opts.preset.is_empty() {
             vec!["basic".into()]
         } else {
@@ -155,8 +163,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
             made.push(repo);
         }
         made
-    } else {
-        opts.repo.clone()
     };
 
     if opts.build {
@@ -398,6 +404,64 @@ pub fn run(args: &[String]) -> Result<(), String> {
     } else {
         Err(format!("verify-ui {} failed", opts.verb))
     }
+}
+
+/// Names of a spread of lengths, for the one verb whose subject is the
+/// tab strip itself.
+///
+/// Both halves of the rule need seeing at once (デザイン規約 §ウィンドウの縁):
+/// the short names keep their own width however crowded the strip gets,
+/// and the long ones give way together. A row of repositories all called
+/// `repo` can show neither.
+const TAB_NAMES: [&str; 16] = [
+    "ui",
+    "platitude-gg",
+    "core",
+    "sealed-class-enumizer",
+    "notes",
+    "a-repository-with-a-rather-long-name",
+    "docs",
+    "another-repository-with-a-long-name",
+    "spike",
+    "yet-another-long-repository-name",
+    "assets",
+    "the-longest-repository-name-in-the-row",
+    "ci",
+    "one-more-long-repository-name-here",
+    "tools",
+    "a-final-repository-with-a-long-name",
+];
+
+/// The strip the `tab-widths` verb is run against: `count` repositories
+/// (default 8) named off the ladder above.
+///
+/// The last one carries a real history — the tab opened last is the one
+/// left in front, so that is the page under the strip in the picture.
+/// The rest are bare of commits: what is being looked at is above them,
+/// and building sixteen histories to photograph one band would be paying
+/// for the wrong thing.
+fn tab_width_repos(arg: &str) -> Result<Vec<PathBuf>, String> {
+    let count: usize = if arg.is_empty() {
+        8
+    } else {
+        arg.parse()
+            .map_err(|_| format!("tab-widths takes a number of tabs, not {arg:?}"))?
+    };
+    if count == 0 || count > TAB_NAMES.len() {
+        return Err(format!("tab-widths takes 1..={} tabs", TAB_NAMES.len()));
+    }
+    let mut made = Vec::with_capacity(count);
+    for (position, name) in TAB_NAMES.iter().take(count).enumerate() {
+        let preset = if position + 1 == count {
+            "basic"
+        } else {
+            "empty"
+        };
+        let repo = crate::demo::create_named(preset, None, name)?;
+        made.push(repo);
+    }
+    println!("demo repos (tab-widths): {count} named after their length");
+    Ok(made)
 }
 
 /// The folder a verb needs handed to it, made on the spot.

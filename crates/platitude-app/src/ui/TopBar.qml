@@ -35,6 +35,14 @@ Rectangle {
     /// expression turns it NaN, and NaN draws as "no tabs at all" with
     /// nothing on stderr — this is the number that catches it.
     readonly property real bandTabsWidth: tabs.width
+    /// Automation: the run the tabs were handed, and what they made of it.
+    /// A picture cannot say which tabs gave way and which were left alone
+    /// — every strip that fits looks like every other one — so the widths
+    /// themselves are the answer (`PG_AUTO_ACT=tab-widths`).
+    readonly property int bandTabCount: tabs.count
+    readonly property real bandTabRun: tabs.runAvail
+    readonly property real bandTabContent: tabs.contentWidth
+    readonly property bool bandTabScrolls: tabs.contentWidth > tabs.width
 
     signal openRepositoryRequested()
     signal identityEditRequested()
@@ -135,6 +143,39 @@ Rectangle {
         return tab ? tab.repo_path : ""
     }
 
+    /// Automation: every tab's width, in the order they sit in
+    /// (`PG_AUTO_ACT=tab-widths`). Tabs left at their natural width and
+    /// tabs holding the shared cap are what this run is being asked
+    /// about, and one number each is what tells them apart.
+    function tabWidths() {
+        let widths = []
+        for (let i = 0; i < tabs.count; i++) {
+            const tab = tabs.itemAtIndex(i)
+            widths.push(tab ? Math.round(tab.width) : 0)
+        }
+        return widths.join(",")
+    }
+
+    /// Automation: the pointer, set down on the tab at `index`
+    /// (`PG_AUTO_ACT=tab-mark`). The `✕` comes out on the tab in front
+    /// and on the tab under the hand, and the second of those is the
+    /// half no headless run can reach any other way.
+    function pointAtTab(index) {
+        const tab = tabs.itemAtIndex(index)
+        if (tab)
+            tab.pointed = true
+    }
+
+    /// Automation: which tabs have their mark out, in strip order.
+    function tabMarks() {
+        let marks = []
+        for (let i = 0; i < tabs.count; i++) {
+            const tab = tabs.itemAtIndex(i)
+            marks.push(tab ? tab.markShown : 0)
+        }
+        return marks.join(",")
+    }
+
     /// The word both toolbar buttons are measured for. They sit side by
     /// side and change wording independently, so one box for the pair is
     /// what keeps either of them from shifting the other — and which of
@@ -186,6 +227,91 @@ Rectangle {
         id: pushCodeWidest
         code: true
         text: "push -f"
+    }
+
+    /// The longest a tab's name is ever drawn (デザイン規約 レイアウト初期値).
+    readonly property int tabTitleMaxW: 180
+    /// The shortest, in characters rather than in pixels: three of them
+    /// and the ellipsis that says the rest was cut (同表). A count is what
+    /// this is — three characters cost a different number of pixels in
+    /// each of the three platforms' UI fonts, and at every scaling — so
+    /// the length comes out of the font instead of out of the table.
+    readonly property int tabTitleMinChars: 3
+    readonly property int tabTitleMinW:
+        Math.ceil(tabTitleFont.advanceWidth("…")
+                  + topBar.tabTitleMinChars * tabTitleFont.averageCharacterWidth)
+    /// What every tab's name is capped at right now — the strip's answer
+    /// to how much room it was given (`settleTitleCap`).
+    property real tabTitleCap: topBar.tabTitleMaxW
+    FontMetrics {
+        id: tabTitleFont
+        font.family: Theme.uiFamily
+        font.pixelSize: Theme.fontMd
+    }
+
+    /// Hands the run out among the tab names, the longest giving way last.
+    ///
+    /// Each name is granted its natural width while there is room; when
+    /// there is not, what is left goes round again among the ones still
+    /// asking for more. So a tab whose name already fits never moves, the
+    /// ones that give way are the long ones, and they all come to rest on
+    /// one width (デザイン規約 §ウィンドウの縁). Below `tabTitleMinW`
+    /// nothing narrows any further and the strip scrolls instead.
+    ///
+    /// Settled by hand rather than bound: the widths are read off a list
+    /// of items, and a binding cannot see one of those arrive.
+    /// Whole pixels throughout: a name asks for a fractional width, an
+    /// item is laid out on a whole one, and a strip sized off the
+    /// fractions comes out a pixel over the run it was told to fit in —
+    /// which is a strip that scrolls when nothing is out of room
+    /// (実測 content=897 against run=896 before the rounding went in).
+    function settleTitleCap() {
+        let want = []
+        for (let i = 0; i < titleMeasure.count; i++) {
+            const label = titleMeasure.itemAt(i)
+            if (label)
+                want.push(Math.min(Math.ceil(label.implicitWidth),
+                                   topBar.tabTitleMaxW))
+        }
+        if (want.length === 0) {
+            topBar.tabTitleCap = topBar.tabTitleMaxW
+            return
+        }
+        want.sort((a, b) => a - b)
+        let left = Math.floor(tabs.runAvail) - want.length * tabs.tabFixedW
+        let cap = topBar.tabTitleMaxW
+        for (let i = 0; i < want.length; i++) {
+            const share = Math.floor(left / (want.length - i))
+            if (want[i] > share) {
+                cap = share
+                break
+            }
+            left -= want[i]
+        }
+        topBar.tabTitleCap = Math.max(topBar.tabTitleMinW,
+                                      Math.min(cap, topBar.tabTitleMaxW))
+    }
+
+    /// The names at their natural width, off screen. The strip's own
+    /// labels are the ones being capped, so they cannot also be what the
+    /// cap is measured from. These carry the font the strip draws in —
+    /// the heavier weight the current tab is set in included, which is
+    /// wider — so what comes back is the width the strip will ask for.
+    Repeater {
+        id: titleMeasure
+        model: topBar.tabsModel
+        onCountChanged: topBar.settleTitleCap()
+        delegate: Label {
+            required property int index
+            required property string title
+
+            visible: false
+            text: title
+            font.weight: topBar.tabsModel.currentIndex === index
+                         ? Font.DemiBold : Font.Normal
+            onImplicitWidthChanged: topBar.settleTitleCap()
+            Component.onCompleted: topBar.settleTitleCap()
+        }
     }
 
     implicitHeight: Theme.toolbarHeight
@@ -304,9 +430,8 @@ Rectangle {
             // own controls off the end of the band, and those are the ones
             // that have to stay where the hand expects them.
             //
-            // Tabs keep their natural width for now — narrowing them needs
-            // a floor to narrow towards, and that is a number the design
-            // document does not have yet (P3-確認事項 §ウィンドウ chrome).
+            // The tabs narrow before it comes to that (`settleTitleCap`),
+            // so the scrolling starts where they can give no more.
             ListView {
                 id: tabs
                 x: menuButton.width
@@ -320,14 +445,32 @@ Rectangle {
                 /// as spacing.
                 readonly property real grabRun: topBar.captionMerged
                                                 ? 2 * Theme.railWidth : 0
+                /// The run the tabs share out between them. Both the width
+                /// below and the cap the names are narrowed to read this
+                /// one expression — written twice, a value that can be set
+                /// but does not take effect is what comes back.
+                //
                 // `tabs.grabRun` stays qualified: an unqualified name here
                 // reads whatever id happens to share it — ids outrank the
                 // enclosing object's own properties — and an Item minus a
                 // number is NaN, which took the whole strip's width with
                 // it once (no tabs drawn, nothing said why).
-                width: Math.max(0, Math.min(contentWidth,
-                                            tabStrip.width - menuButton.width
-                                            - plusButton.width - tabs.grabRun))
+                readonly property real runAvail:
+                    Math.max(0, tabStrip.width - menuButton.width
+                                - plusButton.width - tabs.grabRun)
+                onRunAvailChanged: topBar.settleTitleCap()
+                /// The air a tab is set in: `spaceSm` before the name, and
+                /// after the mark what is left of `spaceSm` once the air
+                /// the mark brings with it is taken off (デザイン規約 §余白;
+                /// the delegate below carries the reasoning).
+                readonly property int markAir: (Theme.iconLg - Theme.iconSm) / 2
+                                               + Theme.spaceXs
+                readonly property real tabPadW: Theme.spaceSm
+                                                + (Theme.spaceSm - tabs.markAir)
+                /// What a tab costs before its name has a single letter in
+                /// it — that air, and the mark at its end.
+                readonly property real tabFixedW: tabs.tabPadW + Theme.iconLg
+                width: Math.max(0, Math.min(contentWidth, tabs.runAvail))
                 orientation: ListView.Horizontal
                 // Hard stop at the ends, as everywhere else that scrolls
                 // (デザイン規約 §QML 実装ルール).
@@ -371,12 +514,23 @@ Rectangle {
                     required property string title
                     required property string repo_path
                     readonly property bool current: topBar.tabsModel.currentIndex === index
-                    /// Air the `✕` brings with it: the `iconMd` mark stands
-                    /// centred in an `iconLg` button, and the glyph is drawn
-                    /// inset again inside that (`NavIcon` "close" — diagonals
-                    /// read heavier, so it sits further in than the bars do).
-                    readonly property int markAir: (Theme.iconLg - Theme.iconMd) / 2
-                                                   + Theme.spaceXs
+                    /// Whether the pointer is on this tab. The real hover
+                    /// and the smoke hook write this one property — hover
+                    /// is the input that cannot be injected, so the wash
+                    /// and the mark have to be answering a single question
+                    /// or the headless run proves nothing about either.
+                    property bool pointed: false
+                    /// Automation: whether the mark is out on this tab.
+                    /// Read off the mark itself — reporting what was asked
+                    /// of it would go on passing after the binding that
+                    /// draws it had come apart.
+                    readonly property real markShown: closeMark.opacity
+                    // Air the `✕` brings with it (`tabs.markAir`): the
+                    // `iconSm` mark stands centred in an `iconLg` button,
+                    // and the glyph is drawn inset again inside that
+                    // (`NavIcon` "close" — diagonals read heavier, so it
+                    // sits further in than the bars do).
+                    //
                     // What the eye measures is ink, not boxes. So the mark's
                     // seat is given only the air it has not already taken
                     // (`spaceSm − markAir`), and the run to the name is left
@@ -387,8 +541,11 @@ Rectangle {
                     // `implicitWidth + 2 * spaceSm`: anything the layout
                     // cannot hand out lands past the last item, which is to
                     // say on the right margin, where nobody wrote it down.
-                    width: tabContent.implicitWidth + Theme.spaceSm
-                           + (Theme.spaceSm - markAir)
+                    // Rounded up for the same reason `settleTitleCap`
+                    // works in whole pixels: the two have to agree on
+                    // what this tab costs, or the strip scrolls by the
+                    // fractions they disagree about.
+                    width: Math.ceil(tabContent.implicitWidth) + tabs.tabPadW
                     height: tabs.height
                     color: current ? Theme.bgSelected : "transparent"
                     // The middle button is taken here rather than on the
@@ -405,11 +562,12 @@ Rectangle {
                         onClicked: mouse => topBar.pressTab(tabItem.index,
                                                             tabItem.tab_id,
                                                             mouse.button)
+                        onContainsMouseChanged: tabItem.pointed = containsMouse
                     }
                     Rectangle {
                         anchors.fill: parent
                         color: Theme.bgHover
-                        visible: tabMouse.containsMouse && !tabItem.current
+                        visible: tabItem.pointed && !tabItem.current
                     }
                     Rectangle {
                         anchors.left: parent.left
@@ -423,30 +581,56 @@ Rectangle {
                         id: tabContent
                         anchors.fill: parent
                         anchors.leftMargin: Theme.spaceSm
-                        anchors.rightMargin: Theme.spaceSm - tabItem.markAir
+                        anchors.rightMargin: Theme.spaceSm - tabs.markAir
                         spacing: 0
                         Label {
                             text: tabItem.title
                             elide: Text.ElideRight
-                            Layout.maximumWidth: 180
+                            // The cap the whole strip shares, so the tabs
+                            // that give way give way together. Capping the
+                            // hint is what narrows the tab: the row asks
+                            // for what it is allowed, and the tab's width
+                            // above is that plus its air.
+                            Layout.maximumWidth: topBar.tabTitleCap
                             Layout.fillHeight: true
                             verticalAlignment: Text.AlignVCenter
+                            // The name is what a tab is for, so it reads
+                            // at full strength in every tab; which one is
+                            // in front is said by the seat it sits in —
+                            // the wash, the rule under it, and the weight.
                             font.weight: tabItem.current ? Font.DemiBold : Font.Normal
-                            color: tabItem.current ? Theme.textPrimary
-                                                   : Theme.textSecondary
+                            color: Theme.textPrimary
                         }
+                        // Shown on the tab in front and under the pointer,
+                        // and nowhere else — a row of marks is a row of
+                        // things asking to be pressed, and only one tab at
+                        // a time is being aimed at (デザイン規約 §タブの所作).
+                        //
+                        // Dimmed rather than dropped: an item the layout
+                        // has stopped seeing takes its width with it, and
+                        // the tab would then change size under the hand
+                        // that came to close it. Nothing is reachable
+                        // while it is out, either — being out is what
+                        // "the pointer is elsewhere" means.
                         HoverToolButton {
+                            id: closeMark
                             padding: 0
                             Layout.alignment: Qt.AlignVCenter
                             implicitWidth: Theme.iconLg
                             implicitHeight: Theme.iconLg
+                            opacity: tabItem.current || tabItem.pointed ? 1 : 0
                             contentItem: Item {
                                 NavIcon {
                                     anchors.centerIn: parent
-                                    width: Theme.iconMd
-                                    height: Theme.iconMd
+                                    width: Theme.iconSm
+                                    height: Theme.iconSm
                                     kind: "close"
-                                    tint: Theme.textPrimary
+                                    // A step under the name in both size
+                                    // and colour: what it closes is the
+                                    // thing being read, and the mark is
+                                    // the way out of it rather than the
+                                    // point of it.
+                                    tint: Theme.textSecondary
                                 }
                             }
                             onClicked: topBar.tabsModel.closeTab(tabItem.tab_id)

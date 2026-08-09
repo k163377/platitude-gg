@@ -76,6 +76,13 @@ commands:
       -cancel ways out, and open-fail-tab for the road that keeps its
       tab) make their own folder when no argument names one: what they
       are about is a folder no repository can be.
+      The verb `tab-widths` makes its own repositories too — its argument
+      is how many (1..=16, default 8), and it names them at a spread of
+      lengths, because a strip of equally-named tabs cannot show which
+      of them gave way and which were left at their own width.
+      `tab-mark` opens the same strip and puts the pointer on the tab its
+      argument names (default 1), which is the only way a headless run
+      reaches the half of the `✕` rule that hover answers.
 
   linux [--rebuild] [--shell] [--stage core|app] <command…>
       Run a command against this checkout on Ubuntu, in a container built

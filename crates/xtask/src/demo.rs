@@ -30,6 +30,16 @@ pub fn run(args: &[String]) -> Result<PathBuf, String> {
 
 /// Builds `preset` and returns the work-tree path.
 pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
+    create_named(preset, at, "repo")
+}
+
+/// Builds `preset` with the work tree called `name` rather than `repo`.
+///
+/// A tab is titled after its work-tree folder (`models::tabs::title_of`),
+/// and every demo repository being called the same thing is fine until
+/// the subject is the strip itself — a row of identical names cannot show
+/// which tabs gave way and which were left alone.
+pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<PathBuf, String> {
     let root = match at {
         Some(dir) => dir,
         None => {
@@ -42,7 +52,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
                 .join(format!("{preset}-{nanos}"))
         }
     };
-    let mut repo = DemoRepo::init(&root)?;
+    let mut repo = DemoRepo::init(&root, name)?;
     match preset {
         "basic" => basic(&mut repo)?,
         "dirty" => dirty(&mut repo)?,
@@ -88,7 +98,7 @@ const TICK_SECS: u64 = 30 * 60;
 const HISTORY_SECS: u64 = 40 * 60 * 60;
 
 impl DemoRepo {
-    fn init(root: &Path) -> Result<Self, String> {
+    fn init(root: &Path, name: &str) -> Result<Self, String> {
         std::fs::create_dir_all(root).map_err(|e| format!("creating {}: {e}", root.display()))?;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -96,7 +106,7 @@ impl DemoRepo {
             .as_secs();
         let mut repo = Self {
             root: root.to_path_buf(),
-            work: root.join("repo"),
+            work: root.join(name),
             global_config: root.join("no-global-config"),
             base_epoch: now.saturating_sub(HISTORY_SECS),
             tick: 0,
