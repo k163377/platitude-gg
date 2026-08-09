@@ -127,6 +127,20 @@ fn run_side(side: &str, root: &Path, steps: &[Vec<String>]) -> Vec<String> {
         let secs = at.elapsed().as_secs();
         if out.status.success() {
             println!("[{side}] ok   {display} ({secs}s)");
+            // A green verify-ui is only half of Done — the PNGs still get
+            // eyeballed (verify-ui skill), so where they landed survives
+            // the capture.
+            for text in [&out.stdout, &out.stderr] {
+                for line in String::from_utf8_lossy(text).lines() {
+                    let line = line.trim();
+                    if line.starts_with("shot: ")
+                        || line.starts_with("screenshot: ")
+                        || line.contains("screenshots and settings:")
+                    {
+                        println!("[{side}]      {line}");
+                    }
+                }
+            }
         } else {
             // The whole of both streams: a failure with its tail cut off
             // sends whoever reads it straight back here to re-run it.
