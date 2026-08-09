@@ -28,6 +28,8 @@ commands:
         rebase-empty     a rebase stopped on a commit that came out empty
         cherry-pick-conflict  a cherry-pick stopped on a conflict
         conflict-kinds   four kinds of conflict in one stopped merge
+        drop-collides    a drop that replays clean and collides restoring
+        drop-stops       a drop that stops part-way, over a dirty tree
         stashes   three stashes, one with untracked files
         detached  HEAD detached at a tag
         behind    remote has commits fetch would bring in

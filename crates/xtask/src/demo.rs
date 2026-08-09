@@ -52,6 +52,8 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
         "rebase-empty" => rebase_empty(&mut repo)?,
         "cherry-pick-conflict" => cherry_pick_conflict(&mut repo)?,
         "conflict-kinds" => conflict_kinds(&mut repo)?,
+        "drop-collides" => drop_collides(&mut repo)?,
+        "drop-stops" => drop_stops(&mut repo)?,
         "stashes" => stashes(&mut repo)?,
         "detached" => detached(&mut repo)?,
         "behind" => behind(&mut repo)?,
@@ -744,6 +746,63 @@ fn rebase_conflict(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("shared.txt", "main side\n", "fix: change shared too")?;
     repo.git(&["switch", "feature/clash"])?;
     repo.git_expecting_stop(&["rebase", "main"])?;
+    Ok(())
+}
+
+/// A drop whose replay goes through and whose *restore* is what collides:
+/// the uncommitted edit sits on the line the newest commit rewrote, and on
+/// nothing the replay itself has to apply.
+///
+/// The drop is of HEAD, so the verb needs no argument. Taking that commit
+/// out puts the line back the way it was, and the work coming out of the
+/// stash changed the same line — two versions of one line, which is the
+/// landing a move already has (規約 §未コミット変更がある状態での移動).
+fn drop_collides(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.commit(
+        "docs/release.md",
+        "# releasing\n\n- pick the version number\n- tag it\n- upload the archives\n",
+        "docs: write the release steps down",
+    )?;
+    repo.commit(
+        "docs/release.md",
+        "# releasing\n\n- agree the version number\n- tag it\n- upload the archives\n",
+        "docs: reword the first step",
+    )?;
+    repo.write(
+        "docs/release.md",
+        "# releasing\n\n- read the version number off the milestone\n- tag it\n\
+         - upload the archives\n",
+    )?;
+    Ok(())
+}
+
+/// A drop the commits after it depend on, over a dirty tree: git will not
+/// replay while the work is there, and once it is stashed out of the way
+/// the replay walks into the hole the drop leaves and stops part-way.
+///
+/// The commit to take out is `row:2` — the WIP row sits above the newest
+/// commit, so the third row of the graph is the second commit back. The
+/// uncommitted edit is somewhere else entirely, so it is what makes git
+/// refuse without taking any part in what the replay collides over.
+fn drop_stops(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.commit(
+        "docs/release.md",
+        "# releasing\n\n- tag it\n",
+        "docs: tag it",
+    )?;
+    repo.commit(
+        "docs/release.md",
+        "# releasing\n\n- tag it\n- upload the archives\n",
+        "docs: upload the archives",
+    )?;
+    repo.commit(
+        "docs/release.md",
+        "# releasing\n\n- tag it\n- upload the archives\n- announce it\n",
+        "docs: announce it",
+    )?;
+    repo.write("README.md", "# demo\n\nnotes, still being written\n")?;
     Ok(())
 }
 

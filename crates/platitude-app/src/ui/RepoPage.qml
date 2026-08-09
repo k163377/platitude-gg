@@ -2089,6 +2089,18 @@ Item {
             repoTab.resumeAutoFetch()
         }
     }
+    // The commit an automation argument names: an object name as it
+    // stands, "row:<n>" read off the graph the way the other row verbs
+    // are addressed, and the branch tip when nothing is given. A headless
+    // run cannot spell an object name it has not been told, and a demo
+    // repository is built fresh every time.
+    function autoActOid(arg) {
+        if (arg === "")
+            return branchesModel.headOid
+        if (arg.indexOf("row:") === 0)
+            return graphModel.oidAt(Number(arg.substring(4)))
+        return arg
+    }
     function runAutoAct() {
         const act = AppBackend.autoAct
         const arg = AppBackend.autoActArg
@@ -2619,10 +2631,13 @@ Item {
             // plain verb leaves the menu standing for the shot and "-go"
             // takes whichever of the two the row is offering. The plan is
             // built by object name, the way a graph row hands one over,
-            // so a symbolic name is not what this takes.
-            page.openRowMenu(arg !== "" ? arg : branchesModel.headOid)
+            // so a symbolic name is not what this takes — "row:<n>" names
+            // one the way the other graph verbs do, for the commits a
+            // headless run has no other way to spell.
+            page.openRowMenu(page.autoActOid(arg))
             AppBackend.report("drop_row " + dropCommitItem.code
                               + " " + dropCommitItem.text
+                              + " oid=" + page.menuOid.substring(0, 8)
                               + " hold=" + (dropCommitItem.holdMs > 0)
                               + " reached=" + repoTab.headReachedElsewhere)
             if (act === "drop-commit-go") {
