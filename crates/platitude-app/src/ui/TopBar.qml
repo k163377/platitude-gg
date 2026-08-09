@@ -126,6 +126,15 @@ Rectangle {
         return paths.join(",")
     }
 
+    /// Automation: the path a tab was opened with, spelled the way the
+    /// strip has it (`PG_AUTO_ACT=open-again`). Asking for a repository
+    /// that is already open is what the verb does, and this is where the
+    /// only string certain to name one comes from.
+    function tabPathAt(index) {
+        const tab = tabs.itemAtIndex(index)
+        return tab ? tab.repo_path : ""
+    }
+
     /// The word both toolbar buttons are measured for. They sit side by
     /// side and change wording independently, so one box for the pair is
     /// what keeps either of them from shifting the other — and which of

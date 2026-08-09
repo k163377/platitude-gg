@@ -72,10 +72,20 @@ impl TabsModel {
     }
 
     /// Opens a plain filesystem path.
+    ///
+    /// A repository already in the strip is not opened a second time —
+    /// the strip moves to the tab holding it (デザイン規約 §タブの所作).
     #[qslot]
     fn open_repository_path(&mut self, path: String) {
-        let path_buf = std::path::PathBuf::from(path.trim());
+        // Trimmed once, here, so the string the tab keeps is the one it
+        // was compared by.
+        let path = path.trim().to_string();
+        let path_buf = std::path::PathBuf::from(&path);
         if path_buf.as_os_str().is_empty() {
+            return;
+        }
+        if let Some(position) = self.position_of(&path) {
+            self.set_current_index(position as i32);
             return;
         }
         let title = title_of(&path_buf, &path);
@@ -109,6 +119,10 @@ impl TabsModel {
             return;
         };
         let mut wanted = saved.active;
+        // Where the active one landed when it turned out to be a second
+        // copy: the tab already holding that repository, whatever the
+        // shifting below does to the count.
+        let mut wanted_held: Option<usize> = None;
         for (position, path) in saved.paths.iter().enumerate() {
             let path_buf = std::path::PathBuf::from(path);
             if !path_buf.is_dir() {
@@ -116,6 +130,19 @@ impl TabsModel {
                 // Everything after it shifts left, and the active one with
                 // it if it was to the right.
                 if position < saved.active {
+                    wanted = wanted.saturating_sub(1);
+                }
+                continue;
+            }
+            // A file written before the strip refused duplicates can name
+            // one repository twice, and the two entries need not be
+            // spelled alike. Putting both back would restore the very
+            // thing opening now declines to make.
+            if let Some(held) = self.position_of(path) {
+                tracing::info!(path = %path, "restored tab dropped: already open");
+                if position == saved.active {
+                    wanted_held = Some(held);
+                } else if position < saved.active {
                     wanted = wanted.saturating_sub(1);
                 }
                 continue;
@@ -133,7 +160,7 @@ impl TabsModel {
         if self.items.is_empty() {
             return;
         }
-        self.current_index = wanted.min(self.items.len() - 1) as i32;
+        self.current_index = wanted_held.unwrap_or(wanted).min(self.items.len() - 1) as i32;
         self.current_index_changed();
         self.report();
     }
@@ -169,6 +196,26 @@ impl TabsModel {
 }
 
 impl TabsModel {
+    /// Where the repository at `path` already sits in the strip, if it
+    /// does. **The one place that answers this** — both ways a tab can
+    /// appear (opening and restoring) ask here, so the two cannot come
+    /// to different conclusions about the same folder.
+    ///
+    /// Compared by `repo::open_key` rather than by the string: the same
+    /// folder arrives spelled differently depending on the way in, and
+    /// the worktree row — the row naming the repository already open —
+    /// is the one that arrives in git's spelling every time.
+    ///
+    /// Resolves every open tab's path, so the cost is one filesystem
+    /// lookup per tab. That is bounded by the cap on the tab list and is
+    /// paid only when someone asks for a repository.
+    fn position_of(&self, path: &str) -> Option<usize> {
+        let key = platitude_core::repo::open_key(path);
+        self.items
+            .iter()
+            .position(|t| platitude_core::repo::open_key(&t.repo_path) == key)
+    }
+
     /// Hands the hub the tab strip as it stands. Opening, closing and
     /// switching are single acts rather than something that moves under a
     /// dragging hand, so they report as they happen; the file itself is

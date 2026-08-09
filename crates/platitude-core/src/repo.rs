@@ -91,3 +91,90 @@ pub async fn open(
         object_format,
     })
 }
+
+/// The key two paths are judged to be the same folder by — what decides
+/// whether a repository is already open.
+///
+/// Unlike [`crate::settings::repo_key`] this one is never written down,
+/// so it is free to ask the filesystem, and asking is the whole point:
+/// one directory reaches the application spelled several ways depending
+/// on which way in was taken. A folder picker returns what the shell
+/// handed it, while `git worktree list` prints forward slashes and the
+/// long name — on Windows that is `C:\Users\WRONGW~1\…\repo` against
+/// `C:/Users/wrongwrong/…/repo` for one folder (measured). Resolving
+/// folds all of it together: separators, a trailing one, the letter case
+/// Windows keeps but does not distinguish, the 8.3 short name, and links.
+///
+/// A path the filesystem will not resolve — removed, or never there —
+/// falls back to `repo_key`, which keeps two absent paths apart rather
+/// than folding them into one answer.
+pub fn open_key(path: &str) -> PathBuf {
+    let path = path.trim();
+    std::fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(crate::settings::repo_key(path)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn folder(dir: &tempfile::TempDir, name: &str) -> PathBuf {
+        let path = dir.path().join(name);
+        std::fs::create_dir(&path).expect("create folder");
+        path
+    }
+
+    #[test]
+    fn one_folder_spelled_several_ways_is_one_key() {
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let here = folder(&dir, "repo");
+        let plain = here.to_string_lossy().into_owned();
+
+        assert_eq!(open_key(&plain), open_key(&plain.replace('\\', "/")));
+        assert_eq!(
+            open_key(&plain),
+            open_key(&format!("{plain}{}", std::path::MAIN_SEPARATOR))
+        );
+        assert_eq!(open_key(&plain), open_key(&format!("  {plain}  ")));
+    }
+
+    #[test]
+    fn two_folders_keep_their_own_keys() {
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let one = folder(&dir, "one");
+        let two = folder(&dir, "two");
+        assert_ne!(
+            open_key(&one.to_string_lossy()),
+            open_key(&two.to_string_lossy())
+        );
+    }
+
+    /// A path the filesystem will not resolve still answers, and two of
+    /// them stay apart: folding every unresolvable path into one answer
+    /// would make a repository that has been moved away stand for all
+    /// the others.
+    #[test]
+    fn paths_that_are_not_there_stay_apart() {
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let one = dir.path().join("gone-one").to_string_lossy().into_owned();
+        let two = dir.path().join("gone-two").to_string_lossy().into_owned();
+        assert_ne!(open_key(&one), open_key(&two));
+        assert_eq!(open_key(&one), open_key(&one.replace('\\', "/")));
+    }
+
+    /// Windows keeps the letter case a name was written in but does not
+    /// tell names apart by it. Resolving through the filesystem is what
+    /// folds that away — the same step that folds the 8.3 short name a
+    /// temp directory is handed out under (`WRONGW~1` for `wrongwrong`),
+    /// which is how `git worktree list` and a folder picker name one
+    /// directory with two strings that are not equal.
+    #[cfg(windows)]
+    #[test]
+    fn windows_letter_case_is_not_part_of_the_name() {
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let here = folder(&dir, "repo");
+        assert_eq!(
+            open_key(&here.to_string_lossy()),
+            open_key(&here.with_file_name("REPO").to_string_lossy())
+        );
+    }
+}

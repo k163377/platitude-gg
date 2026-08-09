@@ -615,6 +615,28 @@ ApplicationWindow {
             }
         }
 
+        // Smoke hook (PG_AUTO_ACT=open-again): asking for a repository the
+        // strip already holds. The argument is the path to ask for; with
+        // none it is the first tab's own, spelled the way that tab was
+        // opened — passing git's spelling of the same folder instead is
+        // how the other half of the answer gets read. Enters through the
+        // same slot every way in uses, and reports the strip afterwards:
+        // no new tab may appear, and `active` has to have moved to the one
+        // already holding it (デザイン規約 §タブの所作).
+        Timer {
+            interval: 1200
+            running: AppBackend.autoAct === "open-again"
+            onTriggered: {
+                const asked = AppBackend.autoActArg !== ""
+                            ? AppBackend.autoActArg : topBar.tabPathAt(0)
+                tabsModel.openRepositoryPath(asked)
+                AppBackend.report("open_again tabs=" + pageRepeater.count
+                                  + " active=" + tabsModel.currentIndex
+                                  + " asked=" + asked
+                                  + " open=" + topBar.tabPaths())
+            }
+        }
+
         // Smoke hook (PG_AUTO_ACT=force-push-hold): the overwrite is only
         // reachable by holding the toolbar's button, which is here rather
         // than on the page where the other verbs live. Waits out the page's
