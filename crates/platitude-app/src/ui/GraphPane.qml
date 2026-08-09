@@ -679,16 +679,18 @@ Rectangle {
     }
     // What a column that will not move answers with: the platform's own
     // cursor, untouched, and this badge below and right of it (規約
-    // §グラフ列は最も広い所のレーンまで). Offset by a gap so it clears
-    // the cursor's own ink rather than sitting inside it.
+    // §グラフ列は最も広い所のレーンまで). Tucked into the corner the
+    // cursor leaves empty — the platform's own badged cursors sit that
+    // close, and a badge held further out reads as a separate mark
+    // rather than as something the cursor is wearing.
     NavIcon {
         id: refusedCursor
         kind: "no"
         tint: Theme.textPrimary
         width: Theme.iconMd
         height: Theme.iconMd
-        x: graphArea.dividerPoint.x + Theme.spaceSm
-        y: graphArea.dividerPoint.y + Theme.spaceSm
+        x: graphArea.dividerPoint.x + Theme.spaceXs
+        y: graphArea.dividerPoint.y + Theme.spaceXs
         z: 4
         visible: graphArea.graphColWFixed && graphArea.dividerPointed
         // A Canvas that was never visible was never asked to paint, and
