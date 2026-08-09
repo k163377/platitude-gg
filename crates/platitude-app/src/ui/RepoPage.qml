@@ -2060,12 +2060,16 @@ Item {
         // Pulled past everything, so where it stops is the bound itself
         // rather than a number this verb chose.
         readonly property int pull: 1000
+        /// Which pane's box to pull. The two carry the same box and hooks
+        /// under the same names, so this verb is written once.
+        property var pane: detailsPane
+        property string paneName: "details"
         /// Whether to take the pane's room away again afterwards, by
         /// raising the command log under it — the one way a headless run
         /// can make the pane shorter than the box it is already holding.
         property bool squeeze: false
         onTriggered: {
-            detailsPane.growDescription(descGrowTimer.pull)
+            descGrowTimer.pane.growDescription(descGrowTimer.pull)
             if (descGrowTimer.squeeze)
                 page.toggleCommands()
             descGrowSettle.start()
@@ -2075,19 +2079,22 @@ Item {
     // read a beat later: asked in the same breath, the list still reports
     // the height it had before it gave any of it up.
     //
-    // `grip=` says the corner was offered at all, `author=` that the card
-    // it borrowed room from is still on screen — which the picture cannot
-    // answer, because the overflow draws over the window's own footer.
+    // `grip=` says the corner was offered at all, `keeps=` that what the
+    // box borrowed room from is still on screen — the author card in the
+    // details pane, the commit button in the editor — which the picture
+    // cannot answer, because the overflow draws over the window's own
+    // footer.
     Timer {
         id: descGrowSettle
         interval: 200
         onTriggered: AppBackend.report(
-            "description_grow author=" + detailsPane.authorInside
-            + " grip=" + detailsPane.descGrips
-            + " box=" + Math.round(detailsPane.descHeight)
-            + " wants=" + Math.round(detailsPane.descWants)
-            + " cap=" + Math.round(detailsPane.descCap)
-            + " rows=" + detailsPane.descListRows)
+            "description_grow keeps=" + descGrowTimer.pane.descKeeps
+            + " pane=" + descGrowTimer.paneName
+            + " grip=" + descGrowTimer.pane.descGrips
+            + " box=" + Math.round(descGrowTimer.pane.descHeight)
+            + " wants=" + Math.round(descGrowTimer.pane.descWants)
+            + " cap=" + Math.round(descGrowTimer.pane.descCap)
+            + " rows=" + descGrowTimer.pane.descListRows)
     }
     // An assignment is not something git knows about, so nothing here is
     // waiting for a refresh to bring it: the rows and the card re-read
@@ -2584,7 +2591,19 @@ Item {
             // the other half of the same bound: what the hand was given
             // has to be returned when the pane no longer has it to lend.
             page.activateRow(graphModel.oidAt(Number(arg)))
+            descGrowTimer.pane = detailsPane
+            descGrowTimer.paneName = "details"
             descGrowTimer.squeeze = act === "details-grow-squeeze"
+            descGrowTimer.start()
+        } else if (act === "wip-grow" || act === "wip-grow-squeeze") {
+            // The same pull in the commit editor, where the argument is
+            // the description itself: the box starts empty, so a run that
+            // types nothing has nothing to open it for.
+            page.showWip()
+            wipPane.setMessage("feat: write the summary", arg)
+            descGrowTimer.pane = wipPane
+            descGrowTimer.paneName = "wip"
+            descGrowTimer.squeeze = act === "wip-grow-squeeze"
             descGrowTimer.start()
         } else if (act === "details-fit") {
             // Whether the pane's own column fits the pane. Nothing here

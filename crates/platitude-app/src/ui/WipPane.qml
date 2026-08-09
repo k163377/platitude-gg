@@ -218,10 +218,40 @@ ColumnLayout {
     /// Smoke hook: the caret in the description box, the way a click in
     /// it puts it there (see DetailsPane — same box, same reason).
     function focusDescription() {
-        wipBody.forceActiveFocus()
+        wipBody.takeCaret()
     }
-    readonly property color descriptionColor: wipBody.color
-    readonly property bool descriptionFocused: wipBody.activeFocus
+    readonly property color descriptionColor: wipBody.textColor
+    readonly property bool descriptionFocused: wipBody.focused
+
+    // -- what this pane lends the description box --
+    //
+    // Same bound as the details pane, read off what this pane has under
+    // the box instead: the file list is the only thing that gives, and
+    // the checkboxes, the commit button and the exit card keep their own
+    // height by construction, so two rows of list is the whole of it
+    // (デザイン規約 §コミットメッセージの 2 つの枠).
+    readonly property real descRoom:
+        Math.max(0, wipList.height - 2 * Theme.rowHeight)
+    /// What the pane needs back — the list bottoms out at zero while the
+    /// column keeps growing, so the overflow past this pane's own edge is
+    /// the rest of the answer (see DetailsPane).
+    readonly property real descOwed:
+        Math.max(0, 2 * Theme.rowHeight - wipList.height)
+        + Math.max(0, wipPane.implicitHeight - wipPane.height)
+    // -- smoke hooks, forwarded to the box --
+    function growDescription(dy) { wipBody.grow(dy) }
+    readonly property bool descGrips: wipBody.grips
+    readonly property real descHeight: wipBody.boxHeight
+    readonly property real descWants: wipBody.wants
+    readonly property real descCap: wipBody.cap
+    readonly property int descListRows:
+        Math.round(wipList.height / Theme.rowHeight)
+    /// Whether what sits under the box is still inside the pane. Here it
+    /// is the commit button that would go under the window's own footer,
+    /// and that shot frames like one where it did not.
+    readonly property bool descKeeps:
+        commitButton.mapToItem(wipPane, 0, commitButton.height).y
+        <= wipPane.height
 
     // The stash options open right under the button that asks for them,
     // as a mode of this pane rather than a window over it (デザイン規約
@@ -464,39 +494,14 @@ ColumnLayout {
                 }
             }
         }
-        // Two lines tall from the start (matches the details pane's
-        // description box).
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(Math.max(wipBody.implicitHeight,
-                                                      2 * Theme.fontMdLine)
-                                             + Theme.spaceSm,
-                                             Theme.messageMaxHeight)
-            color: Theme.bgBase
-            radius: Theme.radiusMd
-            border.color: Theme.borderSubtle
-            border.width: Theme.borderWidth
-            ScrollView {
-                anchors.fill: parent
-                anchors.margins: Theme.spaceXs
-                // ScrollView keeps its Flickable private -- reach it
-                // once it exists.
-                Component.onCompleted:
-                    contentItem.boundsBehavior = Flickable.StopAtBounds
-                TextArea {
-                    id: wipBody
-                    wrapMode: TextArea.Wrap
-                    placeholderText: qsTr("Description")
-                    font.pixelSize: Theme.fontMd
-                    // Same rule as the details pane's box, written the
-                    // same way: dim at rest, the summary's colour while
-                    // the caret is in it (see DetailsPane).
-                    color: !wipBody.readOnly && wipBody.activeFocus
-                           ? Theme.textPrimary : Theme.textSecondary
-                    background: null
-                    padding: 0
-                }
-            }
+        // Two lines tall from the start, and pulled open by the corner
+        // for a long one — the same component the details pane reads
+        // messages in.
+        DescriptionBox {
+            id: wipBody
+            placeholderText: qsTr("Description")
+            room: wipPane.descRoom
+            owed: wipPane.descOwed
         }
         // Amend replaces the newest commit instead of adding one, so it
         // starts from that commit's message rather than an empty editor.

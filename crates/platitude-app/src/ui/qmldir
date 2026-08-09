@@ -18,6 +18,7 @@ CoAuthorLine 1.0 CoAuthorLine.qml
 CommitHoverCard 1.0 CommitHoverCard.qml
 CommandRowDelegate 1.0 CommandRowDelegate.qml
 CommandsPane 1.0 CommandsPane.qml
+DescriptionBox 1.0 DescriptionBox.qml
 DetailsPane 1.0 DetailsPane.qml
 DiffPane 1.0 DiffPane.qml
 FileRowDelegate 1.0 FileRowDelegate.qml

@@ -470,7 +470,7 @@ fn to_the_byte(head: &str, bytes: usize) -> String {
 /// At least, not at most: asking for less than one sentence used to return
 /// the two characters of the terminator, and a co-author whose name is
 /// `終端` tests nothing.
-fn pasted(bytes: usize) -> String {
+pub(crate) fn pasted(bytes: usize) -> String {
     let unit = "この行は長い日本語の文章で、折り返しと省略の両方を試すために置いてある。 \
                 And an English clause rides along so the run of Latin text is measured too. ";
     let mut s = String::new();

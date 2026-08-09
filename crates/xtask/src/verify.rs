@@ -244,7 +244,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
     println!("config dir: {}", config_dir.display());
 
     let arg = match opts.arg.is_empty() {
-        true => folder_for(&opts.verb, &shot_dir, &path)?,
+        true => match body_for(&opts.verb) {
+            Some(body) => body,
+            None => folder_for(&opts.verb, &shot_dir, &path)?,
+        },
         false => opts.arg.clone(),
     };
 
@@ -387,13 +390,20 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let must_say = match opts.verb.as_str() {
         "solo" => Some("solo blocked=true"),
         "details-fit" => Some("details_fit fits=true"),
-        // A pull that took more room than the pane had leaves the author
-        // card drawn over the window's own footer, and that frames like a
-        // pane that fits — the same blind spot details-fit answers for.
-        // Only that half is judged here: whether the grip was offered at
-        // all depends on the row, and the run where it stays away is half
-        // of the pair.
-        "details-grow" | "details-grow-squeeze" => Some("description_grow author=true"),
+        // A pull that took more room than the pane had leaves what sits
+        // under the box — the author card, the commit button — drawn over
+        // the window's own footer, and that frames like a pane that fits:
+        // the same blind spot details-fit answers for. Only that half is
+        // judged here: whether the grip was offered at all depends on the
+        // message, and the run where it stays away is half of the pair.
+        "details-grow" | "details-grow-squeeze" | "wip-grow" | "wip-grow-squeeze" => {
+            Some("description_grow keeps=true")
+        }
+        // The caret is the whole of these two, and a hook that never
+        // reached the box leaves a picture of the resting colour --
+        // which is a real state, and the other half of each pair.
+        "edit-message-focus" => Some("message_focus pane=details focused=true"),
+        "wip-message-focus" => Some("message_focus pane=wip focused=true"),
         // A dialog that stayed open because the write did not take looks
         // exactly like one nobody has answered yet, and "which half
         // landed" is not something a picture holds at all.
@@ -537,6 +547,20 @@ fn tab_width_repos(arg: &str) -> Result<Vec<PathBuf>, String> {
     }
     println!("demo repos (tab-widths): {count} named after their length");
     Ok(made)
+}
+
+/// The description a verb needs typed for it, when the run brought none.
+///
+/// The commit editor starts empty, so the verbs that pull its box open
+/// have nothing to open it for unless something is in it — and something
+/// longer than the pane is tall, or the pull lands on the end of the text
+/// rather than on the bound this is about. The details pane needs no such
+/// thing: its messages come out of a repository.
+fn body_for(verb: &str) -> Option<String> {
+    match verb {
+        "wip-grow" | "wip-grow-squeeze" => Some(crate::demo::pasted(4000)),
+        _ => None,
+    }
 }
 
 /// The folder a verb needs handed to it, made on the spot.
