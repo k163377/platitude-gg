@@ -198,10 +198,18 @@ impl Store {
     /// The store this process should use, with a development build's own
     /// copy filled in the first time it runs.
     pub fn discover(build: Build) -> Self {
-        let env = Env::system();
-        let store = Self::locate(Platform::HOST, &env, build);
+        Self::open(Platform::HOST, &Env::system(), build)
+    }
+
+    /// [`Store::discover`] with the platform and the environment handed
+    /// over, so that what a development build does on its first run can be
+    /// watched from a test.
+    fn open(platform: Platform, env: &Env, build: Build) -> Self {
+        let store = Self::locate(platform, env, build);
         if build.is_dev() {
-            let shipped = Self::locate(Platform::HOST, &env, Build::SHIPPED);
+            let shipped = Self::locate(platform, env, Build::SHIPPED);
+            // Not when a directory was named: `locate` hands every build
+            // the same one, and a store cannot be seeded from itself.
             if shipped != store {
                 store.seed_from(&shipped);
             }
@@ -1558,6 +1566,43 @@ graph_lanes_width = 3
         dev.save_settings(&moved).expect("save");
         dev.seed_from(&real);
         assert_eq!(dev.load_settings().defaults.auto_fetch_minutes, 1);
+    }
+
+    #[test]
+    fn the_first_run_of_a_development_build_lands_beside_the_real_one() {
+        // The whole path a launch takes, with the two base directories
+        // pointed at a temporary one: which files a build is given, and
+        // the copying that happens on the way.
+        let home = tempfile::tempdir().expect("tempdir");
+        let base = home.path().to_string_lossy().replace('\\', "/");
+        let env = Env::from_pairs(&[("APPDATA", &base), ("LOCALAPPDATA", &base)]);
+
+        let real = Store::open(Platform::Windows, &env, Build::SHIPPED);
+        let mut settings = Settings::default();
+        settings.defaults.auto_fetch_minutes = 9;
+        real.save_settings(&settings).expect("save");
+
+        let dev = Store::open(
+            Platform::Windows,
+            &env,
+            Build {
+                tree: "solo",
+                debug: true,
+            },
+        );
+        assert_ne!(dev, real, "a development build writes files of its own");
+        assert_eq!(dev.load_settings().defaults.auto_fetch_minutes, 9);
+        assert_eq!(
+            real.load_settings().defaults.auto_fetch_minutes,
+            9,
+            "and takes nothing away from the build that shipped"
+        );
+
+        // Both are up at the same time, which is the point of the split.
+        let held = real.claim();
+        assert!(matches!(held, Claim::Ours(_)));
+        assert!(matches!(dev.claim(), Claim::Ours(_)));
+        drop(held);
     }
 
     #[test]
