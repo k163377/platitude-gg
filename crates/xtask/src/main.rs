@@ -25,9 +25,12 @@ commands:
       for each --verb, and bare. The two sides write to different build
       trees (target/ vs the docker volume), so the wall clock is
       whichever side finishes last. Each --verb also runs verify-ui on
-      the host, so one flag covers the verb on both OSes. Without
-      --verb the summary says the touched verbs still have to run —
-      it never passes for the whole of stage 2 on its own.
+      the host, so one flag covers the verb on both OSes; its value is
+      a whole verify-ui argument line, quoted when the verb needs its
+      preset or argument beside it (--verb 'co-authors 4 --preset
+      co-authors'). Without --verb the summary says the touched verbs
+      still have to run — it never passes for the whole of stage 2 on
+      its own.
 
   demo-repo <preset> [--at <dir>]
       Build a throwaway repository (isolated from your git config) and

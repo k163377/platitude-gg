@@ -62,13 +62,20 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "platitude-core",
     ])];
     for (i, verb) in verbs.iter().enumerate() {
+        // A --verb value is a whole verify-ui argument line — some verbs
+        // only mean anything with their preset or argument beside them
+        // ("co-authors 4 --preset co-authors").
+        let verb_words: Vec<&str> = verb.split_whitespace().collect();
         // The first host run builds the release; the rest reuse it.
-        let mut host = words(&["cargo", "xtask", "verify-ui", verb]);
+        let mut host = words(&["cargo", "xtask", "verify-ui"]);
+        host.extend(verb_words.iter().map(|w| (*w).to_string()));
         if i > 0 {
             host.push("--no-build".to_string());
         }
         host_steps.push(host);
-        linux_steps.push(words(&["cargo", "xtask", "linux", "verify-ui", verb]));
+        let mut linux = words(&["cargo", "xtask", "linux", "verify-ui"]);
+        linux.extend(verb_words.iter().map(|w| (*w).to_string()));
+        linux_steps.push(linux);
     }
     // Last so it reuses the release the container's verify-ui just built.
     linux_steps.push(words(&["cargo", "xtask", "linux", "bare"]));
