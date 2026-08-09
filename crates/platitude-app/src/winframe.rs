@@ -432,6 +432,13 @@ mod win32 {
 
     const WM_NCHITTEST: u32 = 0x0084;
     const WM_NCRBUTTONUP: u32 = 0x00A5;
+    /// The two messages that ask for the frame to be drawn (winuser.h).
+    /// `WM_NCACTIVATE` takes `-1` as its `lParam` to mean "do not redraw
+    /// the frame", which is how it is declined without also declining the
+    /// activation it carries.
+    const WM_NCPAINT: u32 = 0x0085;
+    const WM_NCACTIVATE: u32 = 0x0086;
+    const NO_FRAME_REDRAW: isize = -1;
     /// The hit-test answers this window hands out (winuser.h). Client,
     /// caption, and the eight resize edges; nothing else exists here —
     /// no drawn system buttons, no icon box.
@@ -471,6 +478,24 @@ mod win32 {
             wparam: usize,
             lparam: isize,
         ) -> isize;
+    }
+
+    // SAFETY: as the other blocks — the DC is handed back to be released,
+    // and the brush is a handle this module deletes itself.
+    #[link(name = "user32")]
+    unsafe extern "system" {
+        fn GetWindowDC(window: *mut c_void) -> *mut c_void;
+        fn ReleaseDC(window: *mut c_void, dc: *mut c_void) -> i32;
+        fn FillRect(dc: *mut c_void, rect: *const Rect, brush: *mut c_void) -> i32;
+        fn GetClientRect(window: *mut c_void, rect: *mut Rect) -> i32;
+        fn ClientToScreen(window: *mut c_void, point: *mut Point) -> i32;
+    }
+
+    // SAFETY: as above.
+    #[link(name = "gdi32")]
+    unsafe extern "system" {
+        fn CreateSolidBrush(color: u32) -> *mut c_void;
+        fn DeleteObject(object: *mut c_void) -> i32;
     }
 
     // SAFETY: as the other user32 blocks — plain integers and pointers
@@ -535,8 +560,113 @@ mod win32 {
             open_system_menu(window, x, y);
             return 0;
         }
+        // The frame is not the system's to draw here. `DefWindowProc`
+        // paints the sizing border it still thinks this window wears, and
+        // the innermost pixel of it comes out white — measured on the
+        // window: `#FFFFFF` at the column just outside the client, with
+        // the app's own hairline one pixel further out, and no DWM
+        // attribute moves it (P5-確認事項 §10 had it as unsolved). Against
+        // a dark theme that one pixel is the brightest thing on the
+        // window's edge, so what the person sees hugging the window is a
+        // white line rather than the edge the app painted.
+        //
+        // Declining the paint is safe in the way `WM_NCHITTEST` is: it
+        // asks for pixels, not for frame metrics Qt has cached, so
+        // nothing is left holding a stale answer. What remains around the
+        // window is DWM's own composition — the shadow, and the border
+        // colour `set_border_color` hands it.
+        if message == WM_NCPAINT {
+            paint_frame(window);
+            return 0;
+        }
+        if message == WM_NCACTIVATE {
+            // SAFETY: as below — the message is passed on, with the one
+            // argument that says to leave the frame alone.
+            return unsafe { DefSubclassProc(window, message, wparam, NO_FRAME_REDRAW) };
+        }
         // SAFETY: passing the message on is what a subclass does.
         unsafe { DefSubclassProc(window, message, wparam, lparam) }
+    }
+
+    /// Fills the frame around the client area with the colour the app
+    /// asked for, instead of leaving it to `DefWindowProc`.
+    ///
+    /// Only one pixel of this is ever seen: DWM covers the rest of the
+    /// frame with the window's shadow and its own border. That pixel is
+    /// the one just outside the client, and left alone it comes out
+    /// `#FFFFFF` — measured through `PrintWindow`, so it is in the
+    /// window's own bits rather than DWM's composition, which is why
+    /// painting reaches it where three DWM attributes and immersive dark
+    /// mode all did not (P5-確認事項 §10 had it as unsolved). Against this
+    /// theme a white line hugging the window is the brightest thing on
+    /// the edge, and it read as the edge itself.
+    fn paint_frame(window: *mut c_void) {
+        let (_, frame) = FRAME_COLORS.get();
+        // Nothing was asked for, or "draw nothing" was: a maximised
+        // window's frame is off the screen entirely, and a colour there
+        // is what puts a bar of it on the next monitor.
+        if frame == COLOR_NONE {
+            return;
+        }
+        let mut window_rect = Rect::default();
+        let mut client = Rect::default();
+        let mut at = Point { x: 0, y: 0 };
+        // SAFETY: `window` is the live handle the message arrived on; the
+        // three calls fill locals of the shapes they document.
+        unsafe {
+            GetWindowRect(window, &mut window_rect);
+            GetClientRect(window, &mut client);
+            ClientToScreen(window, &mut at);
+        }
+        // The client, in the frame's own coordinates.
+        let (left, top) = (at.x - window_rect.left, at.y - window_rect.top);
+        let (right, bottom) = (left + client.right, top + client.bottom);
+        let (width, height) = (
+            window_rect.right - window_rect.left,
+            window_rect.bottom - window_rect.top,
+        );
+        // SAFETY: the DC and the brush are released and deleted below, on
+        // every path, and `FillRect` only reads the rectangle it is
+        // handed.
+        unsafe {
+            let dc = GetWindowDC(window);
+            if dc.is_null() {
+                return;
+            }
+            let brush = CreateSolidBrush(frame);
+            if !brush.is_null() {
+                for band in [
+                    Rect {
+                        left: 0,
+                        top: 0,
+                        right: width,
+                        bottom: top,
+                    },
+                    Rect {
+                        left: 0,
+                        top,
+                        right: left,
+                        bottom,
+                    },
+                    Rect {
+                        left: right,
+                        top,
+                        right: width,
+                        bottom,
+                    },
+                    Rect {
+                        left: 0,
+                        top: bottom,
+                        right: width,
+                        bottom: height,
+                    },
+                ] {
+                    FillRect(dc, &band, brush);
+                }
+                DeleteObject(brush);
+            }
+            ReleaseDC(window, dc);
+        }
     }
 
     /// Both halves of an `lParam` that carries a screen point — signed,
