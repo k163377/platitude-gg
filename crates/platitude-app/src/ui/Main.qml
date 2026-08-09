@@ -73,11 +73,22 @@ ApplicationWindow {
     color: Theme.bgBase
 
     // ---- what a title bar does, now that this band is one ----------------
-    /// Goes through `visibility`, which is also where the saved shape is
-    /// read from, so a window left maximised comes back that way.
+    /// The button and the band's double-click have to mean the same
+    /// thing, so both go to the platform.
+    ///
+    /// `visibility` alone does not: Qt maximises a frameless window by
+    /// resizing it, and the platform is then holding no maximised state
+    /// to put back — the button left the window large while the
+    /// double-click, which the platform handles, restored it (reported
+    /// 2026-08-09). `visibility` still says what the window *is*, and
+    /// still carries the state everywhere the platform has no command of
+    /// its own.
     function toggleMaximized() {
-        root.visibility = root.visibility === Window.Maximized
-                          ? Window.Windowed : Window.Maximized
+        const wanted = root.visibility !== Window.Maximized
+        if (root.captionMerged)
+            AppBackend.setWindowMaximized(wanted)
+        else
+            root.visibility = wanted ? Window.Maximized : Window.Windowed
     }
     function minimizeWindow() {
         root.visibility = Window.Minimized
@@ -443,24 +454,38 @@ ApplicationWindow {
             root.x = x
             root.y = y
         }
-        if (AppBackend.startWindowMaximized())
-            root.visibility = Window.Maximized
-        // And now the part this side cannot do: the *frame* has to fit,
-        // and it is wider than the window says it is. A remembered 1920
-        // came back as a 1936-wide frame at x=-5 on a 1920 screen —
-        // enough to put the right-hand pane's scroll bar off the screen
-        // and the left edge on the next monitor (measured 2026-08-09,
-        // and reported as both). `insideScreen` above cannot see either
-        // number, so it lets that through; the platform side moves the
-        // window back and says whether it had to.
+        // The part this side cannot do: the *frame* has to fit, and it is
+        // wider than the window says it is. A remembered 1920 came back
+        // as a 1936-wide frame at x=-5 on a 1920 screen — enough to put
+        // the right-hand pane's scroll bar off the screen and the left
+        // edge on the next monitor (measured 2026-08-09, and reported as
+        // both). `insideScreen` above cannot see either number, so it
+        // lets that through; the platform side moves the window back and
+        // says whether it had to.
         //
-        // Nothing is measured on a run that was moved: `settleTimer`
-        // reads the frame slop off the difference between what the
-        // window was handed and what it says it is, and a window that
-        // was repositioned in between is not that difference. The next
-        // launch comes up fitting and measures then.
-        if (!AppBackend.fitWindowToScreen())
+        // Before the maximise, not after: the shape standing when a
+        // window is maximised is the shape a restore comes back to, so
+        // this is the last chance to make that shape a good one.
+        const moved = AppBackend.fitWindowToScreen()
+        if (AppBackend.startWindowMaximized()) {
+            // Let the platform do it, so the platform is the one holding
+            // the shape to come back to. Qt's own maximise just resizes
+            // the window, which leaves nothing behind to restore — the
+            // whole of `toggleMaximized`'s story. Where there is no
+            // platform command (plain chrome, and the offscreen runs that
+            // have no window at all), `visibility` still carries it.
+            if (root.captionMerged)
+                AppBackend.setWindowMaximized(true)
+            else
+                root.visibility = Window.Maximized
+        } else if (!moved) {
+            // Nothing is measured on a run that was moved: `settleTimer`
+            // reads the frame slop off the difference between what the
+            // window was handed and what it says it is, and a window that
+            // was repositioned in between is not that difference. Nor on
+            // one that came up maximised, which is not that shape either.
             settleTimer.restart()
+        }
     }
     /// What the store sends for a coordinate it has never been told.
     readonly property int unplaced: -2147483648

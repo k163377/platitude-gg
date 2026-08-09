@@ -431,6 +431,16 @@ impl AppBackend {
         crate::winframe::set_caption_strip(x0, x1, bottom);
     }
 
+    /// Maximises the window or puts it back, through the platform rather
+    /// than through `visibility`. Qt maximises a frameless window by
+    /// resizing it, which leaves the platform with nothing to restore —
+    /// so the button did nothing while the band's double-click worked
+    /// (`winframe::set_maximized`).
+    #[qslot]
+    fn set_window_maximized(&self, maximized: bool) {
+        crate::winframe::set_maximized(maximized);
+    }
+
     /// Pulls a restored window back inside the screen it came up on, and
     /// answers whether it had to. The scene cannot do this itself: what
     /// has to fit is the frame, which is wider than the window says it

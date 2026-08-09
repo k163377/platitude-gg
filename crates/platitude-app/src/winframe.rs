@@ -51,6 +51,26 @@ pub fn keep_system_gestures() {
 // and the one pixel of it that showed came out white and answered to
 // nothing but painting the frame ourselves.
 
+/// Maximises the window, or puts it back, through the platform's own
+/// command — the same one the band's double-click sends.
+///
+/// The scene has `visibility` for this, and for a framed window it was
+/// enough. It is not enough here: Qt maximises a frameless window by
+/// resizing it, which leaves Windows holding no maximised state at all
+/// (measured: the window covers the work area with `IsZoomed` false), and
+/// putting it back then has nothing to put back — the button left the
+/// window large while a double-click on the band, which goes through the
+/// platform, restored it (reported 2026-08-09). Sending the command
+/// instead keeps one answer for both gestures, which is the same reason
+/// the drag, the snap and the window menu are the platform's
+/// (`take_frame_hit_test`).
+pub fn set_maximized(maximized: bool) {
+    #[cfg(windows)]
+    win32::set_maximized(maximized);
+    #[cfg(not(windows))]
+    let _ = maximized;
+}
+
 /// Pulls the window back inside the work area of the monitor it came up
 /// on, and answers whether it had to. Windowed windows only — a maximised
 /// one is the platform's own arrangement.
@@ -168,6 +188,7 @@ mod win32 {
     const GWL_STYLE: i32 = -16;
     const WS_MAXIMIZEBOX: i32 = 0x0001_0000;
     const WS_MINIMIZEBOX: i32 = 0x0002_0000;
+    const WS_THICKFRAME: i32 = 0x0004_0000;
     const WS_SYSMENU: i32 = 0x0008_0000;
     const SWP_NOSIZE: u32 = 0x0001;
     const SWP_NOMOVE: u32 = 0x0002;
@@ -353,6 +374,46 @@ mod win32 {
         unsafe {
             EnumThreadWindows(GetCurrentThreadId(), wear_one, 0);
         }
+    }
+
+    /// `SC_MAXIMIZE` / `SC_RESTORE` (winuser.h), the two the band's
+    /// double-click and the window menu send.
+    const SC_MAXIMIZE: usize = 0xF030;
+    const SC_RESTORE: usize = 0xF120;
+
+    pub(super) fn set_maximized(maximized: bool) {
+        WANT_MAXIMIZED.set(maximized);
+        // SAFETY: as in `square_corners` — the same walk, and the callback
+        // only posts a message to the window it is handed.
+        unsafe {
+            EnumThreadWindows(GetCurrentThreadId(), command_one, 0);
+        }
+    }
+
+    thread_local! {
+        /// Which of the two commands the walk is carrying.
+        static WANT_MAXIMIZED: Cell<bool> = const { Cell::new(false) };
+    }
+
+    /// Runs for every top-level window the thread owns. Posted rather
+    /// than sent: this arrives from a QML slot, and the platform's own
+    /// handling of it wants a turn of the message loop rather than a
+    /// call from inside one.
+    extern "system" fn command_one(window: *mut c_void, _param: isize) -> i32 {
+        // SAFETY: `window` is live for the callback and both calls only
+        // read it or post to it.
+        unsafe {
+            if IsWindowVisible(window) == 0 {
+                return 1;
+            }
+            let command = if WANT_MAXIMIZED.get() {
+                SC_MAXIMIZE
+            } else {
+                SC_RESTORE
+            };
+            PostMessageW(window, WM_SYSCOMMAND, command, 0);
+        }
+        1
     }
 
     /// Fits every windowed top-level window into its monitor's work
@@ -769,7 +830,7 @@ mod win32 {
         // Not `WS_CAPTION`, though the window menu's Move and Size want
         // it: with the non-client area still there, saying the window has
         // a caption is saying the platform may draw one over the band.
-        let wanted = WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU;
+        let wanted = WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU | WS_THICKFRAME;
         // SAFETY: `window` is live for the length of this callback, and
         // both calls take and return a plain integer.
         let style = unsafe { GetWindowLongW(window, GWL_STYLE) };
