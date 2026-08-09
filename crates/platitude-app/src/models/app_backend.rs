@@ -61,6 +61,13 @@ pub struct AppBackend {
     /// without a way to ask for their layout from this side it is only
     /// ever exercised by the people who cannot report back.
     plain_chrome: bool,
+    /// Whether something rather than somebody is driving this run
+    /// (`Env::automated` — any `PG_*` knob but the three that say nothing
+    /// about who is at the window). What reads it is the window: a run
+    /// nobody is looking at keeps the size it was configured with instead
+    /// of being fitted to a screen (`Main.insideScreen`), and the screen
+    /// the headless platform reports is 800x800.
+    automated: bool,
     /// Screenshot hook: `"<name>|<email>"` prefills the identity screen.
     auto_identity: String,
     /// Screenshot hook: submit that prefilled identity straight away.
@@ -194,6 +201,7 @@ impl Default for AppBackend {
             auto_scroll: std::env::var("PG_AUTO_SCROLL").as_deref() == Ok("1"),
             auto_wip: std::env::var("PG_AUTO_WIP").as_deref() == Ok("1"),
             plain_chrome: std::env::var("PG_PLAIN_CHROME").as_deref() == Ok("1"),
+            automated: platitude_core::settings::Env::system().automated(),
             auto_identity: std::env::var("PG_AUTO_IDENTITY").unwrap_or_default(),
             auto_identity_save: std::env::var("PG_AUTO_IDENTITY_SAVE").as_deref() == Ok("1"),
             // Smoke-test hook: "top" / "bottom" jumps the graph after
@@ -265,6 +273,7 @@ impl AppBackend {
     qproperty!("autoScroll", Member = auto_scroll, Constant);
     qproperty!("autoWip", Member = auto_wip, Constant);
     qproperty!("plainChrome", Member = plain_chrome, Constant);
+    qproperty!("automated", Member = automated, Constant);
     qproperty!("scrollTo", Member = scroll_to, Constant);
     qproperty!("autoAct", Member = auto_act, Constant);
     qproperty!("autoActArg", Member = auto_act_arg, Constant);

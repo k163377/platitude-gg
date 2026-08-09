@@ -133,7 +133,7 @@ impl Env {
     /// True when anything is driving this process. Every `PG_*` knob exists
     /// for automation only, so one of them being set is enough to know a
     /// person is not the one at the window.
-    fn automated(&self) -> bool {
+    pub fn automated(&self) -> bool {
         self.vars
             .iter()
             .any(|(k, _)| k.starts_with(AUTOMATION_PREFIX) && !NOT_AUTOMATION.contains(&k.as_str()))

@@ -438,8 +438,15 @@ ApplicationWindow {
     // own these. An unsaved position stays unset so the platform gets to
     // place the window itself — a first run should not open at 0,0.
     function applySavedWindow() {
-        root.width = AppBackend.startWindowWidth()
-        root.height = AppBackend.startWindowHeight()
+        const wantWidth = root.insideScreen(AppBackend.startWindowWidth(),
+                                            Screen.width)
+        const wantHeight = root.insideScreen(AppBackend.startWindowHeight(),
+                                             Screen.height)
+        root.width = wantWidth
+        root.height = wantHeight
+        root.askedWidth = wantWidth
+        root.askedHeight = wantHeight
+        settleTimer.restart()
         const x = AppBackend.startWindowX()
         const y = AppBackend.startWindowY()
         if (x !== root.unplaced && y !== root.unplaced) {
@@ -452,12 +459,87 @@ ApplicationWindow {
     /// What the store sends for a coordinate it has never been told.
     readonly property int unplaced: -2147483648
 
+    /// A remembered length, kept inside the screen the window comes up on.
+    ///
+    /// A shape saved on a display that is not there any more comes back to
+    /// a smaller one, and so does anything that once got written down too
+    /// wide — neither should open a window whose corners nobody can reach.
+    /// The screen is `Screen.width`, the one this window is on, and *not*
+    /// `Screen.desktopAvailableWidth`, which is the whole virtual desktop
+    /// (measured on a three-monitor machine: 5760, so nothing is ever
+    /// wider than it).
+    ///
+    /// Only a window somebody is at is fitted to a screen. A run that is
+    /// being driven takes the size it was configured with — nobody is
+    /// looking at it, and the offscreen platform the headless runs use
+    /// reports an 800x800 screen that would cut every screenshot to fit.
+    function insideScreen(saved, screen) {
+        return AppBackend.automated ? saved : Math.min(saved, screen)
+    }
+
+    /// What this window adds to a size on the way in.
+    ///
+    /// It does not read back the way it is written. Measured on the merged
+    /// chrome: asked for 1200 it comes up 1200 wide (client 1200, frame
+    /// 1216) and then calls itself 1206 — so writing down what it says
+    /// grew the window 6px on every launch (measured: 1200 → 1206 → 1212
+    /// → 1218 → 1224 over four). What the two sides disagree about is the
+    /// frame margins, which Qt takes from one place when it sets the
+    /// geometry and another when it reads it back, and this window has no
+    /// ordinary frame for them to agree on.
+    ///
+    /// So the difference is read off the window itself — like
+    /// `maximizedInset`, whatever this window turns out to add is what
+    /// comes back off — and taken away again on the way out, which keeps
+    /// the *frame* where it was: the file loses the 6px that the frame
+    /// gains.
+    property int widthSlop: 0
+    property int heightSlop: 0
+    /// The size the window was asked for, which the slop is measured from.
+    property int askedWidth: 0
+    property int askedHeight: 0
+
+    Timer {
+        id: settleTimer
+        // One beat, so the window has answered the size it was given: the
+        // answer arrives as a queued platform event, not inside the
+        // assignment.
+        interval: Metrics.anchorDelayMs
+        onTriggered: {
+            // Only ever measured against a size this window was just
+            // handed, and only while nothing else has had a chance to
+            // resize it. A window that came up maximised is not measured
+            // at all — it reports the screen — and nor is one that is put
+            // down later, because what puts it down (a snap to half the
+            // screen, say) is free to resize it on the way, and a
+            // difference read off that is not a frame margin. That leaves
+            // the size such a run ends at 6px wide in the file, once; the
+            // next launch starts windowed, measures, and stops it there.
+            if (root.askedWidth <= 0 || root.visibility !== Window.Windowed)
+                return
+            root.widthSlop = root.width - root.askedWidth
+            root.heightSlop = root.height - root.askedHeight
+        }
+    }
+
     /// Everything the next launch should come back to. One place, because
     /// what is worth writing is the shape the window settled into, not
     /// every value it passed through on the way (実装計画 §7).
     function reportState() {
-        AppBackend.saveWindow(root.x, root.y, root.width, root.height,
-                              root.visibility === Window.Maximized)
+        // A minimised window has nothing to say about the shape it will
+        // come back as, so it says nothing and the file keeps what the
+        // window last looked like. Measured on Windows: while it is down
+        // the window reports neither its windowed nor its maximised
+        // numbers (one maximised on a 1920x1032 work area calls itself
+        // 1926x1032 at -3,3) and its visibility is no longer Maximized —
+        // so a report from here wrote a window wider than the screen into
+        // the file and cleared the flag that would have brought the
+        // maximised one back.
+        if (root.visibility !== Window.Minimized)
+            AppBackend.saveWindow(root.x, root.y,
+                                  root.width - root.widthSlop,
+                                  root.height - root.heightSlop,
+                                  root.visibility === Window.Maximized)
         if (root.curPage !== null)
             root.curPage.reportLayout()
         AppBackend.flushState()
@@ -521,6 +603,11 @@ ApplicationWindow {
                 // than on the state timer.
                 AppBackend.setAutoFetchMinutes(7)
             }
+            // A run that ends with the window down. Up first, because the
+            // window whose numbers go wrong while it is minimised is the
+            // one that was maximised.
+            if (AppBackend.autoActArg === "minimize")
+                root.visibility = Window.Maximized
             stateReportTimer.start()
         }
     }
@@ -530,6 +617,14 @@ ApplicationWindow {
         id: stateReportTimer
         interval: 400
         onTriggered: {
+            // Up, then down, with a report from each: what the file holds
+            // once the window is down has to be what it held while it was
+            // up. Without the first report there is nothing for the
+            // second one to leave alone, and the verb passes either way.
+            if (AppBackend.autoActArg === "minimize") {
+                root.reportState()
+                root.visibility = Window.Minimized
+            }
             root.reportState()
             AppBackend.report(
                 "state tabs=" + pageRepeater.count
@@ -542,7 +637,21 @@ ApplicationWindow {
                 + " graphLanes=" + AppBackend.startGraphLanesWidth()
                 + " commands=" + AppBackend.startCommandsShown()
                 + " maximized=" + (root.visibility === Window.Maximized)
+                // What the report above left in the store, which is what
+                // the next launch comes back to. Read back rather than
+                // repeated from the window, so a run that had nothing to
+                // say (minimised) is told apart from one that said this.
+                + " windowW=" + AppBackend.startWindowWidth()
+                + " windowH=" + AppBackend.startWindowHeight()
+                + " windowMax=" + AppBackend.startWindowMaximized()
                 + " autoFetch=" + AppBackend.autoFetchMinutes)
+            // Back up for the shot: `grabToImage` has nothing to hand
+            // back from a window that is down. Windowed rather than
+            // maximised, so the picture is the size every other verb's
+            // is — the offscreen platform maximises to its own 800x800
+            // screen, and a shot that shape is a shot of the harness.
+            if (AppBackend.autoActArg === "minimize")
+                root.visibility = Window.Windowed
         }
     }
 
