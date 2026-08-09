@@ -53,10 +53,10 @@ struct Outcome {
     timed_out: bool,
     write_failures: usize,
     allow_write_failure: bool,
-    /// What a verb whose setup this harness takes part in has to be caught
-    /// saying. A screenshot cannot tell a run that reached the state from
-    /// one whose staging quietly did not take: `solo` photographs a
-    /// perfectly good ordinary window if the lock was never held.
+    /// What a verb whose failure the camera cannot see has to be caught
+    /// saying. `solo` photographs a perfectly good ordinary window if the
+    /// lock was never held, and `details-fit` frames a pane whose content
+    /// ran off the right of the window the same as one that fits.
     must_say: Option<&'static str>,
     said: bool,
 }
@@ -323,7 +323,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let err_lines = join(stderr);
     let elapsed = started.elapsed();
 
-    let must_say = (opts.verb == "solo").then_some("solo blocked=true");
+    let must_say = match opts.verb.as_str() {
+        "solo" => Some("solo blocked=true"),
+        "details-fit" => Some("details_fit fits=true"),
+        _ => None,
+    };
     let outcome = Outcome {
         exit_ok: status.as_ref().is_some_and(|s| s.success()),
         saved: err_lines
@@ -378,8 +382,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         && !outcome.said
     {
         println!(
-            "  the run never said `{wanted}` — its staging did not take, and the shot is of \
-             an ordinary window."
+            "  the run never said `{wanted}` — and this verb's picture reads the same \
+             whether it should have or not."
         );
     }
     if outcome.write_sank_it() {

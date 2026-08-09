@@ -2039,6 +2039,18 @@ Item {
                 + " open=" + detailsPane.matesCardOpen)
         }
     }
+    // The details have to arrive, and the column has to be laid out with
+    // them, before there is anything to measure.
+    Timer {
+        id: detailsFitTimer
+        interval: 800
+        // A pane width the splitter left on a fraction can put a fraction
+        // in the answer; what this verb is about is tens of pixels.
+        onTriggered: AppBackend.report(
+            "details_fit fits=" + (detailsPane.contentOverflow < 1)
+            + " over=" + Math.round(detailsPane.contentOverflow)
+            + " pane=" + Math.round(detailsPane.width))
+    }
     // An assignment is not something git knows about, so nothing here is
     // waiting for a refresh to bring it: the rows and the card re-read
     // the store themselves.
@@ -2524,6 +2536,15 @@ Item {
             // next to a run where it opened. The argument is the row.
             page.activateRow(graphModel.oidAt(Number(arg)))
             coAuthorTimer.start()
+        } else if (act === "details-fit") {
+            // Whether the pane's own column fits the pane. Nothing here
+            // elides on its own: a row that will not give lays the whole
+            // column out at its width, and the picture of that is glyphs
+            // cut in half at the window's edge — which headless cannot
+            // see, so the pane reports the number. The argument is the
+            // row, and `--preset edges` holds the wall.
+            page.activateRow(graphModel.oidAt(Number(arg)))
+            detailsFitTimer.start()
         } else if (act === "name-box") {
             // Opened and left standing, for a look at it. The argument is
             // the row, since the box only belongs on one with no chips.

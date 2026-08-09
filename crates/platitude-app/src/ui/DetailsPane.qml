@@ -293,6 +293,19 @@ ColumnLayout {
     }
     Component.onCompleted: detailsPane.syncMessage()
 
+    /// How far this pane's own content runs past its right edge, in px.
+    /// A child with no `Layout.fillWidth` of its own is Fixed -- only a
+    /// nested layout fills by default -- and the layout hands a Fixed
+    /// child its implicit width and never a pixel less. So one row that
+    /// will not give is a floor the whole column sits on. The column then
+    /// lays itself out at that floor while the pane keeps the width the
+    /// splitter set, and every box in it, sized to fill, paints over the
+    /// window's edge with the glyphs cut in half. `fileList` fills and
+    /// carries no margins, so its width *is* that laid-out width.
+    /// Headless cannot see a cut glyph — this is the number instead.
+    readonly property real contentOverflow:
+        Math.max(0, fileList.width - detailsPane.width)
+
     spacing: 0
 
     PaneHeader {
@@ -691,6 +704,17 @@ ColumnLayout {
                         // the same line out of the graph pane. The date
                         // holds the left of this row; this is the rest.
                         nameWidth: detailsPane.width / 2
+                        // Grows no further than the names themselves, and
+                        // gives way when the row cannot hold them -- the
+                        // rule the author's name above already follows.
+                        // Without the pair this line is Fixed, and a
+                        // Fixed item is a floor the layout cannot go
+                        // under: the row then lays out at its own width
+                        // and every box in the pane, sized to fill it,
+                        // paints past the window's edge (measured at 483
+                        // against a 384px pane).
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: coBlock.implicitWidth
                         Layout.alignment: Qt.AlignVCenter
                         onPointerChanged: inside => detailsPane.showCoAuthors(inside)
                     }

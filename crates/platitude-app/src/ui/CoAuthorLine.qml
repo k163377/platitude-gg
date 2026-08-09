@@ -87,8 +87,10 @@ Item {
             Layout.alignment: Qt.AlignVCenter
             // Written out, the names take the room the holder gives them
             // and stop there; as a chip, the name gives way at the share
-            // its holder passed.
-            Layout.fillWidth: line.plain
+            // its holder passed. Either way the name is what yields when
+            // the room runs out -- the face and the count are one glyph
+            // each and have nothing to give.
+            Layout.fillWidth: true
             Layout.maximumWidth: line.plain || line.nameWidth <= 0
                                  ? Number.POSITIVE_INFINITY : line.nameWidth
             elide: Text.ElideRight
