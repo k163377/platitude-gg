@@ -1193,23 +1193,96 @@ async fn a_pop_refused_by_a_conflicted_tree_is_still_a_failure() {
 /// Puts the todo-editor helper where the session looks for it — beside the
 /// running executable, which for a test is the test binary's own directory.
 /// Packaging carries the same obligation for the application.
+///
+/// Once per process, and the file is published by `rename` rather than
+/// written where it stands. Both halves are about the same thing: on Linux
+/// a file somebody holds open for writing cannot be executed at all
+/// (`ETXTBSY`), and all five replaying tests call this and then hand the
+/// path to git. Copying straight onto it put one test's write fd under
+/// another's exec — `pg-todo-editor: Text file busy`, reported by the `sh`
+/// git runs `GIT_SEQUENCE_EDITOR` through, on 6 runs out of 8 with a thread
+/// per core (実測 24 cores; 規約 §テストが差し込む実行ファイルは rename で置く).
 fn install_todo_editor() {
-    let built = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pg-todo-editor"));
+    static INSTALLED: std::sync::Once = std::sync::Once::new();
+    // Every caller waits for the one copy, so no test reaches git while it
+    // is in flight; the rename covers the rest — another process sharing
+    // this `target/` never sees a partly-written helper either.
+    INSTALLED.call_once(|| {
+        let built = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pg-todo-editor"));
+        let Some(dir) = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))
+        else {
+            return;
+        };
+        let _ = publish_helper(&built, &dir);
+    });
+}
+
+/// Copies `built` into `dir` under the name the application looks for,
+/// through a staging name of its own so the live path is never opened for
+/// writing. Returns where it put it.
+fn publish_helper(
+    built: &std::path::Path,
+    dir: &std::path::Path,
+) -> std::io::Result<std::path::PathBuf> {
     let name = format!(
         "{}{}",
         platitude_core::sequencer::HELPER_NAME,
         std::env::consts::EXE_SUFFIX
     );
-    let beside = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|d| d.join(name)));
-    if let Some(beside) = beside
-        && beside != built
-    {
-        // A previous run may have left one behind and Windows locks a
-        // running executable; either way the copy that is there will do.
-        let _ = std::fs::copy(&built, &beside);
+    let beside = dir.join(&name);
+    if beside == built {
+        return Ok(beside);
     }
+    // One staging name per process is enough: `INSTALLED` means one copy
+    // runs at a time, and a second process gets a name of its own.
+    let staged = dir.join(format!("{name}.{}.staged", std::process::id()));
+    let published = std::fs::copy(built, &staged).and_then(|_| std::fs::rename(&staged, &beside));
+    if let Err(error) = published {
+        // Windows locks a running executable, so the rename can lose to a
+        // helper another run left behind — the one that is there will do.
+        let _ = std::fs::remove_file(&staged);
+        if !beside.is_file() {
+            return Err(error);
+        }
+    }
+    Ok(beside)
+}
+
+/// The install must replace the helper's directory entry, never write
+/// through it: a replay running the old one has it open for execution, and
+/// on Linux that makes it unwritable (`ETXTBSY`) in one direction and
+/// unexecutable in the other. A new inode under the same name settles both
+/// — whoever is mid-exec keeps the file they started, and the next replay
+/// gets the fresh one.
+#[test]
+#[cfg(unix)]
+fn the_helper_is_replaced_rather_than_written_over() {
+    use std::os::unix::fs::MetadataExt;
+
+    let built = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pg-todo-editor"));
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = publish_helper(&built, dir.path()).expect("install");
+    let before = std::fs::metadata(&first).expect("stat").ino();
+
+    let again = publish_helper(&built, dir.path()).expect("install over the first");
+    assert_eq!(again, first, "the same name both times");
+    assert_ne!(
+        std::fs::metadata(&again).expect("stat").ino(),
+        before,
+        "the second install wrote through the live path"
+    );
+
+    // And what landed is still the helper: `fs::copy` carries the mode, so
+    // the file it publishes is one git can execute.
+    let out = std::process::Command::new(&again)
+        .output()
+        .expect("run the installed helper");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("usage: pg-todo-editor"),
+        "the installed file is not the helper: {out:?}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
