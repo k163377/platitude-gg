@@ -822,6 +822,16 @@ Rectangle {
         Label {
             text: qsTr("A thin, fast GUI over your installed git.")
             color: Theme.textSecondary
+            // Its natural width while the column has room for it, and
+            // wrapped inside the column when it has not: this pane is
+            // 216px at the window's floor and the line asks for half as
+            // much again, which unbounded it took from the panes on
+            // either side (規約 §窓の床). The same shape the error line
+            // above already has.
+            width: Math.min(implicitWidth,
+                            graphArea.width - 2 * Theme.spaceXl)
+            wrapMode: Text.Wrap
+            horizontalAlignment: Text.AlignHCenter
             anchors.horizontalCenter: parent.horizontalCenter
         }
         HoverButton {
