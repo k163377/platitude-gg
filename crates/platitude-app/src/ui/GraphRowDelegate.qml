@@ -521,15 +521,15 @@ Item {
     /// pane, and its left edge is nowhere near the pointer.
     readonly property real pointerX: rowMouse.mouseX
 
-    // Hover details: what the row no longer shows as columns. The WIP
-    // row has no commit behind it, so it keeps the plain tooltip.
-    ToolTip.visible: rowMouse.containsMouse && rowItem.isWip
-    ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: qsTr("Working-tree changes — not committed yet")
-
-    // Everything else opens the page's card after the same delay. The
-    // row reports; the page decides, because the card outlives this
-    // delegate (it is recycled the moment the row scrolls off).
+    // Hover details: what the row no longer shows as columns — who wrote
+    // it, when, and whoever they credited. The row reports; the page
+    // decides, because the card outlives this delegate (it is recycled
+    // the moment the row scrolls off).
+    //
+    // The WIP row opens nothing. It has no commit behind it and so none
+    // of those facts, and its count is already in its own label — the
+    // same answer its double-click and its right-click give
+    // (規約 §hover のツールチップ).
     Timer {
         id: hoverDelay
         interval: Metrics.tipDelayMs
