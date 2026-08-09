@@ -32,7 +32,9 @@ QtObject {
     readonly property int opticalDrop: 1
     readonly property int menuMinW: 160
     readonly property var laneDash: [1, 1]
-    readonly property real tailFade: 0.45
+    // The one opacity anything is dimmed to (デザイン規約 §暗く落とした段).
+    // Same 45% the `*Dim` colours already are — measured, not chosen.
+    readonly property real dimFade: 0.45
     readonly property int tipDelayMs: 600
     readonly property int hoverKeepMs: 150
     // How often the window offers its shape to be written down. Nothing

@@ -2997,15 +2997,29 @@ Item {
                 avatarSeedTimer.start()
             else
                 page.settingsDialogRequested()
-        } else if (act === "find") {
+        } else if (act === "find" || act === "find-next" || act === "find-prev") {
             // The key cannot be pressed from here, so the page opens the
-            // bar the way the key would. The argument goes into the box so
-            // the shot has something in it.
+            // bar the way the key would, and the argument goes into the
+            // box the way typing would — assigning the text runs the same
+            // search a keystroke runs.
             page.startFind()
             if (arg !== "")
                 graphPane.findQuery = arg
+            if (act === "find-next")
+                graphPane.findNext()
+            else if (act === "find-prev")
+                graphPane.findPrevious()
+            // `width` and `cap` are the two halves of the rule the long
+            // queries are here to check: the card may grow, and it may
+            // not reach past a subject's first character.
             AppBackend.report("find open=" + graphPane.findOpen
-                              + " query=" + graphPane.findQuery)
+                              + " query=" + graphPane.findQuery
+                              + " matches=" + graphPane.findMatches
+                              + " at=" + graphPane.findAt
+                              + " row=" + graphPane.view.currentIndex
+                              + " selected=" + page.selectedOid.substring(0, 7)
+                              + " width=" + Math.round(graphPane.findWidth)
+                              + " cap=" + Math.round(graphPane.width - graphPane.subjectTextX))
         } else if (act === "commands") {
             // Stage and unstage so the log has something in it, then
             // open it the way the toolbar does.
@@ -3894,6 +3908,17 @@ Item {
                         blank: page.blank
                         chipListAnchor: page.refListAnchor
                         onRowActivated: oidHex => page.activateRow(oidHex)
+                        // A search that lands somewhere lands the way a
+                        // click does: the row is selected and the panes
+                        // to the right follow it. The bar moves between
+                        // matches, not between commits — landing on the
+                        // same row twice changes nothing and costs no
+                        // git (`selectRow` is the only spender here, and
+                        // the row only changes when the match does).
+                        onFindLanded: oidHex => {
+                            if (oidHex !== "" && oidHex !== page.selectedOid)
+                                page.activateRow(oidHex)
+                        }
                         onRowMenuOpenRequested: oidHex => page.openRowMenu(oidHex)
                         onRowSwitchRequested: (oidHex, record) =>
                             page.rowDoubleClicked(oidHex, record)

@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use platitude_core::find::{Query, Row};
 use platitude_core::session::LogRow;
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::encode::{encode_geometry, encode_labels};
+use crate::encode::{co_author_pairs, encode_geometry, encode_labels, label_names};
 use crate::hub::{Feed, GraphMsg, Hub};
 
 use super::{impl_extend_notified, qml_register};
@@ -18,6 +19,12 @@ use super::{impl_extend_notified, qml_register};
 // derived in QML from `oid_hex` (mechanical substring); `avatar` is a
 // packed local identicon code (see encode::avatar_code). PartialEq
 // feeds the in-place replacement: unchanged rows emit no dataChanged.
+//
+// **Fifteen fields is the ceiling** — `#[derive(QModelItem)]` refuses a
+// sixteenth. Anything the rows need that QML never reads belongs on the
+// way in rather than here: the lane count each row needs is taken off
+// the `LogRow` while the item is built (`max_lanes`), which is what made
+// room for `matched`.
 #[derive(QModelItem, Default, Clone, PartialEq)]
 pub struct GraphRowItem {
     oid_hex: String,
@@ -30,7 +37,6 @@ pub struct GraphRowItem {
     subject: String,
     node_lane: i32,
     node_color: i32,
-    row_width: i32,
     avatar: i32,
     /// A `file:` URL when this author has a picture, empty otherwise —
     /// resolved here rather than in QML so a delegate coming back from
@@ -46,6 +52,11 @@ pub struct GraphRowItem {
     labels: String,
     /// `stash@{n}` when the row is a stash; empty otherwise.
     stash_ref: String,
+    /// The find bar's line is somewhere in this row. False for every row
+    /// while nothing is being searched for — the delegate dims off the
+    /// pane's own "there is a search on", so an all-false model with no
+    /// query dims nothing.
+    matched: bool,
 }
 
 #[derive(Default)]
@@ -69,6 +80,12 @@ pub struct GraphModel {
     /// not reset). QML re-anchors the viewport only when this moves,
     /// because only a reset zeroes the scroll position.
     reset_count: i32,
+    /// What the find bar is looking for, and how many rows answer it.
+    /// Held here because the rows are: every pass that rebuilds them has
+    /// to re-mark them, or a background refresh would quietly put the
+    /// light out while the bar still says how many are lit.
+    query: Option<Query>,
+    match_count: i32,
     /// Lanes running off the end of the window (`t<lane>.<color>;...`,
     /// uppercase for a dashed leash — `encode::tail_lanes`), drawn by the
     /// truncation footer.
@@ -174,6 +191,113 @@ impl GraphModel {
             self.extend_notified(extra);
         }
     }
+
+    /// Whether the query — if there is one — is somewhere in this row.
+    ///
+    /// The three packed fields are unpacked through the readers that sit
+    /// beside their encoders, so the search sees names and addresses and
+    /// never the flags, separators or identicon codes they are packed
+    /// with.
+    fn hits(query: &Query, item: &GraphRowItem) -> bool {
+        let mut people: Vec<&str> = vec![item.author.as_str()];
+        let mut addresses: Vec<&str> = vec![item.author_email.as_str()];
+        if !item.co_authors.is_empty() {
+            for (name, address) in co_author_pairs(&item.co_authors) {
+                people.push(name);
+                addresses.push(address);
+            }
+        }
+        let mut tokens: Vec<&str> = label_names(&item.labels).collect();
+        if !item.stash_ref.is_empty() {
+            tokens.push(item.stash_ref.as_str());
+        }
+        query.matches(&Row {
+            oid_hex: &item.oid_hex,
+            subject: &item.subject,
+            body: &item.body,
+            people: &people,
+            addresses: &addresses,
+            tokens: &tokens,
+        })
+    }
+
+    /// Sets `matched` on the rows already in the model and counts them.
+    ///
+    /// Written in place rather than through [`Self::splice_notified`]:
+    /// that one takes a whole new `Vec`, and cloning every row's strings
+    /// on every keystroke is exactly the work this search exists to
+    /// avoid. Only the runs that actually changed are notified.
+    #[expect(unsafe_code)]
+    fn remark_notified(&mut self) {
+        let mut ranges: Vec<(usize, usize)> = Vec::new();
+        let mut count = 0;
+        for i in 0..self.rows.len() {
+            let now = match &self.query {
+                Some(q) => Self::hits(q, &self.rows[i]),
+                None => false,
+            };
+            if now {
+                count += 1;
+            }
+            if self.rows[i].matched != now {
+                self.rows[i].matched = now;
+                match ranges.last_mut() {
+                    Some((_, last)) if *last + 1 == i => *last = i,
+                    _ => ranges.push((i, i)),
+                }
+            }
+        }
+        self.match_count = count;
+        if ranges.is_empty() {
+            return;
+        }
+        if let Some(proxy) = self.try_get_rust_proxy_ptr() {
+            for (first, last) in ranges {
+                // SAFETY: same pattern as splice_notified above — the
+                // proxy stays valid while the QObject side is attached,
+                // and we are on the Qt main thread inside a slot.
+                let top_left = unsafe { &*proxy }.base_index(
+                    &*self,
+                    first as i32,
+                    0,
+                    &qtbridge::qtbridge_type_lib::QModelIndex::default(),
+                );
+                // SAFETY: see above; base_index only builds an index.
+                let bottom_right = unsafe { &*proxy }.base_index(
+                    &*self,
+                    last as i32,
+                    0,
+                    &qtbridge::qtbridge_type_lib::QModelIndex::default(),
+                );
+                // SAFETY: see above.
+                unsafe { &mut *proxy }.base_data_changed(&mut *self, &top_left, &bottom_right);
+            }
+        }
+    }
+
+    /// Marks rows on their way in, before anyone sees them.
+    ///
+    /// A row arriving under a standing query has to arrive already lit:
+    /// marking it afterwards would notify a change on a row nobody has
+    /// drawn yet, and a chunk streaming in mid-search would flicker dark
+    /// for a frame.
+    fn mark_incoming(&self, items: &mut [GraphRowItem]) {
+        let Some(query) = &self.query else {
+            return;
+        };
+        for item in items {
+            item.matched = Self::hits(query, item);
+        }
+    }
+
+    /// Rows answering the query, as their indices in order.
+    fn match_rows(&self) -> impl DoubleEndedIterator<Item = i32> {
+        self.rows
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| r.matched)
+            .map(|(i, _)| i as i32)
+    }
 }
 
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
@@ -191,6 +315,13 @@ impl GraphModel {
     qproperty!("truncated", Member = truncated, Notify = stats_changed);
     qproperty!("finishCount", Member = finish_count, Notify = stats_changed);
     qproperty!("resetCount", Member = reset_count, Notify = stats_changed);
+    // How many loaded rows the find bar's line is in. A property rather
+    // than the return of the slot that sets the query: a background
+    // refresh re-marks the rows without anybody typing, and a binding is
+    // the only thing that hears about that (app-ui.md §QML バインディング
+    // はプロパティにしか反応しない). Doc comments do not go on
+    // `qproperty!` — the macro rejects attributes.
+    qproperty!("matchCount", Member = match_count, Notify = stats_changed);
     qproperty!(
         "tailGeometry",
         Member = tail_geometry,
@@ -226,6 +357,10 @@ impl GraphModel {
                         self.loading = true;
                         self.row_total = 0;
                         self.walked_total = 0;
+                        // The query stands — a restart is the same
+                        // history read again — but its answers went with
+                        // the rows, and the chunks re-count them.
+                        self.match_count = 0;
                         self.max_lanes = 1;
                         self.first_chunk_ms = -1;
                         self.total_ms = -1;
@@ -245,11 +380,13 @@ impl GraphModel {
                         tracing::info!(first_chunk_ms = self.first_chunk_ms, "graph first chunk");
                     }
                     let avatars = crate::hub::AvatarUrls::current();
-                    let items: Vec<GraphRowItem> =
+                    let mut items: Vec<GraphRowItem> =
                         rows.iter().map(|row| to_row_item(row, &avatars)).collect();
-                    for item in &items {
-                        self.max_lanes = self.max_lanes.max(item.row_width);
+                    for row in &rows {
+                        self.max_lanes = self.max_lanes.max(i32::from(row.width));
                     }
+                    self.mark_incoming(&mut items);
+                    self.match_count += items.iter().filter(|i| i.matched).count() as i32;
                     self.extend_notified(items);
                     self.row_total = self.rows.len() as i32;
                 }
@@ -264,6 +401,14 @@ impl GraphModel {
                         if let Some(existing) = self.rows.get(idx) {
                             let mut updated = existing.clone();
                             updated.labels = encode_labels(&labels);
+                            // The names on the row are searched, so the
+                            // second pass that puts the chips on can turn
+                            // a row's light on or off.
+                            if let Some(query) = &self.query {
+                                updated.matched = Self::hits(query, &updated);
+                                self.match_count +=
+                                    i32::from(updated.matched) - i32::from(existing.matched);
+                            }
                             self.set(idx, updated);
                         }
                     }
@@ -306,11 +451,16 @@ impl GraphModel {
                     }
                     self.generation = generation;
                     let avatars = crate::hub::AvatarUrls::current();
-                    let items: Vec<GraphRowItem> =
+                    let mut items: Vec<GraphRowItem> =
                         rows.iter().map(|row| to_row_item(row, &avatars)).collect();
-                    self.max_lanes = items
+                    // Before the splice, so a rebuild under a standing
+                    // query notifies each row once — with its light
+                    // already right — instead of twice.
+                    self.mark_incoming(&mut items);
+                    self.match_count = items.iter().filter(|i| i.matched).count() as i32;
+                    self.max_lanes = rows
                         .iter()
-                        .map(|item| item.row_width)
+                        .map(|row| i32::from(row.width))
                         .max()
                         .unwrap_or(1)
                         .max(1);
@@ -458,6 +608,64 @@ impl GraphModel {
         out.join("\u{1e}")
     }
 
+    /// Puts the find bar's line to the rows, lighting the ones it is in.
+    ///
+    /// An empty line — or one that is only whitespace — is not a search
+    /// (`find::Query::new`): the marks come off and `matchCount` goes to
+    /// zero, which is what the bar reads as "nothing is being looked
+    /// for".
+    #[qslot]
+    fn set_find(&mut self, text: String) {
+        let next = Query::new(&text);
+        if next == self.query {
+            return;
+        }
+        self.query = next;
+        self.remark_notified();
+        self.stats_changed();
+    }
+
+    /// Row of the first match at or after `from`, wrapping to the first
+    /// match of all when there is none below; -1 when nothing matches.
+    ///
+    /// Where an incremental search lands. Counting from where the reader
+    /// is rather than from the top is what every find box does, and at
+    /// the top — where the graph opens — the two are the same thing.
+    #[qslot]
+    fn match_from(&self, from: i32) -> i32 {
+        self.match_rows()
+            .find(|row| *row >= from)
+            .or_else(|| self.match_rows().next())
+            .unwrap_or(-1)
+    }
+
+    /// Row of the next match after `row`, wrapping past the end.
+    #[qslot]
+    fn match_after(&self, row: i32) -> i32 {
+        self.match_rows()
+            .find(|r| *r > row)
+            .or_else(|| self.match_rows().next())
+            .unwrap_or(-1)
+    }
+
+    /// Row of the previous match before `row`, wrapping past the start.
+    #[qslot]
+    fn match_before(&self, row: i32) -> i32 {
+        self.match_rows()
+            .rfind(|r| *r < row)
+            .or_else(|| self.match_rows().next_back())
+            .unwrap_or(-1)
+    }
+
+    /// Which match this row is, counting from 1; 0 when it is not one.
+    /// The left half of the bar's count.
+    #[qslot]
+    fn match_ordinal(&self, row: i32) -> i32 {
+        self.match_rows()
+            .position(|r| r == row)
+            .map_or(0, |i| i as i32 + 1)
+    }
+
     /// Full commit id at a row (selection, its recovery after a rewrite,
     /// and the smoke hooks).
     #[qslot]
@@ -490,7 +698,6 @@ fn to_row_item(row: &LogRow, avatars: &crate::hub::AvatarUrls) -> GraphRowItem {
         subject: row.subject.clone(),
         node_lane: i32::from(row.node_lane),
         node_color: i32::from(row.node_color),
-        row_width: i32::from(row.width),
         avatar: crate::encode::avatar_code(&row.author),
         avatar_url: avatars.url_of(&row.author_email),
         co_authors: crate::encode::encode_co_authors(&row.co_authors),
@@ -498,5 +705,9 @@ fn to_row_item(row: &LogRow, avatars: &crate::hub::AvatarUrls) -> GraphRowItem {
         geometry: encode_geometry(&row.segments),
         labels: encode_labels(&row.labels),
         stash_ref: row.stash_ref.clone(),
+        // Set by the marking pass that runs before anyone sees the row
+        // (`mark_incoming`), so a chunk arriving under a standing query
+        // arrives already lit.
+        matched: false,
     }
 }

@@ -41,6 +41,19 @@ Item {
     required property string geometry
     required property string labels
     required property string stash_ref
+    /// The find bar's line is somewhere in this row (platitude-core::find
+    /// decides; the model marks it). Only ever true while a search is on.
+    required property bool matched
+    // Dimmed because the search passed this row over — not because it is
+    // in any way unavailable (デザイン規約 §暗く落とした段: a row falls
+    // this way only when many fall together and few stay lit, which is
+    // what makes it read as "not the ones" rather than "not allowed").
+    // The pane owns "there is a search on": the model's marks are all
+    // false when nothing is being looked for, and with no search nothing
+    // may dim.
+    readonly property bool dimmed:
+        rowItem.ListView.view ? rowItem.ListView.view.findLit && !rowItem.matched
+                              : false
 
     width: ListView.view.width
     height: Theme.graphRowHeight
@@ -112,6 +125,9 @@ Item {
     onGeometryChanged: laneCanvas.requestPaint()
     onNode_laneChanged: laneCanvas.requestPaint()
     onAvatarChanged: laneCanvas.requestPaint()
+    // The node is drawn on the same canvas as the lanes and only the node
+    // dims, so the whole thing has to be asked for again.
+    onDimmedChanged: laneCanvas.requestPaint()
     // Assigning a picture changes no history, so this role moves on rows
     // that are otherwise untouched — and a canvas repaints only when it
     // is asked to.
@@ -140,6 +156,7 @@ Item {
             id: labelColumn
             Layout.preferredWidth: rowItem.labelsW
             Layout.fillHeight: true
+            opacity: rowItem.dimmed ? Metrics.dimFade : 1
             RefChip {
                 id: rowChip
                 // Assigning `visible` here replaces the chip's own rule,
@@ -288,6 +305,13 @@ Item {
                         }
                         ctx.setLineDash([])
                     }
+                    // Everything from here down is the node, and the node
+                    // is the row's own — so it dims with the row while
+                    // the lanes above stay lit. A lane is one line drawn
+                    // across many rows: dimming it per row would break
+                    // each line into a bright-and-dark ladder that says
+                    // nothing about what was searched for.
+                    ctx.globalAlpha = rowItem.dimmed ? Metrics.dimFade : 1
                     // The WIP row has no commit and no author: a dashed,
                     // empty node instead of the identicon.
                     const r = Metrics.nodeIcon / 2
@@ -347,8 +371,12 @@ Item {
                         const by = ay + r + Theme.borderWidth
                         // Punched out of what is already drawn, so the
                         // smaller face reads as being in front of the
-                        // node rather than blended into it.
+                        // node rather than blended into it. At full
+                        // strength whatever the row's is: this takes
+                        // pixels away, and a dimmed eraser would leave
+                        // the author's face showing through the badge.
                         ctx.save()
+                        ctx.globalAlpha = 1
                         ctx.globalCompositeOperation = "destination-out"
                         ctx.beginPath()
                         ctx.arc(bx, by, br + Theme.borderWidth, 0, 2 * Math.PI)
@@ -364,9 +392,18 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: Theme.spaceXs
+            // The tick goes with the message, not with the lanes: it
+            // stands in the subject column and belongs to this row alone.
+            // Left bright it would be the loudest thing on a row the
+            // search passed over.
+            opacity: rowItem.dimmed ? Metrics.dimFade : 1
             // Short colored tick before the message: separates rows
             // visually (deliberately not a continuous line) and echoes
             // the commit's chain color.
+            //
+            // These three steps — this margin, this width, the layout's
+            // spacing — are what `GraphPane.subjectTextX` adds up, since
+            // that is where the find bar's cap is measured from.
             Rectangle {
                 Layout.leftMargin: Theme.spaceSm
                 implicitWidth: 2 * Theme.borderWidth

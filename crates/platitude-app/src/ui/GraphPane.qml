@@ -69,6 +69,19 @@ Rectangle {
     /// that opens it cannot be pressed from there.
     readonly property alias findOpen: findBar.open
     property alias findQuery: findBar.query
+    /// What the bar reports back, for the headless run and for whoever
+    /// wants to read the search without opening the card.
+    readonly property alias findMatches: findBar.matches
+    readonly property alias findAt: findBar.atMatch
+    readonly property alias findWidth: findBar.width
+    /// A search is on and something answers it. The one thing that lets a
+    /// row dim: with nothing found there is nothing to contrast a dimmed
+    /// row against, and a graph dimmed end to end says only that the
+    /// window went dark.
+    readonly property bool findLit: findBar.open && findBar.matches > 0
+    /// Where the row this search is on has landed. The page owns what
+    /// selection means, so it hears about the row and decides.
+    signal findLanded(string oidHex)
 
     /// Brings the find bar down over this list. Refused while a question
     /// is standing: two bars from one edge would leave neither readable,
@@ -77,6 +90,61 @@ Rectangle {
         if (askBar.label !== "")
             return
         findBar.raise()
+        // The card comes back up holding what was last typed into it, and
+        // the marks came off when it went away — so the search is run
+        // again rather than waiting for a key that may never come.
+        graphArea.runFind()
+    }
+
+    // ---- the search itself -----------------------------------------
+    // The rows are marked in Rust (`GraphModel.setFind`), which is also
+    // where the rule about what a typed line matches lives
+    // (`platitude-core::find`). Nothing here decides anything about the
+    // query; this end moves the viewport and reads the count back.
+
+    /// Re-runs the search and goes to where it lands. Called on every
+    /// keystroke: the marking is a walk over rows already in memory, and
+    /// no git runs for any of it.
+    function runFind() {
+        graphArea.graphModel.setFind(findBar.open ? findBar.query : "")
+        // From where the reader is, wrapping. At the top of the graph —
+        // where it opens, and where most searches start — that is the
+        // first match there is.
+        graphArea.goToMatch(graphArea.graphModel.matchFrom(graphArea.firstVisibleRow()))
+    }
+    /// Topmost row with any of itself on screen; 0 while the view is in
+    /// its own top margin, where there is no row to be over.
+    function firstVisibleRow() {
+        const row = graphList.indexAt(0, graphList.contentY + 1)
+        return row >= 0 ? row : 0
+    }
+    /// Whether all of `row` is on screen. A row below the last one drawn
+    /// reports no index at all, which is what a list shorter than its
+    /// viewport answers for its whole lower half — there, nothing is out
+    /// of sight.
+    function rowOnScreen(row) {
+        const bottom = graphList.indexAt(
+            0, graphList.contentY + graphList.height - Theme.graphRowHeight)
+        return row >= graphArea.firstVisibleRow() && (bottom < 0 || row <= bottom)
+    }
+    function findNext() {
+        graphArea.goToMatch(graphArea.graphModel.matchAfter(graphList.currentIndex))
+    }
+    function findPrevious() {
+        graphArea.goToMatch(graphArea.graphModel.matchBefore(graphList.currentIndex))
+    }
+    /// Puts the search on `row`: the page is told so the right-hand panes
+    /// follow, and the viewport moves only when the row is not already on
+    /// screen — a match in sight is not worth taking the reader's place
+    /// for. Which match it is comes out of the bar's own binding, so
+    /// nothing here assigns it (that would break the binding, and the
+    /// count would then stop following a background refresh).
+    function goToMatch(row) {
+        if (row < 0)
+            return
+        if (!graphArea.rowOnScreen(row))
+            graphList.positionViewAtIndex(row, ListView.Center)
+        graphArea.findLanded(graphArea.graphModel.oidAt(row))
     }
 
     /// Raises the bar. `oidHex` is the row it is about ("" for none, and
@@ -253,6 +321,12 @@ Rectangle {
     property real graphX: 0
     readonly property real graphXMax: Math.max(0, graphFullW - graphColW)
     onGraphXMaxChanged: graphX = Math.min(graphX, graphXMax)
+    /// Where a subject's first character sits — the two columns, then the
+    /// tick and the gap after it. **Must match GraphRowDelegate's third
+    /// column**, whose RowLayout lays out the same three steps; the find
+    /// bar measures its cap from here (§コミットを探す).
+    readonly property real subjectTextX: labelW + graphColW + Theme.spaceSm
+                                         + 2 * Theme.borderWidth + Theme.spaceXs
 
     color: Theme.bgSurface
 
@@ -299,6 +373,37 @@ Rectangle {
         anchors.right: parent.right
         anchors.rightMargin: Theme.spaceLg
         z: 4
+        loaded: graphArea.graphModel.rowTotal
+        // Bound, not assigned when a key is pressed: a background refresh
+        // re-marks the rows without anybody typing (app-ui.md §QML バイン
+        // ディングはプロパティにしか反応しない), and the count has to be
+        // the rows' count rather than the last keystroke's.
+        matches: graphArea.graphModel.matchCount
+        // Reads two properties and asks the model where the current row
+        // sits among the matches — so it settles again whenever either
+        // the marks or the selection move.
+        atMatch: graphArea.graphModel.matchCount > 0
+                 ? graphArea.graphModel.matchOrdinal(graphList.currentIndex) : 0
+        refused: findBar.open && findBar.query.trim() !== ""
+                 && graphArea.graphModel.matchCount === 0
+        refusedTip: graphArea.graphModel.truncated
+                    ? qsTr("Nothing in the loaded history matches — older commits are not loaded")
+                    : qsTr("Nothing in this history matches")
+        // How far left the card may reach: `spaceXs` past where a subject
+        // starts, which is about half of the first character
+        // (§コミットを探す). Measured from the columns rather than from
+        // the pane, so the cap follows the dividers when they are dragged
+        // — it is a distance from the tick the messages begin at, not a
+        // fraction of the window.
+        maxWidth: graphArea.width - graphArea.subjectTextX - Theme.spaceXs
+                  - anchors.rightMargin
+        onDismissed: {
+            graphArea.runFind()
+            graphList.forceActiveFocus()
+        }
+        onQueryChanged: graphArea.runFind()
+        onNextRequested: graphArea.findNext()
+        onPreviousRequested: graphArea.findPrevious()
     }
     ListView {
         id: graphList
@@ -344,6 +449,9 @@ Rectangle {
         // bar; the row only marks itself.
         property string askOid: ""
         property bool askDanger: false
+        // Mirrored for the delegates, which can only see the view: rows
+        // dim only while a search has something to show.
+        readonly property bool findLit: graphArea.findLit
         signal rowSelected(string oidHex)
         signal rowMenuRequested(string oidHex)
         signal rowSwitchRequested(string oidHex, string record)
@@ -401,7 +509,7 @@ Rectangle {
                         if (graphArea.graphModel.tailGeometry === "")
                             return
                         ctx.lineWidth = Metrics.laneStroke
-                        ctx.globalAlpha = Metrics.tailFade
+                        ctx.globalAlpha = Metrics.dimFade
                         // Same tokens as a row's geometry (uppercase =
                         // dashed leash): a stash or WIP row whose target
                         // sits past the cut keeps dotting through here.

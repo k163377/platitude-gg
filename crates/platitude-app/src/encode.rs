@@ -136,6 +136,20 @@ pub fn encode_co_authors(mates: &[platitude_core::details::CoAuthor]) -> String 
     out
 }
 
+/// The (name, address) of each credited person in a packed record
+/// string — the inverse of the first two fields of [`encode_co_authors`].
+///
+/// Beside the encoder for the same reason [`label_names`] is: the third
+/// field is a number, and a reader that searched the packed string whole
+/// would answer a typed `12345` with somebody's identicon code.
+pub fn co_author_pairs(encoded: &str) -> impl Iterator<Item = (&str, &str)> {
+    encoded.split(RECORD_SEP).filter_map(|record| {
+        let mut fields = record.split(FIELD_SEP);
+        let name = fields.next()?;
+        Some((name, fields.next().unwrap_or("")))
+    })
+}
+
 /// FNV-1a 32-bit. Stands in for randomness wherever a name has to pick
 /// something arbitrary but has to pick the *same* thing every time.
 fn fnv1a(text: &str) -> u32 {

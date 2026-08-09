@@ -12,6 +12,7 @@ pub mod conflict;
 pub mod details;
 pub mod eol;
 pub mod error;
+pub mod find;
 pub mod graph;
 pub mod identity;
 pub mod integrate;
