@@ -150,10 +150,55 @@ ColumnLayout {
     /// way it writes `showStageTools` — hover cannot be injected.
     function pointEol(path) {
         wipPane.worktreeModel.pointEol(path)
+        if (path === "") {
+            eolCard.close()
+            return
+        }
+        // Under the row rather than under the pointer: these rows are a
+        // pane wide at most, so the two are never far apart, and a card
+        // placed from the row lands in the same place whether a pointer
+        // or the automation named it.
+        const row = wipPane.rowFor(path)
+        if (row === null)
+            return
+        const at = row.mapToItem(wipPane, 0, row.height)
+        eolCard.path = path
+        eolCard.notice = wipPane.pointedEolText
+        eolCard.x = at.x + Theme.spaceMd
+        eolCard.y = at.y
+        eolCard.open()
     }
-    /// Puts the commit button's tip out without a pointer, the way the
+    /// Puts the commit button's card out without a pointer, the way the
     /// rows' is put out — hover cannot be injected.
     property bool pointAtCommit: false
+    onPointAtCommitChanged: wipPane.settleCommitCard()
+    function settleCommitCard() {
+        if (!commitButton.eolWarned
+                || !(commitHover.containsMouse || wipPane.pointAtCommit)) {
+            if (eolCard.path === "")
+                eolCard.close()
+            return
+        }
+        // No one file to name: the button speaks for the whole index.
+        eolCard.path = ""
+        eolCard.notice = wipPane.workTree.eolStagedCount === 1
+            ? qsTr("1 staged file changes its line endings")
+            : qsTr("%1 staged files change their line endings")
+              .arg(wipPane.workTree.eolStagedCount)
+        const at = commitButton.mapToItem(wipPane, 0, commitButton.height)
+        eolCard.x = at.x
+        eolCard.y = at.y + Theme.spaceXs
+        eolCard.open()
+    }
+    // The one card both hovers open: only one pointer, so only one of them
+    // is ever out. Owned here rather than by a row, which is recycled the
+    // moment it scrolls off (app-ui.md).
+    EolHoverCard {
+        id: eolCard
+    }
+    /// The card itself is up. Read by the headless runs — reporting what
+    /// asked for it would go green with the wiring cut.
+    readonly property bool eolCardOpen: eolCard.opened
     /// What the named row is saying, for the headless report to read.
     readonly property string pointedEolPath: wipPane.worktreeModel.pointedEolPath
     readonly property string pointedEolText:
@@ -652,24 +697,24 @@ ColumnLayout {
             // frame, the mark and the hover say what is in it; the
             // decision stays the reader's.
             onActivated: wipPane.commitClicked()
-            ToolTip.visible: (commitHover.containsMouse || wipPane.pointAtCommit)
-                             && (!enabled || commitButton.eolWarned)
+            // Why it cannot be pressed. The other thing this button has to
+            // say — that the index carries a line-ending change — is said
+            // by the card `settleCommitCard` opens instead, and the two
+            // cannot both be true: the warning wants a button that can be
+            // pressed.
+            ToolTip.visible: commitHover.containsMouse && !enabled
             ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: !wipPane.repoTab.identityReady
                           ? qsTr("No name or email set for commits")
                           : wipSubject.text.trim() === ""
                           ? qsTr("A commit needs a summary")
-                          : !enabled
-                          ? qsTr("Stage something to commit")
-                          : wipPane.workTree.eolStagedCount === 1
-                          ? qsTr("1 staged file changes its line endings")
-                          : qsTr("%1 staged files change their line endings")
-                            .arg(wipPane.workTree.eolStagedCount)
+                          : qsTr("Stage something to commit")
             MouseArea {
                 id: commitHover
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.NoButton
+                onContainsMouseChanged: wipPane.settleCommitCard()
             }
         }
         // ==== 案 C: the way out of a stopped operation, built into ====

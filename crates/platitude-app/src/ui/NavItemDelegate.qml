@@ -428,16 +428,11 @@ Item {
         // A stash is named by a message that the row has to cut short.
         if (navRow.kindHint === "stash")
             return navRow.name
-        // A pending file's row is cut down to its last segment by the tree
-        // view, so the path is what its hover has always been for. The
-        // line-ending sentence goes **under** it rather than over it: a
-        // reader who cannot see which file this is has lost more than the
-        // notice gives them.
-        if (navRow.kindHint === "wt" && navRow.eolText !== "") {
-            const path = full !== navRow.name ? navRow.escapeMarkup(full) + "<br>" : ""
-            return path + "<font color=\"" + Theme.warning + "\">"
-                   + navRow.escapeMarkup(navRow.eolText) + "</font>"
-        }
+        // A row carrying the line-ending mark has a card of its own, which
+        // names the path as its first line — two things opening off one
+        // pointer would sit on top of each other.
+        if (navRow.eolPointedAt)
+            return ""
         return full !== navRow.name ? full : ""
     }
     /// Whether the words on the model are this row's. Only one row can be
@@ -457,11 +452,8 @@ Item {
         return text.replace(/&/g, "&amp;").replace(/</g, "&lt;")
                    .replace(/>/g, "&gt;")
     }
-    // Named as well as hovered: hover cannot be injected, so the row the
-    // model says is being read shows its tip too. Under a real pointer the
-    // two are the same row (the hover is what names it).
-    ToolTip.visible: (itemMouse.containsMouse || navRow.eolPointedAt)
-                     && !navRow.editing && navRow.hoverText !== ""
+    ToolTip.visible: itemMouse.containsMouse && !navRow.editing
+                     && navRow.hoverText !== ""
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: navRow.hoverText
 }

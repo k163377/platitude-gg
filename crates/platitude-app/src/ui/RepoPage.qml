@@ -1737,7 +1737,8 @@ Item {
         onTriggered: {
             wipPane.pointAtCommit = true
             AppBackend.report("eol_commit staged=" + workTree.stagedCount
-                              + " warned=" + workTree.eolStagedCount)
+                              + " warned=" + workTree.eolStagedCount
+                              + " card=" + wipPane.eolCardOpen)
         }
     }
     // The marks arrive with the status read, so the row named for its
@@ -1748,6 +1749,7 @@ Item {
         onTriggered: {
             wipPane.pointEol(AppBackend.autoActArg)
             AppBackend.report("eol_hover path=" + wipPane.pointedEolPath
+                              + " card=" + wipPane.eolCardOpen
                               + " text=" + wipPane.pointedEolText)
         }
     }
