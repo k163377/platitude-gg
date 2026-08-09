@@ -32,6 +32,9 @@ async fn reached(repo: &mut TestRepo) -> bool {
         .expect("ask what holds the tip")
 }
 
+/// Doubles as the no-stash case: a repository that never stashed has no
+/// `refs/stash`, and the walk has to survive naming it anyway (that is
+/// why it is spelled `--glob=refs/stash*` — core.md).
 #[tokio::test]
 async fn a_branch_alone_on_its_tip_holds_it_alone() {
     let mut repo = scenario();
@@ -86,14 +89,6 @@ async fn a_stash_made_on_the_tip_holds_it() {
     repo.write_file("a.txt", "dirty\n");
     repo.git(&["stash"]);
     assert!(reached(&mut repo).await);
-}
-
-/// A repository that never stashed has no `refs/stash`, and the walk has
-/// to survive naming it anyway.
-#[tokio::test]
-async fn no_stash_at_all_is_not_an_error() {
-    let mut repo = scenario();
-    assert!(!reached(&mut repo).await);
 }
 
 /// The exclusion is what makes the question mean anything: without it the

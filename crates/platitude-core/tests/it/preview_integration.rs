@@ -57,6 +57,9 @@ async fn untracked_image_previews_the_new_side_only() {
     assert_eq!(new.bytes.as_deref(), Some(TINY_PNG));
 }
 
+/// Also the unborn-HEAD shape: `HEAD:<path>` failing to resolve means "no
+/// old side" whether the path is missing from HEAD or HEAD does not exist
+/// yet — one cat-file, one answer (`preview::blob_side`).
 #[tokio::test]
 async fn staged_new_image_reads_the_index_blob() {
     let mut repo = TestRepo::init();
@@ -194,25 +197,6 @@ async fn renamed_image_reads_the_old_side_from_orig_path() {
         .await
         .unwrap();
     assert_eq!(p.old.unwrap().bytes.as_deref(), Some(TINY_PNG));
-    assert_eq!(p.new.unwrap().bytes.as_deref(), Some(TINY_PNG));
-}
-
-#[tokio::test]
-async fn unborn_head_staged_image_has_no_old_side() {
-    let mut repo = TestRepo::init();
-    write_bytes(&repo, "logo.png", TINY_PNG);
-    repo.git(&["add", "--", "logo.png"]);
-
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
-    let target = DiffTarget::Staged {
-        path: "logo.png".to_string(),
-        orig_path: None,
-    };
-    let p = preview::file_preview(&executor, &repo.path, &target, true, &cancel)
-        .await
-        .unwrap();
-    assert!(p.old.is_none(), "HEAD does not exist yet");
     assert_eq!(p.new.unwrap().bytes.as_deref(), Some(TINY_PNG));
 }
 

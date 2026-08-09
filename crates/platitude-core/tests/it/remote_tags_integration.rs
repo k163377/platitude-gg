@@ -43,6 +43,8 @@ const NET: Duration = remote::DEFAULT_NETWORK_TIMEOUT;
 /// `v-remote` is pushed by a third repository and its branch deleted, so
 /// the commit under it is never downloaded here: that is what stops the
 /// fetch's tag auto-following from quietly turning it into a local tag.
+/// `v-both` is annotated, so the same scenario also holds the peel rule:
+/// both sides must read it at the commit, never the tag object.
 ///
 /// Returns the bare origin, the working repository, and (root, head).
 fn tag_scenario() -> (TestRepo, TestRepo, String, String) {
@@ -53,7 +55,7 @@ fn tag_scenario() -> (TestRepo, TestRepo, String, String) {
     let mut work = TestRepo::init();
     let root = work.commit_file("a.txt", "one\n", "root");
     work.git(&["remote", "add", "origin", &bare.file_url()]);
-    work.git(&["tag", "v-both"]);
+    work.git(&["tag", "-a", "v-both", "-m", "release"]);
     work.git(&["tag", "v-drift"]);
     work.git(&["push", "origin", "main", "v-both", "v-drift"]);
 
@@ -92,7 +94,15 @@ async fn a_remote_is_read_at_the_commits_its_tags_peel_to() {
             .find(|t| t.name == name)
             .map(|t| t.commit.to_hex())
     };
-    assert_eq!(at("v-both").as_deref(), Some(root.as_str()));
+    assert_eq!(
+        at("v-both").as_deref(),
+        Some(root.as_str()),
+        "the ^{{}} line, which is what a local tag peels to as well"
+    );
+    assert!(
+        tags.iter().any(|t| t.name == "v-both" && t.annotated),
+        "the annotated tag is read at the commit, not the tag object"
+    );
     assert_eq!(
         at("v-drift").as_deref(),
         Some(root.as_str()),
@@ -103,36 +113,6 @@ async fn a_remote_is_read_at_the_commits_its_tags_peel_to() {
     assert_ne!(
         head, root,
         "the scenario needs two commits to drift between"
-    );
-}
-
-#[tokio::test]
-async fn an_annotated_tag_comes_back_as_the_commit_not_the_tag_object() {
-    let mut bare = TestRepo::init();
-    let bare_path = bare.path.clone();
-    bare.git_in(&bare_path, &["config", "core.bare", "true"]);
-    let mut work = TestRepo::init();
-    let root = work.commit_file("a.txt", "one\n", "root");
-    work.git(&["remote", "add", "origin", &bare.file_url()]);
-    work.git(&["tag", "-a", "v1", "-m", "release"]);
-    work.git(&["push", "origin", "main", "v1"]);
-
-    let tags = remote::list_tags(
-        &GitExecutor::new(),
-        &work.path,
-        "origin",
-        NET,
-        &CancellationToken::new(),
-    )
-    .await
-    .expect("ls-remote --tags");
-
-    let v1 = tags.iter().find(|t| t.name == "v1").expect("v1 advertised");
-    assert!(v1.annotated);
-    assert_eq!(
-        v1.commit.to_hex(),
-        root,
-        "the ^{{}} line, which is what a local tag peels to as well"
     );
 }
 
@@ -397,25 +377,3 @@ async fn a_drifted_tag_puts_its_name_on_both_rows() {
     .await;
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn a_tag_standing_where_both_sides_agree_is_one_chip_not_two() {
-    let (_bare, work, root, _head) = tag_scenario();
-    let (sink, session) = opened(&work).await;
-    session.fetch(Some("origin".into()));
-    sink.snapshot_after_the_fetch().await;
-
-    sink.wait_for("the root row's chips", |evs| {
-        let rows = rows_now(evs);
-        let both: Vec<_> = rows
-            .get(&root)?
-            .iter()
-            .filter(|l| l.text == "v-both")
-            .collect();
-        if both.len() != 1 || !both[0].has_remote {
-            return None;
-        }
-        assert!(both[0].here, "the local tag is the one that speaks");
-        Some(())
-    })
-    .await;
-}

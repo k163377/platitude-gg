@@ -529,44 +529,12 @@ async fn unstage_a_single_line() {
     );
 }
 
-/// Partially staging an untracked file goes through intent-to-add.
+/// Partially staging an untracked file goes through intent-to-add. The
+/// file sits in a brand-new directory on purpose: `status -uall` names it
+/// per file rather than folding the directory, which is what gives it a
+/// diff to select from.
 #[tokio::test]
 async fn stage_part_of_an_untracked_file() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("seed.txt", "seed\n", "root");
-    repo.write_file("new.txt", "keep\ndrop\n");
-    let (exec, cancel) = env();
-    let repo_info = info(&repo).await;
-
-    stage::apply_partial(
-        &exec,
-        &repo_info,
-        &DiffTarget::Untracked {
-            path: "new.txt".into(),
-        },
-        &[HunkSelect::lines(0, [0])],
-        fp(
-            &repo_info,
-            &DiffTarget::Untracked {
-                path: "new.txt".into(),
-            },
-        )
-        .await,
-        &cancel,
-    )
-    .await
-    .expect("stage part of a new file");
-
-    assert_eq!(indexed(&mut repo, "new.txt"), "keep");
-    let (staged, unstaged, _) = buckets(&repo).await;
-    assert_eq!(staged, vec!["new.txt"]);
-    assert_eq!(unstaged, vec!["new.txt"], "the rest stays unstaged");
-}
-
-/// A file in a brand-new directory reaches staging like any other untracked
-/// file: `status -uall` names it per file, so it has a diff to select from.
-#[tokio::test]
-async fn stage_part_of_a_file_in_an_untracked_dir() {
     let mut repo = TestRepo::init();
     repo.commit_file("seed.txt", "seed\n", "root");
     repo.write_file("newdir/new.txt", "keep\ndrop\n");
@@ -593,9 +561,12 @@ async fn stage_part_of_a_file_in_an_untracked_dir() {
         &cancel,
     )
     .await
-    .expect("stage part of a file in a new dir");
+    .expect("stage part of a new file");
 
     assert_eq!(indexed(&mut repo, "newdir/new.txt"), "keep");
+    let (staged, unstaged, _) = buckets(&repo).await;
+    assert_eq!(staged, vec!["newdir/new.txt"]);
+    assert_eq!(unstaged, vec!["newdir/new.txt"], "the rest stays unstaged");
 }
 
 /// CRLF content must round-trip byte-for-byte through the rebuilt patch.

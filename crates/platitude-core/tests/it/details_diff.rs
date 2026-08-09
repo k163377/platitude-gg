@@ -307,13 +307,18 @@ fn stopped_merge_of_four_kinds(repo: &mut TestRepo) {
     repo.git_expect_failure(&["merge", "--no-edit", "side"]);
 }
 
+/// One stopped merge, all four kinds read back from it: the two-blob
+/// conflicts (`UU`, `AA`) come out combined, the one-sided pair
+/// (`DU`, `UD`) has nothing to diff and says so.
 #[tokio::test]
-async fn a_conflicted_file_diffs_against_both_sides_at_once() {
+async fn a_stopped_merge_reads_back_all_four_conflict_kinds() {
     let mut repo = TestRepo::init();
     stopped_merge_of_four_kinds(&mut repo);
 
     let executor = GitExecutor::new();
     let cancel = CancellationToken::new();
+
+    // UU — both changed it: the full combined shape, markers and all.
     let patches = details::file_diff(
         &executor,
         &repo.path,
@@ -374,15 +379,11 @@ async fn a_conflicted_file_diffs_against_both_sides_at_once() {
         ours,
         vec![Some(1), None, Some(2), None, None, None, Some(3)]
     );
-}
 
-#[tokio::test]
-async fn a_conflict_both_sides_added_is_combined_too() {
-    let mut repo = TestRepo::init();
-    stopped_merge_of_four_kinds(&mut repo);
-
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    // AA — both added it: combined too, and above all not read as a new
+    // file (both sides invented the path, so neither is "the old side" —
+    // being read as new would take the pane's pieces away for the wrong
+    // reason).
     let patches = details::file_diff(
         &executor,
         &repo.path,
@@ -395,21 +396,11 @@ async fn a_conflict_both_sides_added_is_combined_too() {
     .unwrap();
     let patch = &patches[0];
     assert!(patch.is_combined);
-    // Both sides invented the path, so neither is "the old side" — the one
-    // thing that must not happen is it being read as a new file, which
-    // would take the pane's pieces away for the wrong reason.
     assert!(patch.old_path.is_some());
     assert!(patch.new_path.is_some());
     assert!(!patch.hunks.is_empty());
-}
 
-#[tokio::test]
-async fn a_conflict_with_only_one_side_left_has_no_diff_to_show() {
-    let mut repo = TestRepo::init();
-    stopped_merge_of_four_kinds(&mut repo);
-
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    // DU / UD — one side left: named but not diffed.
     for path in ["ours-del.txt", "theirs-del.txt"] {
         let patches = details::file_diff(
             &executor,

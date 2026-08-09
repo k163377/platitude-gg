@@ -105,46 +105,15 @@ pub fn is_valid_name(name: &str) -> bool {
 mod tests {
     use super::*;
 
+    /// Every shape an argv can carry is pinned against real git in
+    /// `tests/it/rename_integration.rs`
+    /// (`the_name_rules_are_the_ones_git_applies` — including `@` and a
+    /// leading dash, which git takes and this must too). Only what cannot
+    /// reach `check-ref-format` through a command line stays here.
     #[test]
-    fn plain_names_pass() {
-        assert!(is_valid_name("v1.0.0"));
-        assert!(is_valid_name("release/2026-08"));
-        assert!(is_valid_name("feature/login"));
-        assert!(is_valid_name("a"));
-    }
-
-    #[test]
-    fn the_shapes_git_refuses() {
-        assert!(!is_valid_name(""));
-        assert!(!is_valid_name("with space"));
-        assert!(!is_valid_name("tilde~1"));
-        assert!(!is_valid_name("caret^"));
-        assert!(!is_valid_name("colon:name"));
-        assert!(!is_valid_name("question?"));
-        assert!(!is_valid_name("star*"));
-        assert!(!is_valid_name("bracket["));
-        assert!(!is_valid_name("back\\slash"));
+    fn control_characters_are_refused_without_asking_git() {
         assert!(!is_valid_name("new\nline"));
-        assert!(!is_valid_name("a..b"));
-        assert!(!is_valid_name("at@{0}"));
-        assert!(!is_valid_name("/leading"));
-        assert!(!is_valid_name("trailing/"));
-        assert!(!is_valid_name("double//slash"));
-        assert!(!is_valid_name("ends."));
-        assert!(!is_valid_name(".hidden"));
-        assert!(!is_valid_name("dir/.hidden"));
-        assert!(!is_valid_name("name.lock"));
-        assert!(!is_valid_name("dir/name.lock"));
-    }
-
-    #[test]
-    fn the_shapes_only_git_would_defend() {
-        // Nothing here is stricter than `check-ref-format`: a name git
-        // takes, this takes. `@` reads as HEAD everywhere else, and a
-        // leading dash reads as an option — but our commands name refs
-        // after `--end-of-options`, and inventing a rule of our own is
-        // how a GUI ends up refusing a branch the terminal just made.
-        assert!(is_valid_name("@"));
-        assert!(is_valid_name("-dash"));
+        assert!(!is_valid_name("bell\u{7}"));
+        assert!(!is_valid_name("del\u{7f}"));
     }
 }

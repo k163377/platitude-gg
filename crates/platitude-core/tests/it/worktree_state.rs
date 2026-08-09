@@ -1,12 +1,15 @@
-//! status / op-state / stash against real git, plus captured-fixture
-//! parser checks (raw bytes committed under tests/fixtures/).
+//! status / stash against real git, plus captured-fixture parser checks
+//! (raw bytes committed under tests/fixtures/). Op-state detection is
+//! pinned where the operations that produce it live —
+//! `integrate_integration` stops a real merge / rebase / cherry-pick and
+//! reads the state back.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 use crate::support::TestRepo;
 use platitude_core::status::StatusItem;
-use platitude_core::{GitExecutor, opstate, stash, status};
+use platitude_core::{GitExecutor, stash, status};
 use tokio_util::sync::CancellationToken;
 
 /// staged add + staged rename + unstaged modify + untracked, on main with
@@ -66,91 +69,6 @@ async fn status_buckets_reflect_the_working_tree() {
         vec!["untracked dir/inner.txt"],
         "-uall expands a new directory into its files"
     );
-}
-
-#[tokio::test]
-async fn conflict_and_merge_state_are_detected() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "base\n", "base");
-    repo.git(&["checkout", "-b", "side"]);
-    repo.commit_file("f.txt", "side change\n", "side edit");
-    repo.git(&["checkout", "main"]);
-    repo.commit_file("f.txt", "main change\n", "main edit");
-
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
-
-    let before = opstate::detect(&executor, &repo.path, &cancel)
-        .await
-        .unwrap();
-    assert!(!before.any());
-
-    repo.git_expect_failure(&["merge", "side"]);
-
-    let s = status::load(&executor, &repo.path, &cancel).await.unwrap();
-    assert!(s.has_conflicts());
-    let conflicted: Vec<&str> = s.conflicted().map(StatusItem::path).collect();
-    assert_eq!(conflicted, vec!["f.txt"]);
-
-    let during = opstate::detect(&executor, &repo.path, &cancel)
-        .await
-        .unwrap();
-    assert!(during.merging);
-    assert!(!during.rebasing);
-
-    repo.git(&["merge", "--abort"]);
-    let after = opstate::detect(&executor, &repo.path, &cancel)
-        .await
-        .unwrap();
-    assert!(!after.any());
-}
-
-#[tokio::test]
-async fn rebase_state_is_detected() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "base\n", "base");
-    repo.git(&["checkout", "-b", "topic"]);
-    repo.commit_file("f.txt", "topic change\n", "topic edit");
-    repo.git(&["checkout", "main"]);
-    repo.commit_file("f.txt", "main change\n", "main edit");
-    repo.git(&["checkout", "topic"]);
-
-    repo.git_expect_failure(&["rebase", "main"]);
-
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
-    let state = opstate::detect(&executor, &repo.path, &cancel)
-        .await
-        .unwrap();
-    assert!(state.rebasing);
-
-    repo.git(&["rebase", "--abort"]);
-    let after = opstate::detect(&executor, &repo.path, &cancel)
-        .await
-        .unwrap();
-    assert!(!after.any());
-}
-
-#[tokio::test]
-async fn cherry_pick_state_is_detected() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "base\n", "base");
-    repo.git(&["checkout", "-b", "donor"]);
-    repo.commit_file("f.txt", "donor change\n", "donor edit");
-    let donor = repo.git(&["rev-parse", "HEAD"]);
-    repo.git(&["checkout", "main"]);
-    repo.commit_file("f.txt", "main change\n", "main edit");
-
-    repo.git_expect_failure(&["cherry-pick", &donor]);
-
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
-    let state = opstate::detect(&executor, &repo.path, &cancel)
-        .await
-        .unwrap();
-    assert!(state.cherry_picking);
-
-    repo.git(&["cherry-pick", "--abort"]);
 }
 
 #[tokio::test]

@@ -176,22 +176,9 @@ async fn pre_cancelled_token_short_circuits() {
 /// up as an answered, ok-looking row.
 #[tokio::test]
 async fn answers_by_code_reports_only_zero_and_one_as_answers() {
-    use platitude_core::process::{CommandEnd, CommandObserver};
-    use std::sync::{Arc, Mutex};
-
-    #[derive(Default)]
-    struct Ends(Mutex<Vec<CommandEnd>>);
-    impl CommandObserver for Ends {
-        fn records(&self, _user: bool) -> bool {
-            true
-        }
-        fn started(&self, _display: &str, _full: &str, _user: bool) -> u64 {
-            0
-        }
-        fn finished(&self, _id: u64, end: CommandEnd, _elapsed_ms: u64, _message: &str) {
-            self.0.lock().unwrap().push(end);
-        }
-    }
+    use crate::support::Ends;
+    use platitude_core::process::CommandEnd;
+    use std::sync::Arc;
 
     let mut repo_dir = TestRepo::init();
     let c1 = repo_dir.commit_file("a.txt", "1\n", "one");

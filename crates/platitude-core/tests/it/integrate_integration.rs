@@ -948,22 +948,9 @@ async fn dropping_at_either_end_of_the_history() {
 /// open over a perfectly good drop (規約 §終了コードで答える問い合わせ).
 #[tokio::test]
 async fn reaching_past_the_first_commit_is_an_answer_not_a_failure() {
-    use platitude_core::process::{CommandEnd, CommandObserver};
-    use std::sync::{Arc, Mutex};
-
-    #[derive(Default)]
-    struct Ends(Mutex<Vec<CommandEnd>>);
-    impl CommandObserver for Ends {
-        fn records(&self, _user: bool) -> bool {
-            true
-        }
-        fn started(&self, _display: &str, _full: &str, _user: bool) -> u64 {
-            0
-        }
-        fn finished(&self, _id: u64, end: CommandEnd, _elapsed_ms: u64, _message: &str) {
-            self.0.lock().unwrap().push(end);
-        }
-    }
+    use crate::support::Ends;
+    use platitude_core::process::CommandEnd;
+    use std::sync::Arc;
 
     let mut repo = TestRepo::init();
     let first = repo.commit_file("a.txt", "one\n", "the first");
@@ -994,27 +981,6 @@ async fn reaching_past_the_first_commit_is_an_answer_not_a_failure() {
             .any(|end| matches!(end, CommandEnd::Exited(code) if *code != 0)),
         "nothing here failed: {recorded:?}"
     );
-}
-
-/// A range holding a merge is refused for a drop the same way it is for
-/// a squash: a plain interactive rebase would flatten the history rather
-/// than leave one commit out of it.
-#[tokio::test]
-async fn dropping_across_a_merge_is_refused() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    let doomed = repo.commit_file("b.txt", "two\n", "the one to go");
-    repo.git(&["checkout", "-b", "side"]);
-    repo.commit_file("c.txt", "three\n", "side work");
-    repo.git(&["checkout", "main"]);
-    repo.commit_file("d.txt", "four\n", "main work");
-    repo.git(&["merge", "--no-ff", "-m", "bring side in", "side"]);
-    let (exec, cancel) = env();
-
-    let err = sequencer::plan_edit(&exec, &repo.path, &doomed, sequencer::Edit::Drop, &cancel)
-        .await
-        .expect_err("a merge is in the way");
-    assert!(err.to_string().contains("merge commit"), "{err}");
 }
 
 #[tokio::test]
@@ -1343,6 +1309,9 @@ async fn a_commit_outside_the_current_branch_is_refused() {
     assert!(err.to_string().contains("not in the history"), "{err}");
 }
 
+/// The refusal sits before the edit is even looked at (`plan_edit` checks
+/// the range first), so a drop and a reword hit the same wall: a plain
+/// interactive rebase would flatten the merge rather than replay it.
 #[tokio::test]
 async fn a_range_holding_a_merge_is_refused_rather_than_flattened() {
     let mut repo = TestRepo::init();
@@ -1356,16 +1325,15 @@ async fn a_range_holding_a_merge_is_refused_rather_than_flattened() {
     let before = repo.git(&["rev-parse", "HEAD"]);
     let (exec, cancel) = env();
 
-    let err = sequencer::plan_edit(
-        &exec,
-        &repo.path,
-        &target,
+    for edit in [
+        sequencer::Edit::Drop,
         sequencer::Edit::Reword("nope\n".into()),
-        &cancel,
-    )
-    .await
-    .expect_err("a rebase would drop the merge");
-    assert!(err.to_string().contains("merge commit"), "{err}");
+    ] {
+        let err = sequencer::plan_edit(&exec, &repo.path, &target, edit, &cancel)
+            .await
+            .expect_err("a rebase would drop the merge");
+        assert!(err.to_string().contains("merge commit"), "{err}");
+    }
     assert_eq!(repo.git(&["rev-parse", "HEAD"]), before, "nothing ran");
 }
 

@@ -2005,12 +2005,29 @@ async fn a_write_rebuilds_the_graph_once() {
     session.close();
 }
 
-/// A background rebuild that finds nothing changed must stay silent — no
-/// reset, no chunk, no repaint. This is what keeps a quiet auto-fetch
-/// interval (or any other background refresh) from flickering the graph.
-#[tokio::test(flavor = "multi_thread")]
-async fn background_refresh_swaps_only_on_change() {
-    let (mut repo, _) = scenario();
+/// Every event a log stream can emit — what "the graph stayed silent"
+/// counts.
+fn is_stream_event(e: &SessionEvent) -> bool {
+    matches!(
+        e,
+        SessionEvent::LogStarted { .. }
+            | SessionEvent::LogChunk { .. }
+            | SessionEvent::LogFinished { .. }
+            | SessionEvent::LogReplaced { .. }
+            | SessionEvent::LogFailed { .. }
+    )
+}
+
+/// Opens a session over `scenario()`, settles the first 5-row graph, then
+/// holds `refresh` to silence: a background pass over an unchanged
+/// repository must not emit a single stream event ("nothing happens" can
+/// only be observed by giving the pass ample time to run). Returns the
+/// stream-event count to measure "after" against. The quiet half of both
+/// refresh entry points is the same promise, so it is written once.
+async fn settled_and_silent(
+    refresh: impl Fn(&Arc<RepoSession>),
+) -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, usize) {
+    let (repo, _) = scenario();
     let sink = CaptureSink::new();
     let session = RepoSession::open(
         GitExecutor::new(),
@@ -2019,32 +2036,26 @@ async fn background_refresh_swaps_only_on_change() {
         sink.clone(),
     );
     sink.settled_stream_gen(5).await;
+    let baseline = sink.count(is_stream_event);
 
-    let stream_count = || {
-        sink.count(|e| {
-            matches!(
-                e,
-                SessionEvent::LogStarted { .. }
-                    | SessionEvent::LogChunk { .. }
-                    | SessionEvent::LogFinished { .. }
-                    | SessionEvent::LogReplaced { .. }
-                    | SessionEvent::LogFailed { .. }
-            )
-        })
-    };
-    let baseline = stream_count();
-
-    // Nothing changed since the last delivery, so the rebuild must not
-    // emit a single stream event. "Nothing happens" can only be observed
-    // by giving the pass ample time to run.
-    session.refresh_log();
+    refresh(&session);
     tokio::time::sleep(Duration::from_millis(1500)).await;
     assert_eq!(
-        stream_count(),
+        sink.count(is_stream_event),
         baseline,
         "an unchanged rebuild stayed silent: {:?}",
         sink.events.lock().unwrap()
     );
+    (repo, sink, session, baseline)
+}
+
+/// A background rebuild that finds nothing changed must stay silent — no
+/// reset, no chunk, no repaint. This is what keeps a quiet auto-fetch
+/// interval (or any other background refresh) from flickering the graph.
+#[tokio::test(flavor = "multi_thread")]
+async fn background_refresh_swaps_only_on_change() {
+    let (mut repo, sink, session, baseline) =
+        settled_and_silent(|s| s.refresh_log()).await;
 
     // History moved outside the session: the same call now delivers one
     // atomic replacement — a single LogReplaced carrying every row, so
@@ -2055,16 +2066,7 @@ async fn background_refresh_swaps_only_on_change() {
     let events = sink.events.lock().unwrap();
     let after: Vec<&SessionEvent> = events
         .iter()
-        .filter(|e| {
-            matches!(
-                e,
-                SessionEvent::LogStarted { .. }
-                    | SessionEvent::LogChunk { .. }
-                    | SessionEvent::LogFinished { .. }
-                    | SessionEvent::LogReplaced { .. }
-                    | SessionEvent::LogFailed { .. }
-            )
-        })
+        .filter(|e| is_stream_event(e))
         .skip(baseline)
         .collect();
     assert_eq!(after.len(), 1, "one event for the whole change: {after:?}");
@@ -2087,41 +2089,8 @@ async fn background_refresh_swaps_only_on_change() {
 /// them. A re-read that finds every ref where it left it stays silent.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_external_ref_move_rebuilds_the_graph() {
-    let (mut repo, _) = scenario();
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        GitExecutor::new(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
-    sink.settled_stream_gen(5).await;
-
-    let stream_count = || {
-        sink.count(|e| {
-            matches!(
-                e,
-                SessionEvent::LogStarted { .. }
-                    | SessionEvent::LogChunk { .. }
-                    | SessionEvent::LogFinished { .. }
-                    | SessionEvent::LogReplaced { .. }
-                    | SessionEvent::LogFailed { .. }
-            )
-        })
-    };
-    let baseline = stream_count();
-
-    // The quiet case is the common one: on an idle repository every poll
-    // re-reads the same refs, and rebuilding for those would repaint the
-    // graph over nothing.
-    session.refresh_refs();
-    tokio::time::sleep(Duration::from_millis(1500)).await;
-    assert_eq!(
-        stream_count(),
-        baseline,
-        "an unmoved ref layout rebuilt nothing: {:?}",
-        sink.events.lock().unwrap()
-    );
+    let (mut repo, sink, session, _) =
+        settled_and_silent(|s| s.refresh_refs()).await;
 
     // Now main moves under the session, with the working tree clean on
     // both sides: nothing but the refs can report this.

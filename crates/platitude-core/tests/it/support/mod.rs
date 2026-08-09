@@ -9,7 +9,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::Mutex;
 
+use platitude_core::process::{CommandEnd, CommandObserver};
 use platitude_core::session::{LogRow, RefLabel, SessionEvent};
 
 /// Base timestamp for deterministic commits (arbitrary fixed epoch).
@@ -253,4 +255,21 @@ pub fn replay_graph(events: &[SessionEvent]) -> BTreeMap<u32, SeenRow> {
         }
     }
     rows
+}
+
+/// Collects every [`CommandEnd`] the executor reports, for tests that read
+/// exit codes off the command-log path (`GitExecutor::observed`).
+#[derive(Default)]
+pub struct Ends(pub Mutex<Vec<CommandEnd>>);
+
+impl CommandObserver for Ends {
+    fn records(&self, _user: bool) -> bool {
+        true
+    }
+    fn started(&self, _display: &str, _full: &str, _user: bool) -> u64 {
+        0
+    }
+    fn finished(&self, _id: u64, end: CommandEnd, _elapsed_ms: u64, _message: &str) {
+        self.0.lock().unwrap().push(end);
+    }
 }
