@@ -345,6 +345,7 @@ ApplicationWindow {
             + " grabRun=" + topBar.bandGrabRun
             + " buttonsX=" + topBar.bandButtonsX
             + " width=" + topBar.width
+            + " tabsW=" + topBar.bandTabsWidth
             + " rightMargin=" + topBar.bandRightMargin)
     }
 

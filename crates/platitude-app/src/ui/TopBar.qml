@@ -31,6 +31,10 @@ Rectangle {
     readonly property real bandGrabRun: tabs.grabRun
     readonly property real bandButtonsX: minimizeButton.x
     readonly property real bandRightMargin: bandRow.anchors.rightMargin
+    /// What the strip itself came out to. A broken term in its width
+    /// expression turns it NaN, and NaN draws as "no tabs at all" with
+    /// nothing on stderr — this is the number that catches it.
+    readonly property real bandTabsWidth: tabs.width
 
     signal openRepositoryRequested()
     signal identityEditRequested()
@@ -43,7 +47,7 @@ Rectangle {
     /// maximised inset, the window resizing) and reports the strip on.
     signal captionStripMoved()
     /// The run itself, for `Main` to measure in scene coordinates.
-    readonly property Item grabRunItem: grabRun
+    readonly property Item grabRunItem: grabArea
 
     /// One of the window's own buttons: the same cell the app menu sits in
     /// at the other end of the band, so the two ends are built alike and
@@ -307,9 +311,14 @@ Rectangle {
                 /// as spacing.
                 readonly property real grabRun: topBar.captionMerged
                                                 ? 2 * Theme.railWidth : 0
+                // `tabs.grabRun` stays qualified: an unqualified name here
+                // reads whatever id happens to share it — ids outrank the
+                // enclosing object's own properties — and an Item minus a
+                // number is NaN, which took the whole strip's width with
+                // it once (no tabs drawn, nothing said why).
                 width: Math.max(0, Math.min(contentWidth,
                                             tabStrip.width - menuButton.width
-                                            - plusButton.width - grabRun))
+                                            - plusButton.width - tabs.grabRun))
                 orientation: ListView.Horizontal
                 // Hard stop at the ends, as everywhere else that scrolls
                 // (デザイン規約 §QML 実装ルール).
@@ -436,7 +445,7 @@ Rectangle {
             // right-click menu are all the platform's own. No handlers —
             // the scene's only job is saying where the run is.
             Item {
-                id: grabRun
+                id: grabArea
                 x: plusButton.x + plusButton.width
                 width: Math.max(0, tabStrip.width - x)
                 height: tabStrip.height
