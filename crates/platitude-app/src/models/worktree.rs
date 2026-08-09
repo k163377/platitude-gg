@@ -57,6 +57,10 @@ pub struct WorkTreeModel {
     /// only: `conflict::mergetool` resolves the tool itself at launch, so
     /// a name that went stale between poll and click cannot start anything.
     merge_tool: String,
+    /// Staged files whose change says something about its line endings.
+    /// A commit carries the index, so the working-tree side is not counted
+    /// here — it is a warning about the next `git add`, not this commit.
+    eol_staged_count: i32,
     feed: Option<Arc<Feed<StatusMsg>>>,
     tab_id: i32,
 }
@@ -91,6 +95,11 @@ impl WorkTreeModel {
     qproperty!("sideOurs", Member = side_ours, Notify = changed);
     qproperty!("sideTheirs", Member = side_theirs, Notify = changed);
     qproperty!("mergeTool", Member = merge_tool, Notify = changed);
+    qproperty!(
+        "eolStagedCount",
+        Member = eol_staged_count,
+        Notify = changed
+    );
 
     #[qsignal]
     fn changed(&mut self);
@@ -116,7 +125,7 @@ impl WorkTreeModel {
             progress,
             sides,
             merge_tool,
-            ..
+            eol_marks,
         }) = feed.drain().pop()
         else {
             return;
@@ -124,6 +133,8 @@ impl WorkTreeModel {
         self.side_ours = sides.ours;
         self.side_theirs = sides.theirs;
         self.merge_tool = merge_tool;
+        self.eol_staged_count =
+            i32::try_from(eol_marks.iter().filter(|m| m.staged).count()).unwrap_or(i32::MAX);
 
         self.branch = status.branch_head.clone().unwrap_or_default();
         self.head_oid = status

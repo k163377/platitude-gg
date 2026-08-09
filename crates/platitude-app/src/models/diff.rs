@@ -269,45 +269,13 @@ impl DiffModel {
     /// Takes a line-ending notice apart into the pieces its sentence needs.
     /// `None` resets — which is also what "nothing to say" looks like.
     fn apply_endings(&mut self, notice: Option<&eol::Notice>) {
-        self.ending_kind.clear();
-        self.ending_from.clear();
-        self.ending_to.clear();
-        self.ending_lines = 0;
-        self.ending_scope.clear();
-        self.ending_ext.clear();
-        let Some(notice) = notice else { return };
-        // `from` and `to` are the two endings in the order the sentence
-        // names them, whichever of the four it turns out to be.
-        let (kind, from, to) = match notice {
-            eol::Notice::Flipped { from, to } => ("flipped", *from, *to),
-            eol::Notice::Mixed {
-                lines, added, file, ..
-            } => {
-                self.ending_lines = i32::try_from(*lines).unwrap_or(i32::MAX);
-                ("mixed", *added, *file)
-            }
-            eol::Notice::NewFile { eol, baseline } => {
-                self.apply_scope(baseline);
-                ("new", *eol, baseline.eol)
-            }
-            eol::Notice::FirstEnding { eol, baseline } => {
-                self.apply_scope(baseline);
-                ("first", *eol, baseline.eol)
-            }
-        };
-        self.ending_kind = kind.to_string();
-        self.ending_from = from.as_str().to_string();
-        self.ending_to = to.as_str().to_string();
-    }
-
-    fn apply_scope(&mut self, baseline: &eol::Baseline) {
-        let (scope, ext) = match &baseline.scope {
-            eol::Scope::Here(ext) => ("here", ext.as_str()),
-            eol::Scope::Ext(ext) => ("ext", ext.as_str()),
-            eol::Scope::Repo => ("repo", ""),
-        };
-        self.ending_scope = scope.to_string();
-        self.ending_ext = ext.to_string();
+        let words = crate::encode::ending_words(notice);
+        self.ending_kind = words.kind;
+        self.ending_from = words.from;
+        self.ending_to = words.to;
+        self.ending_lines = words.lines;
+        self.ending_scope = words.scope;
+        self.ending_ext = words.ext;
     }
 
     /// Maps the core preview onto the QML-facing strings. `None` resets.

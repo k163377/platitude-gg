@@ -10,7 +10,7 @@ use crate::process::{GitCommand, GitExecutor};
 
 /// One entry of porcelain-v2 output. Change codes are git's raw letters
 /// (`M`, `T`, `A`, `D`, `R`, `C`, `U`; `.` = unchanged).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum StatusItem {
     /// Ordinary or renamed/copied tracked entry.
     Tracked {

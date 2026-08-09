@@ -1730,6 +1730,27 @@ Item {
             page.commitNow()
         }
     }
+    // Staging has to land before the button can know what it carries.
+    Timer {
+        id: eolCommitTimer
+        interval: 1200
+        onTriggered: {
+            wipPane.pointAtCommit = true
+            AppBackend.report("eol_commit staged=" + workTree.stagedCount
+                              + " warned=" + workTree.eolStagedCount)
+        }
+    }
+    // The marks arrive with the status read, so the row named for its
+    // sentence has to be named again once they are in.
+    Timer {
+        id: eolHoverTimer
+        interval: 800
+        onTriggered: {
+            wipPane.pointEol(AppBackend.autoActArg)
+            AppBackend.report("eol_hover path=" + wipPane.pointedEolPath
+                              + " text=" + wipPane.pointedEolText)
+        }
+    }
     // The diff has to arrive before a row of it can be staged — or
     // thrown away, which stops at the question the pill answers.
     Timer {
@@ -2765,6 +2786,23 @@ Item {
             page.showWip()
             if (act === "op-exit-go")
                 AppBackend.report("op_exit_held " + wipPane.completeOpExit(arg))
+        } else if (act === "eol-commit") {
+            // The commit button with something staged that changes its
+            // line endings: the frame, the mark, and the tip that says
+            // what it is about. Nothing is committed — the shot is the
+            // state before anyone decides.
+            page.showWip()
+            repoTab.stageAll()
+            wipPane.setMessage(arg === "" ? "feat: something" : arg, "")
+            eolCommitTimer.start()
+        } else if (act === "eol-hover") {
+            // The sentence a pending file's row carries, put out by naming
+            // the row rather than by hovering it — hover cannot be
+            // injected, and this writes the one property a real pointer
+            // writes. The tip lands in overlay.png.
+            page.showWip()
+            wipPane.pointEol(arg)
+            eolHoverTimer.start()
         } else if (act === "stage-hunk" || act === "stage-line"
                    || act === "discard-hunk" || act === "discard-hunk-go"
                    || act === "diff-file" || act === "line-tools"

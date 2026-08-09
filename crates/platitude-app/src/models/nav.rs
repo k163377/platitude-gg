@@ -59,10 +59,11 @@ pub struct NavItem {
     /// PR-state badge. Real data arrives in Phase 4 (ls-remote refs/pull
     /// matching); until then PG_FAKE_PR previews the look.
     has_pr: bool,
-    /// The line ending this file's pending change brings in, empty when it
-    /// has nothing to say. A word rather than the sentence: the row carries
-    /// a mark, and the sentence is the diff pane's.
-    eol_mark: String,
+    /// This file's pending change has something to say about its line
+    /// endings. A flag, not the sentence — a `QModelItem` holds fifteen
+    /// fields and this one is the fifteenth, so the words for the row the
+    /// pointer is on are kept once on the model instead (`pointEol`).
+    eol_mark: bool,
     depth: i32,
     folder: bool,
 }
@@ -100,6 +101,24 @@ pub struct NavSectionModel {
     refs_loaded: bool,
     /// Worktree section only: tree (default) vs flat-path display.
     tree_view: bool,
+    /// Which row the pointer is on, so the other marked rows do not all
+    /// answer with the sentence belonging to this one.
+    ///
+    /// The notice itself follows, taken apart into the pieces its sentence
+    /// needs. Kept once here rather than on every row: only one row is
+    /// under the pointer, and a `QModelItem` has no fields left (see
+    /// `NavItem::eol_mark`). Flat because `qproperty!` names one member,
+    /// not a path through one.
+    pointed_eol_path: String,
+    pointed_eol_kind: String,
+    pointed_eol_from: String,
+    pointed_eol_to: String,
+    pointed_eol_lines: i32,
+    pointed_eol_scope: String,
+    pointed_eol_ext: String,
+    /// The marks as they arrived, so pointing at a row can find its words
+    /// without the rows having carried them.
+    eol_marks: Arc<Vec<platitude_core::session::EolMark>>,
     /// Explicit folder open/close choices (key = folder path); anything
     /// absent uses the section default.
     folder_overrides: HashMap<String, bool>,
@@ -353,11 +372,7 @@ fn status_nav_items(
             bucket: bucket.into(),
             group: group.into(),
             orig_path: orig,
-            eol_mark: eol_marks
-                .iter()
-                .find(|m| m.path == path)
-                .map(|m| m.eol.clone())
-                .unwrap_or_default(),
+            eol_mark: eol_marks.iter().any(|m| m.path == path),
             ..Default::default()
         });
     };
@@ -427,6 +442,65 @@ impl NavSectionModel {
     qproperty!("headRow", Member = head_row, Notify = changed);
     qproperty!("refsLoaded", Member = refs_loaded, Notify = changed);
     qproperty!("treeView", Member = tree_view, Notify = changed);
+    qproperty!(
+        "pointedEolPath",
+        Member = pointed_eol_path,
+        Notify = changed
+    );
+    qproperty!(
+        "pointedEolKind",
+        Member = pointed_eol_kind,
+        Notify = changed
+    );
+    qproperty!(
+        "pointedEolFrom",
+        Member = pointed_eol_from,
+        Notify = changed
+    );
+    qproperty!("pointedEolTo", Member = pointed_eol_to, Notify = changed);
+    qproperty!(
+        "pointedEolLines",
+        Member = pointed_eol_lines,
+        Notify = changed
+    );
+    qproperty!(
+        "pointedEolScope",
+        Member = pointed_eol_scope,
+        Notify = changed
+    );
+    qproperty!("pointedEolExt", Member = pointed_eol_ext, Notify = changed);
+
+    /// Names the row the pointer is on, so its line-ending sentence can be
+    /// built. An empty path clears it. Hover cannot be injected headless,
+    /// so this is also what the automation writes — the same one property
+    /// a real pointer moves.
+    #[qslot]
+    fn point_eol(&mut self, path: String) {
+        let notice = self
+            .eol_marks
+            .iter()
+            .find(|m| m.path == path)
+            .map(|m| &m.notice);
+        let words = crate::encode::ending_words(notice);
+        if path == self.pointed_eol_path
+            && words.kind == self.pointed_eol_kind
+            && words.from == self.pointed_eol_from
+            && words.to == self.pointed_eol_to
+            && words.lines == self.pointed_eol_lines
+            && words.scope == self.pointed_eol_scope
+            && words.ext == self.pointed_eol_ext
+        {
+            return;
+        }
+        self.pointed_eol_path = path;
+        self.pointed_eol_kind = words.kind;
+        self.pointed_eol_from = words.from;
+        self.pointed_eol_to = words.to;
+        self.pointed_eol_lines = words.lines;
+        self.pointed_eol_scope = words.scope;
+        self.pointed_eol_ext = words.ext;
+        self.changed();
+    }
 
     #[qsignal]
     fn changed(&mut self);
@@ -549,6 +623,7 @@ impl NavSectionModel {
             }) = feed.drain().pop()
         {
             let rows = status_nav_items(&status, &eol_marks);
+            self.eol_marks = eol_marks;
             arrived |= self.take_rows(rows);
         }
         if let Some(feed) = self.worktrees_feed.clone()

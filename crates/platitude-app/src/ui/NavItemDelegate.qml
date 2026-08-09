@@ -23,7 +23,18 @@ Item {
     required property bool has_pr
     required property int depth
     required property bool folder
-    required property string eol_mark
+    required property bool eol_mark
+    /// The pointed row's line-ending words, handed down by the pane — the
+    /// section model keeps one copy rather than every row keeping its own.
+    property string pointedEolPath: ""
+    property string pointedEolKind: ""
+    property string pointedEolFrom: ""
+    property string pointedEolTo: ""
+    property int pointedEolLines: 0
+    property string pointedEolScope: ""
+    property string pointedEolExt: ""
+    /// The pointer arrived at, or left, a row carrying the mark.
+    signal eolPointed(string path, bool on)
     property string kindHint: "branch"
     property string headTrack: ""
     property real listWidth: 200
@@ -167,6 +178,7 @@ Item {
         // The name says where the ref is, the way a chip's does: grey for
         // one this repository does not hold (デザイン規約 §ref の種別).
         Label {
+            id: nameLabel
             visible: !navRow.editing
             Layout.fillWidth: true
             text: navRow.name
@@ -176,6 +188,24 @@ Item {
                    : navRow.is_head ? Theme.textLink
                    : navRow.only_remote ? Theme.textSecondary : Theme.textPrimary
             font.pixelSize: Theme.fontMd
+            // A pending file whose change says something about its line
+            // endings. On the name's shoulder, the way a button in trouble
+            // wears one (`ActionButton.alert`) — **outside the layout**, so
+            // no row moves and the stage button's seat at the right edge
+            // stays its own. What it is about is the row's hover; the
+            // sentence in full is the diff pane's.
+            NavIcon {
+                visible: navRow.kindHint === "wt" && navRow.eol_mark
+                kind: "bang"
+                tint: Theme.warning
+                width: Theme.iconSm
+                height: Theme.iconSm
+                // Clamped: an elided name is wider than its box, and the
+                // mark belongs to the name that is on screen.
+                x: Math.min(nameLabel.implicitWidth,
+                            nameLabel.width - Theme.iconSm)
+                y: -Theme.spaceXs
+            }
         }
         // The name, in a box, where the name was. Nothing is asked before
         // it opens or when it is walked away from: what it costs is the
@@ -239,16 +269,6 @@ Item {
             width: Theme.iconSm
             height: Theme.iconSm
         }
-        // A pending file whose change says something about its line
-        // endings. The sentence is the diff pane's; this is the mark that
-        // gets someone there before they commit.
-        Rectangle {
-            visible: navRow.kindHint === "wt" && navRow.eol_mark !== ""
-            width: Theme.spaceXs
-            height: Theme.spaceXs
-            radius: width / 2
-            color: Theme.warning
-        }
     }
     // Rows whose name can be changed from here. A remote branch is one of
     // them even though git has no rename over there — core builds the
@@ -304,6 +324,13 @@ Item {
         // While the box is open the row belongs to it.
         visible: !navRow.editing
         acceptedButtons: Qt.LeftButton | Qt.RightButton
+        // The row that carries the mark tells the model it is the one
+        // being read, so the sentence can be built for it alone. The row
+        // itself has no field left to hold it (`NavItem::eol_mark`).
+        onContainsMouseChanged: {
+            if (navRow.eol_mark)
+                navRow.eolPointed(navRow.fullName, itemMouse.containsMouse)
+        }
         onClicked: mouse => {
             if (mouse.button === Qt.RightButton) {
                 // Only rows with operations behind them open a menu.
@@ -399,14 +426,40 @@ Item {
         // A stash is named by a message that the row has to cut short.
         if (navRow.kindHint === "stash")
             return navRow.name
+        // A pending file's row is cut down to its last segment by the tree
+        // view, so the path is what its hover has always been for. The
+        // line-ending sentence goes **under** it rather than over it: a
+        // reader who cannot see which file this is has lost more than the
+        // notice gives them.
+        if (navRow.kindHint === "wt" && navRow.eolText !== "") {
+            const path = full !== navRow.name ? navRow.escapeMarkup(full) + "<br>" : ""
+            return path + "<font color=\"" + Theme.warning + "\">"
+                   + navRow.escapeMarkup(navRow.eolText) + "</font>"
+        }
         return full !== navRow.name ? full : ""
     }
+    /// Whether the words on the model are this row's. Only one row can be
+    /// pointed at, so they are kept once there rather than on every row
+    /// (`NavSectionModel::point_eol`), and the row has to check that the
+    /// answer is its own before reading it.
+    readonly property bool eolPointedAt: navRow.eol_mark
+        && navRow.pointedEolPath === navRow.fullName
+    /// The sentence for this row, when the pointer is on it.
+    readonly property string eolText:
+        navRow.eolPointedAt && navRow.pointedEolKind !== ""
+        ? Words.lineEndings(navRow.pointedEolKind, navRow.pointedEolFrom,
+                            navRow.pointedEolTo, navRow.pointedEolLines,
+                            navRow.pointedEolScope, navRow.pointedEolExt)
+        : ""
     function escapeMarkup(text) {
         return text.replace(/&/g, "&amp;").replace(/</g, "&lt;")
                    .replace(/>/g, "&gt;")
     }
-    ToolTip.visible: itemMouse.containsMouse && !navRow.editing
-                     && navRow.hoverText !== ""
+    // Named as well as hovered: hover cannot be injected, so the row the
+    // model says is being read shows its tip too. Under a real pointer the
+    // two are the same row (the hover is what names it).
+    ToolTip.visible: (itemMouse.containsMouse || navRow.eolPointedAt)
+                     && !navRow.editing && navRow.hoverText !== ""
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: navRow.hoverText
 }

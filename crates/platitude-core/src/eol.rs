@@ -140,16 +140,6 @@ pub enum Notice {
     FirstEnding { eol: Eol, baseline: Baseline },
 }
 
-/// The ending a notice is about — what the change puts into the file,
-/// whichever of the four it is.
-pub fn brought_in(notice: &Notice) -> Eol {
-    match notice {
-        Notice::Flipped { to, .. } => *to,
-        Notice::Mixed { added, .. } => *added,
-        Notice::NewFile { eol, .. } | Notice::FirstEnding { eol, .. } => *eol,
-    }
-}
-
 /// Pairs a reading with a baseline. `None` is silence, and every way of not
 /// knowing ends up here: git ruling the path out, no baseline to compare
 /// against, or a file that agrees with its neighbours after all.

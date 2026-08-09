@@ -860,6 +860,9 @@ fn eol(repo: &mut DemoRepo) -> Result<(), String> {
         "feat: five of them",
     )?;
     repo.commit("src/bare.kt", "fun bare() = 0", "feat: no ending at all")?;
+    // An ordinary change with nothing to say, so "a file is marked" and
+    // "this commit carries a marked file" can be told apart.
+    repo.commit("src/plain.kt", "fun plain() = 1\n", "feat: an ordinary one")?;
 
     // (a) every line's ending changes, and nothing else does.
     repo.write(
@@ -873,6 +876,7 @@ fn eol(repo: &mut DemoRepo) -> Result<(), String> {
     )?;
     // (d) the file that had none gains its first.
     repo.write("src/bare.kt", "fun bare() = 0\r\n")?;
+    repo.write("src/plain.kt", "fun plain() = 1\nfun alsoPlain() = 2\n")?;
     // (c) a file the repository has never seen, disagreeing with its
     // neighbours.
     repo.write(

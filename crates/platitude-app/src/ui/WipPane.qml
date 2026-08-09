@@ -145,6 +145,26 @@ ColumnLayout {
     function showStageTools(bucket, path) {
         wipPane.stageHotKey = bucket + ":" + path
     }
+    /// Names the file whose line-ending sentence the hover should carry.
+    /// The empty string clears it. Automation writes it directly, the same
+    /// way it writes `showStageTools` — hover cannot be injected.
+    function pointEol(path) {
+        wipPane.worktreeModel.pointEol(path)
+    }
+    /// Puts the commit button's tip out without a pointer, the way the
+    /// rows' is put out — hover cannot be injected.
+    property bool pointAtCommit: false
+    /// What the named row is saying, for the headless report to read.
+    readonly property string pointedEolPath: wipPane.worktreeModel.pointedEolPath
+    readonly property string pointedEolText:
+        wipPane.worktreeModel.pointedEolKind !== ""
+        ? Words.lineEndings(wipPane.worktreeModel.pointedEolKind,
+                            wipPane.worktreeModel.pointedEolFrom,
+                            wipPane.worktreeModel.pointedEolTo,
+                            wipPane.worktreeModel.pointedEolLines,
+                            wipPane.worktreeModel.pointedEolScope,
+                            wipPane.worktreeModel.pointedEolExt)
+        : ""
     /// Whether a row should put its mark out because the pointer is on the
     /// mark of another row that would move with it. Only rows on the same
     /// side answer: `+` stages what is not staged, `−` takes back what is.
@@ -585,9 +605,37 @@ ColumnLayout {
             id: commitButton
             Layout.fillWidth: true
             highlighted: true
+            /// Something staged says its line endings changed, so the
+            /// commit is about to carry it. **Only the index counts** — a
+            /// file marked on its working-tree side is not in this commit
+            /// (`session::EolMark::staged`).
+            readonly property bool eolWarned:
+                wipPane.workTree.eolStagedCount > 0 && commitButton.enabled
             text: wipPane.amending
                   ? qsTr("Amend commit (%1 staged)").arg(wipPane.workTree.stagedCount)
                   : qsTr("Commit changes (%1 staged)").arg(wipPane.workTree.stagedCount)
+            // The frame and the mark say the same thing the toolbar's
+            // buttons say when something needs reading before it is
+            // pressed (デザイン規約 §状態の 3 段 — a change that carries
+            // past this machine). The face stays the accent's: this is
+            // still the button that finishes the work.
+            Rectangle {
+                anchors.fill: parent
+                visible: commitButton.eolWarned
+                color: "transparent"
+                radius: Theme.radiusSm
+                border.width: Theme.borderWidth
+                border.color: Theme.warning
+            }
+            NavIcon {
+                visible: commitButton.eolWarned
+                kind: "bang"
+                tint: Theme.warning
+                width: Theme.iconSm
+                height: Theme.iconSm
+                x: parent.width - width - Theme.spaceXs
+                y: Theme.spaceXs
+            }
             // An amend can stand on its own (message only); a new commit
             // needs staged content and a summary, and git needs an
             // identity to attribute either one to.
@@ -595,14 +643,74 @@ ColumnLayout {
                      && wipPane.repoTab.identityReady
                      && wipSubject.text.trim() !== ""
                      && (wipPane.amending || wipPane.workTree.stagedCount > 0)
-            onClicked: wipPane.commitClicked()
-            ToolTip.visible: commitHover.containsMouse && !enabled
+            /// How far through the hold this press has got. Only the
+            /// warned form asks for one; the ordinary commit is a click,
+            /// because a confirmation on every commit becomes a thing
+            /// people press without reading (デザイン規約 §可否・警告の
+            /// 出し場所).
+            property real holdProgress: 0
+            // The fill the hold draws, in the frame it drew
+            // (デザイン規約 §長押し).
+            Rectangle {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: parent.width * commitButton.holdProgress
+                radius: Theme.radiusSm
+                color: Theme.warning
+                opacity: 0.25
+                visible: commitButton.holdProgress > 0
+            }
+            onClicked: if (!commitButton.eolWarned) wipPane.commitClicked()
+            onDownChanged: {
+                if (!commitButton.eolWarned)
+                    return
+                if (commitButton.down) {
+                    commitBack.stop()
+                    commitHold.restart()
+                } else {
+                    commitHold.stop()
+                }
+            }
+            NumberAnimation {
+                id: commitHold
+                target: commitButton
+                property: "holdProgress"
+                from: 0
+                to: 1
+                duration: Metrics.holdMs
+                // A press that stopped short slides back rather than
+                // blanking: a held button reports no click, so without
+                // this a plain click answers with nothing at all.
+                onStopped: {
+                    if (commitButton.holdProgress >= 1)
+                        commitButton.holdProgress = 0
+                    else if (commitButton.holdProgress > 0)
+                        commitBack.restart()
+                }
+                onFinished: wipPane.commitClicked()
+            }
+            NumberAnimation {
+                id: commitBack
+                target: commitButton
+                property: "holdProgress"
+                to: 0
+                duration: Metrics.holdBackMs
+                easing.type: Easing.OutCubic
+            }
+            ToolTip.visible: (commitHover.containsMouse || wipPane.pointAtCommit)
+                             && (!enabled || commitButton.eolWarned)
             ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: !wipPane.repoTab.identityReady
                           ? qsTr("No name or email set for commits")
                           : wipSubject.text.trim() === ""
                           ? qsTr("A commit needs a summary")
-                          : qsTr("Stage something to commit")
+                          : !enabled
+                          ? qsTr("Stage something to commit")
+                          : wipPane.workTree.eolStagedCount === 1
+                          ? qsTr("1 staged file changes its line endings. Hold to commit anyway.")
+                          : qsTr("%1 staged files change their line endings. Hold to commit anyway.")
+                            .arg(wipPane.workTree.eolStagedCount)
             MouseArea {
                 id: commitHover
                 anchors.fill: parent
@@ -781,6 +889,14 @@ ColumnLayout {
             chosen: wipPane.isChosen(bucket, fullName)
             sideOurs: wipPane.workTree.sideOurs
             sideTheirs: wipPane.workTree.sideTheirs
+            pointedEolPath: wipPane.worktreeModel.pointedEolPath
+            pointedEolKind: wipPane.worktreeModel.pointedEolKind
+            pointedEolFrom: wipPane.worktreeModel.pointedEolFrom
+            pointedEolTo: wipPane.worktreeModel.pointedEolTo
+            pointedEolLines: wipPane.worktreeModel.pointedEolLines
+            pointedEolScope: wipPane.worktreeModel.pointedEolScope
+            pointedEolExt: wipPane.worktreeModel.pointedEolExt
+            onEolPointed: (path, on) => wipPane.pointEol(on ? path : "")
             onFileClicked: (bucket, path, origPath, modifiers) => {
                 // Choosing rows is not reading one: only a plain click
                 // moves the diff.

@@ -308,6 +308,60 @@ pub fn image_data_url(mime: &str, bytes: &[u8]) -> String {
 
 /// Human-readable byte size ("67 B", "1.5 KB", "234 KB", "1.2 MB").
 /// 1024-based; one decimal below ten so small differences stay visible.
+/// A line-ending notice taken apart into the pieces its sentence needs.
+///
+/// Two places say the same sentence — the diff pane's line and the hover of
+/// the pending file that carries the mark — so they take the notice apart
+/// the same way. The sentence itself is `Words.lineEndings`; working out
+/// which of the four it is, and how far the sample behind it reached, is
+/// not QML's job.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct EndingWords {
+    /// `""` (nothing to say) / `flipped` / `mixed` / `new` / `first`.
+    pub kind: String,
+    /// The two endings in the order the sentence names them.
+    pub from: String,
+    pub to: String,
+    pub lines: i32,
+    /// How far the sample reached: `""` / `here` / `ext` / `repo`.
+    pub scope: String,
+    pub ext: String,
+}
+
+pub fn ending_words(notice: Option<&platitude_core::eol::Notice>) -> EndingWords {
+    use platitude_core::eol::{Notice, Scope};
+    let mut out = EndingWords::default();
+    let Some(notice) = notice else { return out };
+    let (kind, from, to) = match notice {
+        Notice::Flipped { from, to } => ("flipped", *from, *to),
+        Notice::Mixed {
+            lines, added, file, ..
+        } => {
+            out.lines = i32::try_from(*lines).unwrap_or(i32::MAX);
+            ("mixed", *added, *file)
+        }
+        Notice::NewFile { eol, baseline } => ("new", *eol, baseline.eol),
+        Notice::FirstEnding { eol, baseline } => ("first", *eol, baseline.eol),
+    };
+    let baseline = match notice {
+        Notice::NewFile { baseline, .. } | Notice::FirstEnding { baseline, .. } => Some(baseline),
+        _ => None,
+    };
+    if let Some(baseline) = baseline {
+        let (scope, ext) = match &baseline.scope {
+            Scope::Here(ext) => ("here", ext.as_str()),
+            Scope::Ext(ext) => ("ext", ext.as_str()),
+            Scope::Repo => ("repo", ""),
+        };
+        out.scope = scope.to_string();
+        out.ext = ext.to_string();
+    }
+    out.kind = kind.to_string();
+    out.from = from.as_str().to_string();
+    out.to = to.as_str().to_string();
+    out
+}
+
 pub fn human_size(bytes: u64) -> String {
     const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
     if bytes < 1024 {

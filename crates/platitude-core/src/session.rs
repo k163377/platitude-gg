@@ -610,8 +610,15 @@ impl OpGate {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EolMark {
     pub path: String,
-    /// The ending the change brings in, spelled the way a person reads it.
-    pub eol: String,
+    /// The whole statement, so the row that carries the mark can say the
+    /// same sentence the diff pane would.
+    pub notice: eol::Notice,
+    /// The **index** side is the one with something to say. A commit
+    /// carries the index and nothing else, so this is what decides whether
+    /// committing now would take the problem with it; a file marked only on
+    /// its working-tree side is a warning about the next `git add`, not
+    /// about this commit.
+    pub staged: bool,
 }
 
 /// What is known about a path's line endings before its patch is read.
@@ -663,11 +670,12 @@ pub struct RepoSession {
     /// Pending paths whose change has something to say about line endings,
     /// repeated by every status read until something asks for them again.
     eol_marks: Mutex<Arc<Vec<EolMark>>>,
-    /// Set when the marks are worth re-reading: the tree turned dirty, a
-    /// write landed, or the tab has only just opened. **Not every poll** —
-    /// finding out means reading the pending diffs, which is a cost the
-    /// resting state should not pay every ten seconds.
+    /// Set when the marks are worth re-reading whatever status says: a
+    /// write landed, or the tab has only just opened.
     eol_marks_stale: std::sync::atomic::AtomicBool,
+    /// Fingerprint of the last status read, so a tick that finds the same
+    /// files in the same states reads no diffs at all.
+    status_key: Mutex<Option<u64>>,
     /// Fingerprint of the last refs read (see [`refs_key`]), so a refresh
     /// can tell an external commit / fetch / switch from a quiet re-read.
     /// `None` until the first read: opening already streams the graph.
@@ -760,6 +768,7 @@ impl RepoSession {
             eol_baselines: Mutex::new(HashMap::new()),
             eol_marks: Mutex::new(Arc::new(Vec::new())),
             eol_marks_stale: std::sync::atomic::AtomicBool::new(true),
+            status_key: Mutex::new(None),
             refs_key: Mutex::new(None),
             last_snapshot: Mutex::new(None),
             write_busy: std::sync::atomic::AtomicBool::new(false),
@@ -1567,11 +1576,21 @@ impl RepoSession {
                 let flipped = self.wip_dirty.swap(dirty, Ordering::SeqCst) != dirty;
                 // Reading the pending diffs is the one part of this that
                 // scales with the change rather than with the tree, so it
-                // is not on the poll: a tree that turned dirty, a write
-                // that landed and a tab that just opened are the three
-                // moments the answer can have changed under it.
+                // does not run on every tick — only where the answer can
+                // have moved. **What status reports is the test**, not
+                // whether the tree turned dirty: the index cannot change
+                // without status changing, including when it is another
+                // git outside this window that changes it, and the index
+                // is what a commit carries. A tick that reads the same
+                // status reads no diffs.
                 let stale = self.eol_marks_stale.swap(false, Ordering::SeqCst);
-                let eol_marks = if stale || flipped {
+                let key = status_key(&status);
+                let moved = self
+                    .status_key
+                    .lock()
+                    .map(|mut slot| slot.replace(key) != Some(key))
+                    .unwrap_or(true);
+                let eol_marks = if stale || moved {
                     self.settle_eol_marks(&workdir, &status, &cancel).await
                 } else {
                     self.eol_marks()
@@ -2984,12 +3003,18 @@ impl RepoSession {
             eol::untracked_shapes(&self.executor, workdir, cancel),
         );
 
-        // A path with something to say from either side says it once: the
-        // row is one row whichever bucket it is in.
-        let mut readings: BTreeMap<String, eol::Reading> = BTreeMap::new();
-        for out in [unstaged, staged].into_iter().flatten() {
+        // A path with something to say from either side says it once — the
+        // row is one row whichever bucket it is in — but **which** side it
+        // was is kept, because only the index goes into a commit.
+        let mut readings: BTreeMap<String, (eol::Reading, bool)> = BTreeMap::new();
+        if let Ok(out) = unstaged {
             for seen in eol::read(&out.stdout) {
-                readings.entry(seen.path).or_insert(seen.reading);
+                readings.insert(seen.path, (seen.reading, false));
+            }
+        }
+        if let Ok(out) = staged {
+            for seen in eol::read(&out.stdout) {
+                readings.insert(seen.path, (seen.reading, true));
             }
         }
         // Only files status actually reports: a path spelled differently by
@@ -3004,9 +3029,12 @@ impl RepoSession {
             if !pending.contains(path.as_str()) {
                 continue;
             }
+            // Untracked means nothing of it is in the index yet, so
+            // whatever it says is about the next `git add`, not this
+            // commit.
             match shape {
                 eol::Shape::Uniform(eol) => {
-                    readings.insert(path, eol::Reading::NewFile { eol });
+                    readings.insert(path, (eol::Reading::NewFile { eol }, false));
                 }
                 // The one shape the column cannot finish: the sentence
                 // counts lines, and only the patch has them.
@@ -3015,13 +3043,13 @@ impl RepoSession {
                     if let Ok(raw) =
                         details::file_diff_raw(&self.executor, workdir, &target, cancel).await
                     {
-                        readings.insert(path, eol::read_one(&raw));
+                        readings.insert(path, (eol::read_one(&raw), false));
                     }
                 }
                 eol::Shape::Nothing => {}
             }
         }
-        readings.retain(|_, reading| *reading != eol::Reading::Quiet);
+        readings.retain(|_, (reading, _)| *reading != eol::Reading::Quiet);
         if readings.is_empty() {
             return Vec::new();
         }
@@ -3040,7 +3068,7 @@ impl RepoSession {
 
         let mut marks = Vec::new();
         for (path, ruling) in paths.into_iter().zip(rulings) {
-            let Some(reading) = readings.get(&path).copied() else {
+            let Some((reading, staged)) = readings.get(&path).copied() else {
                 continue;
             };
             if ruling == eol::Ruling::NotText {
@@ -3056,9 +3084,8 @@ impl RepoSession {
             if let Some(notice) = eol::settle(reading, baseline.as_ref()) {
                 marks.push(EolMark {
                     path,
-                    // The ending the change brings in — the one thing a
-                    // mark could say in a word if it said anything.
-                    eol: eol::brought_in(&notice).as_str().to_string(),
+                    notice,
+                    staged,
                 });
             }
         }
@@ -4019,6 +4046,19 @@ fn build_label_map(
 /// date redraws chips through the label diff, and rebuilding for those
 /// would repaint the graph over nothing. `git for-each-ref` lists in
 /// refname order, so equal layouts hash equal.
+/// Fingerprint of what status reported: which paths, in which state.
+///
+/// Deliberately not the branch headers — ahead/behind move when a fetch
+/// lands and say nothing about anyone's line endings.
+fn status_key(status: &WorkTreeStatus) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for item in &status.items {
+        item.hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
 fn refs_key(refs: &[RefEntry], head: &HeadState) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
