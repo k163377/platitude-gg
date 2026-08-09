@@ -80,7 +80,15 @@ Canvas {
             ctx.stroke()
         } else if (icon.kind === "pen") {
             ctx.save()
-            ctx.translate(8 * s, 8 * s)
+            // Half a line hangs off the top of the body, which is stroked,
+            // and nothing off the point, which is filled — so the ink of
+            // this one sits above the middle of its box while every other
+            // mark here sits on it. Alone it is a fraction of a pixel; in
+            // a row with a word it is the pixel that makes the pen look
+            // lifted (measured beside `Keep editing`: 1px over the check's
+            // seat in the same button). Put back before the turn, so it
+            // travels along the pen's own axis.
+            ctx.translate(8 * s, 8 * s + 0.25 * s + ctx.lineWidth / 4)
             ctx.rotate(Math.PI / 4)
             ctx.strokeRect(-1.4 * s, -6 * s, 2.8 * s, 8.5 * s)
             ctx.beginPath()
