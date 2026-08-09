@@ -580,6 +580,11 @@ pub struct Hub {
     /// new and a flag would be set by all of them.
     state: State,
     saved_state: State,
+    /// Empty unless another process is already using the files this one
+    /// would have used; then it names their directory. The window has
+    /// nothing else to say which of two builds is in the way, and the
+    /// store this hub holds is an empty one by then.
+    held_elsewhere: String,
 }
 
 thread_local! {
@@ -611,8 +616,12 @@ impl AvatarUrls {
 
 impl Hub {
     /// Installs the hub into the main thread. Call once before `QApp::run`.
-    pub fn install(runtime: tokio::runtime::Runtime) {
-        let store = Store::discover();
+    ///
+    /// The store comes from `main`, which is where the question "may this
+    /// process use these files at all" is answered — a run that was turned
+    /// away is handed an empty store here and `held_elsewhere` names the
+    /// directory it did not get.
+    pub fn install(runtime: tokio::runtime::Runtime, store: Store, held_elsewhere: String) {
         let settings = store.load_settings();
         let state = store.load_state();
         tracing::info!(
@@ -630,6 +639,7 @@ impl Hub {
                 settings,
                 saved_state: state.clone(),
                 state,
+                held_elsewhere,
             });
         });
         // Once, at the start: a person who emptied the avatars directory
@@ -785,6 +795,12 @@ impl Hub {
 
     pub fn state(&self) -> &State {
         &self.state
+    }
+
+    /// The directory another process is holding, empty when this one got
+    /// what it asked for.
+    pub fn held_elsewhere(&self) -> &str {
+        &self.held_elsewhere
     }
 
     /// Records the auto-fetch interval and puts it in force. Written out at

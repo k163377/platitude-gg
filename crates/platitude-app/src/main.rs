@@ -15,6 +15,7 @@ use models::{
     AppBackend, CommandsModel, DetailsModel, DiffModel, GraphModel, NavSectionModel, RepoTab,
     TabsModel, WorkTreeModel,
 };
+use platitude_core::settings::{Build, Claim, Store};
 use qtbridge::QApp;
 
 fn main() {
@@ -39,7 +40,15 @@ fn main() {
             std::process::exit(1);
         }
     };
-    Hub::install(runtime);
+    // Sole use of the two files, held for the length of the run. What the
+    // taskbar's own launch entry starts lands here and goes no further:
+    // two processes writing one `state.toml` overwrite each other's tabs
+    // and window shape, last one out winning.
+    let (store, held_elsewhere, _lock) = claim_store(Build {
+        tree: &tree,
+        debug: cfg!(debug_assertions),
+    });
+    Hub::install(runtime, store, held_elsewhere);
 
     let mut app = QApp::new();
     // The slug, not the product name `Platitude GG`: nothing shows this to a
@@ -119,6 +128,41 @@ fn main() {
 
     Hub::shutdown();
     std::process::exit(code);
+}
+
+/// The store this run may use, the directory it was refused if it was, and
+/// the lock to hold on to until the process ends.
+///
+/// Three ways it can go, and the third is the one worth spelling out:
+///
+/// * nobody else has the files — the run gets them, and the lock rides in
+///   `main`'s frame so the kernel releases it however the process ends;
+/// * somebody does — the run is handed an *empty* store, so a window that
+///   is about to say "already running" cannot write a thing on its way out,
+///   and the window says which directory it did not get;
+/// * the lock could not be asked for at all (a redirected profile, a
+///   network share, a filesystem that does not answer) — the run carries
+///   on with the files. A lock nobody can take must never be the reason a
+///   window will not open.
+fn claim_store(build: Build) -> (Store, String, Option<platitude_core::settings::Lock>) {
+    let store = Store::discover(build);
+    match store.claim() {
+        Claim::Ours(lock) => (store, String::new(), Some(lock)),
+        Claim::Taken => {
+            let held = store
+                .lock_path()
+                .as_deref()
+                .and_then(std::path::Path::parent)
+                .map(|dir| dir.display().to_string())
+                .unwrap_or_default();
+            tracing::warn!(store = %held, "another platitude-gg is using these settings");
+            (Store::ephemeral(), held, None)
+        }
+        Claim::Unknown(error) => {
+            tracing::warn!(%error, "the settings could not be locked; carrying on");
+            (store, String::new(), None)
+        }
+    }
 }
 
 /// stderr logging; level via `PG_LOG` (error/warn/info/debug/trace).

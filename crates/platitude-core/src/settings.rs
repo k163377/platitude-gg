@@ -25,6 +25,20 @@ pub const DIR_NAME: &str = "platitude-gg";
 pub const SETTINGS_FILE: &str = "settings.toml";
 pub const STATE_FILE: &str = "state.toml";
 
+/// The file whose handle says which process is using these two.
+///
+/// A file of its own, and one nothing ever writes to. Locking a content
+/// file instead would come apart on the first flush: both are replaced by
+/// `rename` (`write_atomically`), and a lock held on a file that is then
+/// replaced guards an orphan. Measured on Windows — the rename succeeds
+/// over the open handle, and the next process locks the new file without a
+/// word; POSIX renames over open files as a matter of course, so it goes
+/// the same way there.
+pub const LOCK_FILE: &str = "lock";
+
+/// What a development build's directory is called, under [`DIR_NAME`].
+const DEV_DIR: &str = "dev";
+
 /// Written at the top of both files. Every reader is per-key tolerant, so
 /// this is not a gate — it is there so a later renaming of a key can tell
 /// an old file from a new one instead of guessing.
@@ -126,6 +140,53 @@ impl Env {
     }
 }
 
+/// Which build is asking for a store.
+///
+/// A build made in a worktree, or one with debug assertions on, keeps its
+/// own copy of the two files. Several of those are up at once on this
+/// machine, next to the one being used for real work (CLAUDE.md
+/// ビルド・テスト), and the files are what two processes fight over — so
+/// giving each build its own is both what lets them run side by side and
+/// what keeps a development run from costing somebody the tabs and the
+/// layout they were in. What ships reaches the real files, and nothing
+/// else does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Build<'a> {
+    /// The worktree the binary was built in, empty for a plain checkout
+    /// (`models::build_tree` reads it out of the build path).
+    pub tree: &'a str,
+    /// Built with debug assertions on.
+    pub debug: bool,
+}
+
+impl Build<'_> {
+    /// What ships: a plain checkout, optimised.
+    pub const SHIPPED: Build<'static> = Build {
+        tree: "",
+        debug: false,
+    };
+
+    /// True for a build that keeps its own copy.
+    pub fn is_dev(&self) -> bool {
+        !self.tree.is_empty() || self.debug
+    }
+
+    /// The directory this build's files live in, under the platform's
+    /// base. The tree names it, because that is the one thing that tells
+    /// two development builds apart — the same tree built both ways is
+    /// still one build to a person, and shares.
+    fn dir(&self) -> PathBuf {
+        let base = PathBuf::from(DIR_NAME);
+        if !self.tree.is_empty() {
+            base.join(format!("{DEV_DIR}-{}", self.tree))
+        } else if self.debug {
+            base.join(DEV_DIR)
+        } else {
+            base
+        }
+    }
+}
+
 /// Where the two files are, or that there are none.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Store {
@@ -134,9 +195,18 @@ pub struct Store {
 }
 
 impl Store {
-    /// The store this process should use.
-    pub fn discover() -> Self {
-        Self::locate(Platform::HOST, &Env::system())
+    /// The store this process should use, with a development build's own
+    /// copy filled in the first time it runs.
+    pub fn discover(build: Build) -> Self {
+        let env = Env::system();
+        let store = Self::locate(Platform::HOST, &env, build);
+        if build.is_dev() {
+            let shipped = Self::locate(Platform::HOST, &env, Build::SHIPPED);
+            if shipped != store {
+                store.seed_from(&shipped);
+            }
+        }
+        store
     }
 
     /// `PG_CONFIG_DIR` wins: a path puts both files in it, and an empty
@@ -144,7 +214,12 @@ impl Store {
     /// variable still means no files — otherwise a screenshot run would
     /// write its window geometry into the developer's real settings, and
     /// the next run would start from it.
-    pub fn locate(platform: Platform, env: &Env) -> Self {
+    ///
+    /// A named directory is a named directory, whichever build is asking:
+    /// two runs sharing one `--config-dir` are how the saved layout is
+    /// tested at all, and a build that quietly went somewhere else would
+    /// answer a different question than the one asked.
+    pub fn locate(platform: Platform, env: &Env, build: Build) -> Self {
         if let Some(dir) = env.get(CONFIG_DIR_ENV) {
             if dir.is_empty() {
                 return Self::ephemeral();
@@ -154,7 +229,7 @@ impl Store {
         if env.automated() {
             return Self::ephemeral();
         }
-        Self::platform_paths(platform, env)
+        Self::platform_paths(platform, env, build)
     }
 
     /// Both files in one directory.
@@ -181,7 +256,7 @@ impl Store {
     /// A base directory that is not in the environment is not guessed at —
     /// the store simply has no files rather than inventing a path to write
     /// into.
-    fn platform_paths(platform: Platform, env: &Env) -> Self {
+    fn platform_paths(platform: Platform, env: &Env, build: Build) -> Self {
         let (settings_base, state_base) = match platform {
             Platform::Windows => (
                 env.filled("APPDATA").map(PathBuf::from),
@@ -206,9 +281,10 @@ impl Store {
                 (config, state)
             }
         };
+        let dir = build.dir();
         Self {
-            settings_path: settings_base.map(|b| b.join(DIR_NAME).join(SETTINGS_FILE)),
-            state_path: state_base.map(|b| b.join(DIR_NAME).join(STATE_FILE)),
+            settings_path: settings_base.map(|b| b.join(&dir).join(SETTINGS_FILE)),
+            state_path: state_base.map(|b| b.join(&dir).join(STATE_FILE)),
         }
     }
 
@@ -235,6 +311,108 @@ impl Store {
         self.settings_path.is_none() && self.state_path.is_none()
     }
 
+    /// Starts a development build off as a copy of the real files, so that
+    /// the first run of one opens on the tabs and the layout the person was
+    /// already in rather than on an empty window.
+    ///
+    /// Once only, and only into a store that holds neither file: after that
+    /// the copy is its own, and the two go their separate ways. Nothing
+    /// here can stop the application — an empty store of one's own is a
+    /// working store.
+    pub fn seed_from(&self, source: &Store) {
+        let (Some(settings), Some(state)) = (self.settings_path(), self.state_path()) else {
+            return;
+        };
+        if settings.exists() || state.exists() {
+            return;
+        }
+        if let Err(error) = self.copy_from(source) {
+            tracing::warn!(%error, "this build starts with an empty store of its own");
+        }
+    }
+
+    fn copy_from(&self, source: &Store) -> std::io::Result<()> {
+        for (from, to) in [
+            (source.settings_path(), self.settings_path()),
+            (source.state_path(), self.state_path()),
+        ] {
+            let (Some(from), Some(to)) = (from, to) else {
+                continue;
+            };
+            if !from.is_file() {
+                continue;
+            }
+            if let Some(dir) = to.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            std::fs::copy(from, to)?;
+        }
+        // The pictures the settings index sit beside them (`avatar`), and
+        // an index whose files did not come along draws rows that never
+        // fill. One level: the directory holds files named for their own
+        // bytes and nothing else.
+        let (Some(from), Some(to)) = (source.avatars_dir(), self.avatars_dir()) else {
+            return Ok(());
+        };
+        if !from.is_dir() {
+            return Ok(());
+        }
+        std::fs::create_dir_all(&to)?;
+        for entry in std::fs::read_dir(&from)? {
+            let entry = entry?;
+            if entry.file_type()?.is_file() {
+                std::fs::copy(entry.path(), to.join(entry.file_name()))?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Where the lock sits: beside the state file, which is the one two
+    /// processes overwrite in turn — and which is per-machine, where the
+    /// settings may be a roaming profile that follows a person to another
+    /// computer. `None` for a store with no files.
+    pub fn lock_path(&self) -> Option<PathBuf> {
+        let beside = self
+            .state_path
+            .as_deref()
+            .or(self.settings_path.as_deref())?;
+        Some(beside.with_file_name(LOCK_FILE))
+    }
+
+    /// Asks for sole use of these files.
+    ///
+    /// The answer separates "somebody else has it" from "the question
+    /// could not be asked": a redirected profile or a network share can
+    /// leave file locking unanswered, and a lock nobody can take must
+    /// never become the reason a window will not open.
+    pub fn claim(&self) -> Claim {
+        let Some(path) = self.lock_path() else {
+            // A store with no files has nothing for a second process to
+            // overwrite. Every automated run is this one.
+            return Claim::Ours(Lock { _file: None });
+        };
+        if let Some(dir) = path.parent()
+            && let Err(error) = std::fs::create_dir_all(dir)
+        {
+            return Claim::Unknown(error);
+        }
+        let file = match std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(error) => return Claim::Unknown(error),
+        };
+        match file.try_lock() {
+            Ok(()) => Claim::Ours(Lock { _file: Some(file) }),
+            Err(std::fs::TryLockError::WouldBlock) => Claim::Taken,
+            Err(std::fs::TryLockError::Error(error)) => Claim::Unknown(error),
+        }
+    }
+
     pub fn load_settings(&self) -> Settings {
         Settings::from_table(&read_table(self.settings_path.as_deref()))
     }
@@ -256,6 +434,30 @@ impl Store {
         };
         write_atomically(path, &state.to_table().to_string())
     }
+}
+
+/// Sole use of a store, for as long as this value is alive.
+///
+/// The kernel owns it: dropping the handle releases it, and so does the
+/// process ending, however it ends. There is no stale file to clean up
+/// after a crash, and no identifier written anywhere that could outlive
+/// the process that wrote it.
+#[derive(Debug)]
+pub struct Lock {
+    /// Never read. Holding the handle open *is* the lock.
+    _file: Option<std::fs::File>,
+}
+
+/// What came back from [`Store::claim`].
+#[derive(Debug)]
+pub enum Claim {
+    /// Nobody else is using these files. Hold on to it.
+    Ours(Lock),
+    /// Another process is using them.
+    Taken,
+    /// The lock could not be asked for. Carry on: a filesystem that will
+    /// not answer is not a second application.
+    Unknown(std::io::Error),
 }
 
 // ---------------------------------------------------------------------------
@@ -1115,7 +1317,7 @@ graph_lanes_width = 3
     #[test]
     fn the_config_dir_variable_wins_and_empty_means_no_files() {
         let env = Env::from_pairs(&[(CONFIG_DIR_ENV, "/tmp/pg"), ("APPDATA", "/roaming")]);
-        let store = Store::locate(Platform::Windows, &env);
+        let store = Store::locate(Platform::Windows, &env, Build::SHIPPED);
         assert_eq!(
             store.settings_path(),
             Some(Path::new("/tmp/pg/settings.toml"))
@@ -1123,14 +1325,14 @@ graph_lanes_width = 3
         assert_eq!(store.state_path(), Some(Path::new("/tmp/pg/state.toml")));
 
         let empty = Env::from_pairs(&[(CONFIG_DIR_ENV, ""), ("APPDATA", "/roaming")]);
-        assert!(Store::locate(Platform::Windows, &empty).is_ephemeral());
+        assert!(Store::locate(Platform::Windows, &empty, Build::SHIPPED).is_ephemeral());
     }
 
     #[test]
     fn an_automated_run_never_reaches_the_real_files() {
         let env = Env::from_pairs(&[("APPDATA", "/roaming"), ("PG_AUTO_ACT", "open-picker")]);
         assert!(
-            Store::locate(Platform::Windows, &env).is_ephemeral(),
+            Store::locate(Platform::Windows, &env, Build::SHIPPED).is_ephemeral(),
             "a driven process must not write where a person's settings are"
         );
 
@@ -1140,7 +1342,7 @@ graph_lanes_width = 3
             (CONFIG_DIR_ENV, "/tmp/run-7"),
         ]);
         assert_eq!(
-            Store::locate(Platform::Windows, &told).state_path(),
+            Store::locate(Platform::Windows, &told, Build::SHIPPED).state_path(),
             Some(Path::new("/tmp/run-7/state.toml")),
             "a run that names a directory gets it"
         );
@@ -1154,7 +1356,7 @@ graph_lanes_width = 3
             ("PG_LOG", "info"),
         ]);
         assert_eq!(
-            Store::locate(Platform::Windows, &env).settings_path(),
+            Store::locate(Platform::Windows, &env, Build::SHIPPED).settings_path(),
             Some(Path::new("C:/Roaming/platitude-gg/settings.toml")),
             "PG_LOG says how loud to be, not who is driving"
         );
@@ -1172,7 +1374,7 @@ graph_lanes_width = 3
             ("PG_ALLOW_GUI", "1"),
         ]);
         assert_eq!(
-            Store::locate(Platform::Windows, &env).state_path(),
+            Store::locate(Platform::Windows, &env, Build::SHIPPED).state_path(),
             Some(Path::new("C:/Local/platitude-gg/state.toml")),
             "the window a person asked for opens on the tabs they left"
         );
@@ -1191,6 +1393,7 @@ graph_lanes_width = 3
         let windows = Store::locate(
             Platform::Windows,
             &Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("LOCALAPPDATA", "C:/Local")]),
+            Build::SHIPPED,
         );
         assert_eq!(
             windows.settings_path(),
@@ -1202,7 +1405,11 @@ graph_lanes_width = 3
             "a window position must not roam to another machine"
         );
 
-        let mac = Store::locate(Platform::MacOs, &Env::from_pairs(&[("HOME", "/Users/me")]));
+        let mac = Store::locate(
+            Platform::MacOs,
+            &Env::from_pairs(&[("HOME", "/Users/me")]),
+            Build::SHIPPED,
+        );
         assert_eq!(
             mac.settings_path(),
             Some(Path::new(
@@ -1210,7 +1417,11 @@ graph_lanes_width = 3
             ))
         );
 
-        let xdg = Store::locate(Platform::Xdg, &Env::from_pairs(&[("HOME", "/home/me")]));
+        let xdg = Store::locate(
+            Platform::Xdg,
+            &Env::from_pairs(&[("HOME", "/home/me")]),
+            Build::SHIPPED,
+        );
         assert_eq!(
             xdg.settings_path(),
             Some(Path::new("/home/me/.config/platitude-gg/settings.toml"))
@@ -1223,6 +1434,7 @@ graph_lanes_width = 3
         let told = Store::locate(
             Platform::Xdg,
             &Env::from_pairs(&[("HOME", "/home/me"), ("XDG_STATE_HOME", "/run/state")]),
+            Build::SHIPPED,
         );
         assert_eq!(
             told.state_path(),
@@ -1232,7 +1444,163 @@ graph_lanes_width = 3
 
     #[test]
     fn nowhere_to_put_them_is_not_a_guess() {
-        assert!(Store::locate(Platform::Xdg, &Env::default()).is_ephemeral());
+        assert!(Store::locate(Platform::Xdg, &Env::default(), Build::SHIPPED).is_ephemeral());
+    }
+
+    #[test]
+    fn a_development_build_never_writes_the_real_files() {
+        let env = Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("LOCALAPPDATA", "C:/Local")]);
+        let debug = Store::locate(
+            Platform::Windows,
+            &env,
+            Build {
+                tree: "",
+                debug: true,
+            },
+        );
+        assert_eq!(
+            debug.settings_path(),
+            Some(Path::new("C:/Roaming/platitude-gg/dev/settings.toml"))
+        );
+
+        let worktree = Store::locate(
+            Platform::Windows,
+            &env,
+            Build {
+                tree: "solo",
+                debug: true,
+            },
+        );
+        assert_eq!(
+            worktree.state_path(),
+            Some(Path::new("C:/Local/platitude-gg/dev-solo/state.toml")),
+            "the tree names it, so two of them can be up at once"
+        );
+        assert_eq!(
+            worktree,
+            Store::locate(
+                Platform::Windows,
+                &env,
+                Build {
+                    tree: "solo",
+                    debug: false
+                }
+            ),
+            "one tree is one build to a person, however it was compiled"
+        );
+
+        let xdg = Store::locate(
+            Platform::Xdg,
+            &Env::from_pairs(&[("HOME", "/home/me")]),
+            Build {
+                tree: "labels",
+                debug: false,
+            },
+        );
+        assert_eq!(
+            xdg.settings_path(),
+            Some(Path::new(
+                "/home/me/.config/platitude-gg/dev-labels/settings.toml"
+            ))
+        );
+    }
+
+    #[test]
+    fn a_named_directory_is_the_same_one_for_every_build() {
+        // Two runs sharing one `--config-dir` are how the saved layout is
+        // tested; a build that went somewhere else of its own accord would
+        // quietly answer a different question.
+        let env = Env::from_pairs(&[(CONFIG_DIR_ENV, "/tmp/run-7"), ("APPDATA", "C:/Roaming")]);
+        assert_eq!(
+            Store::locate(
+                Platform::Windows,
+                &env,
+                Build {
+                    tree: "solo",
+                    debug: true
+                }
+            ),
+            Store::locate(Platform::Windows, &env, Build::SHIPPED)
+        );
+    }
+
+    #[test]
+    fn a_development_build_starts_from_a_copy_and_then_goes_its_own_way() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let real = dir_store(&dir.path().join("real"));
+        let mut settings = Settings::default();
+        settings.defaults.auto_fetch_minutes = 7;
+        real.save_settings(&settings).expect("save");
+        real.save_state(&State::default()).expect("save");
+        let avatars = real.avatars_dir().expect("avatars");
+        std::fs::create_dir_all(&avatars).expect("mkdir");
+        std::fs::write(avatars.join("abc.png"), b"picture").expect("write");
+
+        let dev = dir_store(&dir.path().join("dev"));
+        dev.seed_from(&real);
+        assert_eq!(
+            dev.load_settings().defaults.auto_fetch_minutes,
+            7,
+            "the first run opens on what the person had"
+        );
+        assert!(
+            dev.avatars_dir()
+                .expect("avatars")
+                .join("abc.png")
+                .is_file(),
+            "an index whose pictures stayed behind draws rows that never fill"
+        );
+
+        // From here the two are strangers: a second seeding must not undo
+        // what the development build has done since.
+        let mut moved = dev.load_settings();
+        moved.defaults.auto_fetch_minutes = 1;
+        dev.save_settings(&moved).expect("save");
+        dev.seed_from(&real);
+        assert_eq!(dev.load_settings().defaults.auto_fetch_minutes, 1);
+    }
+
+    #[test]
+    fn only_one_process_at_a_time_holds_a_store() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = dir_store(dir.path());
+        let first = store.claim();
+        assert!(matches!(first, Claim::Ours(_)), "nobody else has it");
+        assert!(
+            matches!(store.claim(), Claim::Taken),
+            "a second asker is turned away"
+        );
+
+        // Dropping the handle is the whole release mechanism — which is
+        // also what happens when a process is killed.
+        drop(first);
+        assert!(matches!(store.claim(), Claim::Ours(_)));
+    }
+
+    #[test]
+    fn a_store_with_no_files_is_never_taken() {
+        // Every automated run lands here, and two of them run at once.
+        let store = Store::ephemeral();
+        let first = store.claim();
+        assert!(store.lock_path().is_none());
+        assert!(matches!(first, Claim::Ours(_)));
+        assert!(matches!(store.claim(), Claim::Ours(_)));
+    }
+
+    #[test]
+    fn the_lock_is_not_one_of_the_two_files() {
+        // Both are replaced by rename on every write, and a lock on a
+        // replaced file guards an orphan (measured — see `LOCK_FILE`).
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = dir_store(dir.path());
+        let held = store.claim();
+        store.save_state(&State::default()).expect("save");
+        store.save_settings(&Settings::default()).expect("save");
+        assert!(
+            matches!(store.claim(), Claim::Taken),
+            "a flush must not hand the store to the next process"
+        );
+        drop(held);
     }
 
     #[test]

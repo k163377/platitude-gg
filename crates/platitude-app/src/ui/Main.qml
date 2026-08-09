@@ -93,6 +93,34 @@ ApplicationWindow {
     onWidthChanged: root.reportCaptionStrip()
     onMaximizedInsetChanged: root.reportCaptionStrip()
 
+    /// What Windows has to be told about this window, whatever the window
+    /// turns out to be for. A run that was turned away gets a window too,
+    /// and an undecorated one would be a second application on the taskbar
+    /// wearing the shell's generic icon.
+    function decorateWindow() {
+        // Windows 11 rounds the window itself and leaves the corner pixels
+        // transparent, so the desktop shows through them. The window is up
+        // by now (`visible` is set above), which is all the switch needs.
+        AppBackend.squareWindowCorners()
+        // Without this the window wears the shell's generic icon, in the
+        // title bar and on the taskbar button alike.
+        AppBackend.setWindowIcon()
+        // Asking for no drawn buttons took the system's own gestures with
+        // them; this puts those back (see `flags` above).
+        if (!root.captionMerged)
+            return
+        AppBackend.keepWindowGestures()
+        // The hairline Windows draws around the window, and the strip of
+        // frame just inside it. Left to the system both are light, and
+        // with no title bar to explain them they read as stray white
+        // edges around the band. The strip takes the band's own colour so
+        // it disappears into it; the hairline stays a line.
+        AppBackend.setWindowBorder(Theme.borderDefault, Theme.bgElevated)
+        // The hit test just installed reads the strip from here on; hand
+        // it the shape the band settled into while loading.
+        root.reportCaptionStrip()
+    }
+
     /// How far a maximised window reaches past the screen.
     ///
     /// Windows inflates a maximised frame by the width of its invisible
@@ -328,7 +356,9 @@ ApplicationWindow {
         id: stateTimer
         interval: Metrics.stateFlushMs
         repeat: true
-        running: true
+        // A run that was turned away holds an empty store, so its reports
+        // would reach no file — it does not make them all the same.
+        running: !AppBackend.alreadyRunning
         onTriggered: root.reportState()
     }
 
@@ -347,6 +377,20 @@ ApplicationWindow {
             + " width=" + topBar.width
             + " tabsW=" + topBar.bandTabsWidth
             + " rightMargin=" + topBar.bandRightMargin)
+    }
+
+    // PG_AUTO_ACT=solo: the window a run that was turned away puts up.
+    // The harness has to be part of this one — it holds the real lock on
+    // the config directory before it starts this process, so the picture
+    // is of the mechanism and not of a flag that imitates it.
+    Timer {
+        id: soloActTimer
+        interval: 1200
+        onTriggered: AppBackend.report(
+            "solo blocked=" + AppBackend.alreadyRunning
+            + " held=" + (AppBackend.heldElsewhere !== "")
+            + " gate=" + gate.visible
+            + " main=" + mainUi.visible)
     }
 
     // PG_AUTO_ACT=state: what a launch came back to, and (with the
@@ -392,46 +436,38 @@ ApplicationWindow {
     }
 
     // Closing is the last chance: the timer will not come round again.
-    onClosing: root.reportState()
+    onClosing: {
+        if (!AppBackend.alreadyRunning)
+            root.reportState()
+    }
 
     Component.onCompleted: {
-        AppBackend.initialize()
-        // Windows 11 rounds the window itself and leaves the corner pixels
-        // transparent, so the desktop shows through them. The window is up
-        // by now (`visible` is set above), which is all the switch needs.
-        AppBackend.squareWindowCorners()
-        // Without this the window wears the shell's generic icon, in the
-        // title bar and on the taskbar button alike.
-        AppBackend.setWindowIcon()
-        // Asking for no drawn buttons took the system's own gestures with
-        // them; this puts those back (see `flags` above).
-        if (root.captionMerged) {
-            AppBackend.keepWindowGestures()
-            // The hairline Windows draws around the window, and the strip
-            // of frame just inside it. Left to the system both are light,
-            // and with no title bar to explain them they read as stray
-            // white edges around the band. The strip takes the band's own
-            // colour so it disappears into it; the hairline stays a line.
-            AppBackend.setWindowBorder(Theme.borderDefault, Theme.bgElevated)
-            // The hit test just installed reads the strip from here on;
-            // hand it the shape the band settled into while loading.
-            root.reportCaptionStrip()
-        }
-        root.applySavedWindow()
-        if (AppBackend.autoOpen !== "") {
-            // Multiple repositories separated by ';' open as tabs in order.
-            const paths = AppBackend.autoOpen.split(";")
-            for (let i = 0; i < paths.length; i++) {
-                if (paths[i] !== "")
-                    tabsModel.openRepositoryPath(paths[i])
+        root.decorateWindow()
+        // A window that is only here to say another process has the files
+        // does none of the rest: no git to ask about, no tabs to open, no
+        // shape to take back — the window whose files these are is
+        // already wearing it.
+        if (!AppBackend.alreadyRunning) {
+            AppBackend.initialize()
+            root.applySavedWindow()
+            if (AppBackend.autoOpen !== "") {
+                // Multiple repositories separated by ';' open as tabs in
+                // order.
+                const paths = AppBackend.autoOpen.split(";")
+                for (let i = 0; i < paths.length; i++) {
+                    if (paths[i] !== "")
+                        tabsModel.openRepositoryPath(paths[i])
+                }
+            } else {
+                tabsModel.restoreTabs()
             }
-        } else {
-            tabsModel.restoreTabs()
         }
         if (AppBackend.autoAct === "state")
             stateActTimer.start()
         if (AppBackend.autoAct === "band")
             bandActTimer.start()
+        if (AppBackend.autoAct === "solo")
+            soloActTimer.start()
         if (AppBackend.autoQuitMs > 0)
             quitTimer.start()
         if (AppBackend.shotDir !== "")
@@ -468,7 +504,11 @@ ApplicationWindow {
                     const saved = res.saveToFile(AppBackend.shotDir + "/overlay.png")
                     console.warn("overlay saved=" + saved)
                 })
-            const ok = mainUi.grabToImage(function (res) {
+            // Whatever the window is actually showing. The gate is a
+            // sibling of `mainUi`, not a child, so a run that ends on it
+            // used to photograph the application it never became.
+            const shown = gate.visible ? gate : mainUi
+            const ok = shown.grabToImage(function (res) {
                 const saved = res.saveToFile(path)
                 console.warn("screenshot saved=" + saved + " path=" + path)
                 if (AppBackend.autoQuitMs <= 0)
@@ -479,10 +519,22 @@ ApplicationWindow {
         }
     }
 
-    // ---- git gate --------------------------------------------------------
+    // ---- the two ways the window has nothing to show ---------------------
+    // git is missing or too old, or another process already has the files
+    // this one would have used. Both are "this window is not going to be
+    // an application", and both wear the same shape.
     Item {
+        id: gate
         anchors.fill: parent
-        visible: AppBackend.gitState !== "ok"
+        visible: AppBackend.gitState !== "ok" || AppBackend.alreadyRunning
+        // Its own ground rather than the window's, so that a grab of this
+        // item is a picture of the screen (`shotTimer`). Nothing under it
+        // is drawn while it is up — `mainUi` is hidden — so the colour is
+        // the one the window would have shown anyway.
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.bgBase
+        }
         Column {
             anchors.centerIn: parent
             spacing: Theme.spaceLg
@@ -493,11 +545,42 @@ ApplicationWindow {
                 font.weight: Font.DemiBold
                 anchors.horizontalCenter: parent.horizontalCenter
             }
+            Label {
+                visible: AppBackend.alreadyRunning
+                text: qsTr("Platitude GG is already open. Its window is the one to use.")
+                wrapMode: Text.Wrap
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+            }
+            // Which one, since two builds are alike on screen and the
+            // taskbar's launch entry does not say which it started.
+            Label {
+                visible: AppBackend.alreadyRunning
+                text: AppBackend.heldElsewhere
+                color: Theme.textSecondary
+                font.family: Theme.monoFamily
+                font.pixelSize: Theme.fontSm
+                elide: Text.ElideMiddle
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+            }
+            // The way out. There is no title bar of its own to close this
+            // window by when the band is the title bar, and the band is
+            // inside the part that stays hidden.
+            // Not `highlighted`: the accent is for the button somebody
+            // came to press (規約 §アクセント), and nobody came here. The
+            // empty page's lone button is the same shape.
+            HoverButton {
+                visible: AppBackend.alreadyRunning
+                text: qsTr("Close")
+                anchors.horizontalCenter: parent.horizontalCenter
+                onClicked: root.close()
+            }
             // The drawn ring, not Fusion's BusyIndicator — the same
             // turning mark as everywhere else in the window
             // (規約 §進行中・長押しの定数).
             NavIcon {
-                visible: AppBackend.gitState === "checking"
+                visible: AppBackend.gitState === "checking" && !AppBackend.alreadyRunning
                 width: Theme.iconLg
                 height: Theme.iconLg
                 kind: "spinner"
@@ -507,6 +590,7 @@ ApplicationWindow {
                 // thread drains models.
                 RotationAnimator on rotation {
                     running: AppBackend.gitState === "checking"
+                             && !AppBackend.alreadyRunning
                              && AppBackend.shotDir === ""
                     loops: Animation.Infinite
                     from: 0

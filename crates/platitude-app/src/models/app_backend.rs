@@ -88,6 +88,13 @@ pub struct AppBackend {
     /// The worktree this binary was built in, empty for the primary
     /// checkout — see [`build_tree`].
     build_tree: String,
+    /// Another process is already using the files this one would have
+    /// used, so this window is only here to say so and be dismissed.
+    already_running: bool,
+    /// The directory that other process is holding. Two builds are told
+    /// apart by nothing else on screen, and the taskbar's launch entry
+    /// gives no clue which one it started.
+    held_elsewhere: String,
     check_feed: Arc<Feed<AppMsg>>,
 }
 
@@ -208,6 +215,8 @@ impl Default for AppBackend {
                     .join(" ")
             ),
             build_tree: build_tree(),
+            already_running: Hub::with(|hub| !hub.held_elsewhere().is_empty()).unwrap_or(false),
+            held_elsewhere: Hub::with(|hub| hub.held_elsewhere().to_string()).unwrap_or_default(),
             check_feed: Arc::new(Feed::default()),
         }
     }
@@ -273,6 +282,8 @@ impl AppBackend {
     );
     qproperty!("avatarFilters", Member = avatar_filters, Constant);
     qproperty!("buildTree", Member = build_tree, Constant);
+    qproperty!("alreadyRunning", Member = already_running, Constant);
+    qproperty!("heldElsewhere", Member = held_elsewhere, Constant);
 
     #[qsignal]
     fn git_state_changed(&mut self);
