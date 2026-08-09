@@ -247,9 +247,15 @@ ApplicationWindow {
     // needs no identity.
     property bool identityDismissed: false
     property bool identityEditing: false
+    // A save that only half landed leaves an identity that *is* set, so
+    // `missing` on its own takes the screen away at the one moment it has
+    // something to say: measured, the state flipped to `ready` on the
+    // name that did land and this window closed the dialog out from under
+    // the answer. What holds it open is the flag the marks read.
     readonly property bool identityWanted: AppBackend.gitState === "ok"
                                            && (identityEditing
-                                               || (AppBackend.identityState === "missing"
+                                               || ((AppBackend.identityState === "missing"
+                                                    || AppBackend.identityUnsaved)
                                                    && !identityDismissed))
     function dismissIdentity() {
         identityEditing = false
@@ -553,6 +559,27 @@ ApplicationWindow {
         // would reach no file — it does not make them all the same.
         running: !AppBackend.alreadyRunning
         onTriggered: root.reportState()
+    }
+
+    // PG_AUTO_ACT=identity / identity-half: what a save left standing.
+    // The marks and the badge are in the picture, but "which half landed"
+    // is a pair of booleans, and a dialog that stayed open because the
+    // save did not take looks exactly like one nobody has answered yet.
+    // Read the two verbs as a pair: the resting one has to come back with
+    // every flag down, or the half one is only showing that some flag can
+    // be raised.
+    Timer {
+        interval: 1200
+        running: AppBackend.autoAct === "identity"
+                 || AppBackend.autoAct === "identity-half"
+        onTriggered: AppBackend.report(
+            "identity state=" + AppBackend.identityState
+            + " dialog=" + identityDialog.opened
+            + " nameSaved=" + AppBackend.identityNameSaved
+            + " emailSaved=" + AppBackend.identityEmailSaved
+            + " unsaved=" + AppBackend.identityUnsaved
+            + " badge=" + topBar.identityBadgeShown
+            + " said=" + (AppBackend.identityError !== ""))
     }
 
     // PG_AUTO_ACT=band: the shape the title-bar band settled into. The

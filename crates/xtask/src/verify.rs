@@ -16,6 +16,31 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 /// repository load, and the write itself happen inside this.
 const GRACE_MS: u64 = 20_000;
 
+/// What the identity verbs type in when nothing else is asked for. Both
+/// halves differ from anything the seed below holds, so a mark means the
+/// write landed rather than that the value was already there.
+const IDENTITY_ASKED: &str = "Ada Lovelace|ada@example.com";
+
+/// The git configuration an identity run starts from, or `None` for every
+/// verb that has nothing to do with one.
+///
+/// `identity-half` is the whole point of the pair. A `user.email` with two
+/// values in the file refuses a plain set (measured: exit 5, `cannot
+/// overwrite multiple values`) while the `user.name` written just before
+/// it goes in — the same half-landed write a configuration lock lost
+/// between the two calls leaves behind, and the only version of it that
+/// can be produced on demand. Neither seed names a name, so the screen
+/// asks for an identity on its own.
+fn identity_seed(verb: &str) -> Option<&'static str> {
+    match verb {
+        "identity" => Some(""),
+        "identity-half" => {
+            Some("[user]\n\temail = personal@example.com\n\temail = second@example.com\n")
+        }
+        _ => None,
+    }
+}
+
 struct Options {
     verb: String,
     arg: String,
@@ -276,6 +301,33 @@ pub fn run(args: &[String]) -> Result<(), String> {
         cmd.env("PG_AUTO_SELECT", "1");
     }
 
+    // The identity screen is the one surface whose write lands outside the
+    // demo repository — in the configuration of whoever is sitting at this
+    // machine. So the run is given one of its own: `--global` follows
+    // GIT_CONFIG_GLOBAL and the read-back resolves through the same file,
+    // which exercises the whole feature without reading or touching a real
+    // identity. The working directory goes with it, because git resolves
+    // configuration from one and the repository this tree lives in would
+    // otherwise get a say.
+    if let Some(seed) = identity_seed(&opts.verb) {
+        let config = shot_dir.join("gitconfig");
+        std::fs::write(&config, seed).map_err(|e| e.to_string())?;
+        cmd.current_dir(&shot_dir)
+            .env("GIT_CONFIG_GLOBAL", &config)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env(
+                "PG_AUTO_IDENTITY",
+                match opts.arg.is_empty() {
+                    true => IDENTITY_ASKED,
+                    false => opts.arg.as_str(),
+                },
+            );
+        if opts.verb == "identity-half" {
+            cmd.env("PG_AUTO_IDENTITY_SAVE", "1");
+        }
+        println!("identity config: {}", config.display());
+    }
+
     // `solo` is the one verb the harness has to take part in: the window
     // it photographs is the one a *second* process puts up, so somebody
     // has to be the first. Holding the real lock — rather than setting a
@@ -332,6 +384,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let must_say = match opts.verb.as_str() {
         "solo" => Some("solo blocked=true"),
         "details-fit" => Some("details_fit fits=true"),
+        // A dialog that stayed open because the write did not take looks
+        // exactly like one nobody has answered yet, and "which half
+        // landed" is not something a picture holds at all.
+        "identity" => Some(
+            "identity state=missing dialog=true nameSaved=false emailSaved=false unsaved=false",
+        ),
+        "identity-half" => {
+            Some("state=ready dialog=true nameSaved=true emailSaved=false unsaved=true")
+        }
         _ => None,
     };
     let outcome = Outcome {

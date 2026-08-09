@@ -83,6 +83,17 @@ commands:
       `tab-mark` opens the same strip and puts the pointer on the tab its
       argument names (default 1), which is the only way a headless run
       reaches the half of the `✕` rule that hover answers.
+      `identity` and `identity-half` are read as a pair, and are the only
+      verbs whose write would land outside a demo repository — so they are
+      handed a git configuration of their own (GIT_CONFIG_GLOBAL in the
+      shot directory) and never see the one on this machine. The argument
+      is what to type, as `<name>|<email>`. `identity` fills the screen and
+      leaves it; `identity-half` saves against a configuration whose
+      user.email holds two values, which git refuses to overwrite with one
+      — so the name lands and the address does not, the same way a lost
+      configuration lock leaves it. Both are judged on their own report:
+      a screen still standing because the save did not take frames exactly
+      like one nobody has answered yet.
 
   linux [--rebuild] [--shell] [--stage core|app] <command…>
       Run a command against this checkout on Ubuntu, in a container built

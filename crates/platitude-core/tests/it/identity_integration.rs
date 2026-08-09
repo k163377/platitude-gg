@@ -64,7 +64,7 @@ async fn writes_the_identity_and_leaves_sanitizing_to_git() {
     repo.git(&["config", "--unset", "user.email"]);
     let (exec, cancel) = env();
 
-    identity::set_identity(
+    let written = identity::set_identity(
         &exec,
         &repo.path,
         "山田 太郎",
@@ -74,6 +74,8 @@ async fn writes_the_identity_and_leaves_sanitizing_to_git() {
     )
     .await
     .expect("set identity");
+    assert!(written.is_saved(), "both halves landed: {written:?}");
+    assert!(written.message.is_empty(), "nothing to report");
 
     let config = identity::load(&exec, &repo.path, &cancel)
         .await
@@ -161,6 +163,84 @@ async fn writes_the_identity_and_leaves_sanitizing_to_git() {
     .await
     .expect_err("an empty name is refused");
     assert!(err.to_string().contains("must not be empty"), "{err}");
+}
+
+/// An identity is two `git config` calls, and the second one can fail on
+/// its own — the lock on the configuration file is taken and released per
+/// call, so another process can hold it for the second and not the first.
+/// The half that landed must not read as a finished identity: both halves
+/// are set, so `is_complete()` says yes while the address belongs to the
+/// identity the user was replacing.
+///
+/// A `user.email` with two values in the file refuses a plain set the same
+/// way (measured: exit 5, `cannot overwrite multiple values`) and refuses
+/// it every time, which is what makes it the shape to test against.
+#[tokio::test]
+async fn a_write_that_only_half_lands_says_which_half() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["config", "--unset-all", "user.email"]);
+    repo.git(&["config", "--add", "user.email", "personal@example.com"]);
+    repo.git(&["config", "--add", "user.email", "second@example.com"]);
+    let (exec, cancel) = env();
+
+    let written = identity::set_identity(
+        &exec,
+        &repo.path,
+        "Work Name",
+        "work@example.com",
+        ConfigScope::Local,
+        &cancel,
+    )
+    .await
+    .expect("the read-back still answers");
+
+    assert!(!written.is_saved(), "{written:?}");
+    assert!(written.name_saved, "the first call landed");
+    assert!(!written.email_saved, "the second one did not");
+    assert!(!written.message.is_empty(), "git's own message comes back");
+
+    // What is reported is what git now holds, not what was asked for: the
+    // name moved, the address did not.
+    assert_eq!(written.identity.name.as_deref(), Some("Work Name"));
+    assert_ne!(
+        written.identity.email.as_deref(),
+        Some("work@example.com"),
+        "the address is still the one being replaced"
+    );
+    assert!(
+        written.identity.is_complete(),
+        "and it looks finished, which is the whole reason to say otherwise"
+    );
+}
+
+/// A configuration file already locked by somebody else takes neither
+/// half. Nothing changes, and the answer says nothing changed rather than
+/// leaving the screen to guess.
+#[tokio::test]
+async fn a_locked_configuration_takes_neither_half() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    let lock = repo.path.join(".git").join("config.lock");
+    std::fs::write(&lock, b"").expect("hold the configuration lock");
+    let (exec, cancel) = env();
+
+    let written = identity::set_identity(
+        &exec,
+        &repo.path,
+        "Work Name",
+        "work@example.com",
+        ConfigScope::Local,
+        &cancel,
+    )
+    .await
+    .expect("reading needs no lock");
+
+    assert!(!written.is_saved(), "{written:?}");
+    assert!(!written.name_saved && !written.email_saved);
+    assert!(!written.message.is_empty(), "git's own message comes back");
+    assert_eq!(written.identity.name.as_deref(), Some("Test User"));
+    assert_eq!(written.identity.email.as_deref(), Some("test@example.com"));
 }
 
 /// A value starting with a dash must be stored as the value, not read as

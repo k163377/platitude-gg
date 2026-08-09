@@ -63,7 +63,10 @@ AppDialog {
             if (!identityDialog.saving || AppBackend.identityBusy)
                 return
             identityDialog.saving = false
-            if (AppBackend.identityError === "")
+            // Closing on "git raised nothing" would close over a write
+            // that only half landed — both keys are set either way, so
+            // the answer is what git reports for each of them.
+            if (AppBackend.identityNameSaved && AppBackend.identityEmailSaved)
                 identityDialog.close()
         }
     }
@@ -94,17 +97,32 @@ AppDialog {
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
             }
-            FormField {
-                id: nameField
+            RowLayout {
                 Layout.fillWidth: true
-                placeholderText: qsTr("Ada Lovelace")
-                onAccepted: identityDialog.submit()
-                // Not validation — these are the characters git drops
-                // when it builds an author line, and keeping them out
-                // stops the configuration from disagreeing with what
-                // commits show. Everything else is the user's business.
-                validator: RegularExpressionValidator {
-                    regularExpression: /[^<>\r\n]*/
+                spacing: Theme.spaceSm
+                FormField {
+                    id: nameField
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("Ada Lovelace")
+                    onAccepted: identityDialog.submit()
+                    // Not validation — these are the characters git drops
+                    // when it builds an author line, and keeping them out
+                    // stops the configuration from disagreeing with what
+                    // commits show. Everything else is the user's business.
+                    validator: RegularExpressionValidator {
+                        regularExpression: /[^<>\r\n]*/
+                    }
+                }
+                // The mark is only ever seen next to a field whose
+                // neighbour has none: a save where both landed closes
+                // this dialog. `opacity` keeps the field the same width
+                // whether or not it is showing.
+                NavIcon {
+                    Layout.alignment: Qt.AlignVCenter
+                    kind: "check"
+                    tint: Theme.success
+                    opacity: AppBackend.identityUnsaved
+                             && AppBackend.identityNameSaved ? 1 : 0
                 }
             }
         }
@@ -116,13 +134,24 @@ AppDialog {
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
             }
-            FormField {
-                id: emailField
+            RowLayout {
                 Layout.fillWidth: true
-                placeholderText: qsTr("ada@example.com")
-                onAccepted: identityDialog.submit()
-                validator: RegularExpressionValidator {
-                    regularExpression: /[^<>\r\n]*/
+                spacing: Theme.spaceSm
+                FormField {
+                    id: emailField
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("ada@example.com")
+                    onAccepted: identityDialog.submit()
+                    validator: RegularExpressionValidator {
+                        regularExpression: /[^<>\r\n]*/
+                    }
+                }
+                NavIcon {
+                    Layout.alignment: Qt.AlignVCenter
+                    kind: "check"
+                    tint: Theme.success
+                    opacity: AppBackend.identityUnsaved
+                             && AppBackend.identityEmailSaved ? 1 : 0
                 }
             }
         }
@@ -135,13 +164,22 @@ AppDialog {
             text: qsTr("Saved for every repository on this computer "
                        + "(user.name and user.email).")
         }
-        // git's own message, unedited.
+        // git's own message, unedited — and where a write took nowhere
+        // without git raising anything, a sentence of our own, because
+        // there is no message to pass through and the marks alone do not
+        // say why one of them is missing.
         Label {
             Layout.fillWidth: true
-            visible: AppBackend.identityError !== ""
+            visible: text !== ""
             wrapMode: Text.Wrap
             color: Theme.danger
-            text: AppBackend.identityError
+            text: AppBackend.identityError !== ""
+                  ? AppBackend.identityError
+                  : AppBackend.identityUnsaved
+                    ? qsTr("git still reports a different identity. A setting in "
+                           + "the repository this window was started in can sit "
+                           + "over this one.")
+                    : ""
         }
 
         RowLayout {

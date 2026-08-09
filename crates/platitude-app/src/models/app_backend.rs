@@ -33,9 +33,12 @@ enum AppMsg {
     IdentityUnknown {
         message: String,
     },
-    /// An identity write finished; `error` carries git's own message.
+    /// An identity write finished; `error` carries git's own message and
+    /// the two flags say which half git now reports as what was asked for.
     IdentitySaved {
         error: Option<String>,
+        name_saved: bool,
+        email_saved: bool,
     },
 }
 
@@ -50,6 +53,16 @@ pub struct AppBackend {
     identity_email: String,
     identity_error: String,
     identity_busy: bool,
+    /// Which half of the last save git now reports as what was asked for.
+    /// The two are how a half-written identity shows on screen instead of
+    /// passing for a finished one, and they stay false until a save has
+    /// finished — nothing has been asked for before that.
+    identity_name_saved: bool,
+    identity_email_saved: bool,
+    /// A save finished without both halves landing. Separate from the two
+    /// above because it also carries "a save has been tried", which is
+    /// what keeps the marks and the toolbar badge out of a fresh window.
+    identity_unsaved: bool,
     auto_open: String,
     shot_dir: String,
     auto_quit_ms: i32,
@@ -189,6 +202,9 @@ impl Default for AppBackend {
             identity_email: String::new(),
             identity_error: String::new(),
             identity_busy: false,
+            identity_name_saved: false,
+            identity_email_saved: false,
+            identity_unsaved: false,
             auto_open: std::env::var("PG_AUTO_OPEN").unwrap_or_default(),
             shot_dir: std::env::var("PG_SHOT_DIR")
                 .unwrap_or_default()
@@ -262,6 +278,21 @@ impl AppBackend {
     qproperty!(
         "identityBusy",
         Member = identity_busy,
+        Notify = identity_changed
+    );
+    qproperty!(
+        "identityNameSaved",
+        Member = identity_name_saved,
+        Notify = identity_changed
+    );
+    qproperty!(
+        "identityEmailSaved",
+        Member = identity_email_saved,
+        Notify = identity_changed
+    );
+    qproperty!(
+        "identityUnsaved",
+        Member = identity_unsaved,
         Notify = identity_changed
     );
     qproperty!("autoIdentity", Member = auto_identity, Constant);
@@ -695,6 +726,10 @@ impl AppBackend {
         }
         self.identity_busy = true;
         self.identity_error = String::new();
+        // The marks describe the save that is starting, not the last one.
+        self.identity_name_saved = false;
+        self.identity_email_saved = false;
+        self.identity_unsaved = false;
         self.identity_changed();
         let feed = Arc::clone(&self.check_feed);
         let spawned = Hub::with(|hub| {
@@ -716,22 +751,31 @@ impl AppBackend {
                 )
                 .await;
                 match written {
-                    Ok(()) => {
-                        // Read back rather than echo: a repository-local
-                        // setting can still override what was just written.
-                        match identity::load(&executor, &workdir, &cancel).await {
-                            Ok(config) => feed.push(AppMsg::Identity {
-                                name: config.identity.name.unwrap_or_default(),
-                                email: config.identity.email.unwrap_or_default(),
-                            }),
-                            Err(e) => feed.push(AppMsg::IdentityUnknown {
-                                message: e.to_string(),
-                            }),
-                        }
-                        feed.push(AppMsg::IdentitySaved { error: None });
+                    Ok(written) => {
+                        // What git answers, not what was typed: the write
+                        // reads itself back, so a half that did not land
+                        // and a repository-local setting sitting over the
+                        // global one both show here.
+                        let (name_saved, email_saved) = (written.name_saved, written.email_saved);
+                        let message = written.message;
+                        feed.push(AppMsg::Identity {
+                            name: written.identity.name.unwrap_or_default(),
+                            email: written.identity.email.unwrap_or_default(),
+                        });
+                        feed.push(AppMsg::IdentitySaved {
+                            // git's own message, and only git's: a write
+                            // that failed nowhere and still did not take
+                            // is explained on screen, where it can be
+                            // translated.
+                            error: (!message.is_empty()).then_some(message),
+                            name_saved,
+                            email_saved,
+                        });
                     }
                     Err(e) => feed.push(AppMsg::IdentitySaved {
                         error: Some(e.to_string()),
+                        name_saved: false,
+                        email_saved: false,
                     }),
                 }
             });
@@ -748,7 +792,7 @@ impl AppBackend {
     #[qslot]
     fn drain(&mut self) {
         let mut check_identity = false;
-        let mut saved = false;
+        let mut wrote = false;
         for msg in self.check_feed.drain() {
             match msg {
                 AppMsg::GitOk { version } => {
@@ -787,19 +831,29 @@ impl AppBackend {
                     self.identity_state = "error".into();
                     self.identity_error = message;
                 }
-                AppMsg::IdentitySaved { error } => {
+                AppMsg::IdentitySaved {
+                    error,
+                    name_saved,
+                    email_saved,
+                } => {
                     self.identity_busy = false;
-                    match error {
-                        Some(message) => self.identity_error = message,
-                        None => saved = true,
+                    self.identity_name_saved = name_saved;
+                    self.identity_email_saved = email_saved;
+                    self.identity_unsaved = !(name_saved && email_saved);
+                    if let Some(message) = error {
+                        self.identity_error = message;
                     }
+                    // A write that only half landed still changed the
+                    // configuration, so the open repositories re-read it
+                    // whichever way this one went.
+                    wrote = true;
                 }
             }
         }
         if check_identity {
             self.start_identity_check();
         }
-        if saved {
+        if wrote {
             // Open repositories hold their own copy of the configuration.
             Hub::with(|hub| hub.refresh_authors());
         }

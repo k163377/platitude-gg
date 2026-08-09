@@ -82,9 +82,9 @@ pub enum GitError {
     #[error("unexpected output from `{command}`: {message}")]
     UnexpectedOutput { command: String, message: String },
 
-    /// A value the application refused to hand to git. git never ran, so
-    /// there is no message of its own to pass through — this one is
-    /// written for the person who typed the value, and is shown as is.
+    /// A message written here rather than passed through from git: a value
+    /// the application refused to hand over, or a write git raised nothing
+    /// against that did not take effect all the same. Shown as is.
     #[error("{message}")]
     Rejected { message: String },
 }

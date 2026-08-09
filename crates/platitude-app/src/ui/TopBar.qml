@@ -43,6 +43,11 @@ Rectangle {
     readonly property real bandTabRun: tabs.runAvail
     readonly property real bandTabContent: tabs.contentWidth
     readonly property bool bandTabScrolls: tabs.contentWidth > tabs.width
+    /// Automation: the identity badge's own visibility. Reporting the
+    /// condition instead would go on passing with the binding cut, and a
+    /// save that only half landed leaves an identity that *is* set — so
+    /// nothing else on this band would mention it.
+    readonly property bool identityBadgeShown: identityBadgeBox.visible
 
     signal openRepositoryRequested()
     signal identityEditRequested()
@@ -714,7 +719,12 @@ Rectangle {
         // repository-state badges so the way back to the setup screen
         // stays visible after "Not now".
         Rectangle {
+            id: identityBadgeBox
+            // A save whose halves did not both land leaves an identity
+            // that is set and not the one that was asked for, so nothing
+            // else on screen would say anything about it.
             visible: AppBackend.identityState === "missing"
+                     || AppBackend.identityUnsaved
                      || (topBar.curPage !== null
                          && !topBar.curPage.pageTab.identityReady)
             color: "transparent"
@@ -744,7 +754,9 @@ Rectangle {
                 onClicked: topBar.identityEditRequested()
                 ToolTip.visible: containsMouse
                 ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: qsTr("No name or email set for commits")
+                ToolTip.text: AppBackend.identityUnsaved
+                              ? qsTr("Your name and email were not both saved")
+                              : qsTr("No name or email set for commits")
             }
         }
         // The git commands this tab ran. Closed, this mark is the whole
