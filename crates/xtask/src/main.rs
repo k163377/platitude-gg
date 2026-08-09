@@ -76,7 +76,14 @@ commands:
       the command where it stands.
         cargo xtask linux test -p platitude-core --test it
         cargo xtask linux verify-ui commit --preset basic
+        cargo xtask linux bare
       A cargo command goes to cargo; an xtask verb goes to cargo xtask.
+      `bare` is the one that is not either: it builds the release
+      workspace-wide and starts it on an Ubuntu carrying only what a
+      package would declare, which is the only check that the thing runs
+      somewhere it was not built. Worth a place in a pre-merge sweep, not
+      in a daily one — it answers rarely, and when it does the answer is
+      about what a distribution has to ship.
       Which image it runs in follows what the command needs: core is
       Ubuntu and the toolchain, app adds Qt, a software GL stack and the
       fonts デザイン規約 names for Ubuntu. The build directory is a docker

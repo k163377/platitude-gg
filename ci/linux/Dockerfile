@@ -122,3 +122,67 @@ ENV PATH=/opt/qt/${QT_VERSION}/gcc_64/bin:/usr/local/cargo/bin:/usr/local/sbin:/
     LD_LIBRARY_PATH=/opt/qt/${QT_VERSION}/gcc_64/lib \
     QMAKE=/opt/qt/${QT_VERSION}/gcc_64/bin/qmake \
     LANG=C.UTF-8
+
+# A stock Ubuntu with Qt staged beside the binary the way a distribution
+# would ship it, and *nothing else installed*. The two stages above prove
+# the code builds; these last two are the only place that can say the built
+# thing runs somewhere it was not built.
+#
+# What a distribution ships is the libraries, the platform plugins and the
+# QML modules. The modules matter most — they are opened at run time, so
+# `ldd` never names them, and a set chosen from the linker's answer starts
+# and then dies loading QML.
+FROM ubuntu:24.04 AS bare
+
+ARG QT_VERSION
+ENV DEBIAN_FRONTEND=noninteractive
+
+COPY --from=app /opt/qt/${QT_VERSION}/gcc_64/lib /opt/pg-qt/lib
+COPY --from=app /opt/qt/${QT_VERSION}/gcc_64/plugins /opt/pg-qt/plugins
+COPY --from=app /opt/qt/${QT_VERSION}/gcc_64/qml /opt/pg-qt/qml
+
+ENV LD_LIBRARY_PATH=/opt/pg-qt/lib \
+    QT_PLUGIN_PATH=/opt/pg-qt/plugins \
+    QML_IMPORT_PATH=/opt/pg-qt/qml \
+    QML2_IMPORT_PATH=/opt/pg-qt/qml \
+    LANG=C.UTF-8
+
+# The same machine, with exactly what a package would have to declare. The
+# list is not copied from the build stage and not reasoned about: `cargo
+# xtask linux bare --discover` derives it in the stage above by starting the
+# binary, reading the one library the loader names, installing only that,
+# and going round again. What that returned, in the order it returned it:
+#
+#     git libglib2.0-0t64 libegl1 libfontconfig1 libxkbcommon0 libgl1
+#     libdbus-1-3
+#
+# git leads because the product is a GUI over it, and it settles krb5 on the
+# way: Qt6Network wants libgssapi_krb5 and git's own curl brings it, so the
+# list does not name it. Everything else the build stage installs turned out
+# to be somebody's dependency rather than ours — llvmpipe included, which an
+# offscreen run never asked for.
+#
+# That makes the list a claim and this stage the test of it: link one more
+# library and `cargo xtask linux bare` stops with its name. It has already
+# caught two. libGL and libdbus were both missing from the list written by
+# hand, because that first pass added a package per round whatever the error
+# said, and a library that is needed but not the *current* blocker hides
+# behind the one that is.
+#
+# fonts-noto-cjk is the one entry no loader can ask for: デザイン規約 names
+# Noto Sans CJK JP for Ubuntu, and a stock Ubuntu resolves both it and
+# `sans:lang=ja` to DejaVu Sans, which has no kanji in it.
+FROM bare AS runtime
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        fonts-dejavu-core \
+        fonts-noto-cjk \
+        git \
+        libdbus-1-3 \
+        libegl1 \
+        libfontconfig1 \
+        libgl1 \
+        libglib2.0-0t64 \
+        libxkbcommon0 \
+    && rm -rf /var/lib/apt/lists/*
