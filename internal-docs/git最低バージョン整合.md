@@ -54,7 +54,7 @@
 | `config` | `--get-regexp` に `^mergetool\..*\.cmd$`(自前定義ツールの列挙) | 古参 |
 | `-c` | `mergetool.writeToTemp=true`(mergetool 実行時) | 2.43.0 ✓(`keepBackup` / `guiDefault` / `hideResolved` も同じ config 文書に在る) |
 | `push` | `--porcelain` / `--set-upstream` / `--force-with-lease=<ref>:<oid>` / `--force` / `--delete` | 2.43.0 ✓(値付き lease 形式まで記載確認) |
-| `rebase` | `--interactive` / `--onto` / `--root` / `--autostash` / `--update-refs` / `--continue` `--abort` `--skip` `--quit` | 2.43.0 ✓(`--update-refs` 2.38 = **最も新しい依存**) |
+| `rebase` | `--interactive` / `--onto` / `--root` / `--update-refs` / `--continue` `--abort` `--skip` `--quit` | 2.43.0 ✓(`--update-refs` 2.38 = **最も新しい依存**)。`--autostash` は発行しない(規約 §未コミット変更がある状態で履歴を書き換える) |
 | `reset` | `--quiet` / `--soft` `--mixed` `--hard` | 古参。**`--end-of-options` は付けられない**(下記) |
 | `restore` | `--staged` / `--worktree`(併用) | 2.43.0 ✓(2.23 導入。2.43 時点 EXPERIMENTAL 表記 — 存在と記載は確認済) |
 | `rev-list` | `--count` / `--merges` / `--not` / `--remotes` | 古参(1.7.2) |

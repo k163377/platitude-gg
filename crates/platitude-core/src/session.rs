@@ -2410,13 +2410,20 @@ impl RepoSession {
         );
     }
 
-    /// `git rebase <upstream>`.
+    /// `git rebase <upstream>`, carrying uncommitted work across the way
+    /// every other rewrite here does — nothing is asked, and the
+    /// staged/unstaged split survives
+    /// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
     pub fn rebase(self: &Arc<Self>, upstream: String, options: integrate::RebaseOptions) {
         self.write(
             "rebase",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                integrate::rebase(&exec, &repo.workdir, &upstream, &options, &cancel).await
+                let rewrite = Rewrite::Onto {
+                    upstream: &upstream,
+                    options: &options,
+                };
+                rewrite_carrying(&exec, &repo, &rewrite, &cancel).await
             },
         );
     }
@@ -2434,7 +2441,7 @@ impl RepoSession {
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let replay = Replay::of(&upstream, &steps, options)?;
-                replay_carrying(&exec, &repo, &replay, &cancel).await
+                rewrite_carrying(&exec, &repo, &Rewrite::Replay(&replay), &cancel).await
             },
         );
     }
@@ -3186,7 +3193,7 @@ impl Replay<'_> {
         executor: &GitExecutor,
         repo: &RepoInfo,
         cancel: &CancellationToken,
-    ) -> Result<sequencer::ReplayOutcome, GitError> {
+    ) -> Result<integrate::RebaseOutcome, GitError> {
         sequencer::rebase_interactive(
             executor,
             repo,
@@ -3200,6 +3207,38 @@ impl Replay<'_> {
     }
 }
 
+/// The two shapes of history rewrite this application runs, held together
+/// because git refuses both over a dirty working tree in the very same
+/// words — so both go round through the same stash, and the person who
+/// staged half of their work gets it back staged either way
+/// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
+enum Rewrite<'a> {
+    /// `git rebase <upstream>`: a whole branch onto a new base.
+    Onto {
+        upstream: &'a str,
+        options: &'a integrate::RebaseOptions,
+    },
+    /// `git rebase --interactive`: a plan assembled here, for the edits
+    /// that touch one commit (`squash` / reword / drop).
+    Replay(&'a Replay<'a>),
+}
+
+impl Rewrite<'_> {
+    async fn run(
+        &self,
+        executor: &GitExecutor,
+        repo: &RepoInfo,
+        cancel: &CancellationToken,
+    ) -> Result<integrate::RebaseOutcome, GitError> {
+        match self {
+            Rewrite::Onto { upstream, options } => {
+                integrate::rebase(executor, &repo.workdir, upstream, options, cancel).await
+            }
+            Rewrite::Replay(replay) => replay.run(executor, repo, cancel).await,
+        }
+    }
+}
+
 /// Replays a one-commit edit plan through `git rebase --interactive`.
 async fn run_plan(
     executor: &GitExecutor,
@@ -3208,35 +3247,35 @@ async fn run_plan(
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     let replay = Replay::of(&plan.upstream, &plan.steps, plan.options())?;
-    replay_carrying(executor, repo, &replay, cancel).await
+    rewrite_carrying(executor, repo, &Rewrite::Replay(&replay), cancel).await
 }
 
-/// Replays `replay`, going round through a stash when the working tree is
+/// Runs `rewrite`, going round through a stash when the working tree is
 /// in the way (デザイン規約 §未コミット変更がある状態での書き換え).
-async fn replay_carrying(
+async fn rewrite_carrying(
     executor: &GitExecutor,
     repo: &RepoInfo,
-    replay: &Replay<'_>,
+    rewrite: &Rewrite<'_>,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    match replay.run(executor, repo, cancel).await? {
-        sequencer::ReplayOutcome::Replayed => Ok(()),
-        sequencer::ReplayOutcome::Blocked(refusal) => {
-            tracing::info!(%refusal, "replay refused: going round through a stash");
-            carry_across_replay(executor, repo, replay, refusal, cancel).await
+    match rewrite.run(executor, repo, cancel).await? {
+        integrate::RebaseOutcome::Done => Ok(()),
+        integrate::RebaseOutcome::Blocked(refusal) => {
+            tracing::info!(%refusal, "rebase refused: going round through a stash");
+            carry_across_rewrite(executor, repo, rewrite, refusal, cancel).await
         }
     }
 }
 
-/// Stash, replay, put back — the same three steps [`carry_across`] takes
-/// around a move, with the replay in the middle. `--autostash` is not
+/// Stash, rewrite, put back — the same three steps [`carry_across`] takes
+/// around a move, with the rewrite in the middle. `--autostash` is not
 /// what runs them, for two measured reasons: it restores with a plain
 /// `stash apply`, so **everything that was staged comes back unstaged**,
-/// and when the replay stops part-way it parks the work in
+/// and when the rebase stops part-way it parks the work in
 /// `.git/rebase-merge/autostash`, where `stash list` cannot see it and
 /// neither can the graph.
 ///
-/// The restore is skipped when the replay stopped part-way, and that is
+/// The restore is skipped when the rebase stopped part-way, and that is
 /// the whole difference from a move: git will not write into an index
 /// that already holds unmerged paths, so a `pop` there does nothing at
 /// all while reporting the conflict it walked into (実測 — 規約 §`stash
@@ -3244,25 +3283,25 @@ async fn replay_carrying(
 /// stash list, drawn as its own row in the graph, and the person settling
 /// the conflict puts it back when the operation is over — which is where
 /// the same three commands typed by hand would leave it.
-async fn carry_across_replay(
+async fn carry_across_rewrite(
     executor: &GitExecutor,
     repo: &RepoInfo,
-    replay: &Replay<'_>,
+    rewrite: &Rewrite<'_>,
     refusal: GitError,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     if !stash_everything(executor, repo, cancel).await? {
         // The tree was cleaned between the refusal and now, so there is
         // nothing of ours to carry and nothing of anybody else's to
-        // touch: the replay that was refused goes through as it stands.
-        return match replay.run(executor, repo, cancel).await? {
-            sequencer::ReplayOutcome::Replayed => Ok(()),
-            sequencer::ReplayOutcome::Blocked(again) => Err(again),
+        // touch: the rebase that was refused goes through as it stands.
+        return match rewrite.run(executor, repo, cancel).await? {
+            integrate::RebaseOutcome::Done => Ok(()),
+            integrate::RebaseOutcome::Blocked(again) => Err(again),
         };
     }
-    match replay.run(executor, repo, cancel).await {
-        Ok(sequencer::ReplayOutcome::Replayed) => {}
-        Ok(sequencer::ReplayOutcome::Blocked(_)) => {
+    match rewrite.run(executor, repo, cancel).await {
+        Ok(integrate::RebaseOutcome::Done) => {}
+        Ok(integrate::RebaseOutcome::Blocked(_)) => {
             // Nothing should stand in the way of a tree that was just
             // emptied, so whatever is holding this one is not something a
             // stash gets past. Put the work back and let git's first
@@ -3272,7 +3311,7 @@ async fn carry_across_replay(
             return Err(refusal);
         }
         Err(error) => {
-            // A replay that stopped part-way is holding the tree; the
+            // A rebase that stopped part-way is holding the tree; the
             // work stays in the stash until the operation is over. One
             // that failed without starting leaves the emptied tree, and
             // then the stash was only the room it needed.

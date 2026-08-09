@@ -352,6 +352,83 @@ async fn rebase_replays_commits_onto_the_upstream() {
     );
 }
 
+/// A branch holding a commit of its own while `main` has moved on — the
+/// shape someone asks a `rebase <current> onto it` for.
+fn behind_main() -> TestRepo {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["checkout", "-b", "topic"]);
+    repo.commit_file("b.txt", "two\n", "topic one");
+    repo.git(&["checkout", "main"]);
+    repo.commit_file("d.txt", "four\n", "main moved");
+    repo.git(&["checkout", "topic"]);
+    repo
+}
+
+/// git's clean-tree refusal for a *plain* rebase, in git's own words.
+///
+/// A refusal is an answer, not a failure: it arrives as `Blocked`, and
+/// the caller goes round through a stash. The interactive path words the
+/// same two refusals identically — that is what lets one carry serve both
+/// (規約 §未コミット変更がある状態で履歴を書き換える) — and both halves
+/// are exercised here because git words the staged one differently from
+/// the unstaged one.
+///
+/// The third case decides whether a stash is taken at all: untracked
+/// files are in nobody's way, and a rebase over a tree holding only those
+/// goes straight through.
+#[tokio::test]
+async fn a_dirty_tree_stops_a_plain_rebase_before_it_touches_anything() {
+    let (exec, cancel) = env();
+    let opts = RebaseOptions::default();
+    let refusal = |outcome| match outcome {
+        integrate::RebaseOutcome::Blocked(error) => error.to_string(),
+        integrate::RebaseOutcome::Done => panic!("git replayed over work it would lose"),
+    };
+
+    let mut unstaged = behind_main();
+    unstaged.write_file("a.txt", "changed, never staged\n");
+    let before = unstaged.git(&["rev-parse", "topic"]);
+    let said = refusal(
+        integrate::rebase(&exec, &unstaged.path, "main", &opts, &cancel)
+            .await
+            .expect("a refusal is an answer"),
+    );
+    assert!(
+        said.contains("cannot rebase:") && said.contains("unstaged changes"),
+        "the unstaged half of git's check: {said}"
+    );
+    assert_eq!(
+        unstaged.git(&["rev-parse", "topic"]),
+        before,
+        "refused before touching anything"
+    );
+
+    let mut staged = behind_main();
+    staged.write_file("a.txt", "changed and staged\n");
+    staged.git(&["add", "--", "a.txt"]);
+    let said = refusal(
+        integrate::rebase(&exec, &staged.path, "main", &opts, &cancel)
+            .await
+            .expect("a refusal is an answer"),
+    );
+    assert!(
+        said.contains("cannot rebase:") && said.contains("uncommitted changes"),
+        "the staged half of git's check: {said}"
+    );
+
+    let mut untracked = behind_main();
+    untracked.write_file("brand-new.txt", "in nobody's way\n");
+    integrate::rebase(&exec, &untracked.path, "main", &opts, &cancel)
+        .await
+        .expect("untracked files do not stop a rebase");
+    assert_eq!(
+        untracked.git(&["status", "--porcelain"]),
+        "?? brand-new.txt",
+        "and they are still sitting there afterwards"
+    );
+}
+
 #[tokio::test]
 async fn a_conflicting_rebase_reports_progress_and_can_be_aborted() {
     let mut repo = TestRepo::init();

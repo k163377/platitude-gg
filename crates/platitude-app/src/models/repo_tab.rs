@@ -1131,12 +1131,15 @@ impl RepoTab {
     }
 
     /// `git rebase <upstream>`; an empty `onto` uses `upstream` as the base.
+    ///
+    /// There is no autostash knob to pass: uncommitted work is carried
+    /// across by core, the same way every other rewrite here carries it
+    /// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
     #[qslot]
-    fn rebase(&mut self, upstream: String, onto: String, autostash: bool, update_refs: bool) {
+    fn rebase(&mut self, upstream: String, onto: String, update_refs: bool) {
         let options = platitude_core::integrate::RebaseOptions {
             onto: (!onto.is_empty()).then_some(onto),
             branch: None,
-            autostash,
             update_refs,
             root: false,
         };

@@ -764,7 +764,7 @@ Item {
             // published means reachable from a remote-tracking ref, which
             // is only ever as fresh as the last fetch.
             note: page.rebasePublished ? qsTr("rewrites pushed commits") : ""
-            onTriggered: repoTab.rebase(page.menuRefId, "", true, true)
+            onTriggered: repoTab.rebase(page.menuRefId, "", true)
         }
         AppMenuSeparator {}
         // Nothing here repeats a gesture or a button: renaming and
@@ -1320,7 +1320,7 @@ Item {
             text: qsTr("%1 onto it").arg(workTree.branch)
             note: page.menuPublished ? qsTr("rewrites pushed commits") : ""
             offered: page.menuCanIntegrate
-            onTriggered: repoTab.rebase(page.menuOid, "", true, true)
+            onTriggered: repoTab.rebase(page.menuOid, "", true)
         }
         // No row for landing on the commit itself: doing so leaves HEAD
         // on no branch, which is a state to be got out of rather than one
@@ -2675,7 +2675,7 @@ Item {
                 if (act === "merge-branch")
                     repoTab.merge(arg, false, false, "")
                 else if (act === "rebase-onto")
-                    repoTab.rebase(arg, "", true, true)
+                    repoTab.rebase(arg, "", true)
             }
         } else if (act === "op-exit" || act === "op-exit-go") {
             // The ways out of a stopped operation, which stand in the pane
