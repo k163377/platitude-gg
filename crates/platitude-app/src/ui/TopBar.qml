@@ -310,6 +310,16 @@ Rectangle {
                 // (デザイン規約 §QML 実装ルール).
                 boundsBehavior: Flickable.StopAtBounds
                 clip: true
+                // The strip scrolls by wheel only. Left interactive, the
+                // view watches every press for a drag and steals the grab
+                // at the platform's threshold — 4px on Windows — so a
+                // click that lands with a little sideways motion cancels
+                // the tab's own MouseArea instead of switching: no
+                // switch, and the hover wash stays off until the pointer
+                // moves again (reported as "the tab stopped taking the
+                // first click"). Nothing here wants drag-to-pan, so the
+                // watching is all the interactivity ever bought.
+                interactive: false
                 // Every delegate stays alive however far the strip is
                 // scrolled: the automation walks the items for their
                 // paths and ids (`tabPaths` / `middleClickTab`), and a

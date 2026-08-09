@@ -180,8 +180,12 @@ ApplicationWindow {
     // one handler specified to take only passive grabs and accept
     // nothing, so everything below keeps working. Modal dialogs live in
     // the window overlay above this item and are unaffected.
+    //
+    // The top margin reaches up over the safe-area inset the same way
+    // the chrome itself does, so presses on the band are heard too.
     Item {
         anchors.fill: parent
+        anchors.topMargin: -root.contentItem.y
         z: 10000
         PointHandler {
             acceptedButtons: Qt.AllButtons
@@ -548,15 +552,23 @@ ApplicationWindow {
         // ApplicationWindow keeps its content item inside the window's
         // safe area, and with the client area expanded that area starts
         // below the title bar (measured on Windows: y = 31, the band's own
-        // height). So where the band is ours, the chrome hangs off the
-        // window's root item instead, which starts at 0. Where it is not,
-        // the content item is already the whole client area and
-        // ApplicationWindow's own handling is the one to keep.
-        parent: root.captionMerged ? root.contentItem.parent : root.contentItem
+        // height). The chrome reaches back up over that inset with a
+        // negative top margin — the content item does not clip, so both
+        // painting and input carry.
+        //
+        // Not by reparenting onto the window's root item, though that
+        // also lands the band at 0: content outside the content item
+        // never wakes the render loop, so every change waited for the
+        // next input event to be painted — the whole window ran one
+        // frame behind the model, which reads as "the first click did
+        // nothing" (measured: notify delivered synchronously, strip
+        // painted one state late, and a lone mouse-move caught it up).
         anchors.fill: parent
         // Everything the band carries stays inside the screen when the
-        // window is maximised (see `maximizedInset`).
+        // window is maximised (see `maximizedInset`); the top edge folds
+        // the safe-area climb and that inset into one number.
         anchors.margins: root.maximizedInset
+        anchors.topMargin: root.maximizedInset - root.contentItem.y
         spacing: 0
         visible: AppBackend.gitState === "ok"
 
