@@ -42,6 +42,22 @@ HoverToolButton {
     /// is what says it is about this button rather than about the state
     /// the toolbar is in.
     property bool alert: false
+    /// The mark's colour, where it is not the word's. A button whose word
+    /// stays plain while only the mark is coloured says "read this" without
+    /// saying "this one is dangerous" — the colours a word wears here are
+    /// the ones `Remove` and a stopped fetch wear, and they mean something
+    /// stronger than a notice.
+    property color alertTone: actionBtn.fg
+    /// Pull the mark back to a letter's distance from the word.
+    ///
+    /// It is placed at the end of the label's **advance** width, which is
+    /// right for a box the toolbar measures but leaves whatever right side
+    /// bearing the last glyph carries as clear air. A word ending in `)`
+    /// carries a lot of it: measured on `Commit changes (5 staged)`, the
+    /// mark stood 6px clear of the bracket's ink where the letters inside
+    /// the word sit 2px apart, so it read as a separate thing. One gap
+    /// back puts it where the letters are.
+    property bool alertTight: false
     /// The colour the hold fills the button with — the frame's, since a
     /// framed button fills the frame it drew. A bare one names its own
     /// (the hunk heading's `Discard hunk`, which fills edge to edge the
@@ -469,11 +485,12 @@ HoverToolButton {
                 NavIcon {
                     visible: actionBtn.alert
                     kind: "bang"
-                    tint: actionBtn.fg
+                    tint: actionBtn.alertTone
                     width: Theme.iconSm
                     height: Theme.iconSm
                     x: btnLabel.implicitWidth
                        - (btnLabel.splitFlag ? Theme.spaceXs / 2 : 0)
+                       - (actionBtn.alertTight ? Theme.spaceXs : 0)
                     y: -Theme.spaceXs
                 }
             }

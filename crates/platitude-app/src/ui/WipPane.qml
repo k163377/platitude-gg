@@ -618,7 +618,12 @@ ColumnLayout {
                 wipPane.workTree.eolStagedCount > 0 && commitButton.enabled
             kind: "check"
             centred: true
-            tone: commitButton.eolWarned ? Theme.warning : Theme.accent
+            // **The word stays plain in both states.** A coloured word is
+            // what `Remove` and a stopped fetch wear, and both of those are
+            // held rather than clicked; this one is a click either way, and
+            // borrowing their colour for the word would borrow the gesture
+            // with it. The frame and the mark carry the state instead.
+            tone: Theme.textPrimary
             // **The frame goes with the words.** A toolbar button is
             // measured to its content, so a frame left bright around dimmed
             // words still reads as a small live thing; one this wide reads
@@ -628,6 +633,8 @@ ColumnLayout {
             // The mark the button family already puts at the end of its
             // own word when the thing it does needs reading first.
             alert: commitButton.eolWarned
+            alertTone: Theme.warning
+            alertTight: true
             text: wipPane.amending
                   ? qsTr("Amend commit (%1 staged)").arg(wipPane.workTree.stagedCount)
                   : qsTr("Commit changes (%1 staged)").arg(wipPane.workTree.stagedCount)
