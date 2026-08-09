@@ -77,6 +77,22 @@ HoverToolButton {
     /// `text` itself is what the chip is drawn around — and that text is
     /// never translated: it is the command, not a phrase about it.
     property bool code: false
+    /// The icon is a mark standing next to the word, rather than an icon
+    /// at the head of a band.
+    ///
+    /// The step goes with the role (デザイン規約 §寸法「段は役割で選ぶ」
+    /// — `iconSm` is the mark beside a word, `iconMd` the icon a row or a
+    /// band starts with), and the seat comes in to the icon itself: the
+    /// wider seat is there to hold the icon and the hold mark side by
+    /// side, and a button that is only ever clicked pays for a pairing it
+    /// cannot have. Measured on `✓ Save` before this: the word stood 10px
+    /// off the icon's ink and 5px off the frame, so the pair read as two
+    /// things in a box rather than as one phrase (デザイン規約 §余白
+    /// 「印が自分で持っている余白は、隣の詰めに数える」).
+    ///
+    /// The toolbar keeps the wide seat: its buttons can pair, and their
+    /// width is measured into a box two of them share.
+    property bool besideWord: false
     /// Text the label's box is measured for, and whether that wording is
     /// a command (the two families measure differently, so the box has to
     /// be told which one it is holding). A button whose wording changes
@@ -275,17 +291,27 @@ HoverToolButton {
                                                && actionBtn.holdMs > 0
                 /// How far the two are set apart across the slash.
                 readonly property int spread: Theme.iconMd - Theme.spaceXs
+                /// The step this button's icon is drawn at (see
+                /// `besideWord`). A button that can pair keeps the band's
+                /// step whatever it is asked for: the fraction is built
+                /// out of two `iconSm` halves and has no room to give.
+                readonly property int step: actionBtn.besideWord
+                                            && actionBtn.holdMs <= 0
+                                            ? Theme.iconSm : Theme.iconMd
 
                 visible: actionBtn.kind !== "" || actionBtn.holdMs > 0
                 implicitWidth: !visible ? 0
                                : actionBtn.kind !== ""
-                                 ? Math.max(Theme.iconMd, Theme.iconSm + seat.spread)
+                                 ? (seat.step === Theme.iconSm
+                                    ? Theme.iconSm
+                                    : Math.max(Theme.iconMd,
+                                               Theme.iconSm + seat.spread))
                                  : Theme.iconSm
-                implicitHeight: Theme.iconMd + Theme.spaceXs
+                implicitHeight: seat.step + Theme.spaceXs
                 Layout.alignment: Qt.AlignVCenter
                 NavIcon {
-                    width: Theme.iconMd
-                    height: Theme.iconMd
+                    width: seat.step
+                    height: seat.step
                     anchors.centerIn: parent
                     kind: actionBtn.kind
                     tint: actionBtn.fg
