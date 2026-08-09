@@ -149,8 +149,14 @@ impl Query {
     }
 }
 
-/// Shortest abbreviation git will resolve (`--abbrev` floors here), and
-/// so the shortest run of hex this reads as an object name.
+/// Shortest run of hex read as an object name, because it is the
+/// shortest git itself will deal in (2.55, measured): `rev-parse
+/// --short=1`, `=2` and `=3` all come back four characters long, and
+/// `rev-parse <three hex>` answers `Not a valid object name`. Going to
+/// three would find commits by an id that cannot then be pasted into any
+/// git command — and would light one unexplained row every other search
+/// for an ordinary word that happens to be spellable in hex (`bad`,
+/// `ace`, `fee`): 1/4096 across a 2,000-row window, against 1/65536 here.
 const MIN_OID_PREFIX: usize = 4;
 
 /// Case-folded substring test over bytes.
