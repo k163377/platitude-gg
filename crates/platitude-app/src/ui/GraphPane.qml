@@ -74,11 +74,19 @@ Rectangle {
     readonly property alias findMatches: findBar.matches
     readonly property alias findAt: findBar.atMatch
     readonly property alias findWidth: findBar.width
-    /// A search is on and something answers it. The one thing that lets a
-    /// row dim: with nothing found there is nothing to contrast a dimmed
-    /// row against, and a graph dimmed end to end says only that the
-    /// window went dark.
-    readonly property bool findLit: findBar.open && findBar.matches > 0
+    /// How far the graph has stepped down out from under the card.
+    readonly property real findShift: graphList.anchors.topMargin
+    /// Something is being looked for — which is not the same as something
+    /// being found. The one thing that lets a row dim, and it takes the
+    /// query rather than the count: with a query and no answers, every
+    /// row really is "not one of them", so the whole graph goes down.
+    readonly property bool findOn: findBar.open && graphArea.graphModel.searching
+    /// The newest row is one of the answers, so the graph steps out from
+    /// under the card (規約 §コミットを探す). No separate "is the tree
+    /// clean" test is needed: the working-tree row is not a commit and
+    /// never matches, so a dirty tree answers false here by itself.
+    readonly property bool findClears:
+        findBar.open && graphArea.graphModel.firstMatched
     /// Where the row this search is on has landed. The page owns what
     /// selection means, so it hears about the row and decides.
     signal findLanded(string oidHex)
@@ -384,7 +392,11 @@ Rectangle {
         // the marks or the selection move.
         atMatch: graphArea.graphModel.matchCount > 0
                  ? graphArea.graphModel.matchOrdinal(graphList.currentIndex) : 0
-        refused: findBar.open && findBar.query.trim() !== ""
+        // "There is a query" is the model's answer, not a second reading
+        // of the text here: what counts as a query at all (whitespace
+        // does not) is `platitude-core::find`'s rule and belongs in one
+        // place.
+        refused: findBar.open && graphArea.graphModel.searching
                  && graphArea.graphModel.matchCount === 0
         refusedTip: graphArea.graphModel.truncated
                     ? qsTr("Nothing in the loaded history matches — older commits are not loaded")
@@ -411,6 +423,16 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.top: askBar.bottom
+        // The card hangs over the top rows rather than pushing them down
+        // — but when the newest commit is itself one of the answers, the
+        // graph steps down by the card's height so that answer is not
+        // the one thing the search covers. It goes back the moment the
+        // top row stops matching, so the band is not a place the eye
+        // learns to expect (規約 §コミットを探す).
+        anchors.topMargin: graphArea.findClears ? findBar.height : 0
+        Behavior on anchors.topMargin {
+            NumberAnimation { duration: 200 }
+        }
         clip: true
         model: graphArea.graphModel
         reuseItems: true
@@ -450,8 +472,8 @@ Rectangle {
         property string askOid: ""
         property bool askDanger: false
         // Mirrored for the delegates, which can only see the view: rows
-        // dim only while a search has something to show.
-        readonly property bool findLit: graphArea.findLit
+        // dim while a search is on.
+        readonly property bool findOn: graphArea.findOn
         signal rowSelected(string oidHex)
         signal rowMenuRequested(string oidHex)
         signal rowSwitchRequested(string oidHex, string record)

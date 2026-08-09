@@ -86,6 +86,15 @@ pub struct GraphModel {
     /// light out while the bar still says how many are lit.
     query: Option<Query>,
     match_count: i32,
+    /// Whether anything is being looked for at all — which is not the
+    /// same as anything being found. What dims the rows: with a query
+    /// and no answers, every row is "not one of them".
+    searching: bool,
+    /// Whether the newest row is one of the answers. The graph steps down
+    /// from under the card for it (規約 §コミットを探す), and since the
+    /// working-tree row can never match, this is also the answer to "is
+    /// the tree clean".
+    first_matched: bool,
     /// Lanes running off the end of the window (`t<lane>.<color>;...`,
     /// uppercase for a dashed leash — `encode::tail_lanes`), drawn by the
     /// truncation footer.
@@ -248,6 +257,7 @@ impl GraphModel {
             }
         }
         self.match_count = count;
+        self.settle_first();
         if ranges.is_empty() {
             return;
         }
@@ -290,6 +300,13 @@ impl GraphModel {
         }
     }
 
+    /// Re-reads whether the newest row answers the query. Called wherever
+    /// the rows or their marks move — it is one row, so it costs nothing
+    /// to keep honest.
+    fn settle_first(&mut self) {
+        self.first_matched = self.rows.first().is_some_and(|r| r.matched);
+    }
+
     /// Rows answering the query, as their indices in order.
     fn match_rows(&self) -> impl DoubleEndedIterator<Item = i32> {
         self.rows
@@ -322,6 +339,14 @@ impl GraphModel {
     // はプロパティにしか反応しない). Doc comments do not go on
     // `qproperty!` — the macro rejects attributes.
     qproperty!("matchCount", Member = match_count, Notify = stats_changed);
+    // Whether a search is on, and whether the newest row answers it. Both
+    // properties for the same reason `matchCount` is.
+    qproperty!("searching", Member = searching, Notify = stats_changed);
+    qproperty!(
+        "firstMatched",
+        Member = first_matched,
+        Notify = stats_changed
+    );
     qproperty!(
         "tailGeometry",
         Member = tail_geometry,
@@ -361,6 +386,7 @@ impl GraphModel {
                         // history read again — but its answers went with
                         // the rows, and the chunks re-count them.
                         self.match_count = 0;
+                        self.first_matched = false;
                         self.max_lanes = 1;
                         self.first_chunk_ms = -1;
                         self.total_ms = -1;
@@ -388,6 +414,7 @@ impl GraphModel {
                     self.mark_incoming(&mut items);
                     self.match_count += items.iter().filter(|i| i.matched).count() as i32;
                     self.extend_notified(items);
+                    self.settle_first();
                     self.row_total = self.rows.len() as i32;
                 }
                 GraphMsg::Labels { generation, rows } => {
@@ -412,6 +439,7 @@ impl GraphModel {
                             self.set(idx, updated);
                         }
                     }
+                    self.settle_first();
                 }
                 GraphMsg::Finished {
                     generation,
@@ -458,6 +486,7 @@ impl GraphModel {
                     // already right — instead of twice.
                     self.mark_incoming(&mut items);
                     self.match_count = items.iter().filter(|i| i.matched).count() as i32;
+                    self.first_matched = items.first().is_some_and(|i| i.matched);
                     self.max_lanes = rows
                         .iter()
                         .map(|row| i32::from(row.width))
@@ -621,6 +650,7 @@ impl GraphModel {
             return;
         }
         self.query = next;
+        self.searching = self.query.is_some();
         self.remark_notified();
         self.stats_changed();
     }

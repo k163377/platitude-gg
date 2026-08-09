@@ -118,9 +118,14 @@ Rectangle {
             Math.max(findRow.fieldMinWidth,
                      field.contentWidth + field.leftPadding + field.rightPadding)
             + findRow.fixedWidth
-        // Everything to the right of the box, which never changes width.
+        // Everything to the right of the box. Fixed while there is a
+        // count — held at the widest it could be so the box does not
+        // resize under the hand typing into it — and gone entirely when
+        // there is none: an empty seat beside the `✕` reads as a control
+        // that failed to draw, and the box has better use for the width.
         readonly property real fixedWidth:
-            widest.implicitWidth + closeButton.implicitWidth + 2 * findRow.spacing
+            (findBar.matches > 0 ? widest.implicitWidth + findRow.spacing : 0)
+            + closeButton.implicitWidth + findRow.spacing
 
         // The fixed width the design document gives a search box
         // (§レイアウト初期値), which here is its floor rather than its
@@ -155,9 +160,11 @@ Rectangle {
         }
         Label {
             id: count
-            text: findBar.matches > 0
-                  ? qsTr("%1 / %2").arg(findBar.atMatch).arg(findBar.matches)
-                  : ""
+            // Gone rather than blank when there is nothing to count — a
+            // Layout skips an invisible item and its spacing with it, so
+            // the box grows into the whole of the seat.
+            visible: findBar.matches > 0
+            text: qsTr("%1 / %2").arg(findBar.atMatch).arg(findBar.matches)
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSm
             // Held open at the widest it could ever be here, and read

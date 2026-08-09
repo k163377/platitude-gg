@@ -46,13 +46,12 @@ Item {
     required property bool matched
     // Dimmed because the search passed this row over — not because it is
     // in any way unavailable (デザイン規約 §暗く落とした段: a row falls
-    // this way only when many fall together and few stay lit, which is
-    // what makes it read as "not the ones" rather than "not allowed").
-    // The pane owns "there is a search on": the model's marks are all
-    // false when nothing is being looked for, and with no search nothing
-    // may dim.
+    // this way only when many fall together, which is what makes it read
+    // as "not the ones" rather than "not allowed"). A query nothing
+    // answers takes every row down, which is the same sentence with
+    // nothing left over.
     readonly property bool dimmed:
-        rowItem.ListView.view ? rowItem.ListView.view.findLit && !rowItem.matched
+        rowItem.ListView.view ? rowItem.ListView.view.findOn && !rowItem.matched
                               : false
 
     width: ListView.view.width

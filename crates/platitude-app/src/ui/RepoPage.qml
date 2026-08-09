@@ -2032,6 +2032,17 @@ Item {
         interval: 400
         onTriggered: detailsPane.avatarClicked()
     }
+    // What the graph did about the find bar, read after it finished doing
+    // it. The step down out from under the card is animated, so the value
+    // in the same call stack as the verb is always the one before it
+    // moved — reporting that would be reporting the intent, which the
+    // line above already carries as `clears=`.
+    Timer {
+        id: findSettled
+        interval: 300
+        onTriggered: AppBackend.report(
+            "find_settled shift=" + Math.round(graphPane.findShift))
+    }
     // The store starts empty in every run, so the card's own verbs put a
     // picture in it before opening on it.
     Timer {
@@ -3019,7 +3030,9 @@ Item {
                               + " row=" + graphPane.view.currentIndex
                               + " selected=" + page.selectedOid.substring(0, 7)
                               + " width=" + Math.round(graphPane.findWidth)
-                              + " cap=" + Math.round(graphPane.width - graphPane.subjectTextX))
+                              + " cap=" + Math.round(graphPane.width - graphPane.subjectTextX)
+                              + " clears=" + graphPane.findClears)
+            findSettled.restart()
         } else if (act === "commands") {
             // Stage and unstage so the log has something in it, then
             // open it the way the toolbar does.
