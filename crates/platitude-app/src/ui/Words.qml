@@ -22,6 +22,22 @@ QtObject {
         return name !== "" ? name : qsTr("the incoming side")
     }
 
+    /// Why a folder would not open, from the kind core answered with
+    /// (`plain` / `bare` / `other`). Said in two places — the dialog the
+    /// picker's answer raises, and the screen a tab that could not open
+    /// shows — so the six they make between them are three sentences.
+    ///
+    /// `other` is git having trouble of its own rather than an answer
+    /// about the folder, and its line says only that much: what happened
+    /// is git's to say, and the screen quotes it underneath.
+    function openFailure(kind) {
+        switch (kind) {
+        case "bare": return qsTr("A bare repository has nothing to show")
+        case "other": return qsTr("Could not open this folder")
+        default: return qsTr("Not a git repository")
+        }
+    }
+
     function conflict(change, ours, theirs) {
         const us = Words.ourSide(ours)
         const them = Words.theirSide(theirs)

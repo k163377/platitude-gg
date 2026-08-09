@@ -28,23 +28,24 @@ use qtbridge::QmlMethodInvoker;
 /// What came back about a folder somebody picked, before it is a tab.
 #[derive(Debug)]
 pub enum PickMsg {
-    /// Open it as a tab. Either it can be opened, or the check itself
-    /// could not say — and a screen that cannot name what went wrong has
-    /// no business inventing a line for it. The tab's own failure screen
-    /// and its command log are where git's words already are
-    /// (デザイン規約 §git が言ったことを読む場所).
-    ///
-    /// The path is the one that was picked, not the root git resolved it
-    /// to: the tab is opened exactly the way every other road opens one.
-    Open { path: PathBuf },
-    /// It is no repository this application can show, and which of the
-    /// two it is can be said plainly. `bare` picks the wording.
+    /// It opens. The path is the one that was picked, not the root git
+    /// resolved it to: the tab is opened exactly the way every other
+    /// road opens one.
+    Accepted { path: PathBuf },
+    /// It does not. `kind` is `plain` / `bare` / `other` — the same three
+    /// the tab's own failure screen names, so the two say the same
+    /// things in the same words. Nothing that lands here becomes a tab:
+    /// a folder somebody is in the middle of choosing goes back to the
+    /// choosing, whichever of the three it turned out to be.
     Rejected {
         path: PathBuf,
         /// The folder to reopen the picker at — the one this sits in,
         /// where the repository the person was after usually is.
         near: String,
-        bare: bool,
+        kind: &'static str,
+        /// git's own words, for `other` alone. The other two are named
+        /// by the heading, which would only be repeated here.
+        message: String,
     },
 }
 
@@ -750,24 +751,26 @@ impl Hub {
         handle.spawn(async move {
             let cancel = tokio_util::sync::CancellationToken::new();
             let msg = match platitude_core::repo::open(&executor, &path, &cancel).await {
-                Ok(_) => PickMsg::Open { path },
-                Err(platitude_core::GitError::NotARepository { bare, .. }) => PickMsg::Rejected {
-                    near: crate::urlpath::picker_folder_url(&path),
-                    path,
-                    bare,
-                },
-                // git having trouble of its own rather than an answer
-                // about the folder: a timeout on a share that stopped
-                // answering, or output from `rev-parse` nothing can read.
-                // Not something to word a screen around — it opens, and
-                // the tab says what git said.
+                Ok(_) => PickMsg::Accepted { path },
                 Err(e) => {
-                    tracing::warn!(
-                        path = %path.display(),
-                        error = %e,
-                        "could not tell whether this folder is a repository; opening it"
-                    );
-                    PickMsg::Open { path }
+                    // git having trouble of its own — a timeout on a
+                    // share that stopped answering, output from
+                    // `rev-parse` nothing can read — is not an answer
+                    // about the folder, and only git can say what it
+                    // was. It still never becomes a tab: the person is
+                    // standing at the picker either way.
+                    let (kind, message) = match &e {
+                        platitude_core::GitError::NotARepository { bare, .. } => {
+                            (if *bare { "bare" } else { "plain" }, String::new())
+                        }
+                        _ => ("other", e.to_string()),
+                    };
+                    PickMsg::Rejected {
+                        near: crate::urlpath::picker_folder_url(&path),
+                        path,
+                        kind,
+                        message,
+                    }
                 }
             };
             feed.push(msg);

@@ -3481,14 +3481,19 @@ Item {
             // In the panes' place rather than over the whole page, so the
             // command log stays reachable under it.
             //
-            // The same three lines the picker's dialog would have said,
-            // in the same words: which of the three it was is core's
-            // answer (`errorKind`), not something read off git's wording.
-            // git's own line shows on `other` alone — the two the
-            // application can name itself are named by the heading, and
-            // repeating it in lower case underneath (which is what this
-            // screen used to do, in red, as though git had said it) says
-            // nothing twice.
+            // The same three lines the picker's dialog says, out of the
+            // same place (`Words.openFailure`): which of the three it
+            // was is core's answer (`errorKind`), not something read off
+            // git's wording. git's own line shows on `other` alone — the
+            // two the application can name itself are named by the
+            // heading, and repeating it in lower case underneath (which
+            // is what this screen used to do, in red, as though git had
+            // said it) says nothing twice.
+            //
+            // Which of the two screens a failure lands on is decided by
+            // the road, not by the kind: the picker's answers all go to
+            // the dialog, and everything else — a tab put back from the
+            // last session, a worktree row, PG_AUTO_OPEN — comes here.
             Item {
                 visible: page.openFailed
                 SplitView.fillHeight: true
@@ -3498,11 +3503,7 @@ Item {
                     spacing: Theme.spaceMd
                     width: Math.min(700, page.width - 2 * Theme.spaceXl)
                     Label {
-                        text: repoTab.errorKind === "bare"
-                              ? qsTr("A bare repository has nothing to show")
-                              : repoTab.errorKind === "other"
-                                ? qsTr("Could not open this folder")
-                                : qsTr("Not a git repository")
+                        text: Words.openFailure(repoTab.errorKind)
                         font.pixelSize: Theme.fontLg
                         font.weight: Font.DemiBold
                         anchors.horizontalCenter: parent.horizontalCenter

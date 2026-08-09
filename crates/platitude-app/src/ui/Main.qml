@@ -295,12 +295,15 @@ ApplicationWindow {
 
     TabsModel {
         id: tabsModel
-        onOpenRejected: (path, kind, near) => openFailedDialog.show(path, kind, near)
+        onOpenRejected: (path, kind, message, near) =>
+            openFailedDialog.show(path, kind, message, near)
     }
 
-    // Only the picker's own answers come here: a folder somebody just
-    // chose is still in the middle of choosing one, so the way on is the
-    // picker again. Every other way a repository fails to open (a
+    // Only the picker's own answers come here, and all three of them: a
+    // folder somebody just chose is still in the middle of choosing one,
+    // so the way on is the picker again — including when the check could
+    // not say what was wrong, where the folder is no more openable for
+    // not knowing why. Every other way a repository fails to open (a
     // restored tab, a worktree row, PG_AUTO_OPEN) keeps its tab and its
     // page-sized failure screen — nobody is standing at the picker for
     // those, and a modal on startup is answered before it can be read.
