@@ -224,6 +224,8 @@ pub struct StatusMsg {
     /// while nothing is conflicted. Names the menu row; the launch reads
     /// the config again rather than trusting this.
     pub merge_tool: String,
+    /// Pending files whose change has something to say about line endings.
+    pub eol_marks: Arc<Vec<platitude_core::session::EolMark>>,
 }
 
 #[derive(Debug)]
@@ -425,6 +427,7 @@ impl SessionSink for BridgeSink {
                 progress,
                 sides,
                 merge_tool,
+                eol_marks,
             } => {
                 self.feeds.status_nav.push_replace(StatusMsg {
                     status: status.clone(),
@@ -432,6 +435,7 @@ impl SessionSink for BridgeSink {
                     progress,
                     sides: sides.clone(),
                     merge_tool: merge_tool.clone(),
+                    eol_marks: Arc::clone(&eol_marks),
                 });
                 self.feeds.status.push_replace(StatusMsg {
                     status,
@@ -439,6 +443,7 @@ impl SessionSink for BridgeSink {
                     progress,
                     sides,
                     merge_tool,
+                    eol_marks,
                 });
             }
             SessionEvent::StashesLoaded { stashes } => self.feeds.stash.push_replace(stashes),

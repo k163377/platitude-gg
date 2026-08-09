@@ -30,6 +30,13 @@ pub struct NavItem {
     /// which doubles as the toggle key).
     full: String,
     oid_hex: String,
+    /// git's change code for a file row (`M`, `?`, `UU`). **A folder row
+    /// has no change to report and carries its fold state here instead**
+    /// (`FOLDED`, empty when open) — the item is a union of five kinds of
+    /// row and qtbridge's `QModelItem` allows fifteen fields, so a slot
+    /// that structurally cannot be used twice at once is shared. Reading it
+    /// is guarded by `folder` everywhere, as the other shared fields are
+    /// (`bucket` carries a branch on a worktree row, `full` a folder key).
     change: String,
     bucket: String,
     /// Display grouping of worktree rows (GitKraken-style): untracked
@@ -52,9 +59,23 @@ pub struct NavItem {
     /// PR-state badge. Real data arrives in Phase 4 (ls-remote refs/pull
     /// matching); until then PG_FAKE_PR previews the look.
     has_pr: bool,
+    /// The line ending this file's pending change brings in, empty when it
+    /// has nothing to say. A word rather than the sentence: the row carries
+    /// a mark, and the sentence is the diff pane's.
+    eol_mark: String,
     depth: i32,
     folder: bool,
-    collapsed: bool,
+}
+
+/// What a folder row puts in `change` while it is closed.
+pub const FOLDED: &str = "FOLDED";
+
+fn fold_state(expanded: bool) -> String {
+    if expanded {
+        String::new()
+    } else {
+        FOLDED.to_string()
+    }
 }
 
 #[derive(Default)]
@@ -191,7 +212,7 @@ impl NavSectionModel {
                     full: key,
                     depth: depth as i32,
                     folder: true,
-                    collapsed: !expanded,
+                    change: fold_state(expanded),
                     ..Default::default()
                 });
                 if !expanded {
@@ -287,7 +308,7 @@ fn wt_tree_into(
                 group: group.to_string(),
                 depth,
                 folder: true,
-                collapsed: !expanded,
+                change: fold_state(expanded),
                 ..Default::default()
             });
             if expanded {
@@ -315,7 +336,10 @@ fn wt_tree_into(
 /// `bucket` keeps the real diff/staging routing) → staged. `full` always
 /// carries the real path (tree leaves rename `name` to their last
 /// segment).
-fn status_nav_items(status: &platitude_core::status::WorkTreeStatus) -> Vec<NavItem> {
+fn status_nav_items(
+    status: &platitude_core::status::WorkTreeStatus,
+    eol_marks: &[platitude_core::session::EolMark],
+) -> Vec<NavItem> {
     let push = |out: &mut Vec<NavItem>,
                 bucket: &str,
                 group: &str,
@@ -329,6 +353,11 @@ fn status_nav_items(status: &platitude_core::status::WorkTreeStatus) -> Vec<NavI
             bucket: bucket.into(),
             group: group.into(),
             orig_path: orig,
+            eol_mark: eol_marks
+                .iter()
+                .find(|m| m.path == path)
+                .map(|m| m.eol.clone())
+                .unwrap_or_default(),
             ..Default::default()
         });
     };
@@ -515,9 +544,11 @@ impl NavSectionModel {
             }
         }
         if let Some(feed) = self.status_feed.clone()
-            && let Some(StatusMsg { status, .. }) = feed.drain().pop()
+            && let Some(StatusMsg {
+                status, eol_marks, ..
+            }) = feed.drain().pop()
         {
-            let rows = status_nav_items(&status);
+            let rows = status_nav_items(&status, &eol_marks);
             arrived |= self.take_rows(rows);
         }
         if let Some(feed) = self.worktrees_feed.clone()

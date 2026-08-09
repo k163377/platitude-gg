@@ -41,7 +41,9 @@ Item {
             width: Theme.iconSm
             height: Theme.iconSm
             kind: "chevron"
-            rotation: (fileRow.model.collapsed ?? false) ? 0 : 90
+            // A folder row has no change code, so it keeps its fold state
+            // in that field (`models::nav::FOLDED`).
+            rotation: fileRow.changeText === "FOLDED" ? 0 : 90
             tint: Theme.textSecondary
         }
         ChangeIcon {

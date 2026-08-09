@@ -116,6 +116,7 @@ impl WorkTreeModel {
             progress,
             sides,
             merge_tool,
+            ..
         }) = feed.drain().pop()
         else {
             return;

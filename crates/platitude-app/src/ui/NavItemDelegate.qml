@@ -23,7 +23,7 @@ Item {
     required property bool has_pr
     required property int depth
     required property bool folder
-    required property bool collapsed
+    required property string eol_mark
     property string kindHint: "branch"
     property string headTrack: ""
     property real listWidth: 200
@@ -153,7 +153,9 @@ Item {
                 width: Theme.iconSm
                 height: Theme.iconSm
                 kind: "chevron"
-                rotation: navRow.collapsed ? 0 : 90
+                // A folder row has no change code, so it keeps its fold
+                // state in that field (`models::nav::FOLDED`).
+                rotation: navRow.change === "FOLDED" ? 0 : 90
                 tint: Theme.textSecondary
             }
             ChangeIcon {
@@ -236,6 +238,16 @@ Item {
             // question, one mark, one size (デザイン規約 §寸法).
             width: Theme.iconSm
             height: Theme.iconSm
+        }
+        // A pending file whose change says something about its line
+        // endings. The sentence is the diff pane's; this is the mark that
+        // gets someone there before they commit.
+        Rectangle {
+            visible: navRow.kindHint === "wt" && navRow.eol_mark !== ""
+            width: Theme.spaceXs
+            height: Theme.spaceXs
+            radius: width / 2
+            color: Theme.warning
         }
     }
     // Rows whose name can be changed from here. A remote branch is one of

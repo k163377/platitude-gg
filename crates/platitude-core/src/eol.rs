@@ -46,6 +46,7 @@
 //!   and there is nothing to warn about. The exception is an index blob that
 //!   already holds CRs, where git converts nothing and the CRs are real data.
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
@@ -137,6 +138,16 @@ pub enum Notice {
     NewFile { eol: Eol, baseline: Baseline },
     /// (d) `First line ending in this file · CRLF · …`
     FirstEnding { eol: Eol, baseline: Baseline },
+}
+
+/// The ending a notice is about — what the change puts into the file,
+/// whichever of the four it is.
+pub fn brought_in(notice: &Notice) -> Eol {
+    match notice {
+        Notice::Flipped { to, .. } => *to,
+        Notice::Mixed { added, .. } => *added,
+        Notice::NewFile { eol, .. } | Notice::FirstEnding { eol, .. } => *eol,
+    }
 }
 
 /// Pairs a reading with a baseline. `None` is silence, and every way of not
@@ -278,6 +289,8 @@ const READS: usize = 9;
 /// whole worktree file to fill its `w/` column — 213ms for one 120MB file,
 /// measured — and one neighbour's opinion is not worth that.
 const SAMPLE_MAX_BYTES: u64 = 1 << 20;
+/// How many paths one `check-attr` is asked about at a time.
+const ATTR_BATCH: usize = 200;
 
 /// What git's settings say about one path.
 ///
@@ -291,14 +304,63 @@ pub async fn ruling(
     path: &str,
     cancel: &CancellationToken,
 ) -> Result<Ruling, GitError> {
-    let attrs = attributes(executor, workdir, path, cancel).await?;
-    if attrs.not_text {
-        return Ok(Ruling::NotText);
+    let one = [path.to_string()];
+    Ok(rulings(executor, workdir, &one, cancel)
+        .await?
+        .into_iter()
+        .next()
+        .unwrap_or(Ruling::Open))
+}
+
+/// [`ruling`] for many paths: one `config` read for the repository and one
+/// `check-attr` per batch, rather than two spawns per path.
+pub async fn rulings(
+    executor: &GitExecutor,
+    workdir: &Path,
+    paths: &[String],
+    cancel: &CancellationToken,
+) -> Result<Vec<Ruling>, GitError> {
+    if paths.is_empty() {
+        return Ok(Vec::new());
     }
-    if attrs.decided || normalises(executor, workdir, cancel).await? {
-        return Ok(Ruling::Normalised);
+    let converting = normalises(executor, workdir, cancel).await?;
+    let mut out = Vec::with_capacity(paths.len());
+    // 200 paths answer in 71ms against the reference repository, measured;
+    // one at a time is 42ms each. The chunk is also what keeps a very long
+    // list off a command line with a length limit on it.
+    for batch in paths.chunks(ATTR_BATCH) {
+        for attrs in attributes(executor, workdir, batch, cancel).await? {
+            out.push(match attrs {
+                _ if attrs.not_text => Ruling::NotText,
+                _ if attrs.decided || converting => Ruling::Normalised,
+                _ => Ruling::Open,
+            });
+        }
     }
-    Ok(Ruling::Open)
+    Ok(out)
+}
+
+/// Every untracked, non-ignored file and what its bytes look like.
+///
+/// A file the repository has never seen has no patch to read until one is
+/// asked for, and asking per file is a spawn per file. This is one spawn for
+/// the lot, and for a new file "what endings does it have" is the whole
+/// question — except when the answer is [`Shape::Mixed`], which has a count
+/// in it that only the patch can give.
+pub async fn untracked_shapes(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<Vec<(String, Shape)>, GitError> {
+    let cmd = GitCommand::new().cwd(workdir).args([
+        "ls-files",
+        "--eol",
+        "-z",
+        "--others",
+        "--exclude-standard",
+    ]);
+    let out = executor.run(cmd, cancel).await?;
+    Ok(worktree_shapes(&out.stdout))
 }
 
 /// What the files around `path` look like, or `None` when the answer is
@@ -330,33 +392,51 @@ struct Attributes {
 async fn attributes(
     executor: &GitExecutor,
     workdir: &Path,
-    path: &str,
+    paths: &[String],
     cancel: &CancellationToken,
-) -> Result<Attributes, GitError> {
-    let cmd = GitCommand::new()
+) -> Result<Vec<Attributes>, GitError> {
+    let mut cmd = GitCommand::new()
         .cwd(workdir)
-        .args(["check-attr", "-z", "text", "eol", "--"])
-        .arg(path);
+        .args(["check-attr", "-z", "text", "eol", "--"]);
+    for p in paths {
+        cmd = cmd.arg(p.as_str());
+    }
     let out = executor.run(cmd, cancel).await?;
-    // `-z` prints one `path\0attr\0value\0` triple per attribute asked for.
+    // `-z` prints one `path\0attr\0value\0` triple per attribute asked for,
+    // so a path answering for two attributes takes two triples. Keyed by
+    // path rather than by position: nothing promises the order, and a path
+    // git dropped would otherwise shift every answer after it.
+    let mut found: HashMap<String, Attributes> = HashMap::new();
     let fields: Vec<&[u8]> = out.stdout.split(|b| *b == 0).collect();
-    let mut attrs = Attributes {
-        not_text: false,
-        decided: false,
-    };
     for triple in fields.chunks(3) {
-        let [_, attr, value] = triple else { continue };
+        let [path, attr, value] = triple else {
+            continue;
+        };
+        let entry = found
+            .entry(String::from_utf8_lossy(path).into_owned())
+            .or_insert(Attributes {
+                not_text: false,
+                decided: false,
+            });
         match (
             String::from_utf8_lossy(attr).as_ref(),
             String::from_utf8_lossy(value).as_ref(),
         ) {
-            ("text", "unset") => attrs.not_text = true,
-            ("text", "set") => attrs.decided = true,
-            ("eol", "lf" | "crlf") => attrs.decided = true,
+            ("text", "unset") => entry.not_text = true,
+            ("text", "set") => entry.decided = true,
+            ("eol", "lf" | "crlf") => entry.decided = true,
             _ => {}
         }
     }
-    Ok(attrs)
+    Ok(paths
+        .iter()
+        .map(|p| {
+            found.remove(p).unwrap_or(Attributes {
+                not_text: false,
+                decided: false,
+            })
+        })
+        .collect())
 }
 
 /// Whether `core.autocrlf` converts on the way into the index.
@@ -522,6 +602,48 @@ async fn list(
         .collect())
 }
 
+/// What a file's bytes on disk look like, as `ls-files --eol` reports them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Shape {
+    /// Every line ends the same way.
+    Uniform(Eol),
+    /// Both endings are in there.
+    Mixed,
+    /// No endings at all, not text, or not checked out — nothing to say and
+    /// nothing to vote with.
+    Nothing,
+}
+
+/// Reads `ls-files --eol -z` output into one shape per path, in the order
+/// git listed them.
+///
+/// The `w/` column is the one that matters: it is the bytes on disk, which
+/// is the same space a new file's patch is read in. `i/` would be the index,
+/// which only differs where git is converting — and where git converts,
+/// none of this is asked in the first place.
+pub fn worktree_shapes(stdout: &[u8]) -> Vec<(String, Shape)> {
+    let mut out = Vec::new();
+    for record in stdout.split(|b| *b == 0).filter(|r| !r.is_empty()) {
+        let text = String::from_utf8_lossy(record);
+        // `i/lf    w/crlf  attr/                 \t<path>`
+        let Some((columns, path)) = text.split_once('\t') else {
+            continue;
+        };
+        let worktree = columns
+            .split_whitespace()
+            .find_map(|c| c.strip_prefix("w/"))
+            .unwrap_or_default();
+        let shape = match worktree {
+            "lf" => Shape::Uniform(Eol::Lf),
+            "crlf" => Shape::Uniform(Eol::Crlf),
+            "mixed" => Shape::Mixed,
+            _ => Shape::Nothing,
+        };
+        out.push((path.to_string(), shape));
+    }
+    out
+}
+
 /// The worktree ending of each path git can name one for, with the index it
 /// came in at. Unusable samples are simply absent.
 async fn worktree_endings(
@@ -539,24 +661,10 @@ async fn worktree_endings(
     let out = executor.run(cmd, cancel).await?;
 
     let mut found: Vec<(usize, Eol)> = Vec::new();
-    for record in out.stdout.split(|b| *b == 0).filter(|r| !r.is_empty()) {
-        let text = String::from_utf8_lossy(record);
-        // `i/lf    w/crlf  attr/                 \t<path>`
-        let Some((columns, path)) = text.split_once('\t') else {
-            continue;
-        };
-        let worktree = columns
-            .split_whitespace()
-            .find_map(|c| c.strip_prefix("w/"))
-            .unwrap_or_default();
-        // Empty means the path is not checked out, `mixed` has no single
-        // answer to give, and `-text` and `none` have nothing to say.
-        let eol = match worktree {
-            "lf" => Eol::Lf,
-            "crlf" => Eol::Crlf,
-            _ => continue,
-        };
-        if let Some(index) = paths.iter().position(|p| p == path) {
+    for (path, shape) in worktree_shapes(&out.stdout) {
+        // Mixed has no single answer to give; the rest have nothing to say.
+        let Shape::Uniform(eol) = shape else { continue };
+        if let Some(index) = paths.iter().position(|p| *p == path) {
             found.push((index, eol));
         }
     }
