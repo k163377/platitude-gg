@@ -3508,8 +3508,10 @@ Item {
                         font.weight: Font.DemiBold
                         anchors.horizontalCenter: parent.horizontalCenter
                     }
+                    // In the same place on all three, above git's line
+                    // rather than under it: which folder this is about
+                    // is the same question every time.
                     Label {
-                        visible: repoTab.errorKind !== "other"
                         text: repoTab.errorPath
                         color: Theme.textSecondary
                         elide: Text.ElideMiddle

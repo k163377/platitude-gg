@@ -230,7 +230,11 @@ pub enum SessionEvent {
     Opened {
         info: RepoInfo,
     },
+    /// The repository would not open. The path is the one the session was
+    /// asked for: only some errors carry it themselves, and the screen
+    /// names the folder whichever error it was.
     OpenFailed {
+        path: PathBuf,
         error: GitError,
     },
     /// A (re)load of the graph began; the model must reset.
@@ -753,7 +757,7 @@ impl RepoSession {
                 }
                 Err(error) => {
                     if !error.is_cancelled() {
-                        s.sink.event(SessionEvent::OpenFailed { error });
+                        s.sink.event(SessionEvent::OpenFailed { path, error });
                     }
                 }
             }

@@ -65,9 +65,12 @@ AppDialog {
         // The picker is gone by now, so the folder it landed on has
         // nothing else left to name it. The middle goes first: the leaf
         // is what tells two candidates apart.
+        //
+        // In the same place on all three, above git's line rather than
+        // under it: which folder this is about is the same question
+        // every time, and it should not have to be looked for.
         Label {
             Layout.fillWidth: true
-            visible: openFailedDialog.kind !== "other"
             color: Theme.textSecondary
             elide: Text.ElideMiddle
             text: openFailedDialog.path

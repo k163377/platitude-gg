@@ -357,20 +357,18 @@ impl SessionSink for BridgeSink {
                     path: info.workdir.to_string_lossy().into_owned(),
                 });
             }
-            SessionEvent::OpenFailed { error } => {
-                let (kind, path) = match &error {
-                    platitude_core::GitError::NotARepository { path, bare, .. } => (
-                        if *bare { "bare" } else { "plain" },
-                        path.to_string_lossy().into_owned(),
-                    ),
+            SessionEvent::OpenFailed { path, error } => {
+                let kind = match &error {
+                    platitude_core::GitError::NotARepository { bare: true, .. } => "bare",
+                    platitude_core::GitError::NotARepository { .. } => "plain",
                     // git had trouble of its own, and only it can say
                     // what — the screen quotes it rather than putting a
                     // sentence of ours in git's mouth.
-                    _ => ("other", String::new()),
+                    _ => "other",
                 };
                 self.feeds.tab.push(TabMsg::OpenFailed {
                     kind,
-                    path,
+                    path: path.to_string_lossy().into_owned(),
                     message: error.to_string(),
                 });
             }
