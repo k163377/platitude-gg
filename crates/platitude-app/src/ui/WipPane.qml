@@ -215,6 +215,13 @@ ColumnLayout {
     function setResetAuthorChecked(on) {
         authorBox.checked = on
     }
+    /// Smoke hook: the caret in the description box, the way a click in
+    /// it puts it there (see DetailsPane — same box, same reason).
+    function focusDescription() {
+        wipBody.forceActiveFocus()
+    }
+    readonly property color descriptionColor: wipBody.color
+    readonly property bool descriptionFocused: wipBody.activeFocus
 
     // The stash options open right under the button that asks for them,
     // as a mode of this pane rather than a window over it (デザイン規約
@@ -481,7 +488,11 @@ ColumnLayout {
                     wrapMode: TextArea.Wrap
                     placeholderText: qsTr("Description")
                     font.pixelSize: Theme.fontMd
-                    color: Theme.textSecondary
+                    // Same rule as the details pane's box, written the
+                    // same way: dim at rest, the summary's colour while
+                    // the caret is in it (see DetailsPane).
+                    color: !wipBody.readOnly && wipBody.activeFocus
+                           ? Theme.textPrimary : Theme.textSecondary
                     background: null
                     padding: 0
                 }

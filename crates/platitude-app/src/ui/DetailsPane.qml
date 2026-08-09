@@ -276,6 +276,16 @@ ColumnLayout {
         subjectArea.text = subject
         bodyArea.text = body
     }
+    /// Smoke hook: put the caret in the description box, the way a click
+    /// in it does. Headless has no pointer, and the colour the text
+    /// takes under a caret is what the shot is of.
+    function focusDescription() {
+        bodyArea.forceActiveFocus()
+    }
+    /// What the box paints — reporting the input side (activeFocus)
+    /// would read green with the binding cut.
+    readonly property color descriptionColor: bodyArea.color
+    readonly property bool descriptionFocused: bodyArea.activeFocus
 
     Connections {
         target: detailsPane.details
@@ -407,7 +417,16 @@ ColumnLayout {
                     wrapMode: TextArea.Wrap
                     placeholderText: detailsPane.editable ? qsTr("Description") : ""
                     font.pixelSize: Theme.fontMd
-                    color: Theme.textSecondary
+                    // Dimmer than the summary while it is being read --
+                    // that pair is the message's own hierarchy -- but
+                    // never while it is being written: text under a
+                    // caret is what the eye is on, and secondary is the
+                    // shade this theme spends on what the eye is not on.
+                    // Read-only does not count as writing it: a stash
+                    // and a commit off this line take a caret for
+                    // selecting, and nothing typed there would land.
+                    color: !bodyArea.readOnly && bodyArea.activeFocus
+                           ? Theme.textPrimary : Theme.textSecondary
                     background: null
                     padding: 0
                 }

@@ -1919,6 +1919,16 @@ Item {
         id: rewordTimer
         interval: 800
         onTriggered: {
+            // "edit-message-focus" types nothing: the commit's own body
+            // is what the caret has to be photographed on top of, and
+            // an empty box would only show the placeholder.
+            if (AppBackend.autoAct === "edit-message-focus") {
+                detailsPane.focusDescription()
+                AppBackend.report("message_focus pane=details focused="
+                                  + detailsPane.descriptionFocused
+                                  + " color=" + detailsPane.descriptionColor)
+                return
+            }
             detailsPane.setMessageText(AppBackend.autoActArg, "")
             // "edit-message" stops here, with the save row on screen.
             if (AppBackend.autoAct === "reword")
@@ -2544,7 +2554,8 @@ Item {
             page.squashCommit(branchesModel.headOid)
         } else if (act === "reword" || act === "edit-message"
                    || act === "edit-message-leave"
-                   || act === "edit-message-discard") {
+                   || act === "edit-message-discard"
+                   || act === "edit-message-focus") {
             // Through the pane, like typing: selecting the commit puts
             // its message in the boxes, and the boxes are what saves.
             // "edit-message" leaves it unsaved, for the editing state.
@@ -2593,6 +2604,21 @@ Item {
             // The working tree, as the row above the newest commit opens
             // it: the file list this pane's every other verb starts from.
             page.showWip()
+        } else if (act === "wip-message" || act === "wip-message-focus") {
+            // The same box in the pane that writes a new commit. A body
+            // is typed in first because this editor starts empty, and an
+            // empty box has no text to take a colour. The two verbs are
+            // read as a pair: the caret is the only difference between
+            // them, so the dim side is what says the lit one means
+            // anything.
+            page.showWip()
+            wipPane.setMessage("feat: write the summary",
+                               arg === "" ? "And the description under it." : arg)
+            if (act === "wip-message-focus")
+                wipPane.focusDescription()
+            AppBackend.report("message_focus pane=wip focused="
+                              + wipPane.descriptionFocused
+                              + " color=" + wipPane.descriptionColor)
         } else if (act === "drop-commit" || act === "drop-commit-go") {
             // Through the graph row's menu, where the row is held or
             // clicked depending on what still holds the branch tip: the
