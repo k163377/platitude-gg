@@ -26,22 +26,26 @@ use std::path::{Path, PathBuf};
 /// Directory the images sit in, beside `settings.toml`.
 pub const DIR_NAME: &str = "avatars";
 
-/// Extensions accepted from a picker. Qt reads more than this, but a store
-/// that will hold anything is a store that will one day hold a 40MB TIFF
-/// somebody meant to open in an editor.
-pub const EXTENSIONS: [&str; 5] = ["png", "jpg", "jpeg", "webp", "bmp"];
+/// Extensions the picker offers. **What a file is gets decided by what
+/// is in it** (`picture`), not by this — a picture saved under the wrong
+/// name still works. This is only so that somebody browsing for their
+/// own picture is not shown every file they own.
+pub const EXTENSIONS: [&str; 3] = ["png", "jpg", "jpeg"];
 
-/// Largest picture accepted, in bytes. An avatar is drawn at 20 and 40
-/// pixels; anything past this is a photograph that wandered in, and it
-/// would be read from disk on every repaint of the graph.
-pub const MAX_BYTES: u64 = 4 * 1024 * 1024;
+/// Largest file read. Nothing this size is ever *kept* — everything is
+/// rewritten small on the way in — so this bounds the reading and
+/// decoding done while a person waits, and nothing else. In particular
+/// it bounds no part of the picture itself: a flat PNG decodes to about
+/// a thousand times its own bytes, which is what `picture::MAX_PIXELS`
+/// is for.
+pub const MAX_BYTES: u64 = 10 * 1024 * 1024;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AvatarError {
-    #[error("{} is not a kind of image this can store", .0)]
-    UnsupportedKind(String),
-    #[error("the picture is larger than {}MB", MAX_BYTES / (1024 * 1024))]
+    #[error("the file is larger than {}MB", MAX_BYTES / (1024 * 1024))]
     TooLarge,
+    #[error(transparent)]
+    Picture(#[from] crate::picture::PictureError),
     #[error("could not read {}: {source}", path.display())]
     Read {
         path: PathBuf,
@@ -169,13 +173,15 @@ impl Avatars {
         before - self.entries.len()
     }
 
-    /// Files a picture under an address, copying it in. Returns the name of
-    /// the file now holding it.
+    /// Files a picture under an address, rewriting it small on the way in
+    /// (`picture`). Returns the name of the file now holding it.
     ///
-    /// The copy is what makes this durable: the picture a person picked out
-    /// of their downloads folder will be moved or deleted, and a store that
-    /// only remembered the path would then draw nothing with no way to say
-    /// why.
+    /// Keeping a copy of our own is what makes this durable: the picture a
+    /// person picked out of their downloads folder will be moved or
+    /// deleted, and a store that only remembered the path would then draw
+    /// nothing with no way to say why. Rewriting rather than copying is
+    /// what keeps a photograph from costing tens of megabytes of memory
+    /// for as long as the application is up.
     pub fn assign(
         &mut self,
         dir: &Path,
@@ -183,18 +189,6 @@ impl Avatars {
         name: &str,
         source: &Path,
     ) -> Result<String, AvatarError> {
-        let extension = source
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(str::to_lowercase)
-            .unwrap_or_default();
-        if !EXTENSIONS.contains(&extension.as_str()) {
-            return Err(AvatarError::UnsupportedKind(if extension.is_empty() {
-                source.display().to_string()
-            } else {
-                extension
-            }));
-        }
         let size = std::fs::metadata(source)
             .map_err(|source_err| AvatarError::Read {
                 path: source.to_path_buf(),
@@ -208,7 +202,11 @@ impl Avatars {
             path: source.to_path_buf(),
             source: source_err,
         })?;
-        let file = format!("{}.{extension}", content_name(&bytes));
+        // What gets stored is the rewritten picture, so the name is a hash
+        // of that and not of what was picked: two people who found the
+        // same photograph in different formats still share one file.
+        let bytes = crate::picture::normalize(&bytes)?;
+        let file = format!("{}.png", content_name(&bytes));
         let target = dir.join(&file);
         std::fs::create_dir_all(dir).map_err(|source_err| AvatarError::Write {
             path: dir.to_path_buf(),
@@ -294,9 +292,16 @@ mod tests {
         tempfile::tempdir().expect("tempdir")
     }
 
-    fn picture(dir: &Path, name: &str, bytes: &[u8]) -> PathBuf {
+    /// A real picture on disk. The store decodes what it is handed now,
+    /// so a few bytes standing in for one no longer reaches the far side.
+    fn picture(dir: &Path, name: &str, tint: u8) -> PathBuf {
+        let png = crate::picture::png_of(24, 16, |x, _| [tint, x as u8, 40, 255]);
+        file_of(dir, name, &png)
+    }
+
+    fn file_of(dir: &Path, name: &str, bytes: &[u8]) -> PathBuf {
         let path = dir.join(name);
-        std::fs::write(&path, bytes).expect("write picture");
+        std::fs::write(&path, bytes).expect("write file");
         path
     }
 
@@ -309,7 +314,7 @@ mod tests {
     #[test]
     fn assigning_copies_the_picture_in() {
         let scratch = scratch();
-        let source = picture(scratch.path(), "cat.png", b"\x89PNG cat");
+        let source = picture(scratch.path(), "cat.png", 200);
         let store_dir = scratch.path().join("avatars");
         let mut avatars = Avatars::default();
 
@@ -333,8 +338,8 @@ mod tests {
         let scratch = scratch();
         let store_dir = scratch.path().join("avatars");
         let mut avatars = Avatars::default();
-        let first = picture(scratch.path(), "a.png", b"first");
-        let second = picture(scratch.path(), "b.png", b"second picture");
+        let first = picture(scratch.path(), "a.png", 10);
+        let second = picture(scratch.path(), "b.png", 220);
 
         let old = avatars
             .assign(&store_dir, "ada@example.com", "Ada", &first)
@@ -354,7 +359,7 @@ mod tests {
         let scratch = scratch();
         let store_dir = scratch.path().join("avatars");
         let mut avatars = Avatars::default();
-        let source = picture(scratch.path(), "shared.png", b"same bytes");
+        let source = picture(scratch.path(), "shared.png", 90);
 
         let a = avatars
             .assign(&store_dir, "ada@example.com", "Ada", &source)
@@ -372,30 +377,62 @@ mod tests {
     }
 
     #[test]
-    fn a_kind_it_cannot_store_is_refused_before_anything_is_written() {
+    fn something_that_is_not_a_picture_is_refused_before_anything_is_written() {
         let scratch = scratch();
         let store_dir = scratch.path().join("avatars");
         let mut avatars = Avatars::default();
-        let source = picture(scratch.path(), "notes.txt", b"hello");
+        // Named like a picture, which is exactly why the name is not
+        // what decides.
+        let source = file_of(scratch.path(), "cat.png", b"hello");
         assert!(matches!(
             avatars.assign(&store_dir, "ada@example.com", "Ada", &source),
-            Err(AvatarError::UnsupportedKind(_))
+            Err(AvatarError::Picture(
+                crate::picture::PictureError::Unreadable
+            ))
         ));
         assert!(!store_dir.exists(), "nothing was created");
         assert!(avatars.is_empty());
     }
 
     #[test]
-    fn a_picture_past_the_ceiling_is_refused() {
+    fn a_file_past_the_ceiling_is_refused_without_being_read() {
         let scratch = scratch();
         let store_dir = scratch.path().join("avatars");
         let mut avatars = Avatars::default();
         let big = vec![0u8; (MAX_BYTES + 1) as usize];
-        let source = picture(scratch.path(), "huge.png", &big);
+        let source = file_of(scratch.path(), "huge.png", &big);
         assert!(matches!(
             avatars.assign(&store_dir, "ada@example.com", "Ada", &source),
             Err(AvatarError::TooLarge)
         ));
+    }
+
+    #[test]
+    fn what_is_stored_is_the_small_square_rather_than_what_was_picked() {
+        let scratch = scratch();
+        let store_dir = scratch.path().join("avatars");
+        let mut avatars = Avatars::default();
+        // Wide, and far bigger than anything ever drawn.
+        let wide = crate::picture::png_of(1200, 800, |x, y| {
+            [(x % 251) as u8, (y % 253) as u8, 30, 255]
+        });
+        let source = file_of(scratch.path(), "wide.png", &wide);
+
+        let file = avatars
+            .assign(&store_dir, "ada@example.com", "Ada", &source)
+            .expect("assign");
+        assert!(file.ends_with(".png"), "always stored as png: {file}");
+        let stored = std::fs::read(store_dir.join(&file)).expect("read stored");
+        assert!(
+            stored.len() < wide.len(),
+            "smaller than what was picked: {} vs {}",
+            stored.len(),
+            wide.len()
+        );
+        // The header says it plainly: IHDR carries the two sides.
+        let side = u32::from_be_bytes([stored[16], stored[17], stored[18], stored[19]]);
+        let other = u32::from_be_bytes([stored[20], stored[21], stored[22], stored[23]]);
+        assert_eq!((side, other), (crate::picture::SIDE, crate::picture::SIDE));
     }
 
     #[test]
@@ -427,7 +464,7 @@ mod tests {
         let scratch = scratch();
         let store_dir = scratch.path().join("avatars");
         let mut avatars = Avatars::default();
-        let source = picture(scratch.path(), "a.png", b"bytes");
+        let source = picture(scratch.path(), "a.png", 70);
         let file = avatars
             .assign(&store_dir, "ada@example.com", "Ada", &source)
             .expect("assign");
@@ -443,8 +480,8 @@ mod tests {
         let scratch = scratch();
         let store_dir = scratch.path().join("avatars");
         let mut avatars = Avatars::default();
-        let a = picture(scratch.path(), "a.png", b"one");
-        let b = picture(scratch.path(), "b.jpg", b"two");
+        let a = picture(scratch.path(), "a.png", 30);
+        let b = picture(scratch.path(), "b.jpg", 180);
         avatars
             .assign(&store_dir, "zoe@example.com", "Zoe", &a)
             .expect("assign");

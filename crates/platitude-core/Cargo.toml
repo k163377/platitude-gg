@@ -11,6 +11,13 @@ tokio.workspace = true
 toml.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+# Reading and rewriting the pictures a person assigns to an author
+# (`picture`). Pure Rust and no build script that wants a C compiler, so
+# the three-OS build and the offline job stay as they are — which is why
+# png's `zlib-rs` feature must stay off: it is what would pull one in.
+png = "0.18"
+zune-jpeg = "0.5"
+zune-core = "0.5"
 
 [dev-dependencies]
 insta = "1"
