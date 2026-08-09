@@ -308,11 +308,25 @@ ColumnLayout {
     readonly property real descRoom:
         Math.max(0, wipList.height - 2 * Theme.rowHeight)
     /// What the pane needs back — the list bottoms out at zero while the
-    /// column keeps growing, so the overflow past this pane's own edge is
-    /// the rest of the answer (see DetailsPane).
+    /// column keeps growing, and past that the block is scrolling by
+    /// exactly what it could not fit, which is the rest of the answer.
+    ///
+    /// Measured against the room the block is *allowed*, never against the
+    /// height it was laid out at: the block's own height follows what the
+    /// box does, so reading it back here would put the box and the layout
+    /// in a ring — the box grows, the height it is compared to is still
+    /// last frame's, the box is told it owes the difference, and it gives
+    /// back everything it just took (measured: the grip did nothing at
+    /// all, `cap` never left 120).
     readonly property real descOwed:
         Math.max(0, 2 * Theme.rowHeight - wipList.height)
-        + Math.max(0, wipPane.implicitHeight - wipPane.height)
+        + Math.max(0, blockCol.implicitHeight - wipPane.blockRoom)
+    /// How much of the pane the block above the list may take: all of it
+    /// but the two rows that keep a list a list — the same bound the grip
+    /// stops at (デザイン規約 §コミットメッセージの 2 つの枠). Past this
+    /// the block scrolls rather than running out of the pane's bottom.
+    readonly property real blockRoom:
+        Math.max(0, wipPane.height - headerBand.height - 2 * Theme.rowHeight)
     // -- smoke hooks, forwarded to the box --
     function growDescription(dy) { wipBody.grow(dy) }
     readonly property bool descGrips: wipBody.grips
@@ -321,12 +335,16 @@ ColumnLayout {
     readonly property real descCap: wipBody.cap
     readonly property int descListRows:
         Math.round(wipList.height / Theme.rowHeight)
-    /// Whether what sits under the box is still inside the pane. Here it
-    /// is the commit button that would go under the window's own footer,
-    /// and that shot frames like one where it did not.
-    readonly property bool descKeeps:
-        commitButton.mapToItem(wipPane, 0, commitButton.height).y
-        <= wipPane.height
+    /// Whether the block is taller than the room it was given, which is to
+    /// say whether anything in it is below the fold. The pane says it out
+    /// loud because a headless run cannot see a scroll bar and the shot
+    /// frames alike either way (`PG_AUTO_ACT=window-floor wip`).
+    readonly property bool blockScrolls:
+        blockCol.implicitHeight > wipPane.blockRoom + 1
+    /// Whether the box has given back everything it owes — the same
+    /// question, since what a pulled-open box pushes past the pane's edge
+    /// is what the block ends up scrolling by.
+    readonly property bool descKeeps: !wipPane.blockScrolls
 
     // The stash options open right under the button that asks for them,
     // as a mode of this pane rather than a window over it (デザイン規約
@@ -366,6 +384,7 @@ ColumnLayout {
     spacing: 0
 
     Rectangle {
+        id: headerBand
         Layout.fillWidth: true
         implicitHeight: Theme.headerHeight
         color: Theme.bgElevated
@@ -441,415 +460,451 @@ ColumnLayout {
         }
     }
 
-    // Stash options card, under the button that opened it. The same
-    // framed-card inset rhythm as the editor below (帯 → 枠 → 枠 = one
-    // even spaceXs step).
-    Rectangle {
-        visible: wipPane.stashPanelShown
+    // Everything between the band and the file list, in a surface of its
+    // own that scrolls when the pane is too short to hold it.
+    //
+    // What is in here keeps its height by construction — the editor, the
+    // commit button, the exit card a stopped operation puts up — so the
+    // list was the only thing that could give, and past zero the rest was
+    // simply laid out below the pane's own edge (measured 2026-08-09: in a
+    // 320px window a stopped rebase drew `--continue` and `--skip` and
+    // left `--quit` and `--abort` under the window, with nothing to scroll
+    // to reach them). The window's floor cannot answer that on its own:
+    // the card comes and goes with what git is in the middle of, and a
+    // window that grew itself because a rebase stopped would be a stranger
+    // thing than a pane that scrolls (規約 §窓の床).
+    //
+    // The list keeps two rows throughout, which is the bound the
+    // description box's grip already stops at, so the two scrolling
+    // surfaces never share an edge: a wheel is over exactly one of them.
+    Flickable {
+        id: blockScroll
         Layout.fillWidth: true
-        Layout.leftMargin: Theme.spaceSm
-        Layout.rightMargin: Theme.spaceSm
-        Layout.topMargin: Theme.spaceXs
-        implicitHeight: stashCol.implicitHeight + 2 * Theme.spaceSm
-        color: Theme.bgBase
-        radius: Theme.radiusMd
-        border.color: Theme.borderDefault
-        border.width: Theme.borderWidth
+        Layout.preferredHeight: Math.min(blockCol.implicitHeight,
+                                         wipPane.blockRoom)
+        contentWidth: width
+        contentHeight: blockCol.implicitHeight
+        clip: true
+        // Hard stop at the ends, as everywhere else that scrolls
+        // (デザイン規約 §QML 実装ルール).
+        boundsBehavior: Flickable.StopAtBounds
+        ScrollBar.vertical: AutoScrollBar {}
         ColumnLayout {
-            id: stashCol
-            anchors.fill: parent
-            anchors.margins: Theme.spaceSm
-            spacing: Theme.spaceXs
-            FormField {
-                id: stashName
+            id: blockCol
+            width: blockScroll.width
+            spacing: 0
+
+            // Stash options card, under the button that opened it. The same
+            // framed-card inset rhythm as the editor below (帯 → 枠 → 枠 = one
+            // even spaceXs step).
+            Rectangle {
+                visible: wipPane.stashPanelShown
                 Layout.fillWidth: true
-                placeholderText: qsTr("What this is, for finding it later")
-                onAccepted: wipPane.stashApply()
-                Keys.onEscapePressed: wipPane.closeStashPanel()
-            }
-            CheckBox {
-                id: stashUntracked
-                // A stash that leaves new files behind is the surprise
-                // most often reported to other git GUIs, so this starts
-                // on — the same choice the switch dialog makes.
-                text: qsTr("Include files git is not tracking yet")
-                font.pixelSize: Theme.fontSm
-                implicitHeight: Theme.controlHeight
-                enabled: !stashStagedOnly.checked
-            }
-            CheckBox {
-                id: stashKeepIndex
-                text: qsTr("Leave the staged changes staged")
-                font.pixelSize: Theme.fontSm
-                implicitHeight: Theme.controlHeight
-                enabled: !stashStagedOnly.checked
-            }
-            CheckBox {
-                id: stashStagedOnly
-                text: qsTr("Only the staged changes")
-                font.pixelSize: Theme.fontSm
-                implicitHeight: Theme.controlHeight
-                // git refuses it together with untracked files, and
-                // cannot do it at all for a file changed on both sides:
-                // it writes the entry, then fails to clear the tree and
-                // leaves the entry behind with nothing else done
-                // (measured). Refusing first is the only way that does
-                // not surprise.
-                enabled: wipPane.workTree.partiallyStagedCount === 0
-                // A disabled box keeps its tick, and what is sent is
-                // what the boxes show — so the boxes this tick rules
-                // out are unticked, not just greyed with their ticks
-                // still live.
-                onToggled: {
-                    if (checked) {
-                        stashUntracked.checked = false
-                        stashKeepIndex.checked = false
+                Layout.leftMargin: Theme.spaceSm
+                Layout.rightMargin: Theme.spaceSm
+                Layout.topMargin: Theme.spaceXs
+                implicitHeight: stashCol.implicitHeight + 2 * Theme.spaceSm
+                color: Theme.bgBase
+                radius: Theme.radiusMd
+                border.color: Theme.borderDefault
+                border.width: Theme.borderWidth
+                ColumnLayout {
+                    id: stashCol
+                    anchors.fill: parent
+                    anchors.margins: Theme.spaceSm
+                    spacing: Theme.spaceXs
+                    FormField {
+                        id: stashName
+                        Layout.fillWidth: true
+                        placeholderText: qsTr("What this is, for finding it later")
+                        onAccepted: wipPane.stashApply()
+                        Keys.onEscapePressed: wipPane.closeStashPanel()
+                    }
+                    CheckBox {
+                        id: stashUntracked
+                        // A stash that leaves new files behind is the surprise
+                        // most often reported to other git GUIs, so this starts
+                        // on — the same choice the switch dialog makes.
+                        text: qsTr("Include files git is not tracking yet")
+                        font.pixelSize: Theme.fontSm
+                        implicitHeight: Theme.controlHeight
+                        enabled: !stashStagedOnly.checked
+                    }
+                    CheckBox {
+                        id: stashKeepIndex
+                        text: qsTr("Leave the staged changes staged")
+                        font.pixelSize: Theme.fontSm
+                        implicitHeight: Theme.controlHeight
+                        enabled: !stashStagedOnly.checked
+                    }
+                    CheckBox {
+                        id: stashStagedOnly
+                        text: qsTr("Only the staged changes")
+                        font.pixelSize: Theme.fontSm
+                        implicitHeight: Theme.controlHeight
+                        // git refuses it together with untracked files, and
+                        // cannot do it at all for a file changed on both sides:
+                        // it writes the entry, then fails to clear the tree and
+                        // leaves the entry behind with nothing else done
+                        // (measured). Refusing first is the only way that does
+                        // not surprise.
+                        enabled: wipPane.workTree.partiallyStagedCount === 0
+                        // A disabled box keeps its tick, and what is sent is
+                        // what the boxes show — so the boxes this tick rules
+                        // out are unticked, not just greyed with their ticks
+                        // still live.
+                        onToggled: {
+                            if (checked) {
+                                stashUntracked.checked = false
+                                stashKeepIndex.checked = false
+                            }
+                        }
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: wipPane.workTree.partiallyStagedCount > 0
+                        wrapMode: Text.Wrap
+                        color: Theme.textMuted
+                        font.pixelSize: Theme.fontSm
+                        text: qsTr("%n file(s) are changed both in the staging area "
+                                   + "and on disk. git cannot take those apart, so "
+                                   + "the staged changes cannot go on their own.", "",
+                                   wipPane.workTree.partiallyStagedCount)
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spaceSm
+                        Item { Layout.fillWidth: true }
+                        HoverToolButton {
+                            text: qsTr("Cancel")
+                            font.pixelSize: Theme.fontSm
+                            onClicked: wipPane.closeStashPanel()
+                        }
+                        HoverButton {
+                            highlighted: true
+                            text: qsTr("Stash")
+                            enabled: wipPane.repoTab.busyCount === 0
+                            onClicked: wipPane.stashApply()
+                        }
                     }
                 }
             }
-            Label {
-                Layout.fillWidth: true
-                visible: wipPane.workTree.partiallyStagedCount > 0
-                wrapMode: Text.Wrap
-                color: Theme.textMuted
-                font.pixelSize: Theme.fontSm
-                text: qsTr("%n file(s) are changed both in the staging area "
-                           + "and on disk. git cannot take those apart, so "
-                           + "the staged changes cannot go on their own.", "",
-                           wipPane.workTree.partiallyStagedCount)
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spaceSm
-                Item { Layout.fillWidth: true }
-                HoverToolButton {
-                    text: qsTr("Cancel")
-                    font.pixelSize: Theme.fontSm
-                    onClicked: wipPane.closeStashPanel()
-                }
-                HoverButton {
-                    highlighted: true
-                    text: qsTr("Stash")
-                    enabled: wipPane.repoTab.busyCount === 0
-                    onClicked: wipPane.stashApply()
-                }
-            }
-        }
-    }
-    // Message editor pinned on top — identical shape in commit details,
-    // amend and new-commit creation, inset the same way (see
-    // DetailsPane) so switching modes doesn't move the box.
-    ColumnLayout {
-        Layout.fillWidth: true
-        Layout.margins: Theme.spaceSm
-        Layout.topMargin: Theme.spaceXs
-        Layout.bottomMargin: Theme.spaceXs
-        spacing: Theme.spaceXs
-        Rectangle {
-            Layout.fillWidth: true
-            // Capped and scrolled like the description box below it, and
-            // like the details pane's pair: a summary somebody pastes a
-            // paragraph into otherwise grows until the file list has no
-            // pane left to be in.
-            Layout.preferredHeight: Math.min(wipSubject.implicitHeight
-                                             + Theme.spaceSm,
-                                             Theme.messageMaxHeight)
-            color: Theme.bgBase
-            radius: Theme.radiusMd
-            border.color: Theme.borderDefault
-            border.width: Theme.borderWidth
-            ScrollView {
-                anchors.fill: parent
-                anchors.margins: Theme.spaceXs
-                Component.onCompleted:
-                    contentItem.boundsBehavior = Flickable.StopAtBounds
-                SummaryArea {
-                    id: wipSubject
-                    placeholderText: qsTr("Commit summary")
-                }
-            }
-        }
-        // Two lines tall from the start, and pulled open by the corner
-        // for a long one — the same component the details pane reads
-        // messages in.
-        DescriptionBox {
-            id: wipBody
-            placeholderText: qsTr("Description")
-            room: wipPane.descRoom
-            owed: wipPane.descOwed
-        }
-        // Amend replaces the newest commit instead of adding one, so it
-        // starts from that commit's message rather than an empty editor.
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spaceXs
-            CheckBox {
-                id: amendBox
-                text: qsTr("Amend the last commit")
-                font.pixelSize: Theme.fontSm
-                implicitHeight: Theme.controlHeight
-                onToggled: wipPane.amendToggled(checked)
-            }
-            // git records who committed, but leaves the author alone: an
-            // amend of someone else's commit — or of one's own made under
-            // a different name — keeps the name it had. Offered only
-            // where the two identities actually differ, and unchecked
-            // again whenever it goes away.
-            CheckBox {
-                id: authorBox
-                visible: wipPane.amending && wipPane.repoTab.headAuthorDiffers
-                text: qsTr("Make me the author")
-                font.pixelSize: Theme.fontSm
-                implicitHeight: Theme.controlHeight
-                onVisibleChanged: if (!visible) checked = false
-                ToolTip.visible: hovered
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: qsTr("Replaces the author %1 <%2> with you, "
-                                   + "dated now")
-                              .arg(wipPane.repoTab.headAuthorName)
-                              .arg(wipPane.repoTab.headAuthorEmail)
-            }
-            Item { Layout.fillWidth: true }
-            // What this button is about to do beyond committing: git will
-            // ask an agent for the key, and that agent may put a
-            // passphrase prompt on screen. Said only when signing is on,
-            // and in the plain text colour — it is a fact, not a warning.
-            // It gives the slot up to the pushed-amend warning: one tag
-            // fits here, and a warning outranks a fact.
-            Label {
-                visible: wipPane.repoTab.signsCommits
-                         && !(wipPane.amending && wipPane.headPublished)
-                text: qsTr("will be signed")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
-                ToolTip.visible: signingHover.containsMouse
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: wipPane.repoTab.signingFormat === "ssh"
-                              ? qsTr("Signed with your ssh key")
-                              : wipPane.repoTab.signingFormat === "x509"
-                                ? qsTr("Signed with your x509 certificate")
-                                : qsTr("Signed with your gpg key")
-                MouseArea {
-                    id: signingHover
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.NoButton
-                }
-            }
-            // Said, not asked: rewriting a pushed commit is undone by a
-            // switch or a reset, so the amend goes ahead and this tag
-            // is all the warning it gets.
-            Label {
-                visible: wipPane.amending && wipPane.headPublished
-                text: qsTr("already pushed")
-                color: Theme.warning
-                font.pixelSize: Theme.fontSm
-                ToolTip.visible: amendPushedHover.containsMouse
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: qsTr("Already on a remote — anyone who has it "
-                                   + "will be out of step")
-                MouseArea {
-                    id: amendPushedHover
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.NoButton
-                }
-            }
-        }
-        // The framed button the rest of the app uses, at the size this pane
-        // needs. Its frame, its tone and its `!` are the ones the toolbar's
-        // buttons already wear, so the state this button can be in is said
-        // in the vocabulary someone has read elsewhere — rather than in a
-        // filled face that only this one button has.
-        ActionButton {
-            id: commitButton
-            Layout.fillWidth: true
-            implicitHeight: Theme.controlHeight
-            /// Something staged says its line endings changed, so the
-            /// commit is about to carry it. **Only the index counts** — a
-            /// file marked on its working-tree side is not in this commit
-            /// (`session::EolMark::staged`).
-            readonly property bool eolWarned:
-                wipPane.workTree.eolStagedCount > 0 && commitButton.enabled
-            kind: "check"
-            centred: true
-            // **The word stays plain in both states.** A coloured word is
-            // what `Remove` and a stopped fetch wear, and both of those are
-            // held rather than clicked; this one is a click either way, and
-            // borrowing their colour for the word would borrow the gesture
-            // with it. The frame and the mark carry the state instead.
-            tone: Theme.textPrimary
-            // **The frame goes with the words.** A toolbar button is
-            // measured to its content, so a frame left bright around dimmed
-            // words still reads as a small live thing; one this wide reads
-            // as a live button with grey words in it.
-            frameColor: !commitButton.enabled ? Theme.borderDefault
-                        : commitButton.eolWarned ? Theme.warning : Theme.accent
-            // The mark the button family already puts at the end of its
-            // own word when the thing it does needs reading first.
-            alert: commitButton.eolWarned
-            alertTone: Theme.warning
-            alertTight: true
-            text: wipPane.amending
-                  ? qsTr("Amend commit (%1 staged)").arg(wipPane.workTree.stagedCount)
-                  : qsTr("Commit changes (%1 staged)").arg(wipPane.workTree.stagedCount)
-            // An amend can stand on its own (message only); a new commit
-            // needs staged content and a summary, and git needs an
-            // identity to attribute either one to.
-            enabled: wipPane.repoTab.busyCount === 0
-                     && wipPane.repoTab.identityReady
-                     && wipSubject.text.trim() !== ""
-                     && (wipPane.amending || wipPane.workTree.stagedCount > 0)
-            // **Still one click.** Committing is a daily operation and a
-            // confirmation on a daily operation becomes something people
-            // press without reading, which spends the effect where it is
-            // really needed (デザイン規約 §可否・警告の出し場所). The
-            // frame, the mark and the hover say what is in it; the
-            // decision stays the reader's.
-            onActivated: wipPane.commitClicked()
-            // Why it cannot be pressed. The other thing this button has to
-            // say — that the index carries a line-ending change — is said
-            // by the card `settleCommitCard` opens instead, and the two
-            // cannot both be true: the warning wants a button that can be
-            // pressed.
-            ToolTip.visible: commitHover.containsMouse && !enabled
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: !wipPane.repoTab.identityReady
-                          ? qsTr("No name or email set for commits")
-                          : wipSubject.text.trim() === ""
-                          ? qsTr("A commit needs a summary")
-                          : qsTr("Stage something to commit")
-            MouseArea {
-                id: commitHover
-                anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.NoButton
-                onContainsMouseChanged: wipPane.settleCommitCard()
-            }
-        }
-        // ==== 案 C: the way out of a stopped operation, built into ====
-        // ==== the pane under the button that finishes things.     ====
-        //
-        // The commit button's seat is already "conclude this": during a
-        // merge `--continue` is literally the commit. Standing rather
-        // than dropped from a click — while an operation is stopped this
-        // is the pane's business, and the file list moves down to make
-        // room for it rather than the rows covering the list.
-        Rectangle {
-            id: opExitCard
-            visible: wipPane.workTree.opText !== ""
-            Layout.fillWidth: true
-            Layout.topMargin: Theme.spaceXs
-            implicitHeight: opExitCol.implicitHeight + 2 * Theme.spaceXs
-            color: Theme.bgBase
-            radius: Theme.radiusMd
-            border.color: Theme.warning
-            border.width: Theme.borderWidth
-            // The chip column and the mark's seat, shared by every row so
-            // the sentences start on one x and the card reads down its
-            // first letters — what `AppMenu` does for a menu's rows.
-            // The mark's own seat, left on every row whether or not that
-            // row is a held one — the words start on one x either way,
-            // and the seat is the menu's exactly: narrower than the mark,
-            // which overhangs it into the row padding on one side and the
-            // word gap on the other (デザイン規約 §長押し — 語が払う
-            // 字下げは印 1 個分より小さい).
-            readonly property real holdIndent: Theme.iconMd - 2 * Theme.spaceXs
-            /// Whether leaving the stopped commit out costs nothing.
-            ///
-            /// An interactive rebase stops on a commit that came out
-            /// empty and names `--skip` as the way past it (measured —
-            /// `an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip`).
-            /// Nothing is conflicted or staged while it stands there, and
-            /// a clean tree under a stopped operation is what tells that
-            /// stop from every other one this app can reach today.
-            ///
-            /// **Revisit when `edit` steps land** (full interactive
-            /// rebase): an `edit` stop is clean too, and skipping one
-            /// does lose the commit. Distinguishing them needs core to
-            /// say why git stopped (P3-確認事項).
-            readonly property bool skipIsFree:
-                wipPane.workTree.conflictCount === 0
-                && wipPane.workTree.stagedCount === 0
-                && wipPane.workTree.unstagedCount === 0
-            readonly property real codeColW: {
-                let widest = 0
-                for (let i = 0; i < opExitCol.children.length; i++) {
-                    const row = opExitCol.children[i]
-                    if (row && row.visible && row.codeColSeat !== undefined)
-                        widest = Math.max(widest, row.codeColSeat)
-                }
-                return widest
-            }
+            // Message editor pinned on top — identical shape in commit details,
+            // amend and new-commit creation, inset the same way (see
+            // DetailsPane) so switching modes doesn't move the box.
             ColumnLayout {
-                id: opExitCol
-                anchors.fill: parent
-                anchors.margins: Theme.spaceXs
-                spacing: 0
-                Label {
+                Layout.fillWidth: true
+                Layout.margins: Theme.spaceSm
+                Layout.topMargin: Theme.spaceXs
+                Layout.bottomMargin: Theme.spaceXs
+                spacing: Theme.spaceXs
+                Rectangle {
                     Layout.fillWidth: true
-                    Layout.leftMargin: Theme.spaceXs
-                    Layout.bottomMargin: Theme.spaceXs
-                    // What is stopped, and how far it got. The count is
-                    // the half a stopped rebase cannot say without it.
-                    text: wipPane.workTree.opSteps > 0
-                          ? qsTr("%1 — %2 of %3").arg(wipPane.workTree.opText)
-                            .arg(wipPane.workTree.opStep).arg(wipPane.workTree.opSteps)
-                          : wipPane.workTree.opText
-                    font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
-                    color: Theme.warning
+                    // Capped and scrolled like the description box below it, and
+                    // like the details pane's pair: a summary somebody pastes a
+                    // paragraph into otherwise grows until the file list has no
+                    // pane left to be in.
+                    Layout.preferredHeight: Math.min(wipSubject.implicitHeight
+                                                     + Theme.spaceSm,
+                                                     Theme.messageMaxHeight)
+                    color: Theme.bgBase
+                    radius: Theme.radiusMd
+                    border.color: Theme.borderDefault
+                    border.width: Theme.borderWidth
+                    ScrollView {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spaceXs
+                        Component.onCompleted:
+                            contentItem.boundsBehavior = Flickable.StopAtBounds
+                        SummaryArea {
+                            id: wipSubject
+                            placeholderText: qsTr("Commit summary")
+                        }
+                    }
                 }
-                OpExitRow {
-                    Layout.fillWidth: true
-                    codeColW: opExitCard.codeColW
-                    holdIndent: opExitCard.holdIndent
-                    code: "--continue"
-                    text: qsTr("Carry on with what is staged")
-                    enabled: wipPane.repoTab.busyCount === 0
-                             && wipPane.workTree.conflictCount === 0
-                    onPicked: wipPane.repoTab.resolveOperation("continue")
+                // Two lines tall from the start, and pulled open by the corner
+                // for a long one — the same component the details pane reads
+                // messages in.
+                DescriptionBox {
+                    id: wipBody
+                    placeholderText: qsTr("Description")
+                    room: wipPane.descRoom
+                    owed: wipPane.descOwed
                 }
-                // A merge steps through nothing: no commit to leave out,
-                // and nowhere to stop stepping.
-                OpExitRow {
+                // Amend replaces the newest commit instead of adding one, so it
+                // starts from that commit's message rather than an empty editor.
+                RowLayout {
                     Layout.fillWidth: true
-                    codeColW: opExitCard.codeColW
-                    holdIndent: opExitCard.holdIndent
-                    code: "--skip"
-                    text: qsTr("Leave this commit out")
-                    // What the skip costs, said where a menu row says it.
-                    note: opExitCard.skipIsFree ? qsTr("nothing in it") : ""
-                    visible: wipPane.workTree.opStepping
-                    enabled: wipPane.repoTab.busyCount === 0
-                    // The mark is what says a row takes something away
-                    // (デザイン規約 §長押し), so it goes when the row does
-                    // not: git stops on a commit that came out empty and
-                    // names `--skip` itself, and leaving that one out
-                    // loses nothing. Everywhere else the commit is real
-                    // and only the reflog holds it afterwards.
-                    holdMs: opExitCard.skipIsFree ? 0 : Metrics.holdMs
-                    onPicked: wipPane.repoTab.resolveOperation("skip")
+                    spacing: Theme.spaceXs
+                    CheckBox {
+                        id: amendBox
+                        text: qsTr("Amend the last commit")
+                        font.pixelSize: Theme.fontSm
+                        implicitHeight: Theme.controlHeight
+                        onToggled: wipPane.amendToggled(checked)
+                    }
+                    // git records who committed, but leaves the author alone: an
+                    // amend of someone else's commit — or of one's own made under
+                    // a different name — keeps the name it had. Offered only
+                    // where the two identities actually differ, and unchecked
+                    // again whenever it goes away.
+                    CheckBox {
+                        id: authorBox
+                        visible: wipPane.amending && wipPane.repoTab.headAuthorDiffers
+                        text: qsTr("Make me the author")
+                        font.pixelSize: Theme.fontSm
+                        implicitHeight: Theme.controlHeight
+                        onVisibleChanged: if (!visible) checked = false
+                        ToolTip.visible: hovered
+                        ToolTip.delay: Metrics.tipDelayMs
+                        ToolTip.text: qsTr("Replaces the author %1 <%2> with you, "
+                                           + "dated now")
+                                      .arg(wipPane.repoTab.headAuthorName)
+                                      .arg(wipPane.repoTab.headAuthorEmail)
+                    }
+                    Item { Layout.fillWidth: true }
+                    // What this button is about to do beyond committing: git will
+                    // ask an agent for the key, and that agent may put a
+                    // passphrase prompt on screen. Said only when signing is on,
+                    // and in the plain text colour — it is a fact, not a warning.
+                    // It gives the slot up to the pushed-amend warning: one tag
+                    // fits here, and a warning outranks a fact.
+                    Label {
+                        visible: wipPane.repoTab.signsCommits
+                                 && !(wipPane.amending && wipPane.headPublished)
+                        text: qsTr("will be signed")
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSm
+                        ToolTip.visible: signingHover.containsMouse
+                        ToolTip.delay: Metrics.tipDelayMs
+                        ToolTip.text: wipPane.repoTab.signingFormat === "ssh"
+                                      ? qsTr("Signed with your ssh key")
+                                      : wipPane.repoTab.signingFormat === "x509"
+                                        ? qsTr("Signed with your x509 certificate")
+                                        : qsTr("Signed with your gpg key")
+                        MouseArea {
+                            id: signingHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
+                        }
+                    }
+                    // Said, not asked: rewriting a pushed commit is undone by a
+                    // switch or a reset, so the amend goes ahead and this tag
+                    // is all the warning it gets.
+                    Label {
+                        visible: wipPane.amending && wipPane.headPublished
+                        text: qsTr("already pushed")
+                        color: Theme.warning
+                        font.pixelSize: Theme.fontSm
+                        ToolTip.visible: amendPushedHover.containsMouse
+                        ToolTip.delay: Metrics.tipDelayMs
+                        ToolTip.text: qsTr("Already on a remote — anyone who has it "
+                                           + "will be out of step")
+                        MouseArea {
+                            id: amendPushedHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
+                        }
+                    }
                 }
-                OpExitRow {
+                // The framed button the rest of the app uses, at the size this pane
+                // needs. Its frame, its tone and its `!` are the ones the toolbar's
+                // buttons already wear, so the state this button can be in is said
+                // in the vocabulary someone has read elsewhere — rather than in a
+                // filled face that only this one button has.
+                ActionButton {
+                    id: commitButton
                     Layout.fillWidth: true
-                    codeColW: opExitCard.codeColW
-                    holdIndent: opExitCard.holdIndent
-                    code: "--quit"
-                    text: qsTr("Stop stepping, keep the tree")
-                    visible: wipPane.workTree.opStepping
+                    implicitHeight: Theme.controlHeight
+                    /// Something staged says its line endings changed, so the
+                    /// commit is about to carry it. **Only the index counts** — a
+                    /// file marked on its working-tree side is not in this commit
+                    /// (`session::EolMark::staged`).
+                    readonly property bool eolWarned:
+                        wipPane.workTree.eolStagedCount > 0 && commitButton.enabled
+                    kind: "check"
+                    centred: true
+                    // **The word stays plain in both states.** A coloured word is
+                    // what `Remove` and a stopped fetch wear, and both of those are
+                    // held rather than clicked; this one is a click either way, and
+                    // borrowing their colour for the word would borrow the gesture
+                    // with it. The frame and the mark carry the state instead.
+                    tone: Theme.textPrimary
+                    // **The frame goes with the words.** A toolbar button is
+                    // measured to its content, so a frame left bright around dimmed
+                    // words still reads as a small live thing; one this wide reads
+                    // as a live button with grey words in it.
+                    frameColor: !commitButton.enabled ? Theme.borderDefault
+                                : commitButton.eolWarned ? Theme.warning : Theme.accent
+                    // The mark the button family already puts at the end of its
+                    // own word when the thing it does needs reading first.
+                    alert: commitButton.eolWarned
+                    alertTone: Theme.warning
+                    alertTight: true
+                    text: wipPane.amending
+                          ? qsTr("Amend commit (%1 staged)").arg(wipPane.workTree.stagedCount)
+                          : qsTr("Commit changes (%1 staged)").arg(wipPane.workTree.stagedCount)
+                    // An amend can stand on its own (message only); a new commit
+                    // needs staged content and a summary, and git needs an
+                    // identity to attribute either one to.
                     enabled: wipPane.repoTab.busyCount === 0
-                    onPicked: wipPane.repoTab.resolveOperation("quit")
+                             && wipPane.repoTab.identityReady
+                             && wipSubject.text.trim() !== ""
+                             && (wipPane.amending || wipPane.workTree.stagedCount > 0)
+                    // **Still one click.** Committing is a daily operation and a
+                    // confirmation on a daily operation becomes something people
+                    // press without reading, which spends the effect where it is
+                    // really needed (デザイン規約 §可否・警告の出し場所). The
+                    // frame, the mark and the hover say what is in it; the
+                    // decision stays the reader's.
+                    onActivated: wipPane.commitClicked()
+                    // Why it cannot be pressed. The other thing this button has to
+                    // say — that the index carries a line-ending change — is said
+                    // by the card `settleCommitCard` opens instead, and the two
+                    // cannot both be true: the warning wants a button that can be
+                    // pressed.
+                    ToolTip.visible: commitHover.containsMouse && !enabled
+                    ToolTip.delay: Metrics.tipDelayMs
+                    ToolTip.text: !wipPane.repoTab.identityReady
+                                  ? qsTr("No name or email set for commits")
+                                  : wipSubject.text.trim() === ""
+                                  ? qsTr("A commit needs a summary")
+                                  : qsTr("Stage something to commit")
+                    MouseArea {
+                        id: commitHover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                        onContainsMouseChanged: wipPane.settleCommitCard()
+                    }
                 }
-                OpExitRow {
+                // ==== 案 C: the way out of a stopped operation, built into ====
+                // ==== the pane under the button that finishes things.     ====
+                //
+                // The commit button's seat is already "conclude this": during a
+                // merge `--continue` is literally the commit. Standing rather
+                // than dropped from a click — while an operation is stopped this
+                // is the pane's business, and the file list moves down to make
+                // room for it rather than the rows covering the list.
+                Rectangle {
+                    id: opExitCard
+                    visible: wipPane.workTree.opText !== ""
                     Layout.fillWidth: true
-                    codeColW: opExitCard.codeColW
-                    holdIndent: opExitCard.holdIndent
-                    code: "--abort"
-                    text: qsTr("Undo it all and go back")
-                    enabled: wipPane.repoTab.busyCount === 0
-                    holdMs: Metrics.holdMs
-                    onPicked: wipPane.repoTab.resolveOperation("abort")
+                    Layout.topMargin: Theme.spaceXs
+                    implicitHeight: opExitCol.implicitHeight + 2 * Theme.spaceXs
+                    color: Theme.bgBase
+                    radius: Theme.radiusMd
+                    border.color: Theme.warning
+                    border.width: Theme.borderWidth
+                    // The chip column and the mark's seat, shared by every row so
+                    // the sentences start on one x and the card reads down its
+                    // first letters — what `AppMenu` does for a menu's rows.
+                    // The mark's own seat, left on every row whether or not that
+                    // row is a held one — the words start on one x either way,
+                    // and the seat is the menu's exactly: narrower than the mark,
+                    // which overhangs it into the row padding on one side and the
+                    // word gap on the other (デザイン規約 §長押し — 語が払う
+                    // 字下げは印 1 個分より小さい).
+                    readonly property real holdIndent: Theme.iconMd - 2 * Theme.spaceXs
+                    /// Whether leaving the stopped commit out costs nothing.
+                    ///
+                    /// An interactive rebase stops on a commit that came out
+                    /// empty and names `--skip` as the way past it (measured —
+                    /// `an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip`).
+                    /// Nothing is conflicted or staged while it stands there, and
+                    /// a clean tree under a stopped operation is what tells that
+                    /// stop from every other one this app can reach today.
+                    ///
+                    /// **Revisit when `edit` steps land** (full interactive
+                    /// rebase): an `edit` stop is clean too, and skipping one
+                    /// does lose the commit. Distinguishing them needs core to
+                    /// say why git stopped (P3-確認事項).
+                    readonly property bool skipIsFree:
+                        wipPane.workTree.conflictCount === 0
+                        && wipPane.workTree.stagedCount === 0
+                        && wipPane.workTree.unstagedCount === 0
+                    readonly property real codeColW: {
+                        let widest = 0
+                        for (let i = 0; i < opExitCol.children.length; i++) {
+                            const row = opExitCol.children[i]
+                            if (row && row.visible && row.codeColSeat !== undefined)
+                                widest = Math.max(widest, row.codeColSeat)
+                        }
+                        return widest
+                    }
+                    ColumnLayout {
+                        id: opExitCol
+                        anchors.fill: parent
+                        anchors.margins: Theme.spaceXs
+                        spacing: 0
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: Theme.spaceXs
+                            Layout.bottomMargin: Theme.spaceXs
+                            // What is stopped, and how far it got. The count is
+                            // the half a stopped rebase cannot say without it.
+                            text: wipPane.workTree.opSteps > 0
+                                  ? qsTr("%1 — %2 of %3").arg(wipPane.workTree.opText)
+                                    .arg(wipPane.workTree.opStep).arg(wipPane.workTree.opSteps)
+                                  : wipPane.workTree.opText
+                            font.pixelSize: Theme.fontSm
+                            font.weight: Font.DemiBold
+                            color: Theme.warning
+                        }
+                        OpExitRow {
+                            Layout.fillWidth: true
+                            codeColW: opExitCard.codeColW
+                            holdIndent: opExitCard.holdIndent
+                            code: "--continue"
+                            text: qsTr("Carry on with what is staged")
+                            enabled: wipPane.repoTab.busyCount === 0
+                                     && wipPane.workTree.conflictCount === 0
+                            onPicked: wipPane.repoTab.resolveOperation("continue")
+                        }
+                        // A merge steps through nothing: no commit to leave out,
+                        // and nowhere to stop stepping.
+                        OpExitRow {
+                            Layout.fillWidth: true
+                            codeColW: opExitCard.codeColW
+                            holdIndent: opExitCard.holdIndent
+                            code: "--skip"
+                            text: qsTr("Leave this commit out")
+                            // What the skip costs, said where a menu row says it.
+                            note: opExitCard.skipIsFree ? qsTr("nothing in it") : ""
+                            visible: wipPane.workTree.opStepping
+                            enabled: wipPane.repoTab.busyCount === 0
+                            // The mark is what says a row takes something away
+                            // (デザイン規約 §長押し), so it goes when the row does
+                            // not: git stops on a commit that came out empty and
+                            // names `--skip` itself, and leaving that one out
+                            // loses nothing. Everywhere else the commit is real
+                            // and only the reflog holds it afterwards.
+                            holdMs: opExitCard.skipIsFree ? 0 : Metrics.holdMs
+                            onPicked: wipPane.repoTab.resolveOperation("skip")
+                        }
+                        OpExitRow {
+                            Layout.fillWidth: true
+                            codeColW: opExitCard.codeColW
+                            holdIndent: opExitCard.holdIndent
+                            code: "--quit"
+                            text: qsTr("Stop stepping, keep the tree")
+                            visible: wipPane.workTree.opStepping
+                            enabled: wipPane.repoTab.busyCount === 0
+                            onPicked: wipPane.repoTab.resolveOperation("quit")
+                        }
+                        OpExitRow {
+                            Layout.fillWidth: true
+                            codeColW: opExitCard.codeColW
+                            holdIndent: opExitCard.holdIndent
+                            code: "--abort"
+                            text: qsTr("Undo it all and go back")
+                            enabled: wipPane.repoTab.busyCount === 0
+                            holdMs: Metrics.holdMs
+                            onPicked: wipPane.repoTab.resolveOperation("abort")
+                        }
+                    }
                 }
             }
         }

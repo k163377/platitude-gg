@@ -827,6 +827,8 @@ ApplicationWindow {
             }
             if (AppBackend.autoActArg === "fold")
                 root.curPage.sidebarCollapsed = true
+            else if (AppBackend.autoActArg === "wip")
+                root.curPage.showWip()
             floorShrinkTimer.start()
         }
     }
@@ -884,7 +886,14 @@ ApplicationWindow {
             + " from=" + (root.floorStoodAt === "" ? "-" : root.floorStoodAt)
             + " folded=" + (root.curPage !== null
                             && root.curPage.sidebarCollapsed)
-            + " log=" + (root.curPage !== null && root.curPage.commandsOpen))
+            + " log=" + (root.curPage !== null && root.curPage.commandsOpen)
+            // What the right pane made of a height that cannot hold it:
+            // scrolling is the answer, and a scroll bar is not something
+            // a headless run can see (`wip` shape).
+            + " wipScrolls=" + (root.curPage !== null
+                                && root.curPage.wipBlockScrolls)
+            + " detailsOver=" + (root.curPage !== null
+                                 ? root.curPage.detailsOverHeight : 0))
     }
 
     // PG_AUTO_ACT=state: what a launch came back to, and (with the

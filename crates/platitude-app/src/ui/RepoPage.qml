@@ -2084,7 +2084,13 @@ Item {
         onTriggered: AppBackend.report(
             "details_fit fits=" + (detailsPane.contentOverflow < 1)
             + " over=" + Math.round(detailsPane.contentOverflow)
-            + " pane=" + Math.round(detailsPane.width))
+            + " pane=" + Math.round(detailsPane.width)
+            // The other axis rides along unjudged, the way `edge=` does in
+            // `window_fill`: how far the column runs past the pane's own
+            // bottom is what says whether this pane needs a scroll of its
+            // own, and the answer depends on the window, not on this verb.
+            + " overH=" + Math.round(detailsPane.contentOverHeight)
+            + " paneH=" + Math.round(detailsPane.height))
     }
     // Same wait as details-fit, for the same reason: the message has to
     // be in the box, and the box laid out with it, before there is a
@@ -3263,6 +3269,15 @@ Item {
     readonly property int rightMinWidth: 300
     readonly property int panesMinHeight: 200
     readonly property int commandsMinHeight: 120
+    /// Whether the working-tree pane has anything below its own fold —
+    /// the editor, the commit button and a stopped operation's exit card
+    /// keep their heights by construction, so in a short pane they are
+    /// reached by scrolling rather than not at all (`window-floor wip`).
+    readonly property bool wipBlockScrolls: wipPane.blockScrolls
+    /// …and how far the commit-details pane runs past its own bottom,
+    /// which is the same question asked of the other half of this seat.
+    readonly property real detailsOverHeight: detailsPane.contentOverHeight
+
     /// The middle column's floor. The graph gives up its own columns
     /// first — the chips, then the lanes (`GraphPane.contentMinW`) — and
     /// stops where all three of them would stop saying anything. Never

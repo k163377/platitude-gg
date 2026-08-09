@@ -305,9 +305,21 @@ ColumnLayout {
     /// term is that overflow, and without it the give-back stalls at the
     /// last 48 pixels the list still had (measured: the command log
     /// opening under a pulled-open box).
+    /// Measured against the room the block is allowed rather than the
+    /// height it was laid out at: the block's height follows what the box
+    /// does, so reading it back would put the two in a ring where every
+    /// pull is handed straight back (see WipPane, where that was measured).
     readonly property real descOwed:
         Math.max(0, 2 * Theme.rowHeight - fileList.height)
-        + Math.max(0, detailsPane.implicitHeight - detailsPane.height)
+        + Math.max(0, blockCol.implicitHeight - detailsPane.blockRoom)
+    /// How much of the pane the block between the two bands may take: all
+    /// of it but the list's own band and the two rows that keep a list a
+    /// list. Past this the block scrolls rather than running out of the
+    /// pane's bottom (規約 §窓の床).
+    readonly property real blockRoom:
+        Math.max(0, detailsPane.height - paneHeader.height
+                    - (changesBand.visible ? changesBand.height : 0)
+                    - 2 * Theme.rowHeight)
     // -- smoke hooks, forwarded to the box --
     function growDescription(dy) { bodyArea.grow(dy) }
     readonly property bool descGrips: bodyArea.grips
@@ -319,13 +331,14 @@ ColumnLayout {
     /// this is about is rows.
     readonly property int descListRows:
         Math.round(fileList.height / Theme.rowHeight)
-    /// Whether what sits under the box is still inside the pane. The
-    /// overflow it guards against draws the author card over the window's
-    /// own footer, and a shot of that frames exactly like a shot of a pane
-    /// that fits (see contentOverflow).
-    readonly property bool descKeeps:
-        authorRow.mapToItem(detailsPane, 0, authorRow.height).y
-        <= detailsPane.height
+    /// Whether the block is taller than the room it was given — anything
+    /// in it below the fold. What a pulled-open box pushes past the pane's
+    /// edge is exactly what the block ends up scrolling by, so this is
+    /// also the answer to "has the box given back what it owes". A shot
+    /// frames alike either way (see contentOverflow).
+    readonly property bool blockScrolls:
+        blockCol.implicitHeight > detailsPane.blockRoom + 1
+    readonly property bool descKeeps: !detailsPane.blockScrolls
 
     Connections {
         target: detailsPane.details
@@ -345,485 +358,522 @@ ColumnLayout {
     /// Headless cannot see a cut glyph — this is the number instead.
     readonly property real contentOverflow:
         Math.max(0, fileList.width - detailsPane.width)
+    /// The same question the other way up: how far the column runs past
+    /// the pane's own bottom once the file list has given everything it
+    /// has. Reported for `window-floor`, which is where the answer to
+    /// "does this pane need a scroll of its own" comes from.
+    readonly property real contentOverHeight:
+        Math.max(0, detailsPane.implicitHeight - detailsPane.height)
 
     spacing: 0
 
     PaneHeader {
+        id: paneHeader
         text: qsTr("COMMIT")
     }
-    // Stash actions when the selected row is a stash.
-    Rectangle {
-        visible: detailsPane.stashRef !== ""
+    // Everything between the two bands, in a surface of its own that
+    // scrolls when the pane is too short to hold it — the same shape the
+    // working-tree pane's block has, and for the same reason: the boxes,
+    // the author row and the save row keep their heights by construction,
+    // so the file list was the only thing that could give and past zero
+    // the rest ran out of the pane's bottom (measured at the window's own
+    // floor, on the longest subject git allows: `details_fit overH=160
+    // paneH=200`). 規約 §窓の床.
+    Flickable {
+        id: blockScroll
         Layout.fillWidth: true
-        implicitHeight: Theme.headerHeight
-        color: Theme.bgElevated
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: Theme.spaceSm
-            anchors.rightMargin: Theme.spaceXs
-            spacing: Theme.spaceXs
-            NavIcon {
-                kind: "stash"
-                tint: Theme.textSecondary
-                width: Theme.iconMd
-                height: Theme.iconMd
-            }
-            Label {
-                text: detailsPane.stashRef
-                font.family: Theme.monoFamily
-                font.pixelSize: Theme.fontSm
-                color: Theme.textSecondary
-                elide: Text.ElideRight
-                Layout.fillWidth: true
-            }
-            HoverToolButton {
-                text: qsTr("Apply")
-                font.pixelSize: Theme.fontSm
-                ToolTip.visible: hovered
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: qsTr("Apply this stash, keeping it")
-                onClicked: detailsPane.applyStashRequested(detailsPane.stashRef)
-            }
-            HoverToolButton {
-                text: qsTr("Pop")
-                font.pixelSize: Theme.fontSm
-                ToolTip.visible: hovered
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: qsTr("Apply this stash and drop it")
-                onClicked: detailsPane.popStashRequested(detailsPane.stashRef)
-            }
-        }
-    }
-    // Inset on all four sides — the message box carries its own frame,
-    // and flush against the header band the two borders read as one
-    // welded block. Vertically the inset is the same step the rows
-    // inside use, so band → summary → description → author → band is
-    // one even rhythm; horizontally it is the pane inset, which puts
-    // the card's edge under the header labels.
-    ColumnLayout {
-        Layout.fillWidth: true
-        Layout.margins: Theme.spaceSm
-        Layout.topMargin: Theme.spaceXs
-        Layout.bottomMargin: Theme.spaceXs
-        spacing: Theme.spaceXs
-        visible: detailsPane.details.shaHex !== ""
-
-        // -- message first, like the commit editor: a prominent summary
-        // box and a dimmer description box --
-        Rectangle {
-            Layout.fillWidth: true
-            // Capped and scrolled, the way the description box below it
-            // already is. Nothing in git bounds a summary — it took a
-            // megabyte in the same measurement — and one pasted paragraph
-            // grew this box to 650px, which pushed the description off
-            // the pane and left the author row drawn over the window's
-            // own footer (measured at a 2,000-byte subject).
-            Layout.preferredHeight: Math.min(subjectArea.implicitHeight
-                                             + Theme.spaceSm,
-                                             Theme.messageMaxHeight)
-            color: Theme.bgBase
-            radius: Theme.radiusMd
-            // While the question stands, the boxes it is about carry it:
-            // the click that asked it happened over on the graph, and
-            // nothing else would draw the eye back here.
-            border.color: detailsPane.asking ? Theme.warning : Theme.borderDefault
-            border.width: Theme.borderWidth
-            ScrollView {
-                anchors.fill: parent
-                anchors.margins: Theme.spaceXs
-                // ScrollView keeps its Flickable private -- reach it
-                // once it exists.
-                Component.onCompleted:
-                    contentItem.boundsBehavior = Flickable.StopAtBounds
-                SummaryArea {
-                    id: subjectArea
-                    readOnly: !detailsPane.editable
-                    placeholderText: detailsPane.editable ? qsTr("Commit summary") : ""
-                    ToolTip.visible: hovered && detailsPane.editBlocked !== ""
-                    ToolTip.delay: Metrics.tipDelayMs
-                    ToolTip.text: detailsPane.editBlocked
-                }
-            }
-        }
-        // Always shown, even empty, and two lines tall from the start —
-        // the pair mirrors the commit editor's fields, and this half of
-        // the pair is the same component in both panes.
-        DescriptionBox {
-            id: bodyArea
-            readOnly: !detailsPane.editable
-            placeholderText: detailsPane.editable ? qsTr("Description") : ""
-            border.color: detailsPane.asking ? Theme.warning : Theme.borderSubtle
-            room: detailsPane.descRoom
-            owed: detailsPane.descOwed
-        }
-        // Only once something is actually changed: until then the pane
-        // keeps its resting shape and nothing invites a rewrite.
+        Layout.preferredHeight: Math.min(blockCol.implicitHeight,
+                                         detailsPane.blockRoom)
+        contentWidth: width
+        contentHeight: blockCol.implicitHeight
+        clip: true
+        // Hard stop at the ends, as everywhere else that scrolls
+        // (デザイン規約 §QML 実装ルール).
+        boundsBehavior: Flickable.StopAtBounds
+        ScrollBar.vertical: AutoScrollBar {}
         ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spaceXs
-            visible: detailsPane.messageDirty
-            // The newest commit is amended in place and costs nothing;
-            // an older one is replayed, and everything built on it
-            // comes back as different commits. Only the second case is
-            // worth a line.
-            Label {
+            id: blockCol
+            width: blockScroll.width
+            spacing: 0
+
+            // Stash actions when the selected row is a stash.
+            Rectangle {
+                visible: detailsPane.stashRef !== ""
                 Layout.fillWidth: true
-                visible: !detailsPane.asking
-                         && detailsPane.details.shaHex !== detailsPane.headOid
-                wrapMode: Text.Wrap
-                text: qsTr("Saving replays this commit, so every commit after "
-                           + "it gets a new identity.")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
-            }
-            // Said, not asked, like the amend editor's tag: the save
-            // still goes ahead, and this line is the warning it gets.
-            Label {
-                Layout.fillWidth: true
-                visible: !detailsPane.asking && detailsPane.published
-                wrapMode: Text.Wrap
-                text: qsTr("This commit is on a remote. Rewriting it leaves "
-                           + "anyone who already has it out of step.")
-                color: Theme.warning
-                font.pixelSize: Theme.fontSm
-            }
-            Label {
-                Layout.fillWidth: true
-                visible: detailsPane.asking
-                wrapMode: Text.Wrap
-                text: qsTr("Moving to another commit leaves this text behind.")
-                color: Theme.warning
-                font.pixelSize: Theme.fontSm
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spaceSm
-                Item { Layout.fillWidth: true }
-                HoverToolButton {
-                    visible: !detailsPane.asking
-                    text: qsTr("Cancel")
-                    font.pixelSize: Theme.fontSm
-                    onClicked: detailsPane.revertMessage()
-                }
-                HoverButton {
-                    visible: !detailsPane.asking
-                    highlighted: true
-                    text: qsTr("Save message")
-                    enabled: !detailsPane.busy && subjectArea.text.trim() !== ""
-                    onClicked: detailsPane.submitMessage()
-                }
-                // The two ways out of the question. Staying is the
-                // highlighted one: it is the answer that loses nothing.
-                HoverToolButton {
-                    visible: detailsPane.asking
-                    text: qsTr("Discard edits")
-                    font.pixelSize: Theme.fontSm
-                    onClicked: detailsPane.leaveResolved(true)
-                }
-                HoverButton {
-                    visible: detailsPane.asking
-                    highlighted: true
-                    text: qsTr("Keep editing")
-                    onClicked: detailsPane.leaveResolved(false)
-                }
-            }
-        }
-        // -- author card: avatar + name/date on the left, own hash over
-        // parent hash on the right (rows aligned) --
-        RowLayout {
-            id: authorRow
-            spacing: Theme.spaceSm
-            // The one place a picture is reached from. A pointer resting on
-            // the face raises a badge saying so; pressing it opens the
-            // settings card with this author already named.
-            Item {
-                id: avatarBox
-                width: Metrics.detailsAvatar
-                height: Metrics.detailsAvatar
-                Layout.preferredWidth: Metrics.detailsAvatar
-                Layout.preferredHeight: Metrics.detailsAvatar
-                /// Nothing to assign a picture to on a row with no author:
-                /// the working tree's own row, and a commit not read yet.
-                readonly property bool editable:
-                    detailsPane.details.authorEmail !== ""
-                readonly property bool showBadge:
-                    avatarBox.editable
-                    && (avatarArea.containsMouse || detailsPane.avatarPointedAt)
-                IdentIcon {
+                implicitHeight: Theme.headerHeight
+                color: Theme.bgElevated
+                RowLayout {
                     anchors.fill: parent
-                    code: detailsPane.details.avatar
-                    imageUrl: detailsPane.details.avatarUrl
-                }
-                // Pushed as far into the lower-right as the icon's own
-                // square allows — flush with its right and bottom edges,
-                // so the least of the face is covered and the layout
-                // beside it never moves (デザイン規約 §アバターを与える).
-                Rectangle {
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    width: Theme.iconSm + 2 * Theme.borderWidth
-                    height: width
-                    radius: width / 2
-                    color: Theme.bgElevated
-                    border.color: Theme.borderStrong
-                    border.width: Theme.borderWidth
-                    visible: avatarBox.showBadge
+                    anchors.leftMargin: Theme.spaceSm
+                    anchors.rightMargin: Theme.spaceXs
+                    spacing: Theme.spaceXs
                     NavIcon {
-                        anchors.centerIn: parent
-                        kind: "pen"
-                        tint: Theme.textPrimary
-                        width: Theme.iconSm
-                        height: Theme.iconSm
+                        kind: "stash"
+                        tint: Theme.textSecondary
+                        width: Theme.iconMd
+                        height: Theme.iconMd
+                    }
+                    Label {
+                        text: detailsPane.stashRef
+                        font.family: Theme.monoFamily
+                        font.pixelSize: Theme.fontSm
+                        color: Theme.textSecondary
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                    HoverToolButton {
+                        text: qsTr("Apply")
+                        font.pixelSize: Theme.fontSm
+                        ToolTip.visible: hovered
+                        ToolTip.delay: Metrics.tipDelayMs
+                        ToolTip.text: qsTr("Apply this stash, keeping it")
+                        onClicked: detailsPane.applyStashRequested(detailsPane.stashRef)
+                    }
+                    HoverToolButton {
+                        text: qsTr("Pop")
+                        font.pixelSize: Theme.fontSm
+                        ToolTip.visible: hovered
+                        ToolTip.delay: Metrics.tipDelayMs
+                        ToolTip.text: qsTr("Apply this stash and drop it")
+                        onClicked: detailsPane.popStashRequested(detailsPane.stashRef)
                     }
                 }
-                MouseArea {
-                    id: avatarArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    enabled: avatarBox.editable
-                    onClicked: detailsPane.avatarClicked()
-                }
-                ToolTip.visible: avatarBox.showBadge
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: detailsPane.details.avatarUrl !== ""
-                              ? qsTr("Change the picture for %1")
-                                .arg(detailsPane.details.authorEmail)
-                              : qsTr("Choose a picture for %1")
-                                .arg(detailsPane.details.authorEmail)
             }
+            // Inset on all four sides — the message box carries its own frame,
+            // and flush against the header band the two borders read as one
+            // welded block. Vertically the inset is the same step the rows
+            // inside use, so band → summary → description → author → band is
+            // one even rhythm; horizontally it is the pane inset, which puts
+            // the card's edge under the header labels.
             ColumnLayout {
-                spacing: 0
                 Layout.fillWidth: true
-                // Name, and beside it what git makes of the signature.
-                // An unsigned commit gets nothing: the ordinary case
-                // carries no mark, the same rule the graph's state
-                // badges follow. The verdict rides up here rather than
-                // sitting with the date because the date's row is where
-                // the co-authors go, and a signed commit with one would
-                // have had three things in ~230px (デザイン規約 §co-author).
-                RowLayout {
+                Layout.margins: Theme.spaceSm
+                Layout.topMargin: Theme.spaceXs
+                Layout.bottomMargin: Theme.spaceXs
+                spacing: Theme.spaceXs
+                visible: detailsPane.details.shaHex !== ""
+
+                // -- message first, like the commit editor: a prominent summary
+                // box and a dimmer description box --
+                Rectangle {
+                    Layout.fillWidth: true
+                    // Capped and scrolled, the way the description box below it
+                    // already is. Nothing in git bounds a summary — it took a
+                    // megabyte in the same measurement — and one pasted paragraph
+                    // grew this box to 650px, which pushed the description off
+                    // the pane and left the author row drawn over the window's
+                    // own footer (measured at a 2,000-byte subject).
+                    Layout.preferredHeight: Math.min(subjectArea.implicitHeight
+                                                     + Theme.spaceSm,
+                                                     Theme.messageMaxHeight)
+                    color: Theme.bgBase
+                    radius: Theme.radiusMd
+                    // While the question stands, the boxes it is about carry it:
+                    // the click that asked it happened over on the graph, and
+                    // nothing else would draw the eye back here.
+                    border.color: detailsPane.asking ? Theme.warning : Theme.borderDefault
+                    border.width: Theme.borderWidth
+                    ScrollView {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spaceXs
+                        // ScrollView keeps its Flickable private -- reach it
+                        // once it exists.
+                        Component.onCompleted:
+                            contentItem.boundsBehavior = Flickable.StopAtBounds
+                        SummaryArea {
+                            id: subjectArea
+                            readOnly: !detailsPane.editable
+                            placeholderText: detailsPane.editable ? qsTr("Commit summary") : ""
+                            ToolTip.visible: hovered && detailsPane.editBlocked !== ""
+                            ToolTip.delay: Metrics.tipDelayMs
+                            ToolTip.text: detailsPane.editBlocked
+                        }
+                    }
+                }
+                // Always shown, even empty, and two lines tall from the start —
+                // the pair mirrors the commit editor's fields, and this half of
+                // the pair is the same component in both panes.
+                DescriptionBox {
+                    id: bodyArea
+                    readOnly: !detailsPane.editable
+                    placeholderText: detailsPane.editable ? qsTr("Description") : ""
+                    border.color: detailsPane.asking ? Theme.warning : Theme.borderSubtle
+                    room: detailsPane.descRoom
+                    owed: detailsPane.descOwed
+                }
+                // Only once something is actually changed: until then the pane
+                // keeps its resting shape and nothing invites a rewrite.
+                ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Theme.spaceXs
+                    visible: detailsPane.messageDirty
+                    // The newest commit is amended in place and costs nothing;
+                    // an older one is replayed, and everything built on it
+                    // comes back as different commits. Only the second case is
+                    // worth a line.
                     Label {
-                        id: authorLabel
-                        text: detailsPane.details.authorName
-                        elide: Text.ElideRight
-                        // Grows no further than the name itself, so the
-                        // mark sits against the name rather than being
-                        // pushed across to the hash — and shrinks, with
-                        // the name eliding, when a long one would
-                        // otherwise crowd the mark out.
                         Layout.fillWidth: true
-                        Layout.maximumWidth: authorLabel.implicitWidth
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontMd
-                        font.weight: Font.DemiBold
-                        // Drawn at rest one step down from the name it
-                        // underlines, and up to the name's own value
-                        // under the pointer — the same rule the credit
-                        // line carries, because it says the same thing:
-                        // there is more here, and hovering opens it
-                        // (規約 §co-author の表示).
-                        Rectangle {
-                            visible: authorLabel.text !== ""
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            height: Theme.borderWidth
-                            color: detailsPane.authorLit ? Theme.textPrimary
-                                                         : Theme.borderStrong
-                        }
-                        // A handler, not a `MouseArea`: handlers are
-                        // passive, so the card it opens keeps its own
-                        // hover (規約 §hover のツールチップ).
-                        HoverHandler {
-                            id: authorHover
-                            onHoveredChanged:
-                                detailsPane.showAuthor(authorHover.hovered)
-                        }
-                    }
-                    // A signature that holds is a tick and nothing more;
-                    // only one that contradicts the content spends words
-                    // (規約 §署名の表示). The broken case reads as the
-                    // error message it is, and being the one wide thing
-                    // on the row is how an error should read.
-                    //
-                    // Green stays with the signatures git actually
-                    // vouched for. One it could read but not judge gets
-                    // the same tick in textSecondary: the shape says a
-                    // signature is there, the colour says nobody here
-                    // checked it.
-                    RowLayout {
-                        id: signatureMark
-                        visible: detailsPane.signatureKind !== ""
-                        spacing: Theme.spaceXs
-                        Layout.alignment: Qt.AlignVCenter
-                        readonly property bool broken:
-                            detailsPane.signatureKind === "bad"
-                        readonly property color tone:
-                            detailsPane.signatureKind === "verified" ? Theme.success
-                            : signatureMark.broken ? Theme.danger
-                            : Theme.textSecondary
-                        NavIcon {
-                            kind: signatureMark.broken ? "bang" : "check"
-                            tint: signatureMark.tone
-                            width: Theme.iconSm
-                            height: Theme.iconSm
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                        Label {
-                            visible: signatureMark.broken
-                            text: qsTr("Bad signature")
-                            color: signatureMark.tone
-                            font.pixelSize: Theme.fontSm
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                        ToolTip.visible: signatureHover.hovered
-                        ToolTip.delay: Metrics.tipDelayMs
-                        ToolTip.text: detailsPane.signatureTip
-                        // A handler, not a MouseArea: an item inside a
-                        // layout is sized by the layout, and anchoring
-                        // one to fill its parent is undefined behaviour.
-                        HoverHandler { id: signatureHover }
-                    }
-                    // The slack lives here, past both of them, so the
-                    // mark stays against the name.
-                    Item { Layout.fillWidth: true }
-                }
-                // Date, and beside it whoever the message credits along
-                // with the author. A commit with no trailer shows only
-                // the date, the way it always did.
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spaceSm
-                    Label {
-                        id: detailsDate
-                        text: Qt.formatDateTime(new Date(detailsPane.details.authorTime * 1000),
-                                                "yyyy-MM-dd HH:mm")
+                        visible: !detailsPane.asking
+                                 && detailsPane.details.shaHex !== detailsPane.headOid
+                        wrapMode: Text.Wrap
+                        text: qsTr("Saving replays this commit, so every commit after "
+                                   + "it gets a new identity.")
                         color: Theme.textSecondary
                         font.pixelSize: Theme.fontSm
                     }
-                    // The face and name of the first co-author, then a
-                    // count of the rest — the same "+N" the graph chips
-                    // use, so the row's width never moves. One rule runs
-                    // under the lot, the way the hash and its copy icon
-                    // share one: the two are one target.
-                    CoAuthorLine {
-                        id: coBlock
-                        packed: detailsPane.details.coAuthors
-                        lit: detailsPane.matesLit
-                        // Half the pane, the share the hover card gives
-                        // the same line out of the graph pane. The date
-                        // holds the left of this row; this is the rest.
-                        nameWidth: detailsPane.width / 2
-                        // Grows no further than the names themselves, and
-                        // gives way when the row cannot hold them -- the
-                        // rule the author's name above already follows.
-                        // Without the pair this line is Fixed, and a
-                        // Fixed item is a floor the layout cannot go
-                        // under: the row then lays out at its own width
-                        // and every box in the pane, sized to fill it,
-                        // paints past the window's edge (measured at 483
-                        // against a 384px pane).
+                    // Said, not asked, like the amend editor's tag: the save
+                    // still goes ahead, and this line is the warning it gets.
+                    Label {
                         Layout.fillWidth: true
-                        Layout.maximumWidth: coBlock.implicitWidth
-                        Layout.alignment: Qt.AlignVCenter
-                        onPointerChanged: inside => detailsPane.showCoAuthors(inside)
+                        visible: !detailsPane.asking && detailsPane.published
+                        wrapMode: Text.Wrap
+                        text: qsTr("This commit is on a remote. Rewriting it leaves "
+                                   + "anyone who already has it out of step.")
+                        color: Theme.warning
+                        font.pixelSize: Theme.fontSm
                     }
-                    Item { Layout.fillWidth: true }
-                }
-            }
-            ColumnLayout {
-                spacing: 0
-                Layout.alignment: Qt.AlignRight
-                // The hash is the button, not just the icon beside it —
-                // a 16px glyph was too small to aim at. Hovering
-                // underlines the hash and lights the icon so the whole
-                // plate reads as one control.
-                // Not a HoverToolButton: the style's panel would make
-                // the plate taller than one line and drop this hash out
-                // of step with the author name beside it, so it draws
-                // the same wash over its own flat face.
-                ToolButton {
-                    id: hashCopy
-                    Layout.alignment: Qt.AlignRight
-                    text: detailsPane.details.sha8
-                    leftPadding: Theme.spaceXs
-                    rightPadding: Theme.spaceXs
-                    topPadding: 0
-                    bottomPadding: 0
-                    readonly property bool lit: hovered || visualFocus
-                    ToolTip.visible: hovered
-                    ToolTip.delay: Metrics.tipDelayMs
-                    ToolTip.text: qsTr("Copy full hash")
-                    onClicked: detailsPane.copyRequested(detailsPane.details.shaHex)
-                    background: Rectangle {
-                        radius: Theme.radiusSm
-                        color: hashCopy.down ? Theme.bgPressed
-                             : hashCopy.lit ? Theme.bgHover
-                             : "transparent"
-                        MouseArea {
-                            anchors.fill: parent
-                            acceptedButtons: Qt.NoButton
-                            cursorShape: Qt.PointingHandCursor
+                    Label {
+                        Layout.fillWidth: true
+                        visible: detailsPane.asking
+                        wrapMode: Text.Wrap
+                        text: qsTr("Moving to another commit leaves this text behind.")
+                        color: Theme.warning
+                        font.pixelSize: Theme.fontSm
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spaceSm
+                        Item { Layout.fillWidth: true }
+                        HoverToolButton {
+                            visible: !detailsPane.asking
+                            text: qsTr("Cancel")
+                            font.pixelSize: Theme.fontSm
+                            onClicked: detailsPane.revertMessage()
                         }
-                        // Drawn here rather than as the label's font
-                        // underline so the rule runs under the icon too —
-                        // the hash and the icon are one target, so they
-                        // get one line.
+                        HoverButton {
+                            visible: !detailsPane.asking
+                            highlighted: true
+                            text: qsTr("Save message")
+                            enabled: !detailsPane.busy && subjectArea.text.trim() !== ""
+                            onClicked: detailsPane.submitMessage()
+                        }
+                        // The two ways out of the question. Staying is the
+                        // highlighted one: it is the answer that loses nothing.
+                        HoverToolButton {
+                            visible: detailsPane.asking
+                            text: qsTr("Discard edits")
+                            font.pixelSize: Theme.fontSm
+                            onClicked: detailsPane.leaveResolved(true)
+                        }
+                        HoverButton {
+                            visible: detailsPane.asking
+                            highlighted: true
+                            text: qsTr("Keep editing")
+                            onClicked: detailsPane.leaveResolved(false)
+                        }
+                    }
+                }
+                // -- author card: avatar + name/date on the left, own hash over
+                // parent hash on the right (rows aligned) --
+                RowLayout {
+                    id: authorRow
+                    spacing: Theme.spaceSm
+                    // The one place a picture is reached from. A pointer resting on
+                    // the face raises a badge saying so; pressing it opens the
+                    // settings card with this author already named.
+                    Item {
+                        id: avatarBox
+                        width: Metrics.detailsAvatar
+                        height: Metrics.detailsAvatar
+                        Layout.preferredWidth: Metrics.detailsAvatar
+                        Layout.preferredHeight: Metrics.detailsAvatar
+                        /// Nothing to assign a picture to on a row with no author:
+                        /// the working tree's own row, and a commit not read yet.
+                        readonly property bool editable:
+                            detailsPane.details.authorEmail !== ""
+                        readonly property bool showBadge:
+                            avatarBox.editable
+                            && (avatarArea.containsMouse || detailsPane.avatarPointedAt)
+                        IdentIcon {
+                            anchors.fill: parent
+                            code: detailsPane.details.avatar
+                            imageUrl: detailsPane.details.avatarUrl
+                        }
+                        // Pushed as far into the lower-right as the icon's own
+                        // square allows — flush with its right and bottom edges,
+                        // so the least of the face is covered and the layout
+                        // beside it never moves (デザイン規約 §アバターを与える).
                         Rectangle {
-                            visible: hashCopy.lit
-                            color: Theme.textPrimary
-                            height: Theme.borderWidth
-                            anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.bottom: parent.bottom
-                            anchors.leftMargin: hashCopy.leftPadding
-                            anchors.rightMargin: hashCopy.rightPadding
+                            width: Theme.iconSm + 2 * Theme.borderWidth
+                            height: width
+                            radius: width / 2
+                            color: Theme.bgElevated
+                            border.color: Theme.borderStrong
+                            border.width: Theme.borderWidth
+                            visible: avatarBox.showBadge
+                            NavIcon {
+                                anchors.centerIn: parent
+                                kind: "pen"
+                                tint: Theme.textPrimary
+                                width: Theme.iconSm
+                                height: Theme.iconSm
+                            }
+                        }
+                        MouseArea {
+                            id: avatarArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            enabled: avatarBox.editable
+                            onClicked: detailsPane.avatarClicked()
+                        }
+                        ToolTip.visible: avatarBox.showBadge
+                        ToolTip.delay: Metrics.tipDelayMs
+                        ToolTip.text: detailsPane.details.avatarUrl !== ""
+                                      ? qsTr("Change the picture for %1")
+                                        .arg(detailsPane.details.authorEmail)
+                                      : qsTr("Choose a picture for %1")
+                                        .arg(detailsPane.details.authorEmail)
+                    }
+                    ColumnLayout {
+                        spacing: 0
+                        Layout.fillWidth: true
+                        // Name, and beside it what git makes of the signature.
+                        // An unsigned commit gets nothing: the ordinary case
+                        // carries no mark, the same rule the graph's state
+                        // badges follow. The verdict rides up here rather than
+                        // sitting with the date because the date's row is where
+                        // the co-authors go, and a signed commit with one would
+                        // have had three things in ~230px (デザイン規約 §co-author).
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Theme.spaceXs
+                            Label {
+                                id: authorLabel
+                                text: detailsPane.details.authorName
+                                elide: Text.ElideRight
+                                // Grows no further than the name itself, so the
+                                // mark sits against the name rather than being
+                                // pushed across to the hash — and shrinks, with
+                                // the name eliding, when a long one would
+                                // otherwise crowd the mark out.
+                                Layout.fillWidth: true
+                                Layout.maximumWidth: authorLabel.implicitWidth
+                                color: Theme.textPrimary
+                                font.pixelSize: Theme.fontMd
+                                font.weight: Font.DemiBold
+                                // Drawn at rest one step down from the name it
+                                // underlines, and up to the name's own value
+                                // under the pointer — the same rule the credit
+                                // line carries, because it says the same thing:
+                                // there is more here, and hovering opens it
+                                // (規約 §co-author の表示).
+                                Rectangle {
+                                    visible: authorLabel.text !== ""
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    height: Theme.borderWidth
+                                    color: detailsPane.authorLit ? Theme.textPrimary
+                                                                 : Theme.borderStrong
+                                }
+                                // A handler, not a `MouseArea`: handlers are
+                                // passive, so the card it opens keeps its own
+                                // hover (規約 §hover のツールチップ).
+                                HoverHandler {
+                                    id: authorHover
+                                    onHoveredChanged:
+                                        detailsPane.showAuthor(authorHover.hovered)
+                                }
+                            }
+                            // A signature that holds is a tick and nothing more;
+                            // only one that contradicts the content spends words
+                            // (規約 §署名の表示). The broken case reads as the
+                            // error message it is, and being the one wide thing
+                            // on the row is how an error should read.
+                            //
+                            // Green stays with the signatures git actually
+                            // vouched for. One it could read but not judge gets
+                            // the same tick in textSecondary: the shape says a
+                            // signature is there, the colour says nobody here
+                            // checked it.
+                            RowLayout {
+                                id: signatureMark
+                                visible: detailsPane.signatureKind !== ""
+                                spacing: Theme.spaceXs
+                                Layout.alignment: Qt.AlignVCenter
+                                readonly property bool broken:
+                                    detailsPane.signatureKind === "bad"
+                                readonly property color tone:
+                                    detailsPane.signatureKind === "verified" ? Theme.success
+                                    : signatureMark.broken ? Theme.danger
+                                    : Theme.textSecondary
+                                NavIcon {
+                                    kind: signatureMark.broken ? "bang" : "check"
+                                    tint: signatureMark.tone
+                                    width: Theme.iconSm
+                                    height: Theme.iconSm
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                                Label {
+                                    visible: signatureMark.broken
+                                    text: qsTr("Bad signature")
+                                    color: signatureMark.tone
+                                    font.pixelSize: Theme.fontSm
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                                ToolTip.visible: signatureHover.hovered
+                                ToolTip.delay: Metrics.tipDelayMs
+                                ToolTip.text: detailsPane.signatureTip
+                                // A handler, not a MouseArea: an item inside a
+                                // layout is sized by the layout, and anchoring
+                                // one to fill its parent is undefined behaviour.
+                                HoverHandler { id: signatureHover }
+                            }
+                            // The slack lives here, past both of them, so the
+                            // mark stays against the name.
+                            Item { Layout.fillWidth: true }
+                        }
+                        // Date, and beside it whoever the message credits along
+                        // with the author. A commit with no trailer shows only
+                        // the date, the way it always did.
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Theme.spaceSm
+                            Label {
+                                id: detailsDate
+                                text: Qt.formatDateTime(new Date(detailsPane.details.authorTime * 1000),
+                                                        "yyyy-MM-dd HH:mm")
+                                color: Theme.textSecondary
+                                font.pixelSize: Theme.fontSm
+                            }
+                            // The face and name of the first co-author, then a
+                            // count of the rest — the same "+N" the graph chips
+                            // use, so the row's width never moves. One rule runs
+                            // under the lot, the way the hash and its copy icon
+                            // share one: the two are one target.
+                            CoAuthorLine {
+                                id: coBlock
+                                packed: detailsPane.details.coAuthors
+                                lit: detailsPane.matesLit
+                                // Half the pane, the share the hover card gives
+                                // the same line out of the graph pane. The date
+                                // holds the left of this row; this is the rest.
+                                nameWidth: detailsPane.width / 2
+                                // Grows no further than the names themselves, and
+                                // gives way when the row cannot hold them -- the
+                                // rule the author's name above already follows.
+                                // Without the pair this line is Fixed, and a
+                                // Fixed item is a floor the layout cannot go
+                                // under: the row then lays out at its own width
+                                // and every box in the pane, sized to fill it,
+                                // paints past the window's edge (measured at 483
+                                // against a 384px pane).
+                                Layout.fillWidth: true
+                                Layout.maximumWidth: coBlock.implicitWidth
+                                Layout.alignment: Qt.AlignVCenter
+                                onPointerChanged: inside => detailsPane.showCoAuthors(inside)
+                            }
+                            Item { Layout.fillWidth: true }
                         }
                     }
-                    contentItem: RowLayout {
-                        spacing: Theme.spaceXs
+                    ColumnLayout {
+                        spacing: 0
+                        Layout.alignment: Qt.AlignRight
+                        // The hash is the button, not just the icon beside it —
+                        // a 16px glyph was too small to aim at. Hovering
+                        // underlines the hash and lights the icon so the whole
+                        // plate reads as one control.
+                        // Not a HoverToolButton: the style's panel would make
+                        // the plate taller than one line and drop this hash out
+                        // of step with the author name beside it, so it draws
+                        // the same wash over its own flat face.
+                        ToolButton {
+                            id: hashCopy
+                            Layout.alignment: Qt.AlignRight
+                            text: detailsPane.details.sha8
+                            leftPadding: Theme.spaceXs
+                            rightPadding: Theme.spaceXs
+                            topPadding: 0
+                            bottomPadding: 0
+                            readonly property bool lit: hovered || visualFocus
+                            ToolTip.visible: hovered
+                            ToolTip.delay: Metrics.tipDelayMs
+                            ToolTip.text: qsTr("Copy full hash")
+                            onClicked: detailsPane.copyRequested(detailsPane.details.shaHex)
+                            background: Rectangle {
+                                radius: Theme.radiusSm
+                                color: hashCopy.down ? Theme.bgPressed
+                                     : hashCopy.lit ? Theme.bgHover
+                                     : "transparent"
+                                MouseArea {
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.NoButton
+                                    cursorShape: Qt.PointingHandCursor
+                                }
+                                // Drawn here rather than as the label's font
+                                // underline so the rule runs under the icon too —
+                                // the hash and the icon are one target, so they
+                                // get one line.
+                                Rectangle {
+                                    visible: hashCopy.lit
+                                    color: Theme.textPrimary
+                                    height: Theme.borderWidth
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    anchors.leftMargin: hashCopy.leftPadding
+                                    anchors.rightMargin: hashCopy.rightPadding
+                                }
+                            }
+                            contentItem: RowLayout {
+                                spacing: Theme.spaceXs
+                                Label {
+                                    text: hashCopy.text
+                                    font.family: Theme.monoFamily
+                                    font.pixelSize: Theme.fontMd
+                                    color: Theme.textPrimary
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                                NavIcon {
+                                    kind: "copyicon"
+                                    tint: hashCopy.lit ? Theme.textPrimary
+                                                       : Theme.textSecondary
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                            }
+                        }
                         Label {
-                            text: hashCopy.text
+                            id: parentLink
+                            visible: detailsPane.details.parentHex !== ""
+                            Layout.alignment: Qt.AlignRight
+                            text: "← " + detailsPane.details.parentHex.substring(0, 8)
                             font.family: Theme.monoFamily
-                            font.pixelSize: Theme.fontMd
-                            color: Theme.textPrimary
-                            Layout.alignment: Qt.AlignVCenter
+                            color: Theme.textLink
+                            font.pixelSize: Theme.fontSm
+                            font.underline: parentHover.containsMouse
+                            ToolTip.visible: parentHover.containsMouse
+                            ToolTip.delay: Metrics.tipDelayMs
+                            ToolTip.text: qsTr("Go to parent commit")
+                            MouseArea {
+                                id: parentHover
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: detailsPane.parentClicked(detailsPane.details.parentHex)
+                            }
                         }
-                        NavIcon {
-                            kind: "copyicon"
-                            tint: hashCopy.lit ? Theme.textPrimary
-                                               : Theme.textSecondary
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                    }
-                }
-                Label {
-                    id: parentLink
-                    visible: detailsPane.details.parentHex !== ""
-                    Layout.alignment: Qt.AlignRight
-                    text: "← " + detailsPane.details.parentHex.substring(0, 8)
-                    font.family: Theme.monoFamily
-                    color: Theme.textLink
-                    font.pixelSize: Theme.fontSm
-                    font.underline: parentHover.containsMouse
-                    ToolTip.visible: parentHover.containsMouse
-                    ToolTip.delay: Metrics.tipDelayMs
-                    ToolTip.text: qsTr("Go to parent commit")
-                    MouseArea {
-                        id: parentHover
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: detailsPane.parentClicked(detailsPane.details.parentHex)
                     }
                 }
             }
         }
     }
-    // CHANGES header with the tree ⇄ path view toggle.
+    // CHANGES header with the tree ⇄ path view toggle. Outside the block
+    // above: it is the list's own band, and a list whose heading has
+    // scrolled away is a list of nothing in particular.
     Rectangle {
+        id: changesBand
         visible: detailsPane.details.shaHex !== ""
         Layout.fillWidth: true
         implicitHeight: Theme.headerHeight
