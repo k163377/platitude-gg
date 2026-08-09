@@ -25,11 +25,7 @@ UI の色・タイポグラフィ・寸法の正本は [デザイン規約.md](i
 
 ## ビルド・テスト
 
-前提: Qt(qtbridge が要求するバージョン以上)と C++ ツールチェーンがインストール済みで、`qmake` が PATH にあること。
-
-- Windows: `C:\Qt\<バージョン>\<ツールチェーン>\bin` を PATH に追加
-- Ubuntu(ディストリの Qt パッケージ利用時): `QMAKE=qmake6` を設定
-- macOS: Qt の `bin` を PATH に、`DYLD_FRAMEWORK_PATH` に Qt の `lib`
+前提: Qt(qtbridge が要求するバージョン以上)と C++ ツールチェーンがインストール済みで、`qmake` が PATH にあること。Windows は `C:\Qt\<バージョン>\<ツールチェーン>\bin` を PATH に追加 / Ubuntu(ディストリの Qt パッケージ利用時)は `QMAKE=qmake6` を設定 / macOS は Qt の `bin` を PATH に、`DYLD_FRAMEWORK_PATH` に Qt の `lib`。
 
 開発は debug ビルド。**`--release` は性能計測と起動確認だけ**だが、release でないと QML(exe 埋め込み)が反映されない。以下 `cargo` / `cargo xtask` を省略。
 
@@ -37,12 +33,11 @@ UI の色・タイポグラフィ・寸法の正本は [デザイン規約.md](i
 
 **Done の基準**: 段 2 が全て通ること。テストを実行していないコードは動かないものとして扱う。UI 配線の Done は **両 OS の `verify-ui` が同じ動詞で PASS し、両方の PNG を目視するまで**(手順・動詞表・Windows の罠は **verify-ui スキル**を必ず呼ぶ)。
 
-- **起動だけの要求(「rebase して起動」等)は fast path** — rebase → release ビルド → 起動までを複合コマンドで先に済ませて即報告し、fmt / clippy / test は報告後にバックグラウンドで追報する(Done の基準は不変)。手順は verify-ui スキル §起動 fast path
+- **起動だけの要求(「rebase して起動」等)は fast path** — 起動までを複合コマンドで先に済ませて即報告し、fmt / clippy / test は報告後にバックグラウンドで追報する(Done の基準は不変)。手順は verify-ui スキル §起動 fast path
 - **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ。Linux ではその場で実行 — `bare` だけは常にコンテナ)。イメージは core / app / runtime(**宣言した依存だけ**)から自動で選び、ビルド先は docker volume でこの `target/` を汚さない。要望.md の最低 git バージョンを積んだ唯一の環境。**`bare` は建てた場所の外で動くかだけを見る**(依存が増えた瞬間その名前で止まる。実測は P5-確認事項 §実測済み)
-- **統合テストは 1 バイナリ**(`tests/it/` のモジュール。`cargo test` はバイナリを 1 つずつ走らせるので、`tests/` 直下に .rs を足すと別バイナリ = 直列実行とリンク 1 本分の後退。新しい統合テストは `it/` にモジュールとして足し `main.rs` へ登録)。部分実行は `cargo test -p platitude-core --test it <モジュール名>`
-- **並行セッション(複数エージェント)は git worktree で分ける** — 同一 checkout の共有は `target/` が単一障害点(cargo のビルドロックで直列化・incremental を相互に無効化・verify-ui が起動する release exe に別セッションの編集が焼き込まれた実績)。worktree なら target も demo / screenshot(temp 下の nanos 付きユニークパス)も自然に分離される
+- **並行セッション(複数エージェント)は git worktree で分ける** — 同一 checkout の共有は `target/` が単一障害点(cargo のビルドロックで直列化・incremental を相互に無効化・verify-ui が起動する release exe に別セッションの編集が焼き込まれた実績)。worktree なら target も demo / screenshot も自然に分離される
 - **worktree は固定名を使い回す**: `claude --worktree <固定名>`(`.claude/worktrees/<固定名>` に恒久作成・次回同名で再開。worktree ごとの `target/` = incremental キャッシュがセッションを跨いで温存される)。使い捨ての自動命名 worktree を乱造しない。ブランチは `worktree-<名前>` に切られる。**完了しても main へは戻さない**(§Git 運用)。**本体 checkout で実装作業をしない**(ドキュメント編集・レビューは可)
-- **worktree からのアプリ起動は headless だけ** — 実ウィンドウは画面を横取りし(別セッションの実ウィンドウ検証ごと)、終わり方を持たないプロセスは `target/release` の exe を掴んだままリンクを塞ぐ。`cargo xtask verify-ui` を使うか、自分で叩くなら `QT_QPA_PLATFORM=offscreen` + `PG_AUTO_QUIT_MS` + **自分の worktree の** exe。`cargo xtask hook pre-shell` が worktree セッションのそれ以外を deny する(ユーザーが窓を明示指示した時だけ `PG_ALLOW_GUI=1` を先頭に付ける)。本体 checkout からの起動は対象外 — ユーザー自身の起動で、重なることは許容。**窓に出たビルドがどのツリーのものかは右下**(git バージョンの隣)が名乗る(実装は [app-ui.md](.claude/rules/app-ui.md))
+- **worktree からのアプリ起動は headless だけ** — 実ウィンドウは画面を横取りし(別セッションの実ウィンドウ検証ごと)、終わり方を持たないプロセスは `target/release` の exe を掴んだままリンクを塞ぐ。`cargo xtask verify-ui` を使うか、自分で叩くなら `QT_QPA_PLATFORM=offscreen` + `PG_AUTO_QUIT_MS` + **自分の worktree の** exe。`cargo xtask hook pre-shell` がそれ以外を deny する(ユーザーが窓を明示指示した時だけ `PG_ALLOW_GUI=1` を先頭に付ける)。本体 checkout からの起動は対象外(ユーザー自身の起動)。**窓に出たビルドがどのツリーのものかは右下が名乗る**(実装は [app-ui.md](.claude/rules/app-ui.md))
 - 開発補助ツール(検証・デモ環境生成等)を **Windows 専用形式(.ps1 / .bat)で作らない** — タスクランナーが要る時は `cargo xtask` パターン(ワークスペース内クレート + `.cargo/config.toml` の alias、依存は std のみ)で 3OS 同一に書き、OS 差(Qt の PATH / フォント等)はコード内の分岐に焼き込む。just / make 等の外部タスクランナーも導入しない
 
 ## Rust 規約
@@ -56,7 +51,6 @@ UI の色・タイポグラフィ・寸法の正本は [デザイン規約.md](i
 - スナップショット(insta)の手編集禁止。再生成して差分をレビューする
 - パーサのテストは実 git の出力を fixture として保存して回す。git 実行系は一時ディレクトリに実リポジトリを作る統合テストで検証する
 - **git の挙動に確信が持てなければ、実装の前に使い捨てリポジトリで実測する**(`tests/it/support` の `TestRepo` = tempdir + 実 git + 決定的 SHA)。観測した挙動をテストへ固定してから実装する — 想定だけで書くと実装とテストが**同じ間違いで揃って緑のまま壊れる**。動確で壊れたら、直す前に再現する統合テストが赤になるのを確認する
-- **「もう起きない」を sleep で確かめない** — キューに乗った書き込みは前の write の refresh まで終わってから始まるので、静かな時間の長さは「止まった」と「遅い」を区別しない(`cargo test --workspace` の負荷で落ちる)。タイマは手で進めて、進めた先が受け取ったかどうかを見る(`RepoSession::auto_fetch_ticker`)
 
 ## 性能予算([要望.md](internal-docs/要望.md) 性能要件より)
 
@@ -68,18 +62,18 @@ UI の色・タイポグラフィ・寸法の正本は [デザイン規約.md](i
 
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)、メッセージは英語
 - force push しない
-- **main へブランチを反映するのは、その場でユーザーが指示した時だけ**(ユーザー指示)。セッションはコミットを `worktree-<名前>` に積んだまま「マージ可」と報告して終わる。自分の判断で ff-merge しない — 反映済みと未反映が混ざると管理できなくなる
+- **main へブランチを反映するのは、その場でユーザーが指示した時だけ**。セッションはコミットを `worktree-<名前>` に積んだまま「マージ可」と報告して終わる。自分の判断で ff-merge しない — 反映済みと未反映が混ざると管理できなくなる
   - `cargo xtask hook pre-git` が main を書く git(`merge` / `:main` への refspec / `branch -f main` / `update-ref`)を deny する。**指示があった時だけ** `PG_ALLOW_MAIN=1` を先頭に付けて再実行する。使い捨てリポジトリと worktree ブランチ上のコミットは対象外
   - **反映は本体 checkout の `git merge` で行う** — `update-ref` / `branch -f` で ref だけ進めると本体の index と作業ツリーが置き去りになり、落差が staged として見える。**「コミットし損ねた作業」に見えて中身は HEAD より後ろ**なので、コミットすると反映済みの仕事が消える。診断は `git reflog show main`(`merge …: Fast-forward` でない行が始まり)、復旧は `git restore --source=HEAD --staged --worktree -- .`
 - 本体 checkout での直コミットは可(ドキュメント等)。main の ref を動かす操作のうち止まるのは上記の反映系だけ
 
 ## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
 
-- Phase 1(読み取り専用ビューア)は**完了**。Done 条件の性能 4 項目は完了時点の最終確認でもクリア(first chunk 79ms / 詳細 75ms / 178fps / peak 269MB): [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)
+- Phase 1(読み取り専用ビューア)は**完了**。Done 条件の性能 4 項目は完了時点の最終確認でもクリア: [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)
 - **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules/app-ui.md](.claude/rules/app-ui.md) が正**(app のファイルに触れると自動ロード)。**本ファイルは未配線だけを持つ** — ここに一覧を置くと機能を足すたび太る
-- **未配線**: フル interactive rebase 画面(merge / rebase / revert / 単体 drop の起動、止まった操作の出口 = continue / skip / quit / abort、conflict の種別・片側採用・外部ツールへの受け渡しは配線済み)
+- **未配線**: フル interactive rebase 画面(merge / rebase / revert / 単体 drop の起動、止まった操作の出口、conflict の種別・片側採用・外部ツール連携は配線済み)
 - 残作業と要判断事項は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読むこと**。配布準備期に検証する項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
-- CI(3OS + 完全オフライン job)は記述済みだが **GitHub リモート未設定のため一度も実行されていない**。push は相当先まで行わない方針(2026-08-02 ユーザー指示)のため、初回検証は**配布準備期(P5 目安)まで大幅後ろ倒し**。**CI も軽量(段 2)と完全性(段 3)に分ける**(中身は [P5-確認事項.md](internal-docs/P5-確認事項.md) §3.5)
+- CI(3OS + 完全オフライン job)は記述済みだが **GitHub リモート未設定のため一度も実行されていない**(push は相当先まで行わない方針 = 2026-08-02 ユーザー指示)。初回検証は**配布準備期(P5 目安)**。**CI も軽量(段 2)と完全性(段 3)に分ける**(中身は [P5-確認事項.md](internal-docs/P5-確認事項.md) §3.5)
 - ネットワーク非通信の baseline 実測: [ci/baseline/windows-x64.md](ci/baseline/windows-x64.md)(主張の立て方は [P5-確認事項.md](internal-docs/P5-確認事項.md) §3)
 - mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ、実機検証は Phase 5 ゲート
 
