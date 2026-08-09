@@ -9,14 +9,15 @@
 //! the container drops out and the command runs where it stands: one verb,
 //! three operating systems (CLAUDE.md: no Windows-only dev tooling).
 //!
-//! Three images. Two are chosen by what the command needs: the core stage
+//! Four images. Two are chosen by what the command needs: the core stage
 //! is Ubuntu and the toolchain, the app stage adds Qt, a software GL stack
 //! and the fonts デザイン規約 names for Ubuntu — asking for the small one
 //! when it will do is the difference between a run that starts now and one
-//! that downloads Qt first. The third is asked for by name, `bare`, and is
-//! the opposite of a build environment: an Ubuntu carrying only what a
-//! package would declare, which is the only place that can say the built
-//! thing runs somewhere it was not built.
+//! that downloads Qt first. The other two belong to the `bare` verb and
+//! are the opposite of a build environment: `runtime` carries exactly what
+//! a package would declare, which is the only place that can say the built
+//! thing runs somewhere it was not built, and `bare` carries nothing at
+//! all — the blank sheet `--discover` works the declaration out on.
 //!
 //! The build directory is a docker volume mounted over /work/target, never
 //! the host's. One target/ shared between two operating systems is two
@@ -185,8 +186,9 @@ fn stage_for(rest: &[String]) -> &'static str {
 fn image_tag(root: &Path, stage: &str) -> Result<String, String> {
     let mut inputs = vec!["ci/linux/Dockerfile", "rust-toolchain.toml"];
     if stage != "core" {
-        // Both of the Qt-carrying stages are built with the version CI
-        // pins, so the tag has to move when that does.
+        // Every stage past core is built with the Qt version CI pins
+        // (runtime inherits it through bare), so the tag has to move when
+        // that does.
         inputs.push(".github/workflows/ci.yml");
     }
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;

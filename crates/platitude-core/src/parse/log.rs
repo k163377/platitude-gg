@@ -10,7 +10,7 @@ use crate::oid::Oid;
 
 /// `--format=` argument matching [`LOG_FIELDS`]; keep the two in sync.
 /// Fields: full id, parent ids, author name, author address, author time,
-/// subject.
+/// co-author trailers, body, subject.
 ///
 /// The two author fields are the **mailmap** spellings (`%aN` / `%aE`, not
 /// `%an` / `%ae`): one person committing under a laptop address and an

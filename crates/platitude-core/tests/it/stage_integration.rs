@@ -601,10 +601,10 @@ async fn stage_a_hunk_of_a_crlf_file() {
     assert_eq!(blob, b"a\r\nB\r\nc\r\n", "line endings preserved");
 }
 
-/// A file without a trailing newline: staging the whole hunk must keep the
-/// missing newline, and staging only the addition must still produce a
-/// patch git accepts (the demoted line gains a newline — the one shape a
-/// partial patch cannot express, so it must not be claimed).
+/// A file without a trailing newline: staging the whole hunk must keep
+/// the missing newline. (Selecting only the addition is the one shape a
+/// partial patch cannot express — the line before it would gain a newline
+/// — and the patch bytes for that refusal are pinned in `patch.rs`.)
 #[tokio::test]
 async fn stage_a_file_without_a_trailing_newline() {
     let mut repo = TestRepo::init();

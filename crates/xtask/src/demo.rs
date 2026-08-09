@@ -433,8 +433,6 @@ fn retree_head(repo: &mut DemoRepo, tree: &str) -> Result<String, String> {
     repo.git(&["hash-object", "-w", "-t", "commit", &config_path(&path)])
 }
 
-/// Branches, a remote one commit behind, tags in both places, a stash,
-/// and a dirty working tree — the state most verbs can act on.
 /// Bytes a ref's last component may have. Measured in throwaway
 /// repositories on both systems: a loose ref is the file `<name>.lock`
 /// against a 255-byte filename, so Linux stops at 250 — while NTFS counts
@@ -729,6 +727,8 @@ fn edges(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// Branches, a remote one commit behind, tags in both places, a stash,
+/// and a dirty working tree — the state most verbs can act on.
 fn basic(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -1262,7 +1262,7 @@ fn config_path(path: &Path) -> String {
 
 /// Every state a tag can be in with respect to the remote, so the badge
 /// and the name colour can be read side by side (デザイン規約 §グラフ行の
-/// チップ). Nothing shows until a fetch: `ls-remote --tags` is what carries
+/// ダブルクリック). Nothing shows until a fetch: `ls-remote --tags` is what carries
 /// it, so run this preset with the `fetch` verb.
 ///
 /// | tag          | here          | on origin                    |

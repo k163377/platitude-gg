@@ -747,7 +747,7 @@ async fn what_a_stopped_operation_says_about_its_two_sides() {
         "main"
     );
 
-    // ---- rebase, apply backend: neither file is there ----
+    // ---- rebase, apply backend: same answers, its own directory ----
     let mut repo = conflicting_branches();
     repo.git(&["checkout", "side"]);
     repo.git_expect_failure(&["rebase", "--apply", "main"]);

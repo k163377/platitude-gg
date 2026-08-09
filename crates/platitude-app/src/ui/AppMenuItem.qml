@@ -47,7 +47,7 @@ MenuItem {
     ///
     /// The row says so with the mark ahead of its words, not in them: the
     /// menu leaves the same seat for it on every row, so a held row reads
-    /// down the same column as the rest (`AppMenu.holdColW`).
+    /// down the same column as the rest (`AppMenu.holdIndent`).
     property int holdMs: 0
     /// How far into the hold the press has got, 0 to 1.
     property real holdProgress: 0

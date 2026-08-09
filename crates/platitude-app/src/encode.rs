@@ -306,8 +306,6 @@ pub fn image_data_url(mime: &str, bytes: &[u8]) -> String {
     out
 }
 
-/// Human-readable byte size ("67 B", "1.5 KB", "234 KB", "1.2 MB").
-/// 1024-based; one decimal below ten so small differences stay visible.
 /// A line-ending notice taken apart into the pieces its sentence needs.
 ///
 /// Two places say the same sentence — the diff pane's line and the hover of
@@ -362,6 +360,8 @@ pub fn ending_words(notice: Option<&platitude_core::eol::Notice>) -> EndingWords
     out
 }
 
+/// Human-readable byte size ("67 B", "1.5 KB", "234 KB", "1.2 MB").
+/// 1024-based; one decimal below ten so small differences stay visible.
 pub fn human_size(bytes: u64) -> String {
     const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
     if bytes < 1024 {

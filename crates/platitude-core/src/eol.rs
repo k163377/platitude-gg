@@ -7,7 +7,7 @@
 //! known for comes from a "fix it for me" button that rewrites a global
 //! setting, so there is no such button and no such code path.
 //!
-//! Four cases are worth saying out loud (internal-docs/P3-確認事項.md):
+//! Four cases are worth saying out loud (デザイン規約 §改行コードの警告):
 //!
 //! | | case | decided by |
 //! |---|---|---|

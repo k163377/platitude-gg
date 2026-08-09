@@ -13,19 +13,16 @@ use platitude_core::{GitExecutor, stash, status};
 use tokio_util::sync::CancellationToken;
 
 /// staged add + staged rename + unstaged modify + untracked, on main with
-/// one commit of history.
+/// two commits of history.
 fn dirty_scenario() -> TestRepo {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "line1\nline2\n", "initial");
     repo.commit_file("old name.txt", "rename me\n", "add file to rename");
-    // Staged new file.
     repo.write_file("staged.txt", "new\n");
     repo.git(&["add", "--", "staged.txt"]);
-    // Staged rename (with spaces and unicode in names).
+    // The rename keeps spaces and unicode in both names.
     repo.git(&["mv", "old name.txt", "новый 名前.txt"]);
-    // Unstaged modification.
     repo.write_file("a.txt", "line1 changed\nline2\n");
-    // Untracked.
     repo.write_file("untracked dir/inner.txt", "u\n");
     repo
 }

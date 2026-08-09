@@ -352,6 +352,12 @@ pub async fn configured_tool(
     Ok(None)
 }
 
+/// The answer, read once per process: what is installed on the machine
+/// does not change while the app is open, and at eight seconds it is not
+/// a read to repeat per tab or per dialog. Errors are not stored, so a
+/// read that timed out can be tried again.
+static INSTALLED: tokio::sync::OnceCell<Vec<String>> = tokio::sync::OnceCell::const_new();
+
 /// Merge tools git found installed and this app can actually launch.
 ///
 /// **Slow on Windows** — around 8 seconds, measured warm. `--tool-help`
@@ -373,12 +379,6 @@ pub async fn configured_tool(
 /// returning nothing — which lands on the plain text field the caller
 /// already has. It also loses `emerge`, which a graphical Emacs would run
 /// fine; typing the name still works.
-/// Read once per process. What is installed on the machine does not change
-/// while the app is open, and at eight seconds it is not a read to repeat
-/// per tab or per dialog. Errors are not stored, so a read that timed out
-/// can be tried again.
-static INSTALLED: tokio::sync::OnceCell<Vec<String>> = tokio::sync::OnceCell::const_new();
-
 pub async fn available_tools(
     executor: &GitExecutor,
     workdir: &Path,

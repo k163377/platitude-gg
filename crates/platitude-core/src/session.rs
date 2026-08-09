@@ -694,7 +694,9 @@ pub struct RepoSession {
     poll_slot: Arc<tokio::sync::Semaphore>,
     /// Submission end of the write queue (see the module docs).
     write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,
-    /// Time budget for fetch / push (settings, Phase 4, persist this).
+    /// Time budget for fetch / push. Persisted as the settings key
+    /// `network_timeout_secs`; only the settings dialog's input field is
+    /// missing (実装計画 §7).
     network_timeout: Mutex<std::time::Duration>,
     /// What each remote last advertised under `refs/tags/`. Empty until a
     /// fetch has been through: asking costs the network, so it rides the
@@ -1106,7 +1108,9 @@ impl RepoSession {
             return;
         };
 
-        // Cancel the previous stream and install this run's child token.
+        // Swapped here, on the caller's thread, not inside the spawned
+        // task: call order is what decides which pass owns the graph, and
+        // spawn order does not follow it (core.md).
         let run_cancel = self.root_cancel.child_token();
         if let Some(prev) = self
             .log_cancel
@@ -1348,7 +1352,7 @@ impl RepoSession {
     ///
     /// That half is what makes tags count without paying for them. Tags
     /// are left out of the walk (`JetBrains/kotlin`: 45,846 of 53,672
-    /// refs, 478ms of 504ms — ci/baseline/head-reach-windows-x64.md), and
+    /// refs, 478ms of 501ms — ci/baseline/head-reach-windows-x64.md), and
     /// a tag on the tip is the shape that actually turns up; one strictly
     /// ahead of it is missed, which costs a hold mark on a row that could
     /// have been a click.
@@ -2687,9 +2691,11 @@ impl RepoSession {
     /// the poll out, and put every later write behind a dialog nobody is
     /// waiting on.
     ///
-    /// Both answers arrive as one event, so the list is never seen half
-    /// filled. Either read failing contributes nothing rather than failing
-    /// the pair — what it feeds is a free text field, and offering nothing
+    /// The answers arrive in up to two waves — config names in
+    /// milliseconds, the installed sweep when it lands — with `settled`
+    /// marking the last, so the fast half never waits on the slow one.
+    /// Either read failing contributes nothing rather than failing the
+    /// pair — what it feeds is a free text field, and offering nothing
     /// is a working state.
     pub fn ask_merge_tools(self: &Arc<Self>) {
         let Ok(permit) = Arc::clone(&self.merge_tools_slot).try_acquire_owned() else {
@@ -4039,13 +4045,6 @@ fn build_label_map(
     map
 }
 
-/// Fingerprints where every ref points, so two reads can be compared
-/// without keeping the listing around.
-///
-/// Only what moves the walk counts: a renamed upstream or a changed sort
-/// date redraws chips through the label diff, and rebuilding for those
-/// would repaint the graph over nothing. `git for-each-ref` lists in
-/// refname order, so equal layouts hash equal.
 /// Fingerprint of what status reported: which paths, in which state.
 ///
 /// Deliberately not the branch headers — ahead/behind move when a fetch
@@ -4059,6 +4058,13 @@ fn status_key(status: &WorkTreeStatus) -> u64 {
     hasher.finish()
 }
 
+/// Fingerprints where every ref points, so two reads can be compared
+/// without keeping the listing around.
+///
+/// Only what moves the walk counts: a renamed upstream or a changed sort
+/// date redraws chips through the label diff, and rebuilding for those
+/// would repaint the graph over nothing. `git for-each-ref` lists in
+/// refname order, so equal layouts hash equal.
 fn refs_key(refs: &[RefEntry], head: &HeadState) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();

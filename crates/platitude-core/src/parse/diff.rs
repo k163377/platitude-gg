@@ -590,8 +590,10 @@ diff --git a/has space.txt b/has space.txt
     }
 
     // --- combined diffs -------------------------------------------------
-    // Every constant below is `git diff` output taken verbatim off git
-    // 2.55 in a throwaway repository (probe scripts, 2026-08-08).
+    // The constants below are real git output, taken off git 2.55 in
+    // throwaway repositories (probe scripts, 2026-08-08) — from `git
+    // diff` unless a constant says otherwise, and trimmed where only the
+    // shape matters.
 
     /// A `UU` conflict left as git wrote it: markers in the file, two
     /// parents, and one hunk that also carries a change neither side

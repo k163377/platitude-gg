@@ -12,8 +12,9 @@
 //! | subject, body, author name, address, URL | none. git took a megabyte of each |
 //! | the short end | one character of anything, an empty subject, and an empty address — but *not* an empty author name, which git alone refuses |
 //!
-//! Every name here therefore ends *on* its wall with a multi-byte
-//! character, because that is the byte a slice cuts in half.
+//! The ref names below stand *on* that wall and end with a multi-byte
+//! character, because that is the byte a slice cuts in half; the walls
+//! git does not have are walked with long-but-arbitrary lengths instead.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::expect_used)]

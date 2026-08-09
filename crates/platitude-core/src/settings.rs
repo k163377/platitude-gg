@@ -73,8 +73,8 @@ pub enum StoreError {
 }
 
 /// Which platform's placement rules to apply. A parameter rather than a
-/// `cfg!` so all three can be tested from any machine — two of the three
-/// have no CI runner that reaches them until Phase 5.
+/// `cfg!` so all three can be tested from any machine — the 3-OS CI that
+/// would otherwise reach them stays unrun until Phase 5 (CLAUDE.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Platform {
     Windows,
@@ -396,7 +396,9 @@ impl Store {
     pub fn claim(&self) -> Claim {
         let Some(path) = self.lock_path() else {
             // A store with no files has nothing for a second process to
-            // overwrite. Every automated run is this one.
+            // overwrite — the ephemeral store `PG_*` automation without a
+            // named `PG_CONFIG_DIR` gets. A run that names one holds the
+            // real lock like anyone else (the `solo` verb relies on it).
             return Claim::Ours(Lock { _file: None });
         };
         if let Some(dir) = path.parent()

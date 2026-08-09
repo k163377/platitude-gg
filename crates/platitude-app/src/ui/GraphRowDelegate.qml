@@ -410,8 +410,8 @@ Item {
     property Item hoveredChip: null
     /// This row's chip is the one with the list open under it.
     property bool chipHeld: false
-    // A chip is `fontSmLine` tall — sixteen pixels in a row of twenty-six
-    // — and a hand that has just arrived is still settling. Landing takes
+    // A chip is `fontSmLine` tall — sixteen pixels in a row of
+    // twenty-eight — and a hand that has just arrived is still settling. Landing takes
     // the chip itself, but once the list is out the whole chip column
     // holds it: drifting a dozen pixels inside the column the chips live
     // in is not leaving them (2026-08-09 trace — the hand landed at row

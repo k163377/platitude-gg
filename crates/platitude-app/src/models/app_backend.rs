@@ -146,7 +146,9 @@ fn tree_of(path: &str) -> &str {
     &rest[..rest.find('/').unwrap_or(rest.len())]
 }
 
-/// Separators the packed records use, matching the graph's label records.
+/// Separators the packed records use. Note the graph's label records
+/// (`encode::FIELD_SEP` / `RECORD_SEP`) assign the same two characters
+/// the other way round — each side matches its own reader, not the other.
 const FIELD_SEP: char = '\u{1f}';
 const RECORD_SEP: char = '\u{1e}';
 

@@ -1,8 +1,11 @@
 //! Stash listing and stash operations.
 //!
 //! Selectors (`stash@{0}`) come from a listing and are passed straight
-//! back; nothing here builds one from an index, because the numbering
-//! shifts under every push and drop.
+//! back — the numbering shifts under every push and drop, so a selector
+//! this module invents could name someone else's entry. The one place
+//! that must invent one is [`rename`], whose own `store` pushed the list
+//! down by one; it shifts the selector and then proves it still names
+//! the same commit (by oid) before dropping anything.
 
 use std::path::Path;
 

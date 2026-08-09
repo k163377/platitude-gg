@@ -1,10 +1,12 @@
-//! What Windows has to be told about the window: that its corners stay
-//! square, and which icon it wears.
+//! What Windows has to be told about the window that Qt has no words
+//! for: square corners, the icon, the styles behind Win+Arrow, the
+//! maximise geometry of a frameless window, and the non-client hit test
+//! the merged chrome answers itself.
 //!
 //! Windows 11 rounds every top-level window and leaves the corner pixels
 //! transparent, so whatever sits behind the window shows through them.
 //! And a window that carries no icon of its own is given the shell's
-//! generic one. Qt exposes a switch for neither, so this is the single
+//! generic one. Qt exposes a switch for none of it, so this is the single
 //! place the app speaks Win32 directly instead of taking a dependency
 //! for a handful of signatures.
 //!
@@ -29,12 +31,13 @@ pub fn set_icon() {
 ///
 /// The app draws the window's own buttons, so Qt is asked for none — and
 /// Qt drops `WS_MINIMIZEBOX`, `WS_MAXIMIZEBOX` and `WS_SYSMENU` along with
-/// them. Those three are not about buttons: without them the platform
-/// refuses Win+Arrow, the taskbar's own menu, and clicking the taskbar
-/// button to minimise. Putting them back does not bring the drawn buttons
-/// back with them (measured: style 0x96040000 → 0x960F0000, nothing
-/// appears), because the caption they would be drawn in is no longer part
-/// of this window's frame.
+/// them, and the frameless hints drop `WS_THICKFRAME` too. None of the
+/// four is about drawing: without them the platform refuses Win+Arrow,
+/// the taskbar's own menu, clicking the taskbar button to minimise, and
+/// resizing at the edges. Putting them back does not bring the drawn
+/// buttons or a visible frame back with them (measured: capability bits
+/// return, pixels do not), because the caption they would be drawn in is
+/// no longer part of this window's frame.
 pub fn keep_system_gestures() {
     #[cfg(windows)]
     win32::keep_system_gestures();
@@ -110,8 +113,8 @@ pub fn fit_to_work_area() -> bool {
 // right-hand edge and along the bottom). Nudging the size, asking for the
 // frame to be recalculated and letting the message through first were all
 // tried; none of them make Qt re-measure. What would is a way to set the
-// window's custom margins, which the bridge does not expose
-// (P3-確認事項 §ウィンドウ chrome).
+// window's custom margins, which the bridge does not expose (app-ui.md —
+// the line between messages Qt builds state from and pure queries).
 
 /// Takes `WM_NCHITTEST` away from Qt for the windows that are up, and
 /// answers it from the strip `set_caption_strip` describes.
@@ -148,13 +151,12 @@ pub fn take_frame_hit_test() {
     win32::take_frame_hit_test();
 }
 
-// The scene is never told this border's width, though a maximised frame
-// is inflated by it on every side (`hit_test` measures the resize edges
-// by it, in device pixels, and that is the only reader). The QML side has
-// no use for it: those pixels are non-client, and the client comes back
-// deflated to the work area exactly, so nothing the app paints is ever
-// out there. The measurement, and the shifted window that came of not
-// having taken it, are written up on `Main.mainUi`.
+// The scene is never told the resize border's width. `hit_test` measures
+// the edges by it, in device pixels, and is the only reader — and only
+// windowed: a maximised window is pinned to the work area
+// (`clamp_maximized`), so nothing the app paints is ever out there. The
+// measurement, and the shifted window that came of guessing at it, are
+// written up on `Main.mainUi`.
 
 /// Where the band's empty run sits, in logical scene pixels: from `x0`
 /// to `x1`, reaching down from the window's top edge to `bottom`. The

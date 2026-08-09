@@ -1125,7 +1125,7 @@ async fn a_carry_that_cannot_restore_reports_gits_message() {
 
 /// A pop whose restore conflicts lands exactly where an apply would have:
 /// git keeps the entry, and the conflict is the outcome that was asked
-/// for, not a failure to report (デザイン規約 §stash から戻す).
+/// for, not a failure to report (デザイン規約 §変更を退避する).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_conflicting_pop_keeps_the_entry_and_is_not_a_failure() {
     let mut repo = colliding_branches();

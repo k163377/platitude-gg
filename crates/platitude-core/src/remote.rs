@@ -23,7 +23,8 @@ use crate::process::{GitCommand, GitExecutor};
 ///
 /// Three minutes covers an ordinary fetch of a large repository over a slow
 /// link without leaving a hung connection running for an hour. A user on a
-/// genuinely slow line can raise it (the setting is persisted in Phase 4).
+/// genuinely slow line can raise it (the `network_timeout_secs` settings
+/// key; the dialog's input field is what is still missing — 実装計画 §7).
 pub const DEFAULT_NETWORK_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// A configured remote.

@@ -55,7 +55,9 @@ const FIXED_ARGS: [&str; 7] = [
 ///   delegated to credential helpers)
 /// - `GIT_OPTIONAL_LOCKS=0`: belt-and-suspenders with `--no-optional-locks`
 /// - `GIT_EDITOR=true`: an accidentally editor-spawning command exits
-///   immediately instead of hanging (interactive rebase overrides this)
+///   immediately instead of hanging. Interactive rebase leaves it in
+///   place and adds `GIT_SEQUENCE_EDITOR` on top — rewords rely on the
+///   `true` (sequencer.rs)
 ///
 /// Deliberately absent: `GIT_LITERAL_PATHSPECS`. It disarms pathspec magic
 /// for git's *internal* use too — with it set, `git stash push -u` reports
@@ -134,7 +136,7 @@ pub struct GitCommand {
     cwd: Option<PathBuf>,
     timeout: Option<Duration>,
     /// Applied after [`FIXED_ENV`], so a command can override a default
-    /// (interactive rebase replaces the editors).
+    /// or add its own (interactive rebase adds `GIT_SEQUENCE_EDITOR`).
     env: Vec<(OsString, OsString)>,
     /// This command answers by exit code, so a non-zero one is data.
     answers_by_code: bool,

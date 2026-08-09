@@ -17,7 +17,7 @@
 //! covers tags. The other half — a branch, a remote-tracking ref or a
 //! stash that is a *descendant* of the tip — needs git, and deliberately
 //! leaves tags out of the walk: on the benchmark repository they are 45,846
-//! of the 53,672 refs and 478 ms of the 504 ms (ci/baseline). Missing one
+//! of the 53,672 refs and 478 ms of the 501 ms (ci/baseline). Missing one
 //! costs a hold mark on a row that could have been a click, which is the
 //! direction to be wrong in.
 

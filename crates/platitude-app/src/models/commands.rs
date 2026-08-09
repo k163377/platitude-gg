@@ -112,7 +112,8 @@ impl CommandsModel {
     fn changed(&mut self);
 
     /// A command the user asked for failed. The page opens the panel on
-    /// this; a background read failing stays quiet (境界の決定 1).
+    /// this; a background read failing stays quiet
+    /// (デザイン規約 §git が言ったことを読む場所).
     #[qsignal]
     fn failure(&mut self);
 

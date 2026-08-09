@@ -349,10 +349,10 @@ Rectangle {
         // -- a conflict with only one side left: git has two versions of
         //    the path but not the third to compare them against, so it
         //    prints no patch at all (`* Unmerged path`). The one thing
-        //    worth saying is what the two sides each did — the same
-        //    sentence the file row's icon says, from the same place
-        //    (デザイン規約 §conflict の種別). Which way out to take is
-        //    still the file row's right-click, unchanged.
+        //    worth saying is what the two sides each did — and this pane
+        //    is the one place that sentence is shown (デザイン規約
+        //    §conflict の種別). Which way out to take is still the file
+        //    row's right-click, unchanged.
         Label {
             visible: diffPane.diffModel.unmerged
             Layout.margins: Theme.spaceSm

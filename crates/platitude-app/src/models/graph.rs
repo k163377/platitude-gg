@@ -65,8 +65,9 @@ pub struct GraphModel {
     /// not reset). QML re-anchors the viewport only when this moves,
     /// because only a reset zeroes the scroll position.
     reset_count: i32,
-    /// Lanes running off the end of the window (`lane.color;...`), drawn
-    /// by the truncation footer.
+    /// Lanes running off the end of the window (`t<lane>.<color>;...`,
+    /// uppercase for a dashed leash — `encode::tail_lanes`), drawn by the
+    /// truncation footer.
     tail_geometry: String,
     error: String,
     started_at: Option<Instant>,
@@ -281,7 +282,6 @@ impl GraphModel {
                         } else {
                             String::new()
                         };
-                        // Release Vec growth slack after the stream ends.
                         self.rows.shrink_to_fit();
                         tracing::info!(total, elapsed_ms, truncated, "graph stream finished");
                     }

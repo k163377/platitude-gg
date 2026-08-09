@@ -97,15 +97,15 @@ ApplicationWindow {
     // `minimumWidth` alone is only half of it. It is what the platform
     // asks about while a person drags an edge — and that is the only path
     // it covers: `QWindow::resize` hands the size straight to the platform
-    // without looking at the hints (measured: asked for 200x150 against a
-    // 704x245 floor, the window took it). So every size this application
+    // without looking at the hints (measured: asked for 200x150 against
+    // the floor, the window took it). So every size this application
     // sets itself goes through `holdFloor` below, which is what the
     // remembered shape and the two floors that move are put through.
     /// The page the floor is read off. Not `curPage`: with no tab open
     /// that is null, and the window is not empty — it is showing the blank
     /// page, which has the same three panes with the same minimums, and
     /// would have gone on being squeezable while every other window was
-    /// held (the floor would have fallen to the band's own, 628).
+    /// held (the floor would have fallen to the band's own, smaller one).
     readonly property var floorPage:
         root.curPage !== null ? root.curPage : blankPage.item
     readonly property real floorWidth:

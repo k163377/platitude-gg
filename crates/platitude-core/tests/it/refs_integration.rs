@@ -31,8 +31,9 @@ fn scenario() -> TestRepo {
     repo.git(&["remote", "add", "origin", &remote_str]);
     repo.git(&["fetch", "origin"]);
     repo.git(&["branch", "-u", "origin/main", "main"]);
-    // Delete local-only's counterpart scenario: origin never had it, and
-    // remove feature/x's upstream config so only the name matches.
+    // The bare clone took every branch, so origin is made to forget
+    // local-only — that is what leaves it local. feature/x needs nothing:
+    // it never had an upstream, so only its name matches.
     repo.git(&["push", "origin", "--delete", "local-only"]);
     repo
 }
