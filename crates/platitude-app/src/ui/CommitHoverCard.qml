@@ -39,8 +39,14 @@ Popup {
     /// in full — so the two fields stop and say so with an ellipsis.
     property real textHeight: 0
 
-    /// The pointer is over the card itself.
-    readonly property alias pointerInside: insideHover.hovered
+    /// The pointer is over the card itself — on the padding band the
+    /// background covers, or on the content. Two handlers, because the
+    /// background and the content are siblings, not parent and child:
+    /// the moment something in the content takes the hover — the
+    /// co-author stretch does — the background's handler reads false
+    /// (measured on RefListPopup's rows, 2026-08-09).
+    readonly property bool pointerInside:
+        insideHover.hovered || contentHover.hovered
     /// The co-author stretch, so whoever owns the list that opens off it
     /// can put that list under the stretch rather than under the card.
     readonly property alias matesAnchor: mateLine
@@ -67,6 +73,12 @@ Popup {
 
     contentItem: ColumnLayout {
         spacing: Theme.spaceXs
+        // The content's half of `pointerInside`. Without it the card
+        // stayed up over its own co-author stretch only because
+        // `matesLit` happened to hold it — one wire, not a shape.
+        HoverHandler {
+            id: contentHover
+        }
         Label {
             Layout.fillWidth: true
             Layout.maximumWidth: hoverCard.textWidth
