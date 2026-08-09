@@ -189,14 +189,18 @@ AppDialog {
                 text: identityDialog.editing ? qsTr("Cancel") : qsTr("Not now")
                 onClicked: identityDialog.close()
             }
-            HoverButton {
+            ActionButton {
                 id: saveButton
-                highlighted: true
+                implicitHeight: Theme.controlHeight
+                kind: "check"
+                besideWord: true
+                frameColor: enabled ? Theme.accent : Theme.borderDefault
+                activeFocusOnTab: true
                 text: AppBackend.identityBusy ? qsTr("Saving…") : qsTr("Save")
                 enabled: !AppBackend.identityBusy
                          && nameField.text.trim() !== ""
                          && emailField.text.trim() !== ""
-                onClicked: identityDialog.submit()
+                onActivated: identityDialog.submit()
             }
         }
     }

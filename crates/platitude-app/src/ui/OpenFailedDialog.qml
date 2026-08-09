@@ -92,9 +92,13 @@ AppDialog {
                 text: qsTr("Cancel")
                 onClicked: openFailedDialog.close()
             }
-            HoverButton {
+            ActionButton {
                 id: chooseButton
-                highlighted: true
+                implicitHeight: Theme.controlHeight
+                kind: "folder"
+                besideWord: true
+                frameColor: Theme.accent
+                activeFocusOnTab: true
                 // `again`, not `another`: on two of the three the folder
                 // was the wrong one and the heading has already said so,
                 // and on the third nobody knows that it was — a button
@@ -102,7 +106,7 @@ AppDialog {
                 // check could not answer. What it promises in all three
                 // is the same, and it is the picker coming back.
                 text: qsTr("Choose again…")
-                onClicked: openFailedDialog.retry()
+                onActivated: openFailedDialog.retry()
             }
         }
     }

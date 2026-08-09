@@ -585,26 +585,34 @@ ColumnLayout {
                             font.pixelSize: Theme.fontSm
                             onClicked: detailsPane.revertMessage()
                         }
-                        HoverButton {
+                        ActionButton {
                             visible: !detailsPane.asking
-                            highlighted: true
+                            implicitHeight: Theme.controlHeight
+                            kind: "check"
+                            besideWord: true
+                            frameColor: enabled ? Theme.accent : Theme.borderDefault
+                            activeFocusOnTab: true
                             text: qsTr("Save message")
                             enabled: !detailsPane.busy && subjectArea.text.trim() !== ""
-                            onClicked: detailsPane.submitMessage()
+                            onActivated: detailsPane.submitMessage()
                         }
                         // The two ways out of the question. Staying is the
-                        // highlighted one: it is the answer that loses nothing.
+                        // framed one: it is the answer that loses nothing.
                         HoverToolButton {
                             visible: detailsPane.asking
                             text: qsTr("Discard edits")
                             font.pixelSize: Theme.fontSm
                             onClicked: detailsPane.leaveResolved(true)
                         }
-                        HoverButton {
+                        ActionButton {
                             visible: detailsPane.asking
-                            highlighted: true
+                            implicitHeight: Theme.controlHeight
+                            kind: "pen"
+                            besideWord: true
+                            frameColor: Theme.accent
+                            activeFocusOnTab: true
                             text: qsTr("Keep editing")
-                            onClicked: detailsPane.leaveResolved(false)
+                            onActivated: detailsPane.leaveResolved(false)
                         }
                     }
                 }

@@ -610,11 +610,15 @@ ColumnLayout {
                             font.pixelSize: Theme.fontSm
                             onClicked: wipPane.closeStashPanel()
                         }
-                        HoverButton {
-                            highlighted: true
+                        ActionButton {
+                            implicitHeight: Theme.controlHeight
+                            kind: "stash"
+                            besideWord: true
+                            frameColor: enabled ? Theme.accent : Theme.borderDefault
+                            activeFocusOnTab: true
                             text: qsTr("Stash")
                             enabled: wipPane.repoTab.busyCount === 0
-                            onClicked: wipPane.stashApply()
+                            onActivated: wipPane.stashApply()
                         }
                     }
                 }

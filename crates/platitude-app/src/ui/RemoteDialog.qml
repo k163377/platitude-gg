@@ -154,15 +154,19 @@ AppDialog {
                 text: qsTr("Cancel")
                 onClicked: remoteDialog.close()
             }
-            HoverButton {
+            ActionButton {
                 id: saveButton
-                highlighted: true
+                implicitHeight: Theme.controlHeight
+                kind: remoteDialog.editing === "" ? "plus" : "check"
+                besideWord: true
+                frameColor: enabled ? Theme.accent : Theme.borderDefault
+                activeFocusOnTab: true
                 text: remoteDialog.editing === "" ? qsTr("Add") : qsTr("Save")
                 enabled: remoteDialog.wantedUrl !== ""
                          && (remoteDialog.editing !== ""
                              || (remoteDialog.wantedName !== ""
                                  && !remoteDialog.nameClashes))
-                onClicked: remoteDialog.submit()
+                onActivated: remoteDialog.submit()
             }
         }
     }
