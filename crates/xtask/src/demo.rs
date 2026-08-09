@@ -506,11 +506,15 @@ fn edges(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["commit", "--allow-empty", "--author=日 <あ>", "-m", "一"])?;
 
     // The long end: a subject nobody meant to write, and a body under it.
+    // The body is longer than any pane is tall on purpose: the details
+    // pane's description box can be pulled open by its corner, and a body
+    // that runs out before the room does never reaches the bound that
+    // pull stops at (デザイン規約 §コミットメッセージの 2 つの枠).
     let long_subject = pasted(2000);
     let long_body = format!(
         "{}\n\n{}\n\nCo-authored-by: {} <{}@example.com>\n",
-        pasted(400),
-        pasted(600),
+        pasted(2000),
+        pasted(3000),
         pasted(120),
         to_the_byte("c", 40)
     );

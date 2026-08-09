@@ -57,6 +57,10 @@ commands:
       like one that fits, so the picture cannot answer it. So is
       `window-fill`: a maximised window fills the screen, leaving no
       desktop beside it for an unpainted edge to show against.
+      `details-grow` pulls the description box's grip past everything and
+      is judged the same way, on the author card still being inside the
+      pane; its argument is the row, and the row with a short message —
+      where the grip is not offered — is the other half of that pair.
       options:
         --repo <dir>      run against this repository
         --preset <name>   or against a fresh demo repo (default: basic)

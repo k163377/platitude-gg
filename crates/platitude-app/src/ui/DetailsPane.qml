@@ -287,6 +287,104 @@ ColumnLayout {
     readonly property color descriptionColor: bodyArea.color
     readonly property bool descriptionFocused: bodyArea.activeFocus
 
+    // -- the description box's own ceiling --
+    //
+    // Every message box in the app stops at the shared cap and scrolls
+    // inside it (デザイン規約 §コミットメッセージの 2 つの枠). A pull on
+    // the grip in this one's corner raises this ceiling instead, and
+    // gives it back when the pane can no longer spare the room.
+
+    /// Where the hand has put the ceiling. Kept while the pane lives, so
+    /// clicking down a run of long messages does not mean pulling once
+    /// per commit; not written down, because it belongs to the reading
+    /// rather than to the repository.
+    property real descCap: Theme.messageMaxHeight
+    /// What the text would take if nothing capped it. The two-line floor
+    /// is the box's resting shape, empty or not.
+    readonly property real descWants:
+        Math.max(bodyArea.implicitHeight, 2 * Theme.fontMdLine) + Theme.spaceSm
+    /// What the box is given: its own text, never more — a ceiling held
+    /// above short text would leave an empty box on every commit after
+    /// the long one that earned it.
+    readonly property real descHeight:
+        Math.min(detailsPane.descWants,
+                 Math.max(Theme.messageMaxHeight, detailsPane.descCap))
+    /// How much taller the box may still be drawn. The file list is the
+    /// one thing here that gives, and two rows is where it stops being a
+    /// list — so what is left above that is the whole of the room, and
+    /// everything between the boxes and it (the author, the credit line,
+    /// the CHANGES band) keeps its own height by construction.
+    readonly property real descRoom:
+        Math.max(0, fileList.height - 2 * Theme.rowHeight)
+    /// The far side of the same measure: how far past the bound the pane
+    /// already is, which is what the hand has to give back. The list is
+    /// the only thing that gives, so it hits zero and stops answering
+    /// while the column keeps growing past the pane's edge — the second
+    /// term is that overflow, and without it the give-back stalls at the
+    /// last 48 pixels the list still had (measured: the command log
+    /// opening under a pulled-open box).
+    readonly property real descOwed:
+        Math.max(0, 2 * Theme.rowHeight - fileList.height)
+        + Math.max(0, detailsPane.implicitHeight - detailsPane.height)
+    /// Offered exactly while the cap is what stands between the reader
+    /// and the rest of the text — and it keeps standing there once the
+    /// text is out, because putting the box back is the same grip
+    /// (デザイン規約 §コミットメッセージの 2 つの枠).
+    readonly property bool descGrips:
+        detailsPane.descWants > Theme.messageMaxHeight
+        && (detailsPane.descRoom > 0
+            || detailsPane.descCap > Theme.messageMaxHeight)
+    /// The one place the ceiling moves. The drag and the smoke hook both
+    /// come through here, so neither can reach a height the other is
+    /// refused.
+    function setDescriptionHeight(want) {
+        detailsPane.descCap = Math.max(Theme.messageMaxHeight,
+            Math.min(want, detailsPane.descWants,
+                     detailsPane.descHeight + detailsPane.descRoom))
+    }
+    // The pane loses height without anyone touching the grip: the window
+    // is dragged shorter, the command log opens, a save row appears under
+    // the boxes. The ceiling gives that back rather than letting the
+    // column run under the pane's own edge — which is the accident the
+    // shared cap was put there to stop, and which no screenshot shows.
+    onDescOwedChanged: {
+        if (detailsPane.descOwed > 0)
+            detailsPane.setDescriptionHeight(detailsPane.descHeight
+                                             - detailsPane.descOwed)
+    }
+    /// Smoke hook: pull the grip down by dy, the way a drag does — and
+    /// through the same clamp, so a headless run cannot reach a height
+    /// the pointer could not. Headless has no pointer at all.
+    function growDescription(dy) {
+        detailsPane.setDescriptionHeight(detailsPane.descHeight + dy)
+    }
+    // TextEdit draws only the part of itself its viewport can see, and a
+    // viewport that grows without scrolling never tells it so: the box
+    // opens and the text stops on the line the old height ended at, with
+    // the rest of the frame empty (measured). Nudging the flickable and
+    // putting it straight back is what says "look again" -- the text item
+    // is watching for the viewport to move under it, which is the one
+    // thing a resize does not do.
+    onDescHeightChanged: Qt.callLater(detailsPane.repaintDescription)
+    function repaintDescription() {
+        const flick = bodyView.contentItem
+        const was = flick.contentY
+        flick.contentY = was + 1
+        flick.contentY = was
+    }
+    /// How many rows the file list is left with, which is the bound the
+    /// pull stops at. Rounded: the layout hands out fractions and what
+    /// this is about is rows.
+    readonly property int descListRows:
+        Math.round(fileList.height / Theme.rowHeight)
+    /// Whether the author card is still inside the pane. The overflow it
+    /// guards against draws over the window's own footer, and a shot of
+    /// that frames exactly like a shot of a pane that fits (see
+    /// contentOverflow).
+    readonly property bool authorInside:
+        authorRow.mapToItem(detailsPane, 0, authorRow.height).y
+        <= detailsPane.height
+
     Connections {
         target: detailsPane.details
         function onChanged() { detailsPane.syncMessage() }
@@ -406,18 +504,20 @@ ColumnLayout {
             }
         }
         // Always shown, even empty, and two lines tall from the start —
-        // the pair mirrors the commit editor's fields.
+        // the pair mirrors the commit editor's fields. Alone among the
+        // four boxes it can be pulled taller by its corner, because a
+        // description worth reading is the one thing here that is
+        // routinely longer than the cap.
         Rectangle {
+            id: bodyBox
             Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(Math.max(bodyArea.implicitHeight,
-                                                      2 * Theme.fontMdLine)
-                                             + Theme.spaceSm,
-                                             Theme.messageMaxHeight)
+            Layout.preferredHeight: detailsPane.descHeight
             color: Theme.bgBase
             radius: Theme.radiusMd
             border.color: detailsPane.asking ? Theme.warning : Theme.borderSubtle
             border.width: Theme.borderWidth
             ScrollView {
+                id: bodyView
                 anchors.fill: parent
                 anchors.margins: Theme.spaceXs
                 // ScrollView keeps its Flickable private -- reach it
@@ -442,6 +542,48 @@ ColumnLayout {
                            ? Theme.textPrimary : Theme.textSecondary
                     background: null
                     padding: 0
+                }
+            }
+            // Declared after the ScrollView, so the corner belongs to the
+            // grip rather than to the last few pixels of the scrollbar.
+            // Hit area and ink are the one 16 square: the mark hangs off
+            // its lower-right, which puts the ink on the same inset the
+            // text keeps from the frame.
+            MouseArea {
+                id: bodyGrip
+                visible: detailsPane.descGrips
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                width: Theme.iconMd
+                height: Theme.iconMd
+                hoverEnabled: true
+                // Down is the only way this goes, so the cursor says so
+                // rather than promising the corner drag a browser's box
+                // takes.
+                cursorShape: Qt.SizeVerCursor
+                /// Where the pull started, in the pane's own coordinates
+                /// — the grip itself travels with the edge it is moving.
+                property real fromY: 0
+                property real fromHeight: 0
+                onPressed: mouse => {
+                    bodyGrip.fromY = mapToItem(detailsPane, 0, mouse.y).y
+                    bodyGrip.fromHeight = detailsPane.descHeight
+                }
+                onPositionChanged: mouse => {
+                    if (!bodyGrip.pressed)
+                        return
+                    detailsPane.setDescriptionHeight(
+                        bodyGrip.fromHeight
+                        + mapToItem(detailsPane, 0, mouse.y).y - bodyGrip.fromY)
+                }
+                NavIcon {
+                    anchors.fill: parent
+                    kind: "grip"
+                    // A structural line at rest, since what it marks is
+                    // an edge and not a word; the pointer brings it up to
+                    // the shade the pane spends on things being read.
+                    tint: bodyGrip.containsMouse || bodyGrip.pressed
+                          ? Theme.textSecondary : Theme.borderStrong
                 }
             }
         }
@@ -520,6 +662,7 @@ ColumnLayout {
         // -- author card: avatar + name/date on the left, own hash over
         // parent hash on the right (rows aligned) --
         RowLayout {
+            id: authorRow
             spacing: Theme.spaceSm
             // The one place a picture is reached from. A pointer resting on
             // the face raises a badge saying so; pressing it opens the

@@ -229,6 +229,21 @@ Canvas {
                 ctx.lineTo(x * s, 12 * s)
                 ctx.stroke()
             }
+        } else if (icon.kind === "grip") {
+            // The corner a box is pulled by, drawn as the two rules every
+            // browser puts there. The pair of chevrons one mark over also
+            // moves an edge, but by pressing it: that one swaps a pane
+            // between two shapes, this one is held and dragged, and a
+            // reader who has seen either still has to be told nothing
+            // about the other. Inset like `close`, since diagonals read
+            // heavier than bars of the same span, and hung off the
+            // lower-right so the ink lands on the box's own corner.
+            ctx.beginPath()
+            ctx.moveTo(12 * s, 6 * s)
+            ctx.lineTo(6 * s, 12 * s)
+            ctx.moveTo(12 * s, 10 * s)
+            ctx.lineTo(10 * s, 12 * s)
+            ctx.stroke()
         } else if (icon.kind === "menu") {
             for (const y of [4.5, 8, 11.5]) {
                 ctx.beginPath()

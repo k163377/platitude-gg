@@ -2051,6 +2051,44 @@ Item {
             + " over=" + Math.round(detailsPane.contentOverflow)
             + " pane=" + Math.round(detailsPane.width))
     }
+    // Same wait as details-fit, for the same reason: the message has to
+    // be in the box, and the box laid out with it, before there is a
+    // ceiling to pull on.
+    Timer {
+        id: descGrowTimer
+        interval: 800
+        // Pulled past everything, so where it stops is the bound itself
+        // rather than a number this verb chose.
+        readonly property int pull: 1000
+        /// Whether to take the pane's room away again afterwards, by
+        /// raising the command log under it — the one way a headless run
+        /// can make the pane shorter than the box it is already holding.
+        property bool squeeze: false
+        onTriggered: {
+            detailsPane.growDescription(descGrowTimer.pull)
+            if (descGrowTimer.squeeze)
+                page.toggleCommands()
+            descGrowSettle.start()
+        }
+    }
+    // The layout runs after that handler, so what the pull left behind is
+    // read a beat later: asked in the same breath, the list still reports
+    // the height it had before it gave any of it up.
+    //
+    // `grip=` says the corner was offered at all, `author=` that the card
+    // it borrowed room from is still on screen — which the picture cannot
+    // answer, because the overflow draws over the window's own footer.
+    Timer {
+        id: descGrowSettle
+        interval: 200
+        onTriggered: AppBackend.report(
+            "description_grow author=" + detailsPane.authorInside
+            + " grip=" + detailsPane.descGrips
+            + " box=" + Math.round(detailsPane.descHeight)
+            + " wants=" + Math.round(detailsPane.descWants)
+            + " cap=" + Math.round(detailsPane.descCap)
+            + " rows=" + detailsPane.descListRows)
+    }
     // An assignment is not something git knows about, so nothing here is
     // waiting for a refresh to bring it: the rows and the card re-read
     // the store themselves.
@@ -2536,6 +2574,18 @@ Item {
             // next to a run where it opened. The argument is the row.
             page.activateRow(graphModel.oidAt(Number(arg)))
             coAuthorTimer.start()
+        } else if (act === "details-grow" || act === "details-grow-squeeze") {
+            // The grip in the description box's corner, pulled past what
+            // the pane can spare. The argument is the row, because the
+            // corner is only offered where the message is longer than the
+            // resting cap — and the two answers are read as a pair, since
+            // "the grip stayed away" only means something next to a run
+            // where it appeared. `-squeeze` then takes the room back, for
+            // the other half of the same bound: what the hand was given
+            // has to be returned when the pane no longer has it to lend.
+            page.activateRow(graphModel.oidAt(Number(arg)))
+            descGrowTimer.squeeze = act === "details-grow-squeeze"
+            descGrowTimer.start()
         } else if (act === "details-fit") {
             // Whether the pane's own column fits the pane. Nothing here
             // elides on its own: a row that will not give lays the whole

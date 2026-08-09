@@ -387,6 +387,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let must_say = match opts.verb.as_str() {
         "solo" => Some("solo blocked=true"),
         "details-fit" => Some("details_fit fits=true"),
+        // A pull that took more room than the pane had leaves the author
+        // card drawn over the window's own footer, and that frames like a
+        // pane that fits — the same blind spot details-fit answers for.
+        // Only that half is judged here: whether the grip was offered at
+        // all depends on the row, and the run where it stays away is half
+        // of the pair.
+        "details-grow" | "details-grow-squeeze" => Some("description_grow author=true"),
         // A dialog that stayed open because the write did not take looks
         // exactly like one nobody has answered yet, and "which half
         // landed" is not something a picture holds at all.
