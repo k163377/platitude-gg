@@ -9,11 +9,16 @@ import platitude.ui
 // full, and the facts the row's three columns do not carry — who wrote
 // it, when, and whoever they credited.
 //
-// A card rather than a `ToolTip` because a tooltip is a string: it can
-// hold neither a face nor a line that is itself hoverable. It is also
-// the only shape that can be put where the row is — an attached ToolTip
-// appears wherever the style decides, which is what made the old one
+// A card rather than a `ToolTip`: a tooltip is a string laid out in one
+// block, its ground is the Fusion default from outside this theme, and
+// it appears wherever the style decides — which is what made the old one
 // feel detached from the pointer (P3-確認事項 §B).
+//
+// It answers and offers nothing: nothing in it opens anything further.
+// Whoever wants the addresses behind the credited names, or the message
+// as an editable field, has the details pane a click away — a preview
+// that grows its own second popup is a preview asking to be read like a
+// pane (規約 §co-author の表示).
 //
 // Owned by the page, not the delegate: rows are recycled the moment they
 // scroll off, and a popup parented to one goes with it.
@@ -42,18 +47,18 @@ Popup {
     /// The pointer is over the card itself — on the padding band the
     /// background covers, or on the content. Two handlers, because the
     /// background and the content are siblings, not parent and child:
-    /// the moment something in the content takes the hover — the
-    /// co-author stretch does — the background's handler reads false
-    /// (measured on RefListPopup's rows, 2026-08-09).
+    /// the moment anything in the content takes the hover, the
+    /// background's handler reads false (measured on RefListPopup's
+    /// rows, 2026-08-09).
     readonly property bool pointerInside:
         insideHover.hovered || contentHover.hovered
-    /// The co-author stretch, so whoever owns the list that opens off it
-    /// can put that list under the stretch rather than under the card.
-    readonly property alias matesAnchor: mateLine
-    /// ...or over the co-author stretch inside it, which opens its own.
-    signal matesPointed(bool inside)
-    /// Full weight on that stretch's rule while its card is up.
-    property bool matesLit: false
+
+    /// What the credit line was actually given, and whether the names
+    /// ran past it. Read by the headless runs, which cannot see an
+    /// ellipsis and cannot measure a card from a PNG (0 when the commit
+    /// credits nobody).
+    readonly property real creditWidth: mateLine.visible ? mateLine.width : 0
+    readonly property bool creditCut: mateLine.visible && mateLine.clipped
 
     padding: Theme.spaceSm
     margins: Theme.spaceXs
@@ -73,9 +78,7 @@ Popup {
 
     contentItem: ColumnLayout {
         spacing: Theme.spaceXs
-        // The content's half of `pointerInside`. Without it the card
-        // stayed up over its own co-author stretch only because
-        // `matesLit` happened to hold it — one wire, not a shape.
+        // The content's half of `pointerInside` — see the property.
         HoverHandler {
             id: contentHover
         }
@@ -115,9 +118,10 @@ Popup {
             font.pixelSize: Theme.fontMd
             elide: Text.ElideRight
         }
-        // Date, and beside it whoever the message credits — the same
-        // pairing the details pane uses, drawn by the same component
-        // (規約 §co-author の表示).
+        // Date, and beside it whoever the message credits — written out
+        // and comma separated, because this card is the preview and the
+        // details pane is where a commit is read in full (規約
+        // §co-author の表示).
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceSm
@@ -130,12 +134,22 @@ Popup {
             CoAuthorLine {
                 id: mateLine
                 packed: hoverCard.mates
-                lit: hoverCard.matesLit
-                nameWidth: hoverCard.textWidth
+                plain: true
                 Layout.alignment: Qt.AlignVCenter
-                onPointerChanged: inside => hoverCard.matesPointed(inside)
+                // The message sets this card's width; the credit line
+                // takes what is left of it and elides. `preferredWidth`
+                // 0 is what keeps the names out of the card's own size
+                // hint — a crowd would otherwise widen the card past the
+                // message it belongs to — and the minimum is the floor
+                // under that: what the names need, but never more than a
+                // message column's worth, so a one-line subject still
+                // opens wide enough to credit somebody without leaving
+                // empty room when it already was (規約 §co-author の表示).
+                Layout.fillWidth: true
+                Layout.preferredWidth: 0
+                Layout.minimumWidth: Math.min(Metrics.messageMinW,
+                                              mateLine.implicitWidth)
             }
-            Item { Layout.fillWidth: true }
         }
     }
 }

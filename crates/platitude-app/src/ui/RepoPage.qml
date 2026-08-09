@@ -1454,25 +1454,8 @@ Item {
         // never pass half the pane however long a message is.
         textHeight: graphPane.height / 4
         onPointerInsideChanged: page.settleRowCard()
-        onMatesPointed: inside => {
-            page.rowMatesPointed = inside
-            if (inside)
-                page.openRowMates()
-            else
-                page.settleRowMates()
-        }
-        matesLit: page.rowMatesLit
     }
     property bool rowCardWanted: false
-    /// The pointer is on the card's co-author stretch...
-    property bool rowMatesPointed: false
-    /// ...or on the list that stretch opened.
-    readonly property bool rowMatesLit:
-        page.rowMatesPointed || rowMateList.pointerInside
-    CoAuthorCard {
-        id: rowMateList
-        onPointerInsideChanged: page.settleRowMates()
-    }
     /// The chip's list is up, or is about to be. Both open off the same
     /// pointer and land in the same place, so only one of them is ever
     /// out: the chip's, because it is the more particular of the two —
@@ -1498,43 +1481,21 @@ Item {
     function settleRowCard() {
         rowCardSettle.restart()
     }
-    function openRowMates() {
-        if (rowCard.mates === "")
-            return
-        rowMateList.records = rowCard.mates.split(String.fromCharCode(31))
-        // Under the stretch that opened it, the way the ref list opens
-        // under its chip — the card's own left edge is somewhere else.
-        const line = rowCard.matesAnchor
-        const at = line.mapToItem(page, 0, line.height)
-        rowMateList.x = at.x
-        rowMateList.y = at.y
-        // What is left to the right of where it opens — see the details
-        // pane for why this is not simply the pane's width.
-        rowMateList.maxRowWidth = page.width - at.x - 2 * Theme.spaceSm
-        rowMateList.open()
-    }
-    function settleRowMates() {
-        rowCardSettle.restart()
-    }
     /// Down now, not in a beat's time: what makes way for the chip's
     /// list has to be gone before it is drawn, or the two overlap for
     /// as long as the wait.
     function closeRowCard() {
-        rowMateList.close()
         rowCard.close()
     }
     // Closing waits a beat rather than a turn of the event loop. Walking
-    // from a line into the card it opened crosses a boundary where the
+    // from the row into the card it opened crosses a boundary where the
     // two hovers change in different frames, and `Qt.callLater` runs
     // between them — the card closed under the hand (2026-08-09 report).
     Timer {
         id: rowCardSettle
         interval: Metrics.hoverKeepMs
         onTriggered: {
-            if (!page.rowMatesLit)
-                rowMateList.close()
-            if (!rowCard.pointerInside && !page.rowCardWanted
-                && !page.rowMatesLit)
+            if (!rowCard.pointerInside && !page.rowCardWanted)
                 rowCard.close()
         }
     }
@@ -2020,7 +1981,8 @@ Item {
         interval: 400
         onTriggered: AppBackend.report(
             "row_card open=" + rowCard.opened
-            + " mates=" + rowMateList.opened
+            + " credit=" + Math.round(rowCard.creditWidth)
+            + " cut=" + rowCard.creditCut
             + " list=" + refList.opened
             + " subject=" + (rowCard.subject !== "")
             + " body=" + (rowCard.body !== ""))
@@ -2519,20 +2481,12 @@ Item {
             // for it. The argument is the row.
             page.activateRow(graphModel.oidAt(Number(arg)))
             signatureTimer.start()
-        } else if (act === "row-card" || act === "row-card-mates") {
+        } else if (act === "row-card") {
             // Hover cannot be injected, so this enters where the row's
-            // delay timer would; `-mates` goes one step further, onto
-            // the co-author stretch inside the card. The argument is the
-            // row. Read the two as a pair: the second only means
-            // something next to a run where the list stayed shut.
+            // delay timer would. The argument is the row.
             const hovered = graphPane.view.itemAtIndex(Number(arg))
-            if (hovered) {
+            if (hovered)
                 graphPane.view.rowHoverRequested(hovered, true)
-                if (act === "row-card-mates") {
-                    page.rowMatesPointed = true
-                    page.openRowMates()
-                }
-            }
             rowCardTimer.start()
         } else if (act === "author-card" || act === "author-card-open") {
             // The author's name at rest, and the card the pointer opens

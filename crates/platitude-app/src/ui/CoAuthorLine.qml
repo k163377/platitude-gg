@@ -3,9 +3,17 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// "◯ Name +N" — whoever a commit message credits alongside its author,
-// written the same way wherever it appears: the details pane's date row
-// and the graph row's hover both use this one.
+// Whoever a commit message credits alongside its author, in one of two
+// forms — the same records, written for the room they are written in
+// (規約 §co-author の表示):
+//
+//   "◯ Name +N"        the details pane's date row: a face, the first
+//                      name, the rest counted, and a rule saying the
+//                      card with everybody's address opens here.
+//   "Name, Name, Name"  the graph row's hover card: everyone written
+//                      out, comma separated, elided at the width, and
+//                      offering nothing — the pane is where a commit is
+//                      read in full.
 //
 // It draws and reports; the card that names everyone belongs to whoever
 // owns this, because a popup cannot live inside a recycled delegate.
@@ -25,8 +33,17 @@ Item {
     /// the same way. The owner passes its share, the way the card passes
     /// one for the message.
     property real nameWidth: 0
+    /// Write them all out instead, and offer nothing: no face, no rule,
+    /// no card. For a holder wide enough to name everybody, where the
+    /// addresses are a pane away rather than a hover away.
+    property bool plain: false
     /// The pointer entered or left the underlined stretch.
     signal pointerChanged(bool inside)
+    /// The names did not fit what the holder gave them. Nothing is drawn
+    /// differently for it — the ellipsis already says so — but a headless
+    /// run cannot see an ellipsis, and the width rule is the whole of the
+    /// plain form.
+    readonly property bool clipped: names.truncated
 
     readonly property var records:
         line.packed === "" ? [] : line.packed.split(String.fromCharCode(31))
@@ -40,6 +57,12 @@ Item {
         return record === undefined
                ? 0 : parseInt(record.split(String.fromCharCode(30))[2])
     }
+    function allNames() {
+        let out = ""
+        for (let i = 0; i < line.records.length; i++)
+            out += (i === 0 ? "" : ", ") + line.nameAt(i)
+        return out
+    }
 
     visible: line.records.length > 0
     implicitWidth: row.implicitWidth
@@ -50,22 +73,28 @@ Item {
         anchors.fill: parent
         spacing: Theme.spaceXs
         IdentIcon {
+            visible: !line.plain
             code: line.faceAt(0)
             width: Theme.iconMd
             height: Theme.iconMd
             Layout.alignment: Qt.AlignVCenter
         }
         Label {
-            text: line.nameAt(0)
+            id: names
+            text: line.plain ? line.allNames() : line.nameAt(0)
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSm
             Layout.alignment: Qt.AlignVCenter
-            Layout.maximumWidth: line.nameWidth > 0
-                                 ? line.nameWidth : Number.POSITIVE_INFINITY
+            // Written out, the names take the room the holder gives them
+            // and stop there; as a chip, the name gives way at the share
+            // its holder passed.
+            Layout.fillWidth: line.plain
+            Layout.maximumWidth: line.plain || line.nameWidth <= 0
+                                 ? Number.POSITIVE_INFINITY : line.nameWidth
             elide: Text.ElideRight
         }
         Label {
-            visible: line.records.length > 1
+            visible: !line.plain && line.records.length > 1
             text: "+" + (line.records.length - 1)
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSm
@@ -76,6 +105,7 @@ Item {
     // §暗く落とした段 names borderStrong as textSecondary's step), and up
     // to the name's own value under the pointer.
     Rectangle {
+        visible: !line.plain
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -84,6 +114,7 @@ Item {
     }
     HoverHandler {
         id: lineHover
+        enabled: !line.plain
         onHoveredChanged: line.pointerChanged(lineHover.hovered)
     }
 }
