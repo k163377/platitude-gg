@@ -327,6 +327,36 @@ ColumnLayout {
     /// the block scrolls rather than running out of the pane's bottom.
     readonly property real blockRoom:
         Math.max(0, wipPane.height - headerBand.height - 2 * Theme.rowHeight)
+    /// Moves the block by a wheel a box on it could not use. The boxes
+    /// cover most of the block, so without this the surface they stand on
+    /// has no way to be reached by wheel at all (2026-08-09 ユーザー報告:
+    /// the description box's own scrolling swallowed it and the block
+    /// would not go down).
+    function rollBlock(pixels) {
+        const max = Math.max(0, blockScroll.contentHeight - blockScroll.height)
+        // Taken away, not added: `pixels` is how far the wheel wanted the
+        // content to travel, and content travels against `contentY` — the
+        // same subtraction the box makes on its own text. Added, the block
+        // went the other way, which is a wheel that scrolls up and drags
+        // the surface down under it (2026-08-09 ユーザー報告).
+        blockScroll.contentY =
+            Math.max(0, Math.min(max, blockScroll.contentY - pixels))
+    }
+    /// The same two steps for the summary, which carries its own scroll
+    /// once a pasted paragraph passes the shared cap: its own text while
+    /// there is text to move, the block once there is not. Written out
+    /// here rather than in the box, because this box is three lines of
+    /// `ScrollView` in a pane rather than a component of its own.
+    function rollSummary(flick, dy) {
+        const pixels = dy / 120 * (Metrics.wheelRows * Theme.fontMdLine)
+        const max = Math.max(0, flick.contentHeight - flick.height)
+        const next = Math.max(0, Math.min(max, flick.contentY - pixels))
+        if (Math.abs(next - flick.contentY) > 0.5) {
+            flick.contentY = next
+            return
+        }
+        wipPane.rollBlock(pixels)
+    }
     // -- smoke hooks, forwarded to the box --
     function growDescription(dy) { wipBody.grow(dy) }
     readonly property bool descGrips: wipBody.grips
@@ -612,13 +642,25 @@ ColumnLayout {
                     border.color: Theme.borderDefault
                     border.width: Theme.borderWidth
                     ScrollView {
+                        id: wipSubjectView
                         anchors.fill: parent
                         anchors.margins: Theme.spaceXs
-                        Component.onCompleted:
+                        // Not interactive, for the reason the description
+                        // box carries: the flickable answering the same
+                        // wheel as the handler moved the text twice.
+                        Component.onCompleted: {
                             contentItem.boundsBehavior = Flickable.StopAtBounds
+                            contentItem.interactive = false
+                        }
                         SummaryArea {
                             id: wipSubject
                             placeholderText: qsTr("Commit summary")
+                            WheelHandler {
+                                acceptedDevices: PointerDevice.Mouse
+                                                 | PointerDevice.TouchPad
+                                onWheel: event => wipPane.rollSummary(
+                                    wipSubjectView.contentItem, event.angleDelta.y)
+                            }
                         }
                     }
                 }
@@ -630,6 +672,7 @@ ColumnLayout {
                     placeholderText: qsTr("Description")
                     room: wipPane.descRoom
                     owed: wipPane.descOwed
+                    onWheelPastEnd: pixels => wipPane.rollBlock(pixels)
                 }
                 // Amend replaces the newest commit instead of adding one, so it
                 // starts from that commit's message rather than an empty editor.

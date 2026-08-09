@@ -320,6 +320,28 @@ ColumnLayout {
         Math.max(0, detailsPane.height - paneHeader.height
                     - (changesBand.visible ? changesBand.height : 0)
                     - 2 * Theme.rowHeight)
+    /// Moves the block by a wheel a box on it could not use — the same
+    /// pair the working-tree pane has, and for the same reason: the boxes
+    /// cover most of the block, so a box that keeps the wheel at its own
+    /// end leaves the block unreachable by wheel (2026-08-09 ユーザー報告).
+    function rollBlock(pixels) {
+        const max = Math.max(0, blockScroll.contentHeight - blockScroll.height)
+        // Taken away, not added — see WipPane: content travels against
+        // `contentY`, and adding sent the block the other way from the
+        // wheel that reached it.
+        blockScroll.contentY =
+            Math.max(0, Math.min(max, blockScroll.contentY - pixels))
+    }
+    function rollSummary(flick, dy) {
+        const pixels = dy / 120 * (Metrics.wheelRows * Theme.fontMdLine)
+        const max = Math.max(0, flick.contentHeight - flick.height)
+        const next = Math.max(0, Math.min(max, flick.contentY - pixels))
+        if (Math.abs(next - flick.contentY) > 0.5) {
+            flick.contentY = next
+            return
+        }
+        detailsPane.rollBlock(pixels)
+    }
     // -- smoke hooks, forwarded to the box --
     function growDescription(dy) { bodyArea.grow(dy) }
     readonly property bool descGrips: bodyArea.grips
@@ -474,12 +496,18 @@ ColumnLayout {
                     border.color: detailsPane.asking ? Theme.warning : Theme.borderDefault
                     border.width: Theme.borderWidth
                     ScrollView {
+                        id: subjectView
                         anchors.fill: parent
                         anchors.margins: Theme.spaceXs
                         // ScrollView keeps its Flickable private -- reach it
-                        // once it exists.
-                        Component.onCompleted:
+                        // once it exists. Not interactive, for the reason
+                        // the description box carries: the flickable
+                        // answering the same wheel as the handler moved the
+                        // text twice.
+                        Component.onCompleted: {
                             contentItem.boundsBehavior = Flickable.StopAtBounds
+                            contentItem.interactive = false
+                        }
                         SummaryArea {
                             id: subjectArea
                             readOnly: !detailsPane.editable
@@ -487,6 +515,12 @@ ColumnLayout {
                             ToolTip.visible: hovered && detailsPane.editBlocked !== ""
                             ToolTip.delay: Metrics.tipDelayMs
                             ToolTip.text: detailsPane.editBlocked
+                            WheelHandler {
+                                acceptedDevices: PointerDevice.Mouse
+                                                 | PointerDevice.TouchPad
+                                onWheel: event => detailsPane.rollSummary(
+                                    subjectView.contentItem, event.angleDelta.y)
+                            }
                         }
                     }
                 }
@@ -500,6 +534,7 @@ ColumnLayout {
                     border.color: detailsPane.asking ? Theme.warning : Theme.borderSubtle
                     room: detailsPane.descRoom
                     owed: detailsPane.descOwed
+                    onWheelPastEnd: pixels => detailsPane.rollBlock(pixels)
                 }
                 // Only once something is actually changed: until then the pane
                 // keeps its resting shape and nothing invites a rewrite.

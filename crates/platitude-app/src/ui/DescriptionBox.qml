@@ -65,6 +65,30 @@ Rectangle {
     function grow(dy) {
         box.setBoxHeight(box.boxHeight + dy)
     }
+    /// A wheel this box had nothing left to do with, in pixels. Whoever
+    /// put the box on a surface that scrolls moves that surface by it.
+    ///
+    /// Without this the box is a hole in the pane behind it: a wheel over
+    /// it is answered by text that will not move, and the box covers most
+    /// of what it stands on, so the surface underneath cannot be reached
+    /// by wheel at all (2026-08-09 ユーザー報告).
+    signal wheelPastEnd(real pixels)
+    /// The wheel is taken here rather than left to the flickable under
+    /// the text, because a flickable at its end keeps the event and says
+    /// nothing. One notch is the same `wheelRows` every list in this
+    /// application moves by, counted in lines instead of rows.
+    readonly property real wheelStep: Metrics.wheelRows * Theme.fontMdLine
+    function rollBy(dy) {
+        const flick = view.contentItem
+        const pixels = dy / 120 * box.wheelStep
+        const max = Math.max(0, flick.contentHeight - flick.height)
+        const next = Math.max(0, Math.min(max, flick.contentY - pixels))
+        if (Math.abs(next - flick.contentY) > 0.5) {
+            flick.contentY = next
+            return
+        }
+        box.wheelPastEnd(pixels)
+    }
     /// Smoke hook: the caret in the box, the way a click puts it there.
     /// Not `focus()` -- Item already has a `focus` property, and the name
     /// resolves to that one, so the call is a TypeError at the point it
@@ -107,8 +131,18 @@ Rectangle {
         anchors.margins: Theme.spaceXs
         // ScrollView keeps its Flickable private -- reach it once it
         // exists.
-        Component.onCompleted:
+        //
+        // `interactive` goes with the hard stop: the flickable answers the
+        // wheel itself as well as letting the handler above see it, so the
+        // two moved the text twice — the handler's jump, and then the
+        // flickable's own animation settling somewhere else, which reads
+        // as the text going up and being dragged back (2026-08-09 ユーザー
+        // 報告). Off, `rollBy` is the only thing that moves this text, and
+        // dragging inside a text box means selecting it anyway.
+        Component.onCompleted: {
             contentItem.boundsBehavior = Flickable.StopAtBounds
+            contentItem.interactive = false
+        }
         TextArea {
             id: area
             wrapMode: TextArea.Wrap
@@ -124,6 +158,13 @@ Rectangle {
                    ? Theme.textPrimary : Theme.textSecondary
             background: null
             padding: 0
+            // On the text rather than on the flickable: a handler here is
+            // offered the wheel before the flickable under it decides to
+            // keep it, which is the whole point (`rollBy`).
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: event => box.rollBy(event.angleDelta.y)
+            }
         }
     }
     // Declared after the ScrollView, so the corner belongs to the grip
