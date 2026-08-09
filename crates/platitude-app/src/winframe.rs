@@ -55,6 +55,41 @@ pub fn set_border_color(border: u32, frame: u32) {
     let _ = (border, frame);
 }
 
+/// Takes those two colours back off, so the platform draws neither.
+///
+/// What a maximised window wants. The border they paint is the invisible
+/// resize border, and Windows puts that *outside* the screen when it
+/// maximises a window — measured on the live window: the frame comes to
+/// -8..1928 across a 0..1920 monitor, and the 8 columns at each end carry
+/// `bgElevated` onto whatever is next to that monitor. On a machine with
+/// one screen nobody sees it; with a second one it is a bar of the app's
+/// own colour standing beside the app (reported 2026-08-09, and the same
+/// measurement watched it become the neighbour's desktop again the moment
+/// these two were set to `DWMWA_COLOR_NONE`). Nothing is lost while
+/// maximised: the window's edges are the screen's, and an edge drawn out
+/// there was never on this screen to begin with.
+pub fn clear_border_color() {
+    #[cfg(windows)]
+    win32::clear_border_color();
+}
+
+/// What the window's edge was last asked to be: `"none"` when neither is
+/// to be drawn, otherwise the border's own `#rrggbb`.
+///
+/// For the headless run to read, which is the only reader — DWM's answer
+/// is not in the scene, so what can be checked is what it was told.
+#[cfg(windows)]
+pub fn window_edge() -> String {
+    win32::window_edge()
+}
+
+/// Nothing of ours is painted into any frame here, which is what `"none"`
+/// says.
+#[cfg(not(windows))]
+pub fn window_edge() -> String {
+    "none".into()
+}
+
 // Taking the frame over — answering `WM_NCCALCSIZE` with "the client is
 // the whole window" — does remove the one strip of system-coloured frame
 // that no attribute reaches, and the resize edges can be answered from a
@@ -324,8 +359,11 @@ mod win32 {
     thread_local! {
         /// The two colours the frame walk is handing out, since the
         /// callback takes no argument of its own: the border's, and the
-        /// strip of frame between it and the client area.
-        static FRAME_COLORS: Cell<(u32, u32)> = const { Cell::new((0, 0)) };
+        /// strip of frame between it and the client area. Both start at
+        /// "draw nothing", which is what is true before anyone has asked
+        /// — and what a window that never asks (plain chrome) keeps.
+        static FRAME_COLORS: Cell<(u32, u32)> =
+            const { Cell::new((COLOR_NONE, COLOR_NONE)) };
     }
 
     /// `0x00BBGGRR` from `0xRRGGBB`.
@@ -333,8 +371,33 @@ mod win32 {
         ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF)
     }
 
+    /// `DWMWA_COLOR_NONE` (dwmapi.h): the attribute is in force and says
+    /// to draw nothing at all, which no `COLORREF` can say.
+    const COLOR_NONE: u32 = 0xFFFF_FFFE;
+
     pub(super) fn set_border_color(border: u32, frame: u32) {
         FRAME_COLORS.set((colorref(border), colorref(frame)));
+        paint();
+    }
+
+    pub(super) fn clear_border_color() {
+        FRAME_COLORS.set((COLOR_NONE, COLOR_NONE));
+        paint();
+    }
+
+    /// What `paint` last handed out, in the form the report wants.
+    pub(super) fn window_edge() -> String {
+        let (border, _) = FRAME_COLORS.get();
+        if border == COLOR_NONE {
+            return "none".into();
+        }
+        // Back out of `0x00BBGGRR` into the way a colour is written
+        // everywhere else, so the report says what the tokens say.
+        let (b, g, r) = (border >> 16 & 0xFF, border >> 8 & 0xFF, border & 0xFF);
+        format!("#{r:02x}{g:02x}{b:02x}")
+    }
+
+    fn paint() {
         // SAFETY: as in `square_corners` — the same walk, and the callback
         // only writes an attribute on the window it is handed.
         unsafe {

@@ -109,16 +109,39 @@ ApplicationWindow {
         if (!root.captionMerged)
             return
         AppBackend.keepWindowGestures()
-        // The hairline Windows draws around the window, and the strip of
-        // frame just inside it. Left to the system both are light, and
-        // with no title bar to explain them they read as stray white
-        // edges around the band. The strip takes the band's own colour so
-        // it disappears into it; the hairline stays a line.
-        AppBackend.setWindowBorder(Theme.borderDefault, Theme.bgElevated)
+        root.paintWindowEdge()
         // The hit test just installed reads the strip from here on; hand
         // it the shape the band settled into while loading.
         root.reportCaptionStrip()
     }
+
+    /// The window's own edge — but only while the window has one.
+    ///
+    /// The hairline Windows draws around the window, and the strip of
+    /// frame just inside it. Left to the system both are light, and with
+    /// no title bar to explain them they read as stray white edges around
+    /// the band. The strip takes the band's own colour so it disappears
+    /// into it; the hairline stays a line.
+    ///
+    /// What those two paint is the invisible resize border, and a
+    /// maximised window's is *outside* the screen: measured on the live
+    /// window, the frame comes to -8..1928 across a 0..1920 monitor, and
+    /// those 8 columns at each end put `bgElevated` on whatever monitor
+    /// is next to that one — a bar of the app's own colour standing
+    /// beside the app, in the app's own colour, reported 2026-08-09.
+    /// Asking for no colour at all takes it back (the same measurement
+    /// watched the neighbour's desktop return), and costs nothing: a
+    /// maximised window's edges are the screen's, so the edge this paints
+    /// is one nobody was going to see anyway.
+    function paintWindowEdge() {
+        if (!root.captionMerged)
+            return
+        if (root.visibility === Window.Maximized)
+            AppBackend.clearWindowBorder()
+        else
+            AppBackend.setWindowBorder(Theme.borderDefault, Theme.bgElevated)
+    }
+    onVisibilityChanged: root.paintWindowEdge()
 
     font.family: Theme.uiFamily
     font.pixelSize: Theme.fontMd
@@ -658,6 +681,11 @@ ApplicationWindow {
                 "window_fill fills=" + (at.x === 0 && at.y === 0
                                         && mainUi.width === root.width
                                         && mainUi.height === root.height)
+                // What the platform layer holds, not what this side asked
+                // for a moment ago. DWM's own answer is in no screenshot
+                // and no scene, so being told is as close as a run gets —
+                // and being told nothing is the whole of the rule here.
+                + " edge=" + AppBackend.windowEdge()
                 + " maximized=" + (root.visibility === Window.Maximized)
                 + " at=" + at.x + "," + at.y
                 + " size=" + mainUi.width + "x" + mainUi.height
