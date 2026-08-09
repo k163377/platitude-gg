@@ -183,13 +183,17 @@ ColumnLayout {
         // so has to hold for all four cases at once. **Not "change"** —
         // only one of them is a change. A new file has nothing to have
         // changed from, a mixed one is a file disagreeing with itself, and
-        // a file that never had an ending has only gained its first. What
-        // they share is that the endings are worth reading before this
-        // goes into history; which of the four it is, each row says.
+        // a file that never had an ending has only gained its first.
+        //
+        // **`may`, and it is doing work.** Two of the four are read off a
+        // sample of the neighbouring files, so the app does not know they
+        // are problems — a new file deliberately written with the other
+        // ending is not one. Said flatly, the summary would decide what
+        // each row's own card is careful not to.
         eolCard.path = ""
         eolCard.notice = wipPane.workTree.eolStagedCount === 1
-            ? qsTr("1 staged file has line endings worth a look")
-            : qsTr("%1 staged files have line endings worth a look")
+            ? qsTr("1 staged file may have line-ending problems")
+            : qsTr("%1 staged files may have line-ending problems")
               .arg(wipPane.workTree.eolStagedCount)
         const at = commitButton.mapToItem(wipPane, 0, commitButton.height)
         eolCard.x = at.x
