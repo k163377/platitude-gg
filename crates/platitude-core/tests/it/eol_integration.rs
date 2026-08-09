@@ -11,7 +11,7 @@
 
 use crate::support::TestRepo;
 use platitude_core::details::{self, DiffTarget};
-use platitude_core::eol::{self, Eol, Reading};
+use platitude_core::eol::{self, Baseline, Eol, Reading, Ruling, Scope};
 use platitude_core::{GitExecutor, Oid};
 use tokio_util::sync::CancellationToken;
 
@@ -22,6 +22,22 @@ async fn reading(repo: &TestRepo, target: DiffTarget) -> Reading {
         .await
         .expect("run diff");
     eol::read_one(&raw)
+}
+
+async fn baseline(repo: &TestRepo, path: &str) -> Option<Baseline> {
+    let executor = GitExecutor::new();
+    let cancel = CancellationToken::new();
+    eol::baseline(&executor, &repo.path, path, &cancel)
+        .await
+        .expect("resolve baseline")
+}
+
+async fn ruling(repo: &TestRepo, path: &str) -> Ruling {
+    let executor = GitExecutor::new();
+    let cancel = CancellationToken::new();
+    eol::ruling(&executor, &repo.path, path, &cancel)
+        .await
+        .expect("resolve ruling")
 }
 
 #[tokio::test]
@@ -279,4 +295,122 @@ async fn a_whole_tree_diff_names_every_file_it_has_something_about() {
             file: Eol::Lf
         }
     );
+}
+
+// --------------------------------------------------------------- baselines
+
+#[tokio::test]
+async fn neighbours_in_the_same_directory_answer_for_a_new_file() {
+    let mut repo = TestRepo::init();
+    for name in ["a.kt", "b.kt", "c.kt"] {
+        repo.commit_file(&format!("src/{name}"), "fun x() {}\n", "code");
+    }
+    // Elsewhere in the repository the house style is the other one, so a
+    // baseline that reached past the directory would answer differently.
+    repo.commit_file("docs/note.md", "text\r\n", "docs");
+
+    assert_eq!(
+        baseline(&repo, "src/new.kt").await,
+        Some(Baseline {
+            eol: Eol::Lf,
+            scope: Scope::Here("kt".to_string())
+        })
+    );
+}
+
+#[tokio::test]
+async fn the_same_extension_elsewhere_widens_what_the_notice_may_claim() {
+    let mut repo = TestRepo::init();
+    for dir in ["one", "two", "three"] {
+        repo.commit_file(&format!("{dir}/f.kt"), "fun x() {}\r\n", "code");
+    }
+    // Nothing sits beside the new file, so the sample had to leave the
+    // directory and the notice may not say "here".
+    assert_eq!(
+        baseline(&repo, "fresh/new.kt").await,
+        Some(Baseline {
+            eol: Eol::Crlf,
+            scope: Scope::Ext("kt".to_string())
+        })
+    );
+}
+
+#[tokio::test]
+async fn a_file_with_no_extension_is_measured_against_the_repository() {
+    let mut repo = TestRepo::init();
+    for name in ["a.kt", "b.md", "c.txt"] {
+        repo.commit_file(name, "line\n", "content");
+    }
+    assert_eq!(
+        baseline(&repo, "Makefile").await,
+        Some(Baseline {
+            eol: Eol::Lf,
+            scope: Scope::Repo
+        })
+    );
+}
+
+#[tokio::test]
+async fn a_neighbour_that_cannot_vote_is_replaced_rather_than_counted() {
+    // Mixed has no single answer to give and a file with no ending at all
+    // has nothing to say; both have to drop out and be made up for.
+    let mut repo = TestRepo::init();
+    repo.commit_file("src/mixed.kt", "one\r\ntwo\nthree\r\n", "mixed");
+    repo.commit_file("src/bare.kt", "no ending", "bare");
+    for name in ["a.kt", "b.kt", "c.kt"] {
+        repo.commit_file(&format!("src/{name}"), "fun x() {}\n", "code");
+    }
+    assert_eq!(
+        baseline(&repo, "src/new.kt").await,
+        Some(Baseline {
+            eol: Eol::Lf,
+            scope: Scope::Here("kt".to_string())
+        })
+    );
+}
+
+#[tokio::test]
+async fn too_few_files_to_read_means_no_answer_at_all() {
+    // Two neighbours are not a house style, and answering from them would
+    // be the app inventing one.
+    let mut repo = TestRepo::init();
+    repo.commit_file("only.kt", "fun x() {}\n", "code");
+    repo.commit_file("second.kt", "fun y() {}\n", "code");
+    assert_eq!(baseline(&repo, "third.kt").await, None);
+}
+
+#[tokio::test]
+async fn git_deciding_the_endings_itself_skips_the_sample() {
+    let mut repo = TestRepo::init_autocrlf();
+    for name in ["a.kt", "b.kt", "c.kt", "d.kt"] {
+        repo.commit_file(&format!("src/{name}"), "fun x() {}\n", "code");
+    }
+    // `autocrlf=true` normalises every new file on the way in, so there is
+    // nothing for a new file to disagree with.
+    assert_eq!(ruling(&repo, "src/new.kt").await, Ruling::Normalised);
+    assert_eq!(baseline(&repo, "src/new.kt").await, None);
+}
+
+#[tokio::test]
+async fn attributes_that_settle_the_ending_skip_the_sample_too() {
+    let mut repo = TestRepo::init();
+    repo.commit_file(".gitattributes", "*.kt text eol=lf\n", "attributes");
+    for name in ["a.kt", "b.kt", "c.kt", "d.kt"] {
+        repo.commit_file(&format!("src/{name}"), "fun x() {}\n", "code");
+    }
+    assert_eq!(ruling(&repo, "src/new.kt").await, Ruling::Normalised);
+    assert_eq!(baseline(&repo, "src/new.kt").await, None);
+    // A path the attributes say nothing about is still open.
+    assert_eq!(ruling(&repo, "src/new.md").await, Ruling::Open);
+}
+
+#[tokio::test]
+async fn a_path_marked_as_not_text_is_left_alone() {
+    // The only exclusion the app honours, and it is git's word for it —
+    // generated output and test data are `.gitattributes`' business.
+    let mut repo = TestRepo::init();
+    repo.commit_file(".gitattributes", "*.bin -text\n", "attributes");
+    repo.commit_file("blob.bin", "content\n", "data");
+    assert_eq!(ruling(&repo, "blob.bin").await, Ruling::NotText);
+    assert_eq!(baseline(&repo, "blob.bin").await, None);
 }

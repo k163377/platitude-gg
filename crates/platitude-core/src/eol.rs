@@ -46,6 +46,13 @@
 //!   and there is nothing to warn about. The exception is an index blob that
 //!   already holds CRs, where git converts nothing and the CRs are real data.
 
+use std::path::Path;
+
+use tokio_util::sync::CancellationToken;
+
+use crate::error::GitError;
+use crate::process::{GitCommand, GitExecutor, literal_pathspec};
+
 /// A line terminator this module can name.
 ///
 /// Old-Mac CR-only files are not a case: a file with no `\n` in it reads as
@@ -93,6 +100,40 @@ impl Reading {
     pub fn is_exact(self) -> bool {
         matches!(self, Reading::Flipped { .. } | Reading::Mixed { .. })
     }
+}
+
+/// Where the files a baseline was drawn from sat, so the notice can name
+/// the range it is actually speaking for instead of implying a wider one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Scope {
+    /// Every sample shares this extension and sits in the same directory.
+    Here(String),
+    /// Every sample shares this extension.
+    Ext(String),
+    /// The samples have nothing in common but the repository.
+    Repo,
+}
+
+/// What the files around a path look like. An estimate, and only ever
+/// consulted for the two cases that have nothing exact to go on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Baseline {
+    pub eol: Eol,
+    pub scope: Scope,
+}
+
+/// What git's own settings decide about a path before anything is sampled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ruling {
+    /// `.gitattributes` says the path is not text. The only exclusion there
+    /// is: build output, test data and the rest are `.gitattributes`'
+    /// business, not a list this app keeps.
+    NotText,
+    /// git decides the stored endings itself, so a new file cannot disagree
+    /// with its neighbours and there is nothing to compare.
+    Normalised,
+    /// Nothing decides it. The files around this one are the only answer.
+    Open,
 }
 
 /// One file of a patch and what its lines said.
@@ -179,6 +220,358 @@ pub fn read_one(raw: &[u8]) -> Reading {
     match read(raw).as_slice() {
         [only] => only.reading,
         _ => Reading::Quiet,
+    }
+}
+
+/// How many usable samples a baseline needs.
+const SAMPLES: usize = 3;
+/// How many files may be read looking for them. Neighbours that turn out to
+/// be unusable are replaced, but not forever.
+const READS: usize = 9;
+/// A file this size is not opened for a vote. `ls-files --eol` reads the
+/// whole worktree file to fill its `w/` column — 213ms for one 120MB file,
+/// measured — and one neighbour's opinion is not worth that.
+const SAMPLE_MAX_BYTES: u64 = 1 << 20;
+
+/// What git's settings say about one path.
+///
+/// Two spawns, both cheap, and the answer is what lets the sampling below
+/// be skipped entirely: with `core.autocrlf` converting or `text` set in
+/// `.gitattributes`, git normalises what it stores, so a new file's endings
+/// cannot disagree with anything and no neighbour needs reading.
+pub async fn ruling(
+    executor: &GitExecutor,
+    workdir: &Path,
+    path: &str,
+    cancel: &CancellationToken,
+) -> Result<Ruling, GitError> {
+    let attrs = attributes(executor, workdir, path, cancel).await?;
+    if attrs.not_text {
+        return Ok(Ruling::NotText);
+    }
+    if attrs.decided || normalises(executor, workdir, cancel).await? {
+        return Ok(Ruling::Normalised);
+    }
+    Ok(Ruling::Open)
+}
+
+/// What the files around `path` look like, or `None` when the answer is
+/// "unknown" and the right thing to do is say nothing.
+///
+/// Unknown covers more ground than it sounds like: git already deciding the
+/// endings, too few neighbours worth reading, and a sample that does not
+/// agree with itself all come back the same way, because they all mean the
+/// app has no business naming a house style.
+pub async fn baseline(
+    executor: &GitExecutor,
+    workdir: &Path,
+    path: &str,
+    cancel: &CancellationToken,
+) -> Result<Option<Baseline>, GitError> {
+    match ruling(executor, workdir, path, cancel).await? {
+        Ruling::NotText | Ruling::Normalised => Ok(None),
+        Ruling::Open => sample(executor, workdir, path, cancel).await,
+    }
+}
+
+struct Attributes {
+    /// `-text`: git is told this path is not text.
+    not_text: bool,
+    /// `text` or `eol` is spelled out, so what gets stored is settled.
+    decided: bool,
+}
+
+async fn attributes(
+    executor: &GitExecutor,
+    workdir: &Path,
+    path: &str,
+    cancel: &CancellationToken,
+) -> Result<Attributes, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["check-attr", "-z", "text", "eol", "--"])
+        .arg(path);
+    let out = executor.run(cmd, cancel).await?;
+    // `-z` prints one `path\0attr\0value\0` triple per attribute asked for.
+    let fields: Vec<&[u8]> = out.stdout.split(|b| *b == 0).collect();
+    let mut attrs = Attributes {
+        not_text: false,
+        decided: false,
+    };
+    for triple in fields.chunks(3) {
+        let [_, attr, value] = triple else { continue };
+        match (
+            String::from_utf8_lossy(attr).as_ref(),
+            String::from_utf8_lossy(value).as_ref(),
+        ) {
+            ("text", "unset") => attrs.not_text = true,
+            ("text", "set") => attrs.decided = true,
+            ("eol", "lf" | "crlf") => attrs.decided = true,
+            _ => {}
+        }
+    }
+    Ok(attrs)
+}
+
+/// Whether `core.autocrlf` converts on the way into the index.
+///
+/// **`--get-regexp` answers from every config level at once, lowest first,
+/// and the last one is the effective value.** Reading the first match makes
+/// every repository on Windows look like it normalises: the Git for Windows
+/// installer writes `core.autocrlf=true` into the system config, and a
+/// repository that sets `false` for itself shows up as the second record
+/// (measured on this machine — system `true`, repo `false`, in that order).
+///
+/// `core.eol` is read in the same breath and deliberately not consulted:
+/// it only takes effect where a path is already text by attribute or by
+/// `autocrlf`, both of which have answered by then, so on its own it never
+/// decides anything.
+async fn normalises(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        // Neither key being set answers with code 1, which is an answer.
+        .answers_by_code()
+        .args(["config", "-z", "--get-regexp", r"^core\.(autocrlf|eol)$"]);
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    if out.code == 1 {
+        return Ok(false);
+    }
+    if out.code != 0 {
+        return Err(GitError::Failed {
+            command: "git config --get-regexp core.autocrlf".to_string(),
+            code: out.code,
+            stderr: out.failure_message(),
+        });
+    }
+    let mut effective = false;
+    for record in out.stdout.split(|b| *b == 0).filter(|r| !r.is_empty()) {
+        let text = String::from_utf8_lossy(record);
+        let Some((key, value)) = text.split_once('\n') else {
+            continue;
+        };
+        if key.trim() == "core.autocrlf" {
+            // `input` converts on the way in and not on the way out, which
+            // is still git deciding what gets stored.
+            effective = matches!(value.trim(), "true" | "input");
+        }
+    }
+    Ok(effective)
+}
+
+/// Three neighbours' worth of opinion, or `None`.
+async fn sample(
+    executor: &GitExecutor,
+    workdir: &Path,
+    path: &str,
+    cancel: &CancellationToken,
+) -> Result<Option<Baseline>, GitError> {
+    let (dir, ext) = split_dir_ext(path);
+    let mut picked: Vec<(String, Group)> = Vec::new();
+    let held = |picked: &[(String, Group)], p: &String| picked.iter().any(|(q, _)| q == p);
+
+    // Same extension in the same directory first: a repository with a house
+    // style usually has it per directory, and this listing is the cheapest.
+    if !ext.is_empty() {
+        let here = list(executor, workdir, Some(dir), cancel).await?;
+        let neighbours: Vec<String> = here
+            .into_iter()
+            .filter(|p| p != path && parent_of(p) == dir && extension_of(p) == ext)
+            .collect();
+        take_spread(&neighbours, READS, Group::Here, &mut picked);
+    }
+
+    // Then the same extension anywhere, then anything at all. A file with no
+    // extension has no first two groups and goes straight to the last.
+    if picked.len() < READS {
+        let all = list(executor, workdir, None, cancel).await?;
+        if !ext.is_empty() {
+            let by_ext: Vec<String> = all
+                .iter()
+                .filter(|p| *p != path && !held(&picked, p) && extension_of(p) == ext)
+                .cloned()
+                .collect();
+            take_spread(&by_ext, READS - picked.len(), Group::Ext, &mut picked);
+        }
+        if picked.len() < READS {
+            let rest: Vec<String> = all
+                .into_iter()
+                .filter(|p| p != path && !held(&picked, p))
+                .collect();
+            take_spread(&rest, READS - picked.len(), Group::Any, &mut picked);
+        }
+    }
+
+    // Reading a file is the expensive part, so the ones that cannot be read
+    // usefully are dropped before git is asked, not after. The group travels
+    // with the path so dropping one cannot shift what the rest claim.
+    picked.retain(|(p, _)| readable(workdir, p));
+    if picked.len() < SAMPLES {
+        return Ok(None);
+    }
+
+    let paths: Vec<String> = picked.iter().map(|(p, _)| p.clone()).collect();
+    let mut votes = Tally::default();
+    let mut counted = 0usize;
+    // The notice may only claim the range every voter actually came from.
+    let mut widest = Group::Here;
+    for (index, eol) in worktree_endings(executor, workdir, &paths, cancel).await? {
+        if counted == SAMPLES {
+            break;
+        }
+        votes.add(eol);
+        counted += 1;
+        if let Some((_, group)) = picked.get(index) {
+            widest = widest.max(*group);
+        }
+    }
+    if counted < SAMPLES {
+        return Ok(None);
+    }
+    let Some(eol) = votes.majority() else {
+        return Ok(None);
+    };
+    let scope = match widest {
+        Group::Here => Scope::Here(ext.to_string()),
+        Group::Ext => Scope::Ext(ext.to_string()),
+        Group::Any => Scope::Repo,
+    };
+    Ok(Some(Baseline { eol, scope }))
+}
+
+/// How far from the file a sample had to be drawn. Ordered widest-last: the
+/// scope a notice may claim is the widest any of its voters came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Group {
+    Here,
+    Ext,
+    Any,
+}
+
+/// Index paths, optionally under one directory. The index only — asking for
+/// endings here would read every worktree file in the repository (24.7s on
+/// the 106k-file reference repository, measured, against 42ms for a handful
+/// of settled paths).
+async fn list(
+    executor: &GitExecutor,
+    workdir: &Path,
+    dir: Option<&str>,
+    cancel: &CancellationToken,
+) -> Result<Vec<String>, GitError> {
+    let mut cmd = GitCommand::new().cwd(workdir).args(["ls-files", "-z"]);
+    // A literal directory pathspec matches its whole subtree, which is
+    // narrower than the index and needs no glob escaping.
+    if let Some(dir) = dir.filter(|d| !d.is_empty()) {
+        cmd = cmd.arg("--").arg(literal_pathspec(dir));
+    }
+    let out = executor.run(cmd, cancel).await?;
+    Ok(out
+        .stdout
+        .split(|b| *b == 0)
+        .filter(|p| !p.is_empty())
+        .map(|p| String::from_utf8_lossy(p).into_owned())
+        .collect())
+}
+
+/// The worktree ending of each path git can name one for, with the index it
+/// came in at. Unusable samples are simply absent.
+async fn worktree_endings(
+    executor: &GitExecutor,
+    workdir: &Path,
+    paths: &[String],
+    cancel: &CancellationToken,
+) -> Result<Vec<(usize, Eol)>, GitError> {
+    let mut cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["ls-files", "--eol", "-z", "--"]);
+    for p in paths {
+        cmd = cmd.arg(literal_pathspec(p));
+    }
+    let out = executor.run(cmd, cancel).await?;
+
+    let mut found: Vec<(usize, Eol)> = Vec::new();
+    for record in out.stdout.split(|b| *b == 0).filter(|r| !r.is_empty()) {
+        let text = String::from_utf8_lossy(record);
+        // `i/lf    w/crlf  attr/                 \t<path>`
+        let Some((columns, path)) = text.split_once('\t') else {
+            continue;
+        };
+        let worktree = columns
+            .split_whitespace()
+            .find_map(|c| c.strip_prefix("w/"))
+            .unwrap_or_default();
+        // Empty means the path is not checked out, `mixed` has no single
+        // answer to give, and `-text` and `none` have nothing to say.
+        let eol = match worktree {
+            "lf" => Eol::Lf,
+            "crlf" => Eol::Crlf,
+            _ => continue,
+        };
+        if let Some(index) = paths.iter().position(|p| p == path) {
+            found.push((index, eol));
+        }
+    }
+    // git answers in its own order; the caller's ranking is the one that
+    // decides which three get to vote.
+    found.sort_by_key(|(index, _)| *index);
+    Ok(found)
+}
+
+/// Whether a candidate is worth opening: present, a file, and small enough
+/// that reading it is not the most expensive thing the app does today.
+fn readable(workdir: &Path, path: &str) -> bool {
+    let Ok(meta) = std::fs::metadata(workdir.join(path)) else {
+        return false;
+    };
+    meta.is_file() && meta.len() <= SAMPLE_MAX_BYTES
+}
+
+/// Takes up to `want` entries spread across the list rather than the first
+/// `want`. Index order is alphabetical, so the head of a repository is all
+/// one corner of it; a spread is still deterministic but is a sample of the
+/// repository instead of a sample of its first directory.
+fn take_spread(from: &[String], want: usize, group: Group, into: &mut Vec<(String, Group)>) {
+    if want == 0 || from.is_empty() {
+        return;
+    }
+    if from.len() <= want {
+        into.extend(from.iter().map(|p| (p.clone(), group)));
+        return;
+    }
+    let stride = from.len() / want;
+    for step in 0..want {
+        if let Some(p) = from.get(step * stride) {
+            into.push((p.clone(), group));
+        }
+    }
+}
+
+/// The directory a path sits in and the extension of its file name, both
+/// empty when it has none.
+fn split_dir_ext(path: &str) -> (&str, &str) {
+    (parent_of(path), extension_of(path))
+}
+
+fn parent_of(path: &str) -> &str {
+    match path.rfind('/') {
+        Some(i) => &path[..i],
+        None => "",
+    }
+}
+
+/// The extension of the file name, without the dot. A leading dot is a
+/// name, not an extension: `.gitignore` has none.
+fn extension_of(path: &str) -> &str {
+    let name = match path.rfind('/') {
+        Some(i) => &path[i + 1..],
+        None => path,
+    };
+    match name.rfind('.') {
+        Some(i) if i > 0 => &name[i + 1..],
+        _ => "",
     }
 }
 
