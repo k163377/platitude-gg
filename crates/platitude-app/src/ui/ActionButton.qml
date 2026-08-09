@@ -62,6 +62,11 @@ HoverToolButton {
     /// toolbar every time the state changed.
     property string widestText: ""
     property bool widestCode: false
+    /// Icon and word centred as a pair rather than packed from the left.
+    /// A toolbar button is measured to its content and never sees the
+    /// difference; one told to fill a pane's width does — the icon would
+    /// sit against the far edge with the word adrift from it.
+    property bool centred: false
     /// Held all the way down.
     signal held()
     /// Pressed and let go, meaning the button's ordinary action.
@@ -226,6 +231,12 @@ HoverToolButton {
             anchors.fill: parent
             spacing: Theme.spaceXs
             opacity: actionBtn.busy ? 0 : 1
+            // An invisible child is left out of the layout entirely, so
+            // these two cost nothing where they are not asked for.
+            Item {
+                Layout.fillWidth: true
+                visible: actionBtn.centred
+            }
             // A button with no icon to name it spends no width on one —
             // the word is the whole of it (the hunk header's buttons).
             // A button that swaps between a named icon and the mark keeps
@@ -465,6 +476,10 @@ HoverToolButton {
                        - (btnLabel.splitFlag ? Theme.spaceXs / 2 : 0)
                     y: -Theme.spaceXs
                 }
+            }
+            Item {
+                Layout.fillWidth: true
+                visible: actionBtn.centred
             }
         }
         // Its own item rather than a rotation on the icon above: an

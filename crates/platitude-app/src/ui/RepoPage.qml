@@ -2793,7 +2793,15 @@ Item {
             // state before anyone decides.
             page.showWip()
             repoTab.stageAll()
-            wipPane.setMessage(arg === "" ? "feat: something" : arg, "")
+            // `amend` asks for the other wording rather than for a
+            // message: the two forms of this button differ in what they
+            // say, and both have to be photographable.
+            if (arg === "amend") {
+                wipPane.setAmendChecked(true)
+                page.amending = true
+            }
+            wipPane.setMessage(arg === "" || arg === "amend"
+                               ? "feat: something" : arg, "")
             eolCommitTimer.start()
         } else if (act === "eol-hover") {
             // The sentence a pending file's row carries, put out by naming

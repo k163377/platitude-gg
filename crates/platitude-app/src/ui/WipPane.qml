@@ -601,52 +601,36 @@ ColumnLayout {
                 }
             }
         }
-        HoverButton {
+        // The framed button the rest of the app uses, at the size this pane
+        // needs. Its frame, its tone and its `!` are the ones the toolbar's
+        // buttons already wear, so the state this button can be in is said
+        // in the vocabulary someone has read elsewhere — rather than in a
+        // filled face that only this one button has.
+        ActionButton {
             id: commitButton
             Layout.fillWidth: true
+            implicitHeight: Theme.controlHeight
             /// Something staged says its line endings changed, so the
             /// commit is about to carry it. **Only the index counts** — a
             /// file marked on its working-tree side is not in this commit
             /// (`session::EolMark::staged`).
             readonly property bool eolWarned:
                 wipPane.workTree.eolStagedCount > 0 && commitButton.enabled
-            // The accent face steps back while there is something to read:
-            // a bright ground and a thin frame around it is the frame
-            // losing. The dark face is the one every other framed button
-            // in the app wears (`ActionButton`), and the word stays white,
-            // so what changed is the frame and the mark rather than the
-            // button's place in the pane.
-            highlighted: !commitButton.eolWarned
+            kind: "check"
+            centred: true
+            tone: commitButton.eolWarned ? Theme.warning : Theme.accent
+            // **The frame goes with the words.** A toolbar button is
+            // measured to its content, so a frame left bright around dimmed
+            // words still reads as a small live thing; one this wide reads
+            // as a live button with grey words in it.
+            frameColor: !commitButton.enabled ? Theme.borderDefault
+                        : commitButton.eolWarned ? Theme.warning : Theme.accent
+            // The mark the button family already puts at the end of its
+            // own word when the thing it does needs reading first.
+            alert: commitButton.eolWarned
             text: wipPane.amending
                   ? qsTr("Amend commit (%1 staged)").arg(wipPane.workTree.stagedCount)
                   : qsTr("Commit changes (%1 staged)").arg(wipPane.workTree.stagedCount)
-            // The frame and the mark say the same thing the toolbar's
-            // buttons say when something needs reading before it is
-            // pressed (デザイン規約 §状態の 3 段 — a change that carries
-            // past this machine). The face stays the accent's: this is
-            // still the button that finishes the work.
-            Rectangle {
-                anchors.fill: parent
-                visible: commitButton.eolWarned
-                color: "transparent"
-                radius: Theme.radiusSm
-                border.width: Theme.borderWidth
-                border.color: Theme.warning
-            }
-            // On the word's shoulder, not in the corner: the label is
-            // centred, so the mark follows it rather than the button
-            // (`ActionButton.alert` puts one at the end of its own word
-            // the same way).
-            NavIcon {
-                visible: commitButton.eolWarned
-                kind: "bang"
-                tint: Theme.warning
-                width: Theme.iconSm
-                height: Theme.iconSm
-                x: (commitButton.width + commitButton.contentItem.implicitWidth) / 2
-                   - Theme.spaceXs / 2
-                y: (commitButton.height - commitButton.contentItem.implicitHeight) / 2
-            }
             // An amend can stand on its own (message only); a new commit
             // needs staged content and a summary, and git needs an
             // identity to attribute either one to.
@@ -660,7 +644,7 @@ ColumnLayout {
             // really needed (デザイン規約 §可否・警告の出し場所). The
             // frame, the mark and the hover say what is in it; the
             // decision stays the reader's.
-            onClicked: wipPane.commitClicked()
+            onActivated: wipPane.commitClicked()
             ToolTip.visible: (commitHover.containsMouse || wipPane.pointAtCommit)
                              && (!enabled || commitButton.eolWarned)
             ToolTip.delay: Metrics.tipDelayMs
