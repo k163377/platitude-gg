@@ -1431,7 +1431,10 @@ Item {
         id: refList
         currentBranch: workTree.branch
         onPicked: record => page.activateRecord(record)
-        onClosed: page.refListWanted = false
+        onClosed: {
+            page.refListWanted = false
+            page.refListAnchor = null
+        }
         onPointerInsideChanged: page.settleRefList()
     }
     // ---- the row's own card -----------------------------------------
@@ -1531,6 +1534,11 @@ Item {
     }
 
     property bool refListWanted: false
+    /// The chip the open list hangs off (null when none). The graph's
+    /// rows read it back through `GraphPane.chipListAnchor`, so a hand
+    /// that walked down into the list and comes back to that chip
+    /// re-holds it instead of sitting out the opening rest again.
+    property var refListAnchor: null
     function openRefList(records, anchor) {
         const at = anchor.mapToItem(page, 0, anchor.height)
         // The row's card opens under the pointer, which is on the chip
@@ -1543,6 +1551,7 @@ Item {
         refList.x = at.x
         refList.y = at.y
         page.refListWanted = true
+        page.refListAnchor = anchor
         refList.open()
     }
     function closeRefListUnlessEntered() {
@@ -3535,6 +3544,7 @@ Item {
                         graphModel: graphModel
                         worktreeModel: worktreeModel
                         blank: page.blank
+                        chipListAnchor: page.refListAnchor
                         onRowActivated: oidHex => page.activateRow(oidHex)
                         onRowMenuOpenRequested: oidHex => page.openRowMenu(oidHex)
                         onRowSwitchRequested: (oidHex, record) =>

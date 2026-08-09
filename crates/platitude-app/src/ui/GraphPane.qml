@@ -27,6 +27,11 @@ Rectangle {
     /// A row was double-clicked. `record` is the chip it shows (kind +
     /// flags + name); empty when the row shows no branch at all.
     signal rowSwitchRequested(string oidHex, string record)
+    /// The chip whose stacked list the page has out (null when none).
+    /// Rows read it back through the view: a hand that walked down into
+    /// the list and comes back to this chip is not opening anything, so
+    /// it is not made to sit out the opening rest again.
+    property var chipListAnchor: null
     /// A stacked chip was hovered: unstack it under the chip.
     signal chipExpandRequested(var records, var anchor)
     /// The pointer settled on a row (or left it): open the commit card
@@ -276,6 +281,8 @@ Rectangle {
         signal chipExpandRequested(var records, var anchor)
         signal chipCollapseRequested()
         signal rowHoverRequested(var row, bool inside)
+        // Mirrored for the delegates, which can only see the view.
+        readonly property var chipListAnchor: graphArea.chipListAnchor
         signal namingSubmitted(string oidHex, string name)
         signal namingCancelled()
         onRowMenuRequested: oidHex => graphArea.rowMenuOpenRequested(oidHex)

@@ -450,7 +450,20 @@ Item {
         if (chip) {
             hoverDelay.stop()
             rowItem.ListView.view.rowHoverRequested(rowItem, false)
-            chipDelay.restart()
+            if (rowItem.ListView.view.chipListAnchor === chip) {
+                // The list this chip opened is still out: the hand walked
+                // down into it and came back up. The rest is a question
+                // about opening, and nothing is being opened — re-hold
+                // now, or the settle closes the list at `hoverKeepMs` and
+                // the rest reopens it at `tipDelayMs`, which reads as a
+                // blink (規約 §hover のツールチップ「戻る手は待たせない」).
+                chipDelay.stop()
+                rowItem.chipHeld = true
+                rowItem.ListView.view.chipExpandRequested(
+                    chip.records, chip)
+            } else {
+                chipDelay.restart()
+            }
         } else {
             chipDelay.stop()
             rowItem.chipHeld = false
