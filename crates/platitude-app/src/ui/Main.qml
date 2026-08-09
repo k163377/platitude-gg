@@ -36,33 +36,38 @@ ApplicationWindow {
     readonly property bool captionMerged: Qt.platform.os === "windows"
                                           && !AppBackend.plainChrome
 
-    // Three hints make the band the title bar, and the fourth thing that
-    // matters is what is *not* asked for:
+    // No frame at all, rather than a frame asked to behave.
     //
-    //   ExpandedClientAreaHint    the client area reaches the top of the
-    //                             window instead of starting under a
-    //                             caption band (measured: the frame stops
-    //                             reserving 31px for one)
-    //   NoTitleBarBackgroundHint  the platform stops painting that band
-    //   CustomizeWindowHint       said without WindowTitleHint, which is
-    //                             what drops the title text and the icon
-    //                             the platform would paint over the tabs
-    //   no button hints           so the platform draws no buttons of its
-    //                             own. The app draws them, because theirs
-    //                             are a fixed 32px tall with their own
-    //                             hover and their own glyphs, and none of
-    //                             the three can be styled
+    // The band was made the title bar by expanding the client area over
+    // the caption and asking the platform not to paint it. That left a
+    // real non-client frame around the window, and everything it holds
+    // turned out to be a problem the app could not reach: it is inflated
+    // past the screen on every side whenever the window fills the screen,
+    // so the app's window covered eight columns of the *next monitor* and
+    // hid what was under them (measured, and reported twice); the one
+    // pixel of it that showed came out white against this theme and moved
+    // for no DWM attribute; and the width of it made a remembered size
+    // that fits the screen come back as a window that does not.
     //
-    // Dropping the button hints also drops the style bits that let the
-    // system minimise and maximise the window at all; `keepWindowGestures`
-    // puts those back without the drawing coming with them — and takes
-    // `WM_NCHITTEST` away from Qt while it is at it, because Qt 6.10's
-    // own answer for this flag set synthesises input from a poll and
-    // loses track of it (the story is on `winframe::take_frame_hit_test`;
-    // the symptom was the first click landing dead and hover freezing).
+    // `FramelessWindowHint` deletes the whole area. Measured after: the
+    // window, its client and the work area are the same 0,0..1920,1032
+    // rectangle, and the pixel outside the window belongs to whatever is
+    // behind it. What used to live in that frame moves inward — the edge
+    // is drawn in the scene now (below), and the resize edges and the
+    // grab run were already the subclass's answers rather than Qt's
+    // (`winframe::take_frame_hit_test`, which stays: Qt 6.10's own answer
+    // for a custom-chrome window synthesises input from a poll and loses
+    // track of it — the dead first click and the frozen hover).
+    //
+    // Two things the platform still owes the window, and one it does not:
+    // `keepWindowGestures` puts back the style bits that let the system
+    // minimise, maximise and offer its taskbar menu, and the subclass
+    // pins a maximise to the work area (`clamp_maximized`) because
+    // Windows would otherwise put a frameless window's maximised
+    // rectangle on the whole monitor. What it does not owe is a shadow:
+    // a frameless window has none, and the drawn edge stands in for it.
     flags: root.captionMerged
-           ? (Qt.Window | Qt.CustomizeWindowHint
-              | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint)
+           ? (Qt.Window | Qt.FramelessWindowHint)
            : Qt.Window
     title: qsTr("Platitude GG")
     color: Theme.bgBase
@@ -90,10 +95,7 @@ ApplicationWindow {
         const at = run.mapToItem(null, 0, 0)
         AppBackend.setCaptionStrip(at.x, at.x + run.width, at.y + run.height)
     }
-    onWidthChanged: {
-        root.reportCaptionStrip()
-        root.refreshWindowEdge()
-    }
+    onWidthChanged: root.reportCaptionStrip()
 
     /// What Windows has to be told about this window, whatever the window
     /// turns out to be for. A run that was turned away gets a window too,
@@ -112,41 +114,10 @@ ApplicationWindow {
         if (!root.captionMerged)
             return
         AppBackend.keepWindowGestures()
-        // The colours the edge is made of, handed over once; where they
-        // are allowed to show is `refreshWindowEdge`'s question.
-        AppBackend.setWindowBorder(Theme.borderDefault, Theme.bgElevated)
         // The hit test just installed reads the strip from here on; hand
         // it the shape the band settled into while loading.
         root.reportCaptionStrip()
     }
-
-    /// The window's own edge: the hairline Windows draws around it, and
-    /// the strip of frame just inside that. Left to the system both are
-    /// light, and with no title bar to explain them they read as stray
-    /// white edges around the band. The strip takes the band's own colour
-    /// so it disappears into it; the hairline stays a line.
-    ///
-    /// The colours are handed over once. **Where** they are allowed to
-    /// show is decided on the other side, per window and afresh every
-    /// time this asks, because what they paint is the invisible resize
-    /// border and that border leaves the screen more often than any one
-    /// window state describes — maximised, yes, but also a window merely
-    /// as wide as the screen, which is what one saved from a maximised
-    /// session comes back as (both measured on 2026-08-09; both put a bar
-    /// of the app's own colour on the next monitor, and both were
-    /// reported). `winframe::refresh_border_color` carries the rule.
-    ///
-    /// Asked again whenever the window moves, resizes or changes state —
-    /// those are the three ways the frame gets out, and none of them is a
-    /// state the scene can see on its own.
-    function refreshWindowEdge() {
-        if (root.captionMerged)
-            AppBackend.refreshWindowEdge()
-    }
-    onVisibilityChanged: root.refreshWindowEdge()
-    onXChanged: root.refreshWindowEdge()
-    onYChanged: root.refreshWindowEdge()
-    onHeightChanged: root.refreshWindowEdge()
 
     font.family: Theme.uiFamily
     font.pixelSize: Theme.fontMd
@@ -701,11 +672,6 @@ ApplicationWindow {
                 "window_fill fills=" + (at.x === 0 && at.y === 0
                                         && mainUi.width === root.width
                                         && mainUi.height === root.height)
-                // What the platform layer holds, not what this side asked
-                // for a moment ago. DWM's own answer is in no screenshot
-                // and no scene, so being told is as close as a run gets —
-                // and being told nothing is the whole of the rule here.
-                + " edge=" + AppBackend.windowEdge()
                 + " maximized=" + (root.visibility === Window.Maximized)
                 + " at=" + at.x + "," + at.y
                 + " size=" + mainUi.width + "x" + mainUi.height
@@ -1013,6 +979,28 @@ ApplicationWindow {
         curPage: root.curPage
     }
 
+    // The window's own edge, drawn rather than asked for.
+    //
+    // A frameless window has no non-client area, so there is no frame for
+    // the platform to put a line around: measured on a small one, the
+    // pixel outside the window is simply whatever was behind it. The line
+    // the design asks for (規約 §ウィンドウの縁) is therefore the app's to
+    // draw, and the client is the only place left to draw it.
+    //
+    // Not while the window fills the screen: there the window's edges are
+    // the screen's, and a line there would spend a row of the work area
+    // separating the app from nothing. A plain Rectangle accepts no mouse
+    // events, so the row it covers keeps working.
+    Rectangle {
+        anchors.fill: parent
+        anchors.topMargin: -root.contentItem.y
+        z: 9999
+        visible: root.captionMerged && root.visibility !== Window.Maximized
+        color: "transparent"
+        border.width: Theme.borderWidth
+        border.color: Theme.borderDefault
+    }
+
     // ---- main ------------------------------------------------------------
     ColumnLayout {
         id: mainUi
@@ -1031,22 +1019,14 @@ ApplicationWindow {
         // nothing" (measured: notify delivered synchronously, strip
         // painted one state late, and a lone mouse-move caught it up).
         anchors.fill: parent
-        // Out to every edge of the client area, and no further in: a
-        // maximised frame *is* wider than the screen, but the pixels it
-        // holds out there are not ours to paint.
-        //
-        // Measured 2026-08-09, both ways a window gets maximised (put up
-        // maximised from the saved shape, and maximised from windowed) and
-        // on two monitors, one of them at negative coordinates: the frame
-        // comes to 1936x1048 for a 1920x1032 work area — 8 past every side
-        // — while the client comes back to 0,0..1920,1032, which is that
-        // work area to the pixel. So those 8 are non-client, the system's
-        // own invisible resize border, and the client never leaves the
-        // screen. An inset here to "pull the band back in" therefore has
-        // nothing to pull: it shows up as the whole window's contents
-        // shifted in from the left and short of the right, with the app's
-        // own colour standing in the gap (reported 2026-08-09, and the
-        // reason this is written down rather than tried again).
+        // Out to every edge of the window, which is now the same thing as
+        // every edge of the client: the frameless window has no
+        // non-client area at all (measured: window, client and work area
+        // all 0,0..1920,1032 while maximised). Nothing of this app is
+        // ever outside the screen, and nothing needs pulling in — an
+        // inset here shows up as the contents shifted off the left and
+        // short of the right, which is what it did when it was tried
+        // (reported 2026-08-09).
         anchors.topMargin: -root.contentItem.y
         spacing: 0
         visible: AppBackend.gitState === "ok"

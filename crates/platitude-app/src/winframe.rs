@@ -40,46 +40,16 @@ pub fn keep_system_gestures() {
     win32::keep_system_gestures();
 }
 
-/// Paints the two things Windows 11 draws around the window: the hairline
-/// border, and the strip of frame between it and the client area.
-///
-/// Left alone both are the system's, which on a light system is a white
-/// line and a white strip beside it — and this window has no title bar to
-/// explain either, so they read as stray edges around the band. Both are
-/// `0xRRGGBB` and both come from the design tokens, because this is the
-/// app's own edge and not a system one.
-pub fn set_border_color(border: u32, frame: u32) {
-    #[cfg(windows)]
-    win32::set_border_color(border, frame);
-    #[cfg(not(windows))]
-    let _ = (border, frame);
-}
-
-/// Puts the edge on, or takes it off, according to where the window is.
-///
-/// Call it whenever the window moves, resizes or changes state. The rule
-/// is one line: **the edge is painted only while the whole frame is
-/// inside the screen's work area**, and dropped the moment any of it is
-/// not.
-///
-/// What those colours paint is the invisible resize border, and that
-/// border goes outside the screen more often than "maximised" describes.
-/// Measured on the live window, both ways: maximised, the frame is
-/// -8..1928 across a 0..1920 monitor; and *windowed at the size of the
-/// screen* — which is what a window saved from a maximised session comes
-/// back as — it was -5..1931 across the same monitor, not zoomed at all.
-/// Either way the columns at each end carry `bgElevated` onto whatever
-/// monitor is next to that one: a bar of the app's own colour standing
-/// beside the app, which is what was reported twice on 2026-08-09. Keying
-/// this off `IsZoomed` caught only the first of the two.
-///
-/// Nothing is lost by dropping it: an edge outside the screen is not an
-/// edge anyone was going to see on this screen, and the moment the window
-/// comes back inside it is painted again.
-pub fn refresh_border_color() {
-    #[cfg(windows)]
-    win32::refresh_border_color();
-}
+// The window's edge is not asked of the platform any more, and there is
+// nothing left here to ask. A frameless window has no non-client area for
+// `DWMWA_BORDER_COLOR` or `DWMWA_CAPTION_COLOR` to reach — measured on a
+// small one, the pixel outside the window is simply what was behind it —
+// so the line the design wants is drawn in the scene, at the client's own
+// edge (`Main`). What that replaced, and why none of it survived, is
+// written up there: the colours only ever reached the invisible resize
+// border, that border is outside the screen whenever the window fills it,
+// and the one pixel of it that showed came out white and answered to
+// nothing but painting the frame ourselves.
 
 /// Pulls the window back inside the work area of the monitor it came up
 /// on, and answers whether it had to. Windowed windows only — a maximised
@@ -105,23 +75,6 @@ pub fn fit_to_work_area() -> bool {
 #[cfg(not(windows))]
 pub fn fit_to_work_area() -> bool {
     false
-}
-
-/// What the window's edge was last asked to be: `"none"` when neither is
-/// to be drawn, otherwise the border's own `#rrggbb`.
-///
-/// For the headless run to read, which is the only reader — DWM's answer
-/// is not in the scene, so what can be checked is what it was told.
-#[cfg(windows)]
-pub fn window_edge() -> String {
-    win32::window_edge()
-}
-
-/// Nothing of ours is painted into any frame here, which is what `"none"`
-/// says.
-#[cfg(not(windows))]
-pub fn window_edge() -> String {
-    "none".into()
 }
 
 // Taking the frame over — answering `WM_NCCALCSIZE` with "the client is
@@ -209,21 +162,6 @@ mod win32 {
     const CORNER_PREFERENCE: u32 = 33;
     /// `DWMWCP_DONOTROUND` (dwmapi.h).
     const DO_NOT_ROUND: u32 = 1;
-    /// `DWMWA_BORDER_COLOR` (dwmapi.h, Windows 11 22000+). Takes a
-    /// `COLORREF`, which is `0x00BBGGRR` — the reverse of how a colour is
-    /// written everywhere else in this tree.
-    const BORDER_COLOR: u32 = 34;
-    /// `DWMWA_CAPTION_COLOR` (dwmapi.h, Windows 11 22000+).
-    ///
-    /// Set alongside the border for the sake of anywhere it does apply.
-    /// It is **not** what paints the one white pixel between our border
-    /// and the client area: measured, that pixel is unmoved by this, by
-    /// the border colour, and by extending the frame across the client.
-    /// Taking it needs the non-client area removed in `WM_NCCALCSIZE`,
-    /// which means subclassing the window — the same machinery Snap
-    /// Layouts wants (P3-確認事項 §ウィンドウ chrome).
-    const CAPTION_COLOR: u32 = 35;
-
     /// `GWL_STYLE` and the three style bits the drawn buttons took with
     /// them, plus the `SetWindowPos` flags that mean "nothing but the
     /// frame changed" (winuser.h).
@@ -246,6 +184,20 @@ mod win32 {
         right: i32,
         bottom: i32,
     }
+
+    /// `MINMAXINFO` (winuser.h). Only the two the maximised placement is
+    /// made of are read here; the rest is filled in by whoever ran before
+    /// us and passed straight back.
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct MinMaxInfo {
+        reserved: Point,
+        max_size: Point,
+        max_position: Point,
+        min_track: Point,
+        max_track: Point,
+    }
+    const WM_GETMINMAXINFO: u32 = 0x0024;
 
     /// `MONITORINFO` (winuser.h), and the flag that asks for the monitor
     /// a window is most on rather than none at all.
@@ -403,77 +355,6 @@ mod win32 {
         }
     }
 
-    thread_local! {
-        /// The two colours the frame walk is handing out, since the
-        /// callback takes no argument of its own: the border's, and the
-        /// strip of frame between it and the client area. Both start at
-        /// "draw nothing", which is what is true before anyone has asked
-        /// — and what a window that never asks (plain chrome) keeps.
-        static FRAME_COLORS: Cell<(u32, u32)> =
-            const { Cell::new((COLOR_NONE, COLOR_NONE)) };
-    }
-
-    /// `0x00BBGGRR` from `0xRRGGBB`.
-    fn colorref(rgb: u32) -> u32 {
-        ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF)
-    }
-
-    /// `DWMWA_COLOR_NONE` (dwmapi.h): the attribute is in force and says
-    /// to draw nothing at all, which no `COLORREF` can say.
-    const COLOR_NONE: u32 = 0xFFFF_FFFE;
-
-    thread_local! {
-        /// The colours the app wants its edge to be, whether or not the
-        /// window is anywhere they can be seen. `refresh_border_color`
-        /// hands these out or hands out `COLOR_NONE`; nothing else reads
-        /// them, so the decision lives in one place.
-        static WANTED_COLORS: Cell<(u32, u32)> =
-            const { Cell::new((COLOR_NONE, COLOR_NONE)) };
-    }
-
-    pub(super) fn set_border_color(border: u32, frame: u32) {
-        WANTED_COLORS.set((colorref(border), colorref(frame)));
-        refresh_border_color();
-    }
-
-    pub(super) fn refresh_border_color() {
-        // Nothing is showing until a window says otherwise — a run with no
-        // native window of its own (the offscreen platform) paints no edge
-        // anywhere, and should not report one.
-        SHOWING.set((COLOR_NONE, COLOR_NONE));
-        // SAFETY: as in `square_corners` — the same walk, and the callback
-        // only reads the window it is handed and writes an attribute on it.
-        unsafe {
-            EnumThreadWindows(GetCurrentThreadId(), decide_one, 0);
-        }
-    }
-
-    thread_local! {
-        /// What the walk is handing out this time round: the wanted pair,
-        /// or `COLOR_NONE` for a window whose frame has left the screen.
-        /// Read back by `window_edge` for the headless report.
-        static SHOWING: Cell<(u32, u32)> = const { Cell::new((COLOR_NONE, COLOR_NONE)) };
-    }
-
-    /// Runs for every top-level window the thread owns, and answers the
-    /// one question this module asks about geometry: is all of this
-    /// window's frame inside the work area it sits on?
-    extern "system" fn decide_one(window: *mut c_void, _param: isize) -> i32 {
-        // SAFETY: `window` is live for the callback; both calls only read.
-        let visible = unsafe { IsWindowVisible(window) != 0 };
-        if !visible {
-            return 1;
-        }
-        let colors = if frame_is_on_screen(window) {
-            WANTED_COLORS.get()
-        } else {
-            (COLOR_NONE, COLOR_NONE)
-        };
-        SHOWING.set(colors);
-        FRAME_COLORS.set(colors);
-        paint_one(window, 0)
-    }
-
     /// Fits every windowed top-level window into its monitor's work
     /// area, and says whether any of them moved.
     pub(super) fn fit_to_work_area() -> bool {
@@ -562,79 +443,40 @@ mod win32 {
         1
     }
 
-    /// Whether the window's whole frame — the invisible resize border
-    /// included — is inside the work area of the monitor it is on.
-    fn frame_is_on_screen(window: *mut c_void) -> bool {
+    /// Whether the window covers the whole work area, which is what this
+    /// window's "maximised" now looks like from the outside.
+    ///
+    /// `IsZoomed` is not the question any more. A frameless window Qt
+    /// puts at the maximised size is not zoomed (measured: window, client
+    /// and work area all 0,0..1920,1032 with `IsZoomed` false), and what
+    /// the resize edges have to know is whether there is anywhere left to
+    /// drag an edge *to* — which is a fact about the rectangle, not about
+    /// the flag.
+    fn fills_work_area(window: *mut c_void) -> bool {
         let mut rect = Rect::default();
         let mut info = MonitorInfo {
             size: size_of::<MonitorInfo>() as u32,
             ..MonitorInfo::default()
         };
-        // SAFETY: `window` is live; both calls fill locals of the shape
-        // they document, and `MONITOR_DEFAULTTONEAREST` always answers.
+        // SAFETY: `window` is live for this call; both fill locals of the
+        // shape they document.
         let known = unsafe {
             GetWindowRect(window, &mut rect);
             let monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
             GetMonitorInfoW(monitor, &mut info) != 0
         };
-        if !known {
-            return false;
-        }
         let work = info.work;
-        rect.left >= work.left
-            && rect.top >= work.top
-            && rect.right <= work.right
-            && rect.bottom <= work.bottom
-    }
-
-    /// What the last refresh actually handed out, in the form the report
-    /// wants — not what the app asked for, which is a different question
-    /// whenever the window has left the screen.
-    pub(super) fn window_edge() -> String {
-        let (border, _) = SHOWING.get();
-        if border == COLOR_NONE {
-            return "none".into();
-        }
-        // Back out of `0x00BBGGRR` into the way a colour is written
-        // everywhere else, so the report says what the tokens say.
-        let (b, g, r) = (border >> 16 & 0xFF, border >> 8 & 0xFF, border & 0xFF);
-        format!("#{r:02x}{g:02x}{b:02x}")
-    }
-
-    /// Runs for every top-level window the thread owns; the ones with no
-    /// border to paint report that they refused.
-    extern "system" fn paint_one(window: *mut c_void, _param: isize) -> i32 {
-        let (border, frame) = FRAME_COLORS.get();
-        for (attribute, wanted) in [(BORDER_COLOR, border), (CAPTION_COLOR, frame)] {
-            // SAFETY: `window` is live for the length of this callback,
-            // and `wanted` outlives the call, which copies the four bytes
-            // it points at.
-            let hr = unsafe {
-                DwmSetWindowAttribute(
-                    window,
-                    attribute,
-                    std::ptr::from_ref(&wanted).cast(),
-                    size_of::<u32>() as u32,
-                )
-            };
-            if hr != 0 {
-                tracing::debug!(hresult = hr, attribute, "a window kept the system's colour");
-            }
-        }
-        1
+        known
+            && rect.left <= work.left
+            && rect.top <= work.top
+            && rect.right >= work.right
+            && rect.bottom >= work.bottom
     }
 
     // ---- the frame's answers, owned (see `take_frame_hit_test`) --------
 
     const WM_NCHITTEST: u32 = 0x0084;
     const WM_NCRBUTTONUP: u32 = 0x00A5;
-    /// The two messages that ask for the frame to be drawn (winuser.h).
-    /// `WM_NCACTIVATE` takes `-1` as its `lParam` to mean "do not redraw
-    /// the frame", which is how it is declined without also declining the
-    /// activation it carries.
-    const WM_NCPAINT: u32 = 0x0085;
-    const WM_NCACTIVATE: u32 = 0x0086;
-    const NO_FRAME_REDRAW: isize = -1;
     /// The hit-test answers this window hands out (winuser.h). Client,
     /// caption, and the eight resize edges; nothing else exists here —
     /// no drawn system buttons, no icon box.
@@ -676,24 +518,12 @@ mod win32 {
         ) -> isize;
     }
 
-    // SAFETY: as the other blocks — the DC is handed back to be released,
-    // and the brush is a handle this module deletes itself.
+    // SAFETY: as the other blocks — both only read, into a local of the
+    // shape they document.
     #[link(name = "user32")]
     unsafe extern "system" {
-        fn GetWindowDC(window: *mut c_void) -> *mut c_void;
-        fn ReleaseDC(window: *mut c_void, dc: *mut c_void) -> i32;
-        fn FillRect(dc: *mut c_void, rect: *const Rect, brush: *mut c_void) -> i32;
-        fn GetClientRect(window: *mut c_void, rect: *mut Rect) -> i32;
-        fn ClientToScreen(window: *mut c_void, point: *mut Point) -> i32;
         fn MonitorFromWindow(window: *mut c_void, flags: u32) -> *mut c_void;
         fn GetMonitorInfoW(monitor: *mut c_void, info: *mut MonitorInfo) -> i32;
-    }
-
-    // SAFETY: as above.
-    #[link(name = "gdi32")]
-    unsafe extern "system" {
-        fn CreateSolidBrush(color: u32) -> *mut c_void;
-        fn DeleteObject(object: *mut c_void) -> i32;
     }
 
     // SAFETY: as the other user32 blocks — plain integers and pointers
@@ -773,98 +603,54 @@ mod win32 {
         // nothing is left holding a stale answer. What remains around the
         // window is DWM's own composition — the shadow, and the border
         // colour `set_border_color` hands it.
-        if message == WM_NCPAINT {
-            paint_frame(window);
-            return 0;
-        }
-        if message == WM_NCACTIVATE {
-            // SAFETY: as below — the message is passed on, with the one
-            // argument that says to leave the frame alone.
-            return unsafe { DefSubclassProc(window, message, wparam, NO_FRAME_REDRAW) };
+        // Where a maximised window is allowed to reach. Windows would
+        // put it on the monitor's own rectangle, inflated by the resize
+        // border on every side; this pins it to the work area instead, so
+        // no part of it lands on the monitor next door (measured: the
+        // frame was -8..1928 across a 0..1920 screen, and those 8 columns
+        // hid the neighbour's window — reported twice). Asked after
+        // whoever ran before us has filled the rest in, so only the two
+        // fields this is about are touched.
+        if message == WM_GETMINMAXINFO {
+            // SAFETY: passing the message on is what a subclass does.
+            let passed = unsafe { DefSubclassProc(window, message, wparam, lparam) };
+            clamp_maximized(window, lparam);
+            return passed;
         }
         // SAFETY: passing the message on is what a subclass does.
         unsafe { DefSubclassProc(window, message, wparam, lparam) }
     }
 
-    /// Fills the frame around the client area with the colour the app
-    /// asked for, instead of leaving it to `DefWindowProc`.
-    ///
-    /// Only one pixel of this is ever seen: DWM covers the rest of the
-    /// frame with the window's shadow and its own border. That pixel is
-    /// the one just outside the client, and left alone it comes out
-    /// `#FFFFFF` — measured through `PrintWindow`, so it is in the
-    /// window's own bits rather than DWM's composition, which is why
-    /// painting reaches it where three DWM attributes and immersive dark
-    /// mode all did not (P5-確認事項 §10 had it as unsolved). Against this
-    /// theme a white line hugging the window is the brightest thing on
-    /// the edge, and it read as the edge itself.
-    fn paint_frame(window: *mut c_void) {
-        let (_, frame) = WANTED_COLORS.get();
-        // Nothing was asked for, or this window's frame is not on the
-        // screen: painting it there is what puts a bar of the app's
-        // colour on the next monitor (see `refresh_border_color`).
-        if frame == COLOR_NONE || !frame_is_on_screen(window) {
+    /// Writes the work area into the `MINMAXINFO` a maximise is about to
+    /// be made from: its size, and its origin in the coordinates that
+    /// structure uses, which are the monitor's rather than the desktop's.
+    fn clamp_maximized(window: *mut c_void, lparam: isize) {
+        let mut info = MonitorInfo {
+            size: size_of::<MonitorInfo>() as u32,
+            ..MonitorInfo::default()
+        };
+        // SAFETY: `window` is the live handle the message arrived on, and
+        // the call fills a local of the shape it documents.
+        let known = unsafe {
+            let monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+            GetMonitorInfoW(monitor, &mut info) != 0
+        };
+        if !known {
             return;
         }
-        let mut window_rect = Rect::default();
-        let mut client = Rect::default();
-        let mut at = Point { x: 0, y: 0 };
-        // SAFETY: `window` is the live handle the message arrived on; the
-        // three calls fill locals of the shapes they document.
-        unsafe {
-            GetWindowRect(window, &mut window_rect);
-            GetClientRect(window, &mut client);
-            ClientToScreen(window, &mut at);
-        }
-        // The client, in the frame's own coordinates.
-        let (left, top) = (at.x - window_rect.left, at.y - window_rect.top);
-        let (right, bottom) = (left + client.right, top + client.bottom);
-        let (width, height) = (
-            window_rect.right - window_rect.left,
-            window_rect.bottom - window_rect.top,
-        );
-        // SAFETY: the DC and the brush are released and deleted below, on
-        // every path, and `FillRect` only reads the rectangle it is
-        // handed.
-        unsafe {
-            let dc = GetWindowDC(window);
-            if dc.is_null() {
-                return;
-            }
-            let brush = CreateSolidBrush(frame);
-            if !brush.is_null() {
-                for band in [
-                    Rect {
-                        left: 0,
-                        top: 0,
-                        right: width,
-                        bottom: top,
-                    },
-                    Rect {
-                        left: 0,
-                        top,
-                        right: left,
-                        bottom,
-                    },
-                    Rect {
-                        left: right,
-                        top,
-                        right: width,
-                        bottom,
-                    },
-                    Rect {
-                        left: 0,
-                        top: bottom,
-                        right: width,
-                        bottom: height,
-                    },
-                ] {
-                    FillRect(dc, &band, brush);
-                }
-                DeleteObject(brush);
-            }
-            ReleaseDC(window, dc);
-        }
+        let (work, screen) = (info.work, info.monitor);
+        // SAFETY: `lparam` on this message is a pointer to a `MINMAXINFO`
+        // owned by the caller, which is ours to fill in for the length of
+        // the call — that is what the message is for.
+        let wanted = unsafe { &mut *(lparam as *mut MinMaxInfo) };
+        wanted.max_size = Point {
+            x: work.right - work.left,
+            y: work.bottom - work.top,
+        };
+        wanted.max_position = Point {
+            x: work.left - screen.left,
+            y: work.top - screen.top,
+        };
     }
 
     /// Both halves of an `lParam` that carries a screen point — signed,
@@ -885,7 +671,7 @@ mod win32 {
         // and `rect` is a local the call fills in.
         let (maximized, dpi) = unsafe {
             GetWindowRect(window, &mut rect);
-            (IsZoomed(window) != 0, GetDpiForWindow(window))
+            (fills_work_area(window), GetDpiForWindow(window))
         };
         let dpi = if dpi > 0 { dpi } else { 96 };
         if !maximized {

@@ -431,34 +431,6 @@ impl AppBackend {
         crate::winframe::set_caption_strip(x0, x1, bottom);
     }
 
-    /// Paints the hairline the platform draws around the window. `color`
-    /// is `#rrggbb` and comes from the design tokens — the window's edge
-    /// is the app's, not the system's, now that the band reaches the top.
-    /// Anything that is not six hex digits is left to the system.
-    #[qslot]
-    fn set_window_border(&self, border: String, frame: String) {
-        let hex = |c: &str| {
-            c.strip_prefix('#')
-                .and_then(|c| u32::from_str_radix(c, 16).ok())
-        };
-        let (Some(border_rgb), Some(frame_rgb)) = (hex(&border), hex(&frame)) else {
-            tracing::debug!(%border, %frame, "window edge colours not understood");
-            return;
-        };
-        crate::winframe::set_border_color(border_rgb, frame_rgb);
-    }
-
-    /// Puts that edge on or takes it off, by where the window is now: it
-    /// is painted only while the whole frame is inside the screen's work
-    /// area, because what those colours paint is the invisible resize
-    /// border, and that goes off the screen for more windows than the
-    /// maximised one (`winframe::refresh_border_color`). Call it whenever
-    /// the window moves, resizes, or changes state.
-    #[qslot]
-    fn refresh_window_edge(&self) {
-        crate::winframe::refresh_border_color();
-    }
-
     /// Pulls a restored window back inside the screen it came up on, and
     /// answers whether it had to. The scene cannot do this itself: what
     /// has to fit is the frame, which is wider than the window says it
@@ -467,14 +439,6 @@ impl AppBackend {
     #[qslot]
     fn fit_window_to_screen(&self) -> bool {
         crate::winframe::fit_to_work_area()
-    }
-
-    /// What the edge was last asked to be — `"none"`, or the border's own
-    /// `#rrggbb`. Read by the headless run: what the platform did with it
-    /// is not in the scene, so what can be checked is what it was told.
-    #[qslot]
-    fn window_edge(&self) -> String {
-        crate::winframe::window_edge()
     }
 
     // -- window state -------------------------------------------------------
