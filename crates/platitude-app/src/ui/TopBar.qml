@@ -834,12 +834,18 @@ Rectangle {
             code: !fetchButton.stopped
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
-            tone: fetchButton.stopped ? Theme.danger
-                  : fetchButton.fails > 0 ? Theme.warning
-                  : Theme.textPrimary
-            // The same three, a step down, for the wait: a fetch that runs
-            // while the last ones failed is still the button that failed
-            // (デザイン規約 §暗く落とした段).
+            // Only the stopped step takes a colour for its word. A run of
+            // failures is a notice, and a notice is said by the frame and
+            // the mark while the word stays plain — colouring it would
+            // borrow the look of the two buttons here that are held, and
+            // this one is still a click (デザイン規約 §長押し —
+            // 警告の色は語ではなく枠と印が持つ).
+            tone: fetchButton.stopped ? Theme.danger : Theme.textPrimary
+            // The state a step down, for the wait: a fetch that runs while
+            // the last ones failed is still the button that failed
+            // (デザイン規約 §暗く落とした段). Read off the state rather
+            // than off `tone`, because the word the warned shape keeps is
+            // not what the ring is standing in for — the frame is.
             toneDim: fetchButton.stopped ? Theme.dangerDim
                      : fetchButton.fails > 0 ? Theme.warningDim
                      : Theme.textMuted
@@ -850,6 +856,7 @@ Rectangle {
             // `Resume`, the word is the news and a mark beside it is the
             // fourth thing on one button saying the same thing.
             alert: fetchButton.fails > 0 && !fetchButton.stopped
+            alertTone: Theme.warning
             holdMs: fetchButton.stopped ? Metrics.holdMs : 0
             // Whoever asked for it, the network shows here: a fetch on
             // the timer turns the button the way a clicked one does.
@@ -898,8 +905,9 @@ Rectangle {
             /// (デザイン規約 §リモートへ送る).
             readonly property bool failed: topBar.curPage !== null
                                            && topBar.curPage.pushFailed
-            /// Warning colour, for either of the two things that call for
-            /// it: what an overwrite would do, and what the last go did.
+            /// The frame's warning colour, for either of the two things
+            /// that call for it: what an overwrite would do, and what the
+            /// last go did. The word takes it for only one of them (below).
             readonly property bool warned: pushButton.mode === "diverged"
                                            || pushButton.failed
             kind: "push"
@@ -922,17 +930,27 @@ Rectangle {
             // branch's standing with its remote changes under it.
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
-            tone: pushButton.warned ? Theme.warning : Theme.textPrimary
+            // The overwrite colours its word; the refusal does not. Both
+            // are warnings, but only one of them changes what the press
+            // costs, and the word is where that is said — a refused push
+            // is the same one click it was before git turned it down
+            // (デザイン規約 §長押し — 警告の色は語ではなく枠と印が持つ).
+            tone: pushButton.mode === "diverged" ? Theme.warning
+                                                 : Theme.textPrimary
             // A force push on the wire is still a force push, and a second
             // go at one git turned down is still the button that was turned
             // down, so the ring and the frame keep the warning through the
-            // wait, a step down (デザイン規約 §暗く落とした段).
+            // wait, a step down (デザイン規約 §暗く落とした段). Both
+            // shapes, not just the coloured one: while the wait lasts there
+            // is no word to read, so what the ring stands in for is the
+            // frame.
             toneDim: pushButton.warned ? Theme.warningDim : Theme.textMuted
             frameColor: pushButton.warned ? Theme.warning : "transparent"
             // Said past the word, where a fetch says it: the frame's colour
             // is worn by the diverged shape as well, so on its own it would
             // not tell "cannot land plainly" from "did not land".
             alert: pushButton.failed
+            alertTone: Theme.warning
             // Diverged, the button stays live for the hold that is its
             // only gesture: a plain push cannot land there, so nothing
             // else is waiting on a click to be mistaken for.

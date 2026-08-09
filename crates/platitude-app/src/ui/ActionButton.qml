@@ -10,12 +10,18 @@ HoverToolButton {
     property string kind: ""
     /// Colour of both halves while the button is live.
     property color tone: Theme.textPrimary
-    /// `tone` taken a step down for the wait — the ring and the frame wear
-    /// it while git is on the network (デザイン規約 §暗く落とした段: the
-    /// hue stays, so what the button is does not change; only what state
-    /// it is in). A plain button has no darker step of its own and takes
-    /// `textMuted`, which is where its words go when they are not to be
-    /// read either.
+    /// The state's colour taken a step down for the wait — the ring and
+    /// the frame wear it while git is on the network (デザイン規約
+    /// §暗く落とした段: the hue stays, so what the button is does not
+    /// change; only what state it is in).
+    ///
+    /// The state's, not `tone`'s: where the word stays plain and only the
+    /// frame and the mark carry a warning, this follows the frame. While
+    /// the wait lasts there is no word on the button to be a step down
+    /// from — the ring is standing in for what the frame is saying.
+    ///
+    /// A plain button has no darker step of its own and takes `textMuted`,
+    /// which is where its words go when they are not to be read either.
     property color toneDim: Theme.textMuted
     /// git is on the network for this button: the words step aside for a
     /// turning ring in the middle of the button, and the whole of it goes
