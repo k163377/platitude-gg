@@ -1016,6 +1016,12 @@ ApplicationWindow {
     // the screen's, and a line there would spend a row of the work area
     // separating the app from nothing. A plain Rectangle accepts no mouse
     // events, so the row it covers keeps working.
+    //
+    // The bottom side is the exception, and it is not this rectangle's to
+    // keep: the floor at the end of the column below holds that row in the
+    // same colour and the same width, maximised as well as windowed. Both
+    // end at the same parent's last row, so windowed the two coincide and
+    // the four sides read as one outline.
     Rectangle {
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
@@ -1176,13 +1182,26 @@ ApplicationWindow {
             }
         }
 
-        // Bottom edge: the same splitter-style divider closes the window.
-        // The git version used to float here; it moved into the page's
-        // right pane, where the command log cannot open underneath it.
+        // The window's floor, and — while the edge above is drawn — the
+        // bottom side of it as well: one line in borderDefault doing both,
+        // because both are the last row of the same parent.
+        //
+        // It was a splitter-style 4px band in borderSubtle, and the edge
+        // painting over its last row made the bottom of a windowed window
+        // read four times the other three sides (reported 2026-08-09). The
+        // band was the half to drop: splitterWidth is the width of a drag
+        // handle, and there is nothing to split at the end of the window.
+        //
+        // Drawn while the window fills the screen too, unlike the edge:
+        // there the other three sides face the screen's own, but this one
+        // still has the taskbar under it, and content running straight into
+        // it is what asked for something here in the first place. The git
+        // version used to float here; it moved into the page's right pane,
+        // where the command log cannot open underneath it.
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: Theme.splitterWidth
-            color: Theme.borderSubtle
+            implicitHeight: Theme.borderWidth
+            color: Theme.borderDefault
         }
     }
 }
