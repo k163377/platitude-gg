@@ -42,6 +42,7 @@ cargo fmt --all
 **Done の基準**: fmt / clippy / test が全て通ること。テストを実行していないコードは動かないものとして扱う。UI 配線の Done は **`cargo xtask verify-ui` と `cargo xtask linux verify-ui` が同じ動詞で PASS し、両方の PNG を目視するまで**(手順・動詞表・Windows の罠は **verify-ui スキル**を必ず呼ぶ)。
 
 - release ビルドしないと QML(exe 埋め込み)は反映されない — 起動確認前に必ず `cargo build --release`
+- **起動だけの要求(「rebase して起動」等)は fast path** — rebase → release ビルド → 起動までを複合コマンドで先に済ませて即報告し、fmt / clippy / test は報告後にバックグラウンドで追報する(Done の基準は不変)。手順は verify-ui スキル §起動 fast path
 - **Linux での確認は `cargo xtask linux <コマンド>`**(`test -p platitude-core` / `verify-ui <動詞>`)— Windows / mac ではコンテナ([ci/linux/Dockerfile](ci/linux/Dockerfile))、Linux ではその場で実行。イメージは必要に応じて core(Ubuntu + ツールチェーン)と app(Qt・ソフトウェア GL・Ubuntu のフォント)を自動で選ぶ。ビルド先は docker volume でこの `target/` を汚さず、verify-ui のスクショはホスト側の一時ディレクトリに出る。ベースは CI の ubuntu-latest に揃えた LTS で、要望.md が定める最低 git バージョンを積んだ唯一の環境
 - **統合テストは 1 バイナリ**(`tests/it/` のモジュール。`cargo test` はバイナリを 1 つずつ走らせるので、`tests/` 直下に .rs を足すと別バイナリ = 直列実行とリンク 1 本分の後退。新しい統合テストは `it/` にモジュールとして足し `main.rs` へ登録)。部分実行は `cargo test -p platitude-core --test it <モジュール名>`
 - **並行セッション(複数エージェント)は git worktree で分ける** — 同一 checkout の共有は `target/` が単一障害点(cargo のビルドロックで直列化・incremental を相互に無効化・verify-ui が起動する release exe に別セッションの編集が焼き込まれた実績)。worktree なら target も demo / screenshot(temp 下の nanos 付きユニークパス)も自然に分離される

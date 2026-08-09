@@ -1,6 +1,6 @@
 ---
 name: verify-ui
-description: platitude-gg の UI 動作確認・スクリーンショット検証をする時に必ず読む。cargo xtask verify-ui の使い方、PG_AUTO_ACT 動詞の全表、headless(offscreen)起動と Windows での GUI 検証の罠(フォント・画面ロック・PrintWindow・PostMessage・hover)を全部ここに置く。
+description: platitude-gg の UI 動作確認・スクリーンショット検証をする時に必ず読む。cargo xtask verify-ui の使い方、PG_AUTO_ACT 動詞の全表、headless(offscreen)起動と Windows での GUI 検証の罠(フォント・画面ロック・PrintWindow・PostMessage・hover)を全部ここに置く。「rebase して起動」等、起動だけの要求の手順も §起動 fast path が正(テストは起動報告の後ろへ)。
 ---
 
 # UI 動作確認(ヘッドレス検証)
@@ -10,6 +10,20 @@ description: platitude-gg の UI 動作確認・スクリーンショット検�
 presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正。
 
 **判定には書き込みの失敗も入る** — `write failed` が 1 行でもあれば FAIL(撮れた PNG は「届かなかった状態」のもの)。**拒否を見せるのが目的の動詞だけ `--allow-write-failure` を付ける**(`delete-branch-refused` / `commands-fail` / `fetch-fail` / `push-retry` は実測で拒否を出す。`fetch-resume` と、届かないリモートへ撃つ `push` / `publish-new-go` も同じ仕込み)。**付けてよいのは「その拒否がこの動詞の見せ物である」時だけ** — 引数の渡し忘れも同じ行に出る(`delete-branch-refused` を引数なしで撃つと `git branch -d -- ''` が拒まれ、`not merged` の絵は撮れていない)。
+
+## 起動 fast path(「rebase して起動」等、起動だけの要求)
+
+ユーザーが待っているのは**窓が出ること**で、Done パイプラインではない。前提は「rebase が通り、release exe がビルドできる」ことだけ — **fmt / clippy / test / verify-ui / linux 系を起動の前に置かない**。遅さの主因はビルドではなく手数(2026-08-09 の transcript 実測: 要求→窓 65〜93 秒のうち subprocess は 15〜45 秒。release ビルド単体は 0.4〜17 秒、rebase が Cargo.lock / profile を動かして qtbridge ごと巻き込んでも 26〜46 秒)。状態確認・生存確認を個別ターンに積まず、下の 1 コマンドに畳む。
+
+1. **停止 → rebase → ビルド → 起動 → 生存確認まで 1 個の複合コマンド**(GUI はユーザーの起動指示があるから可 — CLAUDE.md の worktree 起動規約)。PowerShell 5.1 — `&&` は無い。native コマンドを `2>&1` で巻くと成功でも `$?` が false に化けるので巻かない:
+
+   ```powershell
+   Get-Process platitude-gg -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "*worktrees\<自分の worktree 名>*" } | ForEach-Object { $_.Kill() }; git rebase main; if ($LASTEXITCODE -eq 0) { cargo build --release -p platitude-app; if ($LASTEXITCODE -eq 0) { $env:PG_ALLOW_GUI = '1'; Start-Process "$PWD\target\release\platitude-gg.exe"; Start-Sleep -Milliseconds 900; $p = Get-Process platitude-gg -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "*worktrees\<自分の worktree 名>*" }; if ($p) { "launched pid=$($p.Id)" } else { "EXITED at once - Qt bin missing from PATH?" } } }
+   ```
+
+   qmake が見えないシェルでは先頭に `$env:PATH = "<Qt の bin>;" + $env:PATH` を足す(exe の**起動**にも要る — 無いと約 10ms で無言終了。下記の罠)。
+2. 窓が出たら**即報告してターンを終える**。起動を待たせてよいのは rebase の衝突と build エラーだけ(衝突を解決したら、Done パイプラインへ寄り道せずこの fast path の続きで起動まで行く)。
+3. 報告と同じターンで `cargo fmt --all -- --check; cargo clippy --workspace --all-targets -- -D warnings; cargo test --workspace` を **run_in_background で開始**し、結果が届いたら追報する。**Done の基準(fmt / clippy / test 全通過)は不変** — 「マージ可」はこれらの green を確認してから言う。背景のテストビルドと次の release 再ビルドは cargo のロックで直列化されうる — 先に修正指示が来たら背景タスクを止めて修正を優先してよい。
 
 ## PG_AUTO_ACT 動詞表
 
