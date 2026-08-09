@@ -28,6 +28,7 @@ use crate::branch::{self, CheckoutTarget};
 use crate::commit::{self, CommitOptions};
 use crate::conflict;
 use crate::details::{self, CommitDetails, DiffTarget};
+use crate::eol;
 use crate::error::GitError;
 use crate::graph::{GraphBuilder, Segment};
 use crate::identity;
@@ -373,6 +374,10 @@ pub enum SessionEvent {
         /// selections carry it back, so a partial write can refuse a diff
         /// that drifted under the selection (`stage::apply_partial`).
         fingerprint: u64,
+        /// What the same bytes said about line endings, if anything. Rides
+        /// with the diff rather than following it: a notice that appears
+        /// after the reader has started is worse than none.
+        endings: Option<eol::Notice>,
     },
     /// A background refresh/query failed (op is a stable identifier).
     OpFailed {
@@ -597,6 +602,17 @@ impl OpGate {
     }
 }
 
+/// What is known about a path's line endings before its patch is read.
+enum EndingContext {
+    /// git calls the path something other than text, so nothing is said
+    /// about it. Also where a failed reading lands: not knowing whether a
+    /// path is binary is a reason to stay quiet, not to guess.
+    Excluded,
+    /// Worth reading, with the neighbours' opinion if one was needed and
+    /// could be had.
+    Open(Option<eol::Baseline>),
+}
+
 pub struct RepoSession {
     /// Reads and refreshes: recorded in the command log only while
     /// background recording is on.
@@ -623,6 +639,15 @@ pub struct RepoSession {
     merge_tool_wanted: std::sync::atomic::AtomicBool,
     /// The last answer, repeated by refreshes that did not read it.
     merge_tool_seen: Mutex<String>,
+    /// Line-ending baselines already sampled, keyed by (directory,
+    /// extension) — what a house style is scoped to, and what makes the
+    /// second file opened in a directory cost nothing.
+    ///
+    /// `None` is a cached "unknown", which is worth keeping: not knowing
+    /// costs the same reads as knowing. Emptied whenever a write lands or
+    /// refs move, since either can bring a new `.gitattributes` or change
+    /// what the neighbours look like.
+    eol_baselines: Mutex<HashMap<(String, String), Option<eol::Baseline>>>,
     /// Fingerprint of the last refs read (see [`refs_key`]), so a refresh
     /// can tell an external commit / fetch / switch from a quiet re-read.
     /// `None` until the first read: opening already streams the graph.
@@ -712,6 +737,7 @@ impl RepoSession {
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
             merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),
             merge_tool_seen: Mutex::new(String::new()),
+            eol_baselines: Mutex::new(HashMap::new()),
             refs_key: Mutex::new(None),
             last_snapshot: Mutex::new(None),
             write_busy: std::sync::atomic::AtomicBool::new(false),
@@ -1433,6 +1459,9 @@ impl RepoSession {
                 // the first read, which has nothing to compare against.
                 if previous != Some(key) {
                     self.settle_head_reach();
+                    // HEAD moving swaps out the checked-out files, and with
+                    // them whatever the neighbours of a path looked like.
+                    self.forget_eol_baselines();
                 }
                 previous.is_some_and(|previous| previous != key)
             }
@@ -1727,6 +1756,11 @@ impl RepoSession {
                 false
             }
         };
+
+        // Anything that touched the repository can have brought a new
+        // `.gitattributes` or changed what a directory's files look like,
+        // and a stale house style is worse than asking again.
+        self.forget_eol_baselines();
 
         // Settle the working tree and the refs before touching the graph:
         // the WIP row exists only while the tree is dirty and a write that
@@ -2765,9 +2799,24 @@ impl RepoSession {
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let cancel = s.root_cancel.clone();
-            match details::file_diff_with_fingerprint(&s.executor, &workdir, &target, &cancel).await
-            {
-                Ok((patches, fingerprint)) => {
+            // What git's settings say, and the neighbours if they are the
+            // only answer, are read **beside** the diff rather than after
+            // it: a notice that turns up a moment later is one the reader
+            // has already scrolled past.
+            let (diff, endings) = tokio::join!(
+                details::file_diff_raw(&s.executor, &workdir, &target, &cancel),
+                s.ending_context(&workdir, &target, &cancel),
+            );
+            match diff {
+                Ok(raw) => {
+                    let patches = crate::parse::diff::parse_patch(&raw);
+                    let fingerprint = details::fingerprint(&raw);
+                    let endings = match endings {
+                        EndingContext::Excluded => None,
+                        EndingContext::Open(baseline) => {
+                            eol::settle(eol::read_one(&raw), baseline.as_ref())
+                        }
+                    };
                     let is_binary = patches.iter().any(|p| p.is_binary);
                     let preview =
                         preview::file_preview(&s.executor, &workdir, &target, is_binary, &cancel)
@@ -2777,11 +2826,79 @@ impl RepoSession {
                         patches,
                         preview,
                         fingerprint,
+                        endings,
                     });
                 }
                 Err(e) => s.fail("diff", e),
             }
         });
+    }
+
+    /// What is known about a path's line endings before the patch is read.
+    ///
+    /// A history diff is deliberately given no baseline: the two estimated
+    /// cases would have to sample the files around this one **as they stood
+    /// at that commit**, and the files on disk are a different tree.
+    async fn ending_context(
+        &self,
+        workdir: &Path,
+        target: &DiffTarget,
+        cancel: &CancellationToken,
+    ) -> EndingContext {
+        let (path, historical) = match target {
+            DiffTarget::Commit { path, .. } => (path, true),
+            DiffTarget::Staged { path, .. }
+            | DiffTarget::Unstaged { path }
+            | DiffTarget::Untracked { path } => (path, false),
+        };
+        match eol::ruling(&self.executor, workdir, path, cancel).await {
+            Ok(eol::Ruling::NotText) => EndingContext::Excluded,
+            Ok(eol::Ruling::Normalised) => EndingContext::Open(None),
+            Ok(eol::Ruling::Open) if historical => EndingContext::Open(None),
+            Ok(eol::Ruling::Open) => {
+                EndingContext::Open(self.eol_baseline(workdir, path, cancel).await)
+            }
+            // Not knowing is silence, not a failure worth a pane of its own:
+            // the diff beside it is the thing that was asked for.
+            Err(e) => {
+                if !e.is_cancelled() {
+                    tracing::debug!(error = %e, "line-ending ruling failed");
+                }
+                EndingContext::Excluded
+            }
+        }
+    }
+
+    /// The cached baseline for a path's (directory, extension), sampling it
+    /// the first time anything in that pair is looked at.
+    async fn eol_baseline(
+        &self,
+        workdir: &Path,
+        path: &str,
+        cancel: &CancellationToken,
+    ) -> Option<eol::Baseline> {
+        let key = eol::cache_key(path);
+        if let Ok(cache) = self.eol_baselines.lock()
+            && let Some(hit) = cache.get(&key)
+        {
+            return hit.clone();
+        }
+        let fresh = eol::baseline(&self.executor, workdir, path, cancel)
+            .await
+            .unwrap_or_default();
+        if let Ok(mut cache) = self.eol_baselines.lock() {
+            cache.insert(key, fresh.clone());
+        }
+        fresh
+    }
+
+    /// Drops every sampled baseline. A write or a moved ref can bring a new
+    /// `.gitattributes` or change what the neighbours look like, and there
+    /// is no cheaper way to find out than to ask again when next asked.
+    fn forget_eol_baselines(&self) {
+        if let Ok(mut cache) = self.eol_baselines.lock() {
+            cache.clear();
+        }
     }
 
     // --- internals ------------------------------------------------------

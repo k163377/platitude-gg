@@ -402,6 +402,29 @@ Rectangle {
             }
             Item { Layout.fillWidth: true }
         }
+        // -- line endings: one line for the file, never a mark per row.
+        //    A CR is invisible and has nowhere inside a line to sit, and
+        //    the mixed case is already saying how many lines it is about.
+        //    It does not ask anything and does not hold anything up —
+        //    `warning` because it is a change that carries past this
+        //    machine, not because something is wrong here
+        //    (デザイン規約 §状態の 3 段).
+        Label {
+            visible: diffPane.diffModel.endingKind !== ""
+            // The binary notice's seat, down to the margins: both are one
+            // line about the file rather than about anything in it.
+            Layout.margins: Theme.spaceSm
+            Layout.fillWidth: true
+            elide: Text.ElideRight
+            text: Words.lineEndings(diffPane.diffModel.endingKind,
+                                    diffPane.diffModel.endingFrom,
+                                    diffPane.diffModel.endingTo,
+                                    diffPane.diffModel.endingLines,
+                                    diffPane.diffModel.endingScope,
+                                    diffPane.diffModel.endingExt)
+            font.pixelSize: Theme.fontSm
+            color: Theme.warning
+        }
         // -- content preview: binaries summarized by size, images
         //    rendered (added = After only, deleted = Before only,
         //    modified = both).

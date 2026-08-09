@@ -22,6 +22,7 @@ commands:
       print its path. Presets:
         basic     branches + remote (ahead) + tags + stash + dirty WIP
         dirty     every WIP bucket: staged, unstaged, untracked, renamed
+        eol       all four line-ending cases, in a directory of LF files
         conflict  a merge stopped on conflicts (MERGE_HEAD present)
         rebase-conflict  a rebase stopped on conflicts, 1 of 2 steps
         rebase-staged    the same rebase, conflict resolved and staged

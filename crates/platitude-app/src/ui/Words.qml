@@ -52,4 +52,58 @@ QtObject {
         default: return qsTr("Conflicted")
         }
     }
+
+    /// What a change did to a file's line endings, from the pieces
+    /// `DiffModel` took the notice apart into. `""` when there is nothing
+    /// to say, which is most of the time.
+    ///
+    /// Every branch is a **whole sentence**: the two estimated cases can
+    /// only claim as far as the sample reached, so the range is part of
+    /// what is being said rather than a clause bolted on. Stitching
+    /// fragments would also leave a translator with half a sentence and no
+    /// way to reorder it.
+    ///
+    /// `LF` and `CRLF` are written plainly, not as code chips — the chip
+    /// shape is lowercase monospace and an all-caps abbreviation does not
+    /// sit in it (デザイン規約 §git 用語のコード表記).
+    function lineEndings(kind, from, to, lines, scope, ext) {
+        switch (kind) {
+        case "flipped":
+            return qsTr("Line endings change · %1 → %2").arg(from).arg(to)
+        case "mixed":
+            // One line is not "1 added lines", and a translator cannot fix
+            // that from the outside.
+            return lines === 1
+                ? qsTr("Mixed line endings · 1 added line uses %1, this file uses %2")
+                    .arg(from).arg(to)
+                : qsTr("Mixed line endings · %1 added lines use %2, this file uses %3")
+                    .arg(lines).arg(from).arg(to)
+        case "new":
+            switch (scope) {
+            case "here":
+                return qsTr("New file uses %1 · other .%2 files here look like %3")
+                    .arg(from).arg(ext).arg(to)
+            case "ext":
+                return qsTr("New file uses %1 · other .%2 files look like %3")
+                    .arg(from).arg(ext).arg(to)
+            default:
+                return qsTr("New file uses %1 · other files in this repo look like %2")
+                    .arg(from).arg(to)
+            }
+        case "first":
+            switch (scope) {
+            case "here":
+                return qsTr("First line ending in this file · %1 · other .%2 files here look like %3")
+                    .arg(from).arg(ext).arg(to)
+            case "ext":
+                return qsTr("First line ending in this file · %1 · other .%2 files look like %3")
+                    .arg(from).arg(ext).arg(to)
+            default:
+                return qsTr("First line ending in this file · %1 · other files in this repo look like %2")
+                    .arg(from).arg(to)
+            }
+        default:
+            return ""
+        }
+    }
 }

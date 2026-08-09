@@ -1737,9 +1737,21 @@ Item {
         interval: 800
         onTriggered: {
             const act = AppBackend.autoAct
-            // Nothing to do but be looked at: the diff is the shot.
-            if (act === "diff-file")
+            // Nothing to do but be looked at: the diff is the shot. The
+            // line endings get a line of their own — the sentence is in
+            // the picture, but a picture cannot say which of the four the
+            // pane decided on, and the two estimated ones differ from the
+            // exact ones only in what the sample was allowed to claim.
+            if (act === "diff-file") {
+                const d = diffPane.diffModel
+                AppBackend.report("line_endings kind=" + d.endingKind
+                                  + " scope=" + d.endingScope
+                                  + " lines=" + d.endingLines
+                                  + " text=" + Words.lineEndings(
+                                      d.endingKind, d.endingFrom, d.endingTo,
+                                      d.endingLines, d.endingScope, d.endingExt))
                 return
+            }
             // Which line the line-level verbs mean. Not 0: a hunk numbers
             // its lines through the context it carries, and the context is
             // not part of the change (see `firstChangedLine`).

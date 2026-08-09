@@ -122,6 +122,52 @@ pub struct Baseline {
     pub scope: Scope,
 }
 
+/// A settled statement about one file, ready to be worded.
+///
+/// The two estimates carry the baseline they were measured against, because
+/// the sentence has to name the range the sample actually covered rather
+/// than imply the whole repository agrees.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Notice {
+    /// (a) `Line endings change · CRLF → LF`
+    Flipped { from: Eol, to: Eol },
+    /// (b) `Mixed line endings · 3 added lines use CRLF, this file uses LF`
+    Mixed { lines: u32, added: Eol, file: Eol },
+    /// (c) `New file uses CRLF · other .kt files here look like LF`
+    NewFile { eol: Eol, baseline: Baseline },
+    /// (d) `First line ending in this file · CRLF · …`
+    FirstEnding { eol: Eol, baseline: Baseline },
+}
+
+/// Pairs a reading with a baseline. `None` is silence, and every way of not
+/// knowing ends up here: git ruling the path out, no baseline to compare
+/// against, or a file that agrees with its neighbours after all.
+///
+/// A history diff simply arrives with no baseline, which is what keeps the
+/// two estimates out of it: the files around a changed one, as they stood at
+/// that commit, are not the files on disk.
+pub fn settle(reading: Reading, baseline: Option<&Baseline>) -> Option<Notice> {
+    match reading {
+        Reading::Quiet => None,
+        Reading::Flipped { from, to } => Some(Notice::Flipped { from, to }),
+        Reading::Mixed { lines, added, file } => Some(Notice::Mixed { lines, added, file }),
+        Reading::NewFile { eol } => match baseline {
+            Some(b) if b.eol != eol => Some(Notice::NewFile {
+                eol,
+                baseline: b.clone(),
+            }),
+            _ => None,
+        },
+        Reading::FirstEnding { eol } => match baseline {
+            Some(b) if b.eol != eol => Some(Notice::FirstEnding {
+                eol,
+                baseline: b.clone(),
+            }),
+            _ => None,
+        },
+    }
+}
+
 /// What git's own settings decide about a path before anything is sampled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ruling {
@@ -547,6 +593,13 @@ fn take_spread(from: &[String], want: usize, group: Group, into: &mut Vec<(Strin
             into.push((p.clone(), group));
         }
     }
+}
+
+/// What a baseline may be reused for: everything of the same extension in
+/// the same directory has the same neighbours and the same answer.
+pub fn cache_key(path: &str) -> (String, String) {
+    let (dir, ext) = split_dir_ext(path);
+    (dir.to_string(), ext.to_string())
 }
 
 /// The directory a path sits in and the extension of its file name, both

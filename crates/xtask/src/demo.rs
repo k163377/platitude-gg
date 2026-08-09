@@ -56,6 +56,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
     match preset {
         "basic" => basic(&mut repo)?,
         "dirty" => dirty(&mut repo)?,
+        "eol" => eol(&mut repo)?,
         "conflict" => conflict(&mut repo)?,
         "rebase-conflict" => rebase_conflict(&mut repo)?,
         "rebase-staged" => rebase_staged(&mut repo)?,
@@ -827,6 +828,56 @@ fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
          - measure the cold start once more\n\
          \n\
          Nothing here is recorded yet.\n",
+    )?;
+    Ok(())
+}
+
+/// All four line-ending cases at once, in a directory with a house style.
+///
+/// The neighbours are what makes the two estimated cases sayable: three
+/// usable votes are needed, and `flipped.kt` (CRLF in the work tree),
+/// `mixed.kt` (mixed) and `bare.kt` (no ending at all) can none of them
+/// vote. The four plain ones sort ahead of `flipped.kt`, so the sample is
+/// unanimous LF and the notice may say "here".
+fn eol(repo: &mut DemoRepo) -> Result<(), String> {
+    for name in ["alpha", "beta", "delta", "gamma"] {
+        repo.commit(
+            &format!("src/{name}.kt"),
+            &format!("fun {name}() = \"{name}\"\n"),
+            &format!("feat: {name}"),
+        )?;
+    }
+    repo.commit(
+        "src/flipped.kt",
+        "fun one() = 1\nfun two() = 2\nfun three() = 3\n",
+        "feat: three of them",
+    )?;
+    // Long enough that the untouched lines outnumber the changed one, so
+    // the notice can name what the file uses.
+    repo.commit(
+        "src/mixed.kt",
+        "fun a() = 1\nfun b() = 2\nfun c() = 3\nfun d() = 4\nfun e() = 5\n",
+        "feat: five of them",
+    )?;
+    repo.commit("src/bare.kt", "fun bare() = 0", "feat: no ending at all")?;
+
+    // (a) every line's ending changes, and nothing else does.
+    repo.write(
+        "src/flipped.kt",
+        "fun one() = 1\r\nfun two() = 2\r\nfun three() = 3\r\n",
+    )?;
+    // (b) one line lands with the other ending.
+    repo.write(
+        "src/mixed.kt",
+        "fun a() = 1\nfun b() = 2\nfun c() = 3\r\nfun d() = 4\nfun e() = 5\n",
+    )?;
+    // (d) the file that had none gains its first.
+    repo.write("src/bare.kt", "fun bare() = 0\r\n")?;
+    // (c) a file the repository has never seen, disagreeing with its
+    // neighbours.
+    repo.write(
+        "src/fresh.kt",
+        "fun fresh() = \"new\"\r\nfun alsoFresh() = \"new\"\r\n",
     )?;
     Ok(())
 }

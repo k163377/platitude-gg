@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use platitude_core::Oid;
 use platitude_core::details::DiffTarget;
+use platitude_core::eol;
 use platitude_core::preview::{FilePreview, PreviewSide};
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
@@ -63,6 +64,18 @@ pub struct DiffModel {
     /// cannot hold a u64). Empty while loading — a selection made against
     /// no diff has nothing valid to address.
     fingerprint: String,
+    /// What the diff said about line endings, taken apart into the pieces
+    /// one sentence needs: which of the four it is (`""` = nothing to
+    /// say), the two endings in the order the sentence names them, how
+    /// many lines it is about, and how far the sample behind it reached.
+    /// The sentence itself is `Words.lineEndings` — the pieces are here
+    /// because working them out is not QML's job.
+    ending_kind: String,
+    ending_from: String,
+    ending_to: String,
+    ending_lines: i32,
+    ending_scope: String,
+    ending_ext: String,
     current_key: String,
     feed: Option<Arc<Feed<crate::hub::DiffMsg>>>,
     tab_id: i32,
@@ -106,6 +119,12 @@ impl DiffModel {
         Notify = changed
     );
     qproperty!("fingerprint", Member = fingerprint, Notify = changed);
+    qproperty!("endingKind", Member = ending_kind, Notify = changed);
+    qproperty!("endingFrom", Member = ending_from, Notify = changed);
+    qproperty!("endingTo", Member = ending_to, Notify = changed);
+    qproperty!("endingLines", Member = ending_lines, Notify = changed);
+    qproperty!("endingScope", Member = ending_scope, Notify = changed);
+    qproperty!("endingExt", Member = ending_ext, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -167,6 +186,7 @@ impl DiffModel {
         self.is_combined = false;
         self.unmerged = false;
         self.loading = false;
+        self.apply_endings(None);
         self.apply_preview(None);
         self.reset();
         self.changed();
@@ -189,6 +209,7 @@ impl DiffModel {
         self.is_combined = is_combined(&msg.patches);
         self.unmerged = is_unmerged_only(&msg.patches);
         self.fingerprint = format!("{:016x}", msg.fingerprint);
+        self.apply_endings(msg.endings.as_ref());
         self.apply_preview(msg.preview.as_ref());
         self.reset();
         let rows = flatten_patches(&msg.patches, msg.preview.is_none())
@@ -224,6 +245,10 @@ impl DiffModel {
         self.title = title;
         self.is_binary = false;
         self.fingerprint = String::new();
+        // Goes with the fingerprint rather than with the rows: it is a
+        // statement about bytes that have not been read yet, and a notice
+        // held over from the last file would be about that file.
+        self.apply_endings(None);
         self.loading = true;
         if !same_file {
             // Goes down with the rows it describes: while they are still
@@ -239,6 +264,50 @@ impl DiffModel {
         if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
             session.load_diff(target);
         }
+    }
+
+    /// Takes a line-ending notice apart into the pieces its sentence needs.
+    /// `None` resets — which is also what "nothing to say" looks like.
+    fn apply_endings(&mut self, notice: Option<&eol::Notice>) {
+        self.ending_kind.clear();
+        self.ending_from.clear();
+        self.ending_to.clear();
+        self.ending_lines = 0;
+        self.ending_scope.clear();
+        self.ending_ext.clear();
+        let Some(notice) = notice else { return };
+        // `from` and `to` are the two endings in the order the sentence
+        // names them, whichever of the four it turns out to be.
+        let (kind, from, to) = match notice {
+            eol::Notice::Flipped { from, to } => ("flipped", *from, *to),
+            eol::Notice::Mixed {
+                lines, added, file, ..
+            } => {
+                self.ending_lines = i32::try_from(*lines).unwrap_or(i32::MAX);
+                ("mixed", *added, *file)
+            }
+            eol::Notice::NewFile { eol, baseline } => {
+                self.apply_scope(baseline);
+                ("new", *eol, baseline.eol)
+            }
+            eol::Notice::FirstEnding { eol, baseline } => {
+                self.apply_scope(baseline);
+                ("first", *eol, baseline.eol)
+            }
+        };
+        self.ending_kind = kind.to_string();
+        self.ending_from = from.as_str().to_string();
+        self.ending_to = to.as_str().to_string();
+    }
+
+    fn apply_scope(&mut self, baseline: &eol::Baseline) {
+        let (scope, ext) = match &baseline.scope {
+            eol::Scope::Here(ext) => ("here", ext.as_str()),
+            eol::Scope::Ext(ext) => ("ext", ext.as_str()),
+            eol::Scope::Repo => ("repo", ""),
+        };
+        self.ending_scope = scope.to_string();
+        self.ending_ext = ext.to_string();
     }
 
     /// Maps the core preview onto the QML-facing strings. `None` resets.

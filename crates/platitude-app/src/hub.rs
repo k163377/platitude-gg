@@ -234,6 +234,8 @@ pub struct DiffMsg {
     /// Fingerprint of the diff's source bytes; selections carry it back
     /// so a partial write can refuse a drifted diff.
     pub fingerprint: u64,
+    /// What the same bytes said about line endings, if anything.
+    pub endings: Option<platitude_core::eol::Notice>,
 }
 
 /// A queue whose consumer is one QML object on the Qt main thread.
@@ -449,12 +451,14 @@ impl SessionSink for BridgeSink {
                 patches,
                 preview,
                 fingerprint,
+                endings,
             } => {
                 self.feeds.diff.push_replace(DiffMsg {
                     target,
                     patches,
                     preview,
                     fingerprint,
+                    endings,
                 });
             }
             SessionEvent::CommandStarted {
