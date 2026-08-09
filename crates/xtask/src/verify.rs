@@ -420,7 +420,7 @@ fn folder_for(
             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
             Ok(dir.display().to_string())
         }
-        "open-bare" => {
+        "open-bare" | "open-fail-tab-bare" => {
             let dir = made.join("origin.git");
             std::fs::create_dir_all(&made).map_err(|e| e.to_string())?;
             let status = Command::new("git")

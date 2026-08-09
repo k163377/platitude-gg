@@ -27,7 +27,15 @@ pub struct RepoTab {
     /// the folder the dialog last left off in — which is the repository
     /// itself, the one place with nothing to open.
     picker_folder_url: String,
+    /// Why the repository would not open: git's own words. Read only on
+    /// the `other` kind — for the two the application can name itself,
+    /// the heading says it and this would only repeat it in lower case.
     error: String,
+    /// Which of the three the failure was (`plain` / `bare` / `other`),
+    /// the same word the picker's dialog branches on.
+    error_kind: String,
+    /// The folder that would not open, for the line under the heading.
+    error_path: String,
     last_error: String,
     tags_shown: bool,
     /// Write commands currently in flight (they are serialized per session,
@@ -150,6 +158,8 @@ impl Default for RepoTab {
             repo_path: String::new(),
             picker_folder_url: String::new(),
             error: String::new(),
+            error_kind: String::new(),
+            error_path: String::new(),
             last_error: String::new(),
             // Mirrors core LogOptions::default().
             tags_shown: true,
@@ -283,6 +293,8 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!("error", Member = error, Notify = changed);
+    qproperty!("errorKind", Member = error_kind, Notify = changed);
+    qproperty!("errorPath", Member = error_path, Notify = changed);
     qproperty!("lastError", Member = last_error, Notify = changed);
     qproperty!("tagsShown", Member = tags_shown, Notify = changed);
     qproperty!("busyCount", Member = busy_count, Notify = changed);
@@ -472,8 +484,14 @@ impl RepoTab {
                     self.picker_folder_url = picker_folder_url(std::path::Path::new(&path));
                     self.repo_path = path;
                 }
-                TabMsg::OpenFailed { message } => {
+                TabMsg::OpenFailed {
+                    kind,
+                    path,
+                    message,
+                } => {
                     self.state = "error".into();
+                    self.error_kind = kind.into();
+                    self.error_path = path;
                     self.error = message;
                 }
                 TabMsg::OpError { message } => {

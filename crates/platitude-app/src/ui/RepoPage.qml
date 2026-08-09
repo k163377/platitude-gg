@@ -3479,8 +3479,16 @@ Item {
 
             // ---- open failed ------------------------------------------
             // In the panes' place rather than over the whole page, so the
-            // log stays where it always is — under it, and open, since
-            // the line that explains this is git's own.
+            // command log stays reachable under it.
+            //
+            // The same three lines the picker's dialog would have said,
+            // in the same words: which of the three it was is core's
+            // answer (`errorKind`), not something read off git's wording.
+            // git's own line shows on `other` alone — the two the
+            // application can name itself are named by the heading, and
+            // repeating it in lower case underneath (which is what this
+            // screen used to do, in red, as though git had said it) says
+            // nothing twice.
             Item {
                 visible: page.openFailed
                 SplitView.fillHeight: true
@@ -3490,12 +3498,28 @@ Item {
                     spacing: Theme.spaceMd
                     width: Math.min(700, page.width - 2 * Theme.spaceXl)
                     Label {
-                        text: qsTr("Could not open this folder as a git repository")
+                        text: repoTab.errorKind === "bare"
+                              ? qsTr("A bare repository has nothing to show")
+                              : repoTab.errorKind === "other"
+                                ? qsTr("Could not open this folder")
+                                : qsTr("Not a git repository")
                         font.pixelSize: Theme.fontLg
                         font.weight: Font.DemiBold
                         anchors.horizontalCenter: parent.horizontalCenter
                     }
                     Label {
+                        visible: repoTab.errorKind !== "other"
+                        text: repoTab.errorPath
+                        color: Theme.textSecondary
+                        elide: Text.ElideMiddle
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    // git's words, and the only red on this screen: the
+                    // gate that reports a git it cannot use draws the
+                    // line the same way (Main.qml).
+                    Label {
+                        visible: repoTab.errorKind === "other"
                         text: repoTab.error
                         color: Theme.danger
                         wrapMode: Text.Wrap

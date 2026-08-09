@@ -55,7 +55,14 @@ pub enum TabMsg {
         title: String,
         path: String,
     },
+    /// The repository behind this tab would not open. `kind` is the same
+    /// three the picker's dialog knows (`plain` / `bare` / `other`), so
+    /// the two screens say the same thing in the same words; `path` fills
+    /// the line under the heading, and `message` is git's own — shown
+    /// only for `other`, the one case nothing better can be said about.
     OpenFailed {
+        kind: &'static str,
+        path: String,
         message: String,
     },
     OpError {
@@ -349,9 +356,23 @@ impl SessionSink for BridgeSink {
                     path: info.workdir.to_string_lossy().into_owned(),
                 });
             }
-            SessionEvent::OpenFailed { error } => self.feeds.tab.push(TabMsg::OpenFailed {
-                message: error.to_string(),
-            }),
+            SessionEvent::OpenFailed { error } => {
+                let (kind, path) = match &error {
+                    platitude_core::GitError::NotARepository { path, bare, .. } => (
+                        if *bare { "bare" } else { "plain" },
+                        path.to_string_lossy().into_owned(),
+                    ),
+                    // git had trouble of its own, and only it can say
+                    // what — the screen quotes it rather than putting a
+                    // sentence of ours in git's mouth.
+                    _ => ("other", String::new()),
+                };
+                self.feeds.tab.push(TabMsg::OpenFailed {
+                    kind,
+                    path,
+                    message: error.to_string(),
+                });
+            }
             SessionEvent::LogStarted { generation } => {
                 self.feeds.graph.push(GraphMsg::Started { generation });
             }
