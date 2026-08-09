@@ -22,6 +22,14 @@ Rectangle {
     /// Which shape the middle button is in.
     property bool windowMaximized: false
 
+    /// Automation: what the band came out to. A layout change can lose the
+    /// window's own buttons, or the run of band left to take hold of, or
+    /// push either off the end — and none of that shows in a screenshot
+    /// taken where the platform draws no buttons at all.
+    readonly property real bandGrabRun: tabs.grabRun
+    readonly property real bandButtonsX: minimizeButton.x
+    readonly property real bandRightMargin: bandRow.anchors.rightMargin
+
     signal openRepositoryRequested()
     signal identityEditRequested()
     signal settingsRequested()
@@ -166,6 +174,7 @@ Rectangle {
     color: Theme.bgElevated
 
     RowLayout {
+        id: bandRow
         anchors.fill: parent
         // The band's own right edge is not the window's: the client area
         // reaches past what is drawn, so a row flush with it puts the
@@ -767,6 +776,7 @@ Rectangle {
         // and glyphs that cannot be styled and a maximize mark that never
         // becomes a restore mark (P3-確認事項 §ウィンドウ chrome).
         WindowButton {
+            id: minimizeButton
             visible: topBar.captionMerged
             Layout.leftMargin: Theme.spaceXs
             kind: "window-minimize"

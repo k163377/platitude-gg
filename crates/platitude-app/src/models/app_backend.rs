@@ -56,6 +56,11 @@ pub struct AppBackend {
     auto_select: bool,
     auto_scroll: bool,
     auto_wip: bool,
+    /// Verification hook: take the shape the platforms that cannot merge
+    /// the band into the title bar get. Nobody here can run those two, so
+    /// without a way to ask for their layout from this side it is only
+    /// ever exercised by the people who cannot report back.
+    plain_chrome: bool,
     /// Screenshot hook: `"<name>|<email>"` prefills the identity screen.
     auto_identity: String,
     /// Screenshot hook: submit that prefilled identity straight away.
@@ -181,6 +186,7 @@ impl Default for AppBackend {
             auto_select: std::env::var("PG_AUTO_SELECT").as_deref() == Ok("1"),
             auto_scroll: std::env::var("PG_AUTO_SCROLL").as_deref() == Ok("1"),
             auto_wip: std::env::var("PG_AUTO_WIP").as_deref() == Ok("1"),
+            plain_chrome: std::env::var("PG_PLAIN_CHROME").as_deref() == Ok("1"),
             auto_identity: std::env::var("PG_AUTO_IDENTITY").unwrap_or_default(),
             auto_identity_save: std::env::var("PG_AUTO_IDENTITY_SAVE").as_deref() == Ok("1"),
             // Smoke-test hook: "top" / "bottom" jumps the graph after
@@ -249,6 +255,7 @@ impl AppBackend {
     qproperty!("autoSelect", Member = auto_select, Constant);
     qproperty!("autoScroll", Member = auto_scroll, Constant);
     qproperty!("autoWip", Member = auto_wip, Constant);
+    qproperty!("plainChrome", Member = plain_chrome, Constant);
     qproperty!("scrollTo", Member = scroll_to, Constant);
     qproperty!("autoAct", Member = auto_act, Constant);
     qproperty!("autoActArg", Member = auto_act_arg, Constant);

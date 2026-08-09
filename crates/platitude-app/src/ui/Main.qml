@@ -28,7 +28,13 @@ ApplicationWindow {
     /// own title bar above an ordinary tab row — the layout this app
     /// already had, so the fallback is not new code (P3-確認事項
     /// §ウィンドウ chrome).
+    ///
+    /// `PG_PLAIN_CHROME=1` asks for the other shape from here: the two
+    /// platforms that keep it cannot be run on this machine, so without a
+    /// way to see their layout it is only ever exercised by the people who
+    /// cannot report back.
     readonly property bool captionMerged: Qt.platform.os === "windows"
+                                          && !AppBackend.plainChrome
 
     // Three hints make the band the title bar, and the fourth thing that
     // matters is what is *not* asked for:
@@ -314,6 +320,22 @@ ApplicationWindow {
         onTriggered: root.reportState()
     }
 
+    // PG_AUTO_ACT=band: the shape the title-bar band settled into. The
+    // numbers rather than a screenshot, because the headless platform
+    // draws no window buttons of its own — a band that lost the grab run
+    // or pushed its buttons off the end looks fine in the picture.
+    Timer {
+        id: bandActTimer
+        interval: 1200
+        onTriggered: AppBackend.report(
+            "band merged=" + root.captionMerged
+            + " plain=" + AppBackend.plainChrome
+            + " grabRun=" + topBar.bandGrabRun
+            + " buttonsX=" + topBar.bandButtonsX
+            + " width=" + topBar.width
+            + " rightMargin=" + topBar.bandRightMargin)
+    }
+
     // PG_AUTO_ACT=state: what a launch came back to, and (with the
     // argument "change") something for the next one to come back to.
     // Two runs sharing one --config-dir are what actually tests this —
@@ -392,6 +414,8 @@ ApplicationWindow {
         }
         if (AppBackend.autoAct === "state")
             stateActTimer.start()
+        if (AppBackend.autoAct === "band")
+            bandActTimer.start()
         if (AppBackend.autoQuitMs > 0)
             quitTimer.start()
         if (AppBackend.shotDir !== "")
