@@ -101,15 +101,22 @@ ApplicationWindow {
     // 704x245 floor, the window took it). So every size this application
     // sets itself goes through `holdFloor` below, which is what the
     // remembered shape and the two floors that move are put through.
+    /// The page the floor is read off. Not `curPage`: with no tab open
+    /// that is null, and the window is not empty — it is showing the blank
+    /// page, which has the same three panes with the same minimums, and
+    /// would have gone on being squeezable while every other window was
+    /// held (the floor would have fallen to the band's own, 628).
+    readonly property var floorPage:
+        root.curPage !== null ? root.curPage : blankPage.item
     readonly property real floorWidth:
         Math.max(topBar.floorWidth,
-                 root.curPage !== null ? root.curPage.floorWidth : 0)
+                 root.floorPage !== null ? root.floorPage.floorWidth : 0)
     readonly property real floorHeight:
         // The band, the divider under it, and the line the window's bottom
         // edge is drawn as — the three rows of `mainUi` that are not the
         // page (they carry their own heights; the page's is its own floor).
         Theme.toolbarHeight + Theme.splitterWidth + Theme.borderWidth
-        + (root.curPage !== null ? root.curPage.floorHeight : 0)
+        + (root.floorPage !== null ? root.floorPage.floorHeight : 0)
     minimumWidth: Math.ceil(root.floorWidth)
     minimumHeight: Math.ceil(root.floorHeight)
     /// Puts a window that is standing under its floor back on it. The two
@@ -821,14 +828,14 @@ ApplicationWindow {
         interval: 1200
         running: AppBackend.autoAct === "window-floor"
         onTriggered: {
-            if (root.curPage === null || AppBackend.autoActArg === "") {
+            if (root.floorPage === null || AppBackend.autoActArg === "") {
                 root.reportFloor()
                 return
             }
             if (AppBackend.autoActArg === "fold")
-                root.curPage.sidebarCollapsed = true
+                root.floorPage.sidebarCollapsed = true
             else if (AppBackend.autoActArg === "wip")
-                root.curPage.showWip()
+                root.floorPage.showWip()
             floorShrinkTimer.start()
         }
     }
@@ -858,9 +865,9 @@ ApplicationWindow {
         interval: Metrics.anchorDelayMs
         onTriggered: {
             if (AppBackend.autoActArg === "fold")
-                root.curPage.sidebarCollapsed = false
+                root.floorPage.sidebarCollapsed = false
             else if (AppBackend.autoActArg === "log")
-                root.curPage.commandsOpen = true
+                root.floorPage.commandsOpen = true
             floorReportTimer.start()
         }
     }
@@ -884,16 +891,19 @@ ApplicationWindow {
             + " floorW=" + floorW + " floorH=" + floorH
             + " w=" + root.width + " h=" + root.height
             + " from=" + (root.floorStoodAt === "" ? "-" : root.floorStoodAt)
-            + " folded=" + (root.curPage !== null
-                            && root.curPage.sidebarCollapsed)
-            + " log=" + (root.curPage !== null && root.curPage.commandsOpen)
+            // The page the floor was read off, which with no tab open is
+            // the blank one — `tabs=0` is the run that proves it counts.
+            + " tabs=" + pageRepeater.count
+            + " folded=" + (root.floorPage !== null
+                            && root.floorPage.sidebarCollapsed)
+            + " log=" + (root.floorPage !== null && root.floorPage.commandsOpen)
             // What the right pane made of a height that cannot hold it:
             // scrolling is the answer, and a scroll bar is not something
             // a headless run can see (`wip` shape).
-            + " wipScrolls=" + (root.curPage !== null
-                                && root.curPage.wipBlockScrolls)
-            + " detailsOver=" + (root.curPage !== null
-                                 ? root.curPage.detailsOverHeight : 0))
+            + " wipScrolls=" + (root.floorPage !== null
+                                && root.floorPage.wipBlockScrolls)
+            + " detailsOver=" + (root.floorPage !== null
+                                 ? root.floorPage.detailsOverHeight : 0))
     }
 
     // PG_AUTO_ACT=state: what a launch came back to, and (with the
@@ -1312,6 +1322,7 @@ ApplicationWindow {
         // Built only while it is needed, so an app that starts with tabs
         // never pays for it.
         Loader {
+            id: blankPage
             Layout.fillWidth: true
             Layout.fillHeight: true
             active: tabsModel.currentIndex < 0
