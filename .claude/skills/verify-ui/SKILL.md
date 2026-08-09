@@ -17,6 +17,8 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 **既に開いているリポジトリを開き直す形は `open-again`**(引数はパス、省略で先頭タブ自身の綴り。報告行 `open_again tabs= active= asked= open=`)。**2 通りを対で読む**: `--preset basic --preset stashes` に**引数なし**で「移る」側(起動直後は `active=1`、頼んだ後に `tabs=2 active=0`)、**git の綴りを引数で渡す**方が「綴りが違っても同じフォルダ」側(`--repo` にはシェルの綴り = `C:\Users\WRONGW~1\…` を渡し、引数に `git worktree list` が出す `C:/Users/wrongwrong/…` を渡す → `tabs=1`)。**後者だけが本題** — 素の文字列比較でも前者は通る。WORKTREES の行から入る形は `nav-dbl worktree:<git の綴り>` で、判定は `opened repository tab` のログが 1 本きりであること。**復元側は仕込みが要る**(`--config-dir` に重複入りの `[tabs] paths` を書いた `state.toml` を置き `state --restore`)— `restored tab dropped: already open` が落ちた件数を、`state tabs= active=` が残った形を言う。
 
+**2 つ目のプロセスが出す窓は `solo`** — **xtask 自身が `--config-dir` の `lock` を握ってから**アプリを起動するので、起動するのは本物の 2 つ目(状態を真似るフラグは無い)。報告行 `solo blocked= held= gate= main=` で、**`blocked=true` を言わなかった run は FAIL**(仕込みが効かないと絵は普通の窓になり、普通の窓は普通に撮れてしまう)。`--config-dir` を渡さない既定でよい。
+
 **タブ行がタイトルバーを兼ねる帯の形は `band`**(報告行 `band merged= plain= grabRun= buttonsX= width= tabsW= rightMargin=`。offscreen は窓ボタンを OS が描かない = 絵では欠けが見えないため、数字で読む。**`tabsW=` が NaN / 0 はタブ列が丸ごと消えている**(幅式の項が壊れた時の形 — id が同名プロパティをシャドウして NaN、を実際に踏んだ)。`PG_PLAIN_CHROME=1` を立てて撃つと兼ねない側の形 = mac / Linux のレイアウトがこの機械からも出る — `merged=false grabRun=0` が正)。
 
 **設定 / 画面状態の永続化は 2 回の実行で読む**: `state`(引数 `change` で畳み・右ペイン幅・グラフのチップ列 / レーン列の幅・コマンドログ・auto fetch 間隔を動かしてから申告する)。**1 回の実行では何も証明できない** — 同じ `--config-dir` を渡した 2 回目に `--restore` を足すと、`PG_AUTO_OPEN` を渡さない = アプリが自分で憶えているタブを開く経路に入る。報告行 `state tabs= active= opened= collapsed= sidebar= details= graphLabels= graphLanes= commands= maximized= autoFetch=` が両方で一致すれば往復している。**`--config-dir` を渡さない実行は毎回まっさらな一時ディレクトリ**(shot dir の下)で走るので、動確が開発者の実設定を読むことも汚すこともない。**`PG_CONFIG_DIR` 以外の `PG_*` が立っていれば exe 自身もファイル無しに倒す**ので、xtask を通さず直接叩いても実設定は無事(実測: `settings store settings=None state=None`)。**タブの遅延ロードは `opened repository tab` の行数で読む** — 3 タブ復元して 1 本だけなのが正
@@ -51,9 +53,9 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 に発火する(801 = 起動後 1ms。**800 以下は 3500ms 固定に化ける**)。グラフ初回ロードの
 中央リング(`loading && rowTotal === 0`)は demo repo でも first chunk が ~74ms あるので
 `--quit-ms 850` で自然に撮れる(2026-08-08 実測。サイドバーの件数がまだ 0 なのが
-ロード途中の証拠)。**git ゲート(`gitState === "checking"`)だけは撮れない** — ゲートは
-`mainUi` の兄弟に居て、撮影が grab するのは `mainUi` と overlay ミラーの 2 つだけ。
-撮る時は grab 対象をゲートへ差し替える使い捨てパッチが要る(コミットしない)。
+ロード途中の証拠)。**ゲート(git 不在 / もう 1 つ起動していた)も撮れる** — 撮影は
+出ている方を掴む(`gate.visible ? gate : mainUi`)。ゲートは `mainUi` の兄弟なので
+以前は使い捨てパッチが要ったが、ゲートが自分の地を持つようになって解消した。
 
 **ヘッドレスで色を確かめる時はデモリモートの URL を疑う** — 届かないリモートを使う
 検証(`fetch-fail` / `fetch-resume` / 黄の `push`)で通信が成功してしまうと失敗の記録が

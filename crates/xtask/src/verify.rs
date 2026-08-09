@@ -53,11 +53,21 @@ struct Outcome {
     timed_out: bool,
     write_failures: usize,
     allow_write_failure: bool,
+    /// What a verb whose setup this harness takes part in has to be caught
+    /// saying. A screenshot cannot tell a run that reached the state from
+    /// one whose staging quietly did not take: `solo` photographs a
+    /// perfectly good ordinary window if the lock was never held.
+    must_say: Option<&'static str>,
+    said: bool,
 }
 
 impl Outcome {
     fn passed(self) -> bool {
-        self.exit_ok && self.saved && !self.timed_out && !self.write_sank_it()
+        self.exit_ok
+            && self.saved
+            && !self.timed_out
+            && !self.write_sank_it()
+            && (self.must_say.is_none() || self.said)
     }
 
     /// Whether the failing writes are what the verdict turns on — the one
@@ -255,6 +265,30 @@ pub fn run(args: &[String]) -> Result<(), String> {
         cmd.env("PG_AUTO_SELECT", "1");
     }
 
+    // `solo` is the one verb the harness has to take part in: the window
+    // it photographs is the one a *second* process puts up, so somebody
+    // has to be the first. Holding the real lock — rather than setting a
+    // flag that imitates the state — is what makes the picture proof of
+    // the mechanism. The name is `settings::LOCK_FILE`; xtask depends on
+    // std alone (CLAUDE.md), so it is spelled again here, and a drift
+    // shows up as the run reporting `blocked=false` below.
+    let _held = if opts.verb == "solo" {
+        let path = config_dir.join("lock");
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+            .map_err(|e| format!("could not open {}: {e}", path.display()))?;
+        file.try_lock()
+            .map_err(|e| format!("could not hold {}: {e}", path.display()))?;
+        println!("holding: {}", path.display());
+        Some(file)
+    } else {
+        None
+    };
+
     let started = Instant::now();
     let mut child = cmd
         .spawn()
@@ -284,6 +318,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let err_lines = join(stderr);
     let elapsed = started.elapsed();
 
+    let must_say = (opts.verb == "solo").then_some("solo blocked=true");
     let outcome = Outcome {
         exit_ok: status.as_ref().is_some_and(|s| s.success()),
         saved: err_lines
@@ -296,6 +331,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
             .filter(|l| l.contains("write failed"))
             .count(),
         allow_write_failure: opts.allow_write_failure,
+        must_say,
+        said: must_say.is_none_or(|wanted| {
+            err_lines
+                .iter()
+                .chain(out_lines.iter())
+                .any(|l| l.contains(wanted))
+        }),
     };
 
     for line in err_lines.iter().chain(out_lines.iter()) {
@@ -327,6 +369,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
         outcome.write_failures,
         if timed_out { ", TIMED OUT" } else { "" },
     );
+    if let Some(wanted) = outcome.must_say
+        && !outcome.said
+    {
+        println!(
+            "  the run never said `{wanted}` — its staging did not take, and the shot is of \
+             an ordinary window."
+        );
+    }
     if outcome.write_sank_it() {
         println!(
             "  git refused the write this verb asked for — the shot is of the state it \
@@ -365,7 +415,32 @@ mod tests {
         timed_out: false,
         write_failures: 0,
         allow_write_failure: false,
+        must_say: None,
+        said: true,
     };
+
+    #[test]
+    fn a_verb_the_harness_stages_has_to_be_caught_saying_so() {
+        // `solo` photographs an ordinary window if the lock was never
+        // held, and an ordinary window takes a perfectly good picture.
+        let quiet = Outcome {
+            must_say: Some("solo blocked=true"),
+            said: false,
+            ..WELL
+        };
+        assert!(!quiet.passed());
+        assert!(
+            !quiet.write_sank_it(),
+            "nothing was refused; the staging did not take"
+        );
+        assert!(
+            Outcome {
+                said: true,
+                ..quiet
+            }
+            .passed()
+        );
+    }
 
     #[test]
     fn a_refused_write_sinks_the_run_however_good_the_picture() {

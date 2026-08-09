@@ -49,6 +49,9 @@ commands:
       repository, fire PG_AUTO_ACT=<verb> / PG_AUTO_ACT_ARG=<arg>, and
       judge the run by its 'screenshot saved=true' stderr line and by
       whether git refused any of the writes it made.
+      The verb `solo` is run with this process holding the config
+      directory's lock, so the app it starts is a second instance; that
+      run is judged on reporting that it was turned away as well.
       options:
         --repo <dir>      run against this repository
         --preset <name>   or against a fresh demo repo (default: basic)
