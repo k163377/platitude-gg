@@ -10,6 +10,7 @@ pub mod branch;
 pub mod commit;
 pub mod conflict;
 pub mod details;
+pub mod eol;
 pub mod error;
 pub mod graph;
 pub mod identity;

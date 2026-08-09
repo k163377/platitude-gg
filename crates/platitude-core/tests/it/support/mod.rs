@@ -29,7 +29,8 @@ pub struct TestRepo {
 /// Written into `.git/config` right after init — one file write instead of
 /// five `git config` spawns per repo (process spawns dominate suite time on
 /// Windows). Must stay repo-local: the code under test does not see
-/// `global_config`, only this file.
+/// `global_config`, only this file. `{autocrlf}` is filled by
+/// [`TestRepo::init`] / [`TestRepo::init_autocrlf`].
 const REPO_CONFIG: &str = "\
 [user]
 \tname = Test User
@@ -39,7 +40,7 @@ const REPO_CONFIG: &str = "\
 [tag]
 \tgpgSign = false
 [core]
-\tautocrlf = false
+\tautocrlf = {autocrlf}
 ";
 
 /// Test-only speed knobs for TestRepo-spawned git (setup commits are the
@@ -54,7 +55,23 @@ const GLOBAL_CONFIG: &str = "\
 ";
 
 impl TestRepo {
+    /// A repository with `core.autocrlf=false`: git stores and checks out
+    /// bytes verbatim, so what a test writes is what the tests see.
     pub fn init() -> Self {
+        Self::init_with_autocrlf("false")
+    }
+
+    /// A repository with `core.autocrlf=true` — the setting the Git for
+    /// Windows installer offers by default, where git converts CRLF to LF on
+    /// the way into the index and back on the way out. Pinning behaviour
+    /// under it is the only way the conversion path gets walked at all; a
+    /// suite that only ever runs with `false` has never seen what most
+    /// Windows checkouts do.
+    pub fn init_autocrlf() -> Self {
+        Self::init_with_autocrlf("true")
+    }
+
+    fn init_with_autocrlf(autocrlf: &str) -> Self {
         let dir = tempfile::tempdir().expect("create tempdir");
         let path = dir.path().join("repo");
         let global_config = dir.path().join("global-config");
@@ -69,7 +86,8 @@ impl TestRepo {
         repo.git(&["init", "-b", "main"]);
         let config = repo.path.join(".git").join("config");
         let existing = std::fs::read_to_string(&config).expect("read repo config");
-        std::fs::write(&config, format!("{existing}{REPO_CONFIG}")).expect("write repo config");
+        let repo_config = REPO_CONFIG.replace("{autocrlf}", autocrlf);
+        std::fs::write(&config, format!("{existing}{repo_config}")).expect("write repo config");
         repo
     }
 
