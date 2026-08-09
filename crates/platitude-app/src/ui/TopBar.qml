@@ -778,7 +778,7 @@ Rectangle {
                 ToolTip.visible: containsMouse
                 ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: AppBackend.identityUnsaved
-                              ? qsTr("Your name and email were not both saved")
+                              ? qsTr("Name and email were not both saved")
                               : qsTr("No name or email set for commits")
             }
         }

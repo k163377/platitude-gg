@@ -109,9 +109,9 @@ Item {
     /// message and answers to a selector).
     signal refMenuRequested(string name, string full, string oidHex)
     /// Right-click on a working-tree file row, for the same reason.
-    /// `origPath` is where a rename came from ("" otherwise) — undoing one
-    /// takes both of its names.
-    signal fileMenuRequested(string bucket, string path, string origPath)
+    /// Undoing a rename takes both of its names, but the menu reads them
+    /// off the chosen rows (`orig_path`), so the row itself is enough.
+    signal fileMenuRequested(string bucket, string path)
 
     width: listWidth
     height: Theme.rowHeight
@@ -344,8 +344,7 @@ Item {
                     navRow.refMenuRequested(navRow.name, navRow.fullName,
                                             navRow.oid_hex)
                 else if (!navRow.folder && navRow.kindHint === "wt")
-                    navRow.fileMenuRequested(navRow.bucket, navRow.fullName,
-                                             navRow.orig_path)
+                    navRow.fileMenuRequested(navRow.bucket, navRow.fullName)
                 return
             }
             // The second click of a double-click: the first one already

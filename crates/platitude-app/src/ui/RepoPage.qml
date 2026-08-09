@@ -951,8 +951,6 @@ Item {
     // ---- context menu on a working-tree file row --------------------
     property string menuFilePath: ""
     property string menuFileBucket: ""
-    /// Where a staged rename came from ("" for every other row).
-    property string menuFileOrig: ""
     /// Whether this menu's writing rows were on offer as it opened, held
     /// still for as long as it stands (`menuCanSwitch` and the rest).
     property bool menuFileCanWrite: false
@@ -962,13 +960,12 @@ Item {
     /// keys, so a folder in the choice would put a file on the tag that
     /// no command is going to reach.
     property int menuFileCount: 0
-    function openFileMenu(bucket, path, origPath) {
+    function openFileMenu(bucket, path) {
         // A right-click is a click: it walks away from a question that
         // was standing, which may well be about another row.
         page.stopRowAsk()
         page.menuFileBucket = bucket
         page.menuFilePath = path
-        page.menuFileOrig = origPath === undefined ? "" : origPath
         page.menuFileCanWrite = repoTab.busyCount === 0
         // What the discard row would do, worked out once here: the choice
         // cannot change while the menu is up, so the words the row says
@@ -1355,7 +1352,7 @@ Item {
         // The answer is a property of the branch, not of the row, so it
         // is already in hand when the menu opens: a mark that appeared a
         // moment later would re-indent every row in the menu
-        // (`AppMenu.holdColW`) with the hand already on its way.
+        // (`AppMenu.holdIndent`) with the hand already on its way.
         AppMenuItem {
             id: dropCommitItem
             code: "drop"
@@ -2347,11 +2344,10 @@ Item {
             const bucket = act.startsWith("delete-file") ? "untracked"
                          : act.startsWith("discard-staged") ? "staged"
                          : "unstaged"
-            // The row carries where a rename came from, as it does for a
-            // right-click, and the right-click makes it the whole choice.
-            const row = wipPane.rowFor(arg)
+            // The right-click makes the named row the whole choice, and
+            // the menu reads everything else off the chosen rows.
             wipPane.chooseOnly(bucket, arg)
-            page.openFileMenu(bucket, arg, row ? row.orig_path : "")
+            page.openFileMenu(bucket, arg)
             AppBackend.report("discard_row " + fileDiscardItem.text)
             if (act.endsWith("-go"))
                 fileDiscardItem.completeHold()
@@ -3940,7 +3936,7 @@ Item {
                                   && page.selectedStashRef === ""
                                   && page.selectedInHistory
                         editBlocked: page.selectedStashRef !== ""
-                            ? qsTr("Rename a stash in the list on the left")
+                            ? qsTr("Rename it in the list on the left")
                             : (detailsModel.shaHex !== "" && !page.selectedInHistory
                                ? qsTr("Not in the current history — switch to a branch that has it")
                                : "")

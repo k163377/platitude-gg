@@ -75,7 +75,7 @@ ColumnLayout {
           ? qsTr("The signing key has expired")
         : detailsPane.signatureCode === "R"
           ? qsTr("The signing key was revoked")
-        : qsTr("Cannot be checked — no key here to check it against")
+        : qsTr("Cannot be checked — the key is not here")
 
     // ---- co-authors -------------------------------------------------
     // Packed by encode::encode_co_authors; unpacked here the way the

@@ -64,15 +64,7 @@ Rectangle {
     // The bar comes down from the top of the pane and pushes the history
     // down (デザイン規約 §可否・警告の出し場所); the row it concerns is
     // marked rather than worded, so the question is written exactly once.
-    /// Raises the bar. `oidHex` is the row it is about ("" for none, and
-    /// a row outside the loaded window simply goes unmarked — the bar
-    /// stands either way).
-    /// `hold` takes the answer as a press held down instead of a click,
-    /// and `tip` is what the pill says on hover — the questions whose
-    /// write leaves this machine ask that way (デザイン規約 §長押し).
-    /// `form` is what the question needs in order to take an answer at all
-    /// — a chooser, a name box. Most questions have none: they are
-    /// answered by the pill and nothing else.
+
     /// The find bar's state, and its box, for the headless run — the key
     /// that opens it cannot be pressed from there.
     readonly property alias findOpen: findBar.open
@@ -87,6 +79,15 @@ Rectangle {
         findBar.raise()
     }
 
+    /// Raises the bar. `oidHex` is the row it is about ("" for none, and
+    /// a row outside the loaded window simply goes unmarked — the bar
+    /// stands either way).
+    /// `hold` takes the answer as a press held down instead of a click,
+    /// and `tip` is what the pill says on hover — the questions whose
+    /// write leaves this machine ask that way (デザイン規約 §長押し).
+    /// `form` is what the question needs in order to take an answer at all
+    /// — a chooser, a name box. Most questions have none: they are
+    /// answered by the pill and nothing else.
     function startAsking(oidHex, label, detail, accept, danger,
                          hold = false, tip = "", form = null) {
         graphList.namingOid = ""
@@ -446,7 +447,7 @@ Rectangle {
                 leftPadding: Theme.spaceSm
                 rightPadding: Theme.spaceSm
                 wrapMode: Text.Wrap
-                text: qsTr("Showing the first %L1 commits — older history is not loaded")
+                text: qsTr("Only the first %L1 commits are loaded")
                       .arg(graphArea.graphModel.rowTotal)
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontMd
@@ -824,11 +825,11 @@ Rectangle {
             text: qsTr("A thin, fast GUI over your installed git.")
             color: Theme.textSecondary
             // Its natural width while the column has room for it, and
-            // wrapped inside the column when it has not: this pane is
-            // 216px at the window's floor and the line asks for half as
-            // much again, which unbounded it took from the panes on
-            // either side (規約 §窓の床). The same shape the error line
-            // above already has.
+            // wrapped inside the column when it has not: at the window's
+            // floor this pane is narrower than the line asks for, and
+            // unbounded it took the difference from the panes on either
+            // side (規約 §窓の床). The same shape the error line above
+            // already has.
             width: Math.min(implicitWidth,
                             graphArea.width - 2 * Theme.spaceXl)
             wrapMode: Text.Wrap

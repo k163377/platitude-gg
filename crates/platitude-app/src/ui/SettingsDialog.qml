@@ -202,7 +202,7 @@ AppDialog {
                 wrapMode: Text.Wrap
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSm
-                text: qsTr("Runs git fetch --prune on every open repository, at most once per interval. Leave it empty to switch it off; %1 minutes is the longest interval offered.")
+                text: qsTr("Runs git fetch --prune on every open repository, at most once per interval. Empty means off; %1 minutes is the longest interval.")
                       .arg(AppBackend.autoFetchMaxMinutes)
             }
         }
@@ -400,7 +400,7 @@ AppDialog {
                 wrapMode: Text.Wrap
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSm
-                text: qsTr("A picture for anyone whose commits you read. The list offers the authors of the repository you are in. Nothing is fetched: the picture is one of your own files, copied in beside these settings.")
+                text: qsTr("A picture for anyone whose commits you read. The list offers this repository's authors. Nothing is fetched: the picture is one of your own files, copied in beside these settings.")
             }
         }
         FileDialog {

@@ -29,9 +29,8 @@ ColumnLayout {
     /// keep index / staged only.
     signal stashSubmitted(string message, bool untracked, bool keepIndex, bool stagedOnly)
     /// Right-click on a file row; the page owns the menu because
-    /// delegates are recycled out from under an open popup. `origPath` is
-    /// where a rename came from ("" otherwise).
-    signal fileMenuRequested(string bucket, string path, string origPath)
+    /// delegates are recycled out from under an open popup.
+    signal fileMenuRequested(string bucket, string path)
 
     /// Automation: run one of the stopped operation's held rows to its
     /// end, named by its flag.
@@ -1010,10 +1009,10 @@ ColumnLayout {
                 if (wipPane.applyClick(bucket, path, modifiers))
                     wipPane.fileActivated(bucket, path, origPath)
             }
-            onFileMenuRequested: (bucket, path, origPath) => {
+            onFileMenuRequested: (bucket, path) => {
                 if (!wipPane.isChosen(bucket, path))
                     wipPane.chooseOnly(bucket, path)
-                wipPane.fileMenuRequested(bucket, path, origPath)
+                wipPane.fileMenuRequested(bucket, path)
             }
             onFolderClicked: key => wipPane.worktreeModel.toggleFolder(key)
             stagePeer: wipPane.stagePeerOf(bucket, fullName)
