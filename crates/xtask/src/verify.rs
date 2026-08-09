@@ -80,8 +80,10 @@ struct Outcome {
     allow_write_failure: bool,
     /// What a verb whose failure the camera cannot see has to be caught
     /// saying. `solo` photographs a perfectly good ordinary window if the
-    /// lock was never held, and `details-fit` frames a pane whose content
-    /// ran off the right of the window the same as one that fits.
+    /// lock was never held, `details-fit` frames a pane whose content ran
+    /// off the right of the window the same as one that fits, and a
+    /// maximised window that leaves its own edges unpainted has no
+    /// desktop beside it to show `window-fill` the gap against.
     must_say: Option<&'static str>,
     said: bool,
 }
@@ -393,6 +395,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "identity-half" => {
             Some("state=ready dialog=true nameSaved=true emailSaved=false unsaved=true")
         }
+        "window-fill" => Some("window_fill fills=true"),
         _ => None,
     };
     let outcome = Outcome {

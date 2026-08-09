@@ -106,6 +106,14 @@ pub fn take_frame_hit_test() {
     win32::take_frame_hit_test();
 }
 
+// The scene is never told this border's width, though a maximised frame
+// is inflated by it on every side (`hit_test` measures the resize edges
+// by it, in device pixels, and that is the only reader). The QML side has
+// no use for it: those pixels are non-client, and the client comes back
+// deflated to the work area exactly, so nothing the app paints is ever
+// out there. The measurement, and the shifted window that came of not
+// having taken it, are written up on `Main.mainUi`.
+
 /// Where the band's empty run sits, in logical scene pixels: from `x0`
 /// to `x1`, reaching down from the window's top edge to `bottom`. The
 /// subclass turns it into device pixels itself, per hit test, so a DPI

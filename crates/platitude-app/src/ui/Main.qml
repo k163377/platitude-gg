@@ -81,8 +81,8 @@ ApplicationWindow {
     /// coordinates — the one stretch it answers HTCAPTION for, which is
     /// what makes it drag, snap, maximise on a double-click and open the
     /// window menu, all as the platform's own gestures. Called from the
-    /// strip's own layout changes and from the shifts the strip cannot
-    /// see: the maximised inset, and the window resizing.
+    /// strip's own layout changes and from the one shift the strip cannot
+    /// see: the window resizing, which maximising is.
     function reportCaptionStrip() {
         if (!root.captionMerged || topBar.grabRunItem === null)
             return
@@ -91,7 +91,6 @@ ApplicationWindow {
         AppBackend.setCaptionStrip(at.x, at.x + run.width, at.y + run.height)
     }
     onWidthChanged: root.reportCaptionStrip()
-    onMaximizedInsetChanged: root.reportCaptionStrip()
 
     /// What Windows has to be told about this window, whatever the window
     /// turns out to be for. A run that was turned away gets a window too,
@@ -121,19 +120,6 @@ ApplicationWindow {
         root.reportCaptionStrip()
     }
 
-    /// How far a maximised window reaches past the screen.
-    ///
-    /// Windows inflates a maximised frame by the width of its invisible
-    /// resize border on every side — the platform's own title bar used to
-    /// absorb that at the top, and there is no title bar here to do it
-    /// (measured: a 1936x1048 frame on a 1920x1032 work area, so 8 all
-    /// round, which was taking the top of the band and the outer edge of
-    /// the close button off screen with it). Read from the two sizes
-    /// rather than from a metric, so whatever the border turns out to be
-    /// on a given display is what comes back.
-    readonly property real maximizedInset:
-        root.captionMerged && root.visibility === Window.Maximized
-        ? Math.max(0, (root.width - Screen.desktopAvailableWidth) / 2) : 0
     font.family: Theme.uiFamily
     font.pixelSize: Theme.fontMd
 
@@ -637,6 +623,52 @@ ApplicationWindow {
         }
     }
 
+    // PG_AUTO_ACT=window-fill: whether the window's contents reach all
+    // four edges of it while it is maximised.
+    //
+    // Numbers rather than a picture. A maximised window is the one shape
+    // where an edge that falls short cannot be photographed: the app is
+    // the whole screen, so there is no desktop left beside it to show
+    // the gap against, and the frame's own strip out past the screen
+    // looks the same either way. The offscreen platform is enough to run
+    // it on (it maximises to 796x796 of its own 800x800 screen): what
+    // this reads is the contents against the window, and neither of those
+    // two numbers is the screen's.
+    Timer {
+        id: fillActTimer
+        interval: 1200
+        onTriggered: {
+            root.visibility = Window.Maximized
+            fillReportTimer.start()
+        }
+    }
+    // The window has to have taken the state, and the layout to have run
+    // inside the new size, before either can be read back.
+    Timer {
+        id: fillReportTimer
+        interval: 400
+        // `fills=` is what the harness reads, and both platforms answer it
+        // the same way — the client area is all there is to fill on either
+        // (see `mainUi`). Measured in scene coordinates rather than from
+        // the margins that were asked for, because a margin that misses is
+        // exactly what this is looking for.
+        onTriggered: {
+            const at = mainUi.mapToItem(null, 0, 0)
+            AppBackend.report(
+                "window_fill fills=" + (at.x === 0 && at.y === 0
+                                        && mainUi.width === root.width
+                                        && mainUi.height === root.height)
+                + " maximized=" + (root.visibility === Window.Maximized)
+                + " at=" + at.x + "," + at.y
+                + " size=" + mainUi.width + "x" + mainUi.height
+                + " window=" + root.width + "x" + root.height)
+            // Windowed for the shot, as `state minimize` ends: a picture
+            // the shape of the offscreen screen is a picture of the
+            // harness.
+            root.visibility = Window.Windowed
+        }
+    }
+
     // PG_AUTO_ACT=solo: the window a run that was turned away puts up.
     // The harness has to be part of this one — it holds the real lock on
     // the config directory before it starts this process, so the picture
@@ -755,6 +787,8 @@ ApplicationWindow {
             tabWidthActTimer.start()
         if (AppBackend.autoAct === "tab-mark")
             tabMarkActTimer.start()
+        if (AppBackend.autoAct === "window-fill")
+            fillActTimer.start()
         if (AppBackend.autoAct === "solo")
             soloActTimer.start()
         if (AppBackend.autoQuitMs > 0)
@@ -949,11 +983,23 @@ ApplicationWindow {
         // nothing" (measured: notify delivered synchronously, strip
         // painted one state late, and a lone mouse-move caught it up).
         anchors.fill: parent
-        // Everything the band carries stays inside the screen when the
-        // window is maximised (see `maximizedInset`); the top edge folds
-        // the safe-area climb and that inset into one number.
-        anchors.margins: root.maximizedInset
-        anchors.topMargin: root.maximizedInset - root.contentItem.y
+        // Out to every edge of the client area, and no further in: a
+        // maximised frame *is* wider than the screen, but the pixels it
+        // holds out there are not ours to paint.
+        //
+        // Measured 2026-08-09, both ways a window gets maximised (put up
+        // maximised from the saved shape, and maximised from windowed) and
+        // on two monitors, one of them at negative coordinates: the frame
+        // comes to 1936x1048 for a 1920x1032 work area — 8 past every side
+        // — while the client comes back to 0,0..1920,1032, which is that
+        // work area to the pixel. So those 8 are non-client, the system's
+        // own invisible resize border, and the client never leaves the
+        // screen. An inset here to "pull the band back in" therefore has
+        // nothing to pull: it shows up as the whole window's contents
+        // shifted in from the left and short of the right, with the app's
+        // own colour standing in the gap (reported 2026-08-09, and the
+        // reason this is written down rather than tried again).
+        anchors.topMargin: -root.contentItem.y
         spacing: 0
         visible: AppBackend.gitState === "ok"
 

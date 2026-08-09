@@ -54,7 +54,9 @@ commands:
       run is judged on reporting that it was turned away as well.
       The verb `details-fit` is judged on its own report too: a details
       pane whose column runs off the right of the window frames exactly
-      like one that fits, so the picture cannot answer it.
+      like one that fits, so the picture cannot answer it. So is
+      `window-fill`: a maximised window fills the screen, leaving no
+      desktop beside it for an unpainted edge to show against.
       options:
         --repo <dir>      run against this repository
         --preset <name>   or against a fresh demo repo (default: basic)
