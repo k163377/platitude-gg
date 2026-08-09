@@ -97,6 +97,13 @@ impl TabsModel {
         if path_buf.as_os_str().is_empty() {
             return;
         }
+        // A repository already in the strip needs no asking: it opened
+        // once. The strip moves to it, the way every other road into an
+        // open one does (デザイン規約 §タブの所作).
+        if let Some(position) = self.position_of(path.trim()) {
+            self.set_current_index(position as i32);
+            return;
+        }
         if !self.attached {
             self.picks.attach(self.get_qml_method_invoker());
             self.attached = true;
