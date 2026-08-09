@@ -2551,6 +2551,14 @@ Item {
             page.setGraphColumns(graphPane.labelWManual,
                                  Metrics.laneInset + 2 * Metrics.laneW)
             graphPanTimer.start()
+        } else if (act === "graph-divider") {
+            // Whether the column offers a drag at all. Read against two
+            // repositories: gone on a linear history is only an answer
+            // next to a run where the same verb finds it there.
+            AppBackend.report("graph_divider shown=" + graphPane.graphDividerShown
+                              + " lanes=" + graphModel.maxLanes
+                              + " max=" + Math.round(graphPane.graphColWMax)
+                              + " min=" + Math.round(graphPane.graphColWMin))
         } else if (act === "squash") {
             page.openRowMenu(branchesModel.headOid)
             page.squashCommit(branchesModel.headOid)

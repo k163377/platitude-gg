@@ -201,15 +201,24 @@ Rectangle {
     readonly property real graphFullW: Metrics.laneInset
                                        + Math.max(1, graphModel.maxLanes) * Metrics.laneW
                                        + Theme.spaceSm
+    // The narrowest the column goes: one lane, with the rest sent
+    // sideways. One place, so the display, the divider's clamp and the
+    // question of whether there is a drag in it at all agree.
+    readonly property real graphColWMin: Metrics.laneInset + Metrics.laneW
     // How far the divider may be pulled: as wide as the lanes ever get,
     // and no wider — a column past the last lane is emptiness taken from
     // the message column. A narrow window stops it earlier still, where
     // the message column would stop showing that a message is there
     // (規約 §グラフ列は最も広い所のレーンまで).
-    readonly property real graphColWMax: Math.max(Metrics.laneInset + Metrics.laneW,
+    readonly property real graphColWMax: Math.max(graphColWMin,
         Math.min(graphFullW, width - labelW - Metrics.messageMinW))
+    /// Whether the column is the only width it can be. One lane and its
+    /// gutter is the whole of what a linear history has to show, so the
+    /// divider is not offered rather than standing there taking drags
+    /// that come to nothing (規約 §グラフ列は最も広い所のレーンまで).
+    readonly property bool graphColWFixed: graphColWMax <= graphColWMin + Theme.spaceSm
     readonly property real graphColW: Math.min(graphColWMax,
-        graphColWManual >= 0 ? Math.max(graphColWManual, Metrics.laneInset + Metrics.laneW)
+        graphColWManual >= 0 ? Math.max(graphColWManual, graphColWMin)
                              : Metrics.laneInset + Metrics.graphDefaultLanes * Metrics.laneW
                                + Theme.spaceSm)
     property real graphX: 0
@@ -621,7 +630,11 @@ Rectangle {
         width: Theme.splitterWidth
         height: parent.height
         z: 2
-        visible: !graphArea.blank
+        // Gone, not disabled, when the column has nowhere to go: the
+        // hover line and the resize cursor both hang off this one, and
+        // either of them on a width that cannot change is a promise the
+        // drag does not keep.
+        visible: !graphArea.blank && !graphArea.graphColWFixed
         hoverEnabled: true
         cursorShape: Qt.SplitHCursor
         preventStealing: true
@@ -630,10 +643,14 @@ Rectangle {
                 return
             const nx = mapToItem(graphArea, mouse.x, 0).x
                           - Theme.spaceSm - Theme.borderWidth
-            graphArea.graphColWManual = Math.max(Metrics.laneInset + Metrics.laneW,
+            graphArea.graphColWManual = Math.max(graphArea.graphColWMin,
                 Math.min(nx - graphArea.labelW, graphArea.graphColWMax))
         }
     }
+    /// What is drawn, not what was asked for: the automation hook reports
+    /// the divider itself, so a column that cannot be resized but still
+    /// offers the grab cannot pass (`PG_AUTO_ACT=graph-divider`).
+    readonly property alias graphDividerShown: graphDivider.visible
     /// Whether the pointer is anywhere in this pane. A `HoverHandler`
     /// rather than a `MouseArea`: handlers are passive, so the rows',
     /// chips' and dividers' own hover does not take this one away. Real
