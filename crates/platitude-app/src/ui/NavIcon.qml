@@ -8,17 +8,30 @@ Canvas {
     id: icon
     property string kind: "branch"
     property color tint: Theme.textSecondary
+    /// Line weight. The coordinates scale with the size and this does not
+    /// (デザイン規約 §進行中・長押しの定数 —「座標だけ縮めて線を縮めない」),
+    /// which is the drawing this family was cut for: a mark keeps its
+    /// weight wherever it stands, so a row's icon and a badge read as the
+    /// same hand.
+    ///
+    /// A mark that stands at `iconSm` **beside a word** is the one place
+    /// that does not hold. The grid is 3/4 there while the line stays
+    /// whole, so it carries 4/3 the weight of the letters next to it —
+    /// and weight is what the eye reads as size from any distance. Those
+    /// callers pass the grid ratio in, the way `HoldIcon` already scales.
+    property real stroke: Metrics.iconStroke
     width: Theme.iconMd
     height: Theme.iconMd
     onKindChanged: requestPaint()
     onTintChanged: requestPaint()
+    onStrokeChanged: requestPaint()
     onPaint: {
         const ctx = getContext("2d")
         const s = width / 16
         ctx.clearRect(0, 0, width, height)
         ctx.strokeStyle = icon.tint
         ctx.fillStyle = icon.tint
-        ctx.lineWidth = Metrics.iconStroke
+        ctx.lineWidth = icon.stroke
         ctx.lineCap = "round"
         if (icon.kind === "branch") {
             ctx.beginPath()

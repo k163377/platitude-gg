@@ -298,12 +298,27 @@ HoverToolButton {
                 readonly property int step: actionBtn.besideWord
                                             && actionBtn.holdMs <= 0
                                             ? Theme.iconSm : Theme.iconMd
+                /// The air the mark keeps inside its own box, which the
+                /// seat gives back so that the padding on one side and
+                /// the row's spacing on the other land on the **ink**
+                /// (デザイン規約 §余白「印が自分で持っている余白は、隣の
+                /// 詰めに数える」). The icon overflows the seat by this
+                /// much either side, which is what the tokens were going
+                /// to leave empty anyway. Measured before it: the frame
+                /// stood 7–8px off the icon's ink where the word ended
+                /// 5–6px off the other side, so a button that is one
+                /// phrase read as pushed to the right.
+                ///
+                /// One number for the family, from the widest of these
+                /// marks: 8–10px of ink inside the 12px box.
+                readonly property int markAir: seat.step === Theme.iconSm
+                                               ? Theme.spaceXs / 2 : 0
 
                 visible: actionBtn.kind !== "" || actionBtn.holdMs > 0
                 implicitWidth: !visible ? 0
                                : actionBtn.kind !== ""
                                  ? (seat.step === Theme.iconSm
-                                    ? Theme.iconSm
+                                    ? Theme.iconSm - 2 * seat.markAir
                                     : Math.max(Theme.iconMd,
                                                Theme.iconSm + seat.spread))
                                  : Theme.iconSm
@@ -315,6 +330,8 @@ HoverToolButton {
                     anchors.centerIn: parent
                     kind: actionBtn.kind
                     tint: actionBtn.fg
+                    // Whole at `iconMd`, and the grid ratio under it.
+                    stroke: Metrics.iconStroke * seat.step / 16
                     visible: actionBtn.holdMs <= 0
                 }
                 // A held button with nothing to name it says only how it
