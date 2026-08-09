@@ -604,13 +604,19 @@ ColumnLayout {
         HoverButton {
             id: commitButton
             Layout.fillWidth: true
-            highlighted: true
             /// Something staged says its line endings changed, so the
             /// commit is about to carry it. **Only the index counts** — a
             /// file marked on its working-tree side is not in this commit
             /// (`session::EolMark::staged`).
             readonly property bool eolWarned:
                 wipPane.workTree.eolStagedCount > 0 && commitButton.enabled
+            // The accent face steps back while there is something to read:
+            // a bright ground and a thin frame around it is the frame
+            // losing. The dark face is the one every other framed button
+            // in the app wears (`ActionButton`), and the word stays white,
+            // so what changed is the frame and the mark rather than the
+            // button's place in the pane.
+            highlighted: !commitButton.eolWarned
             text: wipPane.amending
                   ? qsTr("Amend commit (%1 staged)").arg(wipPane.workTree.stagedCount)
                   : qsTr("Commit changes (%1 staged)").arg(wipPane.workTree.stagedCount)
@@ -627,14 +633,19 @@ ColumnLayout {
                 border.width: Theme.borderWidth
                 border.color: Theme.warning
             }
+            // On the word's shoulder, not in the corner: the label is
+            // centred, so the mark follows it rather than the button
+            // (`ActionButton.alert` puts one at the end of its own word
+            // the same way).
             NavIcon {
                 visible: commitButton.eolWarned
                 kind: "bang"
                 tint: Theme.warning
                 width: Theme.iconSm
                 height: Theme.iconSm
-                x: parent.width - width - Theme.spaceXs
-                y: Theme.spaceXs
+                x: (commitButton.width + commitButton.contentItem.implicitWidth) / 2
+                   - Theme.spaceXs / 2
+                y: (commitButton.height - commitButton.contentItem.implicitHeight) / 2
             }
             // An amend can stand on its own (message only); a new commit
             // needs staged content and a summary, and git needs an
@@ -643,61 +654,13 @@ ColumnLayout {
                      && wipPane.repoTab.identityReady
                      && wipSubject.text.trim() !== ""
                      && (wipPane.amending || wipPane.workTree.stagedCount > 0)
-            /// How far through the hold this press has got. Only the
-            /// warned form asks for one; the ordinary commit is a click,
-            /// because a confirmation on every commit becomes a thing
-            /// people press without reading (デザイン規約 §可否・警告の
-            /// 出し場所).
-            property real holdProgress: 0
-            // The fill the hold draws, in the frame it drew
-            // (デザイン規約 §長押し).
-            Rectangle {
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                width: parent.width * commitButton.holdProgress
-                radius: Theme.radiusSm
-                color: Theme.warning
-                opacity: 0.25
-                visible: commitButton.holdProgress > 0
-            }
-            onClicked: if (!commitButton.eolWarned) wipPane.commitClicked()
-            onDownChanged: {
-                if (!commitButton.eolWarned)
-                    return
-                if (commitButton.down) {
-                    commitBack.stop()
-                    commitHold.restart()
-                } else {
-                    commitHold.stop()
-                }
-            }
-            NumberAnimation {
-                id: commitHold
-                target: commitButton
-                property: "holdProgress"
-                from: 0
-                to: 1
-                duration: Metrics.holdMs
-                // A press that stopped short slides back rather than
-                // blanking: a held button reports no click, so without
-                // this a plain click answers with nothing at all.
-                onStopped: {
-                    if (commitButton.holdProgress >= 1)
-                        commitButton.holdProgress = 0
-                    else if (commitButton.holdProgress > 0)
-                        commitBack.restart()
-                }
-                onFinished: wipPane.commitClicked()
-            }
-            NumberAnimation {
-                id: commitBack
-                target: commitButton
-                property: "holdProgress"
-                to: 0
-                duration: Metrics.holdBackMs
-                easing.type: Easing.OutCubic
-            }
+            // **Still one click.** Committing is a daily operation and a
+            // confirmation on a daily operation becomes something people
+            // press without reading, which spends the effect where it is
+            // really needed (デザイン規約 §可否・警告の出し場所). The
+            // frame, the mark and the hover say what is in it; the
+            // decision stays the reader's.
+            onClicked: wipPane.commitClicked()
             ToolTip.visible: (commitHover.containsMouse || wipPane.pointAtCommit)
                              && (!enabled || commitButton.eolWarned)
             ToolTip.delay: Metrics.tipDelayMs
@@ -708,8 +671,8 @@ ColumnLayout {
                           : !enabled
                           ? qsTr("Stage something to commit")
                           : wipPane.workTree.eolStagedCount === 1
-                          ? qsTr("1 staged file changes its line endings. Hold to commit anyway.")
-                          : qsTr("%1 staged files change their line endings. Hold to commit anyway.")
+                          ? qsTr("1 staged file changes its line endings")
+                          : qsTr("%1 staged files change their line endings")
                             .arg(wipPane.workTree.eolStagedCount)
             MouseArea {
                 id: commitHover

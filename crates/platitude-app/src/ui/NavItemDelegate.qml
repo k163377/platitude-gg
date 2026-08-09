@@ -201,10 +201,12 @@ Item {
                 width: Theme.iconSm
                 height: Theme.iconSm
                 // Clamped: an elided name is wider than its box, and the
-                // mark belongs to the name that is on screen.
-                x: Math.min(nameLabel.implicitWidth,
+                // mark belongs to the name that is on screen. Half a gap
+                // back into the name's own trailing bearing, so it reads
+                // as part of the word rather than as the next column.
+                x: Math.min(nameLabel.implicitWidth - Theme.spaceXs / 2,
                             nameLabel.width - Theme.iconSm)
-                y: -Theme.spaceXs
+                y: 0
             }
         }
         // The name, in a box, where the name was. Nothing is asked before
