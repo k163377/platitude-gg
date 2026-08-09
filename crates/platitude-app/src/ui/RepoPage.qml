@@ -132,6 +132,16 @@ Item {
         }
     }
 
+    // A tab whose repository would not open. The screen for it sits where
+    // the panes do rather than over the whole page, so the log is still
+    // reachable under it — pressing `>_` on one of these used to do
+    // nothing at all, the panel being inside the half that was hidden.
+    //
+    // It is not raised on its own: the command that failed is a
+    // background read, so the panel would come up empty (実測), and the
+    // line it would have carried is already on the screen above it.
+    readonly property bool openFailed: !page.blank && repoTab.state === "error"
+
     // Turning amend on starts the editor from HEAD's message; turning
     // it off empties it again, since the text belonged to that commit.
     property int seenHeadCommitSeq: 0
@@ -3004,6 +3014,9 @@ Item {
         if (page.commandsOpen)
             commandsPane.showLatest()
     }
+    /// What the panel is doing, rather than what was asked of it — the
+    /// automation reads this one, so a cut binding cannot pass.
+    readonly property bool commandsShown: commandsPane.visible
 
     RepoTab { id: repoTab }
     CommandsModel { id: commandsModel }
@@ -3444,38 +3457,12 @@ Item {
         }
     }
 
-    // Open failed: show git's own message
-    Column {
-        anchors.centerIn: parent
-        visible: repoTab.state === "error"
-        spacing: Theme.spaceMd
-        width: Math.min(700, page.width - 2 * Theme.spaceXl)
-        Label {
-            text: qsTr("Could not open this folder as a git repository")
-            font.pixelSize: Theme.fontLg
-            font.weight: Font.DemiBold
-            anchors.horizontalCenter: parent.horizontalCenter
-        }
-        Label {
-            text: repoTab.error
-            color: Theme.danger
-            wrapMode: Text.Wrap
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-        }
-        HoverButton {
-            text: qsTr("Close tab")
-            anchors.horizontalCenter: parent.horizontalCenter
-            onClicked: page.closeTabRequested()
-        }
-    }
     /// The failed-open screen's "Close tab" button.
     signal closeTabRequested()
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-        visible: repoTab.state !== "error"
 
         // The panes sit above the command log, which is closed until it
         // is asked for. Splitting them vertically keeps the log's height
@@ -3490,10 +3477,44 @@ Item {
                 color: Theme.borderSubtle
             }
 
+            // ---- open failed ------------------------------------------
+            // In the panes' place rather than over the whole page, so the
+            // log stays where it always is — under it, and open, since
+            // the line that explains this is git's own.
+            Item {
+                visible: page.openFailed
+                SplitView.fillHeight: true
+                SplitView.minimumHeight: 200
+                Column {
+                    anchors.centerIn: parent
+                    spacing: Theme.spaceMd
+                    width: Math.min(700, page.width - 2 * Theme.spaceXl)
+                    Label {
+                        text: qsTr("Could not open this folder as a git repository")
+                        font.pixelSize: Theme.fontLg
+                        font.weight: Font.DemiBold
+                        anchors.horizontalCenter: parent.horizontalCenter
+                    }
+                    Label {
+                        text: repoTab.error
+                        color: Theme.danger
+                        wrapMode: Text.Wrap
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    HoverButton {
+                        text: qsTr("Close tab")
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        onClicked: page.closeTabRequested()
+                    }
+                }
+            }
+
             // ---- three-pane layout --------------------------------------
             // (repository state / search / fetch / push live in the window
             // toolbar, next to the tabs; Reload is the app menu and F5)
             SplitView {
+                visible: !page.openFailed
                 SplitView.fillHeight: true
                 SplitView.minimumHeight: 200
                 orientation: Qt.Horizontal

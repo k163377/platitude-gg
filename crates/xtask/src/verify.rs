@@ -411,7 +411,11 @@ fn folder_for(
 ) -> Result<String, String> {
     let made = shot_dir.join("picked");
     match verb {
-        "open-not-a-repo" | "open-not-a-repo-retry" | "open-not-a-repo-cancel" => {
+        "open-not-a-repo"
+        | "open-not-a-repo-retry"
+        | "open-not-a-repo-cancel"
+        | "open-fail-tab"
+        | "open-fail-tab-log" => {
             let dir = made.join("notes");
             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
             Ok(dir.display().to_string())

@@ -16,21 +16,21 @@ AppDialog {
     id: openFailedDialog
 
     /// What was picked, and what git made of it: `plain` (no repository
-    /// here or above), `bare` (one with no work tree), `error` (git had
-    /// trouble of its own — its wording is all anyone can say).
+    /// here or in any folder above) or `bare` (one with no work tree).
+    /// Nothing else opens this — a check that could not say what went
+    /// wrong opens the folder as a tab instead, where git's own words
+    /// already are.
     property string path: ""
     property string kind: ""
-    property string message: ""
     /// The folder to bring the picker back up at, decided in Rust.
     property string near: ""
 
     /// Show me the picker again, at `near`.
     signal chooseAnother(string near)
 
-    function show(path, kind, message, near) {
+    function show(path, kind, near) {
         openFailedDialog.path = path
         openFailedDialog.kind = kind
-        openFailedDialog.message = message
         openFailedDialog.near = near
         openFailedDialog.open()
     }
@@ -58,26 +58,16 @@ AppDialog {
             // "not a repository" — the folder underneath says which.
             text: openFailedDialog.kind === "bare"
                   ? qsTr("A bare repository has nothing to show")
-                  : openFailedDialog.kind === "error"
-                    ? qsTr("Could not open this folder")
-                    : qsTr("Not a git repository")
+                  : qsTr("Not a git repository")
         }
         // The picker is gone by now, so the folder it landed on has
         // nothing else left to name it. The middle goes first: the leaf
         // is what tells two candidates apart.
         Label {
             Layout.fillWidth: true
-            visible: openFailedDialog.kind !== "error"
             color: Theme.textSecondary
             elide: Text.ElideMiddle
             text: openFailedDialog.path
-        }
-        Label {
-            Layout.fillWidth: true
-            visible: openFailedDialog.kind === "error"
-            color: Theme.danger
-            wrapMode: Text.Wrap
-            text: openFailedDialog.message
         }
 
         RowLayout {
@@ -90,7 +80,7 @@ AppDialog {
             HoverButton {
                 id: chooseButton
                 highlighted: true
-                text: qsTr("Choose another folder…")
+                text: qsTr("Choose another…")
                 onClicked: openFailedDialog.retry()
             }
         }

@@ -295,8 +295,7 @@ ApplicationWindow {
 
     TabsModel {
         id: tabsModel
-        onOpenRejected: (path, kind, message, near) =>
-            openFailedDialog.show(path, kind, message, near)
+        onOpenRejected: (path, kind, near) => openFailedDialog.show(path, kind, near)
     }
 
     // Only the picker's own answers come here: a folder somebody just
@@ -355,6 +354,34 @@ ApplicationWindow {
         id: pickSettleTimer
         interval: 300
         onTriggered: root.reportPick()
+    }
+
+    // Smoke hooks (PG_AUTO_ACT=open-fail-tab / open-fail-tab-log): the
+    // other road, the one that keeps its tab — a tab put back from the
+    // last session, a worktree row, a path named on the command line.
+    // Nothing checks the folder first there, so the page itself is what
+    // says so. The `-log` half goes on to open the command log the way
+    // the toolbar's `>_` does, which on this screen used to do nothing.
+    Timer {
+        interval: 1200
+        running: AppBackend.autoAct === "open-fail-tab"
+                 || AppBackend.autoAct === "open-fail-tab-log"
+        onTriggered: {
+            tabsModel.openRepositoryPath(AppBackend.autoActArg)
+            failTabTimer.start()
+        }
+    }
+    Timer {
+        id: failTabTimer
+        interval: 900
+        onTriggered: {
+            if (AppBackend.autoAct === "open-fail-tab-log" && root.curPage !== null)
+                root.curPage.toggleCommands()
+            AppBackend.report(
+                "open_fail_tab tabs=" + pageRepeater.count
+                + " state=" + (root.curPage !== null ? root.curPage.pageTab.state : "-")
+                + " commands=" + (root.curPage !== null ? root.curPage.commandsShown : "-"))
+        }
     }
     /// What the run has to show for itself. `dialog=` is the dialog's own
     /// `opened` (reporting what was asked of it would go on passing with

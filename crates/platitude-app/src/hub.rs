@@ -28,19 +28,23 @@ use qtbridge::QmlMethodInvoker;
 /// What came back about a folder somebody picked, before it is a tab.
 #[derive(Debug)]
 pub enum PickMsg {
-    /// It can be opened. The path is the one that was picked, not the
-    /// root git resolved it to — the tab is opened the same way as ever.
-    Accepted { path: PathBuf },
-    /// It cannot. `kind` (`plain` / `bare` / `error`) is what the screen
-    /// branches on; `message` is git's own wording, for the one case
-    /// nothing better can be said about (デザイン規約 §長さ).
+    /// Open it as a tab. Either it can be opened, or the check itself
+    /// could not say — and a screen that cannot name what went wrong has
+    /// no business inventing a line for it. The tab's own failure screen
+    /// and its command log are where git's words already are
+    /// (デザイン規約 §git が言ったことを読む場所).
+    ///
+    /// The path is the one that was picked, not the root git resolved it
+    /// to: the tab is opened exactly the way every other road opens one.
+    Open { path: PathBuf },
+    /// It is no repository this application can show, and which of the
+    /// two it is can be said plainly. `bare` picks the wording.
     Rejected {
         path: PathBuf,
         /// The folder to reopen the picker at — the one this sits in,
         /// where the repository the person was after usually is.
         near: String,
-        kind: &'static str,
-        message: String,
+        bare: bool,
     },
 }
 
@@ -725,23 +729,25 @@ impl Hub {
         handle.spawn(async move {
             let cancel = tokio_util::sync::CancellationToken::new();
             let msg = match platitude_core::repo::open(&executor, &path, &cancel).await {
-                Ok(_) => PickMsg::Accepted { path },
-                Err(platitude_core::GitError::NotARepository { bare, stderr, .. }) => {
-                    PickMsg::Rejected {
-                        near: crate::urlpath::picker_folder_url(&path),
-                        path,
-                        kind: if bare { "bare" } else { "plain" },
-                        message: stderr,
-                    }
-                }
-                // Anything else is git having trouble rather than the
-                // folder being the wrong one, so its own words go through.
-                Err(e) => PickMsg::Rejected {
+                Ok(_) => PickMsg::Open { path },
+                Err(platitude_core::GitError::NotARepository { bare, .. }) => PickMsg::Rejected {
                     near: crate::urlpath::picker_folder_url(&path),
                     path,
-                    kind: "error",
-                    message: e.to_string(),
+                    bare,
                 },
+                // git having trouble of its own rather than an answer
+                // about the folder: a timeout on a share that stopped
+                // answering, or output from `rev-parse` nothing can read.
+                // Not something to word a screen around — it opens, and
+                // the tab says what git said.
+                Err(e) => {
+                    tracing::warn!(
+                        path = %path.display(),
+                        error = %e,
+                        "could not tell whether this folder is a repository; opening it"
+                    );
+                    PickMsg::Open { path }
+                }
             };
             feed.push(msg);
         });

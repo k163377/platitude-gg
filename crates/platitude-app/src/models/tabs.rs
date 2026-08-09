@@ -73,11 +73,11 @@ impl TabsModel {
     #[qsignal]
     fn current_index_changed(&mut self);
 
-    /// The folder picked in the dialog is not one that can be opened.
-    /// `kind` is `plain` / `bare` / `error`, `near` the folder to bring
-    /// the picker back up at.
+    /// The folder picked in the dialog is no repository this can show.
+    /// `kind` is `plain` or `bare`, `near` the folder to bring the picker
+    /// back up at.
     #[qsignal]
-    fn open_rejected(&mut self, path: String, kind: String, message: String, near: String);
+    fn open_rejected(&mut self, path: String, kind: String, near: String);
 
     /// Takes the folder picked in a FolderDialog (a `file://` URL).
     #[qslot]
@@ -113,22 +113,13 @@ impl TabsModel {
     fn drain(&mut self) {
         for msg in self.picks.drain() {
             match msg {
-                PickMsg::Accepted { path } => {
+                PickMsg::Open { path } => {
                     self.open_repository_path(path.to_string_lossy().into_owned());
                 }
-                PickMsg::Rejected {
-                    path,
-                    near,
-                    kind,
-                    message,
-                } => {
+                PickMsg::Rejected { path, near, bare } => {
+                    let kind = if bare { "bare" } else { "plain" };
                     tracing::info!(path = %path.display(), kind, "picked folder refused");
-                    self.open_rejected(
-                        path.to_string_lossy().into_owned(),
-                        kind.to_string(),
-                        message,
-                        near,
-                    );
+                    self.open_rejected(path.to_string_lossy().into_owned(), kind.to_string(), near);
                 }
             }
         }
