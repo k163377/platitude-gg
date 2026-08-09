@@ -81,6 +81,32 @@ pub fn refresh_border_color() {
     win32::refresh_border_color();
 }
 
+/// Pulls the window back inside the work area of the monitor it came up
+/// on, and answers whether it had to. Windowed windows only — a maximised
+/// one is the platform's own arrangement.
+///
+/// What a remembered shape needs before it is trusted. The scene cannot
+/// do this itself: it knows neither the work area (QML reports no
+/// screen's) nor the frame, which is wider than the window says it is —
+/// and it is the *frame* that has to fit. Measured on the live window: a
+/// remembered 1920 came back as a 1936-wide frame at x=-5 on a 1920
+/// monitor, so the right-hand pane's scroll bar was off the screen and
+/// the left edge was on the neighbour.
+///
+/// Shrinks only as far as it must, and moves rather than shrinks
+/// wherever moving is enough.
+#[cfg(windows)]
+pub fn fit_to_work_area() -> bool {
+    win32::fit_to_work_area()
+}
+
+/// Left to the window manager on the other two platforms, which place
+/// their own windows.
+#[cfg(not(windows))]
+pub fn fit_to_work_area() -> bool {
+    false
+}
+
 /// What the window's edge was last asked to be: `"none"` when neither is
 /// to be drawn, otherwise the border's own `#rrggbb`.
 ///
@@ -208,6 +234,7 @@ mod win32 {
     const SWP_NOSIZE: u32 = 0x0001;
     const SWP_NOMOVE: u32 = 0x0002;
     const SWP_NOZORDER: u32 = 0x0004;
+    const SWP_NOACTIVATE: u32 = 0x0010;
     const SWP_FRAMECHANGED: u32 = 0x0020;
 
     /// `RECT` (windef.h).
@@ -445,6 +472,94 @@ mod win32 {
         SHOWING.set(colors);
         FRAME_COLORS.set(colors);
         paint_one(window, 0)
+    }
+
+    /// Fits every windowed top-level window into its monitor's work
+    /// area, and says whether any of them moved.
+    pub(super) fn fit_to_work_area() -> bool {
+        MOVED.set(false);
+        // SAFETY: as in `square_corners` — the same walk, and the callback
+        // only reads the window it is handed and repositions it.
+        unsafe {
+            EnumThreadWindows(GetCurrentThreadId(), fit_one, 0);
+        }
+        MOVED.get()
+    }
+
+    thread_local! {
+        /// Whether the fit had anything to do, for the caller to pass on:
+        /// a window that was just moved is not one to measure the frame
+        /// slop against (`Main.settleTimer`).
+        static MOVED: Cell<bool> = const { Cell::new(false) };
+    }
+
+    /// Runs for every top-level window the thread owns. A maximised one
+    /// is left alone: where it sits is the platform's arrangement, not a
+    /// remembered shape.
+    extern "system" fn fit_one(window: *mut c_void, _param: isize) -> i32 {
+        // SAFETY: `window` is live for the callback; both calls only read.
+        let skip = unsafe { IsWindowVisible(window) == 0 || IsZoomed(window) != 0 };
+        if skip {
+            return 1;
+        }
+        let mut rect = Rect::default();
+        let mut info = MonitorInfo {
+            size: size_of::<MonitorInfo>() as u32,
+            ..MonitorInfo::default()
+        };
+        // SAFETY: as above; both calls fill locals of the documented shape.
+        let known = unsafe {
+            GetWindowRect(window, &mut rect);
+            let monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+            GetMonitorInfoW(monitor, &mut info) != 0
+        };
+        if !known {
+            return 1;
+        }
+        let work = info.work;
+        // Shrink only as far as the work area, then move rather than
+        // shrink: a window that merely sits too far right needs its
+        // corner back, not a smaller size.
+        let width = (rect.right - rect.left).min(work.right - work.left);
+        let height = (rect.bottom - rect.top).min(work.bottom - work.top);
+        let x = rect.left.min(work.right - width).max(work.left);
+        let y = rect.top.min(work.bottom - height).max(work.top);
+        if (x, y, width, height)
+            == (
+                rect.left,
+                rect.top,
+                rect.right - rect.left,
+                rect.bottom - rect.top,
+            )
+        {
+            return 1;
+        }
+        tracing::debug!(
+            from = format!(
+                "{},{} {}x{}",
+                rect.left,
+                rect.top,
+                rect.right - rect.left,
+                rect.bottom - rect.top
+            ),
+            to = format!("{x},{y} {width}x{height}"),
+            "the remembered window did not fit its screen"
+        );
+        MOVED.set(true);
+        // SAFETY: as above. Nothing but the geometry changes — the window
+        // keeps its place in the stack and does not take focus.
+        unsafe {
+            SetWindowPos(
+                window,
+                std::ptr::null_mut(),
+                x,
+                y,
+                width,
+                height,
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+        }
+        1
     }
 
     /// Whether the window's whole frame — the invisible resize border

@@ -466,7 +466,6 @@ ApplicationWindow {
         root.height = wantHeight
         root.askedWidth = wantWidth
         root.askedHeight = wantHeight
-        settleTimer.restart()
         const x = AppBackend.startWindowX()
         const y = AppBackend.startWindowY()
         if (x !== root.unplaced && y !== root.unplaced) {
@@ -475,6 +474,22 @@ ApplicationWindow {
         }
         if (AppBackend.startWindowMaximized())
             root.visibility = Window.Maximized
+        // And now the part this side cannot do: the *frame* has to fit,
+        // and it is wider than the window says it is. A remembered 1920
+        // came back as a 1936-wide frame at x=-5 on a 1920 screen —
+        // enough to put the right-hand pane's scroll bar off the screen
+        // and the left edge on the next monitor (measured 2026-08-09,
+        // and reported as both). `insideScreen` above cannot see either
+        // number, so it lets that through; the platform side moves the
+        // window back and says whether it had to.
+        //
+        // Nothing is measured on a run that was moved: `settleTimer`
+        // reads the frame slop off the difference between what the
+        // window was handed and what it says it is, and a window that
+        // was repositioned in between is not that difference. The next
+        // launch comes up fitting and measures then.
+        if (!AppBackend.fitWindowToScreen())
+            settleTimer.restart()
     }
     /// What the store sends for a coordinate it has never been told.
     readonly property int unplaced: -2147483648

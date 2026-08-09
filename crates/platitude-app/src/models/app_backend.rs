@@ -459,6 +459,16 @@ impl AppBackend {
         crate::winframe::refresh_border_color();
     }
 
+    /// Pulls a restored window back inside the screen it came up on, and
+    /// answers whether it had to. The scene cannot do this itself: what
+    /// has to fit is the frame, which is wider than the window says it
+    /// is, and the work area is not a thing QML reports
+    /// (`winframe::fit_to_work_area`).
+    #[qslot]
+    fn fit_window_to_screen(&self) -> bool {
+        crate::winframe::fit_to_work_area()
+    }
+
     /// What the edge was last asked to be — `"none"`, or the border's own
     /// `#rrggbb`. Read by the headless run: what the platform did with it
     /// is not in the scene, so what can be checked is what it was told.
