@@ -150,9 +150,11 @@ AppDialog {
         RowLayout {
             Layout.alignment: Qt.AlignRight
             spacing: Theme.spaceSm
-            HoverButton {
+            ActionButton {
+                implicitHeight: Theme.controlHeight
+                activeFocusOnTab: true
                 text: qsTr("Cancel")
-                onClicked: remoteDialog.close()
+                onActivated: remoteDialog.close()
             }
             ActionButton {
                 id: saveButton

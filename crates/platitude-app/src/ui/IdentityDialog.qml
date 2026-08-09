@@ -185,9 +185,11 @@ AppDialog {
         RowLayout {
             Layout.alignment: Qt.AlignRight
             spacing: Theme.spaceSm
-            HoverButton {
+            ActionButton {
+                implicitHeight: Theme.controlHeight
+                activeFocusOnTab: true
                 text: identityDialog.editing ? qsTr("Cancel") : qsTr("Not now")
-                onClicked: identityDialog.close()
+                onActivated: identityDialog.close()
             }
             ActionButton {
                 id: saveButton
