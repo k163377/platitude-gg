@@ -209,6 +209,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
     println!("config dir: {}", config_dir.display());
 
+    let arg = match opts.arg.is_empty() {
+        true => folder_for(&opts.verb, &shot_dir, &path)?,
+        false => opts.arg.clone(),
+    };
+
     let opened = repos
         .iter()
         .map(|r| r.display().to_string())
@@ -217,7 +222,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     println!(
         "running: {} (arg: {}) against {}",
         opts.verb,
-        if opts.arg.is_empty() { "-" } else { &opts.arg },
+        if arg.is_empty() { "-" } else { &arg },
         if opts.restore {
             "the tabs it remembers"
         } else {
@@ -233,7 +238,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         .env("PG_AUTO_QUIT_MS", opts.quit_ms.to_string())
         .env("PG_SHOT_DIR", &shot_dir)
         .env("PG_AUTO_ACT", &opts.verb)
-        .env("PG_AUTO_ACT_ARG", &opts.arg)
+        .env("PG_AUTO_ACT_ARG", &arg)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if cfg!(windows) {
@@ -388,6 +393,44 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!("verify-ui {} failed", opts.verb))
+    }
+}
+
+/// The folder a verb needs handed to it, made on the spot.
+///
+/// The open-refused verbs are the only ones whose subject is a folder no
+/// demo repository can be — being one is the whole point — so there is
+/// nothing to name with `--preset`. Both sit one level down, so the
+/// folder the second try opens at is a real one with the failed pick
+/// inside it. Empty for every other verb: nothing is invented for a verb
+/// that was simply run without its argument.
+fn folder_for(
+    verb: &str,
+    shot_dir: &std::path::Path,
+    path: &std::ffi::OsStr,
+) -> Result<String, String> {
+    let made = shot_dir.join("picked");
+    match verb {
+        "open-not-a-repo" | "open-not-a-repo-retry" | "open-not-a-repo-cancel" => {
+            let dir = made.join("notes");
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            Ok(dir.display().to_string())
+        }
+        "open-bare" => {
+            let dir = made.join("origin.git");
+            std::fs::create_dir_all(&made).map_err(|e| e.to_string())?;
+            let status = Command::new("git")
+                .args(["init", "--bare", "--quiet"])
+                .arg(&dir)
+                .env("PATH", path)
+                .status()
+                .map_err(|e| format!("failed to run git: {e}"))?;
+            if !status.success() {
+                return Err("git init --bare failed".into());
+            }
+            Ok(dir.display().to_string())
+        }
+        _ => Ok(String::new()),
     }
 }
 

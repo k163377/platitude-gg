@@ -295,6 +295,77 @@ ApplicationWindow {
 
     TabsModel {
         id: tabsModel
+        onOpenRejected: (path, kind, message, near) =>
+            openFailedDialog.show(path, kind, message, near)
+    }
+
+    // Only the picker's own answers come here: a folder somebody just
+    // chose is still in the middle of choosing one, so the way on is the
+    // picker again. Every other way a repository fails to open (a
+    // restored tab, a worktree row, PG_AUTO_OPEN) keeps its tab and its
+    // page-sized failure screen — nobody is standing at the picker for
+    // those, and a modal on startup is answered before it can be read.
+    OpenFailedDialog {
+        id: openFailedDialog
+        // Taking it back means what it says: no tab was opened and none
+        // was closed, so the window is exactly where it started — with
+        // the empty page's own way in, if there was nothing else open.
+        onChooseAnother: near => root.openRepositoryPicker(near)
+    }
+
+    // Smoke hooks (PG_AUTO_ACT=open-not-a-repo / open-bare and the two
+    // ways back out). The picker is the platform's own window, so the
+    // run enters where its answer lands — the path it accepted — and
+    // that is also the one place a folder gets checked, so nothing is
+    // proved by a shorter cut. The argument is the folder; xtask makes
+    // one when the verb needs it.
+    readonly property bool pickAct: AppBackend.autoAct === "open-not-a-repo"
+                                    || AppBackend.autoAct === "open-bare"
+                                    || AppBackend.autoAct === "open-not-a-repo-retry"
+                                    || AppBackend.autoAct === "open-not-a-repo-cancel"
+    Timer {
+        interval: 1200
+        running: root.pickAct
+        onTriggered: {
+            tabsModel.openPickedPath(AppBackend.autoActArg)
+            pickAnswerTimer.start()
+        }
+    }
+    // The answer is one `git rev-parse` away (実測 30–36ms on Windows,
+    // repository or not), so this is a beat rather than a wait.
+    Timer {
+        id: pickAnswerTimer
+        interval: 400
+        onTriggered: {
+            if (AppBackend.autoAct === "open-not-a-repo-retry")
+                openFailedDialog.retry()
+            else if (AppBackend.autoAct === "open-not-a-repo-cancel")
+                openFailedDialog.close()
+            else {
+                root.reportPick()
+                return
+            }
+            // Both ways out end the dialog, and a closing popup is still
+            // `opened` for a frame or two — the answer this reads is
+            // whether it went, so it is read after it has had the time.
+            pickSettleTimer.start()
+        }
+    }
+    Timer {
+        id: pickSettleTimer
+        interval: 300
+        onTriggered: root.reportPick()
+    }
+    /// What the run has to show for itself. `dialog=` is the dialog's own
+    /// `opened` (reporting what was asked of it would go on passing with
+    /// the binding cut), and `tabs=` says the refused folder never became
+    /// one — which is the whole of what this verb is about.
+    function reportPick() {
+        AppBackend.report("open_failed kind=" + openFailedDialog.kind
+                          + " dialog=" + openFailedDialog.opened
+                          + " tabs=" + pageRepeater.count
+                          + " active=" + tabsModel.currentIndex
+                          + " near=" + openFailedDialog.near)
     }
 
     // The RepoPage of the active tab (the toolbar's right-side controls
@@ -314,9 +385,16 @@ ApplicationWindow {
     // repository that is already open. Left to itself the dialog comes
     // back up inside the folder it last accepted — the repository — and
     // the next one is always a level up from there.
-    function openRepositoryPicker() {
-        if (root.curPage !== null && root.curPage.pageTab.pickerFolderUrl !== "")
-            folderDialog.currentFolder = root.curPage.pageTab.pickerFolderUrl
+    //
+    // `nearUrl` names a folder to start at instead: a second try after a
+    // folder that turned out not to be a repository opens where that one
+    // sits, which is where the one being looked for usually is.
+    function openRepositoryPicker(nearUrl) {
+        const near = (nearUrl !== undefined && nearUrl !== "")
+                   ? nearUrl
+                   : (root.curPage !== null ? root.curPage.pageTab.pickerFolderUrl : "")
+        if (near !== "")
+            folderDialog.currentFolder = near
         folderDialog.open()
         if (AppBackend.autoAct !== "")
             AppBackend.report("picker folder=" + folderDialog.currentFolder)

@@ -25,6 +25,25 @@ use platitude_core::stash::StashEntry;
 use platitude_core::status::WorkTreeStatus;
 use qtbridge::QmlMethodInvoker;
 
+/// What came back about a folder somebody picked, before it is a tab.
+#[derive(Debug)]
+pub enum PickMsg {
+    /// It can be opened. The path is the one that was picked, not the
+    /// root git resolved it to — the tab is opened the same way as ever.
+    Accepted { path: PathBuf },
+    /// It cannot. `kind` (`plain` / `bare` / `error`) is what the screen
+    /// branches on; `message` is git's own wording, for the one case
+    /// nothing better can be said about (デザイン規約 §長さ).
+    Rejected {
+        path: PathBuf,
+        /// The folder to reopen the picker at — the one this sits in,
+        /// where the repository the person was after usually is.
+        near: String,
+        kind: &'static str,
+        message: String,
+    },
+}
+
 /// Tab-level messages (open lifecycle + background errors + write state).
 #[derive(Debug)]
 pub enum TabMsg {
@@ -687,6 +706,46 @@ impl Hub {
 
     pub fn executor(&self) -> GitExecutor {
         self.executor.clone()
+    }
+
+    /// Asks whether `path` can be opened, without opening anything.
+    ///
+    /// The picker's answer goes through here first so a folder that is no
+    /// repository never becomes a tab: there would be nothing in it to
+    /// read, and the path would go on being remembered across restarts.
+    /// Every other way in (a restored tab, a worktree row, `PG_AUTO_OPEN`)
+    /// still opens straight away — those are not somebody choosing a
+    /// folder, and the page's own failure screen is the right place for
+    /// them (デザイン規約 §可否・警告の出し場所).
+    pub fn probe_repo(&self, path: PathBuf, feed: Arc<Feed<PickMsg>>) -> bool {
+        let Some(handle) = self.runtime_handle() else {
+            return false;
+        };
+        let executor = self.executor();
+        handle.spawn(async move {
+            let cancel = tokio_util::sync::CancellationToken::new();
+            let msg = match platitude_core::repo::open(&executor, &path, &cancel).await {
+                Ok(_) => PickMsg::Accepted { path },
+                Err(platitude_core::GitError::NotARepository { bare, stderr, .. }) => {
+                    PickMsg::Rejected {
+                        near: crate::urlpath::picker_folder_url(&path),
+                        path,
+                        kind: if bare { "bare" } else { "plain" },
+                        message: stderr,
+                    }
+                }
+                // Anything else is git having trouble rather than the
+                // folder being the wrong one, so its own words go through.
+                Err(e) => PickMsg::Rejected {
+                    near: crate::urlpath::picker_folder_url(&path),
+                    path,
+                    kind: "error",
+                    message: e.to_string(),
+                },
+            };
+            feed.push(msg);
+        });
+        true
     }
 
     /// Opens a repository in a new tab; returns the tab id.

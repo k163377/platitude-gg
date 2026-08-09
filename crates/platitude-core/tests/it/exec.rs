@@ -67,7 +67,7 @@ async fn open_rejects_a_non_repository() {
         .await
         .unwrap_err();
     assert!(
-        matches!(err, GitError::NotARepository { .. }),
+        matches!(err, GitError::NotARepository { bare: false, .. }),
         "got {err:?}"
     );
 }
@@ -80,7 +80,31 @@ async fn open_rejects_a_missing_path() {
     let cancel = CancellationToken::new();
     let err = repo::open(&executor, &missing, &cancel).await.unwrap_err();
     assert!(
-        matches!(err, GitError::NotARepository { .. }),
+        matches!(err, GitError::NotARepository { bare: false, .. }),
+        "got {err:?}"
+    );
+}
+
+/// A bare repository is refused like any other folder that cannot be
+/// shown, but it says so about itself: there is a repository here, and it
+/// has no work tree. The screen has a line of its own for that, and this
+/// flag is the only thing it may read to choose it.
+#[tokio::test]
+async fn open_rejects_a_bare_repository_as_bare() {
+    let dir = tempfile::tempdir().unwrap();
+    let bare = dir.path().join("origin.git");
+    let status = std::process::Command::new("git")
+        .args(["init", "--bare", "--quiet"])
+        .arg(&bare)
+        .status()
+        .expect("git init --bare");
+    assert!(status.success());
+
+    let executor = GitExecutor::new();
+    let cancel = CancellationToken::new();
+    let err = repo::open(&executor, &bare, &cancel).await.unwrap_err();
+    assert!(
+        matches!(err, GitError::NotARepository { bare: true, .. }),
         "got {err:?}"
     );
 }

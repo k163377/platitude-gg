@@ -100,6 +100,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/NavList.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NavRail.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/OpExitRow.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/OpenFailedDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/PaneHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefChip.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefListPopup.qml", "qt/qml/platitude");

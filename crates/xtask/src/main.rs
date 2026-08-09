@@ -69,6 +69,9 @@ commands:
                           a write git refused is what this verb shows, so
                           it does not sink the run (delete-branch-refused,
                           commands-fail, fetch-fail, push-retry)
+      The open-refused verbs (open-not-a-repo, open-bare, and the
+      -retry / -cancel ways out) make their own folder when no argument
+      names one: what they are about is a folder no repository can be.
 
   linux [--rebuild] [--shell] [--stage core|app] <command…>
       Run a command against this checkout on Ubuntu, in a container built

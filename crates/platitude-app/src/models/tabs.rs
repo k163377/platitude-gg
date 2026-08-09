@@ -1,8 +1,9 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use qtbridge::{QListModel, QListModelBase, QModelItem, qobject};
+use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::hub::Hub;
+use crate::hub::{Feed, Hub, PickMsg};
 use crate::urlpath::file_url_to_path;
 
 use super::qml_register;
@@ -21,6 +22,11 @@ pub struct TabItem {
 pub struct TabsModel {
     items: Vec<TabItem>,
     current_index: i32,
+    /// Answers about folders the picker handed over. Attached on the
+    /// first question rather than at startup: a window that never opens
+    /// the picker never has one to hear.
+    picks: Arc<Feed<PickMsg>>,
+    attached: bool,
 }
 
 impl Default for TabsModel {
@@ -30,6 +36,8 @@ impl Default for TabsModel {
             // No tab selected. Deriving this (0) points at a tab that does
             // not exist, and the UI reads "no repository open" as < 0.
             current_index: -1,
+            picks: Arc::new(Feed::default()),
+            attached: false,
         }
     }
 }
@@ -65,10 +73,65 @@ impl TabsModel {
     #[qsignal]
     fn current_index_changed(&mut self);
 
-    /// Opens the folder picked in a FolderDialog (a `file://` URL).
+    /// The folder picked in the dialog is not one that can be opened.
+    /// `kind` is `plain` / `bare` / `error`, `near` the folder to bring
+    /// the picker back up at.
+    #[qsignal]
+    fn open_rejected(&mut self, path: String, kind: String, message: String, near: String);
+
+    /// Takes the folder picked in a FolderDialog (a `file://` URL).
     #[qslot]
     fn open_repository_url(&mut self, url: String) {
-        self.open_repository_path(file_url_to_path(&url).to_string_lossy().into_owned());
+        self.open_picked_path(file_url_to_path(&url).to_string_lossy().into_owned());
+    }
+
+    /// Takes a picked folder as a plain path: check first, open second.
+    ///
+    /// The check costs one `git rev-parse` (実測 30–36ms on Windows,
+    /// repository or not), which is why nothing is shown while it runs —
+    /// and why the tab is not opened up front and closed again, which
+    /// would flash a tab for the length of a frame or two.
+    #[qslot]
+    fn open_picked_path(&mut self, path: String) {
+        let path_buf = std::path::PathBuf::from(path.trim());
+        if path_buf.as_os_str().is_empty() {
+            return;
+        }
+        if !self.attached {
+            self.picks.attach(self.get_qml_method_invoker());
+            self.attached = true;
+        }
+        let feed = Arc::clone(&self.picks);
+        // With no runtime there is nothing to ask and nothing to wait
+        // for, so the old road applies: open it and let the page say so.
+        if Hub::with(|hub| hub.probe_repo(path_buf, feed)) != Some(true) {
+            self.open_repository_path(path);
+        }
+    }
+
+    #[qslot]
+    fn drain(&mut self) {
+        for msg in self.picks.drain() {
+            match msg {
+                PickMsg::Accepted { path } => {
+                    self.open_repository_path(path.to_string_lossy().into_owned());
+                }
+                PickMsg::Rejected {
+                    path,
+                    near,
+                    kind,
+                    message,
+                } => {
+                    tracing::info!(path = %path.display(), kind, "picked folder refused");
+                    self.open_rejected(
+                        path.to_string_lossy().into_owned(),
+                        kind.to_string(),
+                        message,
+                        near,
+                    );
+                }
+            }
+        }
     }
 
     /// Opens a plain filesystem path.

@@ -39,6 +39,7 @@ pub async fn open(
         return Err(GitError::NotARepository {
             path: path.to_path_buf(),
             stderr: String::new(),
+            bare: false,
         });
     }
 
@@ -58,9 +59,13 @@ pub async fn open(
         let stderr = out.stderr_utf8().trim().to_string();
         // Covers both "not a git repository" and bare repositories ("this
         // operation must be run in a work tree"): neither can be opened.
+        // Which of the two it was takes a second question, asked only on
+        // the way out — the two folders look nothing alike to the person
+        // who picked one, so the screen has to be able to tell them apart.
         return Err(GitError::NotARepository {
             path: path.to_path_buf(),
             stderr,
+            bare: is_bare(executor, path, cancel).await,
         });
     }
 
@@ -90,6 +95,27 @@ pub async fn open(
         git_dir: PathBuf::from(git_dir.trim_end()),
         object_format,
     })
+}
+
+/// Whether `path` is a repository git will not give a work tree for.
+///
+/// Only asked once [`open`] has already failed, so the cost lands on the
+/// folder nobody could open (実測 33ms) rather than on every one that
+/// works. `false` for a folder that is no repository at all, and for a
+/// question git could not answer — the screen falls back to git's own
+/// wording either way.
+async fn is_bare(executor: &GitExecutor, path: &Path, cancel: &CancellationToken) -> bool {
+    let cmd = GitCommand::new()
+        .cwd(path)
+        .args(["rev-parse", "--is-bare-repository"])
+        .timeout(Duration::from_secs(10))
+        // Outside a repository this exits 128, which is the answer here
+        // and not a failure worth raising the command log over.
+        .answers_by_code();
+    match executor.run_unchecked(cmd, cancel).await {
+        Ok(out) => out.code == 0 && out.stdout_utf8().trim() == "true",
+        Err(_) => false,
+    }
 }
 
 /// The key two paths are judged to be the same folder by — what decides

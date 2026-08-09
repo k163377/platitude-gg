@@ -66,8 +66,17 @@ pub enum GitError {
     UnsupportedVersion { found: String, minimum: String },
 
     /// The given path is not inside a git repository (or does not exist).
+    ///
+    /// `bare` separates the one folder that *is* a repository and still
+    /// cannot be opened: a bare one has no work tree to show. The screen
+    /// says something different for it, and this is how it knows — git's
+    /// wording is for people, not for branching on.
     #[error("not a git repository: {}", path.display())]
-    NotARepository { path: PathBuf, stderr: String },
+    NotARepository {
+        path: PathBuf,
+        stderr: String,
+        bare: bool,
+    },
 
     /// The command succeeded but printed something we cannot interpret.
     #[error("unexpected output from `{command}`: {message}")]
