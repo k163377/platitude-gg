@@ -14,10 +14,12 @@
 //! and the fonts デザイン規約 names for Ubuntu — asking for the small one
 //! when it will do is the difference between a run that starts now and one
 //! that downloads Qt first. The other two belong to the `bare` verb and
-//! are the opposite of a build environment: `runtime` carries exactly what
-//! a package would declare, which is the only place that can say the built
-//! thing runs somewhere it was not built, and `bare` carries nothing at
-//! all — the blank sheet `--discover` works the declaration out on.
+//! are the opposite of a build environment: stock Ubuntu carrying only
+//! the Qt tree a distribution would ship beside the app. `bare` installs
+//! no package at all — the blank sheet `--discover` works the declaration
+//! out on — and `runtime` adds exactly the packages that came out, which
+//! is the only place that can say the built thing runs somewhere it was
+//! not built.
 //!
 //! The build directory is a docker volume mounted over /work/target, never
 //! the host's. One target/ shared between two operating systems is two

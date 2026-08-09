@@ -602,9 +602,10 @@ async fn stage_a_hunk_of_a_crlf_file() {
 }
 
 /// A file without a trailing newline: staging the whole hunk must keep
-/// the missing newline. (Selecting only the addition is the one shape a
-/// partial patch cannot express — the line before it would gain a newline
-/// — and the patch bytes for that refusal are pinned in `patch.rs`.)
+/// the missing newline. (Selecting only an addition after the unterminated
+/// line is the one shape a partial patch cannot express — the line before
+/// it would gain a newline — and no workaround quietly widens the
+/// selection: P3-確認事項 触らないと決めたもの.)
 #[tokio::test]
 async fn stage_a_file_without_a_trailing_newline() {
     let mut repo = TestRepo::init();
