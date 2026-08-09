@@ -4,6 +4,7 @@
 //! plain Rust + std, with OS differences expressed as code, not as parallel
 //! script files.
 
+mod check;
 mod demo;
 mod hook;
 mod linux;
@@ -17,6 +18,17 @@ const USAGE: &str = "\
 cargo xtask <command>
 
 commands:
+  check [--verb <v>]...
+      Stage-2 verification (CLAUDE.md 確認は 3 段), with the host and the
+      container running in parallel: fmt, clippy and the workspace tests
+      here, while the container runs test -p platitude-core, verify-ui
+      for each --verb, and bare. The two sides write to different build
+      trees (target/ vs the docker volume), so the wall clock is
+      whichever side finishes last. Each --verb also runs verify-ui on
+      the host, so one flag covers the verb on both OSes. Without
+      --verb the summary says the touched verbs still have to run —
+      it never passes for the whole of stage 2 on its own.
+
   demo-repo <preset> [--at <dir>]
       Build a throwaway repository (isolated from your git config) and
       print its path. Presets:
@@ -141,6 +153,7 @@ commands:
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
+        Some("check") => check::run(&args[1..]),
         Some("demo-repo") => demo::run(&args[1..]).map(|path| {
             // The path is the output: scripts consume `(cargo xtask ...)`.
             println!("{}", path.display());

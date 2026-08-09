@@ -29,7 +29,7 @@ UI の色・タイポグラフィ・寸法の正本は [デザイン規約.md](i
 
 開発は debug ビルド。**`--release` は性能計測と起動確認だけ**だが、release でないと QML(exe 埋め込み)が反映されない。以下 `cargo` / `cargo xtask` を省略。
 
-**確認は 3 段**(混ぜると日常が重くなるか反映が甘くなる)。**1 日常** = コンテナ無し / **2 反映前** = 軽量 CI = workspace の fmt / clippy / test + `linux test -p platitude-core` + 触った動詞の `linux verify-ui` + `linux bare` / **3 フル** = 完全性 CI = 2 + `linux bare --discover` + 3OS CI + 性能実測(リリース前と、依存や環境を触った時)。
+**確認は 3 段**(混ぜると日常が重くなるか反映が甘くなる)。**1 日常** = コンテナ無し / **2 反映前** = 軽量 CI = workspace の fmt / clippy / test + `linux test -p platitude-core` + 触った動詞の `linux verify-ui` + `linux bare` / **3 フル** = 完全性 CI = 2 + `linux bare --discover` + 3OS CI + 性能実測(リリース前と、依存や環境を触った時)。**段 2 は `check --verb <触った動詞>…` で一括実行**(ホスト側とコンテナ側は書き込み先が別 = 並列で回り、壁時計は遅い側だけになる)。
 
 **Done の基準**: 段 2 が全て通ること。テストを実行していないコードは動かないものとして扱う。UI 配線の Done は **両 OS の `verify-ui` が同じ動詞で PASS し、両方の PNG を目視するまで**(手順・動詞表・Windows の罠は **verify-ui スキル**を必ず呼ぶ)。
 
