@@ -179,11 +179,17 @@ ColumnLayout {
                 eolCard.close()
             return
         }
-        // No one file to name: the button speaks for the whole index.
+        // No one file to name: the button speaks for the whole index, and
+        // so has to hold for all four cases at once. **Not "change"** —
+        // only one of them is a change. A new file has nothing to have
+        // changed from, a mixed one is a file disagreeing with itself, and
+        // a file that never had an ending has only gained its first. What
+        // they share is that the endings are worth reading before this
+        // goes into history; which of the four it is, each row says.
         eolCard.path = ""
         eolCard.notice = wipPane.workTree.eolStagedCount === 1
-            ? qsTr("1 staged file changes its line endings")
-            : qsTr("%1 staged files change their line endings")
+            ? qsTr("1 staged file has line endings worth a look")
+            : qsTr("%1 staged files have line endings worth a look")
               .arg(wipPane.workTree.eolStagedCount)
         const at = commitButton.mapToItem(wipPane, 0, commitButton.height)
         eolCard.x = at.x
