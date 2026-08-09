@@ -55,22 +55,30 @@ pub fn set_border_color(border: u32, frame: u32) {
     let _ = (border, frame);
 }
 
-/// Takes those two colours back off, so the platform draws neither.
+/// Puts the edge on, or takes it off, according to where the window is.
 ///
-/// What a maximised window wants. The border they paint is the invisible
-/// resize border, and Windows puts that *outside* the screen when it
-/// maximises a window — measured on the live window: the frame comes to
-/// -8..1928 across a 0..1920 monitor, and the 8 columns at each end carry
-/// `bgElevated` onto whatever is next to that monitor. On a machine with
-/// one screen nobody sees it; with a second one it is a bar of the app's
-/// own colour standing beside the app (reported 2026-08-09, and the same
-/// measurement watched it become the neighbour's desktop again the moment
-/// these two were set to `DWMWA_COLOR_NONE`). Nothing is lost while
-/// maximised: the window's edges are the screen's, and an edge drawn out
-/// there was never on this screen to begin with.
-pub fn clear_border_color() {
+/// Call it whenever the window moves, resizes or changes state. The rule
+/// is one line: **the edge is painted only while the whole frame is
+/// inside the screen's work area**, and dropped the moment any of it is
+/// not.
+///
+/// What those colours paint is the invisible resize border, and that
+/// border goes outside the screen more often than "maximised" describes.
+/// Measured on the live window, both ways: maximised, the frame is
+/// -8..1928 across a 0..1920 monitor; and *windowed at the size of the
+/// screen* — which is what a window saved from a maximised session comes
+/// back as — it was -5..1931 across the same monitor, not zoomed at all.
+/// Either way the columns at each end carry `bgElevated` onto whatever
+/// monitor is next to that one: a bar of the app's own colour standing
+/// beside the app, which is what was reported twice on 2026-08-09. Keying
+/// this off `IsZoomed` caught only the first of the two.
+///
+/// Nothing is lost by dropping it: an edge outside the screen is not an
+/// edge anyone was going to see on this screen, and the moment the window
+/// comes back inside it is painted again.
+pub fn refresh_border_color() {
     #[cfg(windows)]
-    win32::clear_border_color();
+    win32::refresh_border_color();
 }
 
 /// What the window's edge was last asked to be: `"none"` when neither is
@@ -211,6 +219,18 @@ mod win32 {
         right: i32,
         bottom: i32,
     }
+
+    /// `MONITORINFO` (winuser.h), and the flag that asks for the monitor
+    /// a window is most on rather than none at all.
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    struct MonitorInfo {
+        size: u32,
+        monitor: Rect,
+        work: Rect,
+        flags: u32,
+    }
+    const MONITOR_DEFAULTTONEAREST: u32 = 2;
 
     /// `TrackPopupMenu` flags: hand the choice back rather than posting it,
     /// and take a right-button press as a choice (winuser.h).
@@ -375,19 +395,88 @@ mod win32 {
     /// to draw nothing at all, which no `COLORREF` can say.
     const COLOR_NONE: u32 = 0xFFFF_FFFE;
 
+    thread_local! {
+        /// The colours the app wants its edge to be, whether or not the
+        /// window is anywhere they can be seen. `refresh_border_color`
+        /// hands these out or hands out `COLOR_NONE`; nothing else reads
+        /// them, so the decision lives in one place.
+        static WANTED_COLORS: Cell<(u32, u32)> =
+            const { Cell::new((COLOR_NONE, COLOR_NONE)) };
+    }
+
     pub(super) fn set_border_color(border: u32, frame: u32) {
-        FRAME_COLORS.set((colorref(border), colorref(frame)));
-        paint();
+        WANTED_COLORS.set((colorref(border), colorref(frame)));
+        refresh_border_color();
     }
 
-    pub(super) fn clear_border_color() {
-        FRAME_COLORS.set((COLOR_NONE, COLOR_NONE));
-        paint();
+    pub(super) fn refresh_border_color() {
+        // Nothing is showing until a window says otherwise — a run with no
+        // native window of its own (the offscreen platform) paints no edge
+        // anywhere, and should not report one.
+        SHOWING.set((COLOR_NONE, COLOR_NONE));
+        // SAFETY: as in `square_corners` — the same walk, and the callback
+        // only reads the window it is handed and writes an attribute on it.
+        unsafe {
+            EnumThreadWindows(GetCurrentThreadId(), decide_one, 0);
+        }
     }
 
-    /// What `paint` last handed out, in the form the report wants.
+    thread_local! {
+        /// What the walk is handing out this time round: the wanted pair,
+        /// or `COLOR_NONE` for a window whose frame has left the screen.
+        /// Read back by `window_edge` for the headless report.
+        static SHOWING: Cell<(u32, u32)> = const { Cell::new((COLOR_NONE, COLOR_NONE)) };
+    }
+
+    /// Runs for every top-level window the thread owns, and answers the
+    /// one question this module asks about geometry: is all of this
+    /// window's frame inside the work area it sits on?
+    extern "system" fn decide_one(window: *mut c_void, _param: isize) -> i32 {
+        // SAFETY: `window` is live for the callback; both calls only read.
+        let visible = unsafe { IsWindowVisible(window) != 0 };
+        if !visible {
+            return 1;
+        }
+        let colors = if frame_is_on_screen(window) {
+            WANTED_COLORS.get()
+        } else {
+            (COLOR_NONE, COLOR_NONE)
+        };
+        SHOWING.set(colors);
+        FRAME_COLORS.set(colors);
+        paint_one(window, 0)
+    }
+
+    /// Whether the window's whole frame — the invisible resize border
+    /// included — is inside the work area of the monitor it is on.
+    fn frame_is_on_screen(window: *mut c_void) -> bool {
+        let mut rect = Rect::default();
+        let mut info = MonitorInfo {
+            size: size_of::<MonitorInfo>() as u32,
+            ..MonitorInfo::default()
+        };
+        // SAFETY: `window` is live; both calls fill locals of the shape
+        // they document, and `MONITOR_DEFAULTTONEAREST` always answers.
+        let known = unsafe {
+            GetWindowRect(window, &mut rect);
+            let monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+            GetMonitorInfoW(monitor, &mut info) != 0
+        };
+        if !known {
+            return false;
+        }
+        let work = info.work;
+        rect.left >= work.left
+            && rect.top >= work.top
+            && rect.right <= work.right
+            && rect.bottom <= work.bottom
+    }
+
+    /// What the last refresh actually handed out, in the form the report
+    /// wants — not what the app asked for, which is a different question
+    /// whenever the window has left the screen.
     pub(super) fn window_edge() -> String {
-        let (border, _) = FRAME_COLORS.get();
+        let (border, _) = SHOWING.get();
         if border == COLOR_NONE {
             return "none".into();
         }
@@ -395,14 +484,6 @@ mod win32 {
         // everywhere else, so the report says what the tokens say.
         let (b, g, r) = (border >> 16 & 0xFF, border >> 8 & 0xFF, border & 0xFF);
         format!("#{r:02x}{g:02x}{b:02x}")
-    }
-
-    fn paint() {
-        // SAFETY: as in `square_corners` — the same walk, and the callback
-        // only writes an attribute on the window it is handed.
-        unsafe {
-            EnumThreadWindows(GetCurrentThreadId(), paint_one, 0);
-        }
     }
 
     /// Runs for every top-level window the thread owns; the ones with no
@@ -489,6 +570,8 @@ mod win32 {
         fn FillRect(dc: *mut c_void, rect: *const Rect, brush: *mut c_void) -> i32;
         fn GetClientRect(window: *mut c_void, rect: *mut Rect) -> i32;
         fn ClientToScreen(window: *mut c_void, point: *mut Point) -> i32;
+        fn MonitorFromWindow(window: *mut c_void, flags: u32) -> *mut c_void;
+        fn GetMonitorInfoW(monitor: *mut c_void, info: *mut MonitorInfo) -> i32;
     }
 
     // SAFETY: as above.
@@ -601,11 +684,11 @@ mod win32 {
     /// theme a white line hugging the window is the brightest thing on
     /// the edge, and it read as the edge itself.
     fn paint_frame(window: *mut c_void) {
-        let (_, frame) = FRAME_COLORS.get();
-        // Nothing was asked for, or "draw nothing" was: a maximised
-        // window's frame is off the screen entirely, and a colour there
-        // is what puts a bar of it on the next monitor.
-        if frame == COLOR_NONE {
+        let (_, frame) = WANTED_COLORS.get();
+        // Nothing was asked for, or this window's frame is not on the
+        // screen: painting it there is what puts a bar of the app's
+        // colour on the next monitor (see `refresh_border_color`).
+        if frame == COLOR_NONE || !frame_is_on_screen(window) {
             return;
         }
         let mut window_rect = Rect::default();

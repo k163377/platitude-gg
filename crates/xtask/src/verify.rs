@@ -396,7 +396,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "identity-half" => {
             Some("state=ready dialog=true nameSaved=true emailSaved=false unsaved=true")
         }
-        "window-fill" => Some("window_fill fills=true edge=none"),
+        // `edge=` rides along in that report but is not judged: whether an
+        // edge would land off the screen is a question about a real
+        // monitor, and the offscreen platform has none to answer with.
+        "window-fill" => Some("window_fill fills=true"),
         _ => None,
     };
     let outcome = Outcome {

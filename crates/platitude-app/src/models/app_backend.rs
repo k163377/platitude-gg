@@ -448,12 +448,15 @@ impl AppBackend {
         crate::winframe::set_border_color(border_rgb, frame_rgb);
     }
 
-    /// Takes that edge back off, which is what a maximised window wants:
-    /// the border those colours paint is the invisible resize border, and
-    /// a maximised window's is outside the screen (`winframe`).
+    /// Puts that edge on or takes it off, by where the window is now: it
+    /// is painted only while the whole frame is inside the screen's work
+    /// area, because what those colours paint is the invisible resize
+    /// border, and that goes off the screen for more windows than the
+    /// maximised one (`winframe::refresh_border_color`). Call it whenever
+    /// the window moves, resizes, or changes state.
     #[qslot]
-    fn clear_window_border(&self) {
-        crate::winframe::clear_border_color();
+    fn refresh_window_edge(&self) {
+        crate::winframe::refresh_border_color();
     }
 
     /// What the edge was last asked to be — `"none"`, or the border's own
