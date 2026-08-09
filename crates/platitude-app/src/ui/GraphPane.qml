@@ -638,11 +638,12 @@ Rectangle {
         z: 2
         visible: !graphArea.blank
         hoverEnabled: true
-        // A column with one width still answers the hand, and what it
-        // says is no — but in our own hand, below. The platform's cursor
-        // steps aside for it (規約 §グラフ列は最も広い所のレーンまで).
-        cursorShape: graphArea.graphColWFixed ? Qt.BlankCursor
-                                              : Qt.SplitHCursor
+        // The cursor never changes: it is the platform's splitter shape
+        // in both states, and a column that will not move says so with
+        // the badge below instead (規約 §グラフ列は最も広い所のレーン
+        // まで). Swapping in a drawn arrow made the refusal read as a
+        // different tool from the divider one column over.
+        cursorShape: Qt.SplitHCursor
         preventStealing: true
         onContainsMouseChanged: {
             graphArea.dividerPointed = containsMouse
@@ -676,23 +677,18 @@ Rectangle {
             graphArea.dividerPoint = Qt.point(graphDivider.x + graphDivider.width / 2,
                                               graphArea.height / 2)
     }
-    // The cursor for a column that will not move: the double arrow with
-    // a refusal worn on it, drawn because no platform cursor carries
-    // one (規約 §グラフ列は最も広い所のレーンまで). Centred on the
-    // pointer — a resize cursor's hotspot is its middle, and this one
-    // aims at nothing anyway.
+    // What a column that will not move answers with: the platform's own
+    // cursor, untouched, and this badge below and right of it (規約
+    // §グラフ列は最も広い所のレーンまで). Offset by a gap so it clears
+    // the cursor's own ink rather than sitting inside it.
     NavIcon {
         id: refusedCursor
-        kind: "size-h-no"
+        kind: "no"
         tint: Theme.textPrimary
-        // Two icon grids across, because it stands next to the
-        // platform's own double arrow on the divider one column over:
-        // an `iconLg` mark reads as a small one, and a cursor that is
-        // smaller than the cursor beside it looks like a slip.
-        width: 2 * Theme.iconMd
-        height: 2 * Theme.iconMd
-        x: graphArea.dividerPoint.x - width / 2
-        y: graphArea.dividerPoint.y - height / 2
+        width: Theme.iconMd
+        height: Theme.iconMd
+        x: graphArea.dividerPoint.x + Theme.spaceSm
+        y: graphArea.dividerPoint.y + Theme.spaceSm
         z: 4
         visible: graphArea.graphColWFixed && graphArea.dividerPointed
         // A Canvas that was never visible was never asked to paint, and
@@ -700,15 +696,11 @@ Rectangle {
         onVisibleChanged: if (visible) requestPaint()
     }
     /// What is drawn, not what was asked for: the automation hook reports
-    /// the line and the mark themselves, so a column that cannot be
-    /// resized but still promises a drag cannot pass. `graphDividerBlank`
-    /// is the other half of the mark — with the platform's cursor still
-    /// on, the hand would see both.
+    /// the line and the badge themselves, so a column that cannot be
+    /// resized but still promises a drag cannot pass.
     readonly property alias graphDividerShown: graphDivider.visible
     readonly property alias graphDividerLineShown: graphDividerLine.visible
     readonly property alias graphDividerRefuses: refusedCursor.visible
-    readonly property bool graphDividerBlank:
-        graphDivider.cursorShape === Qt.BlankCursor
     /// Whether the pointer is anywhere in this pane. A `HoverHandler`
     /// rather than a `MouseArea`: handlers are passive, so the rows',
     /// chips' and dividers' own hover does not take this one away. Real

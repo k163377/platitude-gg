@@ -2526,7 +2526,6 @@ Item {
             AppBackend.report("graph_divider shown=" + graphPane.graphDividerShown
                               + " line=" + graphPane.graphDividerLineShown
                               + " refuses=" + graphPane.graphDividerRefuses
-                              + " blank=" + graphPane.graphDividerBlank
                               + " lanes=" + graphModel.maxLanes
                               + " max=" + Math.round(graphPane.graphColWMax)
                               + " min=" + Math.round(graphPane.graphColWMin))
