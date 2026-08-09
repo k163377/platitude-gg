@@ -45,6 +45,9 @@ enum AppMsg {
 pub struct AppBackend {
     git_state: String,
     git_version: String,
+    /// The supported minimum, printed by the missing-git gate. Read from
+    /// core so the screen cannot drift from the version actually enforced.
+    minimum_git: String,
     git_error: String,
     /// "unknown" until the check runs, then "checking" / "missing" /
     /// "ready" / "error". Only "missing" opens the setup screen.
@@ -196,6 +199,7 @@ impl Default for AppBackend {
         Self {
             git_state: "checking".into(),
             git_version: String::new(),
+            minimum_git: platitude_core::version::minimum_string(),
             git_error: String::new(),
             identity_state: "unknown".into(),
             identity_name: String::new(),
@@ -252,6 +256,11 @@ impl AppBackend {
     qproperty!(
         "gitVersion",
         Member = git_version,
+        Notify = git_state_changed
+    );
+    qproperty!(
+        "minimumGit",
+        Member = minimum_git,
         Notify = git_state_changed
     );
     qproperty!("gitError", Member = git_error, Notify = git_state_changed);

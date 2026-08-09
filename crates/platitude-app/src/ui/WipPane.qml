@@ -596,9 +596,7 @@ ColumnLayout {
                         wrapMode: Text.Wrap
                         color: Theme.textMuted
                         font.pixelSize: Theme.fontSm
-                        text: qsTr("%n file(s) are changed both in the staging area "
-                                   + "and on disk. git cannot take those apart, so "
-                                   + "the staged changes cannot go on their own.", "",
+                        text: qsTr("%n file(s) are changed both in the staging area and on disk. git cannot take those apart, so the staged changes cannot go on their own.", "",
                                    wipPane.workTree.partiallyStagedCount)
                     }
                     RowLayout {
@@ -704,8 +702,7 @@ ColumnLayout {
                         onVisibleChanged: if (!visible) checked = false
                         ToolTip.visible: hovered
                         ToolTip.delay: Metrics.tipDelayMs
-                        ToolTip.text: qsTr("Replaces the author %1 <%2> with you, "
-                                           + "dated now")
+                        ToolTip.text: qsTr("Replaces the author %1 <%2> with you, dated now")
                                       .arg(wipPane.repoTab.headAuthorName)
                                       .arg(wipPane.repoTab.headAuthorEmail)
                     }
@@ -746,8 +743,7 @@ ColumnLayout {
                         font.pixelSize: Theme.fontSm
                         ToolTip.visible: amendPushedHover.containsMouse
                         ToolTip.delay: Metrics.tipDelayMs
-                        ToolTip.text: qsTr("Already on a remote — anyone who has it "
-                                           + "will be out of step")
+                        ToolTip.text: qsTr("Already on a remote — anyone who has it will be out of step")
                         MouseArea {
                             id: amendPushedHover
                             anchors.fill: parent

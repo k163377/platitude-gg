@@ -1146,7 +1146,8 @@ ApplicationWindow {
             }
             Label {
                 visible: AppBackend.gitState === "missing"
-                text: qsTr("git was not found on PATH. Install git 2.43 or newer and restart.")
+                text: qsTr("git was not found on PATH. Install git %1 or newer and restart.")
+                          .arg(AppBackend.minimumGit)
                 wrapMode: Text.Wrap
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter

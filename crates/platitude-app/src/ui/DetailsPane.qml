@@ -551,8 +551,7 @@ ColumnLayout {
                         visible: !detailsPane.asking
                                  && detailsPane.details.shaHex !== detailsPane.headOid
                         wrapMode: Text.Wrap
-                        text: qsTr("Saving replays this commit, so every commit after "
-                                   + "it gets a new identity.")
+                        text: qsTr("Saving replays this commit, so every commit after it gets a new identity.")
                         color: Theme.textSecondary
                         font.pixelSize: Theme.fontSm
                     }
@@ -562,8 +561,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         visible: !detailsPane.asking && detailsPane.published
                         wrapMode: Text.Wrap
-                        text: qsTr("This commit is on a remote. Rewriting it leaves "
-                                   + "anyone who already has it out of step.")
+                        text: qsTr("This commit is on a remote. Rewriting it leaves anyone who already has it out of step.")
                         color: Theme.warning
                         font.pixelSize: Theme.fontSm
                     }

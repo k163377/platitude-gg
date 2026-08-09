@@ -84,9 +84,7 @@ AppDialog {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             color: Theme.textSecondary
-            text: qsTr("git records a name and an email address on every commit you "
-                       + "make. They are stored in your git configuration — "
-                       + "Platitude GG keeps no copy of them.")
+            text: qsTr("git records a name and an email address on every commit you make. They are stored in your git configuration — Platitude GG keeps no copy of them.")
         }
 
         ColumnLayout {
@@ -161,8 +159,7 @@ AppDialog {
             wrapMode: Text.Wrap
             color: Theme.textMuted
             font.pixelSize: Theme.fontSm
-            text: qsTr("Saved for every repository on this computer "
-                       + "(user.name and user.email).")
+            text: qsTr("Saved for every repository on this computer (user.name and user.email).")
         }
         // git's own message, unedited — and where a write took nowhere
         // without git raising anything, a sentence of our own, because
@@ -176,9 +173,7 @@ AppDialog {
             text: AppBackend.identityError !== ""
                   ? AppBackend.identityError
                   : AppBackend.identityUnsaved
-                    ? qsTr("git still reports a different identity. A setting in "
-                           + "the repository this window was started in can sit "
-                           + "over this one.")
+                    ? qsTr("git still reports a different identity. A setting in the repository this window was started in can sit over this one.")
                     : ""
         }
 

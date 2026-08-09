@@ -897,8 +897,7 @@ Rectangle {
                 if (topBar.curPage === null)
                     return ""
                 const what = fetchButton.stopped
-                             ? qsTr("Automatic fetching stopped after %n failure(s)."
-                                    + " Hold to start it again.", "",
+                             ? qsTr("Automatic fetching stopped after %n failure(s). Hold to start it again.", "",
                                     fetchButton.fails)
                              : qsTr("Fetch all remotes and prune deleted branches")
                 const why = topBar.curPage.pageTab.autoFetchError
@@ -992,8 +991,7 @@ Rectangle {
                 // Nothing to name a target with in the first state: where
                 // it goes is what the press is about to ask.
                 const what = pushButton.mode === "publish"
-                             ? qsTr("This branch has not been sent anywhere "
-                                    + "yet — asks where it goes")
+                             ? qsTr("This branch has not been sent anywhere yet — asks where it goes")
                            : pushButton.mode === "ready"
                              ? qsTr("Push %n commit(s) to %1", "",
                                     topBar.curPage.pageWt.ahead).arg(to)
@@ -1004,9 +1002,7 @@ Rectangle {
                              ? qsTr("Nothing to push — %1 has moved ahead")
                                .arg(to)
                            : pushButton.mode === "diverged"
-                             ? qsTr("Hold to overwrite %1, dropping %n "
-                                    + "commit(s) it has (as of the last "
-                                    + "fetch)", "",
+                             ? qsTr("Hold to overwrite %1, dropping %n commit(s) it has (as of the last fetch)", "",
                                     topBar.curPage.pageWt.behind).arg(to)
                            : ""
                 // What git said, under what the button would do next —

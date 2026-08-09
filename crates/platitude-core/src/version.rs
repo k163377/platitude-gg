@@ -11,7 +11,8 @@ use crate::process::{GitCommand, GitExecutor};
 /// ships this; modern features like `rebase --update-refs` are assumed).
 pub const MINIMUM_GIT: (u32, u32) = (2, 43);
 
-fn minimum_string() -> String {
+/// [`MINIMUM_GIT`] as the "2.43" the UI and error messages print.
+pub fn minimum_string() -> String {
     format!("{}.{}", MINIMUM_GIT.0, MINIMUM_GIT.1)
 }
 

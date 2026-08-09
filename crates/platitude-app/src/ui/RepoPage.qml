@@ -507,11 +507,9 @@ Item {
         target: graphPane
         property: "askTip"
         value: page.publishTaken
-               ? qsTr("Nobody is asked over there: a branch that can be "
-                      + "fast-forwarded simply moves.")
+               ? qsTr("Nobody is asked over there: a branch that can be fast-forwarded simply moves.")
                : page.publishUnsure
-                 ? qsTr("The push will say what went wrong; the command log "
-                        + "has what was run.")
+                 ? qsTr("The push will say what went wrong; the command log has what was run.")
                  : ""
         when: page.publishAsking
     }
@@ -882,10 +880,7 @@ Item {
             qsTr("Rename"),
             function () { repoTab.renameRemoteBranch(remote, from, name) },
             true,
-            qsTr("Hold to rename. git has no rename on a remote: %1 is "
-                 + "pushed, then %2 is deleted. Anything the old name "
-                 + "carried — an open pull request, a running check — "
-                 + "does not follow it.").arg(remote + "/" + name).arg(remoteRef))
+            qsTr("Hold to rename. git has no rename on a remote: %1 is pushed, then %2 is deleted. Anything the old name carried — an open pull request, a running check — does not follow it.").arg(remote + "/" + name).arg(remoteRef))
         if (AppBackend.autoAct !== "")
             AppBackend.report("rename_remote_asked from=" + remoteRef + " to=" + name)
     }
@@ -3947,8 +3942,7 @@ Item {
                         editBlocked: page.selectedStashRef !== ""
                             ? qsTr("Rename a stash in the list on the left")
                             : (detailsModel.shaHex !== "" && !page.selectedInHistory
-                               ? qsTr("Not in the current history — switch to a "
-                                      + "branch that has it")
+                               ? qsTr("Not in the current history — switch to a branch that has it")
                                : "")
                         busy: repoTab.busyCount > 0
                         asking: page.pendingMove !== null

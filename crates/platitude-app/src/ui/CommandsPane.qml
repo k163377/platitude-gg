@@ -101,8 +101,7 @@ Rectangle {
                     // off until asked for — and only from here on.
                     ToolTip.visible: hovered
                     ToolTip.delay: Metrics.tipDelayMs
-                    ToolTip.text: qsTr("Also record the reads this window "
-                                       + "makes on its own, from now on")
+                    ToolTip.text: qsTr("Also record the reads this window makes on its own, from now on")
                     onToggled: pane.commandsModel.setBackgroundReads(checked)
                 }
                 HoverToolButton {
@@ -160,8 +159,7 @@ Rectangle {
                 parent: list
                 anchors.centerIn: parent
                 visible: list.count === 0
-                text: qsTr("Nothing yet — the commands this window runs "
-                           + "turn up here")
+                text: qsTr("Nothing yet — the commands this window runs turn up here")
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSm
             }

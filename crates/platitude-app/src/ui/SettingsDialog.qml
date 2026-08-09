@@ -202,9 +202,7 @@ AppDialog {
                 wrapMode: Text.Wrap
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSm
-                text: qsTr("Runs git fetch --prune on every open repository, at "
-                           + "most once per interval. Leave it empty to switch it "
-                           + "off; %1 minutes is the longest interval offered.")
+                text: qsTr("Runs git fetch --prune on every open repository, at most once per interval. Leave it empty to switch it off; %1 minutes is the longest interval offered.")
                       .arg(AppBackend.autoFetchMaxMinutes)
             }
         }
@@ -252,9 +250,7 @@ AppDialog {
                 // Named rather than picked from a list: the only way to
                 // enumerate them is `git mergetool --tool-help`, whose
                 // output is laid out for a person to read.
-                text: qsTr("Which tool opens a conflicted file. It must not "
-                           + "need a console — this app gives git none, so "
-                           + "vimdiff and its kind cannot run.")
+                text: qsTr("Which tool opens a conflicted file. It must not need a console — this app gives git none, so vimdiff and its kind cannot run.")
             }
         }
         ColumnLayout {
@@ -404,11 +400,7 @@ AppDialog {
                 wrapMode: Text.Wrap
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSm
-                text: qsTr("A picture for anyone whose commits you read. "
-                           + "The list offers the authors of the repository "
-                           + "you are in. Nothing is fetched: the picture is "
-                           + "one of your own files, copied in beside these "
-                           + "settings.")
+                text: qsTr("A picture for anyone whose commits you read. The list offers the authors of the repository you are in. Nothing is fetched: the picture is one of your own files, copied in beside these settings.")
             }
         }
         FileDialog {
@@ -426,9 +418,7 @@ AppDialog {
             font.pixelSize: Theme.fontSm
             // Two settings, two homes: one this app keeps for itself, one
             // git keeps where every other git on this computer can see it.
-            text: qsTr("The fetch interval is stored by Platitude GG. The "
-                       + "merge editor is stored by git as merge.guitool, "
-                       + "where every other git on this computer sees it.")
+            text: qsTr("The fetch interval is stored by Platitude GG. The merge editor is stored by git as merge.guitool, where every other git on this computer sees it.")
         }
         RowLayout {
             Layout.alignment: Qt.AlignRight
