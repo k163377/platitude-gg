@@ -113,7 +113,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let tag = image_tag(&root, &stage)?;
     if rebuild || !image_exists(&tag)? {
         build_image(&root, &stage, &tag)?;
-        note_stale_images(&stage, &tag);
+        forget_older_images(&stage, &tag);
     }
     in_container(&root, &tag, &command, shell)
 }
@@ -238,13 +238,18 @@ fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Says so when older images of this stage are still on disk. The tag is a
-/// fingerprint, so every edit to the Dockerfile leaves the last one behind
-/// — 1.5GB for the core stage, over 4GB for the app stage — and nothing
-/// else will ever mention them. Removing them here is not this command's
-/// call: a checkout next door may be answering with one of them, and an
-/// image is the user's disk.
-fn note_stale_images(stage: &str, keep: &str) {
+/// Removes the older images of this stage once a new one has built. The
+/// tag is a fingerprint, so every edit to the Dockerfile leaves the last
+/// image behind — 1.5GB for the core stage, over 4GB for the app stage —
+/// and nothing else would ever name them again.
+///
+/// Two things keep this from taking something out from under anybody.
+/// Docker refuses to remove an image a container is still running, so a
+/// run in progress next door is safe by construction; and what a rebuild
+/// costs after this is the layer cache, not the download, because the
+/// layers stay. Every removal is printed: a command that quietly frees
+/// gigabytes is one nobody can audit.
+fn forget_older_images(stage: &str, keep: &str) {
     let prefix = format!("{IMAGE}:{stage}-");
     let Ok(out) = Command::new("docker")
         .args(["images", IMAGE, "--format", "{{.Repository}}:{{.Tag}}"])
@@ -259,15 +264,19 @@ fn note_stale_images(stage: &str, keep: &str) {
         .map(str::trim)
         .filter(|tag| tag.starts_with(&prefix) && *tag != keep)
         .collect();
-    if stale.is_empty() {
-        return;
+    for tag in stale {
+        let removed = Command::new("docker")
+            .args(["image", "rm", tag])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success());
+        if removed {
+            println!("removed the older image {tag}");
+        } else {
+            println!("left {tag} alone — docker would not remove it (in use?)");
+        }
     }
-    println!(
-        "{} older {stage} image(s) are still on disk and nothing will use them \
-         again: docker image rm {}",
-        stale.len(),
-        stale.join(" ")
-    );
 }
 
 fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Result<(), String> {
