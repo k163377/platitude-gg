@@ -1,6 +1,7 @@
 # アバターの取り込み縮小: 実測(Windows x64)
 
-仕様は [P3-確認事項](../../internal-docs/P3-確認事項.md) §アバターの取り込み縮小 が正本。
+仕様は [デザイン規約.md](../../internal-docs/デザイン規約.md) §アバターを与える と
+[.claude/rules/core.md](../../.claude/rules/core.md) の picture 項が正本。
 **ここはその値を選んだ根拠だけ**を持つ。
 
 **測ったのは製品ではなく使い捨ての probe**(木の外・コミットしない。Rust から同じ
@@ -147,8 +148,8 @@ HEIC は HEVC のプール(Access Advance / Via LA)が現役で、**許容ライ
 
 1. **縦横比**。`drawImage(url, dx, dy, 2r, 2r)` は 4:3 の写真を正方形に**押し潰す**
    (`IdentIcon` も同じ)。取り込み時に中央を正方で切れば消える。QML 側で直すと
-   9 引数版の sx/sy/sw/sh を JS で計算することになり、CLAUDE.md §QML にビジネス
-   ロジックを書かない に当たる
+   9 引数版の sx/sy/sw/sh を JS で計算することになり、app-ui.md の「QML に
+   ビジネスロジックを書かない」に当たる
 2. **読めない画像が「輪だけの空円」になる**。`face()` は url があれば identicon へ
    落ちない(`isImageLoaded` が false でも輪だけ描いて戻る)。**保管庫は一度も
    デコードしないので、描けないファイルが普通に入る**。取り込み時にデコードすれば

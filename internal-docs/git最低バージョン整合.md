@@ -4,14 +4,14 @@
 実バイナリでの実測ではなく**マニュアル照合**(git-scm.com のバージョン付きマニュアル + git.git の v タグ付きドキュメントソース)。実バイナリでの一巡は [P5-確認事項.md](P5-確認事項.md) §4。
 
 - 洗い出し: `platitude-core/src` の `GitCommand` 構築の全数(`-c` 固定引数・環境変数・pathspec magic 含む)。app 側に git 実行は無い(core に集約)ことも確認済み
-- 照合日: 2026-08-06(コード状態: main 43f02c8)
+- 照合日: 2026-08-06(コード状態: main 43f02c8)。追補照合 2026-08-10: その後に増えた `ls-remote` / `remote` と `rev-list` の追加オプションを下表へ反映(コード状態: main c4e4a4a)
 - 判定基準: 2.43.0 のマニュアルに記載があれば ✓。git-scm.com が旧版へ redirect する場合は旧版で確認(旧版に在れば 2.43 にも在る — git がオプションを削除することは極めて稀)。2.30 より前からある古参は導入バージョンの知見で確定し「古参」と記す
 
 ## 結論
 
 **発行する全コマンド・全オプションが 2.43 に存在する。** 個別マニュアルに無いのは `cherry-pick --no-edit` 1 件のみで、gitcli(7) の「long option は `--no-` で否定できる」一般規定(§Negating options)+ 実測(CLAUDE.md の実測注記)でカバーされる。最も新しい依存は `rebase --update-refs`(2.38 — 要望.md が明示的に前提化)。
 
-**マニュアル照合が拾えない例外が 1 つある — `reset` は `--end-of-options` を受け付けない。** gitcli(7) の一般規定に載っていても、`git reset` は 2.43 で位置によらず `fatal: option '--end-of-options' must come before non-option arguments`(exit 128)を返す。アプリが発行する動詞のうちこれだけで、`branch` / `switch` / `tag` / `remote add` / `remote set-url` / `rev-parse --verify --quiet` / `log -1 --format=` / `stash list` は全て通る(2.43 実測)。名前を渡したい経路が将来できたら、`rev-parse --end-of-options` で解決してから object id を渡す。**この差は開発機の git(新しい版は受け付ける)では出ない** — 最低バージョンを積んだ Linux コンテナ(`cargo xtask linux`)が唯一の検出点。
+**マニュアル照合が拾えない例外が 1 つある — `reset` は `--end-of-options` を受け付けない。** gitcli(7) の一般規定に載っていても、`git reset` は 2.43 で位置によらず `fatal: option '--end-of-options' must come before non-option arguments`(exit 128)を返す。アプリが発行する動詞のうちこれだけで、`branch` / `switch` / `tag` / `remote add` / `remote set-url` / `ls-remote` / `rev-parse --verify --quiet` / `log -1 --format=` / `stash list` は全て通る(2.43 実測。`ls-remote` は最低バージョンのコンテナの統合テスト `the_remote_branch_check_answers_for_the_exact_name_only` が踏む)。名前を渡したい経路が将来できたら、`rev-parse --end-of-options` で解決してから object id を渡す。**この差は開発機の git(新しい版は受け付ける)では出ない** — 最低バージョンを積んだ Linux コンテナ(`cargo xtask linux`)が唯一の検出点。
 
 **同梱物にもバージョン差がある。** git が持つのはマージツールの**起動レシピだけ**(`$(git --exec-path)/mergetools/` の数十行のシェル。ツール本体は利用者が入れる)で、その顔ぶれが版で変わる — **2.43.0 は 23 個で `vscode` を含まない**(追加は 2.47.0 = `6b77283f mergetools: vscode: new tool`)。`smerge` は 2.22 から在る。**アプリはツール名を利用者から受け取るだけで候補を持たない**ので現状これに依存しないが、将来「既定を提案する」を作るなら名前を書くだけでは 2.43 で外れる(`mergetool.vscode.cmd` を自前で書く形になる)。なお Git for Windows は vim を同梱するため `vimdiff` 系だけは常に「利用可能」と表示されるが、`CREATE_NO_WINDOW` のため**このアプリからは起動できない**。
 
@@ -50,6 +50,7 @@
 | `for-each-ref` | `--format=`(`refname` `objecttype` `objectname` `*objectname` `upstream` `HEAD` `creatordate:unix`) | 2.43.0 ✓(`:unix` は `--date=unix` 委譲、git-log 2.43.0 ✓) |
 | `ls-files` | `-z` / `--eol` / pathspec | `--eol` は 2.8。**最低バージョンのコンテナで実測**(同上)— 列は `i/<v>  w/<v>  attr/<v>\t<path>`、未チェックアウトは `w/` が空 |
 | `log` | `-z` / `-1` / `--date-order` / `--branches` `--remotes` `--tags` / `--max-count=` / `--ignore-missing` / `--reverse` / `--format=` / `--end-of-options` | 2.43.0 ✓。`-z` は diff-options.txt の `ifdef::git-log`「Separate the commits with NULs instead of newlines」を v2.43.0 ソースで確認。`--date-order` は古参(1.5 系から rev-list-options.txt に在る) |
+| `ls-remote` | `--tags` / `--heads` / `--end-of-options` / `--` | 古参(`--tags` / `--heads` は 1.0 以前)。`--end-of-options` は gitcli 2.43.0 ✓ + コンテナの統合テストで実測 |
 | `merge` | `--no-edit` / `--no-ff` / `--ff-only` / `--squash` / `--continue` `--abort` `--quit` | 2.43.0 ✓ |
 | `merge-base` | `--is-ancestor` | 古参(1.8.0) |
 | `mergetool` | `--no-prompt` / `--gui` / `--tool=` / `--tool-help` | 2.43.0 ✓(`--gui` は guitool → tool のフォールバックまで記載を確認) |
@@ -57,9 +58,10 @@
 | `-c` | `mergetool.writeToTemp=true`(mergetool 実行時) | 2.43.0 ✓(`keepBackup` / `guiDefault` / `hideResolved` も同じ config 文書に在る) |
 | `push` | `--porcelain` / `--set-upstream` / `--force-with-lease=<ref>:<oid>` / `--force` / `--delete` | 2.43.0 ✓(値付き lease 形式まで記載確認) |
 | `rebase` | `--interactive` / `--onto` / `--root` / `--update-refs` / `--continue` `--abort` `--skip` `--quit` | 2.43.0 ✓(`--update-refs` 2.38 = **最も新しい依存**)。`--autostash` は発行しない(規約 §未コミット変更がある状態で履歴を書き換える) |
+| `remote` | `add` / `set-url` / `--end-of-options` | 古参(`set-url` 1.7.0)+ 2.43 実測(上記) |
 | `reset` | `--quiet` / `--soft` `--mixed` `--hard` | 古参。**`--end-of-options` は付けられない**(下記) |
 | `restore` | `--staged` / `--worktree`(併用) | 2.43.0 ✓(2.23 導入。2.43 時点 EXPERIMENTAL 表記 — 存在と記載は確認済) |
-| `rev-list` | `--count` / `--merges` / `--not` / `--remotes` | 古参(1.7.2) |
+| `rev-list` | `--count` / `--merges` / `--not` / `--remotes` / `--max-count=` / `--branches` / `--exclude=` / `--glob=` | 古参(`--count` 1.7.2 / `--exclude` 1.9 / `--glob` 1.7.0)。`--exclude` / `--glob` の効き方の罠は core.md |
 | `rev-parse` | `--verify` / `-q` / `--git-path` / `--show-toplevel` / `--absolute-git-dir` / `--show-object-format` / `--end-of-options` / `<rev>^{commit}` | 2.43.0 ✓ |
 | `revert` | `--no-edit` | 2.43.0 ✓ |
 | `rm` | `--cached` / `-r` / `-f` / `--quiet` | 古参 |
