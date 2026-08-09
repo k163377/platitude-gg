@@ -201,13 +201,13 @@ Rectangle {
     readonly property real graphFullW: Metrics.laneInset
                                        + Math.max(1, graphModel.maxLanes) * Metrics.laneW
                                        + Theme.spaceSm
-    // How far the divider may be pulled: up to where the message column
-    // would stop showing that a message is there. Deliberately not the
-    // width of the lanes themselves — capping at the content leaves the
-    // divider on a repository with one lane grabbable but immovable
-    // (規約 §グラフ列は内容の幅に縛らない).
+    // How far the divider may be pulled: as wide as the lanes ever get,
+    // and no wider — a column past the last lane is emptiness taken from
+    // the message column. A narrow window stops it earlier still, where
+    // the message column would stop showing that a message is there
+    // (規約 §グラフ列は最も広い所のレーンまで).
     readonly property real graphColWMax: Math.max(Metrics.laneInset + Metrics.laneW,
-                                                  width - labelW - Metrics.messageMinW)
+        Math.min(graphFullW, width - labelW - Metrics.messageMinW))
     readonly property real graphColW: Math.min(graphColWMax,
         graphColWManual >= 0 ? Math.max(graphColWManual, Metrics.laneInset + Metrics.laneW)
                              : Metrics.laneInset + Metrics.graphDefaultLanes * Metrics.laneW
