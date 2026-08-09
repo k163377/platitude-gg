@@ -3633,6 +3633,12 @@ Item {
                         anchors.bottom: parent.bottom
                         anchors.rightMargin: Theme.spaceSm
                         anchors.bottomMargin: Theme.spaceXs
+                        // In front of the panes that fill this corner:
+                        // declared before them, the label was painted
+                        // under whichever one had content reaching this
+                        // far down, and the demo repositories' short
+                        // lists were the only reason it ever showed.
+                        z: 1
                         text: AppBackend.buildTree === ""
                               ? qsTr("git %1").arg(AppBackend.gitVersion)
                               : qsTr("git %1 · %2").arg(AppBackend.gitVersion)
