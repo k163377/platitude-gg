@@ -439,6 +439,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "identity-tip" => Some("identity_tip unsaved=true badge=true tip=true"),
         "signature-tip" => Some("signature_tip code=E tip=true"),
         "stash-tip" => Some("stash_tip blocked=true tip=true"),
+        // An emptied panel with a red mark over it and an emptied panel
+        // with a quiet one frame the same from the waist down: the panel
+        // is the picture, and the mark is 12 pixels of it in a corner.
+        // `was=` is judged with it — a refusal that never landed leaves
+        // a mark that was never red, and clearing nothing would pass.
+        "commands-clear" => Some("commands_clear was=true wrong=false"),
         // `edge=` rides along in that report but is not judged: whether an
         // edge would land off the screen is a question about a real
         // monitor, and the offscreen platform has none to answer with.

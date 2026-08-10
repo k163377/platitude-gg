@@ -43,6 +43,13 @@ Rectangle {
     readonly property real bandTabRun: tabs.runAvail
     readonly property real bandTabContent: tabs.contentWidth
     readonly property bool bandTabScrolls: tabs.contentWidth > tabs.width
+    /// Automation: what the command log's mark came out to — the band's
+    /// own reading of the log and the error line together, and the colour
+    /// it painted from it. Asked here rather than of the page, because
+    /// what is being checked is that the page's news reached this mark
+    /// at all (`PG_AUTO_ACT=commands-clear`).
+    readonly property bool commandsWrong: commandsToggle.wrong
+    readonly property color commandsMarkColor: commandsMark.color
     /// Automation: the identity badge's own visibility. Reporting the
     /// condition instead would go on passing with the binding cut, and a
     /// save that only half landed leaves an identity that *is* set — so

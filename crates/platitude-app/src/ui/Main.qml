@@ -722,6 +722,39 @@ ApplicationWindow {
             + " tip=" + topBar.identityTipShown)
     }
 
+    // PG_AUTO_ACT=commands-clear: `Clear` empties the panel, mark and
+    // all. The page has already asked for a move to a branch that is not
+    // there (the commands-fail path), so what this waits on is git's
+    // refusal landing: the panel raises itself, the header carries the
+    // line, and the band's `>_` goes red for it. Then the header's own
+    // Clear is pressed.
+    //
+    // The band is where the answer is — the rows and the line both feed
+    // one mark, and clearing only the rows left it red over an empty
+    // panel (2026-08-10 報告). Read off that mark rather than off the
+    // page's own state, which is why this verb lives up here.
+    //
+    // The same mark is read on both sides of the press: a run whose
+    // refusal never landed has nothing to clear, and its `wrong=false`
+    // would be the resting state passing itself off as the fix. `was=`
+    // is that half, and the picture cannot hold it — by the time the
+    // shot is taken the mark is whatever this verb left it.
+    Timer {
+        id: commandsClearActTimer
+        interval: 2400
+        onTriggered: {
+            const was = topBar.commandsWrong
+            if (root.curPage !== null)
+                root.curPage.clearCommandLog()
+            AppBackend.report(
+                "commands_clear was=" + was
+                + " wrong=" + topBar.commandsWrong
+                + " mark=" + topBar.commandsMarkColor
+                + " open=" + (root.curPage !== null
+                              && root.curPage.commandsShown))
+        }
+    }
+
     // PG_AUTO_ACT=band: the shape the title-bar band settled into. The
     // numbers rather than a screenshot, because the headless platform
     // draws no window buttons of its own — a band that lost the grab run
@@ -1034,6 +1067,8 @@ ApplicationWindow {
         }
         if (AppBackend.autoAct === "state")
             stateActTimer.start()
+        if (AppBackend.autoAct === "commands-clear")
+            commandsClearActTimer.start()
         if (AppBackend.autoAct === "band")
             bandActTimer.start()
         if (AppBackend.autoAct === "tab-widths")

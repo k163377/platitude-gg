@@ -74,7 +74,9 @@ commands:
       pane whose column runs off the right of the window frames exactly
       like one that fits, so the picture cannot answer it. So is
       `window-fill`: a maximised window fills the screen, leaving no
-      desktop beside it for an unpainted edge to show against.
+      desktop beside it for an unpainted edge to show against. And so is
+      `commands-clear`, where the panel the reader emptied is the whole
+      picture and the mark it is judged on is a corner of the band.
       `details-grow` and `wip-grow` (each with a `-squeeze` twin) pull the
       description box's grip past everything and are judged the same way,
       on what sits under the box still being inside the pane. The details
@@ -99,7 +101,8 @@ commands:
         --allow-write-failure
                           a write git refused is what this verb shows, so
                           it does not sink the run (delete-branch-refused,
-                          commands-fail, fetch-fail, push-retry)
+                          commands-fail, commands-clear, fetch-fail,
+                          push-retry)
       The open-refused verbs (open-not-a-repo, open-bare, the -retry /
       -cancel ways out, and open-fail-tab for the road that keeps its
       tab) make their own folder when no argument names one: what they

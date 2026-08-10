@@ -17,7 +17,8 @@ Rectangle {
 
     required property var commandsModel
     /// A failure that never became a command row (a background read that
-    /// gave up). Shown in the header, cleared by clicking it.
+    /// gave up). Shown in the header, cleared by clicking it — and by
+    /// `Clear`, which takes everything the panel says at once.
     property string errorText: ""
 
     signal closeRequested()
@@ -30,6 +31,15 @@ Rectangle {
     function showLatest() {
         list.follow = true
         list.positionViewAtEnd()
+    }
+
+    /// What `Clear` empties: the rows and the line in the header both.
+    /// The toolbar's mark is red for either of them, so a Clear that
+    /// left the line standing left the mark red over an empty panel,
+    /// with nothing on screen left to explain it (2026-08-10 報告).
+    function clearPanel() {
+        pane.commandsModel.clear()
+        pane.errorCleared()
     }
 
     ColumnLayout {
@@ -107,7 +117,7 @@ Rectangle {
                 HoverToolButton {
                     text: qsTr("Clear")
                     font.pixelSize: Theme.fontSm
-                    onClicked: pane.commandsModel.clear()
+                    onClicked: pane.clearPanel()
                 }
                 HoverToolButton {
                     padding: 0

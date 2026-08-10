@@ -3039,10 +3039,12 @@ Item {
             repoTab.stageAll()
             repoTab.unstageAll()
             page.toggleCommands()
-        } else if (act === "commands-fail") {
+        } else if (act === "commands-fail" || act === "commands-clear") {
             // A move to a branch that is not there: a real refusal, in
-            // git's own words, that raises the panel by itself.
-            repoTab.checkoutBranch("pg-no-such-branch", "carry")
+            // git's own words, that raises the panel by itself. The
+            // clearing verb starts from the same failure — `Main` waits
+            // for it to land, presses Clear, and reads the band.
+            repoTab.checkoutBranch("pg-no-such-branch")
         } else if (act === "fetch-fail") {
             // Against a remote that is not there, every fetch comes back
             // non-zero. The argument is how many to run, so one verb
@@ -3293,6 +3295,12 @@ Item {
     /// What the panel is doing, rather than what was asked of it — the
     /// automation reads this one, so a cut binding cannot pass.
     readonly property bool commandsShown: commandsPane.visible
+    /// Automation only: the header's `Clear`, pressed from outside the
+    /// pane. The answer to what it clears is on the band, which cannot
+    /// reach in here (`PG_AUTO_ACT=commands-clear`).
+    function clearCommandLog() {
+        commandsPane.clearPanel()
+    }
 
     RepoTab { id: repoTab }
     CommandsModel { id: commandsModel }
