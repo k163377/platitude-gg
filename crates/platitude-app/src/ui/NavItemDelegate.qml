@@ -402,26 +402,25 @@ Item {
     // cannot show (デザイン規約 §hover のツールチップ). A name that the
     // sentence carries doubles as the full name of a nested leaf, which
     // is why the wording always spells the row out; where there is no
-    // sentence to write, the full name stands on its own. The branch the
-    // working tree is on keeps its colour here too, and colouring means
-    // rich text, so the name is escaped (a refname may hold & and <).
+    // sentence to write, the full name stands on its own. Local branches
+    // and tags have no sentence to write: the section names the kind and
+    // the gesture is the same on every row of it, so `Switch to <name>`
+    // and `Create a branch at <name>` only read the label back
+    // (§hover のツールチップ「足すものが 1 つも無い的には、何も出さない」)
+    // — a shortened name is all that is left to say, the same answer the
+    // row the working tree is on already gave. That one keeps its colour
+    // here too, and colouring means rich text, so the name is escaped
+    // (a refname may hold & and <).
     readonly property string hoverText: {
         const full = navRow.fullName
         if (navRow.folder)
             return ""
-        if (navRow.kindHint === "branch") {
-            // Standing on it already: nowhere to announce, so the tooltip
-            // is only there when the row is showing a shortened name.
-            if (navRow.is_head)
-                return full === navRow.name ? ""
-                       : "<font color=\"" + Theme.textLink + "\">"
-                         + navRow.escapeMarkup(full) + "</font>"
-            return qsTr("Switch to %1").arg(full)
-        }
+        if (navRow.kindHint === "branch" && navRow.is_head)
+            return full === navRow.name ? ""
+                   : "<font color=\"" + Theme.textLink + "\">"
+                     + navRow.escapeMarkup(full) + "</font>"
         if (navRow.kindHint === "remote")
             return qsTr("Switch to %1").arg(full)
-        if (navRow.kindHint === "tag")
-            return qsTr("Create a branch at %1").arg(navRow.name)
         if (navRow.kindHint === "worktree")
             return qsTr("Open %1 in a new tab").arg(full)
         // A stash is named by a message that the row has to cut short.
