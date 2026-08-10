@@ -75,6 +75,70 @@ fn pass_of(event: &SessionEvent) -> Option<Pass> {
     }
 }
 
+/// How long a wait puts up with the session saying nothing. Every event
+/// renews it, so what spends it is silence — not the wait taking a while.
+const QUIET_BUDGET: Duration = Duration::from_secs(20);
+
+/// The whole of a wait, as a backstop under [`QUIET_BUDGET`]: a session
+/// talking without ever getting to the answer renews the silence budget
+/// forever, and only a livelock reaches this one.
+const OVERALL_BUDGET: Duration = Duration::from_secs(300);
+
+/// What a wait spends while it waits.
+///
+/// A wait is here to catch a session that stopped, and a budget counted
+/// from the first poll cannot tell that from one that is merely slow.
+/// `concurrent_writes_are_serialized` puts 12 writes through the queue one
+/// at a time, and under `cargo test --workspace` — 252 integration tests, a
+/// thread per core, all spawning git — one round trip takes ~2.5s: 実測,
+/// 20 seconds bought 8 of them, where the test on its own finished all 12
+/// in 4.7s. Raising the number until that fits would hand every other wait
+/// in the file the same head start before it notices a hang.
+///
+/// Progress is what tells the two apart, so that is what the budget is
+/// counted against: every event renews it, and only a session gone quiet
+/// spends it. Same reading as 規約 §「もう起きない」を sleep で確かめない —
+/// a stretch of clock is not a state. A hang still needs the same
+/// [`QUIET_BUDGET`] of nothing to be called one; it is only the waits that
+/// are demonstrably being answered that no longer pay for it.
+struct Patience {
+    started: Instant,
+    quiet_since: Instant,
+    seen: usize,
+}
+
+impl Patience {
+    fn new() -> Self {
+        let now = Instant::now();
+        Self {
+            started: now,
+            quiet_since: now,
+            seen: 0,
+        }
+    }
+
+    /// Renews the budget if the session has said anything since the last
+    /// look.
+    fn note(&mut self, events: usize) {
+        if events != self.seen {
+            self.seen = events;
+            self.quiet_since = Instant::now();
+        }
+    }
+
+    /// Fails the test once the budget is spent. Call it with no lock held
+    /// — the dump it prints takes one.
+    fn check(&self, what: &str, sink: &CaptureSink) {
+        let (quiet, whole) = (self.quiet_since.elapsed(), self.started.elapsed());
+        assert!(
+            quiet < QUIET_BUDGET && whole < OVERALL_BUDGET,
+            "timed out waiting for {what} after {whole:?}, the last \
+             {quiet:?} of it in silence; events so far: {:?}",
+            sink.events.lock().unwrap()
+        );
+    }
+}
+
 struct CaptureSink {
     events: Mutex<Vec<SessionEvent>>,
     hook: Mutex<Option<(When, Then)>>,
@@ -128,7 +192,8 @@ impl CaptureSink {
         fn stream_events(evs: &[SessionEvent]) -> usize {
             evs.iter().filter(|e| is_stream_event(e)).count()
         }
-        let deadline = Instant::now() + Duration::from_secs(20);
+        let what = format!("the stream to settle at {total} rows");
+        let mut patience = Patience::new();
         loop {
             let (newest, seen) = {
                 let evs = self.events.lock().unwrap();
@@ -138,6 +203,7 @@ impl CaptureSink {
                     .filter(|p| p.total == total)
                     .map(|p| p.generation)
                     .max();
+                patience.note(evs.len());
                 (newest, stream_events(&evs))
             };
             if let Some(g) = newest {
@@ -148,11 +214,7 @@ impl CaptureSink {
             } else {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
-            assert!(
-                Instant::now() < deadline,
-                "stream never settled at {total} rows; events so far: {:?}",
-                self.events.lock().unwrap()
-            );
+            patience.check(&what, self);
         }
     }
 
@@ -181,21 +243,19 @@ impl CaptureSink {
         .await
     }
 
-    /// Polls until `pred` over the event list returns `Some`.
+    /// Polls until `pred` over the event list returns `Some`, giving up
+    /// only once the session has gone quiet on it (see [`Patience`]).
     async fn wait_for<T>(&self, what: &str, pred: impl Fn(&[SessionEvent]) -> Option<T>) -> T {
-        let deadline = Instant::now() + Duration::from_secs(20);
+        let mut patience = Patience::new();
         loop {
             {
                 let events = self.events.lock().unwrap();
                 if let Some(v) = pred(&events) {
                     return v;
                 }
+                patience.note(events.len());
             }
-            assert!(
-                Instant::now() < deadline,
-                "timed out waiting for {what}; events so far: {:?}",
-                self.events.lock().unwrap()
-            );
+            patience.check(what, self);
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     }
