@@ -128,6 +128,20 @@ HoverToolButton {
     /// halves would stop reading as one phrase.
     readonly property real slack:
         Math.max(0, btnLabel.box - btnLabel.implicitWidth)
+    /// The air each end is already holding before the slack is shared out
+    /// (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」).
+    ///
+    /// The seat is cut to hold an icon and the hold mark side by side, so
+    /// a button wearing one of them alone keeps it in the middle of that
+    /// seat with air either side of the ink; and a command's chip reaches
+    /// half a gap past its last letter, which is where the eye measures
+    /// the word's end. Taken off before the halves are cut, so what comes
+    /// out even is the **ink** at the two ends rather than the row between
+    /// them — centring the row alone leaves 22px of band before the icon
+    /// against 17px after the chip (measured on `push`).
+    readonly property real headInk:
+        seat.visible ? (seat.implicitWidth - seat.step) / 2 : 0
+    readonly property real tailInk: actionBtn.code ? Theme.spaceXs / 2 : 0
     /// Held all the way down.
     signal held()
     /// Pressed and let go, meaning the button's ordinary action.
@@ -225,18 +239,35 @@ HoverToolButton {
         easing.type: Easing.OutCubic
     }
     background: Rectangle {
-        color: "transparent"
+        // The same wash every other tool button answers with
+        // (`HoverToolButton.washColor`), read rather than left out: a
+        // background handed in replaces the one that carries it, and the
+        // frame, the hold's fill and the focus ring all have to be drawn
+        // here — so this button owes the pointer the paint as well.
+        //
+        // Only while it is answering, though. A button with git out on the
+        // network is as deaf as a disabled one (`live`), and it was
+        // lighting under a pointer that had nothing to press: the hand
+        // that starts a fetch is still resting on the button while the
+        // fetch runs, so the wash stayed up for the whole of it and came
+        // back on every fetch the timer made (2026-08-10 報告). The ring
+        // is all this state has to say.
+        color: actionBtn.live ? actionBtn.washColor : "transparent"
         // The frame goes a step down with the rest of the button while git
         // is out on the network: there is no press to be had until this
         // comes back, but the button is still the one that overwrites a
         // remote, and a frame that dropped to grey would take that back
-        // for as long as the wait lasted. A button with no frame of its
-        // own borrows the plain one — the frame appearing is what says the
-        // wait has started, where there are no words left to say it.
-        border.color: actionBtn.busy
-                      ? (actionBtn.framed ? actionBtn.toneDim
-                                          : Theme.borderDefault)
-                      : actionBtn.frameColor
+        // for as long as the wait lasted.
+        //
+        // A button with no frame of its own grows none. It used to borrow
+        // the plain one, on the reasoning that with the words gone there
+        // was nothing left to say the wait had started — but the ring is
+        // turning in the middle of it, which says exactly that, and a
+        // frame drawn around a button that has never worn one reads as a
+        // box laid over the band rather than as part of it
+        // (2026-08-10 報告「ちょっと浮いて見えた」).
+        border.color: actionBtn.busy && actionBtn.framed
+                      ? actionBtn.toneDim : actionBtn.frameColor
         border.width: Theme.borderWidth
         radius: Theme.radiusSm
         // The hold, filling from the left. Inset by the border where
@@ -263,6 +294,16 @@ HoverToolButton {
         // Drawn outside the frame rather than in it: the frame's colour is
         // already saying this button is the dangerous one, and focus must
         // not be able to take that over.
+        //
+        // `visualFocus`, which is focus that arrived from the keyboard —
+        // not `activeFocus`, which a press gives it as well. A button
+        // takes focus when it is clicked (`focusPolicy` is StrongFocus and
+        // nothing on this band takes it back), so the ring came up on the
+        // press and then stayed, on a button whose reader had long since
+        // moved on (2026-08-10 報告「押したら色が解除されなくなった」).
+        // The ring is for whoever cannot see the pointer; it has nothing
+        // to tell the hand that is holding one. Same reading as the wash
+        // (`HoverToolButton.washColor`).
         Rectangle {
             anchors.fill: parent
             anchors.margins: -Theme.spaceXs / 2
@@ -270,7 +311,7 @@ HoverToolButton {
             border.color: Theme.borderFocus
             border.width: Theme.borderWidth
             radius: Theme.radiusMd
-            visible: actionBtn.activeFocus
+            visible: actionBtn.visualFocus
         }
     }
     // The toolbar's size unless an instance says otherwise — the hunk
@@ -290,7 +331,14 @@ HoverToolButton {
     // reason anybody reading the two expressions would see. It is also the
     // side that ends up with the odd pixel, which is the side with a mark
     // to stand clear of (`alert`).
-    readonly property real headAir: Math.floor(actionBtn.slack / 2)
+    // Only a button measured into a shared box has anything to share: one
+    // sized to its own content is already as tight as the two ends can be,
+    // and moving its ink off the padding would be a change to every button
+    // in the app for the sake of the two on this band.
+    readonly property real headAir: btnLabel.box > 0
+        ? Math.floor((actionBtn.slack - actionBtn.headInk
+                      - actionBtn.tailInk) / 2)
+        : 0
     leftPadding: actionBtn.padding + actionBtn.headAir
     rightPadding: actionBtn.padding + (actionBtn.slack - actionBtn.headAir)
 
@@ -432,27 +480,27 @@ HoverToolButton {
             }
             Item {
                 id: btnLabel
-                // The box is the widest wording plus one gap, so the last
-                // letter stands off the frame the way the first stands off
-                // the icon. Without it the words sit hard against the
-                // border (measured: 8px of air on the left, 5 on the
-                // right).
+                // The box is the widest wording's ink and nothing else.
+                // What stands between that ink and the frame is the
+                // button's own air, shared out by one rule in every state
+                // (`slack`) — the widest included, whose slack is nothing
+                // and whose air is therefore the padding itself.
                 //
-                // A command has that gap already: its chip's ground reaches
-                // half a gap past the last letter on its way out, and what
-                // the eye measures to the frame is the ground's edge rather
-                // than the letter's. Adding the gap on top of it leaves the
-                // widest wording loose on the right while the chip all but
-                // touches the icon on the left (measured: 7px against 2px).
+                // The gap this used to add for a wording that is not a
+                // command has gone with it. It was there to keep the last
+                // letter off the border, which the padding now does on both
+                // sides at once; and charging it to one family and not the
+                // other made the box jump five pixels whenever the two came
+                // within one of each other. That is what happened: the UI
+                // family changed under it and `Resume` (53) passed
+                // `push -f` (52), which took the pair from 92px to 97px
+                // with nothing on screen, and nothing in either table, to
+                // say what had grown.
                 //
                 // Measured from the font even where the flag is drawn (see
                 // below) — the box is what holds the toolbar still, and it
                 // must not move when a shorter rule is chosen for the flag.
-                readonly property real box:
-                    widest.implicitWidth > 0
-                    ? widest.implicitWidth
-                      + (actionBtn.widestCode ? 0 : Theme.spaceXs)
-                    : 0
+                readonly property real box: widest.implicitWidth
                 /// A command's flag, set apart from the command itself so
                 /// its dashes can be drawn rather than typed. Every dash
                 /// the mono family carries is the same 7px rule in an 8px

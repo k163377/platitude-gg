@@ -211,6 +211,9 @@ Rectangle {
             }
             // Outside the frame: the frame's colour says what answering
             // costs, and focus must not be able to take that over.
+            //
+            // Focus that came from the keyboard, not from a press
+            // (`ActionButton` carries the same reading and the reason).
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: -Theme.spaceXs / 2
@@ -218,7 +221,7 @@ Rectangle {
                 border.color: Theme.borderFocus
                 border.width: Theme.borderWidth
                 radius: Theme.radiusMd
-                visible: acceptPill.activeFocus
+                visible: acceptPill.visualFocus
             }
             Row {
                 id: acceptRow

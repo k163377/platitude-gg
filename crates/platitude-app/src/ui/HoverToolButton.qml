@@ -22,6 +22,26 @@ ToolButton {
     /// The corner of the wash. Zero on the controls that fill a band or
     /// a cell edge to edge, where what washes beside them is square.
     property real washRadius: Theme.radiusSm
+    /// What the pointer is answered with, for a caller that draws its own
+    /// background and would otherwise answer with nothing.
+    ///
+    /// A `background` handed in replaces this one whole. While the wash
+    /// was a child of the content it survived that — every `ActionButton`
+    /// in the app went on answering the pointer with its own frame drawn
+    /// underneath — and moving the paint here took it from all of them in
+    /// one go (2026-08-10: fetch, push, the commit button, the hunk
+    /// heading's two and every dialog's pair stopped lighting at all).
+    /// So the rule lives in one place and the two backgrounds read it.
+    ///
+    /// Pressed is a step up from hover rather than the style's darker
+    /// face: with no panel under it, a wash that lifted on press would
+    /// leave the button answering a held finger with nothing.
+    readonly property color washColor:
+        !hoverToolButtonSelf.enabled ? "transparent"
+        : hoverToolButtonSelf.down ? Theme.bgPressed
+        : hoverToolButtonSelf.hovered
+          || hoverToolButtonSelf.visualFocus ? Theme.bgHover
+        : "transparent"
 
     // Said out loud rather than left to the platform. A Control with no
     // ancestor claiming hover falls back to the theme's `useHoverEffects`
@@ -37,13 +57,6 @@ ToolButton {
         implicitWidth: Theme.iconLg
         implicitHeight: Theme.iconLg
         radius: hoverToolButtonSelf.washRadius
-        // Pressed is a step up from hover rather than the style's darker
-        // face: with no panel under it, a wash that lifted on press would
-        // leave the button answering a held finger with nothing.
-        color: !hoverToolButtonSelf.enabled ? "transparent"
-             : hoverToolButtonSelf.down ? Theme.bgPressed
-             : hoverToolButtonSelf.hovered
-               || hoverToolButtonSelf.visualFocus ? Theme.bgHover
-             : "transparent"
+        color: hoverToolButtonSelf.washColor
     }
 }
