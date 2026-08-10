@@ -114,6 +114,17 @@ RUN apt-get update \
         libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
+# gnupg is for the `E` signature verdict (--preset errsig): a commit
+# signed by a key no keyring holds is the one state git can only report
+# through a gpg binary — absent one, it calls the same commit unsigned
+# (measured: N). Verifying is the whole ask; the demo embeds the signed
+# object, so nothing here ever signs. A RUN of its own, below the Qt and
+# font layers, so adding it never fetched them again.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
 # qtbridge finds Qt through QMAKE, as CI hands it over; the built binary
 # finds its libraries through LD_LIBRARY_PATH. Qt switches a "C" locale to
 # C.UTF-8 on its own and says so on every run — naming it here says it once

@@ -52,6 +52,14 @@ ColumnLayout {
     /// Stands in for the pointer where headless cannot put one, so the
     /// badge can be photographed (PG_AUTO_ACT=avatar-hover).
     property bool avatarPointedAt: false
+    /// The same stand-in for the verdict mark and the read-only summary
+    /// box, so their tooltips can be photographed (signature-tip /
+    /// stash-tip). Reported through the ToolTip's own visible — the
+    /// output side, so a cut binding cannot read as green.
+    property bool signaturePointedAt: false
+    readonly property bool signatureTipShown: signatureMark.ToolTip.visible
+    property bool summaryPointedAt: false
+    readonly property bool summaryTipShown: subjectArea.ToolTip.visible
     function avatarClicked() {
         if (detailsPane.details.authorEmail !== "")
             detailsPane.avatarEditRequested(detailsPane.details.authorName,
@@ -520,7 +528,8 @@ ColumnLayout {
                             id: subjectArea
                             readOnly: !detailsPane.editable
                             placeholderText: detailsPane.editable ? qsTr("Commit summary") : ""
-                            ToolTip.visible: hovered && detailsPane.editBlocked !== ""
+                            ToolTip.visible: (hovered || detailsPane.summaryPointedAt)
+                                             && detailsPane.editBlocked !== ""
                             ToolTip.delay: Metrics.tipDelayMs
                             ToolTip.text: detailsPane.editBlocked
                             WheelHandler {
@@ -773,6 +782,7 @@ ColumnLayout {
                                     Layout.alignment: Qt.AlignVCenter
                                 }
                                 ToolTip.visible: signatureHover.hovered
+                                                 || detailsPane.signaturePointedAt
                                 ToolTip.delay: Metrics.tipDelayMs
                                 ToolTip.text: detailsPane.signatureTip
                                 // A handler, not a MouseArea: an item inside a

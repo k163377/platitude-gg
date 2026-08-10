@@ -1981,6 +1981,40 @@ Item {
             + " code=" + page.selectedSignatureCode
             + " signer=" + page.selectedSignatureSigner)
     }
+    // The tooltip halves of signature-tip / stash-tip: the state has to
+    // land (gpg's verdict, the stash's details) before the target is
+    // pointed at, and the report then waits out Metrics.tipDelayMs so
+    // what it reads is the tip on screen.
+    Timer {
+        id: signatureTipTimer
+        interval: 800
+        onTriggered: {
+            detailsPane.signaturePointedAt = true
+            signatureTipReport.start()
+        }
+    }
+    Timer {
+        id: signatureTipReport
+        interval: 800
+        onTriggered: AppBackend.report(
+            "signature_tip code=" + page.selectedSignatureCode
+            + " tip=" + detailsPane.signatureTipShown)
+    }
+    Timer {
+        id: stashTipTimer
+        interval: 800
+        onTriggered: {
+            detailsPane.summaryPointedAt = true
+            stashTipReport.start()
+        }
+    }
+    Timer {
+        id: stashTipReport
+        interval: 800
+        onTriggered: AppBackend.report(
+            "stash_tip blocked=" + (detailsPane.editBlocked !== "")
+            + " tip=" + detailsPane.summaryTipShown)
+    }
     // Automation: the details have to land before the author card can be
     // worked, since it is that author the picture is filed against.
     Timer {
@@ -2604,6 +2638,19 @@ Item {
             // for it. The argument is the row.
             page.activateRow(graphModel.oidAt(Number(arg)))
             signatureTimer.start()
+        } else if (act === "signature-tip") {
+            // The verdict's reason, worn where the pointer cannot go:
+            // the row is selected as `signature` does, and once the
+            // verify is back the mark is asked to say why. The argument
+            // is the row.
+            page.activateRow(graphModel.oidAt(Number(arg)))
+            signatureTipTimer.start()
+        } else if (act === "stash-tip") {
+            // The read-only summary's reason. Selecting the stash row
+            // fills the pane; the box is then asked why it refuses the
+            // caret. The argument is the row.
+            page.activateRow(graphModel.oidAt(Number(arg)))
+            stashTipTimer.start()
         } else if (act === "row-card") {
             // Hover cannot be injected, so this enters where the row's
             // delay timer would. The argument is the row.

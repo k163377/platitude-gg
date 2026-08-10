@@ -72,6 +72,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "unpublished" => unpublished(&mut repo)?,
         "noremote" => noremote(&mut repo)?,
         "signed" => signed(&mut repo)?,
+        "errsig" => errsig(&mut repo)?,
         "co-authors" => co_authors(&mut repo)?,
         "authorship" => authorship(&mut repo)?,
         "tags" => tags(&mut repo)?,
@@ -208,10 +209,11 @@ impl DemoRepo {
         Ok(())
     }
 
-    /// Runs git with `input` on its standard input. One process for a
-    /// batch of refs: a repository of thousands of tags built a `git tag`
-    /// at a time is minutes of process spawning on Windows.
-    fn git_stdin(&mut self, args: &[&str], input: &str) -> Result<(), String> {
+    /// Runs git with `input` on its standard input and returns what it
+    /// printed. One process for a batch of refs: a repository of
+    /// thousands of tags built a `git tag` at a time is minutes of
+    /// process spawning on Windows.
+    fn git_stdin(&mut self, args: &[&str], input: &str) -> Result<String, String> {
         let dir = self.work.clone();
         let mut child = self
             .command(&dir, args)
@@ -234,7 +236,7 @@ impl DemoRepo {
                 String::from_utf8_lossy(&out.stderr).trim()
             ));
         }
-        Ok(())
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
 
     /// Creates `<root>/origin.git` (bare), wires it as `origin`.
@@ -1260,6 +1262,60 @@ fn config_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
+/// The one verdict `signed` cannot stage: `E`, a signature git cannot
+/// check. SSH signing never answers it — no allowedSignersFile is `N`,
+/// a missing or short allowedSignersFile is `U`, tampered bytes and a
+/// missing verifier are both `B` (all measured) — so the commit here is
+/// OpenPGP-signed, and `E` is what gpg says when the public key is in
+/// no keyring it can see. The key was made once, in a throwaway home
+/// that no longer exists, and the signed object is carried whole below:
+/// building needs no gpg and no key material, and no machine can hold
+/// the key, so the verdict cannot drift to `G`. Verifying does need a
+/// gpg binary — without one git calls the same commit unsigned
+/// (measured: `N`) — which Git for Windows bundles and ci/linux
+/// installs.
+fn errsig(repo: &mut DemoRepo) -> Result<(), String> {
+    // The object names its tree, so the same tree is built first; the
+    // hash checks prove nothing drifted, byte for byte.
+    repo.write("a.txt", "one\n")?;
+    repo.git(&["add", "--", "a.txt"])?;
+    let tree = repo.git(&["write-tree"])?;
+    if tree != ERRSIG_TREE {
+        return Err(format!("errsig tree drifted: {tree}"));
+    }
+    let commit = repo.git_stdin(
+        &["hash-object", "-w", "-t", "commit", "--stdin"],
+        ERRSIG_OBJECT,
+    )?;
+    if commit != ERRSIG_COMMIT {
+        return Err(format!("errsig commit drifted: {commit}"));
+    }
+    repo.git(&["update-ref", "refs/heads/main", &commit])?;
+    repo.git(&["reset", "--hard"])?;
+    Ok(())
+}
+
+const ERRSIG_TREE: &str = "20e50a07feffafe7699bf38ff4027a606f406eaa";
+const ERRSIG_COMMIT: &str = "bdc88d46075d5f43d0f8b23a8f48d280769ff273";
+/// `git cat-file commit` of the signed commit, escaped a line at a time
+/// so the checkout's line endings cannot reach the bytes. The armour's
+/// blank line really is `" "` — a space under the `gpgsig` header's
+/// continuation indent.
+const ERRSIG_OBJECT: &str = concat!(
+    "tree 20e50a07feffafe7699bf38ff4027a606f406eaa\n",
+    "author demo <demo@example.com> 1767323045 +0000\n",
+    "committer demo <demo@example.com> 1767323045 +0000\n",
+    "gpgsig -----BEGIN PGP SIGNATURE-----\n",
+    " \n",
+    " iIcEABYKAC8WIQQdamFUB//cf9AEH47UOMlB1A5vegUCankafxEcZGVtb0BleGFt\n",
+    " cGxlLmNvbQAKCRDUOMlB1A5ven70AP9L7BWNVvo87cSiucHqL52AuGc6uD5BI/ad\n",
+    " tIXQBS7ncgD9Gsrff1I162MIgFMh+Hr21cNHvfCKTdsPLb2BTp2r5w0=\n",
+    " =OTHe\n",
+    " -----END PGP SIGNATURE-----\n",
+    "\n",
+    "feat: sign with a key that is not shipped\n",
+);
+
 /// Every state a tag can be in with respect to the remote, so the badge
 /// and the name colour can be read side by side (デザイン規約 §グラフ行の
 /// ダブルクリック). Nothing shows until a fetch: `ls-remote --tags` is what carries
@@ -1333,5 +1389,6 @@ fn manytags(repo: &mut DemoRepo) -> Result<(), String> {
             n % 100
         ));
     }
-    repo.git_stdin(&["update-ref", "--stdin"], &batch)
+    repo.git_stdin(&["update-ref", "--stdin"], &batch)?;
+    Ok(())
 }

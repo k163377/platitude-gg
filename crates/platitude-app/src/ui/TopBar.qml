@@ -48,6 +48,11 @@ Rectangle {
     /// save that only half landed leaves an identity that *is* set — so
     /// nothing else on this band would mention it.
     readonly property bool identityBadgeShown: identityBadgeBox.visible
+    /// Stands in for the pointer where headless cannot put one, so the
+    /// badge's tooltip can be photographed (identity-tip). Reported
+    /// through the ToolTip's own visible — the output side.
+    property bool identityPointedAt: false
+    readonly property bool identityTipShown: identityBadgeMouse.ToolTip.visible
 
     signal openRepositoryRequested()
     signal identityEditRequested()
@@ -775,7 +780,7 @@ Rectangle {
                 anchors.fill: parent
                 hoverEnabled: true
                 onClicked: topBar.identityEditRequested()
-                ToolTip.visible: containsMouse
+                ToolTip.visible: containsMouse || topBar.identityPointedAt
                 ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: AppBackend.identityUnsaved
                               ? qsTr("Name and email were not both saved")

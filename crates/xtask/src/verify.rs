@@ -34,7 +34,10 @@ const IDENTITY_ASKED: &str = "Ada Lovelace|ada@example.com";
 fn identity_seed(verb: &str) -> Option<&'static str> {
     match verb {
         "identity" => Some(""),
-        "identity-half" => {
+        // `identity-tip` walks the same half-landed save and then closes
+        // the dialog on it: the badge the tooltip belongs to only stands
+        // while the identity is half of what was asked for.
+        "identity-half" | "identity-tip" => {
             Some("[user]\n\temail = personal@example.com\n\temail = second@example.com\n")
         }
         _ => None,
@@ -344,7 +347,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
                     false => opts.arg.as_str(),
                 },
             );
-        if opts.verb == "identity-half" {
+        if opts.verb == "identity-half" || opts.verb == "identity-tip" {
             cmd.env("PG_AUTO_IDENTITY_SAVE", "1");
         }
         println!("identity config: {}", config.display());
@@ -429,6 +432,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "identity-half" => {
             Some("state=ready dialog=true nameSaved=true emailSaved=false unsaved=true")
         }
+        // The three forced tooltips: a hook that never reached its
+        // target photographs the resting state, which is a real state.
+        // `tip=` is the attached ToolTip's own visible — the output
+        // side, as everywhere.
+        "identity-tip" => Some("identity_tip unsaved=true badge=true tip=true"),
+        "signature-tip" => Some("signature_tip code=E tip=true"),
+        "stash-tip" => Some("stash_tip blocked=true tip=true"),
         // `edge=` rides along in that report but is not judged: whether an
         // edge would land off the screen is a question about a real
         // monitor, and the offscreen platform has none to answer with.

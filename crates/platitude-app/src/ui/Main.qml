@@ -692,6 +692,36 @@ ApplicationWindow {
             + " said=" + (AppBackend.identityError !== ""))
     }
 
+    // PG_AUTO_ACT=identity-tip: the badge's reason, worn where the
+    // pointer cannot go. The half-landed save comes first (the
+    // identity-half seed and machinery), "Not now" then hands the state
+    // to the badge, and the badge is asked to say why it is there.
+    Timer {
+        interval: 1600
+        running: AppBackend.autoAct === "identity-tip"
+        onTriggered: {
+            root.dismissIdentity()
+            identityTipTimer.start()
+        }
+    }
+    Timer {
+        id: identityTipTimer
+        interval: 400
+        onTriggered: {
+            topBar.identityPointedAt = true
+            identityTipReport.start()
+        }
+    }
+    // Past Metrics.tipDelayMs, so what is reported is the tip on screen.
+    Timer {
+        id: identityTipReport
+        interval: 800
+        onTriggered: AppBackend.report(
+            "identity_tip unsaved=" + AppBackend.identityUnsaved
+            + " badge=" + topBar.identityBadgeShown
+            + " tip=" + topBar.identityTipShown)
+    }
+
     // PG_AUTO_ACT=band: the shape the title-bar band settled into. The
     // numbers rather than a screenshot, because the headless platform
     // draws no window buttons of its own — a band that lost the grab run
