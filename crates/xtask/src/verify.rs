@@ -33,11 +33,11 @@ const IDENTITY_ASKED: &str = "Ada Lovelace|ada@example.com";
 /// asks for an identity on its own.
 fn identity_seed(verb: &str) -> Option<&'static str> {
     match verb {
-        // `badges` wants the badge, not the screen: an empty seed is the
-        // one state that raises it without a save having to fail first,
-        // and the repository keeps its own `user.*` so everything else on
-        // the page goes on working.
-        "identity" | "badges" => Some(""),
+        // The `badges` pair wants the mark, not the screen: an empty seed
+        // is the one state that raises it without a save having to fail
+        // first, and the repository keeps its own `user.*` so everything
+        // else on the page goes on working.
+        "identity" | "badges" | "badges-hover" => Some(""),
         // `identity-tip` walks the same half-landed save and then closes
         // the dialog on it: the badge the tooltip belongs to only stands
         // while the identity is half of what was asked for.
@@ -54,7 +54,7 @@ fn identity_seed(verb: &str) -> Option<&'static str> {
 /// argument names the shape of the window rather than a person.
 fn identity_answer<'a>(verb: &str, arg: &'a str) -> &'a str {
     match verb {
-        "badges" => "skip",
+        "badges" | "badges-hover" => "skip",
         _ if arg.is_empty() => IDENTITY_ASKED,
         _ => arg,
     }
@@ -517,11 +517,22 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // One wanted line for every case: `line=` is already whichever
         // divider has the hand, so the argument does not change it.
         "divider-refuse" => Some("divider_refuse refuses=true line=true"),
-        // The three badges are judged with the fit. A run where one of
-        // them never stood photographs a band that was never crowded, and
-        // that picture cannot be told from a band that took the crowd
-        // well — so the crowd itself has to be said out loud.
-        "badges" => Some("badges fits=true op=true conflicts=true identity=true"),
+        // The three states themselves. A run where one of them never stood
+        // photographs a band that was never crowded, and that picture
+        // cannot be told from a band that gave the crowd room — so the
+        // crowd has to be said out loud.
+        //
+        // Neither the fit nor which of the group's three shapes landed is
+        // judged: this verb takes a width, and the widths that show the
+        // last shape are below the floor a hand can drag the window to
+        // (`fits=false` is what was asked for there). The floor itself is
+        // `window-floor`'s question.
+        "badges" => Some("op=true conflicts=true identity=true"),
+        // The card, opened. `rows=` is the half the picture cannot carry
+        // on its own: a card with one row and a card with three frame the
+        // same way once it is cropped to the band, and which rows arrived
+        // is the whole question the group raises when it gives way.
+        "badges-hover" => Some("card=true rows=op,conflicts,identity"),
         // Walking the graph with the arrows. The picture holds which row
         // is lit and whose commit fills the right-hand pane, but not the
         // three things that make the walk work: that the keyboard was on

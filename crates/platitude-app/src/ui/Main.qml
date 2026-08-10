@@ -706,10 +706,16 @@ ApplicationWindow {
             + " said=" + (AppBackend.identityError !== ""))
     }
 
-    // PG_AUTO_ACT=identity-tip: the badge's reason, worn where the
-    // pointer cannot go. The half-landed save comes first (the
-    // identity-half seed and machinery), "Not now" then hands the state
-    // to the badge, and the badge is asked to say why it is there.
+    // PG_AUTO_ACT=identity-tip: the mark's reason, read where the pointer
+    // cannot go. The half-landed save comes first (the identity-half seed
+    // and machinery), "Not now" then hands the state to the band, and the
+    // band is asked to say why its mark is out.
+    //
+    // The reason moved from an attached ToolTip to the group's card, so
+    // `tip=` is the card's own `opened` — the output side either way.
+    // `badge=` is the group in whichever shape the width left it: at this
+    // verb's window the words stand, and reading the mark alone would
+    // fail a band that is saying exactly what it should.
     Timer {
         interval: 1600
         running: AppBackend.autoAct === "identity-tip"
@@ -722,18 +728,19 @@ ApplicationWindow {
         id: identityTipTimer
         interval: 400
         onTriggered: {
-            topBar.identityPointedAt = true
+            topBar.statePointedAt = true
             identityTipReport.start()
         }
     }
-    // Past Metrics.tipDelayMs, so what is reported is the tip on screen.
+    // Past Metrics.tipDelayMs, so what is reported is what is on screen.
     Timer {
         id: identityTipReport
         interval: 800
         onTriggered: AppBackend.report(
             "identity_tip unsaved=" + AppBackend.identityUnsaved
-            + " badge=" + topBar.identityBadgeShown
-            + " tip=" + topBar.identityTipShown)
+            + " badge=" + (topBar.stateWordsShown || topBar.stateMarkShown)
+            + " tip=" + topBar.stateCardOpen
+            + " rows=" + topBar.stateCardRows)
     }
 
     // PG_AUTO_ACT=commands-clear: `Clear` empties the panel, mark and
@@ -1036,14 +1043,40 @@ ApplicationWindow {
         id: badgesActTimer
         interval: 1200
         running: AppBackend.autoAct === "badges"
+                 || AppBackend.autoAct === "badges-hover"
         onTriggered: {
-            if (AppBackend.autoActArg !== "floor") {
-                root.reportBadges()
+            const arg = AppBackend.autoActArg
+            const wantedW = parseInt(arg)
+            const sized = arg === "floor" || (!isNaN(wantedW) && wantedW > 0)
+            // The pointer, where headless cannot put one. Written to the
+            // same one property the real hover writes, so the card cannot
+            // be opened by a road the hand does not have (app-ui.md).
+            if (AppBackend.autoAct === "badges-hover")
+                topBar.statePointedAt = true
+            if (arg === "floor") {
+                root.width = Math.ceil(root.floorWidth)
+                root.height = Math.ceil(root.floorHeight)
+            } else if (!isNaN(wantedW) && wantedW > 0) {
+                // A plain width, so each of the three shapes the state
+                // group takes can be photographed: whole words, words
+                // narrowed together, the mark. Which width brings on which
+                // is a question about the installed fonts, so the run
+                // names the number and the report says the shape.
+                //
+                // Not held at the floor. The third shape sits below what
+                // this window lets a hand drag it to today, and a shape
+                // nothing can photograph is a shape nobody can check —
+                // the same reason `window-floor` seeds a 320-wide state
+                // file for a window that would never write one.
+                root.width = wantedW
+            }
+            // A beat later if anything was moved or opened; straight away
+            // if this run is only reading the band as it stands.
+            if (sized || AppBackend.autoAct === "badges-hover") {
+                badgesReportTimer.start()
                 return
             }
-            root.width = Math.ceil(root.floorWidth)
-            root.height = Math.ceil(root.floorHeight)
-            badgesReportTimer.start()
+            root.reportBadges()
         }
     }
     // A beat after the shrink, for the same reason the floor verb waits:
@@ -1065,6 +1098,19 @@ ApplicationWindow {
             + " op=" + topBar.opBadgeShown
             + " conflicts=" + topBar.conflictBadgeShown
             + " identity=" + topBar.identityBadgeShown
+            // What the band drew and what came up, past what was asked
+            // for: the three above are conditions, and a condition that
+            // reached no badge is not a picture anybody can read. Which of
+            // the group's three shapes landed is `words=` / `mark=`, and
+            // `cap=` is the width the badges were narrowed to (-1 = none
+            // of them was).
+            + " words=" + topBar.stateWordsShown
+            + " mark=" + topBar.stateMarkShown
+            + " cap=" + topBar.stateCapW
+            + " groupW=" + topBar.stateGroupW
+            + " card=" + topBar.stateCardOpen
+            + " rows=" + topBar.stateCardRows
+            + " cardSize=" + topBar.stateCardSize
             // The band's own floor beside the window's: the band is what
             // the badges widen, and reading only the window's would not
             // say whether it was this row that set it.

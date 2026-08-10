@@ -50,23 +50,161 @@ Rectangle {
     /// at all (`PG_AUTO_ACT=commands-clear`).
     readonly property bool commandsWrong: commandsToggle.wrong
     readonly property color commandsMarkColor: commandsMark.color
-    /// Automation: the identity badge's own visibility. Reporting the
-    /// condition instead would go on passing with the binding cut, and a
-    /// save that only half landed leaves an identity that *is* set — so
-    /// nothing else on this band would mention it.
-    readonly property bool identityBadgeShown: identityBadgeBox.visible
-    /// Automation: the other two badges, read off their own boxes for the
-    /// same reason. All three can stand at once — a stopped operation that
-    /// hit a conflict, on a machine that has never been told who is
-    /// committing — and that is the widest this band ever gets
-    /// (`PG_AUTO_ACT=badges`).
-    readonly property bool opBadgeShown: opBadge.visible
-    readonly property bool conflictBadgeShown: conflictBadge.visible
+    /// The three things this repository can be in the middle of. All three
+    /// can stand at once — a stopped operation that hit a conflict, on a
+    /// machine that has never been told who is committing — and as words
+    /// beside the tabs that was the widest this band ever got, so they are
+    /// folded into one mark and opened as a card (`BandStateCard`).
+    ///
+    /// One expression each, read by the mark and by the card: written
+    /// twice, the two could disagree about whether there is anything here
+    /// to open.
+    readonly property var stateWt: topBar.curPage !== null
+                                   ? topBar.curPage.pageWt : null
+    readonly property bool opBadgeShown: topBar.stateWt !== null
+                                         && topBar.stateWt.opText !== ""
+    readonly property bool conflictBadgeShown: topBar.stateWt !== null
+                                               && topBar.stateWt.hasConflicts
+    /// A save whose halves did not both land leaves an identity that *is*
+    /// set and not the one that was asked for, so nothing else on screen
+    /// would mention it.
+    readonly property bool identityBadgeShown:
+        AppBackend.identityState === "missing"
+        || AppBackend.identityUnsaved
+        || (topBar.curPage !== null
+            && !topBar.curPage.pageTab.identityReady)
+    readonly property bool stateShown: topBar.opBadgeShown
+                                       || topBar.conflictBadgeShown
+                                       || topBar.identityBadgeShown
+    /// The narrowest a badge is drawn before the group gives up on words:
+    /// its opening letters and the ellipsis that says the rest was cut.
+    /// Counted in characters rather than pixels, for the reason the tab
+    /// names are (規約 §ウィンドウの縁) — three characters cost a
+    /// different number of pixels in each platform's UI font.
+    readonly property int stateMinChars: 3
+    readonly property real stateBadgeMinW:
+        Math.ceil(stateFont.advanceWidth("…")
+                  + topBar.stateMinChars * stateFont.averageCharacterWidth)
+        + 2 * Theme.spaceXs
+    FontMetrics {
+        id: stateFont
+        font.family: Theme.uiFamily
+        font.pixelSize: Theme.fontSm
+        font.weight: Font.DemiBold
+    }
+
+    /// The three badges at their natural width, measured off labels that
+    /// are never drawn.
+    ///
+    /// The badges in the band cannot also be what the cap is measured
+    /// from. A `RowLayout` that is not being laid out reports the width it
+    /// had when it last was, and the row of badges goes away the moment
+    /// the group folds — so a cap read from there makes the fold one that
+    /// nothing comes back from (measured 2026-08-11: `cap=32` with a
+    /// 1440-wide window, and no width would bring the words back).
+    component BadgeWord: Label {
+        visible: false
+        font.pixelSize: Theme.fontSm
+        font.weight: Font.DemiBold
+    }
+    BadgeWord {
+        id: mOpText
+        text: topBar.stateWt !== null ? topBar.stateWt.opText : ""
+    }
+    BadgeWord {
+        id: mOpAlso
+        text: topBar.stateWt !== null ? topBar.stateWt.opAlso : ""
+    }
+    BadgeWord {
+        id: mOpStep
+        text: topBar.stateWt === null ? ""
+              : qsTr("%1/%2").arg(topBar.stateWt.opStep)
+                             .arg(topBar.stateWt.opSteps)
+    }
+    BadgeWord {
+        id: mConflict
+        text: qsTr("CONFLICTS")
+    }
+    BadgeWord {
+        id: mIdentity
+        text: qsTr("SET IDENTITY")
+    }
+    DotMark {
+        id: mDot
+        visible: false
+    }
+    readonly property bool stateHasAlso: topBar.stateWt !== null
+                                         && topBar.stateWt.opAlso !== ""
+    readonly property bool stateHasStep: topBar.stateWt !== null
+                                         && topBar.stateWt.opSteps > 0
+    /// Whole pixels, for the reason the tab names are settled in them
+    /// (規約 §ウィンドウの縁): a word asks for a fractional width, a box
+    /// is laid out on a whole one, and a ceiling summed from the fractions
+    /// is a few pixels under what the same widths add up to when each is
+    /// rounded — so the group is handed exactly its natural width and the
+    /// share-out still finds itself short, and every word elides in a band
+    /// with room to spare (measured 2026-08-11 on Linux: `cap=103` with
+    /// `groupW=270`, which was the natural width).
+    readonly property int opBadgeW:
+        Math.ceil(mOpText.implicitWidth
+                  + (topBar.stateHasAlso
+                     ? 2 * Theme.spaceXs + mDot.implicitWidth
+                       + mOpAlso.implicitWidth
+                     : 0)
+                  + (topBar.stateHasStep
+                     ? Theme.spaceXs + mOpStep.implicitWidth : 0))
+        + 2 * Theme.spaceXs
+    readonly property int conflictBadgeW:
+        Math.ceil(mConflict.implicitWidth) + 2 * Theme.spaceXs
+    readonly property int identityBadgeW:
+        Math.ceil(mIdentity.implicitWidth) + 2 * Theme.spaceXs
+
+    /// Automation: which of the group's three shapes is on screen, what
+    /// the badges were narrowed to, and what the card came back with. The
+    /// conditions above are what asks for a state; these are what the band
+    /// made of it (`PG_AUTO_ACT=badges` / `badges-hover`).
+    readonly property bool stateWordsShown: badgeRow.visible
+    readonly property bool stateMarkShown: stateToggle.visible
+    readonly property int stateCapW: stateGroup.cap === Number.MAX_VALUE
+                                     ? -1 : Math.round(stateGroup.cap)
+    readonly property int stateGroupW: Math.round(stateGroup.width)
+    readonly property bool stateCardOpen: stateCard.opened
+    readonly property string stateCardRows: stateCard.rowsLaidOut()
+    readonly property string stateCardSize: stateCard.laidOutSize
     /// Stands in for the pointer where headless cannot put one, so the
-    /// badge's tooltip can be photographed (identity-tip). Reported
-    /// through the ToolTip's own visible — the output side.
-    property bool identityPointedAt: false
-    readonly property bool identityTipShown: identityBadgeMouse.ToolTip.visible
+    /// card can be photographed (`badges-hover` / `identity-tip`). The
+    /// real hover writes this same one property — hover is the input that
+    /// cannot be injected, so the card has to be answering a single
+    /// question or the headless run proves nothing about it.
+    property bool statePointedAt: false
+
+    /// Whether anything is asking for the card: the pointer on the mark,
+    /// the pointer inside the card, or the hook standing in for either.
+    readonly property bool stateLit: groupHover.hovered
+                                     || topBar.statePointedAt
+                                     || stateCard.pointerInside
+    onStateLitChanged: topBar.settleStateCard()
+    /// Opens the card, or starts the wait that closes it. The wait is
+    /// `Metrics.hoverKeepMs` rather than `Qt.callLater`: the mark and the
+    /// card change their hover in separate frames and in either order, and
+    /// callLater runs in between (app-ui.md の 5 つの罠 (3)).
+    function settleStateCard() {
+        if (!topBar.stateLit) {
+            stateSettle.restart()
+            return
+        }
+        stateSettle.stop()
+        if (!stateCard.opened && topBar.stateShown)
+            stateCard.open()
+    }
+    Timer {
+        id: stateSettle
+        interval: Metrics.hoverKeepMs
+        onTriggered: {
+            if (!topBar.stateLit)
+                stateCard.close()
+        }
+    }
 
     signal openRepositoryRequested()
     signal identityEditRequested()
@@ -380,6 +518,9 @@ Rectangle {
             id: tabStrip
             Layout.fillWidth: true
             Layout.fillHeight: true
+            // Second in line for the row's leftover, behind the state
+            // group's ceiling (the comment there carries the reasoning).
+            Layout.horizontalStretchFactor: 1
             // What the strip costs when everything in it has given all it
             // can: the menu cell, one tab with its name cut to the three
             // characters the table allows, the way to open another, and
@@ -713,119 +854,325 @@ Rectangle {
             }
         }
 
-        // Transient state of the current repository. The badge says what
-        // is stopped and how far it got; the ways out of it stand in the
-        // working-tree pane, under the button that finishes things
-        // (デザイン規約 §進行中の操作から出る).
-        Rectangle {
-            id: opBadge
-            readonly property var wt: topBar.curPage !== null
-                                      ? topBar.curPage.pageWt : null
-            visible: opBadge.wt !== null && opBadge.wt.opText !== ""
-            color: "transparent"
-            border.color: Theme.warning
-            border.width: Theme.borderWidth
-            radius: Theme.radiusSm
-            implicitHeight: Theme.iconLg
-            implicitWidth: opLabel.implicitWidth + 2 * Theme.spaceXs
-            RowLayout {
-                id: opLabel
-                anchors.centerIn: parent
+        // Whatever this repository is in the middle of. Three of these can
+        // stand at once — a stopped operation that hit a conflict, on a
+        // machine that has never been told who is committing — and as
+        // whole words they take 340px of the row the tabs are for.
+        //
+        // So they give way in the two steps the tab names give way in
+        // (規約 §ウィンドウの縁): while there is room the words stand
+        // whole; when there is not they narrow *together* to one width,
+        // each keeping its opening letters; and only when even those are
+        // too short to tell apart does the group come down to a single
+        // mark. The card the pointer opens carries the whole of it at
+        // every step, so nothing is ever only in the band.
+        Item {
+            id: stateGroup
+
+            /// Which colour the mark takes once the words are gone. The
+            /// conflict is the one of the three that stops work, so it
+            /// wins whenever it is among them (規約 §状態).
+            readonly property color tint: topBar.conflictBadgeShown
+                                          ? Theme.danger : Theme.warning
+            /// What the badges standing would take with nothing narrowed,
+            /// and what the mark costs on its own. The first is this
+            /// group's ceiling and the second is what it asks for, so the
+            /// row hands it whatever is left over between them — and the
+            /// window's floor is costed at the mark (`TopBar.floorWidth`).
+            readonly property real naturalWidth:
+                (topBar.opBadgeShown ? topBar.opBadgeW + Theme.spaceXs : 0)
+                + (topBar.conflictBadgeShown
+                   ? topBar.conflictBadgeW + Theme.spaceXs : 0)
+                + (topBar.identityBadgeShown
+                   ? topBar.identityBadgeW + Theme.spaceXs : 0)
+                - Theme.spaceXs
+            readonly property real foldedWidth:
+                stateMark.implicitWidth + 2 * fetchButton.padding
+            /// What each badge's box is drawn at, once they have given way
+            /// together, and whether the giving way has gone as far as it
+            /// can. `Number.MAX_VALUE` is "nothing is narrowed".
+            property real cap: Number.MAX_VALUE
+            property bool folded: false
+
+            /// Hands the run out among the badges, the widest giving way
+            /// last — the same max-min share the tab names are settled
+            /// with (`settleTitleCap`), and settled by hand for the same
+            /// reason: the widths are read off a list of items, and a
+            /// binding cannot see one of those arrive.
+            function settleCap() {
+                // Already whole (`TopBar.opBadgeW` and its two neighbours),
+                // and the ceiling above is summed from the same three —
+                // so a group handed its natural width has exactly what
+                // this share-out is about to hand back out.
+                let want = []
+                if (topBar.opBadgeShown)
+                    want.push(topBar.opBadgeW)
+                if (topBar.conflictBadgeShown)
+                    want.push(topBar.conflictBadgeW)
+                if (topBar.identityBadgeShown)
+                    want.push(topBar.identityBadgeW)
+                if (want.length === 0) {
+                    stateGroup.cap = Number.MAX_VALUE
+                    stateGroup.folded = false
+                    return
+                }
+                let left = Math.floor(stateGroup.width)
+                           - (want.length - 1) * Theme.spaceXs
+                want.sort((a, b) => a - b)
+                let cap = Number.MAX_VALUE
+                for (let i = 0; i < want.length; i++) {
+                    const share = Math.floor(left / (want.length - i))
+                    if (want[i] > share) {
+                        cap = share
+                        break
+                    }
+                    left -= want[i]
+                }
+                // Past the point where the opening letters would still
+                // tell one badge from another, the words stop being worth
+                // the room and the group becomes the mark.
+                stateGroup.folded = cap < topBar.stateBadgeMinW
+                stateGroup.cap = cap
+            }
+            onWidthChanged: stateGroup.settleCap()
+
+            visible: topBar.stateShown
+            implicitWidth: stateGroup.foldedWidth
+            implicitHeight: fetchButton.implicitHeight
+            Layout.fillWidth: true
+            Layout.maximumWidth: stateGroup.naturalWidth
+            // The row hands its leftover out in proportion to what each
+            // filling item asked for, and this one asks for the mark — so
+            // without a stretch of its own it is handed a sliver and folds
+            // in a window with 800px going spare (measured 2026-08-11: 104
+            // of 794 at a 1440-wide window, and the words never came back).
+            // The tabs take what is left past this group's ceiling: they
+            // have a narrowing of their own and a floor under it
+            // (`settleTitleCap`), and what they do with room they do not
+            // need is hold it as grab run.
+            Layout.horizontalStretchFactor: 100
+            // The pointer anywhere on the group opens the card — over the
+            // words as much as over the mark, since the words are narrowed
+            // and the card is where the whole of them is. A handler rather
+            // than an area: it is passive, so the identity badge under it
+            // still takes its own press (app-ui.md).
+            HoverHandler {
+                id: groupHover
+            }
+
+            // The words, while there is room for them. Right-aligned: this
+            // group grows and shrinks against the tabs on its left, and
+            // what has to stay put is its edge with `>_`.
+            Row {
+                id: badgeRow
+                visible: !stateGroup.folded
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
                 spacing: Theme.spaceXs
-                Label {
-                    text: opBadge.wt === null ? "" : opBadge.wt.opText
-                    color: Theme.warning
-                    font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
+
+                /// One badge's box. The width is the natural one until the
+                /// group hands down a cap, and the word inside elides into
+                /// whatever that leaves — so what a narrowed badge keeps
+                /// is its opening letters and the ellipsis.
+                component Badge: Rectangle {
+                    id: badge
+                    property bool filled: false
+                    /// What this badge is drawn at with nothing narrowed.
+                    /// Handed in from the hidden measurement rather than
+                    /// read off the row inside: that row is not laid out
+                    /// while the group is folded (`BadgeWord`).
+                    property real naturalW: 0
+                    /// Whether this badge is also a way somewhere. Only
+                    /// the identity one is, narrowed or not (規約 §identity).
+                    property bool pressable: false
+                    signal pressed()
+                    default property alias content: badgeRowInner.data
+
+                    implicitWidth: badge.naturalW
+                    width: Math.min(badge.naturalW, stateGroup.cap)
+                    height: Theme.iconLg
+                    radius: Theme.radiusSm
+                    color: badge.filled ? Theme.danger
+                           : badge.pressable && badgeHover.hovered
+                             ? Theme.bgHover : "transparent"
+                    border.color: badge.filled ? "transparent" : Theme.warning
+                    border.width: badge.filled ? 0 : Theme.borderWidth
+                    RowLayout {
+                        id: badgeRowInner
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.spaceXs
+                        anchors.rightMargin: Theme.spaceXs
+                        spacing: Theme.spaceXs
+                        // Handlers rather than a `MouseArea` and a wash of
+                        // its own: an `Item` handed to a layout is given a
+                        // seat in it, and the word beside it loses that
+                        // much room (app-ui.md「`Layout` の子に `MouseArea`
+                        // を置かない」— measured here as `SET IDENT…` in a
+                        // window with 800px going spare).
+                        HoverHandler {
+                            id: badgeHover
+                            enabled: badge.pressable
+                        }
+                        TapHandler {
+                            enabled: badge.pressable
+                            onTapped: badge.pressed()
+                        }
+                    }
                 }
-                // Bisect runs alongside rather than instead, so it is the
-                // one thing that can share this badge. What goes between
-                // the two names is drawn, not typed — a middle dot would
-                // put a full-width cell in the middle of the badge
-                // (規約 §余白).
-                DotMark {
-                    visible: opBadge.wt !== null && opBadge.wt.opAlso !== ""
-                    tint: Theme.warning
-                    Layout.alignment: Qt.AlignVCenter
+
+                Badge {
+                    id: opBadge
+                    visible: topBar.opBadgeShown
+                    naturalW: topBar.opBadgeW
+                    Label {
+                        text: topBar.stateWt !== null ? topBar.stateWt.opText : ""
+                        color: Theme.warning
+                        font.pixelSize: Theme.fontSm
+                        font.weight: Font.DemiBold
+                        // The one part of this badge that gives: the count
+                        // and the second operation are a few characters
+                        // each and mean nothing cut in half.
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: implicitWidth
+                    }
+                    // Bisect runs alongside rather than instead, so it is
+                    // the one thing that can share this badge. What goes
+                    // between the two names is drawn, not typed — a middle
+                    // dot would put a full-width cell in the badge
+                    // (規約 §余白).
+                    DotMark {
+                        visible: topBar.stateWt !== null
+                                 && topBar.stateWt.opAlso !== ""
+                        tint: Theme.warning
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Label {
+                        visible: topBar.stateWt !== null
+                                 && topBar.stateWt.opAlso !== ""
+                        text: topBar.stateWt !== null ? topBar.stateWt.opAlso : ""
+                        color: Theme.warning
+                        font.pixelSize: Theme.fontSm
+                        font.weight: Font.DemiBold
+                    }
+                    // The count is the half a stopped rebase cannot say
+                    // without it; a merge steps through nothing and has
+                    // none.
+                    Label {
+                        visible: topBar.stateWt !== null
+                                 && topBar.stateWt.opSteps > 0
+                        text: topBar.stateWt === null ? ""
+                              : qsTr("%1/%2").arg(topBar.stateWt.opStep)
+                                             .arg(topBar.stateWt.opSteps)
+                        color: Theme.warning
+                        font.pixelSize: Theme.fontSm
+                        font.weight: Font.DemiBold
+                    }
                 }
-                Label {
-                    visible: opBadge.wt !== null && opBadge.wt.opAlso !== ""
-                    text: opBadge.wt === null ? "" : opBadge.wt.opAlso
-                    color: Theme.warning
-                    font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
+                Badge {
+                    id: conflictBadge
+                    visible: topBar.conflictBadgeShown
+                    naturalW: topBar.conflictBadgeW
+                    filled: true
+                    Label {
+                        text: qsTr("CONFLICTS")
+                        color: Theme.textOnAccent
+                        font.pixelSize: Theme.fontSm
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: implicitWidth
+                    }
                 }
-                // The count is the half a stopped rebase cannot say
-                // without it; a merge steps through nothing and has none.
-                Label {
-                    visible: opBadge.wt !== null && opBadge.wt.opSteps > 0
-                    text: opBadge.wt === null ? ""
-                          : qsTr("%1/%2").arg(opBadge.wt.opStep)
-                                         .arg(opBadge.wt.opSteps)
-                    color: Theme.warning
-                    font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
+                Badge {
+                    id: identityBadge
+                    visible: topBar.identityBadgeShown
+                    naturalW: topBar.identityBadgeW
+                    // The one badge of the three that is also a way
+                    // somewhere, narrowed or not.
+                    pressable: true
+                    onPressed: topBar.identityEditRequested()
+                    Label {
+                        text: qsTr("SET IDENTITY")
+                        color: Theme.warning
+                        font.pixelSize: Theme.fontSm
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: implicitWidth
+                    }
                 }
             }
-        }
-        Rectangle {
-            id: conflictBadge
-            visible: topBar.curPage !== null && topBar.curPage.pageWt.hasConflicts
-            color: Theme.danger
-            radius: Theme.radiusSm
-            implicitHeight: Theme.iconLg
-            implicitWidth: conflictLabel.implicitWidth + 2 * Theme.spaceXs
-            Label {
-                id: conflictLabel
-                anchors.centerIn: parent
-                text: qsTr("CONFLICTS")
-                color: Theme.textOnAccent
-                font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
-            }
-        }
-        // Nothing to attribute commits to. Kept next to the other
-        // repository-state badges so the way back to the setup screen
-        // stays visible after "Not now".
-        Rectangle {
-            id: identityBadgeBox
-            // A save whose halves did not both land leaves an identity
-            // that is set and not the one that was asked for, so nothing
-            // else on screen would say anything about it.
-            visible: AppBackend.identityState === "missing"
-                     || AppBackend.identityUnsaved
-                     || (topBar.curPage !== null
-                         && !topBar.curPage.pageTab.identityReady)
-            color: "transparent"
-            border.color: Theme.warning
-            border.width: Theme.borderWidth
-            radius: Theme.radiusSm
-            implicitHeight: Theme.iconLg
-            implicitWidth: identityBadge.implicitWidth + 2 * Theme.spaceXs
+
+            // …and the mark the group comes down to. `…` typed rather than
+            // drawn, unlike the arrows and the middle dot: those are East
+            // Asian Ambiguous and the CJK families hold them in a
+            // full-width cell, but the ellipsis is what Qt spends on its
+            // own eliding and it measured the same on both OSes (764c362).
+            //
+            // The same box the command log's mark takes, and for the same
+            // reason: the padding that sets how big a target is here
+            // belongs to the Fusion control beside it rather than to the
+            // table (規約 §ウィンドウの縁「その 3 つは 1 つの箱の高さに
+            // 揃える」). `Theme.buttonMinWidth` does not reach it — that
+            // floor is for a box put round a *word*, and given it the mark
+            // came out 80 wide with 26px of air at either end of three
+            // dots (規約 §リポジトリが今どうなっているか).
             Rectangle {
-                anchors.fill: parent
+                id: stateToggle
+                visible: stateGroup.folded
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                implicitWidth: stateGroup.foldedWidth
+                height: fetchButton.implicitHeight
+                width: implicitWidth
                 radius: Theme.radiusSm
-                color: Theme.bgHover
-                visible: identityBadgeMouse.containsMouse
+                color: stateMouse.containsMouse ? Theme.bgHover : "transparent"
+                // The frame is the badges', kept: this mark is out only
+                // when something is already the matter, so unlike `>_` —
+                // which wears one only when something went wrong — it
+                // never stands without it.
+                border.width: Theme.borderWidth
+                border.color: stateGroup.tint
+                Accessible.role: Accessible.Button
+                Accessible.name: qsTr("What this repository is in the middle of")
+                Label {
+                    id: stateMark
+                    anchors.centerIn: parent
+                    text: "…"
+                    font.pixelSize: Theme.fontMd
+                    font.weight: Font.DemiBold
+                    color: stateGroup.tint
+                }
+                MouseArea {
+                    id: stateMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    // A press opens what the hover opens. A mark this
+                    // small is aimed at as often as it is rested on, and a
+                    // press that did nothing would read as a dead control.
+                    onClicked: topBar.settleStateCard()
+                }
             }
-            Label {
-                id: identityBadge
-                anchors.centerIn: parent
-                text: qsTr("SET IDENTITY")
-                color: Theme.warning
-                font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
-            }
-            MouseArea {
-                id: identityBadgeMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                onClicked: topBar.identityEditRequested()
-                ToolTip.visible: containsMouse || topBar.identityPointedAt
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: AppBackend.identityUnsaved
-                              ? qsTr("Name and email were not both saved")
-                              : qsTr("No name or email set for commits")
+
+            BandStateCard {
+                id: stateCard
+                // Under the group and flush with its right-hand edge: the
+                // group sits at the band's right-hand end, and a card
+                // centred on it would open past the window.
+                x: stateGroup.width - width
+                y: stateGroup.height + Theme.spaceXs
+                opText: topBar.stateWt !== null ? topBar.stateWt.opText : ""
+                opAlso: topBar.stateWt !== null ? topBar.stateWt.opAlso : ""
+                opStep: topBar.stateWt !== null ? topBar.stateWt.opStep : 0
+                opSteps: topBar.stateWt !== null ? topBar.stateWt.opSteps : 0
+                conflictCount: topBar.stateWt !== null
+                               ? topBar.stateWt.conflictCount : 0
+                identityUnsaved: AppBackend.identityUnsaved
+                opShown: topBar.opBadgeShown
+                conflictShown: topBar.conflictBadgeShown
+                identityShown: topBar.identityBadgeShown
+                onIdentityRequested: topBar.identityEditRequested()
             }
         }
         // The git commands this tab ran. Closed, this mark is the whole
