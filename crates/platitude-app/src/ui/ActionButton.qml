@@ -127,7 +127,29 @@ HoverToolButton {
     /// further than the icon stands from the button beside it — the two
     /// halves would stop reading as one phrase.
     readonly property real slack:
-        Math.max(0, btnLabel.box - btnLabel.implicitWidth)
+        Math.max(0, btnLabel.box - btnLabel.implicitWidth,
+                 actionBtn.floorSlack)
+    /// What a framed button is short of `Theme.buttonMinWidth`, which it
+    /// takes as slack like any other (so the phrase still moves whole and
+    /// the ink still comes out even at the two ends).
+    ///
+    /// A frame is a box put round a word, and a short word draws a box the
+    /// eye reads as a chip rather than as something to press. Measured
+    /// across the family: `fetch` / `push` 93, `Choose image…` 118,
+    /// `Choose again…` 126, `Open repository…` 132 — against `OK` at 31,
+    /// the gate's `Close` at 47, `Add` at 50 and `Save` at 54. The floor
+    /// is the width Fusion held the same buttons at before the face came
+    /// off, so nothing on screen grows past the weight it already had —
+    /// it only stops carrying depth (2026-08-11 報告).
+    ///
+    /// Only where a frame is drawn. A bare button is a word among words —
+    /// the hunk heading's two, a dialog's `Cancel` — and a floor there
+    /// would stretch the hover wash and the hold's fill well past what the
+    /// button names.
+    readonly property real floorSlack:
+        actionBtn.framed
+        ? Theme.buttonMinWidth - btnRow.implicitWidth - 2 * actionBtn.padding
+        : 0
     /// The air each end is already holding before the slack is shared out
     /// (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」).
     ///
@@ -331,11 +353,14 @@ HoverToolButton {
     // reason anybody reading the two expressions would see. It is also the
     // side that ends up with the odd pixel, which is the side with a mark
     // to stand clear of (`alert`).
-    // Only a button measured into a shared box has anything to share: one
-    // sized to its own content is already as tight as the two ends can be,
-    // and moving its ink off the padding would be a change to every button
-    // in the app for the sake of the two on this band.
-    readonly property real headAir: btnLabel.box > 0
+    // Only a button with slack to share reads the ink off its two ends —
+    // one measured into a shared box (`widestText`) or one held open by
+    // the frame's floor (`floorSlack`). A button sized to its own content
+    // is already as tight as the two ends can be, and taking the ink off
+    // its padding would move every button in the app for the sake of the
+    // few that have room to give.
+    readonly property real headAir:
+        (btnLabel.box > 0 || actionBtn.floorSlack > 0)
         ? Math.floor((actionBtn.slack - actionBtn.headInk
                       - actionBtn.tailInk) / 2)
         : 0

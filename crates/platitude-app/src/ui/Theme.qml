@@ -125,6 +125,7 @@ QtObject {
     readonly property int railWidth: 44
     readonly property int toolbarHeight: 40
     readonly property int controlHeight: 28
+    readonly property int buttonMinWidth: 80
     readonly property int iconXs: 10
     readonly property int iconSm: 12
     readonly property int iconMd: 16
