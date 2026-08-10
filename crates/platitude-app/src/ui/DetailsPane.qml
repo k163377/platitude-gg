@@ -361,6 +361,14 @@ ColumnLayout {
     readonly property bool blockScrolls:
         blockCol.implicitHeight > detailsPane.blockRoom + 1
     readonly property bool descKeeps: !detailsPane.blockScrolls
+    /// The same measurement the working-tree pane makes, off this pane's
+    /// own list: how much of the bottom edge is left bare for the corner
+    /// text the page hangs there (see WipPane.bottomRoom).
+    readonly property real bottomRoom:
+        detailsPane.height - fileList.y
+        - Math.max(0, Math.min(fileList.height,
+                               fileList.originY + fileList.contentHeight
+                               - fileList.contentY))
 
     Connections {
         target: detailsPane.details

@@ -374,6 +374,16 @@ ColumnLayout {
     /// question, since what a pulled-open box pushes past the pane's edge
     /// is what the block ends up scrolling by.
     readonly property bool descKeeps: !wipPane.blockScrolls
+    /// How much of the pane's bottom edge the list is leaving bare, for
+    /// the corner text the page hangs there to step aside by. The list
+    /// runs to that edge and is the only thing down there, so the answer
+    /// is how far short of it the rows stop: a list longer than its own
+    /// height leaves nothing, and a scrolled one leaves nothing either.
+    readonly property real bottomRoom:
+        wipPane.height - wipList.y
+        - Math.max(0, Math.min(wipList.height,
+                               wipList.originY + wipList.contentHeight
+                               - wipList.contentY))
 
     // The stash options open right under the button that asks for them,
     // as a mode of this pane rather than a window over it (デザイン規約

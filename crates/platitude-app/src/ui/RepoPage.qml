@@ -2084,6 +2084,20 @@ Item {
             + " overH=" + Math.round(detailsPane.contentOverHeight)
             + " paneH=" + Math.round(detailsPane.height))
     }
+    // The rows have to arrive, and the list be laid out with them, before
+    // what they leave bare is worth measuring.
+    Timer {
+        id: cornerTimer
+        interval: 800
+        // `shown=` is the label's own visibility, not the room that
+        // decided it: reporting what was asked for would go green with
+        // the binding cut.
+        onTriggered: AppBackend.report(
+            "git_corner pane=" + (page.wipShown ? "wip" : "details")
+            + " shown=" + gitCorner.visible
+            + " room=" + Math.round(gitCorner.roomLeft)
+            + " needs=" + Math.round(gitCorner.roomNeeded))
+    }
     // Same wait as details-fit, for the same reason: the message has to
     // be in the box, and the box laid out with it, before there is a
     // ceiling to pull on.
@@ -2646,6 +2660,21 @@ Item {
             // row, and `--preset edges` holds the wall.
             page.activateRow(graphModel.oidAt(Number(arg)))
             detailsFitTimer.start()
+        } else if (act === "corner") {
+            // The git version in the pane's bottom corner, from both sides
+            // of the one rule it lives by: there while the list under it
+            // leaves that corner bare, gone the moment rows reach it. The
+            // argument picks the pane — "wip" for the working tree, a row
+            // for the commit whose changes fill the other one — and the
+            // preset is the other axis, since `basic` ends its lists well
+            // above the corner and `long` runs them past the pane. Read
+            // as a pair: one half alone frames like a label that is simply
+            // always on, or always off.
+            if (arg === "" || arg === "wip")
+                page.showWip()
+            else
+                page.activateRow(graphModel.oidAt(Number(arg)))
+            cornerTimer.start()
         } else if (act === "name-box") {
             // Opened and left standing, for a look at it. The argument is
             // the row, since the box only belongs on one with no chips.
@@ -3885,16 +3914,42 @@ Item {
                     // otherwise identical. Empty for every other build, so
                     // what ships reads plainly (デザイン規約 §アプリ名).
                     Label {
+                        id: gitCorner
+                        /// The band it needs: its own line, the margin it
+                        /// hangs by, and that margin again above it, so it
+                        /// never reads as sitting on the edge of a row.
+                        readonly property real roomNeeded:
+                            gitCorner.implicitHeight + 2 * Theme.spaceXs
+                        /// What the pane under it is leaving bare. Only one
+                        /// of the two is on screen at a time, and each
+                        /// measures its own file list.
+                        readonly property real roomLeft:
+                            page.wipShown ? wipPane.bottomRoom
+                                          : detailsPane.bottomRoom
+                        // Out of the way as soon as the list reaches this
+                        // corner (2026-08-10 ユーザー報告). This is the
+                        // faintest thing on the pane and the rows are what
+                        // somebody is reading, so the two never share a
+                        // band — which of them gives way is not a question.
+                        //
+                        // Hidden outright rather than held at zero opacity,
+                        // even though its own height is half of what decides
+                        // this: a Label keeps its implicit height while
+                        // `visible: false`, text arriving in the meantime
+                        // included, so the answer never eats what it read
+                        // (qmltestrunner, 2026-08-10 実測).
                         visible: AppBackend.gitVersion !== ""
+                                 && gitCorner.roomLeft >= gitCorner.roomNeeded
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         anchors.rightMargin: Theme.spaceSm
                         anchors.bottomMargin: Theme.spaceXs
-                        // In front of the panes that fill this corner:
-                        // declared before them, the label was painted
-                        // under whichever one had content reaching this
-                        // far down, and the demo repositories' short
-                        // lists were the only reason it ever showed.
+                        // In front of the panes it hangs over: declared
+                        // before them, anything they draw in this corner
+                        // lands on top of it. Nothing does while it is
+                        // shown — the room above is what keeps rows from
+                        // reaching here — so this holds the order for
+                        // whatever else the panes come to put here.
                         z: 1
                         text: AppBackend.buildTree === ""
                               ? qsTr("git %1").arg(AppBackend.gitVersion)
