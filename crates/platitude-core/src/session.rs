@@ -580,6 +580,21 @@ struct WriteRequest {
     >,
 }
 
+/// What a pass reported *under* its graph rather than in it: how far the
+/// walk got, and whether it stopped because the window ran out.
+///
+/// Kept beside the rows because it does not follow from them. The walk
+/// count drifts from the shown count in both directions (the WIP row is
+/// shown but never walked, sifted stash parents are walked but never
+/// shown), and truncation is a property of the walk alone — so two passes
+/// can draw the very same graph and still owe the consumer different
+/// answers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Footer {
+    walked: u32,
+    truncated: bool,
+}
+
 /// Shared mutable state between the log task and refs joins.
 #[derive(Default)]
 struct Shared {
@@ -598,6 +613,14 @@ struct Shared {
     /// background rebuild can tell "same picture" from "changed" and skip
     /// the swap entirely — an unchanged repository must not repaint.
     sent_rows: Vec<LogRow>,
+    /// The footer delivered with them, compared alongside the rows for the
+    /// same decision: a window change can leave every row where it is and
+    /// still change the answer beneath them (two commits through a window
+    /// of two are cut; through a window of three they are not), and that
+    /// change reaches the consumer through a rebuild whenever one overtakes
+    /// the stream the change asked for. `None` = no pass has answered for
+    /// this graph yet, so the next one to finish has something to say.
+    sent_footer: Option<Footer>,
 }
 
 /// Guards snapshot-replacing ops against out-of-order completion.
@@ -1202,21 +1225,41 @@ impl RepoSession {
             shared.generation = generation;
             shared.applied.clear();
             shared.sent_rows.clear();
+            // Nothing has answered for this graph yet — not even this
+            // pass, which only learns its footer when the walk ends. A
+            // rebuild landing in between must not read the last graph's
+            // answer as this one's.
+            shared.sent_footer = None;
             self.sink.event(SessionEvent::LogStarted { generation });
         }
         let started = Instant::now();
         match self.stream_log(workdir, generation, options, cancel).await {
             Ok(totals) => {
-                self.sink.event(SessionEvent::LogFinished {
-                    generation,
-                    total: totals.shown,
-                    elapsed_ms: started.elapsed().as_millis() as u64,
+                let footer = Footer {
                     walked: totals.walked,
                     // Truncation is a property of the walk: the shown count
                     // drifts from it in both directions (the WIP row adds
                     // one, sifted stash parents subtract), so comparing it
                     // against --max-count would flag the wrong streams.
                     truncated: options.limit.is_some_and(|n| totals.walked >= n),
+                };
+                // Recorded and sent under one lock, like every other
+                // message describing what is in `shared`: a rebuild taking
+                // the lock next compares against this footer, and must not
+                // find it before the consumer has been told.
+                let mut shared = self.lock_shared();
+                // Only the stream the consumer is on may answer for it.
+                // A superseded one would leave its numbers behind as the
+                // record of somebody else's graph (see `emit_rows`).
+                if shared.generation == generation {
+                    shared.sent_footer = Some(footer);
+                }
+                self.sink.event(SessionEvent::LogFinished {
+                    generation,
+                    total: totals.shown,
+                    elapsed_ms: started.elapsed().as_millis() as u64,
+                    walked: footer.walked,
+                    truncated: footer.truncated,
                 });
                 Ok(())
             }
@@ -1281,14 +1324,27 @@ impl RepoSession {
                     applied.insert(row.row, labels.clone());
                 }
             }
-            let unchanged = shared.sent_rows == rows;
+            let footer = Footer {
+                walked,
+                // See run_direct_pass: the walk decides truncation, not
+                // the shown row count.
+                truncated: options.limit.is_some_and(|n| walked >= n),
+            };
+            // Both halves of what the last pass delivered. Rows alone
+            // would call a widened window "the same picture" and leave the
+            // truncation notice claiming history the user just asked to
+            // see — a rebuild is the only thing that speaks when one
+            // overtakes the stream the change asked for (core.md).
+            let unchanged = shared.sent_rows == rows && shared.sent_footer == Some(footer);
             shared.builder = builder;
             shared.applied = applied;
             if unchanged {
                 // The UI already shows exactly this: swapping would only
                 // reset the view (scroll anchor, selection re-resolve) for
                 // an identical picture. Background refreshes land here on
-                // every quiet auto-fetch tick.
+                // every quiet auto-fetch tick — same options over an
+                // unmoved repository walk the same commits, so the footer
+                // matches whenever the rows do.
                 //
                 // The generation stays behind with it. Nothing was sent,
                 // so the graph on screen is still the one before this
@@ -1298,6 +1354,7 @@ impl RepoSession {
                 return;
             }
             shared.sent_rows = rows.clone();
+            shared.sent_footer = Some(footer);
             shared.generation = generation;
             // Still under the lock (see run_direct_pass): a refs read that
             // takes it next diffs chips against this graph, and its event
@@ -1306,10 +1363,8 @@ impl RepoSession {
                 generation,
                 rows,
                 elapsed_ms,
-                walked,
-                // See run_direct_pass: the walk decides truncation, not
-                // the shown row count.
-                truncated: options.limit.is_some_and(|n| walked >= n),
+                walked: footer.walked,
+                truncated: footer.truncated,
             });
         }
     }

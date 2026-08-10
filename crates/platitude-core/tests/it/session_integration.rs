@@ -166,10 +166,12 @@ impl CaptureSink {
     /// safe for `after` to be older than the newest settled pass — a
     /// duplicate of a graph already on screen could not have spoken.
     ///
-    /// Which means the caller owes one thing: **ask for a window the
-    /// current one differs from**. A change that leaves the rows exactly
-    /// as they are has nothing to announce if a rebuild overtakes the
-    /// stream, and no wait can conjure an event nobody sent.
+    /// Which means the caller owes one thing: **ask for something the
+    /// graph on screen differs from** — in its rows, or in the footer
+    /// under them (`run_swap_pass` compares both, so a window that only
+    /// moves `walked`/`truncated` does speak). A change that leaves the
+    /// two exactly as they are has nothing to announce if a rebuild
+    /// overtakes the stream, and no wait can conjure an event nobody sent.
     async fn pass_after(&self, what: &str, after: u64) -> Pass {
         self.wait_for(what, |evs| {
             evs.iter()
@@ -642,7 +644,8 @@ async fn truncation_follows_the_walk_not_the_shown_rows() {
 /// opening the wide one straight away. Both say the same thing about the
 /// WIP row, but only the widening changes the graph — and a change is
 /// what makes the answer arrive at all. Going straight to the wide window
-/// leaves the rows exactly as the opening pass left them, so a rebuild
+/// leaves the rows *and the footer* exactly as the opening pass left them
+/// (the default window holds this history whole either way), so a rebuild
 /// that overtakes the stream (this repository opens dirty, and the status
 /// read that notices it asks for one) finds nothing to swap and says
 /// nothing, and the test waits for an event that was never sent.
@@ -754,6 +757,73 @@ async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
          only thing that could have carried the window: {:?}",
         sink.events.lock().unwrap()
     );
+    session.close();
+}
+
+/// The same interleaving over a window change that moves nothing but the
+/// footer: two commits through a window of two are reported cut (the walk
+/// stopped on the limit, which is all truncation can mean), and widening
+/// to three leaves every row exactly where it was. The rebuild that
+/// overtakes the stream carries the new window, so it is the only thing
+/// that can say the history is no longer cut — and a comparison that only
+/// looks at rows finds nothing to do, leaving the notice claiming history
+/// the user just asked to see.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_window_change_only_the_footer_notices_still_lands() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "1\n", "one");
+    repo.commit_file("f.txt", "2\n", "two");
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    let first_gen = sink.settled_stream_gen(2).await;
+
+    // A window exactly as wide as the history: every commit is shown, and
+    // the walk stopping on the limit is what makes it cut all the same.
+    session.set_log_limit(Some(2));
+    let cut = sink.pass_after("the window on the limit", first_gen).await;
+    assert_eq!(cut.total, 2, "both commits fit");
+    assert_eq!(cut.walked, 2, "the walk stopped on the limit");
+    assert!(cut.truncated, "which is all the footer knows");
+
+    // Park in the swap that adds the WIP row (see the test above): from
+    // here every pass waits at the graph lock.
+    let (arrived, at_the_window) = tokio::sync::oneshot::channel();
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    sink.hook_once(
+        |e| matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 3),
+        move || {
+            let _ = arrived.send(());
+            let _ = held.recv_timeout(Duration::from_secs(20));
+        },
+    );
+    repo.write_file("f.txt", "wip\n");
+    session.refresh_status();
+    at_the_window.await.expect("the rebuild reached the window");
+    let wip = sink
+        .wait_for("the WIP row's pass", |evs| {
+            evs.iter().filter_map(pass_of).find(|p| p.total == 3)
+        })
+        .await;
+    assert!(wip.truncated, "the window is still sitting on the limit");
+
+    // Widen past the end of the history. The stream this asks for is
+    // stopped at the door and dropped; the rebuild behind it walks the
+    // same two commits, draws the same three rows, and carries the only
+    // thing that did change.
+    session.set_log_limit(Some(3));
+    session.refresh_log();
+    release.send(()).expect("let the rebuild finish");
+
+    let whole = sink.pass_after("the widened window", wip.generation).await;
+    assert_eq!(whole.total, 3, "WIP row + both commits, exactly as before");
+    assert_eq!(whole.walked, 2, "the walk ran out of history");
+    assert!(!whole.truncated, "so nothing is being kept from the user");
     session.close();
 }
 
