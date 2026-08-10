@@ -3915,11 +3915,15 @@ Item {
                     // what ships reads plainly (デザイン規約 §アプリ名).
                     Label {
                         id: gitCorner
-                        /// The band it needs: its own line, the margin it
-                        /// hangs by, and that margin again above it, so it
-                        /// never reads as sitting on the edge of a row.
+                        /// The band it needs: its own line and the margin
+                        /// it hangs by — its own box and nothing more, so
+                        /// it stays until a row would land on it. Air of
+                        /// its own above it is not wanted: what sits over
+                        /// this corner is a list, and a list's rows are
+                        /// already spaced by their own height
+                        /// (2026-08-10 ユーザー報告).
                         readonly property real roomNeeded:
-                            gitCorner.implicitHeight + 2 * Theme.spaceXs
+                            gitCorner.implicitHeight + Theme.spaceXs
                         /// What the pane under it is leaving bare. Only one
                         /// of the two is on screen at a time, and each
                         /// measures its own file list.
