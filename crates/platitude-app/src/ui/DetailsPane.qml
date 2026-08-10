@@ -907,36 +907,52 @@ ColumnLayout {
                             id: parentLink
                             visible: detailsPane.details.parentHex !== ""
                             Layout.alignment: Qt.AlignRight
-                            text: "← " + detailsPane.details.parentHex.substring(0, 8)
+                            text: detailsPane.details.parentHex.substring(0, 8)
                             font.family: Theme.monoFamily
                             color: Theme.textLink
                             font.pixelSize: Theme.fontSm
-                            // The arrow and the hash are one phrase, so they
-                            // stand `spaceXs` apart — the gap the plate above
-                            // spends between its hash and copy icon. The mono
-                            // space is not a value anyone chose (it is a whole
-                            // cell: 7px here, 6 on Ubuntu), so the cell comes
-                            // back out and the token is paid instead, which
-                            // lands both fonts on the same gap.
-                            font.underline: parentHover.containsMouse
+                            // The mark is drawn, not typed. The fonts disagree
+                            // about `←`: Cascadia Mono holds it in one cell
+                            // (7px of ink) where Noto Sans Mono CJK JP gives it
+                            // a full-width one (12px), so Ubuntu grew a tail
+                            // nobody chose — the same way `⚑` came out a
+                            // different shape on each of the three.
+                            //
+                            // The seat is the mark's box less the air it keeps
+                            // inside it, plus the `spaceXs` the plate above
+                            // spends between its hash and copy icon
+                            // (規約 §余白「印が自分で持っている余白は、隣の
+                            // 詰めに数える」), so the gap lands on the ink.
+                            leftPadding: Theme.iconSm + Theme.spaceXs / 2
                             ToolTip.visible: parentHover.containsMouse
                             ToolTip.delay: Metrics.tipDelayMs
                             ToolTip.text: qsTr("Go to parent commit")
-                            FontMetrics {
-                                id: parentMono
-                                font.family: Theme.monoFamily
-                                font.pixelSize: Theme.fontSm
+                            NavIcon {
+                                kind: "arrow"
+                                // The family draws it leaving; this one points
+                                // back, and turning the mark is how `FoldBlock`
+                                // faces its chevrons too.
+                                rotation: 180
+                                tint: Theme.textLink
+                                width: Theme.iconSm
+                                height: Theme.iconSm
+                                // Whole at `iconMd`, and the grid ratio under it.
+                                stroke: Metrics.iconStroke * Theme.iconSm / 16
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
                             }
-                            // Taken once, not bound: `advanceWidth` is a call,
-                            // so a binding on it captures no dependency and
-                            // never runs again — and at creation the metrics
-                            // object still carries the default font (its own
-                            // font binding lands later), whose space is 4px.
-                            // Bound, this silently settled on 4 − 4 = 0 and
-                            // left the cell at its full width. The family and
-                            // the step are constants, so once is the truth.
-                            Component.onCompleted: parentLink.font.wordSpacing =
-                                Theme.spaceXs - parentMono.advanceWidth(" ")
+                            // One line under the mark and the hash: they are one
+                            // target, the way the hash and its copy icon share
+                            // theirs. `font.underline` cannot reach the mark
+                            // now that the mark is not a letter.
+                            Rectangle {
+                                visible: parentHover.containsMouse
+                                color: Theme.textLink
+                                height: Theme.borderWidth
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                            }
                             MouseArea {
                                 id: parentHover
                                 anchors.fill: parent
