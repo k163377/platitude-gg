@@ -835,8 +835,14 @@ Rectangle {
             // and a button that is only ever clicked does not pay for a
             // pairing it cannot have (`ActionButton.besideWord` hands
             // the same air back for the same reason).
+            //
+            // `padding` rather than the two sides it settles to: those
+            // carry the shared box's slack as well (`ActionButton.slack`),
+            // so reading them would hand this mark the air that belongs to
+            // a word it does not have — and would move it every time the
+            // fetch button changed its wording.
             implicitWidth: commandsMark.implicitWidth
-                           + fetchButton.leftPadding + fetchButton.rightPadding
+                           + 2 * fetchButton.padding
             implicitHeight: fetchButton.implicitHeight
             radius: Theme.radiusSm
             color: open ? Theme.bgSelected

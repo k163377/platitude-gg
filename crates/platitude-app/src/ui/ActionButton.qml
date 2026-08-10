@@ -105,6 +105,29 @@ HoverToolButton {
     /// difference; one told to fill a pane's width does — the icon would
     /// sit against the far edge with the word adrift from it.
     property bool centred: false
+    /// What the shared box hands this state past its own wording. The box
+    /// is measured for the longest thing either of the pair ever says, so
+    /// every shorter wording is given air it has no use for — measured
+    /// against `Resume`, that is 25px behind `push` and 17px behind
+    /// `fetch` (29 and 22 on Ubuntu, where the mono family is narrower).
+    ///
+    /// Split between the button's two ends rather than left where it
+    /// falls. Packed from the left it all lands behind the word, and what
+    /// the button covers stops agreeing with what it says: the wash under
+    /// the pointer, the frame a warning draws and the fill a hold sweeps
+    /// across all reach a third of a button further right than the last
+    /// letter (measured: 10px before the icon against 29px after the word,
+    /// and 33px on Ubuntu, where the band has no window buttons after this
+    /// pair to stand in the leftover).
+    ///
+    /// The phrase moves whole, so the step from the icon to the word is
+    /// the same in every state (デザイン規約 §余白 — the mark and the word
+    /// are one thing said). Centring the word inside the box instead would
+    /// leave the icon where it is and open that step to 18px, which is
+    /// further than the icon stands from the button beside it — the two
+    /// halves would stop reading as one phrase.
+    readonly property real slack:
+        Math.max(0, btnLabel.box - btnLabel.implicitWidth)
     /// Held all the way down.
     signal held()
     /// Pressed and let go, meaning the button's ordinary action.
@@ -254,6 +277,22 @@ HoverToolButton {
     // heading's words take fontSm there, a step under the file's own
     // word (デザイン規約 §diff の中のステージ).
     font.pixelSize: Theme.fontMd
+
+    // The slack goes into the button's own air, so what one end takes the
+    // other gives: the width stays the one the pair was measured for and
+    // the toolbar's right-hand end does not move (デザイン規約
+    // §リモートへ送る — 全状態が同じ幅).
+    //
+    // The trailing side is what is left rather than the other half
+    // rounded: a wording measures in fractions of a pixel, and `floor`
+    // beside `ceil` would round the pair of them up to the next whole one
+    // — a button a pixel wider than the box it was measured into, for no
+    // reason anybody reading the two expressions would see. It is also the
+    // side that ends up with the odd pixel, which is the side with a mark
+    // to stand clear of (`alert`).
+    readonly property real headAir: Math.floor(actionBtn.slack / 2)
+    leftPadding: actionBtn.padding + actionBtn.headAir
+    rightPadding: actionBtn.padding + (actionBtn.slack - actionBtn.headAir)
 
     // The row keeps its size while the network call runs — the toolbar
     // must not shuffle under a pointer that is still resting on the
@@ -439,7 +478,12 @@ HoverToolButton {
                                + (btnLabel.splitFlag ? flagRow.width : 0)
                 implicitHeight: headText.implicitHeight
                 Layout.maximumWidth: 240
-                Layout.preferredWidth: Math.max(btnLabel.implicitWidth, btnLabel.box)
+                // Its own width. What the shared box asks for past this
+                // wording is held by the button's padding (`slack`), so
+                // the cell no longer carries the whole of it behind the
+                // last letter — and the chip and the mark, both measured
+                // off this cell, keep sitting on the word.
+                Layout.preferredWidth: btnLabel.implicitWidth
                 Layout.alignment: Qt.AlignVCenter
 
                 // The command, or the whole wording where there is no flag
