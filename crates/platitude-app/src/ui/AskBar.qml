@@ -214,15 +214,26 @@ Rectangle {
             // so the bar keeps its shape while it is filled in
             // (デザイン規約 §無効).
             //
-            // A remote that could not be read leaves the word plain rather
-            // than colouring it: the frame and the mark already say to read
-            // this, and a coloured word is what the toolbar keeps for the
-            // press that costs something (デザイン規約 §長押し — 警告の色は
-            // 語ではなく枠と印が持つ).
+            // A pill answered by a click keeps the plain word, whatever
+            // the bar is toned: this is the same act as the button that
+            // raised it, and that button says its word in `textPrimary` in
+            // every state it can be clicked in — a first push is not a
+            // different press for being asked about first. What the answer
+            // costs is the frame's to say, and the bar has said it twice
+            // over by then, in the heading and in the line under it
+            // (デザイン規約 §長押し — 警告の色は語ではなく枠と印が持つ).
+            //
+            // Colour comes back where the gesture changes. A coloured word
+            // belongs to the presses that are held — `Remove`, the stopped
+            // fetch's `Resume`, the toolbar's own `push -f` — so on a pill
+            // it reads as "this one is not clicked" rather than as trim.
+            // That is also why the remote that could not be read keeps the
+            // plain word: it is still one click, and the frame and the `!`
+            // carry the whole of that news.
             readonly property color wordInk:
                 !bar.answerable ? Theme.textMuted
                 : bar.holdProgress > 0 ? Theme.textOnAccent
-                : bar.alert ? Theme.textPrimary : bar.tone
+                : bar.hold ? bar.tone : Theme.textPrimary
             // Reachable without a pointer, and given the focus as the bar
             // opens: the pill is the only thing here that acts, so there is
             // nothing else for a tab to land on first (デザイン規約 §長押し).
