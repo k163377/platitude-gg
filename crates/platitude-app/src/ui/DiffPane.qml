@@ -630,6 +630,7 @@ Rectangle {
                     anchors.fill: parent
                     spacing: 0
                     Label {
+                        id: oldNoCol
                         width: 42
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
@@ -641,6 +642,7 @@ Rectangle {
                         font.pixelSize: Theme.fontSm
                     }
                     Label {
+                        id: newNoCol
                         width: 42
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
@@ -652,7 +654,7 @@ Rectangle {
                         font.pixelSize: Theme.fontSm
                     }
                     Label {
-                        width: parent.width - 84
+                        width: parent.width - oldNoCol.width - newNoCol.width
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
                         text: diffRow.text

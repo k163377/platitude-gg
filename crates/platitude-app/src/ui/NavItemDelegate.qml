@@ -449,13 +449,6 @@ Item {
     /// answer is its own before reading it.
     readonly property bool eolPointedAt: navRow.eol_mark
         && navRow.pointedEolPath === navRow.fullName
-    /// The sentence for this row, when the pointer is on it.
-    readonly property string eolText:
-        navRow.eolPointedAt && navRow.pointedEolKind !== ""
-        ? Words.lineEndings(navRow.pointedEolKind, navRow.pointedEolFrom,
-                            navRow.pointedEolTo, navRow.pointedEolLines,
-                            navRow.pointedEolScope, navRow.pointedEolExt)
-        : ""
     /// Whether the headless stand-in points at this row. The report
     /// still reads the ToolTip's own visible — the output side, as
     /// everywhere.
