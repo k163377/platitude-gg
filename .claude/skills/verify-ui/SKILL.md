@@ -1,6 +1,6 @@
 ---
 name: verify-ui
-description: platitude-gg の UI 動作確認・スクリーンショット検証をする時に必ず読む。cargo xtask verify-ui の使い方、PG_AUTO_ACT 動詞の全表(同ディレクトリの verbs.md — 使う動詞の項を Grep で引く)、headless(offscreen)起動と Windows での GUI 検証の罠(フォント・画面ロック・PrintWindow・PostMessage・hover)を全部ここに置く。hover 状態のスクショ(仮表示・強制表示)の標準手順は §hover の絵の撮り方。Done は両 OS — Linux 側は cargo xtask linux verify-ui で、差分は §Linux での動確。「rebase して起動」等、起動だけの要求の手順も §起動 fast path が正(テストは起動報告の後ろへ)。
+description: platitude-gg の UI 動作確認・スクリーンショット検証をする時に必ず読む。cargo xtask verify-ui の使い方、PG_AUTO_ACT 動詞の全表(同ディレクトリの verbs.md — 使う動詞の項を Grep で引く)、headless(offscreen)起動と Windows での GUI 検証の罠(フォント・画面ロック・PrintWindow・PostMessage・hover)を全部ここに置く。hover 状態のスクショ(仮表示・強制表示)の標準手順は §hover の絵の撮り方。Done は両 OS — Linux 側は cargo xtask linux verify-ui で、差分は §Linux(コンテナ)での動確。「rebase して起動」等、起動だけの要求の手順も §起動 fast path が正(テストは起動報告の後ろへ)。
 ---
 
 # UI 動作確認(ヘッドレス検証)
@@ -9,7 +9,9 @@ description: platitude-gg の UI 動作確認・スクリーンショット検�
 
 presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正。
 
-**判定には書き込みの失敗も入る** — `write failed` が 1 行でもあれば FAIL(撮れた PNG は「届かなかった状態」のもの)。**拒否を見せるのが目的の動詞だけ `--allow-write-failure` を付ける**(`delete-branch-refused` / `commands-fail` / `commands-clear` / `fetch-fail` / `push-retry` は実測で拒否を出す。`fetch-resume` と、届かないリモートへ撃つ `push` / `publish-new-go` も同じ仕込み)。**付けてよいのは「その拒否がこの動詞の見せ物である」時だけ** — 引数の渡し忘れも同じ行に出る(`delete-branch-refused` を引数なしで撃つと `git branch -d -- ''` が拒まれ、`not merged` の絵は撮れていない)。
+**動詞はまとめて撮る(1 動詞 1 ターンにしない)** — 検証 1 回の実コストはコマンド約 20 秒 + 応答生成 1〜2 分で、後者は**呼び出しターン数**に比例する(実測: 4 日で verify-ui 1,197 回 — セッションを長くしていた最大の反復)。同じビルドで撮れる動詞は 1 個の複合コマンドに並べて 1 ターンで実行し(2 発目以降は `--no-build`)、PNG の目視も 1 ターンに複数枚まとめて読む。段 2 と重なる時は `cargo xtask check --verb '<動詞と引数>' --verb …` の一括(ホスト / コンテナ並列)が最速。1 動詞ずつ「撮る→見る→直す」を回してよいのは、直前の絵が次の編集を決める時だけ。
+
+**判定には書き込みの失敗も入る** — `write failed` が 1 行でもあれば FAIL(撮れた PNG は「届かなかった状態」のもの)。**拒否を見せるのが目的の動詞だけ `--allow-write-failure` を付ける**(`delete-branch-refused` / `commands-fail` / `commands-clear` / `fetch-fail` / `push-retry` は実測で拒否を出す。`fetch-resume` と、届かないリモートへ撃つ `push` / `publish-new-go` も同じ仕込み)。**付けてよいのは「その拒否がこの動詞の見せ物である」時だけ**(対象動詞の全列挙は `cargo xtask` の USAGE が正) — 引数の渡し忘れも同じ行に出る(`delete-branch-refused` を引数なしで撃つと `git branch -d -- ''` が拒まれ、`not merged` の絵は撮れていない)。
 
 ## 起動 fast path(「rebase して起動」等、起動だけの要求)
 
@@ -23,7 +25,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
    qmake が見えないシェルでは先頭に `$env:PATH = "<Qt の bin>;" + $env:PATH` を足す(exe の**起動**にも要る — 無いと約 10ms で無言終了。下記の罠)。
 2. 窓が出たら**即報告してターンを終える**。起動を待たせてよいのは rebase の衝突と build エラーだけ(衝突を解決したら、Done パイプラインへ寄り道せずこの fast path の続きで起動まで行く)。
-3. 報告と同じターンで `cargo fmt --all -- --check; cargo clippy --workspace --all-targets -- -D warnings; cargo test --workspace` を **run_in_background で開始**し、結果が届いたら追報する。**Done の基準(fmt / clippy / test 全通過)は不変** — 「マージ可」はこれらの green を確認してから言う。背景のテストビルドと次の release 再ビルドは cargo のロックで直列化されうる — 先に修正指示が来たら背景タスクを止めて修正を優先してよい。
+3. 報告と同じターンで `cargo xtask check --verb '<触った動詞>'…` を **run_in_background で開始**し、結果が届いたら追報する。**Done の基準は CLAUDE.md ビルド・テスト(段 2)のまま不変** — 「マージ可」は check の green を確認してから言う。背景のテストビルドと次の release 再ビルドは cargo のロックで直列化されうる — 先に修正指示が来たら背景タスクを止めて修正を優先してよい。
 
 ## PG_AUTO_ACT 動詞表
 
@@ -38,10 +40,10 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 hover はアプリへは注入できない(§Windows での実行・デバッグの罠)が、**絵は撮れる** — 入力(ポインタ)だけを迂回し、表示側は実 hover と同じ経路を通す。**「hover は再現できない」で止まってユーザーに実操作を頼まない** — 過去はそのたびにユーザー側が「強制表示なら出来るはず」と促し直すことになっていた。上から順に 3 つの道を検討する:
 
 1. **既にその状態の動詞がある** — [verbs.md](verbs.md) の一覧を見た目の種類から逆引きする。ツールチップ(attached ToolTip): `identity-tip` / `signature-tip` / `stash-tip` / `path-tip`(いずれも overlay.png 側。**意匠は共有インスタンス 1 つ** = `Main.dressToolTip` なので、どれか 1 枚で全ツールチップの見た目が言える)。hover カード: `row-card`(グラフ行)/ `ref-list-card`(チップの一覧)/ `author-card-open` / `co-authors-open` / `eol-hover`(WIP 行の `!`)/ `eol-commit`(コミットボタンの上のポインタ)/ `avatar-hover`(ペンのバッジ)。ポインタの下で色・印・道具が変わる形: `tab-mark`(タブと `✕`)/ `line-tools` / `hunk-tools`(hunk の照明)/ `stage-many`(行末の `+` と仲間の印)/ `graph-divider`(仕切りの線と禁止の輪)/ `graph-bar`(レーンのバー)/ `nav-peek` 系(レールの peek)/ `avatar-row-lit`(設定一覧の行)。
-2. **配線済みだが動詞が無い** — 動詞を 1 つ足すのが正道で、**安い**: xtask は動詞を検査せず `PG_AUTO_ACT` へ素通しする(許可リストは無い。判定が要る時だけ verify.rs の `must_say` に 1 行)ので、実装は QML の分岐 1 つ — ページ内は `RepoPage.qml` の `autoActTimer`、ウィンドウ横断(タブ・identity・窓)は `Main.qml`。作法は 2 点だけ: **実 hover が書くのと同じ 1 つのプロパティ / シグナルへ書く**(`eol-hover` / `pointAtTab` が手本。書き先が無い形なら先に `*PointedAt` / `pointed` の 1 本を切る — 形の一覧は app-ui.md)・**ページ側の判定を関数直呼びで迂回しない**(`row-card` の注意 = 出さないはずの場面まで開いて緑になる)。足したら verbs.md へ追記する。
+2. **配線済みだが動詞が無い** — 動詞を 1 つ足すのが正道で、**安い**: xtask は動詞を検査せず `PG_AUTO_ACT` へ素通しする(許可リストは無い。判定が要る時だけ verify.rs の `must_say` に 1 行)ので、実装は QML の分岐 1 つ — ページ内は `RepoPage.qml` の `autoActTimer`、ウィンドウ横断(タブ・identity・窓)は `Main.qml`。作法は 2 点だけ: **実 hover が書くのと同じ 1 つのプロパティ / シグナルへ書く**(`eol-hover` / `pointAtTab` が手本。書き先が無い形なら先に `*PointedAt` / `pointed` の 1 本を切る — 形の一覧は rules-refs/app-ui.md)・**ページ側の判定を関数直呼びで迂回しない**(`row-card` の注意 = 出さないはずの場面まで開いて緑になる)。足したら verbs.md へ追記する。
 3. **未配線・意匠検討の仮当て(強制表示)** — 使い捨てパッチで出す。**worktree で当て、コミットしない**(`repo::open` の TimedOut パッチと同じ扱い)。出したい状態は**仮の bool 1 本に束ねて、見た目の条件へ `|| <その bool>` を足す**(差分が最小で revert しやすく、意匠が採用されたらそのまま道 2 の書き先になる)。QML は release exe 埋め込みなので**パッチのたびにビルドが要る**(同じビルドの撮り直しだけ `--no-build`)。撮影は周囲の状態を作る既存動詞に乗せる — 仮表示は無条件に出るので、どの動詞の PNG にも写る(ツールチップ・ポップアップは overlay.png 側 = 残像の罠は上の項)。**複数の的の棚卸しは一括で強制表示して 1 枚に集める**(実績: ツールチップ全 35 件の棚卸し・スピナー差し替え・矢印の線)。往復しそうなら revert の前に `git diff > force-<何>.patch` で保存する。
 
-どの道でも `SetCursorPos` / `WM_MOUSEMOVE` / `SendInput` を試さない(罠の項 — 実マウスに奪還され、成功と失敗が再現不能に混ざる)。実窓でしか見えないのは OS カーソルとの重なりだけ。hover の**配送規則そのもの**(どこに handler を置くと立つか)の検証は使い捨ての qmltestrunner シーン(app-ui.md)。
+どの道でも `SetCursorPos` / `WM_MOUSEMOVE` / `SendInput` を試さない(罠の項 — 実マウスに奪還され、成功と失敗が再現不能に混ざる)。実窓でしか見えないのは OS カーソルとの重なりだけ。hover の**配送規則そのもの**(どこに handler を置くと立つか)の検証は使い捨ての qmltestrunner シーン(rules-refs/app-ui.md)。
 
 ## Linux(コンテナ)での動確 — Done は両 OS
 

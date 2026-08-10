@@ -15,7 +15,7 @@
 - 対応 git の最低バージョンは [要望.md](internal-docs/要望.md) の定めに従う。それ未満向けのフォールバックコードを書かない
 - UI はダークテーマ(青系)のみ。文言は英語のみ・ハードコード禁止(`qsTr()` 必須、将来の i18n に備える)
 - **内部コマンドと UI 表記は意図して分ける**。内部は最新 git の適切なコマンド(`switch` / `restore` 等)、UI 文言はコマンド名に引きずられず「その操作が何をするか」で選ぶ。用語とコード表記(チップ)の正本は [デザイン規約.md](internal-docs/デザイン規約.md) の用語表・§git 用語のコード表記
-- UI の値は [デザイン規約.md](internal-docs/デザイン規約.md) のトークンのみ使用 — QML を書く前に必ず読み、値は表から選ぶ(**数値を検討・微調整しない**)。数値・色・フォント名の直書き禁止。トークンの追加・変更には人間の承認が必要
+- UI の値は [デザイン規約.md](internal-docs/デザイン規約.md) のトークンのみ使用 — QML を書く前に必ず該当 § を引き、値は表から選ぶ(**数値を検討・微調整しない**)。数値・色・フォント名の直書き禁止。トークンの追加・変更には人間の承認が必要
 
 ## 技術スタック
 
@@ -34,9 +34,10 @@
 
 - **起動だけの要求(「rebase して起動」等)は fast path** — 起動までを複合コマンドで先に済ませて即報告し、fmt / clippy / test は報告後にバックグラウンドで追報する(Done の基準は不変)。手順は verify-ui スキル §起動 fast path
 - **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ。Linux ではその場で実行 — `bare` だけは常にコンテナ)。イメージは core / app / runtime(**宣言した依存だけ**)から自動で選び、ビルド先は docker volume でこの `target/` を汚さない。要望.md の最低 git バージョンを積んだ唯一の環境。**`bare` は建てた場所の外で動くかだけを見る**(依存が増えた瞬間その名前で止まる。実測は P5-確認事項 §実測済み)
-- **並行セッション(複数エージェント)は git worktree で分ける** — 同一 checkout の共有は `target/` が単一障害点(ビルドロックで直列化・incremental 相互無効化・別セッションの編集が release exe に焼き込まれた実績)。worktree なら target も demo / screenshot も自然に分離される
-- **worktree は固定名を使い回す**: `claude --worktree <固定名>`(`.claude/worktrees/<固定名>` に恒久作成・次回同名で再開。worktree ごとの `target/` がセッションを跨いで温存される)。使い捨ての自動命名 worktree を乱造しない。ブランチは `worktree-<名前>` に切られる。**完了しても main へは戻さない**(§Git 運用)。**本体 checkout で実装作業をしない**(ドキュメント編集・レビューは可。**ただしスキル・`.claude/rules` の編集は worktree で** — 並行セッションが同じファイルを触りやすく、main 直コミットが衝突する)
-- **worktree からのアプリ起動は headless だけ** — 実ウィンドウは画面(と別セッションの窓検証)を横取りし、居座るプロセスは exe を掴んでリンクを塞ぐ。`cargo xtask verify-ui` を使うか、自分で叩くなら `QT_QPA_PLATFORM=offscreen` + `PG_AUTO_QUIT_MS` + **自分の worktree の** exe。`cargo xtask hook pre-shell` がそれ以外を deny する(ユーザーが窓を明示指示した時だけ `PG_ALLOW_GUI=1` を先頭に付ける)。本体 checkout からの起動は対象外(ユーザー自身の起動)。**窓に出たビルドがどのツリーのものかは右下が名乗る**(実装は [app-ui.md](.claude/rules/app-ui.md))
+- **並行セッション(複数エージェント)は git worktree で分ける** — 同一 checkout の共有は `target/` が単一障害点(ビルドロック直列化・incremental 相互無効化・別セッション編集の焼き込み実績)。worktree なら target も demo / screenshot も自然に分離される
+- **worktree は固定の座席 `a`〜`f` だけ**: `claude --worktree a` / セッション内は EnterWorktree で**空き座席の path** へ。トピック名・自動命名で**新造しない**(用途名は再利用されず、席の `target/` 温存が働かない — 非座席名は hook が確認を挟む)。空き・マージ状態はセッション開始の挨拶が言う。**席のブランチ(`worktree-<席>`)がマージ済みなら `git reset --hard main` で先頭に揃えてから始める**。未マージの席は前の仕事のマージ待ち — 続き以外は別の席へ、全席詰まりなら増設せず報告する。**完了しても main へは戻さない**(§Git 運用)
+- **本体 checkout で実装作業をしない**(ドキュメント編集・レビューは可。**ただしスキル・`.claude/rules`・`.claude/rules-refs` の編集は worktree で** — 並行セッションが同じファイルを触りやすく、main 直コミットが衝突する)
+- **worktree からのアプリ起動は headless だけ** — 実ウィンドウは画面(と別セッションの窓検証)を横取りし、居座るプロセスは exe を掴んでリンクを塞ぐ。`cargo xtask verify-ui` を使うか、自分で叩くなら `QT_QPA_PLATFORM=offscreen` + `PG_AUTO_QUIT_MS` + **自分の worktree の** exe。`cargo xtask hook pre-shell` がそれ以外を deny する(ユーザーが窓を明示指示した時だけ `PG_ALLOW_GUI=1` を先頭に付ける)。本体 checkout からの起動は対象外(ユーザー自身の起動)。**窓に出たビルドがどのツリーのものかは右下が名乗る**(実装は [rules-refs/app-ui.md](.claude/rules-refs/app-ui.md))
 - 開発補助ツール(検証・デモ環境生成等)を **Windows 専用形式(.ps1 / .bat)で作らない** — タスクランナーが要る時は `cargo xtask` パターン(ワークスペース内クレート + `.cargo/config.toml` の alias、依存は std のみ)で 3OS 同一に書き、OS 差(Qt の PATH / フォント等)はコード内の分岐に焼き込む。just / make 等の外部タスクランナーも導入しない
 
 ## Rust 規約
@@ -55,26 +56,26 @@
 
 `JetBrains/kotlin` 級(10万コミット超)で: 起動→グラフ初回表示 3 秒以内 / 操作応答 100ms / スクロール 60fps / メモリ 300MB 以下。
 コミット数に比例する同期処理を UI 操作の経路に置かない。遅延読み込みと差分更新を基本とする。
-**refs の本数にも比例させない** — 基準リポジトリは refs が 5 万本(うちタグ 4.5 万)で、ループの中の走査は積になる。ref 同士を突き合わせる時は索引を 1 本作ってから回す(`session::RefJoins` / `refs::RemoteBranches`。実測 [ci/baseline/refs-join-windows-x64.md](ci/baseline/refs-join-windows-x64.md))。未着手の非同期化の候補は [非同期化の候補.md](internal-docs/非同期化の候補.md)。
+**refs の本数にも比例させない** — 基準リポジトリは refs が 5 万本(うちタグ 4.5 万)で、ループの中の走査は積になる。ref 同士を突き合わせる時は索引を 1 本作ってから回す(`session::RefJoins` / `refs::RemoteBranches`。[refs-join 実測](ci/baseline/refs-join-windows-x64.md))。未着手の非同期化の候補は [非同期化の候補.md](internal-docs/非同期化の候補.md)。
 
 ## Git 運用
 
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)、メッセージは英語
 - force push しない
-- **rebase はその場でユーザーが指示した時だけ**(main への追従・履歴の squash を含む)。worktree ブランチが main より遅れたままは正常な状態で、直す対象ではない。自発の rebase はコンフリクト対応と広範な再ビルドを呼び、時短のつもりでかえってセッションを遅くする
+- **rebase はその場でユーザーが指示した時だけ**(main への追従・履歴の squash を含む)。worktree ブランチが main より遅れたままは正常な状態で、直す対象ではない(例外は座席のマージ済みブランチの `reset --hard main` — §ビルド・テスト)。自発の rebase はコンフリクトと広範な再ビルドを呼ぶ
 - **main へブランチを反映するのは、その場でユーザーが指示した時だけ**。セッションはコミットを `worktree-<名前>` に積んだまま「マージ可」と報告して終わる。自分の判断で ff-merge しない — 反映済みと未反映が混ざると管理できなくなる
-  - `cargo xtask hook pre-git` が main を書く git(`merge` / `:main` への refspec / `branch -f main` / `update-ref`)と、本体 checkout からの `.claude/skills` / `.claude/rules` を含むコミットを deny する。**指示があった時だけ** `PG_ALLOW_MAIN=1` を先頭に付けて再実行する。使い捨てリポジトリと worktree ブランチ上のコミットは対象外
+  - `cargo xtask hook pre-shell` が main を書く git(`merge` / `:main` への refspec / `branch -f main` / `update-ref`)と、本体 checkout からの `.claude/skills` / `.claude/rules` / `.claude/rules-refs` を含むコミットを deny する。**指示があった時だけ** `PG_ALLOW_MAIN=1` を先頭に付けて再実行する。使い捨てリポジトリと worktree ブランチ上のコミットは対象外
   - **反映は本体 checkout の `git merge` で行う** — `update-ref` / `branch -f` は本体の index と作業ツリーを置き去りにし、落差が staged に見える(**中身は HEAD より後ろ** — コミットすると反映済みの仕事が消える)。診断は `git reflog show main`、復旧は `git restore --source=HEAD --staged --worktree -- .`
-- 本体 checkout での直コミットは可(ドキュメント等。**`.claude/skills` / `.claude/rules` は除く** — worktree に積んで反映指示を待つ)。main の ref を動かす操作のうち止まるのは上記の反映系だけ
+- 本体 checkout での直コミットは可(ドキュメント等。**`.claude/skills` / `.claude/rules` / `.claude/rules-refs` は除く** — worktree に積んで反映指示を待つ)。main の ref を動かす操作のうち止まるのは上記の反映系だけ
 
 ## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
 
-- Phase 1(読み取り専用ビューア)は**完了**。性能 4 項目は最終確認でクリア: [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)
-- **配線済み操作の一覧は [.claude/rules/app-ui.md](.claude/rules/app-ui.md)、個々の意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**(前者は app のファイルに触れると自動ロード、後者は触る項を Grep で引く)。**本ファイルは未配線だけを持つ** — ここに一覧を置くと機能を足すたび太る
-- **未配線**: フル interactive rebase 画面(merge / rebase / revert / 単体 drop の起動、止まった操作の出口、conflict の種別・片側採用・外部ツール連携は配線済み)
+- Phase 1(読み取り専用ビューア)は**完了**。性能 4 項目は最終確認でクリア: [phase1 実測](ci/baseline/phase1-perf-windows-x64.md)
+- **配線済み操作の一覧・個々の意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**(触る項を Grep で引く。app の不変条件は [.claude/rules/app-ui.md](.claude/rules/app-ui.md) が自動ロード)。**本ファイルは未配線だけを持つ** — ここに一覧を置くと機能を足すたび太る
+- **未配線**: フル interactive rebase 画面のみ(その周辺の日常操作は配線済み — 一覧は rules-refs)
 - 残作業と要判断事項は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読むこと**。配布準備期に検証する項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
 - CI(3OS + 完全オフライン job)は記述済み・**リモート未設定で未実行**(push は相当先まで行わない = 2026-08-02 ユーザー指示)。初回検証は**配布準備期(P5)**。CI も軽量(段 2)/ 完全性(段 3)に分ける(中身は [P5-確認事項.md](internal-docs/P5-確認事項.md) §3.5)
-- ネットワーク非通信の baseline 実測: [ci/baseline/windows-x64.md](ci/baseline/windows-x64.md)(主張の立て方は [P5-確認事項.md](internal-docs/P5-確認事項.md) §3)
+- ネットワーク非通信の baseline 実測: [baseline](ci/baseline/windows-x64.md)(主張の立て方は [P5-確認事項.md](internal-docs/P5-確認事項.md) §3)
 - mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ、実機検証は Phase 5 ゲート
 
 ## 規約の置き場所と本ファイルの運用
