@@ -17,6 +17,12 @@ const WINDOW_ESCAPE: &str = "PG_ALLOW_GUI";
 /// The directory every worktree of this repository sits under.
 const WORKTREES: &str = "/.claude/worktrees/";
 
+/// The reusable worktree seats. Sessions rotate through these six instead
+/// of minting a name per topic — a topical worktree is never reused, so
+/// every one paid a cold target/ build and kept the gigabytes afterwards
+/// (CLAUDE.md ビルド・テスト).
+const SEATS: [&str; 6] = ["a", "b", "c", "d", "e", "f"];
+
 pub fn run(args: &[String]) -> Result<(), String> {
     let event = args.first().map(String::as_str).unwrap_or("");
     let mut input = String::new();
@@ -31,6 +37,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // their own .claude/settings.json, and they keep the git guard until
         // they pick the new wiring up.
         "pre-git" => pre_git(&input).map(|_| ()),
+        "pre-worktree" => pre_worktree(&input),
         "session-start" => session_start(&input),
         other => Err(format!("unknown hook event: {other:?}")),
     }
@@ -342,13 +349,13 @@ fn shared_rules_denied(command: &str, cwd: &str) -> bool {
     println!(
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
          \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
-         \"This commit would carry .claude/skills or .claude/rules onto main \
-         from the primary checkout, and those files ride worktree branches: \
-         parallel sessions keep reaching for them, and direct commits to \
-         main collide (CLAUDE.md Git 運用). Make the edit on a worktree \
-         branch and report the branch as ready to merge. If the user asked \
-         for this direct commit in so many words, run the same command again \
-         with {}=1 in front of it.\"}}}}",
+         \"This commit would carry .claude/skills, .claude/rules or \
+         .claude/rules-refs onto main from the primary checkout, and those \
+         files ride worktree branches: parallel sessions keep reaching for \
+         them, and direct commits to main collide (CLAUDE.md Git 運用). \
+         Make the edit on a worktree branch and report the branch as ready \
+         to merge. If the user asked for this direct commit in so many \
+         words, run the same command again with {}=1 in front of it.\"}}}}",
         MAIN_ESCAPE
     );
     true
@@ -499,19 +506,21 @@ fn takes_value(subcommand: &str, option: &str) -> bool {
 }
 
 /// Whether `text` — a pathspec or a line of git status output — names
-/// .claude/skills or .claude/rules as a path segment. .claude/settings.json
-/// stays directly committable; only the files every session loads as rules
-/// ride worktree branches.
+/// .claude/skills, .claude/rules or .claude/rules-refs as a path segment.
+/// .claude/settings.json stays directly committable; only the files every
+/// session loads or greps as rules ride worktree branches.
 fn names_shared_rules(text: &str) -> bool {
     let text = text.replace('\\', "/");
-    [".claude/skills", ".claude/rules"].iter().any(|shared| {
-        text.match_indices(*shared).any(|(at, _)| {
-            let before = text[..at].chars().next_back();
-            let after = text[at + shared.len()..].chars().next();
-            before.is_none_or(|c| matches!(c, '/' | '"' | '\'' | ' '))
-                && after.is_none_or(|c| matches!(c, '/' | '"' | '\'' | ' '))
+    [".claude/skills", ".claude/rules-refs", ".claude/rules"]
+        .iter()
+        .any(|shared| {
+            text.match_indices(*shared).any(|(at, _)| {
+                let before = text[..at].chars().next_back();
+                let after = text[at + shared.len()..].chars().next();
+                before.is_none_or(|c| matches!(c, '/' | '"' | '\'' | ' '))
+                    && after.is_none_or(|c| matches!(c, '/' | '"' | '\'' | ' '))
+            })
         })
-    })
 }
 
 /// Whether the index already carries the shared rules — staged by an
@@ -722,24 +731,182 @@ fn resolve(cwd: &str, path: &str) -> String {
     resolved
 }
 
-/// SessionStart: sessions opened in the primary checkout get the worktree
-/// rule injected while worktree sessions stay quiet. Plain stdout becomes
-/// session context for this event.
-fn session_start(input: &str) -> Result<(), String> {
-    let cwd = string_field(input, "cwd").unwrap_or_default();
-    if !cwd.replace('\\', "/").contains("/.claude/worktrees/") {
+/// PreToolUse(EnterWorktree): a worktree name outside the seat roster
+/// starts a cold target/ nobody will reuse (CLAUDE.md ビルド・テスト).
+/// Entering by path is how a session takes an existing seat, and creating
+/// a missing seat by its own letter is fine; anything else waits for the
+/// user to say so.
+fn pre_worktree(input: &str) -> Result<(), String> {
+    let name = string_field(input, "name");
+    let path = string_field(input, "path");
+    if let Some(objection) = worktree_objection(name.as_deref(), path.as_deref()) {
         println!(
-            "This session runs in the primary checkout. Implementation work \
-             belongs in a reused fixed-name worktree (`claude --worktree <name>`) \
-             so parallel sessions do not fight over target/ and the release exe \
-             — see CLAUDE.md ビルド・テスト. Document edits and review are fine \
-             here, except .claude/skills and .claude/rules: parallel sessions \
-             keep reaching for those same files, and a direct commit to main \
-             collides with theirs — edit them on a worktree branch and report \
-             the branch as ready to merge (CLAUDE.md Git 運用)."
+            "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
+             \"permissionDecision\":\"ask\",\"permissionDecisionReason\":\
+             \"{objection} Worktrees are six reusable seats, a-f: enter a \
+             free one with path (the session greeting lists them), or create \
+             a missing seat by passing its letter as name (CLAUDE.md \
+             ビルド・テスト). A worktree outside the roster needs the user's \
+             say-so.\"}}}}"
         );
     }
     Ok(())
+}
+
+/// Why an EnterWorktree call is held, if it is. Pure so the tests can ask.
+fn worktree_objection(name: Option<&str>, path: Option<&str>) -> Option<&'static str> {
+    if path.is_some() || name.is_some_and(|name| SEATS.contains(&name)) {
+        return None;
+    }
+    Some(match name {
+        Some(_) => {
+            "A worktree under a topical name is never reused, so its cold target/ build and its gigabytes are paid for one session."
+        }
+        None => {
+            "A worktree under a generated name is never reused, so its cold target/ build and its gigabytes are paid for one session."
+        }
+    })
+}
+
+/// SessionStart: sessions opened in the primary checkout get the worktree
+/// rule injected, and every session gets told where the seats stand, so
+/// taking a free one needs no survey. Plain stdout becomes session
+/// context for this event.
+fn session_start(input: &str) -> Result<(), String> {
+    let cwd = string_field(input, "cwd").unwrap_or_default();
+    let seats = seat_report(&cwd).unwrap_or_default();
+    match worktree_root(&cwd) {
+        None => println!(
+            "This session runs in the primary checkout. Implementation work \
+             belongs in a worktree seat (`claude --worktree <letter>`, or \
+             EnterWorktree by path) so parallel sessions do not fight over \
+             target/ and the release exe — see CLAUDE.md ビルド・テスト. \
+             Document edits and review are fine here, except .claude/skills, \
+             .claude/rules and .claude/rules-refs: parallel sessions keep \
+             reaching for those same files, and a direct commit to main \
+             collides with theirs — edit them on a worktree branch and \
+             report the branch as ready to merge (CLAUDE.md Git 運用). \
+             {seats}"
+        ),
+        Some(root) => {
+            let name = root.rsplit('/').next().unwrap_or_default();
+            if SEATS.contains(&name) {
+                if let Some(stand) = seat_stand(&cwd, &seats) {
+                    println!("{stand}");
+                }
+            } else {
+                println!(
+                    "This session runs in worktree '{name}', outside the \
+                     seat roster a-f. Continue this branch's pending work if \
+                     that is what the session is for; otherwise take a seat \
+                     with EnterWorktree by path (CLAUDE.md ビルド・テスト). \
+                     {seats}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// One line about the seat this session sits in. A merged seat starts
+/// over from main's tip; a seat carrying unmerged commits is a merge
+/// waiting to happen, and only its own continuation should build on it.
+fn seat_stand(cwd: &str, seats: &str) -> Option<String> {
+    let branch = git_query(cwd, &["rev-parse", "--abbrev-ref", "HEAD"])?;
+    let ahead = commits_in(cwd, &format!("main..{branch}"))?;
+    if ahead > 0 {
+        return Some(format!(
+            "This seat's branch {branch} carries {ahead} unmerged commit(s) \
+             — continue that work, or take another seat and leave this one \
+             for its merge. {seats}"
+        ));
+    }
+    let behind = commits_in(cwd, &format!("{branch}..main"))?;
+    (behind > 0).then(|| {
+        format!(
+            "This seat's branch {branch} is merged and {behind} behind main \
+             — start with `git reset --hard main` so the work begins at the \
+             tip (CLAUDE.md ビルド・テスト)."
+        )
+    })
+}
+
+/// The seat roster in one line, read from `git worktree list` so the
+/// answer is the repository's and not a guess.
+fn seat_report(cwd: &str) -> Option<String> {
+    let listing = git_query(cwd, &["worktree", "list", "--porcelain"])?;
+    let entries = seat_entries(&listing);
+    let mut free = Vec::new();
+    let mut pending = Vec::new();
+    let mut in_use = Vec::new();
+    let mut missing = Vec::new();
+    for seat in SEATS {
+        let Some((_, branch, locked)) = entries.iter().find(|(name, ..)| *name == seat) else {
+            missing.push(seat);
+            continue;
+        };
+        if *locked {
+            in_use.push(seat.to_string());
+        } else if branch.is_empty() {
+            // Detached HEAD: nothing pre-git guards stands on it, so treat
+            // it like a merged seat that wants resetting to the tip.
+            free.push(format!("{seat} (detached — reset --hard main first)"));
+        } else if let Some(ahead) = commits_in(cwd, &format!("main..{branch}")) {
+            if ahead > 0 {
+                pending.push(format!("{seat} ({branch} +{ahead})"));
+            } else if commits_in(cwd, &format!("{branch}..main")).unwrap_or(0) > 0 {
+                free.push(format!("{seat} (reset --hard main first)"));
+            } else {
+                free.push(format!("{seat} (at main)"));
+            }
+        }
+    }
+    let mut parts = Vec::new();
+    if !free.is_empty() {
+        parts.push(format!("free: {}", free.join(", ")));
+    }
+    if !pending.is_empty() {
+        parts.push(format!("waiting for merge: {}", pending.join(", ")));
+    }
+    if !in_use.is_empty() {
+        parts.push(format!("in use: {}", in_use.join(", ")));
+    }
+    if !missing.is_empty() {
+        parts.push(format!("not created yet: {}", missing.join(", ")));
+    }
+    Some(format!("Worktree seats — {}.", parts.join("; ")))
+}
+
+/// (seat, branch, locked) for every roster seat the listing shows.
+fn seat_entries(listing: &str) -> Vec<(&'static str, String, bool)> {
+    let mut seats = Vec::new();
+    for block in listing.split("\n\n") {
+        let mut path = None;
+        let mut branch = String::new();
+        let mut locked = false;
+        for line in block.lines() {
+            if let Some(rest) = line.strip_prefix("worktree ") {
+                path = Some(rest.replace('\\', "/"));
+            } else if let Some(rest) = line.strip_prefix("branch refs/heads/") {
+                branch = rest.to_string();
+            } else if line == "locked" || line.starts_with("locked ") {
+                locked = true;
+            }
+        }
+        let Some(found) = path.as_deref().and_then(worktree_root).and_then(|root| {
+            let name = root.rsplit('/').next()?.to_string();
+            SEATS.iter().find(|seat| **seat == name).copied()
+        }) else {
+            continue;
+        };
+        seats.push((found, branch, locked));
+    }
+    seats
+}
+
+/// How many commits `git rev-list --count` sees in `range`.
+fn commits_in(cwd: &str, range: &str) -> Option<u32> {
+    git_query(cwd, &["rev-list", "--count", range]).and_then(|count| count.parse().ok())
 }
 
 /// Returns the first JSON string value for `key` in `input`, unescaped just
@@ -770,10 +937,25 @@ fn string_field(input: &str, key: &str) -> Option<String> {
 mod tests {
     use super::{
         commit, launch_objections, names_shared_rules, qml_font_notes, reflection, resolve,
+        seat_entries, string_field, worktree_objection, worktree_root,
     };
 
     const IN_WORKTREE: &str = "C:/Users/x/IdeaProjects/platitude-gg/.claude/worktrees/launch";
     const PRIMARY: &str = "C:/Users/x/IdeaProjects/platitude-gg";
+
+    #[test]
+    fn reads_a_backslashed_cwd_out_of_a_payload_and_into_a_root() {
+        let payload = r#"{"session_id":"x","cwd":"C:\\Users\\x\\IdeaProjects\\platitude-gg\\.claude\\worktrees\\nice-satoshi-45da22"}"#;
+        let cwd = string_field(payload, "cwd").expect("cwd");
+        assert_eq!(
+            cwd,
+            "C:\\Users\\x\\IdeaProjects\\platitude-gg\\.claude\\worktrees\\nice-satoshi-45da22"
+        );
+        assert_eq!(
+            worktree_root(&cwd).as_deref(),
+            Some("C:/Users/x/IdeaProjects/platitude-gg/.claude/worktrees/nice-satoshi-45da22")
+        );
+    }
 
     #[test]
     fn refuses_a_worktree_launch_that_opens_a_window_or_keeps_the_exe() {
@@ -973,8 +1155,33 @@ mod tests {
         ));
         assert!(names_shared_rules(".claude\\rules\\core.md"));
         assert!(names_shared_rules(".claude/skills"));
+        assert!(names_shared_rules(".claude/rules-refs/app-ui.md"));
         assert!(!names_shared_rules(".claude/settings.json"));
         assert!(!names_shared_rules("docs/.claude/rules-of-thumb.md"));
         assert!(!names_shared_rules("internal-docs/skills.md"));
+    }
+
+    #[test]
+    fn holds_worktree_names_outside_the_seat_roster() {
+        assert!(worktree_objection(Some("feature-x"), None).is_some());
+        assert!(worktree_objection(None, None).is_some());
+        assert!(worktree_objection(Some("c"), None).is_none());
+        assert!(worktree_objection(None, Some("C:/x/platitude-gg/.claude/worktrees/a")).is_none());
+    }
+
+    #[test]
+    fn reads_seats_out_of_a_worktree_listing() {
+        let listing = "worktree C:/x/platitude-gg\nHEAD 1111\nbranch refs/heads/main\n\n\
+                       worktree C:/x/platitude-gg/.claude/worktrees/a\nHEAD 2222\nbranch refs/heads/worktree-a\n\n\
+                       worktree C:/x/platitude-gg/.claude/worktrees/tooltip\nHEAD 3333\nbranch refs/heads/worktree-tooltip\n\n\
+                       worktree C:/x/platitude-gg/.claude/worktrees/b\nHEAD 4444\nbranch refs/heads/worktree-b\nlocked claude session b (pid 1)\n";
+        let seats = seat_entries(listing);
+        assert_eq!(
+            seats,
+            vec![
+                ("a", "worktree-a".to_string(), false),
+                ("b", "worktree-b".to_string(), true),
+            ]
+        );
     }
 }

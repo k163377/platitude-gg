@@ -18,6 +18,15 @@
             "command": "cargo xtask hook pre-shell"
           }
         ]
+      },
+      {
+        "matcher": "EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo xtask hook pre-worktree"
+          }
+        ]
       }
     ],
     "PostToolUse": [
