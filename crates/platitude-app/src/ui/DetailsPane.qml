@@ -859,6 +859,7 @@ ColumnLayout {
                         ToolButton {
                             id: hashCopy
                             Layout.alignment: Qt.AlignRight
+                            hoverEnabled: true
                             text: detailsPane.details.sha8
                             leftPadding: Theme.spaceXs
                             rightPadding: Theme.spaceXs

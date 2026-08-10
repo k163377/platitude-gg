@@ -407,6 +407,7 @@ Rectangle {
                 width: Theme.railWidth
                 height: tabStrip.height
                 padding: 0
+                hoverEnabled: true
                 Accessible.name: qsTr("Application menu")
                 // Written out instead of borrowing HoverToolButton: an
                 // open menu keeps the wash, which no hover of its own can
