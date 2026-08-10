@@ -33,6 +33,13 @@ ComboBox {
     /// empty list says "nothing" where "not yet" is the truth.
     property bool loading: false
 
+    /// The last row is not one of the answers but the way to one this
+    /// list does not hold yet. Set off by the line a menu separates its
+    /// groups with (デザイン規約 §メニュー): a row that acts and a row
+    /// that answers cannot be told apart while both are plain text on
+    /// one ground, and the list is read before it is clicked.
+    property bool lastRowActs: false
+
     /// What the field should say, and the value to read back.
     ///
     /// **Not `editText`.** A model arriving makes ComboBox snap its
@@ -65,8 +72,14 @@ ComboBox {
     implicitHeight: Theme.controlHeight
     font.pixelSize: Theme.fontMd
 
+    // The ground says whether there is anything to type here. `bgBase` is
+    // the inside of an input (デザイン規約 §色 背景), and a chooser has no
+    // inside — it carries the value it shows and nothing can be put into
+    // it. Left bare it reads as the button it is, so where a chooser and
+    // a name box stand side by side the recessed ground belongs to
+    // exactly one of them (デザイン規約 §選ぶ欄と打つ欄).
     background: Rectangle {
-        color: Theme.bgBase
+        color: combo.pickOnly ? "transparent" : Theme.bgBase
         radius: Theme.radiusSm
         border.color: combo.activeFocus ? Theme.borderFocus : Theme.borderDefault
         border.width: Theme.borderWidth
@@ -160,17 +173,43 @@ ComboBox {
     }
 
     delegate: ItemDelegate {
+        id: row
         required property string modelData
         required property int index
+        /// This row acts rather than answers — see `lastRowActs`.
+        readonly property bool acts: combo.lastRowActs
+                                     && row.index === combo.count - 1
+        /// What the line above it costs: the separator and the air the
+        /// menu gives one on each side (デザイン規約 §メニュー).
+        readonly property int lead: row.acts
+                                    ? 2 * Theme.spaceXs + Theme.borderWidth : 0
         width: combo.width - 2 * Theme.spaceXs
-        height: Theme.rowHeight
-        highlighted: combo.highlightedIndex === index
-        background: Rectangle {
-            radius: Theme.radiusSm
-            color: parent.highlighted ? Theme.bgHover : "transparent"
+        height: Theme.rowHeight + row.lead
+        topPadding: row.lead
+        highlighted: combo.highlightedIndex === row.index
+        // Two rectangles rather than one: the wash belongs to the row,
+        // and a wash drawn over the whole item would swallow the line
+        // that is there to keep the two apart.
+        background: Item {
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                y: Theme.spaceXs
+                height: Theme.borderWidth
+                color: Theme.borderSubtle
+                visible: row.acts
+            }
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: Theme.rowHeight
+                radius: Theme.radiusSm
+                color: row.highlighted ? Theme.bgHover : "transparent"
+            }
         }
         contentItem: Label {
-            text: parent.modelData
+            text: row.modelData
             color: Theme.textPrimary
             font.pixelSize: Theme.fontMd
             leftPadding: Theme.spaceXs

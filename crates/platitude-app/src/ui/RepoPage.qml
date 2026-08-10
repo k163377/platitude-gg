@@ -617,7 +617,10 @@ Item {
             property alias remotePick: remotePick
         RowLayout {
             Layout.fillWidth: true
-            spacing: Theme.spaceSm
+            // The two boxes are one path, so they are packed the way a
+            // row packs its own contents rather than spaced the way
+            // separate controls are (デザイン規約 §余白 spaceXs).
+            spacing: Theme.spaceXs
             // Every remote this repository has, with the way to one it
             // does not on the end of the same list. A list rather than a
             // row of chips: a fork-and-upstream working copy has several,
@@ -627,6 +630,7 @@ Item {
             AppCombo {
                 id: remotePick
                 pickOnly: true
+                lastRowActs: true
                 // The fixed-input width every boxed field shares
                 // (デザイン規約 §レイアウト初期値 160) — not a width of
                 // its own.
@@ -634,6 +638,16 @@ Item {
                 model: page.publishChoices
                 wanted: page.publishRemote
                 onActivated: index => page.choosePublishRemote(index)
+            }
+            // What the two boxes add up to. The line below already reads
+            // `<remote>/<name>`, and without the slash between them the
+            // pair is two boxes of one width with one chevron to tell
+            // them apart (デザイン規約 §選ぶ欄と打つ欄).
+            Label {
+                Layout.alignment: Qt.AlignVCenter
+                text: "/"
+                color: Theme.textMuted
+                font.pixelSize: Theme.fontMd
             }
             // Never a placeholder: the branch's own name is the answer
             // unless somebody changes it, and an empty box would read as
