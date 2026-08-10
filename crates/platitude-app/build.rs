@@ -1,4 +1,6 @@
-//! Hands the linker the Windows resource carrying the exe's own icon.
+//! Hands the linker the Windows resource carrying what the exe says about
+//! itself to the shell: its own icon, and the name shown in its place —
+//! without the latter the shell falls back to `platitude-gg.exe`.
 //!
 //! `assets/platitude.res` is checked in rather than compiled here. The
 //! resource compiler ships with the Windows SDK, and making every build
@@ -6,7 +8,7 @@
 //! buys nothing over a 21KB file in the tree. `assets/platitude.rc` says
 //! how to rebuild it.
 //!
-//! This is separate from the icon the running window wears, which
+//! The icon here is separate from the one the running window wears, which
 //! `src/winframe.rs` sets at startup: one is read off the file by the
 //! shell, the other off the window by the taskbar.
 
@@ -26,7 +28,7 @@ fn main() {
         println!("cargo:rustc-link-arg-bins={}", res.display());
     } else {
         println!(
-            "cargo:warning=assets/platitude.res is missing, so the exe keeps the shell's generic icon"
+            "cargo:warning=assets/platitude.res is missing, so the exe keeps the shell's generic icon and is named after its own file"
         );
     }
 }

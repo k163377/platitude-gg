@@ -1,14 +1,69 @@
-// The exe's own icon: what Explorer shows for the file, what a pinned
-// shortcut carries, and what the taskbar falls back to before the window
-// is up. The running window sets its own separately (src/winframe.rs).
-//
-// Resource id 1 is deliberate: Windows shows the numerically lowest ICON
-// resource as the file's icon, so this has to stay the lowest one here.
+// What the exe says about itself to the Windows shell: its icon and its
+// name. This is the Windows counterpart of packaging/linux's .desktop and
+// packaging/macos' Info.plist -- neither of those is linked into anything,
+// but on Windows the metadata lives inside the binary.
 //
 // platitude.res is the compiled form and is what build.rs hands the
-// linker. After changing platitude.ico, rebuild it with the Windows SDK
-// resource compiler, from this directory:
+// linker. After changing anything here (or platitude.ico), rebuild it with
+// the Windows SDK resource compiler, from this directory:
 //
 //   rc.exe /nologo /fo platitude.res platitude.rc
 //
+// This file stays ASCII, comments included: rc.exe reads it in the system
+// codepage unless told otherwise, so a non-ASCII byte here would compile
+// differently on someone else's machine than it does on the one that last
+// rebuilt the .res.
+
+// The file's icon: what Explorer shows for it, what a pinned shortcut
+// carries, and what the taskbar falls back to before the window is up. The
+// running window sets its own separately (src/winframe.rs).
+//
+// Resource id 1 is deliberate: Windows shows the numerically lowest ICON
+// resource as the file's icon, so this has to stay the lowest one here.
 1 ICON "platitude.ico"
+
+// The display name. Without a version resource the shell has no name to
+// show and falls back to the file name, so the taskbar's window menu read
+// "platitude-gg.exe". FileDescription is the field it reads: measured with
+// AssocQueryString/ASSOCSTR_FRIENDLYAPPNAME, which answered the bare file
+// name for the resourceless exe and notepad.exe's FileDescription for
+// notepad.exe, and again through the shell property system (Explorer's
+// file-description column). Both now read "Platitude GG".
+//
+// Do not check that with PowerShell's Get-Item .VersionInfo: .NET's
+// FileVersionInfo reports every string field empty for this resource while
+// reading its fixed block fine, and a probe with a non-zero FILEVERSION
+// changed nothing. Win32 VerQueryValue returns all four strings from the
+// same bytes, so the resource is sound and that reader is not.
+//
+// InternalName and OriginalFilename carry the slug instead, the way Exec=
+// and CFBundleExecutable do: those two are machine-read, and the display
+// name does not belong in them (design rules, the app-name section).
+//
+// No version fields. The workspace version lives in Cargo.toml and nothing
+// restates it -- Info.plist leaves a @VERSION@ placeholder for the
+// packaging step for that reason, and this file cannot do even that,
+// because the compiled .res is checked in and linked as it stands.
+// Stamping a real version belongs to the packaging step (P5 notes). Saying
+// FILEVERSION 0,0,0,0 here would be a no-op anyway: it is what rc.exe
+// writes when the statement is absent, byte for byte.
+1 VERSIONINFO
+FILEOS 0x4      // VOS__WINDOWS32
+FILETYPE 0x1    // VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        // US English, Unicode -- the app ships English only (CLAUDE.md).
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "FileDescription", "Platitude GG"
+            VALUE "ProductName", "Platitude GG"
+            VALUE "InternalName", "platitude-gg"
+            VALUE "OriginalFilename", "platitude-gg.exe"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
