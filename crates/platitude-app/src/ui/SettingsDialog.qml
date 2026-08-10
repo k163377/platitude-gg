@@ -124,7 +124,7 @@ AppDialog {
                         + settingsDialog.prefillEmail + ">"
             avatarWho.wanted = who
             avatarWho.editText = who
-            chooseImage.forceActiveFocus()
+            choosePicture.forceActiveFocus()
         } else {
             avatarWho.wanted = ""
             avatarWho.editText = ""
@@ -378,9 +378,14 @@ AppDialog {
                     }
                 }
                 ActionButton {
-                    id: chooseImage
+                    id: choosePicture
                     implicitHeight: Theme.controlHeight
-                    text: qsTr("Choose image…")
+                    // One word for the file all the way through — the seat
+                    // is the avatar, what fills it is a picture, and there
+                    // is no third name for either (デザイン規約 §アバターを
+                    // 与える). No article: the row names a kind about to be
+                    // chosen, not something already on screen (§長さ).
+                    text: qsTr("Choose picture…")
                     // Opened from an avatar this already holds the focus,
                     // so the whole errand is one press and the picker —
                     // and the accent says so, since the frame is what
@@ -414,8 +419,11 @@ AppDialog {
         }
         FileDialog {
             id: picturePicker
-            title: qsTr("Choose a picture")
-            nameFilters: [AppBackend.avatarFilters]
+            title: qsTr("Choose picture")
+            // The kinds come from the store so the dialog and the store
+            // cannot drift apart; the word in front of them is ours, so it
+            // lives here rather than in Rust (CLAUDE.md 文言規約).
+            nameFilters: [qsTr("Pictures (%1)").arg(AppBackend.avatarPatterns)]
             onAccepted: AppBackend.assignAvatar(settingsDialog.chosenEmail,
                                                 settingsDialog.chosenName,
                                                 selectedFile.toString())
@@ -442,7 +450,7 @@ AppDialog {
                 // The accent goes to whichever of the two the dialog was
                 // opened for, and the other keeps a plain frame — the
                 // same one expression, read the other way round
-                // (`chooseImage`). No icon: a check would claim credit
+                // (`choosePicture`). No icon: a check would claim credit
                 // for writes that already happened, which is the very
                 // thing the comment above says a `Save` here must not do.
                 frameColor: settingsDialog.prefillEmail === ""

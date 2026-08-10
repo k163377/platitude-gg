@@ -105,9 +105,11 @@ pub struct AppBackend {
     avatars: String,
     /// git-style: empty means the last assignment worked.
     avatar_error: String,
-    /// What the picker offers, built from the kinds the store accepts so
-    /// the dialog and the store cannot drift apart.
-    avatar_filters: String,
+    /// The patterns the picker offers, built from the kinds the store
+    /// accepts so the dialog and the store cannot drift apart. Patterns
+    /// only: the word in front of them is the dialog's, and words live in
+    /// `qsTr()` on the QML side.
+    avatar_patterns: String,
     /// The worktree this binary was built in, empty for the primary
     /// checkout — see [`build_tree`].
     build_tree: String,
@@ -236,14 +238,11 @@ impl Default for AppBackend {
             auto_fetch_max: platitude_core::session::AUTO_FETCH_MAX_MINUTES as i32,
             avatars: packed_avatars(),
             avatar_error: String::new(),
-            avatar_filters: format!(
-                "Images ({})",
-                platitude_core::avatar::EXTENSIONS
-                    .iter()
-                    .map(|e| format!("*.{e}"))
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            ),
+            avatar_patterns: platitude_core::avatar::EXTENSIONS
+                .iter()
+                .map(|e| format!("*.{e}"))
+                .collect::<Vec<_>>()
+                .join(" "),
             build_tree: build_tree(),
             already_running: Hub::with(|hub| !hub.held_elsewhere().is_empty()).unwrap_or(false),
             held_elsewhere: Hub::with(|hub| hub.held_elsewhere().to_string()).unwrap_or_default(),
@@ -331,7 +330,7 @@ impl AppBackend {
         Member = avatar_error,
         Notify = avatars_changed
     );
-    qproperty!("avatarFilters", Member = avatar_filters, Constant);
+    qproperty!("avatarPatterns", Member = avatar_patterns, Constant);
     qproperty!("buildTree", Member = build_tree, Constant);
     qproperty!("alreadyRunning", Member = already_running, Constant);
     qproperty!("heldElsewhere", Member = held_elsewhere, Constant);

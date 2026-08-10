@@ -688,10 +688,15 @@ ColumnLayout {
                         }
                         ToolTip.visible: avatarBox.showBadge
                         ToolTip.delay: Metrics.tipDelayMs
+                        // The same word the settings card uses for the file
+                        // (デザイン規約 §アバターを与える). The article is what
+                        // splits the two: the one being changed is the face
+                        // under the pointer, the one being chosen does not
+                        // exist yet (§長さ).
                         ToolTip.text: detailsPane.details.avatarUrl !== ""
                                       ? qsTr("Change the picture for %1")
                                         .arg(detailsPane.details.authorEmail)
-                                      : qsTr("Choose a picture for %1")
+                                      : qsTr("Choose picture for %1")
                                         .arg(detailsPane.details.authorEmail)
                     }
                     ColumnLayout {
