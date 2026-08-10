@@ -912,16 +912,31 @@ ColumnLayout {
                             color: Theme.textLink
                             font.pixelSize: Theme.fontSm
                             // The arrow and the hash are one phrase, so they
-                            // sit as close as the plate above holds its hash
-                            // and copy icon. The mono space is not a value
-                            // anyone chose — it is a whole cell (7px here)
-                            // where that pair reads 6 at a font one step
-                            // larger, so it is half a gap too wide.
-                            font.wordSpacing: -Theme.spaceXs / 2
+                            // stand `spaceXs` apart — the gap the plate above
+                            // spends between its hash and copy icon. The mono
+                            // space is not a value anyone chose (it is a whole
+                            // cell: 7px here, 6 on Ubuntu), so the cell comes
+                            // back out and the token is paid instead, which
+                            // lands both fonts on the same gap.
                             font.underline: parentHover.containsMouse
                             ToolTip.visible: parentHover.containsMouse
                             ToolTip.delay: Metrics.tipDelayMs
                             ToolTip.text: qsTr("Go to parent commit")
+                            FontMetrics {
+                                id: parentMono
+                                font.family: Theme.monoFamily
+                                font.pixelSize: Theme.fontSm
+                            }
+                            // Taken once, not bound: `advanceWidth` is a call,
+                            // so a binding on it captures no dependency and
+                            // never runs again — and at creation the metrics
+                            // object still carries the default font (its own
+                            // font binding lands later), whose space is 4px.
+                            // Bound, this silently settled on 4 − 4 = 0 and
+                            // left the cell at its full width. The family and
+                            // the step are constants, so once is the truth.
+                            Component.onCompleted: parentLink.font.wordSpacing =
+                                Theme.spaceXs - parentMono.advanceWidth(" ")
                             MouseArea {
                                 id: parentHover
                                 anchors.fill: parent
