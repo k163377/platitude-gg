@@ -331,11 +331,12 @@ Rectangle {
         }
         // Escape and a click anywhere else walk away too; this is the
         // way out that can be seen, for a bar that stands until it is
-        // answered.
+        // answered — and a step under what it closes, like every other
+        // one of these (デザイン規約 §寸法).
         NavIcon {
             Layout.alignment: Qt.AlignVCenter
-            width: Theme.iconMd
-            height: Theme.iconMd
+            width: Theme.iconSm
+            height: Theme.iconSm
             kind: "close"
             tint: dismissMouse.containsMouse ? Theme.textPrimary
                                              : Theme.textSecondary

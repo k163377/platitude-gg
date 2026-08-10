@@ -331,12 +331,13 @@ Rectangle {
                     implicitHeight: Theme.iconLg
                     padding: 0
                     contentItem: Item {
+                        // A step under what it closes (デザイン規約 §寸法).
                         NavIcon {
                             anchors.centerIn: parent
-                            width: Theme.iconMd
-                            height: Theme.iconMd
+                            width: Theme.iconSm
+                            height: Theme.iconSm
                             kind: "close"
-                            tint: Theme.textPrimary
+                            tint: Theme.textSecondary
                         }
                     }
                     onClicked: diffPane.closeRequested()
