@@ -918,16 +918,17 @@ ColumnLayout {
                             // nobody chose — the same way `⚑` came out a
                             // different shape on each of the three.
                             //
-                            // The seat is the mark's box less the air it keeps
-                            // inside it, plus the `spaceXs` the plate above
-                            // spends between its hash and copy icon
-                            // (規約 §余白「印が自分で持っている余白は、隣の
-                            // 詰めに数える」), so the gap lands on the ink.
-                            leftPadding: Theme.iconSm + Theme.spaceXs / 2
+                            // The seat is the mark's ink, not its box, so the
+                            // `spaceXs` lands where the eye measures it — the
+                            // same gap the plate above spends between its hash
+                            // and copy icon (規約 §余白「印が自分で持っている
+                            // 余白は、隣の詰めに数える」).
+                            leftPadding: parentBack.inkWidth + Theme.spaceXs
                             ToolTip.visible: parentHover.containsMouse
                             ToolTip.delay: Metrics.tipDelayMs
                             ToolTip.text: qsTr("Go to parent commit")
                             NavIcon {
+                                id: parentBack
                                 kind: "arrow"
                                 // The family draws it leaving; this one points
                                 // back, and turning the mark is how `FoldBlock`
@@ -936,9 +937,14 @@ ColumnLayout {
                                 tint: Theme.textLink
                                 width: Theme.iconSm
                                 height: Theme.iconSm
-                                // Whole at `iconMd`, and the grid ratio under it.
-                                stroke: Metrics.iconStroke * Theme.iconSm / 16
-                                anchors.left: parent.left
+                                // The grid shrinks and the line shrinks with it,
+                                // or the mark carries more weight than the
+                                // digits beside it (§語の隣に立つ印).
+                                stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
+                                // Hung off the left by the air it keeps inside
+                                // its box, so the ink starts where the link does
+                                // and the line under the pair starts with it.
+                                x: -(parentBack.width - parentBack.inkWidth) / 2
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             // One line under the mark and the hash: they are one
