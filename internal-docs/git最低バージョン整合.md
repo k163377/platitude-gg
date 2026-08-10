@@ -1,7 +1,7 @@
 # 最低 git バージョン整合チェック
 
 アプリが発行する全 git コマンド・オプションが、対応最低バージョン([要望.md](要望.md) §その他 — 照合時点で **2.43**)に存在するかの論理チェック記録。
-実バイナリでの実測ではなく**マニュアル照合**(git-scm.com のバージョン付きマニュアル + git.git の v タグ付きドキュメントソース)。実バイナリでの一巡は [P5-確認事項.md](P5-確認事項.md) §4。
+実バイナリでの実測ではなく**マニュアル照合**(git-scm.com のバージョン付きマニュアル + git.git の v タグ付きドキュメントソース)。実バイナリでの一巡は [P5-確認事項.md](P5-確認事項.md) §6。
 
 - 洗い出し: `platitude-core/src` の `GitCommand` 構築の全数(`-c` 固定引数・環境変数・pathspec magic 含む)。app 側に git 実行は無い(core に集約)ことも確認済み
 - 照合日: 2026-08-06(コード状態: main 43f02c8)。追補照合 2026-08-10: その後に増えた `ls-remote` / `remote` と `rev-list` の追加オプションを下表へ反映(コード状態: main c4e4a4a)
@@ -9,7 +9,7 @@
 
 ## 結論
 
-**発行する全コマンド・全オプションが 2.43 に存在する。** 個別マニュアルに無いのは `cherry-pick --no-edit` 1 件のみで、gitcli(7) の「long option は `--no-` で否定できる」一般規定(§Negating options)+ 実測(CLAUDE.md の実測注記)でカバーされる。最も新しい依存は `rebase --update-refs`(2.38 — 要望.md が明示的に前提化)。
+**発行する全コマンド・全オプションが 2.43 に存在する。** 個別マニュアルに無いのは `cherry-pick --no-edit` 1 件のみで、gitcli(7) の「long option は `--no-` で否定できる」一般規定(§Negating options)+ 実測でカバーされる。最も新しい依存は `rebase --update-refs`(2.38 — 要望.md が明示的に前提化)。
 
 **マニュアル照合が拾えない例外が 1 つある — `reset` は `--end-of-options` を受け付けない。** gitcli(7) の一般規定に載っていても、`git reset` は 2.43 で位置によらず `fatal: option '--end-of-options' must come before non-option arguments`(exit 128)を返す。アプリが発行する動詞のうちこれだけで、`branch` / `switch` / `tag` / `remote add` / `remote set-url` / `ls-remote` / `rev-parse --verify --quiet` / `log -1 --format=` / `stash list` は全て通る(2.43 実測。`ls-remote` は最低バージョンのコンテナの統合テスト `the_remote_branch_check_answers_for_the_exact_name_only` が踏む)。名前を渡したい経路が将来できたら、`rev-parse --end-of-options` で解決してから object id を渡す。**この差は開発機の git(新しい版は受け付ける)では出ない** — 最低バージョンを積んだ Linux コンテナ(`cargo xtask linux`)が唯一の検出点。
 
@@ -61,7 +61,7 @@
 | `remote` | `add` / `set-url` / `--end-of-options` | 古参(`set-url` 1.7.0)+ 2.43 実測(上記) |
 | `reset` | `--quiet` / `--soft` `--mixed` `--hard` | 古参。**`--end-of-options` は付けられない**(下記) |
 | `restore` | `--staged` / `--worktree`(併用) | 2.43.0 ✓(2.23 導入。2.43 時点 EXPERIMENTAL 表記 — 存在と記載は確認済) |
-| `rev-list` | `--count` / `--merges` / `--not` / `--remotes` / `--max-count=` / `--branches` / `--exclude=` / `--glob=` | 古参(`--count` 1.7.2 / `--exclude` 1.9 / `--glob` 1.7.0)。`--exclude` / `--glob` の効き方の罠は core.md |
+| `rev-list` | `--count` / `--merges` / `--not` / `--remotes` / `--max-count=` / `--branches` / `--exclude=` / `--glob=` | 古参(`--count` 1.7.2 / `--exclude` 1.9 / `--glob` 1.7.0)。`--exclude` / `--glob` の効き方の罠は rules-refs/core.md |
 | `rev-parse` | `--verify` / `-q` / `--git-path` / `--show-toplevel` / `--absolute-git-dir` / `--show-object-format` / `--end-of-options` / `<rev>^{commit}` | 2.43.0 ✓ |
 | `revert` | `--no-edit` | 2.43.0 ✓ |
 | `rm` | `--cached` / `-r` / `-f` / `--quiet` | 古参 |
