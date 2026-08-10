@@ -60,6 +60,9 @@ ColumnLayout {
     readonly property bool signatureTipShown: signatureMark.ToolTip.visible
     property bool summaryPointedAt: false
     readonly property bool summaryTipShown: subjectArea.ToolTip.visible
+    /// The same stand-in for a file row, so a cut-down paths-view row's
+    /// tooltip can be photographed (path-tip). -1 points at no row.
+    property int pointedTipRow: -1
     function avatarClicked() {
         if (detailsPane.details.authorEmail !== "")
             detailsPane.avatarEditRequested(detailsPane.details.authorName,
@@ -688,10 +691,15 @@ ColumnLayout {
                         }
                         ToolTip.visible: avatarBox.showBadge
                         ToolTip.delay: Metrics.tipDelayMs
+                        // The one word the whole feature goes by (デザイン規約
+                        // §アバターを与える). The article is what splits the
+                        // two states, not a second noun: the one being
+                        // changed is the face under the pointer, the one
+                        // being chosen does not exist yet (§長さ).
                         ToolTip.text: detailsPane.details.avatarUrl !== ""
-                                      ? qsTr("Change the picture for %1")
+                                      ? qsTr("Change the avatar for %1")
                                         .arg(detailsPane.details.authorEmail)
-                                      : qsTr("Choose a picture for %1")
+                                      : qsTr("Choose avatar for %1")
                                         .arg(detailsPane.details.authorEmail)
                     }
                     ColumnLayout {
@@ -1038,6 +1046,7 @@ ColumnLayout {
         ScrollBar.vertical: AutoScrollBar {}
         delegate: FileRowDelegate {
             listWidth: fileList.width
+            pointedTipRow: detailsPane.pointedTipRow
             onActivated: (bucket, path, origPath) =>
                 detailsPane.fileActivated(path, origPath)
             onFolderToggled: key => detailsPane.details.toggleFolder(key)

@@ -19,6 +19,13 @@ Item {
     readonly property string origPathText: model.orig_path ?? ""
     readonly property bool isFolder: (model.folder ?? false) === true
 
+    /// Stands in for the pointer where headless cannot put one, so a
+    /// cut-down row's tooltip can be photographed (PG_AUTO_ACT=path-tip).
+    /// -1 points at no row.
+    property int pointedTipRow: -1
+    readonly property bool tipPointedAt:
+        fileRow.pointedTipRow === fileRow.model.index
+
     signal activated(string bucket, string path, string origPath)
     signal folderToggled(string key)
 
@@ -115,9 +122,14 @@ Item {
                 fileRow.activated("", fileRow.pathText, fileRow.origPathText)
         }
     }
-    // Tree leaves show only their file name; hover reveals the path.
-    ToolTip.visible: fileMouse.containsMouse && !fileRow.isFolder
-                     && fileRow.nameText !== fileRow.pathText
+    // Tree leaves show only their file name; hover reveals the path. A
+    // paths-view row the pane elided answers the same way — its display
+    // name is the full path, so elision is the one thing that leaves
+    // the whole name unsaid (デザイン規約 §hover のツールチップ).
+    ToolTip.visible: (fileMouse.containsMouse || fileRow.tipPointedAt)
+                     && !fileRow.isFolder
+                     && (fileRow.nameText !== fileRow.pathText
+                         || newName.truncated || origName.truncated)
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: fileRow.pathText
 }

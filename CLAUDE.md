@@ -35,7 +35,7 @@
 - **起動だけの要求(「rebase して起動」等)は fast path** — 起動までを複合コマンドで先に済ませて即報告し、fmt / clippy / test は報告後にバックグラウンドで追報する(Done の基準は不変)。手順は verify-ui スキル §起動 fast path
 - **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ。Linux ではその場で実行 — `bare` だけは常にコンテナ)。イメージは core / app / runtime(**宣言した依存だけ**)から自動で選び、ビルド先は docker volume でこの `target/` を汚さない。要望.md の最低 git バージョンを積んだ唯一の環境。**`bare` は建てた場所の外で動くかだけを見る**(依存が増えた瞬間その名前で止まる。実測は P5-確認事項 §実測済み)
 - **並行セッション(複数エージェント)は git worktree で分ける** — 同一 checkout の共有は `target/` が単一障害点(ビルドロックで直列化・incremental 相互無効化・別セッションの編集が release exe に焼き込まれた実績)。worktree なら target も demo / screenshot も自然に分離される
-- **worktree は固定名を使い回す**: `claude --worktree <固定名>`(`.claude/worktrees/<固定名>` に恒久作成・次回同名で再開。worktree ごとの `target/` がセッションを跨いで温存される)。使い捨ての自動命名 worktree を乱造しない。ブランチは `worktree-<名前>` に切られる。**完了しても main へは戻さない**(§Git 運用)。**本体 checkout で実装作業をしない**(ドキュメント編集・レビューは可)
+- **worktree は固定名を使い回す**: `claude --worktree <固定名>`(`.claude/worktrees/<固定名>` に恒久作成・次回同名で再開。worktree ごとの `target/` がセッションを跨いで温存される)。使い捨ての自動命名 worktree を乱造しない。ブランチは `worktree-<名前>` に切られる。**完了しても main へは戻さない**(§Git 運用)。**本体 checkout で実装作業をしない**(ドキュメント編集・レビューは可。**ただしスキル・`.claude/rules` の編集は worktree で** — 並行セッションが同じファイルを触りやすく、main 直コミットが衝突する)
 - **worktree からのアプリ起動は headless だけ** — 実ウィンドウは画面(と別セッションの窓検証)を横取りし、居座るプロセスは exe を掴んでリンクを塞ぐ。`cargo xtask verify-ui` を使うか、自分で叩くなら `QT_QPA_PLATFORM=offscreen` + `PG_AUTO_QUIT_MS` + **自分の worktree の** exe。`cargo xtask hook pre-shell` がそれ以外を deny する(ユーザーが窓を明示指示した時だけ `PG_ALLOW_GUI=1` を先頭に付ける)。本体 checkout からの起動は対象外(ユーザー自身の起動)。**窓に出たビルドがどのツリーのものかは右下が名乗る**(実装は [app-ui.md](.claude/rules/app-ui.md))
 - 開発補助ツール(検証・デモ環境生成等)を **Windows 専用形式(.ps1 / .bat)で作らない** — タスクランナーが要る時は `cargo xtask` パターン(ワークスペース内クレート + `.cargo/config.toml` の alias、依存は std のみ)で 3OS 同一に書き、OS 差(Qt の PATH / フォント等)はコード内の分岐に焼き込む。just / make 等の外部タスクランナーも導入しない
 
@@ -65,7 +65,7 @@
 - **main へブランチを反映するのは、その場でユーザーが指示した時だけ**。セッションはコミットを `worktree-<名前>` に積んだまま「マージ可」と報告して終わる。自分の判断で ff-merge しない — 反映済みと未反映が混ざると管理できなくなる
   - `cargo xtask hook pre-git` が main を書く git(`merge` / `:main` への refspec / `branch -f main` / `update-ref`)を deny する。**指示があった時だけ** `PG_ALLOW_MAIN=1` を先頭に付けて再実行する。使い捨てリポジトリと worktree ブランチ上のコミットは対象外
   - **反映は本体 checkout の `git merge` で行う** — `update-ref` / `branch -f` は本体の index と作業ツリーを置き去りにし、落差が staged に見える(**中身は HEAD より後ろ** — コミットすると反映済みの仕事が消える)。診断は `git reflog show main`、復旧は `git restore --source=HEAD --staged --worktree -- .`
-- 本体 checkout での直コミットは可(ドキュメント等)。main の ref を動かす操作のうち止まるのは上記の反映系だけ
+- 本体 checkout での直コミットは可(ドキュメント等。**`.claude/skills` / `.claude/rules` は除く** — worktree に積んで反映指示を待つ)。main の ref を動かす操作のうち止まるのは上記の反映系だけ
 
 ## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
 

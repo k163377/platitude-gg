@@ -35,6 +35,10 @@ Item {
     property string pointedEolExt: ""
     /// The pointer arrived at, or left, a row carrying the mark.
     signal eolPointed(string path, bool on)
+    /// Stands in for the pointer where headless cannot put one, so a
+    /// cut-down row's tooltip can be photographed (PG_AUTO_ACT=path-tip).
+    /// -1 points at no row.
+    property int pointedTipRow: -1
     property string kindHint: "branch"
     /// The current branch's ahead / behind. What travels is the two
     /// numbers — the row draws the arrows itself (`HeadTrack`).
@@ -403,44 +407,41 @@ Item {
         }
     }
     // Hover says where this row leads — the one thing the row itself
-    // cannot show (デザイン規約 §hover のツールチップ). A name that the
-    // sentence carries doubles as the full name of a nested leaf, which
-    // is why the wording always spells the row out; where there is no
-    // sentence to write, the full name stands on its own. Local branches
-    // and tags have no sentence to write: the section names the kind and
-    // the gesture is the same on every row of it, so `Switch to <name>`
-    // and `Create a branch at <name>` only read the label back
-    // (§hover のツールチップ「足すものが 1 つも無い的には、何も出さない」)
-    // — a shortened name is all that is left to say, the same answer the
-    // row the working tree is on already gave. That one keeps its colour
-    // here too, and colouring means rich text, so the name is escaped
-    // (a refname may hold & and <).
+    // cannot show (デザイン規約 §hover のツールチップ). Only the two
+    // sentences that name somewhere the row is not survive that bar:
+    // a remote branch spells the remote-qualified name, a worktree
+    // opens as another tab. The refs say nothing at all — the section
+    // names the kind, the gesture is the same on every row of it, and
+    // even the full name of a leaf folded into its folders only reads
+    // the tree back, the same path the pointer just came down through.
+    // A stash reaches the same answer its own way: the row *is* the
+    // message, the full name is the selector (`stash@{0}`), which
+    // nobody hovers to learn, and a message the row had to cut short
+    // is a click away, in the details pane that reads it anyway
+    // (§hover のツールチップ「足すものが 1 つも無い的には、何も出さない」).
     readonly property string hoverText: {
         const full = navRow.fullName
         if (navRow.folder)
             return ""
-        if (navRow.kindHint === "branch" && navRow.is_head)
-            return full === navRow.name ? ""
-                   : "<font color=\"" + Theme.textLink + "\">"
-                     + navRow.escapeMarkup(full) + "</font>"
         if (navRow.kindHint === "remote")
             return qsTr("Switch to %1").arg(full)
         if (navRow.kindHint === "worktree")
             return qsTr("Open %1 in a new tab").arg(full)
-        // The same answer for a stash, reached its own way: the row *is*
-        // the message, so a tooltip reads the label straight back. Nor can
-        // the full name stand in for it the way it does below — here that
-        // is the selector (`stash@{0}`), which nobody hovers to learn. A
-        // message the row had to cut short is a click away, in the details
-        // pane that reads it anyway.
-        if (navRow.kindHint === "stash")
+        if (navRow.kindHint === "branch" || navRow.kindHint === "tag"
+                || navRow.kindHint === "stash")
             return ""
         // A row carrying the line-ending mark has a card of its own, which
         // names the path as its first line — two things opening off one
         // pointer would sit on top of each other.
         if (navRow.eolPointedAt)
             return ""
-        return full !== navRow.name ? full : ""
+        // What is left is a file row, whose leaf the tree cut to its
+        // last segment: the path is the one thing the row cannot show.
+        // A row the pane elided is the same case reached another way —
+        // the paths view's display name *is* the full path, so elision
+        // alone leaves it unsaid (the menu rows' own rule, デザイン規約
+        // §メニュー).
+        return full !== navRow.name || nameLabel.truncated ? full : ""
     }
     /// Whether the words on the model are this row's. Only one row can be
     /// pointed at, so they are kept once there rather than on every row
@@ -455,12 +456,12 @@ Item {
                             navRow.pointedEolTo, navRow.pointedEolLines,
                             navRow.pointedEolScope, navRow.pointedEolExt)
         : ""
-    function escapeMarkup(text) {
-        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;")
-                   .replace(/>/g, "&gt;")
-    }
-    ToolTip.visible: itemMouse.containsMouse && !navRow.editing
-                     && navRow.hoverText !== ""
+    /// Whether the headless stand-in points at this row. The report
+    /// still reads the ToolTip's own visible — the output side, as
+    /// everywhere.
+    readonly property bool tipPointedAt: navRow.pointedTipRow === navRow.index
+    ToolTip.visible: (itemMouse.containsMouse || navRow.tipPointedAt)
+                     && !navRow.editing && navRow.hoverText !== ""
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: navRow.hoverText
 }

@@ -10,9 +10,10 @@ import platitude.ui
 // it, when, and whoever they credited.
 //
 // A card rather than a `ToolTip`: a tooltip is a string laid out in one
-// block, its ground is the Fusion default from outside this theme, and
-// it appears wherever the style decides — which is what made the old one
-// feel detached from the pointer (P3-確認事項 §B).
+// block, and it appears wherever the style decides — which is what made
+// the old one feel detached from the pointer (P3-確認事項 §B). The ground
+// stopped being a reason when the shared tip took the same card
+// (`Main.dressToolTip`); the one-block shape is still one.
 //
 // It answers and offers nothing: nothing in it opens anything further.
 // Whoever wants the addresses behind the credited names, or the message

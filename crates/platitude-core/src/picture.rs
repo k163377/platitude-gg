@@ -52,18 +52,22 @@ pub const MAX_PIXELS: u64 = 32_000_000;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum PictureError {
-    /// Not a PNG or a JPEG, or one that will not come apart.
-    #[error("this is not a picture that can be read")]
+    /// Not a PNG or a JPEG, or one that will not come apart. The sentence
+    /// names the two formats rather than a category: every category word
+    /// for the file is a second name for the avatar, and the settings card
+    /// puts this line directly under the one word it uses
+    /// (デザイン規約 §アバターを与える).
+    #[error("this file is not a PNG or a JPEG that can be read")]
     Unreadable,
     /// The dimensions are named because the ceiling a person was told
     /// about is the file size — without them, a 2MB file being refused
     /// has no explanation at all.
-    #[error("the picture is {width}x{height}, past the {} megapixels this can take", MAX_PIXELS / 1_000_000)]
+    #[error("this file is {width}x{height}, past the {} megapixels this can take", MAX_PIXELS / 1_000_000)]
     TooManyPixels { width: u32, height: u32 },
-    /// The picture came apart but the small copy could not be written.
-    /// Only a bug or an allocator that gave up reaches this, so the
-    /// wording does not ask anybody to do anything.
-    #[error("the picture could not be stored")]
+    /// The file came apart but the small copy could not be written. Only a
+    /// bug or an allocator that gave up reaches this, so the wording does
+    /// not ask anybody to do anything.
+    #[error("the avatar could not be stored")]
     Unstorable,
 }
 

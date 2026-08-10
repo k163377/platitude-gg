@@ -135,7 +135,7 @@ HoverToolButton {
     ///
     /// A frame is a box put round a word, and a short word draws a box the
     /// eye reads as a chip rather than as something to press. Measured
-    /// across the family: `fetch` / `push` 93, `Choose image…` 118,
+    /// across the family: `fetch` / `push` 93, `Choose avatar…` 118,
     /// `Choose again…` 126, `Open repository…` 132 — against `OK` at 31,
     /// the gate's `Close` at 47, `Add` at 50 and `Save` at 54. The floor
     /// is the width Fusion held the same buttons at before the face came

@@ -79,6 +79,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "manytags" => manytags(&mut repo)?,
         "edges" => edges(&mut repo)?,
         "long" => long(&mut repo)?,
+        "longpaths" => longpaths(&mut repo)?,
         "empty" => {}
         other => return Err(format!("unknown preset: {other}")),
     }
@@ -607,6 +608,24 @@ fn long(repo: &mut DemoRepo) -> Result<(), String> {
     std::fs::remove_file(repo.work.join("src/net/part_08.rs"))
         .map_err(|e| format!("removing src/net/part_08.rs: {e}"))?;
     repo.git(&["mv", "docs/part_00.md", "docs/renamed.md"])?;
+    Ok(())
+}
+
+/// One file under a path wider than any pane, committed and then changed
+/// again: the flat paths views (the commit's file list and the working
+/// tree's) each hold a row that middle-elides at any sane width, which
+/// is the state the row's hover has to answer (PG_AUTO_ACT=path-tip).
+/// The dirty tree keeps the graph shape fixed: row 0 is the WIP row,
+/// row 1 the commit that holds the file.
+fn longpaths(repo: &mut DemoRepo) -> Result<(), String> {
+    const FAR: &str =
+        "crates/platitude-core/src/session/integration/support/fixtures/refs_join_snapshot.rs";
+    repo.commit(
+        FAR,
+        "// kept far down the tree\n",
+        "feat: keep a fixture far down the tree",
+    )?;
+    repo.write(FAR, "// kept far down the tree\n// and changed\n")?;
     Ok(())
 }
 
