@@ -7,12 +7,18 @@ import platitude.ui
 // floating in it: it has nothing to do with the filter it stands next
 // to, and on the same bare ground it read as part of the input. The
 // whole block takes the click, so the reach is the band's full height.
+//
+// It says nothing on hover. Every other icon-only control in the window
+// carries a tooltip, but this one names itself twice over: the chevrons
+// are the standing idiom for a panel folding away, and the answer is on
+// screen the moment it is pressed and one press from being taken back
+// (デザイン規約 §左メニューを畳む). The name lives on `Accessible.name`,
+// where the people who cannot read the mark still get it.
 Rectangle {
     id: block
     /// Which way the list goes when this is pressed — away to the left,
     /// or back out to the right.
     property bool folds: true
-    property string tip: ""
     /// Whether something stands to its left to be divided from. False
     /// when the block is the whole band (folded), where the hairline
     /// would land on the window's own edge.
@@ -24,6 +30,12 @@ Rectangle {
     HoverToolButton {
         anchors.fill: parent
         padding: 0
+        // Square, edge to edge: this is a band's worth of ground, and
+        // the headers, rows and rail cells it stands among all wash
+        // without a corner of their own.
+        washRadius: 0
+        Accessible.name: block.folds ? qsTr("Fold the list to its icons")
+                                     : qsTr("Unfold the list")
         // Carried in a box of its own rather than sized by the button:
         // the mark stands beside the sections' icons on the folded rail
         // and has to be the same weight and the same 20 as they are.
@@ -37,9 +49,6 @@ Rectangle {
                 rotation: block.folds ? 180 : 0
             }
         }
-        ToolTip.visible: hovered
-        ToolTip.delay: Metrics.tipDelayMs
-        ToolTip.text: block.tip
         onClicked: block.activated()
     }
     // What divides it from the band it sits at the end of.

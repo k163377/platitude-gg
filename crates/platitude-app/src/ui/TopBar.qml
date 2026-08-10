@@ -394,10 +394,10 @@ Rectangle {
                 height: tabStrip.height
                 padding: 0
                 Accessible.name: qsTr("Application menu")
-                // Written out instead of borrowing HoverToolButton: that
-                // one rounds its wash and the rail's cells do not. An open
-                // menu keeps the wash — what is on screen has to say which
-                // mark put it there (`NavRail`).
+                // Written out instead of borrowing HoverToolButton: an
+                // open menu keeps the wash, which no hover of its own can
+                // say — what is on screen has to say which mark put it
+                // there (`NavRail`).
                 background: Rectangle {
                     color: menuButton.hovered || appMenu.opened
                            ? Theme.bgHover : "transparent"

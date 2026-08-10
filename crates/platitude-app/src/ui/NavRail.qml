@@ -135,7 +135,6 @@ Rectangle {
             width: parent.width
             height: Theme.headerHeight
             folds: false
-            tip: qsTr("Unfold the list")
             divided: false
             onActivated: rail.unfoldRequested()
             // The hairline the filter's underline leaves behind, so the
