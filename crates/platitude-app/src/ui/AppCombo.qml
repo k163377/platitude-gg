@@ -111,7 +111,7 @@ ComboBox {
                 if (combo.popup.opened)
                     combo.popup.close()
                 else
-                    combo.popup.open()
+                    combo.offer()
             }
         }
         Label {
@@ -131,16 +131,23 @@ ComboBox {
         width: Theme.iconMd
         height: Theme.iconMd
         NavIcon {
+            id: seatMark
             anchors.fill: parent
-            kind: combo.loading ? "spinner" : "chevron"
+            // Nothing to open, nothing to point at (see `hasList`).
+            visible: combo.hasList
+            // The ring turns in one place at a time: here while the card
+            // is shut, inside the card once it is up — two of them a row
+            // apart would be one waiting said twice.
+            readonly property bool waits: combo.loading && !combo.popup.opened
+            kind: waits ? "spinner" : "chevron"
             tint: Theme.textSecondary
             // Only the turning one is animated; the arrow keeps the angle
             // it was drawn at (an animator leaves it where it stopped).
-            rotation: combo.loading ? 0 : 90
+            rotation: waits ? 0 : 90
             // On the render thread, so it keeps turning while the GUI
             // thread drains models.
             RotationAnimator on rotation {
-                running: combo.loading && AppBackend.shotDir === ""
+                running: seatMark.waits && AppBackend.shotDir === ""
                 loops: Animation.Infinite
                 from: 0
                 to: 360
@@ -149,10 +156,52 @@ ComboBox {
         }
     }
 
+    /// Opens the list. A read still out counts as something to open —
+    /// the card says so with its own ring (see `hasList`).
+    function offer() {
+        if (combo.hasList)
+            combo.popup.open()
+    }
+
+    /// Whether there is anything to open at all — rows, or a read that
+    /// may still bring some.
+    ///
+    /// A read that is still out is not the same as an empty list, and
+    /// the card is where that difference gets said: it opens, and the
+    /// ring inside it says the rows are not here yet
+    /// (デザイン規約 §進行中・長押しの定数 — 進行中を言うのはリングの
+    /// 仕事). Refusing to open while the read is out would leave the
+    /// press with no answer at all, which reads as broken.
+    ///
+    /// With neither, the field is just a box to type in and says so by
+    /// dropping the seat's mark: a chevron over a list that can never
+    /// open is a lie.
+    readonly property bool hasList: combo.count > 0 || combo.loading
+    // The read came back with nothing while the card was up. Nothing is
+    // an answer, and the card has no way to say it — so the card goes,
+    // and the mark goes with it.
+    onHasListChanged: if (!combo.hasList) combo.popup.close()
+
     popup: Popup {
         y: combo.height
         width: combo.width
         padding: Theme.spaceXs
+        // The other way in is the control's own press, which Qt takes
+        // before anything here sees it.
+        //
+        // The arrows start from the answer as well, so the wash that says
+        // where they are does not land on a row nobody picked while the
+        // picked one sits beside it wearing another ground. Only where
+        // the list is the whole set of answers: moving `currentIndex` on
+        // an editable one drags the text with it (see `wanted`).
+        onAboutToShow: {
+            if (!combo.hasList) {
+                combo.popup.close()
+                return
+            }
+            if (combo.pickOnly)
+                combo.currentIndex = combo.find(combo.wanted)
+        }
         // The padding is the popup's, not the list's, so it has to be
         // added on — a height of just the rows leaves the last one cut.
         implicitHeight: Math.min(contentItem.implicitHeight, Theme.rowHeight * 8)
@@ -163,12 +212,37 @@ ComboBox {
             border.color: Theme.borderDefault
             border.width: Theme.borderWidth
         }
-        contentItem: ListView {
-            clip: true
-            implicitHeight: contentHeight
-            model: combo.delegateModel
-            currentIndex: combo.highlightedIndex
-            ScrollBar.vertical: AutoScrollBar {}
+        // A card with a ring in it while the rows are still being read,
+        // and the rows themselves once they land. The height is a row's
+        // worth for the ring to stand in, so the card that opens on a
+        // press is the same size as the card that answers it.
+        contentItem: Item {
+            implicitHeight: rows.count > 0 ? rows.contentHeight : Theme.rowHeight
+            NavIcon {
+                id: cardRing
+                anchors.centerIn: parent
+                width: Theme.iconMd
+                height: Theme.iconMd
+                visible: rows.count === 0 && combo.loading
+                kind: "spinner"
+                tint: Theme.textSecondary
+                RotationAnimator on rotation {
+                    running: cardRing.visible && AppBackend.shotDir === ""
+                    loops: Animation.Infinite
+                    from: 0
+                    to: 360
+                    duration: Metrics.spinMs
+                }
+            }
+            ListView {
+                id: rows
+                anchors.fill: parent
+                clip: true
+                implicitHeight: contentHeight
+                model: combo.delegateModel
+                currentIndex: combo.highlightedIndex
+                ScrollBar.vertical: AutoScrollBar {}
+            }
         }
     }
 
@@ -183,6 +257,14 @@ ComboBox {
         /// menu gives one on each side (デザイン規約 §メニュー).
         readonly property int lead: row.acts
                                     ? 2 * Theme.spaceXs + Theme.borderWidth : 0
+        /// The answer this list is already carrying. Without it the list
+        /// opens with a row washed that has nothing to do with the value
+        /// — Qt puts its highlight on whatever the keyboard would move
+        /// from — so the one row the reader came to find is the one row
+        /// nothing points at (デザイン規約 §選ぶ欄と打つ欄).
+        readonly property bool current:
+            !row.acts && row.modelData !== ""
+            && row.modelData === (combo.pickOnly ? combo.wanted : combo.editText)
         width: combo.width - 2 * Theme.spaceXs
         height: Theme.rowHeight + row.lead
         topPadding: row.lead
@@ -198,6 +280,18 @@ ComboBox {
                 height: Theme.borderWidth
                 color: Theme.borderSubtle
                 visible: row.acts
+            }
+            // Two grounds, because they answer two questions: which row
+            // is the value (§色 bgSelected = 選択行) and which row the
+            // hand is on. The wash is an overlay colour, so it lies over
+            // the selected ground without either one being lost.
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: Theme.rowHeight
+                radius: Theme.radiusSm
+                color: row.current ? Theme.bgSelected : "transparent"
             }
             Rectangle {
                 anchors.left: parent.left
