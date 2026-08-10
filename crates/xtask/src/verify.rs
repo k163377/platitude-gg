@@ -456,6 +456,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "identity-tip" => Some("identity_tip unsaved=true badge=true tip=true"),
         "signature-tip" => Some("signature_tip code=E tip=true"),
         "stash-tip" => Some("stash_tip blocked=true tip=true"),
+        // The fourth: an elided paths-view row whose hover says the
+        // whole name. One verb serves both panes (the argument picks
+        // one), so the wanted line names neither — `tree=false` is the
+        // flattened view, `tip=` the shared instance's own visible.
+        "path-tip" => Some("tree=false tip=true"),
         // An emptied panel with a red mark over it and an emptied panel
         // with a quiet one frame the same from the waist down: the panel
         // is the picture, and the mark is 12 pixels of it in a corner.

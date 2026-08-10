@@ -21,6 +21,10 @@ ColumnLayout {
     // whether HEAD is already on a remote (shows the warning tag).
     property bool amending: false
     property bool headPublished: false
+    /// Stands in for the pointer on a file row, so a cut-down paths-view
+    /// row's tooltip can be photographed (PG_AUTO_ACT=path-tip). -1
+    /// points at no row.
+    property int pointedTipRow: -1
 
     signal amendToggled(bool on)
     signal commitClicked()
@@ -1035,6 +1039,7 @@ ColumnLayout {
             chosen: wipPane.isChosen(bucket, fullName)
             sideOurs: wipPane.workTree.sideOurs
             sideTheirs: wipPane.workTree.sideTheirs
+            pointedTipRow: wipPane.pointedTipRow
             pointedEolPath: wipPane.worktreeModel.pointedEolPath
             pointedEolKind: wipPane.worktreeModel.pointedEolKind
             pointedEolFrom: wipPane.worktreeModel.pointedEolFrom

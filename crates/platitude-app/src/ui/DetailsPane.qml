@@ -60,6 +60,9 @@ ColumnLayout {
     readonly property bool signatureTipShown: signatureMark.ToolTip.visible
     property bool summaryPointedAt: false
     readonly property bool summaryTipShown: subjectArea.ToolTip.visible
+    /// The same stand-in for a file row, so a cut-down paths-view row's
+    /// tooltip can be photographed (path-tip). -1 points at no row.
+    property int pointedTipRow: -1
     function avatarClicked() {
         if (detailsPane.details.authorEmail !== "")
             detailsPane.avatarEditRequested(detailsPane.details.authorName,
@@ -1043,6 +1046,7 @@ ColumnLayout {
         ScrollBar.vertical: AutoScrollBar {}
         delegate: FileRowDelegate {
             listWidth: fileList.width
+            pointedTipRow: detailsPane.pointedTipRow
             onActivated: (bucket, path, origPath) =>
                 detailsPane.fileActivated(path, origPath)
             onFolderToggled: key => detailsPane.details.toggleFolder(key)

@@ -2129,6 +2129,36 @@ Item {
             "stash_tip blocked=" + (detailsPane.editBlocked !== "")
             + " tip=" + detailsPane.summaryTipShown)
     }
+    // The tooltip half of path-tip: the list has to land before a row
+    // can be pointed at, and the report then waits out tipDelayMs so
+    // what it reads is the tip on screen. It reads the shared instance
+    // itself — the one thing that can also say the words on it.
+    Timer {
+        id: pathTipTimer
+        property bool wipSide: true
+        interval: 800
+        onTriggered: {
+            if (pathTipTimer.wipSide)
+                wipPane.pointedTipRow = 0
+            else
+                detailsPane.pointedTipRow = 0
+            pathTipReport.start()
+        }
+    }
+    Timer {
+        id: pathTipReport
+        interval: 800
+        onTriggered: {
+            const tip = page.ToolTip.toolTip
+            AppBackend.report("path_tip pane="
+                + (pathTipTimer.wipSide ? "wip" : "details")
+                + " tree=" + (pathTipTimer.wipSide
+                              ? worktreeModel.treeView
+                              : detailsModel.treeView)
+                + " tip=" + tip.visible
+                + " text=" + tip.text)
+        }
+    }
     // Automation: the details have to land before the author card can be
     // worked, since it is that author the picture is filed against.
     Timer {
@@ -2778,6 +2808,21 @@ Item {
             // caret. The argument is the row.
             page.activateRow(graphModel.oidAt(Number(arg)))
             stashTipTimer.start()
+        } else if (act === "path-tip") {
+            // The whole name an elided paths-view row keeps for its
+            // hover: the view is flattened, its first row is pointed at
+            // the way a pointer would be, and the shared tip answers.
+            // The argument picks the pane the way `corner` does — "wip"
+            // for the working tree, a row for the commit's file list.
+            pathTipTimer.wipSide = arg === "" || arg === "wip"
+            if (pathTipTimer.wipSide) {
+                page.showWip()
+                worktreeModel.setTreeView(false)
+            } else {
+                page.activateRow(graphModel.oidAt(Number(arg)))
+                detailsModel.setTreeView(false)
+            }
+            pathTipTimer.start()
         } else if (act === "row-card") {
             // Hover cannot be injected, so this enters where the row's
             // delay timer would. The argument is the row.

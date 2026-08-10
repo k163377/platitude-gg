@@ -60,6 +60,8 @@ commands:
         edges     every string at both ends of what git allows, in Japanese
         long      a message, a commit and a work tree that all run past
                   the pane they are shown in (80 files, 60-odd unstaged)
+        longpaths one committed-then-changed file under a path wider than
+                  any pane: both paths views elide it (path-tip)
         empty     `git init` and nothing else
 
   verify-ui <verb> [arg] [options]

@@ -35,6 +35,10 @@ Item {
     property string pointedEolExt: ""
     /// The pointer arrived at, or left, a row carrying the mark.
     signal eolPointed(string path, bool on)
+    /// Stands in for the pointer where headless cannot put one, so a
+    /// cut-down row's tooltip can be photographed (PG_AUTO_ACT=path-tip).
+    /// -1 points at no row.
+    property int pointedTipRow: -1
     property string kindHint: "branch"
     /// The current branch's ahead / behind. What travels is the two
     /// numbers — the row draws the arrows itself (`HeadTrack`).
@@ -433,7 +437,11 @@ Item {
             return ""
         // What is left is a file row, whose leaf the tree cut to its
         // last segment: the path is the one thing the row cannot show.
-        return full !== navRow.name ? full : ""
+        // A row the pane elided is the same case reached another way —
+        // the paths view's display name *is* the full path, so elision
+        // alone leaves it unsaid (the menu rows' own rule, デザイン規約
+        // §メニュー).
+        return full !== navRow.name || nameLabel.truncated ? full : ""
     }
     /// Whether the words on the model are this row's. Only one row can be
     /// pointed at, so they are kept once there rather than on every row
@@ -448,8 +456,12 @@ Item {
                             navRow.pointedEolTo, navRow.pointedEolLines,
                             navRow.pointedEolScope, navRow.pointedEolExt)
         : ""
-    ToolTip.visible: itemMouse.containsMouse && !navRow.editing
-                     && navRow.hoverText !== ""
+    /// Whether the headless stand-in points at this row. The report
+    /// still reads the ToolTip's own visible — the output side, as
+    /// everywhere.
+    readonly property bool tipPointedAt: navRow.pointedTipRow === navRow.index
+    ToolTip.visible: (itemMouse.containsMouse || navRow.tipPointedAt)
+                     && !navRow.editing && navRow.hoverText !== ""
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: navRow.hoverText
 }
