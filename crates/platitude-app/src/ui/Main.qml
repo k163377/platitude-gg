@@ -1096,7 +1096,45 @@ ApplicationWindow {
             root.reportState()
     }
 
+    /// The shared tooltip — the one popup in this app nobody declares.
+    /// The attached property builds it from the style, so it arrives in
+    /// Fusion's own clothes: a pale yellow ground, a frame that reads the
+    /// *text* role (so the palette cannot separate the two), and a drawn
+    /// shadow. Reaching it is the only way to dress it, and dressing it
+    /// once reaches every `ToolTip.text` in the tree.
+    readonly property var sharedTip: mainUi.ToolTip.toolTip
+    /// Puts the app's own card on it: the same ground, frame, radius and
+    /// padding every other card stands on (`RefListPopup` / `EolHoverCard`
+    /// / `CommitHoverCard` — デザイン規約 §背景 names `bgElevated` as the
+    /// tooltip's ground). The word keeps the window's font: this is an
+    /// ordinary UI sentence, and `fontMd` is what the table calls that.
+    /// The shadow goes with the rest — no other card casts one.
+    function dressToolTip() {
+        root.sharedTip.background = tipGround.createObject(root.sharedTip)
+        root.sharedTip.contentItem = tipWord.createObject(root.sharedTip)
+        root.sharedTip.padding = Theme.spaceSm
+    }
+    Component {
+        id: tipGround
+        Rectangle {
+            color: Theme.bgElevated
+            radius: Theme.radiusMd
+            border.color: Theme.borderDefault
+            border.width: Theme.borderWidth
+        }
+    }
+    Component {
+        id: tipWord
+        Text {
+            text: root.sharedTip.text
+            font: root.sharedTip.font
+            color: Theme.textPrimary
+            wrapMode: Text.Wrap
+        }
+    }
+
     Component.onCompleted: {
+        root.dressToolTip()
         root.decorateWindow()
         // A window that is only here to say another process has the files
         // does none of the rest: no git to ask about, no tabs to open, no

@@ -10,9 +10,9 @@ import platitude.ui
 // same sentence the diff pane puts above the hunks.
 //
 // A card rather than a `ToolTip`, for the reason `CommitHoverCard` is one:
-// a tooltip's ground is the Fusion default from outside this theme — a
-// pale yellow, which puts warning-coloured words on a cream field. This
-// is the app's own ground, the same one every other card stands on.
+// a tooltip holds one string in one colour, and this has two lines of
+// which only the second is warning-coloured. The ground is no longer the
+// reason — tooltips stand on this same card now (`Main.dressToolTip`).
 //
 // It answers and offers nothing. Whoever wants the lines themselves opens
 // the diff, which is one click away on the row the card came from.
