@@ -4066,10 +4066,18 @@ Item {
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                     }
-                    HoverButton {
+                    // A plain frame, the same as the empty page's lone
+                    // button and the gate's: the accent belongs to the
+                    // button somebody came to press, and what this screen
+                    // offers is the way out of a folder that would not
+                    // open (規約 §肯定側のボタン).
+                    ActionButton {
+                        implicitHeight: Theme.controlHeight
                         text: qsTr("Close tab")
+                        frameColor: Theme.borderDefault
+                        activeFocusOnTab: true
                         anchors.horizontalCenter: parent.horizontalCenter
-                        onClicked: page.closeTabRequested()
+                        onActivated: page.closeTabRequested()
                     }
                 }
             }

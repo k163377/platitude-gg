@@ -1007,10 +1007,20 @@ Rectangle {
             horizontalAlignment: Text.AlignHCenter
             anchors.horizontalCenter: parent.horizontalCenter
         }
-        HoverButton {
+        // A plain frame, not the accent: the accent is for the button
+        // somebody came to press, and this page is what stands there when
+        // nobody has opened anything yet. A frame all the same — bare is
+        // the shape an answer takes beside a framed one, and there is
+        // nothing beside this to read it against; under two lines of
+        // centred text a button with no edge is a third line
+        // (規約 §肯定側のボタン / §枠を持てる場所にだけ枠を出す).
+        ActionButton {
+            implicitHeight: Theme.controlHeight
             text: qsTr("Open repository…")
+            frameColor: Theme.borderDefault
+            activeFocusOnTab: true
             anchors.horizontalCenter: parent.horizontalCenter
-            onClicked: graphArea.openRepositoryRequested()
+            onActivated: graphArea.openRepositoryRequested()
         }
     }
 }

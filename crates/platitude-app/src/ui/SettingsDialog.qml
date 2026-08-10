@@ -377,14 +377,23 @@ AppDialog {
                         onTriggered: avatarWho.popup.open()
                     }
                 }
-                HoverButton {
+                ActionButton {
                     id: chooseImage
+                    implicitHeight: Theme.controlHeight
                     text: qsTr("Choose image…")
                     // Opened from an avatar this already holds the focus,
-                    // so the whole errand is one press and the picker.
-                    highlighted: settingsDialog.prefillEmail !== ""
+                    // so the whole errand is one press and the picker —
+                    // and the accent says so, since the frame is what
+                    // names the affirmative here (規約 §肯定側のボタン).
+                    // Away from the accent it keeps a plain frame rather
+                    // than going bare: bare is for the answer standing
+                    // beside a framed one, read as the pair it is in, and
+                    // this one stands in a form row next to a combo.
+                    frameColor: settingsDialog.prefillEmail !== "" && enabled
+                                ? Theme.accent : Theme.borderDefault
+                    activeFocusOnTab: true
                     enabled: settingsDialog.chosenEmail !== ""
-                    onClicked: picturePicker.open()
+                    onActivated: picturePicker.open()
                 }
             }
             Label {
@@ -427,10 +436,19 @@ AppDialog {
             // button to do. A Cancel here would promise to put back a
             // picture that was assigned the moment it was named, and a
             // Save would claim credit for writes that already happened.
-            HoverButton {
-                highlighted: settingsDialog.prefillEmail === ""
+            ActionButton {
+                implicitHeight: Theme.controlHeight
                 text: qsTr("OK")
-                onClicked: settingsDialog.close()
+                // The accent goes to whichever of the two the dialog was
+                // opened for, and the other keeps a plain frame — the
+                // same one expression, read the other way round
+                // (`chooseImage`). No icon: a check would claim credit
+                // for writes that already happened, which is the very
+                // thing the comment above says a `Save` here must not do.
+                frameColor: settingsDialog.prefillEmail === ""
+                            ? Theme.accent : Theme.borderDefault
+                activeFocusOnTab: true
+                onActivated: settingsDialog.close()
             }
         }
     }

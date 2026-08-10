@@ -32,7 +32,6 @@ GraphPane 1.0 GraphPane.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml
 HeadTrack 1.0 HeadTrack.qml
 HoldIcon 1.0 HoldIcon.qml
-HoverButton 1.0 HoverButton.qml
 HoverToolButton 1.0 HoverToolButton.qml
 IdentIcon 1.0 IdentIcon.qml
 IdentityDialog 1.0 IdentityDialog.qml

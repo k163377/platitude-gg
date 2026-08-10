@@ -1230,14 +1230,17 @@ ApplicationWindow {
             // The way out. There is no title bar of its own to close this
             // window by when the band is the title bar, and the band is
             // inside the part that stays hidden.
-            // Not `highlighted`: the accent is for the button somebody
-            // came to press (規約 §アクセント), and nobody came here. The
-            // empty page's lone button is the same shape.
-            HoverButton {
+            // A plain frame, not the accent: the accent is for the button
+            // somebody came to press (規約 §アクセント), and nobody came
+            // here. The empty page's lone button is the same shape.
+            ActionButton {
                 visible: AppBackend.alreadyRunning
+                implicitHeight: Theme.controlHeight
                 text: qsTr("Close")
+                frameColor: Theme.borderDefault
+                activeFocusOnTab: true
                 anchors.horizontalCenter: parent.horizontalCenter
-                onClicked: root.close()
+                onActivated: root.close()
             }
             // The drawn ring, not Fusion's BusyIndicator — the same
             // turning mark as everywhere else in the window
