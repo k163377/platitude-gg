@@ -911,6 +911,13 @@ ColumnLayout {
                             font.family: Theme.monoFamily
                             color: Theme.textLink
                             font.pixelSize: Theme.fontSm
+                            // The arrow and the hash are one phrase, so they
+                            // sit as close as the plate above holds its hash
+                            // and copy icon. The mono space is not a value
+                            // anyone chose — it is a whole cell (7px here)
+                            // where that pair reads 6 at a font one step
+                            // larger, so it is half a gap too wide.
+                            font.wordSpacing: -Theme.spaceXs / 2
                             font.underline: parentHover.containsMouse
                             ToolTip.visible: parentHover.containsMouse
                             ToolTip.delay: Metrics.tipDelayMs
