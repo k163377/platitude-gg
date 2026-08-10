@@ -50,6 +50,22 @@ async fn current_op(repo: &TestRepo) -> Option<InProgress> {
     InProgress::from_state(&state)
 }
 
+/// Nothing of the operation is left on disk: not the marker a badge
+/// reads, and not the sequence a `--skip` steps. The two come apart —
+/// a revert that records nothing leaves the sequence without the
+/// marker, so `current_op` on its own calls a half-walked sequence
+/// clean.
+async fn nothing_in_progress(repo: &TestRepo) {
+    assert_eq!(current_op(repo).await, None, "no operation for a badge");
+    let (exec, cancel) = env();
+    assert!(
+        !opstate::sequence_pending(&exec, &repo.path, &cancel)
+            .await
+            .expect("sequence state"),
+        "no sequence left standing"
+    );
+}
+
 #[tokio::test]
 async fn merge_fast_forward_and_no_ff() {
     let mut repo = TestRepo::init();
@@ -1006,6 +1022,156 @@ async fn cherry_pick_and_revert() {
         r#"Revert "wanted elsewhere""#
     );
     assert_eq!(current_op(&repo).await, None);
+}
+
+/// A commit whose changes the branch already has records nothing, and
+/// git stops there rather than dropping it — exit 1 with the sequencer
+/// state left standing, which is a badge on the toolbar and a panel over
+/// the log for something nobody has to do anything about. The branch is
+/// left exactly as it was, with no operation in progress
+/// (デザイン規約 §履歴を合流させる).
+#[tokio::test]
+async fn a_cherry_pick_the_branch_already_has_leaves_nothing_behind() {
+    use crate::support::Ends;
+    use platitude_core::process::CommandEnd;
+    use std::sync::Arc;
+
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "base\n", "root");
+    repo.git(&["checkout", "-b", "side"]);
+    let picked = repo.commit_file("f.txt", "base\nsame\n", "the change");
+    repo.git(&["checkout", "main"]);
+    // main arrives at the identical content under a commit of its own,
+    // so replaying `picked` here has nothing left to write.
+    repo.commit_file("f.txt", "base\nsame\n", "the same change, arrived at here");
+    let before = repo.git(&["rev-parse", "HEAD"]);
+
+    let ends = Arc::new(Ends::default());
+    let exec = GitExecutor::new().observed(Arc::clone(&ends) as _, true);
+    let cancel = CancellationToken::new();
+    integrate::cherry_pick(&exec, &repo.path, &[picked], &cancel)
+        .await
+        .expect("a pick with nothing in it is not a failure");
+
+    assert_eq!(
+        repo.git(&["rev-parse", "HEAD"]),
+        before,
+        "no commit written"
+    );
+    nothing_in_progress(&repo).await;
+    assert_eq!(repo.git(&["status", "--porcelain"]), "", "tree untouched");
+
+    // The stop is an answer, so the log keeps the row without raising
+    // itself over it (規約 §終了コードで答える問い合わせ).
+    let recorded = ends.0.lock().unwrap().clone();
+    assert!(
+        recorded
+            .iter()
+            .any(|end| matches!(end, CommandEnd::Answered(1))),
+        "the stop was recorded as an answer: {recorded:?}"
+    );
+    assert!(
+        !recorded
+            .iter()
+            .any(|end| matches!(end, CommandEnd::Exited(code) if *code != 0)),
+        "nothing here failed: {recorded:?}"
+    );
+}
+
+/// A commit that was empty when it was made is what was asked for, so it
+/// lands as it stands. That is what `--allow-empty` buys: without it git
+/// stops on those too, in the very same words as the pick above — and
+/// the two are not the same answer (実測 2.55).
+#[tokio::test]
+async fn a_commit_that_was_always_empty_is_picked_as_it_stands() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["checkout", "-b", "side"]);
+    repo.git(&["commit", "--allow-empty", "-m", "a marker of its own"]);
+    let empty = repo.git(&["rev-parse", "HEAD"]);
+    repo.git(&["checkout", "main"]);
+    let (exec, cancel) = env();
+
+    integrate::cherry_pick(&exec, &repo.path, &[empty], &cancel)
+        .await
+        .expect("cherry-pick");
+    assert_eq!(
+        repo.git(&["log", "-1", "--format=%s"]),
+        "a marker of its own"
+    );
+    nothing_in_progress(&repo).await;
+}
+
+/// The commits either side of an empty one still land: `--skip` moves
+/// the sequence on rather than ending it.
+#[tokio::test]
+async fn the_commits_around_an_empty_pick_still_land() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "base\n", "root");
+    repo.git(&["checkout", "-b", "side"]);
+    let first = repo.commit_file("a.txt", "one\n", "before");
+    let empty = repo.commit_file("f.txt", "base\nsame\n", "the change");
+    let last = repo.commit_file("c.txt", "three\n", "after");
+    repo.git(&["checkout", "main"]);
+    repo.commit_file("f.txt", "base\nsame\n", "the same change, arrived at here");
+    let (exec, cancel) = env();
+
+    integrate::cherry_pick(&exec, &repo.path, &[first, empty, last], &cancel)
+        .await
+        .expect("cherry-pick");
+    assert_eq!(
+        repo.git(&["log", "-3", "--format=%s"]),
+        "after\nbefore\nthe same change, arrived at here"
+    );
+    nothing_in_progress(&repo).await;
+}
+
+/// A revert with nothing left to undo never reaches the sequencer at
+/// all: git refuses the commit it was about to write and the operation
+/// is over where it stands, so there is nothing to skip. The wording is
+/// `git commit`'s own, on stdout with stderr empty (実測 2.55).
+#[tokio::test]
+async fn a_revert_with_nothing_left_to_undo_lands_as_nothing() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\n", "root");
+    let added = repo.commit_file("f.txt", "one\ntwo\n", "adds the line");
+    repo.commit_file("f.txt", "one\n", "takes it back by hand");
+    let before = repo.git(&["rev-parse", "HEAD"]);
+    let (exec, cancel) = env();
+
+    integrate::revert(&exec, &repo.path, &[added], &cancel)
+        .await
+        .expect("a revert with nothing in it is not a failure");
+    assert_eq!(
+        repo.git(&["rev-parse", "HEAD"]),
+        before,
+        "no commit written"
+    );
+    nothing_in_progress(&repo).await;
+    assert_eq!(repo.git(&["status", "--porcelain"]), "");
+}
+
+/// Several reverts do go through the sequencer, and an empty one there
+/// stops it with the state standing — the same walk past as the pick,
+/// reached by a different message.
+#[tokio::test]
+async fn the_commits_around_an_empty_revert_still_land() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\n", "root");
+    let added = repo.commit_file("f.txt", "one\ntwo\n", "adds the line");
+    repo.commit_file("f.txt", "one\n", "takes it back by hand");
+    let keeps = repo.commit_file("k.txt", "keep\n", "adds k");
+    let (exec, cancel) = env();
+
+    integrate::revert(&exec, &repo.path, &[added, keeps], &cancel)
+        .await
+        .expect("revert");
+    assert_eq!(
+        repo.git(&["log", "-1", "--format=%s"]),
+        r#"Revert "adds k""#
+    );
+    assert!(!repo.path.join("k.txt").exists());
+    nothing_in_progress(&repo).await;
 }
 
 #[tokio::test]

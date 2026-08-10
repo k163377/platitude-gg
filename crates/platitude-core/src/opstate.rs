@@ -37,6 +37,29 @@ impl OpState {
     }
 }
 
+/// Whether a cherry-pick / revert sequence still has commits left to
+/// replay.
+///
+/// A different question from [`detect`]: the markers there say "an
+/// operation is standing here for someone to finish", while the todo
+/// list says "git has more commits to get through". They usually arrive
+/// together — but a revert that turns out to record nothing leaves the
+/// second without the first, because git refuses the commit it was
+/// about to write before any `REVERT_HEAD` exists, and the sequence
+/// stands there with its remaining steps (実測 2.55,
+/// `integrate_integration`).
+pub async fn sequence_pending(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["rev-parse", "--git-path", "sequencer/todo"]);
+    let out = executor.run(cmd, cancel).await?;
+    Ok(workdir.join(out.stdout_utf8().trim_end()).exists())
+}
+
 /// Detects in-progress operations for the repository at `workdir`.
 pub async fn detect(
     executor: &GitExecutor,
