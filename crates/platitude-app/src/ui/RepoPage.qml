@@ -1797,6 +1797,9 @@ Item {
     // click takes, so the wiring can be proven headlessly. The dispatch
     // is equality on a bare verb; the argument passes through as
     // whatever the verb needs (a name, an oid, a row number).
+    // ==== PG_AUTO_ACT band, from here to just before absorbWriteResult()
+    // (~1,500 lines): report timers and the runAutoAct() dispatch, all
+    // headless-verification harness. UI work seldom needs this band. ====
     Timer {
         id: autoActTimer
         interval: 1200
@@ -3276,6 +3279,7 @@ Item {
     // A finished write the editor asked for: clear it only once git
     // says the commit landed, so a rejected one keeps its text.
     property int seenWriteSeq: 0
+    // ==== end of the PG_AUTO_ACT band ====
     function absorbWriteResult() {
         if (repoTab.writeSeq === page.seenWriteSeq)
             return
@@ -3533,6 +3537,9 @@ Item {
     DiffModel { id: diffModel }
     NavSectionModel { id: branchesModel }
     NavSectionModel { id: remotesModel }
+    // One letter apart, two different things: `worktreeModel` feeds the
+    // WIP pane (the "worktree" nav section = uncommitted files), while
+    // `worktreesModel` lists git worktrees (the sidebar's WORKTREES).
     NavSectionModel { id: worktreeModel }
     NavSectionModel { id: worktreesModel }
     NavSectionModel { id: stashesModel }

@@ -618,6 +618,8 @@ fn long(repo: &mut DemoRepo) -> Result<(), String> {
 /// The dirty tree keeps the graph shape fixed: row 0 is the WIP row,
 /// row 1 the commit that holds the file.
 fn longpaths(repo: &mut DemoRepo) -> Result<(), String> {
+    // Demo-repo content only: the path is made up and exists in no
+    // checkout of this repository.
     const FAR: &str =
         "crates/platitude-core/src/session/integration/support/fixtures/refs_join_snapshot.rs";
     repo.commit(

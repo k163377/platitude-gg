@@ -1,6 +1,8 @@
 // Design tokens — a verbatim mirror of internal-docs/デザイン規約.md.
 // Edit the document first, then reflect changes here. Never introduce
-// values that are not in the document's tables.
+// values that are not in the document's tables. The mirror is complete
+// on purpose: a token no code uses yet still belongs here — do not
+// prune it, and do not read its presence as "the default to pick".
 pragma Singleton
 
 import QtQuick
