@@ -505,6 +505,19 @@ impl NavSectionModel {
     #[qsignal]
     fn changed(&mut self);
 
+    // A refs snapshot arrived, whether or not it moved anything.
+    //
+    // `changed` cannot answer this: it stays deliberately quiet when the
+    // rows come out identical, because rebuilding a section holding tens
+    // of thousands of tags for the same picture is work the sidebar can
+    // see. A page holding a landing owed by a write needs to hear it all
+    // the same — a cherry-pick of a commit the branch already has
+    // records nothing and leaves the refs exactly as they were, and its
+    // landing would otherwise stay armed until something unrelated moved
+    // them (`RepoPage.tryPendingHeadSelect`).
+    #[qsignal]
+    fn refs_settled(&mut self);
+
     /// Wires this instance to one section's data feed. `section`:
     /// `branches` / `remotes` / `worktree` / `worktrees` / `stashes` /
     /// `tags`.
@@ -572,9 +585,13 @@ impl NavSectionModel {
         // queue already emptied by the first. Nothing arrived means
         // nothing to rebuild.
         let mut arrived = false;
+        // Whether refs were published at all, which is a different
+        // question from whether they moved (see `refs_settled`).
+        let mut settled = false;
         if let Some(feed) = self.refs_feed.clone()
             && let Some(snapshot) = feed.drain().pop()
         {
+            settled = true;
             // The first snapshot is news whatever it holds: the default
             // selection is waiting on `refsLoaded`, and a section that is
             // legitimately empty would otherwise never say so.
@@ -678,12 +695,14 @@ impl NavSectionModel {
                 .collect();
             arrived |= self.take_rows(rows);
         }
-        if !arrived {
-            return;
+        if arrived {
+            self.total = self.all.len() as i32;
+            self.reset();
+            self.changed();
         }
-        self.total = self.all.len() as i32;
-        self.reset();
-        self.changed();
+        if settled {
+            self.refs_settled();
+        }
     }
 
     #[qslot]

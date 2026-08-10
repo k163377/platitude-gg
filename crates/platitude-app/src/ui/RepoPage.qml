@@ -3785,6 +3785,15 @@ Item {
             page.tryPendingHeadSelect()
             page.trySelectDefault()
         }
+        // Refs that settled without moving say nothing through `changed`
+        // (identical rows are deliberately quiet — see the model), and a
+        // write that recorded nothing leaves them exactly so: a
+        // cherry-pick of a commit this branch already has owes the same
+        // landing as one that wrote a commit, and this is the only word
+        // that it can be paid.
+        function onRefsSettled() {
+            page.tryPendingHeadSelect()
+        }
     }
     Connections {
         target: worktreeModel
