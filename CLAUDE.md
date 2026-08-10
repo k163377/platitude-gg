@@ -70,7 +70,7 @@
 ## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
 
 - Phase 1(読み取り専用ビューア)は**完了**。性能 4 項目は最終確認でクリア: [ci/baseline/phase1-perf-windows-x64.md](ci/baseline/phase1-perf-windows-x64.md)
-- **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules/app-ui.md](.claude/rules/app-ui.md) が正**(app のファイルに触れると自動ロード)。**本ファイルは未配線だけを持つ** — ここに一覧を置くと機能を足すたび太る
+- **配線済み操作の一覧は [.claude/rules/app-ui.md](.claude/rules/app-ui.md)、個々の意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**(前者は app のファイルに触れると自動ロード、後者は触る項を Grep で引く)。**本ファイルは未配線だけを持つ** — ここに一覧を置くと機能を足すたび太る
 - **未配線**: フル interactive rebase 画面(merge / rebase / revert / 単体 drop の起動、止まった操作の出口、conflict の種別・片側採用・外部ツール連携は配線済み)
 - 残作業と要判断事項は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読むこと**。配布準備期に検証する項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
 - CI(3OS + 完全オフライン job)は記述済み・**リモート未設定で未実行**(push は相当先まで行わない = 2026-08-02 ユーザー指示)。初回検証は**配布準備期(P5)**。CI も軽量(段 2)/ 完全性(段 3)に分ける(中身は [P5-確認事項.md](internal-docs/P5-確認事項.md) §3.5)
