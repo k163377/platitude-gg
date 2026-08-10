@@ -2858,6 +2858,22 @@ Item {
             // The working tree, as the row above the newest commit opens
             // it: the file list this pane's every other verb starts from.
             page.showWip()
+        } else if (act === "wip-tally") {
+            // The graph row's tally, opened beside the list it counts.
+            // **Read the two together**: `rows` is what the pane lists and
+            // the kinds are what the row says, and `status::Kinds` counts
+            // rows — so the kinds have to add up to it. A drift means one
+            // of the two stopped reading the same status, which is the one
+            // thing the picture cannot answer (four numbers against six
+            // rows is not something the eye adds up).
+            page.showWip()
+            AppBackend.report("wip_tally added=" + graphPane.view.wipAdded
+                              + " modified=" + graphPane.view.wipModified
+                              + " deleted=" + graphPane.view.wipDeleted
+                              + " renamed=" + graphPane.view.wipRenamed
+                              + " copied=" + graphPane.view.wipCopied
+                              + " conflicted=" + graphPane.view.wipConflicted
+                              + " rows=" + worktreeModel.total)
         } else if (act === "wip-message" || act === "wip-message-focus") {
             // The same box in the pane that writes a new commit. A body
             // is typed in first because this editor starts empty, and an
@@ -4021,7 +4037,7 @@ Item {
                     GraphPane {
                         id: graphPane
                         graphModel: graphModel
-                        worktreeModel: worktreeModel
+                        workTree: workTree
                         blank: page.blank
                         chipListAnchor: page.refListAnchor
                         onRowActivated: oidHex => page.activateRow(oidHex)

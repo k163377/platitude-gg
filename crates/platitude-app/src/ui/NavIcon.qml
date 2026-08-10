@@ -20,6 +20,32 @@ Canvas {
     /// and weight is what the eye reads as size from any distance. Those
     /// callers pass the grid ratio in, the way `HoldIcon` already scales.
     property real stroke: Metrics.iconStroke
+    /// How much of the 16-grid this mark's ink actually spans sideways.
+    ///
+    /// A seat drawn to the box leaves the rest as air, and beside a word
+    /// that air reads as a gap nobody wrote (デザイン規約 §余白「印が自分で
+    /// 持っている余白は、隣の詰めに数える」). It is not a constant across
+    /// the family: `plus` fills nine of the sixteen, `bang` is a stem and a
+    /// dot and fills two — so a caller that puts marks of different kinds
+    /// in one row cannot subtract one number from all of them. Kinds not
+    /// listed fill their box, which is what a seat of `width` already
+    /// assumes.
+    readonly property real inkGrid: {
+        switch (icon.kind) {
+        case "bang": return 2
+        case "arrow": return 8
+        case "plus":
+        case "minus":
+        case "copyicon": return 9
+        // Two rotated pieces: the body and the point, turned 45° about the
+        // middle, so what they span sideways is their diagonal.
+        case "pen": return 10
+        default: return 16
+        }
+    }
+    /// The same in the item's own pixels, with the line that hangs off
+    /// either end of it.
+    readonly property real inkWidth: icon.inkGrid / 16 * icon.width + icon.stroke
     width: Theme.iconMd
     height: Theme.iconMd
     onKindChanged: requestPaint()
@@ -80,15 +106,21 @@ Canvas {
             ctx.stroke()
         } else if (icon.kind === "pen") {
             ctx.save()
-            // Half a line hangs off the top of the body, which is stroked,
-            // and nothing off the point, which is filled — so the ink of
-            // this one sits above the middle of its box while every other
-            // mark here sits on it. Alone it is a fraction of a pixel; in
-            // a row with a word it is the pixel that makes the pen look
-            // lifted (measured beside `Keep editing`: 1px over the check's
-            // seat in the same button). Put back before the turn, so it
-            // travels along the pen's own axis.
-            ctx.translate(8 * s, 8 * s + 0.25 * s + ctx.lineWidth / 4)
+            // This mark is the only one here whose ink is not centred on
+            // its own origin, and it is out by more than the line: the
+            // body reaches 6 up and the point 5.5 down, and turning the
+            // pair 45° puts the body's far corner at 5.23 while the tip
+            // lands at 3.89 — **0.67 of a grid above the middle**. Half a
+            // line hangs off the top of the body as well (stroked, where
+            // the point is filled), which is another quarter-line. Both
+            // are put back before the turn, so the shift travels along the
+            // pen's own axis.
+            //
+            // The old 0.25 covered the line and a little of the geometry,
+            // which held at `iconMd` beside a word — and showed as soon as
+            // the mark stood at `iconSm` next to a digit of its own
+            // (2026-08-10, the graph row's tallies).
+            ctx.translate(8 * s, 8 * s + 0.67 * s + ctx.lineWidth / 4)
             ctx.rotate(Math.PI / 4)
             ctx.strokeRect(-1.4 * s, -6 * s, 2.8 * s, 8.5 * s)
             ctx.beginPath()

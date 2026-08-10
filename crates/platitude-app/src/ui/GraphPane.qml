@@ -14,8 +14,10 @@ Rectangle {
     id: graphArea
 
     required property var graphModel
-    // WIP row's file count rides on the ListView for the delegate.
-    required property var worktreeModel
+    // The uncommitted row's tallies ride on the ListView for the delegate.
+    // They come off status rather than off the file list — the same status
+    // the list itself is built from, counted by kind (`status::Kinds`).
+    required property var workTree
     // No repository behind this pane: the empty-window call to action.
     property bool blank: false
 
@@ -479,7 +481,12 @@ Rectangle {
         property real graphColWidth: graphArea.graphColW
         property real graphFullWidth: graphArea.graphFullW
         property real graphXOffset: graphArea.graphX
-        property int wipCount: graphArea.worktreeModel.total
+        property int wipAdded: graphArea.workTree.wipAdded
+        property int wipModified: graphArea.workTree.wipModified
+        property int wipDeleted: graphArea.workTree.wipDeleted
+        property int wipRenamed: graphArea.workTree.wipRenamed
+        property int wipCopied: graphArea.workTree.wipCopied
+        property int wipConflicted: graphArea.workTree.conflictCount
         // Which row's chip column is a name box, and what has been typed
         // into it. Held here rather than in the delegate: the delegate is
         // recycled the moment its row scrolls off.

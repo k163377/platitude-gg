@@ -152,6 +152,66 @@ impl Counts {
     }
 }
 
+/// How many rows of each change kind the working-tree list holds.
+///
+/// **Rows, not files.** One file changed on both sides is listed twice —
+/// once under the index and once under the working tree — and these count
+/// what the pane lists, so the row's tally and the list agree by
+/// construction. The kinds are the same letters the file rows carry, read
+/// the same way (`models::nav` builds a row per side; `ChangeIcon` reads
+/// the letter).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Kinds {
+    pub added: usize,
+    pub modified: usize,
+    pub deleted: usize,
+    pub renamed: usize,
+    pub copied: usize,
+    pub conflicted: usize,
+}
+
+impl Kinds {
+    pub fn of(status: &WorkTreeStatus) -> Self {
+        let mut kinds = Self::default();
+        for item in &status.items {
+            match item {
+                // A conflict is one row whatever the two stage letters
+                // say — the pane lists it in its own bucket.
+                StatusItem::Unmerged { .. } => kinds.conflicted += 1,
+                // Nothing of it is in the index yet, so the whole file is
+                // what it adds.
+                StatusItem::Untracked { .. } => kinds.added += 1,
+                StatusItem::Tracked {
+                    staged, unstaged, ..
+                } => {
+                    kinds.take(*staged);
+                    kinds.take(*unstaged);
+                }
+                StatusItem::Ignored { .. } => {}
+            }
+        }
+        kinds
+    }
+
+    /// One side's letter. `.` is "this side did nothing" and has no row;
+    /// `M` and `T` are both edits (a type change is still the same path
+    /// holding something else).
+    fn take(&mut self, code: char) {
+        match code {
+            '.' => {}
+            'A' => self.added += 1,
+            'D' => self.deleted += 1,
+            'R' => self.renamed += 1,
+            'C' => self.copied += 1,
+            _ => self.modified += 1,
+        }
+    }
+
+    pub fn total(&self) -> usize {
+        self.added + self.modified + self.deleted + self.renamed + self.copied + self.conflicted
+    }
+}
+
 /// Fatal parse error (the stream shape is fixed; a mismatch means the
 /// snapshot cannot be trusted).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -309,6 +369,83 @@ mod tests {
     }
 
     const SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const H1: &str = "1111111111111111111111111111111111111111";
+    const H2: &str = "2222222222222222222222222222222222222222";
+
+    /// The graph row's tally counts **rows**, and a file changed on both
+    /// sides is two of them — one under the index and one under the
+    /// working tree, which is exactly what the pane lists. Counting files
+    /// instead would put a number on the row that the list below it
+    /// contradicts.
+    #[test]
+    fn a_file_changed_on_both_sides_is_two_rows() {
+        let bytes = z(&[
+            &format!("# branch.oid {SHA}"),
+            &format!("1 MM N... 100644 100644 100644 {H1} {H2} both.txt"),
+        ]);
+        let status = parse_status(&bytes).unwrap();
+        assert_eq!(status.staged().count(), 1);
+        assert_eq!(status.unstaged().count(), 1);
+        let kinds = Kinds::of(&status);
+        assert_eq!(kinds.modified, 2);
+        assert_eq!(kinds.total(), 2);
+    }
+
+    #[test]
+    fn every_kind_lands_where_its_letter_says() {
+        let bytes = z(&[
+            &format!("# branch.oid {SHA}"),
+            &format!("1 A. N... 000000 100644 100644 {H1} {H2} added.txt"),
+            &format!("1 .D N... 100644 100644 000000 {H1} {H1} gone.txt"),
+            // A type change is still the same path holding something else.
+            &format!("1 .T N... 120000 120000 100644 {H1} {H1} was-a-link.txt"),
+            &format!("2 R. N... 100644 100644 100644 {H1} {H1} R100 new-name.txt"),
+            "old-name.txt",
+            &format!("2 C. N... 100644 100644 100644 {H1} {H1} C75 copy.txt"),
+            "source.txt",
+            &format!("u UU N... 100644 100644 100644 100644 {H1} {H2} {H2} clash.txt"),
+            "? untracked.txt",
+        ]);
+        let kinds = Kinds::of(&parse_status(&bytes).unwrap());
+        assert_eq!(
+            kinds,
+            Kinds {
+                // The staged `A`, and the untracked file — nothing of it is
+                // in the index yet, so the whole file is what it adds.
+                added: 2,
+                modified: 1,
+                deleted: 1,
+                renamed: 1,
+                copied: 1,
+                conflicted: 1,
+            }
+        );
+        assert_eq!(kinds.total(), 7);
+    }
+
+    /// However the two stage letters read, a conflict is one row: the pane
+    /// lists it in its own bucket rather than under either side.
+    #[test]
+    fn a_conflict_is_one_row_whatever_its_letters_say() {
+        let bytes = z(&[
+            &format!("# branch.oid {SHA}"),
+            &format!("u AA N... 100644 100644 100644 100644 {H1} {H2} {H2} both-added.txt"),
+            &format!("u DU N... 100644 100644 100644 100644 {H1} {H2} {H2} we-deleted.txt"),
+        ]);
+        let kinds = Kinds::of(&parse_status(&bytes).unwrap());
+        assert_eq!(kinds.conflicted, 2);
+        assert_eq!(kinds.total(), 2);
+        assert_eq!(kinds.added, 0);
+        assert_eq!(kinds.deleted, 0);
+    }
+
+    #[test]
+    fn a_clean_tree_has_nothing_to_tally() {
+        let bytes = z(&[&format!("# branch.oid {SHA}"), "# branch.head main"]);
+        let kinds = Kinds::of(&parse_status(&bytes).unwrap());
+        assert_eq!(kinds, Kinds::default());
+        assert_eq!(kinds.total(), 0);
+    }
 
     #[test]
     fn parses_headers_and_ordinary_entries() {

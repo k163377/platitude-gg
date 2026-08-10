@@ -61,6 +61,16 @@ pub struct WorkTreeModel {
     /// A commit carries the index, so the working-tree side is not counted
     /// here — it is a warning about the next `git add`, not this commit.
     eol_staged_count: i32,
+    /// How many rows of each change kind the file list holds, for the
+    /// graph's uncommitted row to name (`status::Kinds`). Rows rather than
+    /// files, so the row's tally and the list below it cannot disagree —
+    /// and read off the status this model already has, so the row costs no
+    /// git of its own. Conflicts are already counted above.
+    wip_added: i32,
+    wip_modified: i32,
+    wip_deleted: i32,
+    wip_renamed: i32,
+    wip_copied: i32,
     feed: Option<Arc<Feed<StatusMsg>>>,
     tab_id: i32,
 }
@@ -100,6 +110,11 @@ impl WorkTreeModel {
         Member = eol_staged_count,
         Notify = changed
     );
+    qproperty!("wipAdded", Member = wip_added, Notify = changed);
+    qproperty!("wipModified", Member = wip_modified, Notify = changed);
+    qproperty!("wipDeleted", Member = wip_deleted, Notify = changed);
+    qproperty!("wipRenamed", Member = wip_renamed, Notify = changed);
+    qproperty!("wipCopied", Member = wip_copied, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -177,6 +192,14 @@ impl WorkTreeModel {
         );
         // One pass, not five: `-uall` lists every untracked file, so the
         // list is as long as the working tree is dirty.
+        // Same pass, same source: the kinds are the letters the file rows
+        // carry, so the graph row's tally is the list it sits above.
+        let kinds = platitude_core::status::Kinds::of(&status);
+        self.wip_added = kinds.added as i32;
+        self.wip_modified = kinds.modified as i32;
+        self.wip_deleted = kinds.deleted as i32;
+        self.wip_renamed = kinds.renamed as i32;
+        self.wip_copied = kinds.copied as i32;
         let counts = platitude_core::status::Counts::of(&status);
         self.staged_count = counts.staged as i32;
         self.unstaged_count = counts.unstaged as i32;

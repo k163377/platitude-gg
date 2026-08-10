@@ -9,9 +9,9 @@ import platitude.ui
 // Commit-graph row: [branch/tag chips][lanes + identicon node][subject]
 // — fixed-width label and graph columns keep subjects aligned. Column
 // geometry arrives through properties on the owning ListView
-// (labelWidth / graphColWidth / graphFullWidth / graphXOffset /
-// wipCount), and clicks go back up through its rowSelected /
-// rowMenuRequested signals.
+// (labelWidth / graphColWidth / graphFullWidth / graphXOffset, and the
+// uncommitted row's tallies), and clicks go back up through its
+// rowSelected / rowMenuRequested signals.
 Item {
     id: rowItem
     required property int index
@@ -66,6 +66,53 @@ Item {
                                      ? ListView.view.topMargin : 0
     // The all-zero id marks the synthetic uncommitted-changes row.
     readonly property bool isWip: oid_hex !== "" && !/[^0]/.test(oid_hex)
+    // One kind of change and how many rows of it the file list holds. The
+    // mark is the same ChangeIcon those rows carry, so the tally reads as
+    // "these, that many" rather than as a legend of its own — and a kind
+    // with nothing in it takes no seat (デザイン規約 §無効: what is not
+    // there does not stand).
+    component Tally: RowLayout {
+        id: tally
+        required property string code
+        required property int count
+        visible: tally.count > 0
+        // Nothing between the mark and its number: the seat below is the
+        // ink's width, so what the eye measures is already the mark's own
+        // air (デザイン規約 §余白). A step here would put it back, and the
+        // pair has to read as one thing from across the room — the gap to
+        // the next kind is the only one that should be visible.
+        spacing: 0
+        // The seat is the ink, not the box. Drawn to the box, `!` would
+        // stand five pixels from its own number while `+` stood two, and
+        // neither would belong to it.
+        // The seat is the ink, not the box. Drawn to the box, `!` would
+        // stand five pixels from its own number while `+` stood two, and
+        // neither would belong to it.
+        Item {
+            Layout.preferredWidth: tallyMark.inkWidth
+            Layout.preferredHeight: Theme.iconXs
+            ChangeIcon {
+                id: tallyMark
+                anchors.centerIn: parent
+                change: tally.code
+                // A step under `iconSm`: this mark stands beside a digit
+                // of its own rather than beside a word, and at `iconSm` it
+                // measured 8px against the digit's 6 (規約 §寸法).
+                width: Theme.iconXs
+                height: Theme.iconXs
+                // The grid shrinks and the line has to shrink with it, or
+                // the mark carries more weight than the digit beside it
+                // (app-ui.md §語の隣に立つ印).
+                stroke: Metrics.iconStroke * Theme.iconXs / Theme.iconMd
+            }
+        }
+        Label {
+            leftPadding: Theme.spaceXs / 2
+            text: tally.count
+            color: tallyMark.tint
+            font.pixelSize: Theme.fontSm
+        }
+    }
     // Chip records are separated by U+001F (see encode.rs), and arrive
     // in the order the chip reads them out: HEAD → local → remote → tag.
     // One chip for the row, so a commit that is both a branch tip and a
@@ -411,15 +458,67 @@ Item {
                 color: Theme.graphLane[rowItem.node_color % Theme.graphLane.length]
             }
             Label {
-                Layout.fillWidth: true
-                text: rowItem.isWip
-                      ? qsTr("Uncommitted changes (%1)")
-                        .arg(rowItem.ListView.view ? rowItem.ListView.view.wipCount : 0)
-                      : rowItem.subject
+                // The uncommitted row's words are a fixed length, and the
+                // counts read as part of the same sentence: it keeps its
+                // own width so they sit right after it rather than out at
+                // the pane's far edge.
+                Layout.fillWidth: !rowItem.isWip
+                // No total: the tallies beside it add up to exactly that
+                // number, and the pane's own heading says it as well
+                // (規約 §未コミット行が名乗るもの).
+                text: rowItem.isWip ? qsTr("Uncommitted changes")
+                                    : rowItem.subject
                 elide: Text.ElideRight
                 font.pixelSize: Theme.fontMd
                 color: rowItem.isWip ? Theme.textSecondary : Theme.textPrimary
-                rightPadding: Theme.spaceSm
+                rightPadding: rowItem.isWip ? 0 : Theme.spaceSm
+            }
+            // What the working tree does to HEAD, in lines. One reading
+            // rather than the two the panes take: the same line touched in
+            // the index and again in the tree is counted by both of those,
+            // and their sum is not what this row stands for.
+            // What is in the working tree, by kind. Conflicts lead: what is
+            // stopped is the thing to see first, and the rest is the order
+            // the file list would put them in.
+            RowLayout {
+                Layout.leftMargin: Theme.spaceSm
+                Layout.rightMargin: Theme.spaceSm
+                spacing: Theme.spaceSm
+                Tally {
+                    code: "UU"
+                    count: rowItem.isWip && rowItem.ListView.view
+                           ? rowItem.ListView.view.wipConflicted : 0
+                }
+                Tally {
+                    code: "A"
+                    count: rowItem.isWip && rowItem.ListView.view
+                           ? rowItem.ListView.view.wipAdded : 0
+                }
+                Tally {
+                    code: "M"
+                    count: rowItem.isWip && rowItem.ListView.view
+                           ? rowItem.ListView.view.wipModified : 0
+                }
+                Tally {
+                    code: "D"
+                    count: rowItem.isWip && rowItem.ListView.view
+                           ? rowItem.ListView.view.wipDeleted : 0
+                }
+                Tally {
+                    code: "R"
+                    count: rowItem.isWip && rowItem.ListView.view
+                           ? rowItem.ListView.view.wipRenamed : 0
+                }
+                Tally {
+                    code: "C"
+                    count: rowItem.isWip && rowItem.ListView.view
+                           ? rowItem.ListView.view.wipCopied : 0
+                }
+            }
+            // The rest of the row, on the one row that does not fill it.
+            Item {
+                visible: rowItem.isWip
+                Layout.fillWidth: true
             }
         }
     }
