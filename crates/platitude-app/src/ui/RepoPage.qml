@@ -292,10 +292,10 @@ Item {
 
     property var rowAskRun: null
     function startRowAsk(oidHex, label, detail, danger, acceptText, run,
-                         hold = false, tip = "", form = null) {
+                         hold = false, tip = "", form = null, code = "") {
         page.rowAskRun = run
         graphPane.startAsking(oidHex, label, detail, acceptText, danger,
-                              hold, tip, form)
+                              hold, tip, form, code)
     }
     function stopRowAsk() {
         page.rowAskRun = null
@@ -438,18 +438,32 @@ Item {
     readonly property bool publishChecked:
         repoTab.remoteBranchAsked === page.publishRemote
         + String.fromCharCode(31) + page.publishBranch
-    /// …and the answer was yes: this name is already over there, so
-    /// sending advances a branch somebody else made instead of making one.
-    /// git does not refuse that when it fast-forwards (実測), so the hold
-    /// is what stands in for the refusal.
-    readonly property bool publishTaken:
-        page.publishChecked && repoTab.remoteBranchTaken
-    /// The remote never answered — unreachable URL, credentials that are
-    /// not there, no network. Sending is still allowed (only a push finds
-    /// out what a remote really holds) but it takes the hold: what could
-    /// not be ruled out is that the name is already over there.
+    /// …and what that answer says a push under this name would meet
+    /// (`platitude_core::remote::RemoteBranchState`). Empty until the
+    /// answer for exactly this name is in.
+    readonly property string publishState:
+        page.publishChecked ? repoTab.remoteBranchState : ""
+    /// Nothing about the far side can be settled from this end: the name
+    /// is over there but the commit it holds is not in this repository, or
+    /// the remote never answered at all (a URL typed wrong, credentials
+    /// that are not there, no network). Sending is still allowed and stays
+    /// a click — a plain push can only fast-forward, so nothing over there
+    /// can be lost by pressing — but the bar wears the frame and the mark
+    /// the toolbar wears when a remote did not answer it
+    /// (デザイン規約 §リモートへ送る「送れなかったことはボタンが憶えている」).
     readonly property bool publishUnsure:
-        page.publishChecked && !repoTab.remoteBranchReached
+        page.publishState === "unknown" || page.publishState === "unreachable"
+    /// The name is taken by commits this history does not have, so a plain
+    /// push cannot land at all (実測) and only an overwrite can. The pill
+    /// becomes the one the toolbar offers a diverged branch — `push -f`,
+    /// warning-coloured, held rather than clicked — because the same state
+    /// must not wear two meanings (デザイン規約 §リモートへ送る).
+    readonly property bool publishRefused: page.publishState === "refused"
+    /// The commit the question showed on the far side, which is what an
+    /// overwrite leases against: a remote that moved since is refused by
+    /// git rather than flattened (§相手の履歴を置き換える).
+    readonly property string publishLease:
+        page.publishRefused ? repoTab.remoteBranchTip : ""
 
     /// The remote is asked once the typing settles, not per keystroke: it
     /// is a round trip to the network, and the person pressed a button
@@ -476,16 +490,36 @@ Item {
         value: page.publishFilled && page.publishChecked
         when: page.publishAsking
     }
+    // Held only where holding is what the gesture is for: the overwrite.
+    // "Could not tell" is still a fast-forward-only push, so it keeps the
+    // click and says its doubt with the frame and the mark instead.
     Binding {
         target: graphPane
         property: "askHold"
-        value: page.publishTaken || page.publishUnsure
+        value: page.publishRefused
         when: page.publishAsking
     }
     Binding {
         target: graphPane
         property: "askNeutral"
-        value: !page.publishTaken && !page.publishUnsure
+        value: !page.publishRefused
+        when: page.publishAsking
+    }
+    // The word the pill answers with, which is the command that would run:
+    // a push that can land, or the overwrite that is the only thing that
+    // can (デザイン規約 §はじめてリモートへ送る).
+    Binding {
+        target: graphPane
+        property: "askCode"
+        value: page.publishRefused ? "push -f" : "push"
+        when: page.publishAsking
+    }
+    // Warning without taking the word: the remote could not be read, and
+    // that is the same news the toolbar carries as a frame and a `!`.
+    Binding {
+        target: graphPane
+        property: "askAlert"
+        value: page.publishUnsure
         when: page.publishAsking
     }
     Binding {
@@ -494,33 +528,53 @@ Item {
         value: !page.publishFilled ? qsTr("Pick where it goes.")
                : !page.publishChecked
                  ? qsTr("Asking %1 what it has…").arg(page.publishRemote)
-                 : page.publishUnsure
+                 : page.publishState === "unreachable"
                    ? qsTr("%1 did not answer — it may already have that branch.")
                      .arg(page.publishRemote)
-                   : page.publishTaken
-                     ? qsTr("%1 already exists — your commits go on top of it.")
+                   : page.publishState === "unknown"
+                     ? qsTr("%1 already exists, and what it holds is not here.")
                        .arg(page.publishTarget)
-                     : qsTr("%1 does not exist yet; this makes it.")
-                       .arg(page.publishTarget)
+                     : page.publishRefused
+                       ? qsTr("Commits only %1 has stop being on it.")
+                         .arg(page.publishTarget)
+                       : page.publishState === "fast-forward"
+                         ? qsTr("%1 already exists — your commits go on top of it.")
+                           .arg(page.publishTarget)
+                         : qsTr("%1 does not exist yet; this makes it.")
+                           .arg(page.publishTarget)
         when: page.publishAsking
     }
+    // What the line under the question had no room for: how the overwrite
+    // is pressed and how much it takes, and — where the remote could not be
+    // read — that pressing is still safe to try. Nothing for the two the
+    // line already settles (デザイン規約 §hover のツールチップ).
     Binding {
         target: graphPane
         property: "askTip"
-        value: page.publishTaken
-               ? qsTr("Nobody is asked over there: a branch that can be fast-forwarded simply moves.")
-               : page.publishUnsure
-                 ? qsTr("The push will say what went wrong; the command log has what was run.")
-                 : ""
+        value: page.publishRefused
+               ? qsTr("Hold to overwrite %1, dropping %n commit(s) it has and yours does not. A remote that moved since is refused.",
+                      "", repoTab.remoteBranchTheirs).arg(page.publishTarget)
+               : page.publishState === "unknown"
+                 ? qsTr("%1 was never fetched here, so what it holds cannot be read — the push can only fast-forward it.")
+                   .arg(page.publishTarget)
+                 : page.publishState === "unreachable"
+                   ? qsTr("%1 did not answer; the push can only fast-forward, and its answer will say what went wrong.")
+                     .arg(page.publishRemote)
+                   : ""
         when: page.publishAsking
     }
 
     function startPublishAsk() {
         page.publishRemote = repoTab.defaultRemote
         page.publishBranch = workTree.branch
-        page.startRowAsk("", qsTr("Send %1 where?").arg(workTree.branch), "",
-                         false, qsTr("Send"), page.answerPublish, false, "",
-                         publishForm)
+        // The command opens the question and answers it, the same word the
+        // button that raised the bar wears: the first push is not a
+        // different act, only one whose destination nobody has written down
+        // (デザイン規約 §はじめてリモートへ送る). `push` goes untranslated
+        // — it is the command's spelling, not a word for it.
+        page.startRowAsk("", qsTr("%1 where?").arg(workTree.branch), "",
+                         false, "", page.answerPublish, false, "",
+                         publishForm, "push")
         // After the bar is up, never before: raising it resets the three
         // things the bindings below own, and a binding whose value has not
         // changed does not push back.
@@ -563,18 +617,35 @@ Item {
         if (form && form.remotePick)
             form.remotePick.popup.open()
     }
+    /// Automation: what the far side turned out to hold, once the remote
+    /// has had time to answer. The picture cannot say which of the three
+    /// the pill became — held, clicked, or dead — so this is where the
+    /// question's own answer is read (デザイン規約 §はじめてリモートへ送る).
+    Timer {
+        id: publishSettleTimer
+        interval: 1200
+        onTriggered: AppBackend.report("publish settled far=" + page.publishState
+                                       + " code=" + graphPane.askCode
+                                       + " hold=" + graphPane.askHold
+                                       + " alert=" + graphPane.askAlert
+                                       + " lease=" + (page.publishLease !== "")
+                                       + " theirs=" + repoTab.remoteBranchTheirs)
+    }
     /// Automation: the answer, given after the remote has had time to say
     /// what it has — the pill is dead until it has.
     Timer {
         id: publishAnswerTimer
         interval: 1200
         onTriggered: {
-            AppBackend.report("publish answering taken=" + page.publishTaken
+            // `far` is what the far side turned out to hold — the other
+            // line's `state` is this end's own push state, and the two
+            // answer different questions.
+            AppBackend.report("publish answering far=" + page.publishState
                               + " unsure=" + page.publishUnsure
                               + " answerable=" + graphPane.askAnswerable)
             // The same gesture a person is given: a hold cannot be
             // answered by a click here either.
-            if (page.publishTaken || page.publishUnsure)
+            if (page.publishRefused)
                 graphPane.completeHold()
             else
                 page.answerRowAsk()
@@ -586,7 +657,8 @@ Item {
         // still this button's news, and the mark it wears afterwards is
         // the same one (デザイン規約 §リモートへ送る).
         page.pushSentBranch = workTree.branch
-        repoTab.publishCurrent(page.publishRemote, page.publishBranch)
+        repoTab.publishCurrent(page.publishRemote, page.publishBranch,
+                               page.publishLease)
     }
 
     // Writing a remote down, and correcting one. The question that sent us
@@ -732,10 +804,13 @@ Item {
         // Walking away from a refused delete takes the offer with it.
         onClosed: page.forceDeleteBranch = ""
         AppMenuItem {
-            // The verb alone: this menu was opened on the row it means,
+            // The command alone: this menu was opened on the row it means,
             // and the row is already showing that name (デザイン規約
-            // §メニュー). `Delete` below it has always read this way.
-            text: qsTr("Switch")
+            // §メニュー). The word was git's own to begin with, so the chip
+            // changes no wording — it says that this is the command, and
+            // seats the row in the column the ones below it read as
+            // commands (§git 用語のコード表記).
+            code: "switch"
             offered: page.menuCanSwitch
             // Through the same dispatcher the graph's chips use: a remote
             // branch whose local one already exists cannot simply be
@@ -1264,13 +1339,17 @@ Item {
     // carries Apply and Pop (デザイン規約 §メニュー).
     AppMenu {
         id: stashMenu
+        // The word git gives each of them, without the `stash` it is
+        // already standing on: this menu belongs to one stash row, so the
+        // subcommand alone is the whole of what tells the two apart
+        // (デザイン規約 §グラフ行の右クリック).
         AppMenuItem {
-            text: qsTr("Apply")
+            code: "apply"
             offered: page.menuStashCanWrite
             onTriggered: repoTab.applyStash(page.menuStashRef)
         }
         AppMenuItem {
-            text: qsTr("Pop")
+            code: "pop"
             offered: page.menuStashCanWrite
             onTriggered: {
                 repoTab.popStash(page.menuStashRef)
@@ -2288,6 +2367,8 @@ Item {
                 publishAnswerTimer.start()
             else if (act === "publish-remotes")
                 page.openPublishRemotes()
+            else
+                publishSettleTimer.start()
             // `dialog=` / `name=` say whether the remote dialog stands and
             // what its name box holds — the no-remote push opens it by
             // itself, and only this line can say so headless.

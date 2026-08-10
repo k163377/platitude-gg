@@ -325,13 +325,21 @@ pub enum SessionEvent {
     RemoteBranchChecked {
         remote: String,
         branch: String,
-        exists: bool,
-        /// Whether the remote answered at all. It may be unreachable — a
-        /// URL typed wrong, credentials that are not there, no network —
-        /// and "could not ask" is an answer the question has to be able to
-        /// stand on. Treating silence as "not taken" would send on the
-        /// assumption git refuses what it does not.
-        reached: bool,
+        /// What a push under that name would meet: taken or not, and where
+        /// taken, whether git would carry it or turn it down. Silence from
+        /// the remote is one of the answers rather than a missing one —
+        /// reading it as "nothing is there" would send on the assumption
+        /// that git refuses what it does not.
+        state: remote::RemoteBranchState,
+        /// The commit the remote advertised, hex, empty where it named
+        /// none. What an overwrite would have to lease against, so the
+        /// question can offer one pinned to what it showed.
+        tip: String,
+        /// How many commits that tip reaches that this history does not —
+        /// what an overwrite would take off that branch. Zero unless the
+        /// answer was `Refused`, which is the only state where both the
+        /// commit and the walk are here.
+        theirs: u32,
     },
     /// Answer to [`RepoSession::check_publish`].
     PublishChecked {
@@ -2434,7 +2442,12 @@ impl RepoSession {
     /// Separate from [`Self::push_current`] because nothing local knows
     /// where this goes: both halves come from the question, and the answer
     /// becomes the upstream so the question is asked once per branch.
-    pub fn publish_current(self: &Arc<Self>, remote_name: String, remote_branch: String) {
+    pub fn publish_current(
+        self: &Arc<Self>,
+        remote_name: String,
+        remote_branch: String,
+        expect: String,
+    ) {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
         self.write(
@@ -2446,6 +2459,7 @@ impl RepoSession {
                     &repo.workdir,
                     &remote_name,
                     &remote_branch,
+                    &expect,
                     &cancel,
                 )
                 .await?;
@@ -2495,7 +2509,9 @@ impl RepoSession {
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let cancel = s.root_cancel.clone();
-            match remote::has_branch(
+            let mut tip = String::new();
+            let mut theirs = 0;
+            let state = match remote::branch_tip(
                 &s.executor,
                 &workdir,
                 &remote_name,
@@ -2505,24 +2521,51 @@ impl RepoSession {
             )
             .await
             {
+                Ok(None) => remote::RemoteBranchState::Free,
+                // The name is taken, so what matters now is whether git
+                // would take the push: it does when this history already
+                // contains what the remote holds, and refuses otherwise
+                // (実測). The commit may not be in this repository at all —
+                // a branch never fetched — and then neither answer is
+                // ours to give.
+                Ok(Some(over_there)) => {
+                    tip = over_there.to_hex();
+                    match commit::is_in_head_history(&s.executor, &workdir, &over_there, &cancel)
+                        .await
+                    {
+                        Ok(true) => remote::RemoteBranchState::FastForward,
+                        // Only an overwrite can land here, and an overwrite
+                        // has to say what it takes off — the commit is in
+                        // this repository (that is how the comparison was
+                        // answered at all), so the walk can count them.
+                        Ok(false) => {
+                            theirs = commit::count_beyond_head(
+                                &s.executor,
+                                &workdir,
+                                &over_there,
+                                &cancel,
+                            )
+                            .await
+                            .unwrap_or(0);
+                            remote::RemoteBranchState::Refused
+                        }
+                        Err(_) => remote::RemoteBranchState::Unknown,
+                    }
+                }
                 // A remote that cannot be reached answers too, and the
                 // failure is not raised as one: the question is standing
                 // and about to say so itself, so opening the command log
                 // over it would say the same thing twice (the command is
                 // recorded either way).
-                Ok(exists) => s.sink.event(SessionEvent::RemoteBranchChecked {
-                    remote: remote_name,
-                    branch,
-                    exists,
-                    reached: true,
-                }),
-                Err(_) => s.sink.event(SessionEvent::RemoteBranchChecked {
-                    remote: remote_name,
-                    branch,
-                    exists: false,
-                    reached: false,
-                }),
-            }
+                Err(_) => remote::RemoteBranchState::Unreachable,
+            };
+            s.sink.event(SessionEvent::RemoteBranchChecked {
+                remote: remote_name,
+                branch,
+                state,
+                tip,
+                theirs,
+            });
         });
     }
 

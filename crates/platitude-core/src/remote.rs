@@ -308,11 +308,17 @@ pub async fn plan_current_push(
 /// This is the first push of a branch: nothing local records a target, so
 /// both halves come from the question the UI asked, and the answer is
 /// recorded as the upstream so the next push needs no question.
+/// `expect` is the commit the question showed as being over there. Empty
+/// sends the push fast-forward only; a commit turns it into the same
+/// leased overwrite the toolbar offers a diverged branch — and the lease
+/// is pinned to what was on screen, so a remote that moved since is
+/// refused rather than flattened (§相手の履歴を置き換える).
 pub async fn plan_publish(
     executor: &GitExecutor,
     workdir: &Path,
     remote: &str,
     remote_branch: &str,
+    expect: &str,
     cancel: &CancellationToken,
 ) -> Result<PushSpec, GitError> {
     let branch = current_branch(executor, workdir, cancel).await?;
@@ -321,7 +327,13 @@ pub async fn plan_publish(
         remote_branch: remote_branch.to_string(),
         local: branch,
         set_upstream: true,
-        force: PushForce::None,
+        force: if expect.is_empty() {
+            PushForce::None
+        } else {
+            PushForce::WithLease {
+                expect: Some(expect.to_string()),
+            }
+        },
     })
 }
 
@@ -364,23 +376,25 @@ pub async fn set_url(
     Ok(())
 }
 
-/// Whether a remote already carries a branch under this exact name.
+/// What a remote carries under this exact branch name, if anything.
 ///
-/// Asked before a first push, because git will not refuse one that lands:
-/// pushing onto a name the remote already has succeeds whenever it can be
-/// fast-forwarded, silently advancing somebody else's branch (実測).
+/// Asked before a first push, because git answers two different ways to a
+/// name that is already over there: it fast-forwards one that our history
+/// contains — silently advancing somebody else's branch — and refuses one
+/// it does not (実測, both). The commit is returned rather than a yes, so
+/// the caller can tell those two apart before anything is sent.
 ///
 /// **The pattern has to be the full `refs/heads/<name>`.** `ls-remote`
 /// matches a bare name against the *tail* of a ref, so asking for `topic`
 /// answers yes when the remote only has `feature/topic` (実測).
-pub async fn has_branch(
+pub async fn branch_tip(
     executor: &GitExecutor,
     workdir: &Path,
     remote: &str,
     branch: &str,
     timeout: Duration,
     cancel: &CancellationToken,
-) -> Result<bool, GitError> {
+) -> Result<Option<Oid>, GitError> {
     let refname = format!("refs/heads/{branch}");
     let cmd = GitCommand::new()
         .cwd(workdir)
@@ -393,7 +407,47 @@ pub async fn has_branch(
         .stdout
         .split(|b| *b == b'\n')
         .filter_map(split_ls_remote_line)
-        .any(|(_, name)| name == refname))
+        .find(|(_, name)| *name == refname)
+        .map(|(oid, _)| oid))
+}
+
+/// What a first push under a given name would meet on the far side.
+///
+/// The three answers a question about a destination can take, and the one
+/// thing each of them settles: whether git will take the push, refuse it,
+/// or whether this end simply cannot say.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteBranchState {
+    /// Nothing is there under that name: the push makes the branch.
+    Free,
+    /// It is there and this history contains it, so the push lands and
+    /// moves it on. Nothing of theirs is lost — the surprise, if there is
+    /// one, is that the branch was somebody else's to begin with.
+    FastForward,
+    /// It is there with commits this history does not have. **git refuses
+    /// this push** (実測), so nothing can happen by pressing.
+    Refused,
+    /// It is there, and what it holds cannot be read from here — the
+    /// commit it names is not in this repository, so the two histories
+    /// cannot be compared without fetching it first.
+    Unknown,
+    /// The remote never answered: a URL typed wrong, credentials that are
+    /// not there, no network. Silence is not "nothing is there".
+    Unreachable,
+}
+
+impl RemoteBranchState {
+    /// The wire name the UI reads. Spelled out rather than derived so the
+    /// two ends cannot drift apart on a rename.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Free => "free",
+            Self::FastForward => "fast-forward",
+            Self::Refused => "refused",
+            Self::Unknown => "unknown",
+            Self::Unreachable => "unreachable",
+        }
+    }
 }
 
 /// Short name of the checked-out branch; an error when HEAD is detached.

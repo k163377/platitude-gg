@@ -166,8 +166,12 @@ Rectangle {
     /// `form` is what the question needs in order to take an answer at all
     /// — a chooser, a name box. Most questions have none: they are
     /// answered by the pill and nothing else.
+    /// `code` is the git command the question is about, said at the head of
+    /// the question and on the pill both, where the act has one word of its
+    /// own (デザイン規約 §git 用語のコード表記); `accept` carries the
+    /// wording everywhere else.
     function startAsking(oidHex, label, detail, accept, danger,
-                         hold = false, tip = "", form = null) {
+                         hold = false, tip = "", form = null, code = "") {
         graphList.namingOid = ""
         graphList.namingText = ""
         // Before the label, which is what opens the bar: the form has to
@@ -175,9 +179,11 @@ Rectangle {
         askBar.form = form
         askBar.answerable = true
         askBar.neutral = false
+        askBar.alert = false
         askBar.label = label
         askBar.detail = detail
         askBar.accept = accept
+        askBar.code = code
         askBar.danger = danger
         askBar.hold = hold
         askBar.tip = tip
@@ -187,12 +193,18 @@ Rectangle {
     /// Whether the standing question can be answered yet. A question with
     /// a form turns this off until the form has something to send.
     property alias askAnswerable: askBar.answerable
-    /// Whether it is asking for information rather than for consent, and
-    /// the words on its pill and its tooltip — all three change under a
+    /// Whether it is asking for information rather than for consent, how it
+    /// is answered, and what it says while it stands — these change under a
     /// publish question as the remote answers what the typed name means.
+    /// The wording of the pill is not among them: the command it names is
+    /// settled when the question opens (デザイン規約 §はじめてリモートへ送る).
     property alias askNeutral: askBar.neutral
-    property alias askAccept: askBar.accept
     property alias askHold: askBar.hold
+    /// The command the pill answers with, and whether the far side could be
+    /// read at all — both move under a publish question as the remote
+    /// answers, because what would run depends on what is over there.
+    property alias askCode: askBar.code
+    property alias askAlert: askBar.alert
     property alias askDetail: askBar.detail
     property alias askTip: askBar.tip
     /// The live form, so its owner can read what was typed into it.

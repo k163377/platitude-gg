@@ -58,11 +58,20 @@ pub struct RepoTab {
     /// Empty while a read is out — the question the answer belongs to has
     /// to be checked, because the box may have moved on to another name.
     remote_branch_asked: String,
-    /// Whether that name is already taken on that remote.
-    remote_branch_taken: bool,
-    /// Whether the remote answered at all. Unreachable is its own answer:
-    /// "not taken" cannot be assumed from silence.
-    remote_branch_reached: bool,
+    /// What a push under that name would meet over there
+    /// (`platitude_core::remote::RemoteBranchState`): `free` /
+    /// `fast-forward` / `refused` / `unknown` / `unreachable`. One string
+    /// rather than a pair of flags — the five are exclusive, and the two
+    /// that ask the question to hold back are not the same two that ask it
+    /// to warn.
+    remote_branch_state: String,
+    /// The commit that remote advertised for the name, hex. What an
+    /// overwrite leases against — the question shows this state, so this is
+    /// the commit it showed.
+    remote_branch_tip: String,
+    /// How many commits that tip has that this branch does not: what an
+    /// overwrite would take off it.
+    remote_branch_theirs: i32,
     /// Last answer to `checkPublish`: how much of a range a remote has.
     publish_range: String,
     publish_total: i32,
@@ -169,8 +178,9 @@ impl Default for RepoTab {
             merge_tools_loading: false,
             remote_names: String::new(),
             remote_branch_asked: String::new(),
-            remote_branch_taken: false,
-            remote_branch_reached: false,
+            remote_branch_state: String::new(),
+            remote_branch_tip: String::new(),
+            remote_branch_theirs: 0,
             publish_range: String::new(),
             publish_total: 0,
             publish_published: 0,
@@ -312,13 +322,18 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!(
-        "remoteBranchTaken",
-        Member = remote_branch_taken,
+        "remoteBranchState",
+        Member = remote_branch_state,
         Notify = changed
     );
     qproperty!(
-        "remoteBranchReached",
-        Member = remote_branch_reached,
+        "remoteBranchTip",
+        Member = remote_branch_tip,
+        Notify = changed
+    );
+    qproperty!(
+        "remoteBranchTheirs",
+        Member = remote_branch_theirs,
         Notify = changed
     );
     qproperty!("publishRange", Member = publish_range, Notify = changed);
@@ -538,12 +553,14 @@ impl RepoTab {
                 TabMsg::RemoteBranch {
                     remote,
                     branch,
-                    exists,
-                    reached,
+                    state,
+                    tip,
+                    theirs,
                 } => {
                     self.remote_branch_asked = format!("{remote}\u{1f}{branch}");
-                    self.remote_branch_taken = exists;
-                    self.remote_branch_reached = reached;
+                    self.remote_branch_state = state;
+                    self.remote_branch_tip = tip;
+                    self.remote_branch_theirs = theirs;
                 }
                 TabMsg::HeadCommit {
                     message,
@@ -1052,8 +1069,10 @@ impl RepoTab {
     /// just took. Records the answer as the upstream, so the branch never
     /// asks again.
     #[qslot]
-    fn publish_current(&mut self, remote: String, remote_branch: String) {
-        self.with_session(|s| s.publish_current(remote.clone(), remote_branch.clone()));
+    fn publish_current(&mut self, remote: String, remote_branch: String, expect: String) {
+        self.with_session(|s| {
+            s.publish_current(remote.clone(), remote_branch.clone(), expect.clone())
+        });
     }
 
     /// `git remote add <name> <url>`. Contacts nothing — a URL that goes
@@ -1069,14 +1088,16 @@ impl RepoTab {
         self.with_session(|s| s.set_remote_url(name.clone(), url.clone()));
     }
 
-    /// Asks the remote whether it already carries a branch name. Reaches
-    /// the network, so it is asked while the question stands and not on a
-    /// poll. The answer arrives as `remoteBranchAsked` / `remoteBranchTaken`.
+    /// Asks what a push under this branch name would meet on that remote.
+    /// Reaches the network, so it is asked while the question stands and
+    /// not on a poll. The answer arrives as `remoteBranchAsked` /
+    /// `remoteBranchState`.
     #[qslot]
     fn check_remote_branch(&mut self, remote: String, branch: String) {
         self.remote_branch_asked = String::new();
-        self.remote_branch_taken = false;
-        self.remote_branch_reached = false;
+        self.remote_branch_state = String::new();
+        self.remote_branch_tip = String::new();
+        self.remote_branch_theirs = 0;
         self.changed();
         self.with_session(|s| s.check_remote_branch(remote.clone(), branch.clone()));
     }

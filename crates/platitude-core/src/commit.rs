@@ -208,6 +208,32 @@ pub async fn is_in_head_history(
     }
 }
 
+/// How many commits `oid` reaches that HEAD does not.
+///
+/// What an overwrite would take off the far side: those commits stay in the
+/// repository that holds them, but nothing on that branch points at them
+/// afterwards. Only asked when the commit is here to walk — the count is
+/// the one thing the question can put a number on (§相手の履歴を置き換える).
+pub async fn count_beyond_head(
+    executor: &GitExecutor,
+    workdir: &Path,
+    oid: &Oid,
+    cancel: &CancellationToken,
+) -> Result<u32, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["rev-list", "--count"])
+        .arg(format!("HEAD..{}", oid.to_hex()));
+    let out = executor.run(cmd, cancel).await?;
+    out.stdout_utf8()
+        .trim()
+        .parse()
+        .map_err(|_| GitError::UnexpectedOutput {
+            command: format!("git rev-list --count HEAD..{}", oid.to_hex()),
+            message: "a count was expected".to_string(),
+        })
+}
+
 /// Normalizes editor text for git: CRLF to LF and exactly one trailing
 /// newline. `--cleanup=whitespace` handles the rest.
 fn normalized(message: &str) -> String {

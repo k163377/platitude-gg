@@ -21,8 +21,18 @@ Rectangle {
     property string label: ""
     /// What answering costs, in the one line §用語 allows for it.
     property string detail: ""
-    /// The words on the pill that answers.
+    /// The words on the pill that answers. Left empty where the act has a
+    /// command of its own and `code` says it instead.
     property string accept: ""
+    /// The command this question is about, where what it guards is a git
+    /// command rather than a description of one (デザイン規約
+    /// §git 用語のコード表記). The question opens with it and the pill
+    /// answers with it — one word said twice, from a single place, so the
+    /// press that raises the bar and the press that answers it cannot come
+    /// to name two different things. Empty leaves both in the ordinary
+    /// voice, which is what every question whose act git has no one word
+    /// for takes (`Move` / `Rename`).
+    property string code: ""
     /// Throwing away work in hand (danger) rather than reaching past this
     /// machine (warning) — §状態.
     property bool danger: false
@@ -36,6 +46,13 @@ Rectangle {
     /// will make of what it does. The bar's own line has room for one
     /// thing only, and this is where §長押し puts the rest.
     property string tip: ""
+    /// The far side could not be read — the remote never answered, or what
+    /// it named is not in this repository. The frame goes `warning` and a
+    /// `!` follows the word, which is the same news the toolbar's own pair
+    /// carries in the same two marks (デザイン規約 §リモートへ送る):
+    /// **the word and the gesture stay as they were**, because what could
+    /// not be read changes neither what would run nor how it is pressed.
+    property bool alert: false
     /// Whether answering takes a hold rather than a click (デザイン規約
     /// §進行中・長押しの定数): the frame fills from the left while the
     /// press lasts, and letting go part way leaves nothing behind. A hold
@@ -136,13 +153,28 @@ Rectangle {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceXs
-            Label {
-                text: bar.label
-                color: bar.tone
-                font.pixelSize: Theme.fontMd
-                font.weight: Font.DemiBold
-                elide: Text.ElideRight
+            // The question, opened by the command where the act it guards
+            // is one (デザイン規約 §git 用語のコード表記) — `push main
+            // where?` reads as one sentence, so the chip takes the
+            // heading's weight rather than sitting in it as a lighter word.
+            RowLayout {
                 Layout.fillWidth: true
+                spacing: Theme.spaceXs
+                CodeChip {
+                    Layout.alignment: Qt.AlignVCenter
+                    visible: bar.code !== ""
+                    word: bar.code
+                    tint: bar.tone
+                    weight: Font.DemiBold
+                }
+                Label {
+                    text: bar.label
+                    color: bar.tone
+                    font.pixelSize: Theme.fontMd
+                    font.weight: Font.DemiBold
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
             }
             Label {
                 text: bar.detail
@@ -172,8 +204,25 @@ Rectangle {
             radius: Theme.radiusSm
             color: acceptMouse.containsMouse && bar.holdProgress === 0
                    ? Theme.bgHover : "transparent"
-            border.color: bar.tone
+            border.color: bar.alert ? Theme.warning : bar.tone
             border.width: Theme.borderWidth
+            // The ink for everything the pill says — the mark, the word,
+            // the chip a command wears — decided once so the three cannot
+            // come apart. Lifted while the fill runs under it: what is
+            // written crosses both the filled side and the bare one. With
+            // nothing to send yet, only the ink drops — the frame stays,
+            // so the bar keeps its shape while it is filled in
+            // (デザイン規約 §無効).
+            //
+            // A remote that could not be read leaves the word plain rather
+            // than colouring it: the frame and the mark already say to read
+            // this, and a coloured word is what the toolbar keeps for the
+            // press that costs something (デザイン規約 §長押し — 警告の色は
+            // 語ではなく枠と印が持つ).
+            readonly property color wordInk:
+                !bar.answerable ? Theme.textMuted
+                : bar.holdProgress > 0 ? Theme.textOnAccent
+                : bar.alert ? Theme.textPrimary : bar.tone
             // Reachable without a pointer, and given the focus as the bar
             // opens: the pill is the only thing here that acts, so there is
             // nothing else for a tab to land on first (デザイン規約 §長押し).
@@ -185,11 +234,18 @@ Rectangle {
             // rather than the palette's, so the collapse looks no different.
             activeFocusOnTab: true
             enabled: bar.open && bar.answerable
+            /// Whether the focus this pill holds arrived under a finger.
+            /// Cleared when the focus leaves, so the next way in is read on
+            /// its own terms — and cleared when the bar closes with it,
+            /// since the focus goes then too.
+            property bool tookAPress: false
+            onActiveFocusChanged: if (!acceptPill.activeFocus)
+                                      acceptPill.tookAPress = false
             // The pill draws itself rather than being a control, so it
             // has to name itself. The gesture is said here because the
             // words on it no longer carry it.
             Accessible.role: Accessible.Button
-            Accessible.name: bar.accept
+            Accessible.name: bar.code !== "" ? bar.code : bar.accept
             Accessible.description: bar.hold ? qsTr("Hold to activate") : ""
             // The hold filling the frame from the left, inset by the
             // border so the frame stays a frame while it fills: that the
@@ -214,6 +270,12 @@ Rectangle {
             //
             // Focus that came from the keyboard, not from a press
             // (`ActionButton` carries the same reading and the reason).
+            // **`visualFocus` is not ours to read** — that is a `Control`
+            // property and this pill is drawn as a plain rectangle, so
+            // binding to it assigns `undefined` and the ring never comes
+            // up at all (QML says so twice per bar and nowhere else).
+            // Where a press is the only other way in, remembering that it
+            // happened says the same thing.
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: -Theme.spaceXs / 2
@@ -221,7 +283,7 @@ Rectangle {
                 border.color: Theme.borderFocus
                 border.width: Theme.borderWidth
                 radius: Theme.radiusMd
-                visible: acceptPill.visualFocus
+                visible: acceptPill.activeFocus && !acceptPill.tookAPress
             }
             Row {
                 id: acceptRow
@@ -236,21 +298,49 @@ Rectangle {
                     anchors.verticalCenterOffset: Metrics.opticalDrop
                     visible: bar.hold
                     progress: bar.holdProgress
-                    tint: acceptLabel.color
+                    tint: acceptPill.wordInk
                 }
-                Label {
-                    id: acceptLabel
+                // The command, where the question is about one: the same
+                // word the button that raised the bar wears, in the same
+                // dress (デザイン規約 §git 用語のコード表記). Which of
+                // these two speaks is `code` alone, so the pill has no
+                // wording of its own to drift from the head of the
+                // question.
+                // The word, and the mark that stands at the end of it.
+                // Only the word is in the row: the mark hangs off the end
+                // of the word's advance and into the pill's own padding,
+                // which is how the toolbar sets the same pair — spaced by
+                // the air the chip keeps at its edge rather than by a gap
+                // of its own (デザイン規約 §git 用語のコード表記).
+                Item {
+                    id: wordSeat
                     anchors.verticalCenter: parent.verticalCenter
-                    text: bar.accept
-                    // Lifted while the fill runs under it: the words cross
-                    // both the filled side and the bare one. With nothing
-                    // to send yet, only the word drops — the frame stays,
-                    // so the bar keeps its shape while it is filled in
-                    // (デザイン規約 §無効).
-                    color: !bar.answerable ? Theme.textMuted
-                           : bar.holdProgress > 0 ? Theme.textOnAccent
-                                                  : bar.tone
-                    font.pixelSize: Theme.fontMd
+                    implicitWidth: bar.code !== "" ? acceptCode.implicitWidth
+                                                   : acceptWord.implicitWidth
+                    implicitHeight: bar.code !== "" ? acceptCode.implicitHeight
+                                                    : acceptWord.implicitHeight
+                    CodeChip {
+                        id: acceptCode
+                        visible: bar.code !== ""
+                        word: bar.code
+                        tint: acceptPill.wordInk
+                    }
+                    Label {
+                        id: acceptWord
+                        visible: bar.code === ""
+                        text: bar.accept
+                        color: acceptPill.wordInk
+                        font.pixelSize: Theme.fontMd
+                    }
+                    NavIcon {
+                        visible: bar.alert
+                        kind: "bang"
+                        tint: Theme.warning
+                        width: Theme.iconSm
+                        height: Theme.iconSm
+                        x: wordSeat.implicitWidth
+                        y: -Theme.spaceXs
+                    }
                 }
             }
             ToolTip.visible: bar.tip !== "" && acceptMouse.containsMouse
@@ -260,6 +350,10 @@ Rectangle {
                 id: acceptMouse
                 anchors.fill: parent
                 hoverEnabled: true
+                // A hand on the pill takes the focus with it, and a ring
+                // drawn for that is a ring nobody asked for (§長押し: the
+                // ring is the keyboard's way of seeing where it is).
+                onPressed: acceptPill.tookAPress = true
                 // `released` inside the pill, not `clicked`: Qt stops
                 // emitting `clicked` once its own press-and-hold timer has
                 // gone off (800ms), so a click pill held down the way the

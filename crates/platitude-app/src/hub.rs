@@ -105,9 +105,12 @@ pub enum TabMsg {
     RemoteBranch {
         remote: String,
         branch: String,
-        exists: bool,
-        /// False when the remote could not be asked at all.
-        reached: bool,
+        /// `platitude_core::remote::RemoteBranchState` by its wire name.
+        state: String,
+        /// The commit the remote advertised, hex; empty where it named none.
+        tip: String,
+        /// Commits that tip has and this history does not.
+        theirs: i32,
     },
     /// Merge tool names the settings field can offer. Empty is an answer.
     /// `settled` false is the fast half, with the slow read still out.
@@ -528,14 +531,16 @@ impl SessionSink for BridgeSink {
             SessionEvent::RemoteBranchChecked {
                 remote,
                 branch,
-                exists,
-                reached,
+                state,
+                tip,
+                theirs,
             } => {
                 self.feeds.tab.push(TabMsg::RemoteBranch {
                     remote,
                     branch,
-                    exists,
-                    reached,
+                    state: state.as_str().to_string(),
+                    tip,
+                    theirs: i32::try_from(theirs).unwrap_or(i32::MAX),
                 });
             }
             SessionEvent::SignatureChecked { oid, signature } => {

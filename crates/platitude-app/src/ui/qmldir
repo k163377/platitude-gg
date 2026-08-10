@@ -15,6 +15,7 @@ ChangeIcon 1.0 ChangeIcon.qml
 ClipboardHelper 1.0 ClipboardHelper.qml
 CoAuthorCard 1.0 CoAuthorCard.qml
 CoAuthorLine 1.0 CoAuthorLine.qml
+CodeChip 1.0 CodeChip.qml
 CommitHoverCard 1.0 CommitHoverCard.qml
 EolHoverCard 1.0 EolHoverCard.qml
 CommandRowDelegate 1.0 CommandRowDelegate.qml

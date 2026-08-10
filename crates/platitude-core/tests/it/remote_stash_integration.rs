@@ -6,6 +6,7 @@
 
 use crate::support::TestRepo;
 use platitude_core::GitError;
+use platitude_core::commit;
 use platitude_core::process::GitExecutor;
 use platitude_core::remote::{self, PushForce, PushSpec};
 use platitude_core::stash::{self, PushOptions};
@@ -542,7 +543,7 @@ async fn publishing_sends_the_branch_and_records_the_upstream() {
     work.git(&["switch", "-c", "topic"]);
     work.commit_file("b.txt", "b\n", "topic work");
 
-    let spec = remote::plan_publish(&exec, &work.path, "origin", "topic", &cancel)
+    let spec = remote::plan_publish(&exec, &work.path, "origin", "topic", "", &cancel)
         .await
         .expect("plan publish");
     assert!(spec.set_upstream, "the answer is recorded, not re-asked");
@@ -572,7 +573,7 @@ async fn publishing_can_use_a_different_name_on_the_remote() {
     work.git(&["switch", "-c", "topic"]);
     work.commit_file("b.txt", "b\n", "topic work");
 
-    let spec = remote::plan_publish(&exec, &work.path, "origin", "feature/topic", &cancel)
+    let spec = remote::plan_publish(&exec, &work.path, "origin", "feature/topic", "", &cancel)
         .await
         .expect("plan publish");
     remote::push(&exec, &work.path, &spec, NET, &cancel)
@@ -606,19 +607,23 @@ async fn a_first_push_onto_a_taken_name_is_not_refused_when_it_fast_forwards() {
     let theirs = bare.git(&["rev-parse", "shared"]);
     work.commit_file("b.txt", "b2\n", "ours");
 
+    let tip = remote::branch_tip(&exec, &work.path, "origin", "shared", NET, &cancel)
+        .await
+        .expect("ask")
+        .expect("the question the UI puts to the remote before it pushes");
     assert!(
-        remote::has_branch(&exec, &work.path, "origin", "shared", NET, &cancel)
+        commit::is_in_head_history(&exec, &work.path, &tip, &cancel)
             .await
-            .expect("ask"),
-        "the question the UI puts to the remote before it pushes"
+            .expect("compare"),
+        "what makes this the fast-forward case: their commit is one of ours"
     );
 
-    let spec = remote::plan_publish(&exec, &work.path, "origin", "shared", &cancel)
+    let spec = remote::plan_publish(&exec, &work.path, "origin", "shared", "", &cancel)
         .await
         .expect("plan publish");
     remote::push(&exec, &work.path, &spec, NET, &cancel)
         .await
-        .expect("git takes it — this is the hole the hold covers");
+        .expect("git takes it — this is the hole the question covers");
 
     assert_ne!(
         bare.git(&["rev-parse", "shared"]),
@@ -639,20 +644,101 @@ async fn the_remote_branch_check_answers_for_the_exact_name_only() {
     work.git(&["push", "origin", "feature/topic"]);
 
     assert!(
-        remote::has_branch(&exec, &work.path, "origin", "feature/topic", NET, &cancel)
+        remote::branch_tip(&exec, &work.path, "origin", "feature/topic", NET, &cancel)
             .await
             .expect("ask")
+            .is_some()
     );
     assert!(
-        !remote::has_branch(&exec, &work.path, "origin", "topic", NET, &cancel)
+        remote::branch_tip(&exec, &work.path, "origin", "topic", NET, &cancel)
             .await
-            .expect("ask"),
+            .expect("ask")
+            .is_none(),
         "`topic` is not taken just because `feature/topic` is"
     );
     assert!(
-        !remote::has_branch(&exec, &work.path, "origin", "feature", NET, &cancel)
+        remote::branch_tip(&exec, &work.path, "origin", "feature", NET, &cancel)
             .await
             .expect("ask")
+            .is_none()
+    );
+}
+
+/// The other half of the same question. A name can be taken by commits
+/// this history never had, and there git refuses the push outright — so
+/// "taken" alone cannot decide what the UI should do about it. The commit
+/// `branch_tip` hands back is what tells the two apart before anything is
+/// sent.
+#[tokio::test]
+async fn a_taken_name_holding_commits_of_its_own_is_refused() {
+    let (mut bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+
+    // Their branch leaves the trunk and takes a commit with it; ours
+    // leaves from the same place and never gets that commit.
+    work.git(&["switch", "-c", "theirs"]);
+    work.commit_file("b.txt", "theirs\n", "theirs");
+    work.git(&["push", "origin", "theirs"]);
+    let theirs = bare.git(&["rev-parse", "theirs"]);
+    work.git(&["switch", "-c", "ours", "HEAD~1"]);
+    work.commit_file("c.txt", "ours\n", "ours");
+
+    let tip = remote::branch_tip(&exec, &work.path, "origin", "theirs", NET, &cancel)
+        .await
+        .expect("ask")
+        .expect("the name is taken");
+    assert!(
+        !commit::is_in_head_history(&exec, &work.path, &tip, &cancel)
+            .await
+            .expect("compare"),
+        "their commit is not one of ours, which is what makes this refusable"
+    );
+
+    let spec = remote::plan_publish(&exec, &work.path, "origin", "theirs", "", &cancel)
+        .await
+        .expect("plan publish");
+    let sent = remote::push(&exec, &work.path, &spec, NET, &cancel).await;
+    assert!(
+        matches!(sent, Err(GitError::PushOutdated { .. })),
+        "git turns a first push that is not a fast-forward down: {sent:?}"
+    );
+    assert_eq!(
+        bare.git(&["rev-parse", "theirs"]),
+        theirs,
+        "and their branch is where it was"
+    );
+
+    // The only thing that can land here, and the lease is what makes it
+    // offerable: pinned to a commit that is not there any more, git says no
+    // rather than flattening a branch nobody looked at.
+    let stale = remote::plan_publish(
+        &exec,
+        &work.path,
+        "origin",
+        "theirs",
+        &"0".repeat(40),
+        &cancel,
+    )
+    .await
+    .expect("plan a leased publish");
+    assert!(
+        remote::push(&exec, &work.path, &stale, NET, &cancel)
+            .await
+            .is_err(),
+        "a lease against a commit the remote does not hold is refused"
+    );
+    assert_eq!(bare.git(&["rev-parse", "theirs"]), theirs);
+
+    let leased = remote::plan_publish(&exec, &work.path, "origin", "theirs", &theirs, &cancel)
+        .await
+        .expect("plan a leased publish");
+    remote::push(&exec, &work.path, &leased, NET, &cancel)
+        .await
+        .expect("the overwrite the question offers, pinned to what it showed");
+    assert_ne!(
+        bare.git(&["rev-parse", "theirs"]),
+        theirs,
+        "their branch now carries ours instead"
     );
 }
 
@@ -682,7 +768,7 @@ async fn adding_a_remote_records_the_url_without_reaching_it() {
 
     // And the corrected remote is usable, which is the whole point of
     // keeping it rather than undoing the add.
-    let spec = remote::plan_publish(&exec, &work.path, "fork", "main", &cancel)
+    let spec = remote::plan_publish(&exec, &work.path, "fork", "main", "", &cancel)
         .await
         .expect("plan publish");
     remote::push(&exec, &work.path, &spec, NET, &cancel)
@@ -702,7 +788,7 @@ async fn a_push_to_a_remote_that_goes_nowhere_leaves_the_remote_behind() {
     remote::add(&exec, &work.path, "fork", nowhere, &cancel)
         .await
         .expect("add");
-    let spec = remote::plan_publish(&exec, &work.path, "fork", "main", &cancel)
+    let spec = remote::plan_publish(&exec, &work.path, "fork", "main", "", &cancel)
         .await
         .expect("plan publish");
     let error = remote::push(&exec, &work.path, &spec, NET, &cancel)
