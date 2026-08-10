@@ -17,6 +17,64 @@ type When = Box<dyn Fn(&SessionEvent) -> bool + Send>;
 /// What runs inside that event's delivery.
 type Then = Box<dyn FnOnce() + Send>;
 
+/// What a graph pass reports when it lands, whichever of the two shapes
+/// it landed in.
+#[derive(Debug, Clone, Copy)]
+struct Pass {
+    generation: u64,
+    /// Rows the pass put on screen (`LogFinished`'s `total`).
+    total: u32,
+    walked: u32,
+    truncated: bool,
+}
+
+/// Reads a landed pass out of the one event that ends it.
+///
+/// A stream (`LogStarted` → chunks → `LogFinished`) and an atomic
+/// replacement (`LogReplaced`) are two shapes of the same thing, and
+/// which one carries a given ask is a scheduling accident. `restart_log`
+/// asks for a stream, but that pass drops without a word the moment a
+/// background rebuild is asked for over it — `run_direct_pass` returns on
+/// a cancelled token, and a walk cancelled mid-stream reports neither
+/// `LogFinished` nor `LogFailed` — and the rebuild behind it replaces
+/// instead, carrying the very options the ask just changed (both entry
+/// points read them after taking the token, so the winner is always the
+/// one holding the new ones).
+///
+/// A test that waits for one shape is waiting on that race. 実測: a
+/// window change on a loaded machine landed as `LogReplaced { generation:
+/// 4 }` — the open sequence's dirty-flip `refresh_log` overtook the
+/// stream at generation 3 — and the wait sat out its whole budget.
+fn pass_of(event: &SessionEvent) -> Option<Pass> {
+    match event {
+        SessionEvent::LogFinished {
+            generation,
+            total,
+            walked,
+            truncated,
+            ..
+        } => Some(Pass {
+            generation: *generation,
+            total: *total,
+            walked: *walked,
+            truncated: *truncated,
+        }),
+        SessionEvent::LogReplaced {
+            generation,
+            rows,
+            walked,
+            truncated,
+            ..
+        } => Some(Pass {
+            generation: *generation,
+            total: rows.len() as u32,
+            walked: *walked,
+            truncated: *truncated,
+        }),
+        _ => None,
+    }
+}
+
 struct CaptureSink {
     events: Mutex<Vec<SessionEvent>>,
     hook: Mutex<Option<(When, Then)>>,
@@ -68,18 +126,7 @@ impl CaptureSink {
     /// reaction to whatever the test does next.
     async fn settled_stream_gen(&self, total: u32) -> u64 {
         fn stream_events(evs: &[SessionEvent]) -> usize {
-            evs.iter()
-                .filter(|e| {
-                    matches!(
-                        e,
-                        SessionEvent::LogStarted { .. }
-                            | SessionEvent::LogChunk { .. }
-                            | SessionEvent::LogFinished { .. }
-                            | SessionEvent::LogReplaced { .. }
-                            | SessionEvent::LogFailed { .. }
-                    )
-                })
-                .count()
+            evs.iter().filter(|e| is_stream_event(e)).count()
         }
         let deadline = Instant::now() + Duration::from_secs(20);
         loop {
@@ -87,17 +134,9 @@ impl CaptureSink {
                 let evs = self.events.lock().unwrap();
                 let newest = evs
                     .iter()
-                    .filter_map(|e| match e {
-                        SessionEvent::LogFinished {
-                            generation,
-                            total: t,
-                            ..
-                        } if *t == total => Some(*generation),
-                        SessionEvent::LogReplaced {
-                            generation, rows, ..
-                        } if rows.len() as u32 == total => Some(*generation),
-                        _ => None,
-                    })
+                    .filter_map(pass_of)
+                    .filter(|p| p.total == total)
+                    .map(|p| p.generation)
                     .max();
                 (newest, stream_events(&evs))
             };
@@ -115,6 +154,29 @@ impl CaptureSink {
                 self.events.lock().unwrap()
             );
         }
+    }
+
+    /// Waits for the first graph pass after generation `after` to land,
+    /// in whichever shape it landed in (see [`pass_of`]).
+    ///
+    /// "The first one after" is the reaction to whatever the test asked
+    /// for last, and nothing else: a pass that finds the graph unchanged
+    /// swaps nothing and says nothing (`run_swap_pass`), so the only
+    /// passes that speak are the ones an ask produced. That also makes it
+    /// safe for `after` to be older than the newest settled pass — a
+    /// duplicate of a graph already on screen could not have spoken.
+    ///
+    /// Which means the caller owes one thing: **ask for a window the
+    /// current one differs from**. A change that leaves the rows exactly
+    /// as they are has nothing to announce if a rebuild overtakes the
+    /// stream, and no wait can conjure an event nobody sent.
+    async fn pass_after(&self, what: &str, after: u64) -> Pass {
+        self.wait_for(what, |evs| {
+            evs.iter()
+                .filter_map(pass_of)
+                .find(|p| p.generation > after)
+        })
+        .await
     }
 
     /// Polls until `pred` over the event list returns `Some`.
@@ -482,15 +544,8 @@ async fn tag_only_commits_follow_the_include_tags_option() {
     }
 
     session.set_include_tags(false);
-    sink.wait_for("tags-off LogFinished", |evs| {
-        evs.iter().find_map(|e| match e {
-            SessionEvent::LogFinished {
-                generation, total, ..
-            } if *generation > first_gen && *total == 1 => Some(()),
-            _ => None,
-        })
-    })
-    .await;
+    let off = sink.pass_after("the tag-less graph", first_gen).await;
+    assert_eq!(off.total, 1, "the tag-only commit left the walk");
 
     session.close();
 }
@@ -525,24 +580,10 @@ async fn log_limit_truncates_the_window() {
     let first_gen = sink.settled_stream_gen(3).await;
 
     session.set_log_limit(Some(2));
-    sink.wait_for("limited LogFinished", |evs| {
-        evs.iter().find_map(|e| match e {
-            SessionEvent::LogFinished {
-                generation,
-                total,
-                walked,
-                truncated,
-                ..
-            } if *generation > first_gen => {
-                assert_eq!(*total, 2);
-                assert_eq!(*walked, 2, "the footer's number is the limit itself");
-                assert!(truncated);
-                Some(())
-            }
-            _ => None,
-        })
-    })
-    .await;
+    let limited = sink.pass_after("the limited window", first_gen).await;
+    assert_eq!(limited.total, 2);
+    assert_eq!(limited.walked, 2, "the footer's number is the limit itself");
+    assert!(limited.truncated);
 
     session.close();
 }
@@ -585,24 +626,10 @@ async fn truncation_follows_the_walk_not_the_shown_rows() {
     // The walk emits 4 rows (stash, its index parent, "three", "two") and
     // is cut before "one"; the sifted index parent leaves 3 shown rows.
     session.set_log_limit(Some(4));
-    sink.wait_for("limited LogFinished", |evs| {
-        evs.iter().find_map(|e| match e {
-            SessionEvent::LogFinished {
-                generation,
-                total,
-                walked,
-                truncated,
-                ..
-            } if *generation > first_gen => {
-                assert_eq!(*total, 3, "stash + three + two, index parent sifted");
-                assert_eq!(*walked, 4, "the walk count stays on the limit");
-                assert!(truncated, "the walk was cut before the root commit");
-                Some(())
-            }
-            _ => None,
-        })
-    })
-    .await;
+    let limited = sink.pass_after("the limited window", first_gen).await;
+    assert_eq!(limited.total, 3, "stash + three + two, index parent sifted");
+    assert_eq!(limited.walked, 4, "the walk count stays on the limit");
+    assert!(limited.truncated, "the walk was cut before the root commit");
 
     session.close();
 }
@@ -610,6 +637,15 @@ async fn truncation_follows_the_walk_not_the_shown_rows() {
 /// The synthetic WIP row is shown but never walked: a window that holds
 /// the whole history must not report truncation just because the WIP row
 /// pushes the shown count up to the limit.
+///
+/// Reached by widening a window that really was cut, rather than by
+/// opening the wide one straight away. Both say the same thing about the
+/// WIP row, but only the widening changes the graph — and a change is
+/// what makes the answer arrive at all. Going straight to the wide window
+/// leaves the rows exactly as the opening pass left them, so a rebuild
+/// that overtakes the stream (this repository opens dirty, and the status
+/// read that notices it asks for one) finds nothing to swap and says
+/// nothing, and the test waits for an event that was never sent.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_wip_row_does_not_trigger_truncation() {
     let mut repo = TestRepo::init();
@@ -626,31 +662,98 @@ async fn the_wip_row_does_not_trigger_truncation() {
     );
 
     // Wait until the dirty state is reflected and the stream settles, so
-    // the next generation is the reaction to the limit change.
+    // the next pass is the reaction to the limit change.
     let first_gen = sink.settled_stream_gen(3).await;
+
+    // One commit through a window of one: cut, and the WIP row rides on
+    // top of it regardless.
+    session.set_log_limit(Some(1));
+    let cut = sink.pass_after("the cut window", first_gen).await;
+    assert_eq!(cut.total, 2, "WIP row + the one commit walked");
+    assert_eq!(cut.walked, 1, "the walk stopped on the limit");
+    assert!(cut.truncated, "older history exists and is not shown");
 
     // Two commits walk through a window of three; the WIP row makes three
     // shown rows, which is not a truncated window.
     session.set_log_limit(Some(3));
-    sink.wait_for("limited LogFinished", |evs| {
-        evs.iter().find_map(|e| match e {
-            SessionEvent::LogFinished {
-                generation,
-                total,
-                walked,
-                truncated,
-                ..
-            } if *generation > first_gen => {
-                assert_eq!(*total, 3, "WIP row + two commits");
-                assert_eq!(*walked, 2, "the WIP row is shown but never walked");
-                assert!(!truncated, "the whole history fits the window");
-                Some(())
-            }
-            _ => None,
-        })
-    })
-    .await;
+    let whole = sink.pass_after("the widened window", cut.generation).await;
+    assert_eq!(whole.total, 3, "WIP row + two commits");
+    assert_eq!(whole.walked, 2, "the WIP row is shown but never walked");
+    assert!(!whole.truncated, "the whole history fits the window");
 
+    session.close();
+}
+
+/// A window change asks for a stream, but only until somebody else asks
+/// for the graph: the stream drops without a word when a background
+/// rebuild supersedes it, and that rebuild — reading the options the
+/// change just wrote — lands the new window as an atomic replacement
+/// instead. The two are the same answer, and which one arrives is a
+/// scheduling accident, so waiting for one shape is waiting on a race.
+///
+/// Held in the swap that adds the WIP row, the interleaving is exact: the
+/// stream cannot reach its cancel check until the rebuild behind it has
+/// taken its place. Left to the scheduler it is rare — it turned up as a
+/// flake on a machine running three other builds, not as a test.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "1\n", "one");
+    repo.commit_file("f.txt", "2\n", "two");
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        GitExecutor::new(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    sink.settled_stream_gen(2).await;
+
+    // Park in the swap that adds the WIP row: it sends under the graph
+    // lock, so every pass asked for from here waits at that door.
+    let (arrived, at_the_window) = tokio::sync::oneshot::channel();
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    sink.hook_once(
+        |e| matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 3),
+        move || {
+            let _ = arrived.send(());
+            let _ = held.recv_timeout(Duration::from_secs(20));
+        },
+    );
+    repo.write_file("f.txt", "wip\n");
+    session.refresh_status();
+    at_the_window.await.expect("the rebuild reached the window");
+    // The sink records before it runs the hook, so the graph the change
+    // is measured against is already readable from where it is parked.
+    let wip_gen = sink
+        .wait_for("the WIP row's generation", |evs| {
+            evs.iter()
+                .filter_map(pass_of)
+                .find(|p| p.total == 3)
+                .map(|p| p.generation)
+        })
+        .await;
+
+    // The change's stream is stopped at that door; the rebuild asked for
+    // behind it takes its place before the stream gets through.
+    session.set_log_limit(Some(1));
+    session.refresh_log();
+    release.send(()).expect("let the rebuild finish");
+
+    let cut = sink.pass_after("the new window", wip_gen).await;
+    assert_eq!(cut.total, 2, "WIP row + the one commit walked");
+    assert_eq!(cut.walked, 1, "the walk stopped on the limit");
+    assert!(cut.truncated, "older history exists and is not shown");
+    assert_eq!(
+        sink.count(
+            |e| matches!(e, SessionEvent::LogFinished { generation, .. } if *generation > wip_gen)
+        ),
+        0,
+        "the superseded stream stayed silent, so the replacement is the \
+         only thing that could have carried the window: {:?}",
+        sink.events.lock().unwrap()
+    );
     session.close();
 }
 
