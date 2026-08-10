@@ -33,7 +33,11 @@ const IDENTITY_ASKED: &str = "Ada Lovelace|ada@example.com";
 /// asks for an identity on its own.
 fn identity_seed(verb: &str) -> Option<&'static str> {
     match verb {
-        "identity" => Some(""),
+        // `badges` wants the badge, not the screen: an empty seed is the
+        // one state that raises it without a save having to fail first,
+        // and the repository keeps its own `user.*` so everything else on
+        // the page goes on working.
+        "identity" | "badges" => Some(""),
         // `identity-tip` walks the same half-landed save and then closes
         // the dialog on it: the badge the tooltip belongs to only stands
         // while the identity is half of what was asked for.
@@ -41,6 +45,18 @@ fn identity_seed(verb: &str) -> Option<&'static str> {
             Some("[user]\n\temail = personal@example.com\n\temail = second@example.com\n")
         }
         _ => None,
+    }
+}
+
+/// What the dialog on top of that seed is told to do. The identity verbs
+/// are about the write, so they type an identity in; `badges` is about
+/// what stands behind the dialog once it has been waved away, and its own
+/// argument names the shape of the window rather than a person.
+fn identity_answer<'a>(verb: &str, arg: &'a str) -> &'a str {
+    match verb {
+        "badges" => "skip",
+        _ if arg.is_empty() => IDENTITY_ASKED,
+        _ => arg,
     }
 }
 
@@ -340,13 +356,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         cmd.current_dir(&shot_dir)
             .env("GIT_CONFIG_GLOBAL", &config)
             .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env(
-                "PG_AUTO_IDENTITY",
-                match opts.arg.is_empty() {
-                    true => IDENTITY_ASKED,
-                    false => opts.arg.as_str(),
-                },
-            );
+            .env("PG_AUTO_IDENTITY", identity_answer(&opts.verb, &opts.arg));
         if opts.verb == "identity-half" || opts.verb == "identity-tip" {
             cmd.env("PG_AUTO_IDENTITY_SAVE", "1");
         }
@@ -461,6 +471,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // simply has a pane outside the frame, where a screenshot cannot
         // follow. What the floor came to is a number or it is nothing.
         "window-floor" => Some("window_floor fits=true"),
+        // The three badges are judged with the fit. A run where one of
+        // them never stood photographs a band that was never crowded, and
+        // that picture cannot be told from a band that took the crowd
+        // well — so the crowd itself has to be said out loud.
+        "badges" => Some("badges fits=true op=true conflicts=true identity=true"),
         _ => None,
     };
     let outcome = Outcome {

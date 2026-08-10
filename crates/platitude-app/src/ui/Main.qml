@@ -969,6 +969,58 @@ ApplicationWindow {
                                  ? root.floorPage.detailsOverHeight : 0))
     }
 
+    // PG_AUTO_ACT=badges: all three of the band's state badges at once —
+    // a stopped operation, the conflict it stopped on, and a machine that
+    // has never been told who is committing. Each of them is a fixed box
+    // in the band's row, so three of them is the widest the band ever
+    // asks for, and the floor is the only thing standing between that and
+    // a `>_` pushed off the end (デザイン規約 §ウィンドウの縁).
+    //
+    // The argument is the window rather than a name: `floor` puts it down
+    // on the floor the three badges leave, which is the half a picture of
+    // a wide window cannot answer.
+    Timer {
+        id: badgesActTimer
+        interval: 1200
+        running: AppBackend.autoAct === "badges"
+        onTriggered: {
+            if (AppBackend.autoActArg !== "floor") {
+                root.reportBadges()
+                return
+            }
+            root.width = Math.ceil(root.floorWidth)
+            root.height = Math.ceil(root.floorHeight)
+            badgesReportTimer.start()
+        }
+    }
+    // A beat after the shrink, for the same reason the floor verb waits:
+    // what is being read is where the layout came to rest, not what it
+    // was asked for.
+    Timer {
+        id: badgesReportTimer
+        interval: Metrics.anchorDelayMs
+        onTriggered: root.reportBadges()
+    }
+    /// What the band came to with every badge it can wear. `fits=` leads,
+    /// and the three badges are judged with it: a run where one of them
+    /// never stood photographs a band that was never crowded, and that
+    /// picture is indistinguishable from a band that took the crowd well.
+    function reportBadges() {
+        const floorW = Math.ceil(root.floorWidth)
+        AppBackend.report(
+            "badges fits=" + (root.width >= floorW)
+            + " op=" + topBar.opBadgeShown
+            + " conflicts=" + topBar.conflictBadgeShown
+            + " identity=" + topBar.identityBadgeShown
+            // The band's own floor beside the window's: the band is what
+            // the badges widen, and reading only the window's would not
+            // say whether it was this row that set it.
+            + " bandW=" + Math.ceil(topBar.floorWidth)
+            + " floorW=" + floorW + " w=" + root.width
+            + " tabsW=" + Math.round(topBar.bandTabsWidth)
+            + " grabRun=" + Math.round(topBar.bandGrabRun))
+    }
+
     // PG_AUTO_ACT=state: what a launch came back to, and (with the
     // argument "change") something for the next one to come back to.
     // Two runs sharing one --config-dir are what actually tests this —

@@ -55,6 +55,13 @@ Rectangle {
     /// save that only half landed leaves an identity that *is* set — so
     /// nothing else on this band would mention it.
     readonly property bool identityBadgeShown: identityBadgeBox.visible
+    /// Automation: the other two badges, read off their own boxes for the
+    /// same reason. All three can stand at once — a stopped operation that
+    /// hit a conflict, on a machine that has never been told who is
+    /// committing — and that is the widest this band ever gets
+    /// (`PG_AUTO_ACT=badges`).
+    readonly property bool opBadgeShown: opBadge.visible
+    readonly property bool conflictBadgeShown: conflictBadge.visible
     /// Stands in for the pointer where headless cannot put one, so the
     /// badge's tooltip can be photographed (identity-tip). Reported
     /// through the ToolTip's own visible — the output side.
@@ -736,6 +743,7 @@ Rectangle {
             }
         }
         Rectangle {
+            id: conflictBadge
             visible: topBar.curPage !== null && topBar.curPage.pageWt.hasConflicts
             color: Theme.danger
             radius: Theme.radiusSm
