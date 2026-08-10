@@ -124,7 +124,7 @@ AppDialog {
                         + settingsDialog.prefillEmail + ">"
             avatarWho.wanted = who
             avatarWho.editText = who
-            choosePicture.forceActiveFocus()
+            chooseAvatar.forceActiveFocus()
         } else {
             avatarWho.wanted = ""
             avatarWho.editText = ""
@@ -378,14 +378,13 @@ AppDialog {
                     }
                 }
                 ActionButton {
-                    id: choosePicture
+                    id: chooseAvatar
                     implicitHeight: Theme.controlHeight
-                    // One word for the file all the way through — the seat
-                    // is the avatar, what fills it is a picture, and there
-                    // is no third name for either (デザイン規約 §アバターを
+                    // One word for the whole feature, and it is the word
+                    // this shelf already uses (デザイン規約 §アバターを
                     // 与える). No article: the row names a kind about to be
                     // chosen, not something already on screen (§長さ).
-                    text: qsTr("Choose picture…")
+                    text: qsTr("Choose avatar…")
                     // Opened from an avatar this already holds the focus,
                     // so the whole errand is one press and the picker —
                     // and the accent says so, since the frame is what
@@ -398,7 +397,7 @@ AppDialog {
                                 ? Theme.accent : Theme.borderDefault
                     activeFocusOnTab: true
                     enabled: settingsDialog.chosenEmail !== ""
-                    onActivated: picturePicker.open()
+                    onActivated: avatarPicker.open()
                 }
             }
             Label {
@@ -414,16 +413,21 @@ AppDialog {
                 wrapMode: Text.Wrap
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSm
-                text: qsTr("A picture for anyone whose commits you read. The list offers this repository's authors. Nothing is fetched: the picture is one of your own files, copied in beside these settings.")
+                text: qsTr("An avatar for anyone whose commits you read. The list offers this repository's authors. Nothing is fetched: it comes from one of your own files, copied in beside these settings.")
             }
         }
         FileDialog {
-            id: picturePicker
-            title: qsTr("Choose picture")
-            // The kinds come from the store so the dialog and the store
-            // cannot drift apart; the word in front of them is ours, so it
-            // lives here rather than in Rust (CLAUDE.md 文言規約).
-            nameFilters: [qsTr("Pictures (%1)").arg(AppBackend.avatarPatterns)]
+            id: avatarPicker
+            title: qsTr("Choose avatar")
+            // The patterns come from the store so the dialog and the store
+            // cannot drift apart; the words in front of them are ours, so
+            // they live here rather than in Rust (CLAUDE.md 文言規約). They
+            // name the two formats rather than a category, because every
+            // category word for a file is a second name for the avatar
+            // (デザイン規約 §アバターを与える) — and the formats are pinned
+            // by that same section, so `avatar::EXTENSIONS` cannot grow one
+            // this line does not know about without the rules moving first.
+            nameFilters: [qsTr("PNG and JPEG (%1)").arg(AppBackend.avatarPatterns)]
             onAccepted: AppBackend.assignAvatar(settingsDialog.chosenEmail,
                                                 settingsDialog.chosenName,
                                                 selectedFile.toString())
@@ -450,7 +454,7 @@ AppDialog {
                 // The accent goes to whichever of the two the dialog was
                 // opened for, and the other keeps a plain frame — the
                 // same one expression, read the other way round
-                // (`choosePicture`). No icon: a check would claim credit
+                // (`chooseAvatar`). No icon: a check would claim credit
                 // for writes that already happened, which is the very
                 // thing the comment above says a `Save` here must not do.
                 frameColor: settingsDialog.prefillEmail === ""

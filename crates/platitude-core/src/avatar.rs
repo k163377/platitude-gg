@@ -60,7 +60,7 @@ pub enum AvatarError {
     },
     /// No configuration directory, so nothing can be kept. A screenshot run
     /// and a machine with no `APPDATA` both land here.
-    #[error("there is nowhere to keep pictures")]
+    #[error("there is nowhere to keep avatars")]
     NoStore,
 }
 
