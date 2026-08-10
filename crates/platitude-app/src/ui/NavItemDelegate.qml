@@ -423,9 +423,14 @@ Item {
             return qsTr("Switch to %1").arg(full)
         if (navRow.kindHint === "worktree")
             return qsTr("Open %1 in a new tab").arg(full)
-        // A stash is named by a message that the row has to cut short.
+        // The same answer for a stash, reached its own way: the row *is*
+        // the message, so a tooltip reads the label straight back. Nor can
+        // the full name stand in for it the way it does below — here that
+        // is the selector (`stash@{0}`), which nobody hovers to learn. A
+        // message the row had to cut short is a click away, in the details
+        // pane that reads it anyway.
         if (navRow.kindHint === "stash")
-            return navRow.name
+            return ""
         // A row carrying the line-ending mark has a card of its own, which
         // names the path as its first line — two things opening off one
         // pointer would sit on top of each other.
