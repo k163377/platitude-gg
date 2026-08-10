@@ -85,12 +85,14 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/DescriptionBox.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DetailsPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffPane.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/DotMark.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FileRowDelegate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FindBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FoldBlock.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FormField.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphRowDelegate.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/HeadTrack.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HoldIcon.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HoverButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HoverToolButton.qml", "qt/qml/platitude");

@@ -727,19 +727,44 @@ Rectangle {
             radius: Theme.radiusSm
             implicitHeight: Theme.iconLg
             implicitWidth: opLabel.implicitWidth + 2 * Theme.spaceXs
-            Label {
+            RowLayout {
                 id: opLabel
                 anchors.centerIn: parent
+                spacing: Theme.spaceXs
+                Label {
+                    text: opBadge.wt === null ? "" : opBadge.wt.opText
+                    color: Theme.warning
+                    font.pixelSize: Theme.fontSm
+                    font.weight: Font.DemiBold
+                }
+                // Bisect runs alongside rather than instead, so it is the
+                // one thing that can share this badge. What goes between
+                // the two names is drawn, not typed — a middle dot would
+                // put a full-width cell in the middle of the badge
+                // (規約 §余白).
+                DotMark {
+                    visible: opBadge.wt !== null && opBadge.wt.opAlso !== ""
+                    tint: Theme.warning
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                Label {
+                    visible: opBadge.wt !== null && opBadge.wt.opAlso !== ""
+                    text: opBadge.wt === null ? "" : opBadge.wt.opAlso
+                    color: Theme.warning
+                    font.pixelSize: Theme.fontSm
+                    font.weight: Font.DemiBold
+                }
                 // The count is the half a stopped rebase cannot say
                 // without it; a merge steps through nothing and has none.
-                text: opBadge.wt === null ? ""
-                    : opBadge.wt.opSteps > 0
-                      ? qsTr("%1 %2/%3").arg(opBadge.wt.opText)
-                        .arg(opBadge.wt.opStep).arg(opBadge.wt.opSteps)
-                      : opBadge.wt.opText
-                color: Theme.warning
-                font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
+                Label {
+                    visible: opBadge.wt !== null && opBadge.wt.opSteps > 0
+                    text: opBadge.wt === null ? ""
+                          : qsTr("%1/%2").arg(opBadge.wt.opStep)
+                                         .arg(opBadge.wt.opSteps)
+                    color: Theme.warning
+                    font.pixelSize: Theme.fontSm
+                    font.weight: Font.DemiBold
+                }
             }
         }
         Rectangle {

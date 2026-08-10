@@ -290,13 +290,36 @@ Rectangle {
                 anchors.leftMargin: Theme.spaceSm
                 anchors.rightMargin: Theme.spaceSm
                 spacing: Theme.spaceSm
-                Label {
-                    text: qsTr("DIFF · %1").arg(diffPane.diffModel.title)
-                    font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
-                    color: Theme.textSecondary
-                    elide: Text.ElideMiddle
+                // The word, the dot, and the file. Drawing the dot
+                // (`DotMark`) puts the space either side of it back in
+                // this row's hands — as a glyph it was whatever a
+                // full-width cell had left over (規約 §余白).
+                RowLayout {
                     Layout.fillWidth: true
+                    spacing: Theme.spaceXs
+                    Label {
+                        text: qsTr("DIFF")
+                        font.pixelSize: Theme.fontSm
+                        font.weight: Font.DemiBold
+                        color: Theme.textSecondary
+                    }
+                    DotMark {
+                        // Nothing open, nothing to separate: as a glyph
+                        // this sat unread inside its cell, drawn it is a
+                        // dot with nothing after it.
+                        visible: diffPane.diffModel.title !== ""
+                        tint: Theme.textSecondary
+                    }
+                    Label {
+                        // Takes the slack, so the pair above stays put
+                        // (FileRowDelegate learned this the hard way).
+                        Layout.fillWidth: true
+                        text: diffPane.diffModel.title
+                        font.pixelSize: Theme.fontSm
+                        font.weight: Font.DemiBold
+                        color: Theme.textSecondary
+                        elide: Text.ElideMiddle
+                    }
                 }
                 // The file's own word, and the loudest thing in the pane:
                 // the pair colour the hunks and the file rows use, a step
@@ -429,25 +452,71 @@ Rectangle {
         // -- content preview: binaries summarized by size, images
         //    rendered (added = After only, deleted = Before only,
         //    modified = both).
-        Label {
+        // The word, then what the file weighs. Both marks are drawn for
+        // the same reason: as glyphs they sit in a full-width cell whose
+        // leftover became the spacing, and each family drew its own
+        // arrow (規約 §寸法「印はフォントの字に任せない」). The one
+        // wording without a size keeps its dash — that is a sentence,
+        // not a mark, and it measured the same on both OSes.
+        RowLayout {
+            id: binaryLine
+            readonly property string oldSize: diffPane.diffModel.previewOldSize
+            readonly property string newSize: diffPane.diffModel.previewNewSize
+            readonly property bool sized:
+                binaryLine.oldSize !== "" || binaryLine.newSize !== ""
+            readonly property bool bothSides:
+                binaryLine.oldSize !== "" && binaryLine.newSize !== ""
+            readonly property bool removed:
+                binaryLine.newSize === "" && binaryLine.oldSize !== ""
             visible: diffPane.diffModel.previewKind === "binary"
                      || (diffPane.diffModel.isBinary
                          && diffPane.diffModel.previewKind === "")
             Layout.margins: Theme.spaceSm
             Layout.fillWidth: true
-            elide: Text.ElideRight
-            text: {
-                const oldS = diffPane.diffModel.previewOldSize
-                const newS = diffPane.diffModel.previewNewSize
-                if (oldS !== "" && newS !== "")
-                    return qsTr("Binary file · %1 → %2").arg(oldS).arg(newS)
-                if (newS !== "")
-                    return qsTr("Binary file · %1").arg(newS)
-                if (oldS !== "")
-                    return qsTr("Binary file removed · was %1").arg(oldS)
-                return qsTr("Binary file — no text diff")
+            spacing: Theme.spaceXs
+            Label {
+                text: !binaryLine.sized
+                      ? qsTr("Binary file — no text diff")
+                      : binaryLine.removed ? qsTr("Binary file removed")
+                                           : qsTr("Binary file")
+                elide: Text.ElideRight
+                color: Theme.textMuted
             }
-            color: Theme.textMuted
+            DotMark {
+                visible: binaryLine.sized
+                tint: Theme.textMuted
+            }
+            Label {
+                visible: binaryLine.sized
+                text: binaryLine.removed
+                      ? qsTr("was %1").arg(binaryLine.oldSize)
+                      : binaryLine.bothSides ? binaryLine.oldSize
+                                             : binaryLine.newSize
+                color: Theme.textMuted
+            }
+            Item {
+                visible: binaryLine.bothSides
+                Layout.preferredWidth: sizeMark.inkWidth
+                Layout.preferredHeight: Theme.iconSm
+                Layout.alignment: Qt.AlignVCenter
+                NavIcon {
+                    id: sizeMark
+                    anchors.centerIn: parent
+                    kind: "arrow"
+                    width: Theme.iconSm
+                    height: Theme.iconSm
+                    stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
+                    tint: Theme.textMuted
+                }
+            }
+            Label {
+                visible: binaryLine.bothSides
+                text: binaryLine.newSize
+                color: Theme.textMuted
+            }
+            // Someone has to take the slack, or the engine centres what
+            // it cannot fill (FileRowDelegate learned this the hard way).
+            Item { Layout.fillWidth: true }
         }
         RowLayout {
             visible: diffPane.diffModel.previewKind === "image"
@@ -458,14 +527,14 @@ Rectangle {
             ImagePreviewCell {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                label: qsTr("Before · %1").arg(diffPane.diffModel.previewOldSize)
+                caption: qsTr("Before")
                 url: diffPane.diffModel.previewOldUrl
                 sizeText: diffPane.diffModel.previewOldSize
             }
             ImagePreviewCell {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                label: qsTr("After · %1").arg(diffPane.diffModel.previewNewSize)
+                caption: qsTr("After")
                 url: diffPane.diffModel.previewNewUrl
                 sizeText: diffPane.diffModel.previewNewSize
             }

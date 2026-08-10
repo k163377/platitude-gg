@@ -26,6 +26,12 @@ pub struct WorkTreeModel {
     ahead: i32,
     behind: i32,
     op_text: String,
+    /// The second name, when bisect is running alongside something else.
+    /// Two fields rather than one joined string: what goes between them
+    /// is a mark the showing side draws (規約 §余白), and `op_text` stays
+    /// empty exactly when nothing is running — which is what every
+    /// `opText === ""` test in the UI is asking.
+    op_also: String,
     has_conflicts: bool,
     staged_count: i32,
     unstaged_count: i32,
@@ -89,6 +95,7 @@ impl WorkTreeModel {
     qproperty!("ahead", Member = ahead, Notify = changed);
     qproperty!("behind", Member = behind, Notify = changed);
     qproperty!("opText", Member = op_text, Notify = changed);
+    qproperty!("opAlso", Member = op_also, Notify = changed);
     qproperty!("hasConflicts", Member = has_conflicts, Notify = changed);
     qproperty!("stagedCount", Member = staged_count, Notify = changed);
     qproperty!("unstagedCount", Member = unstaged_count, Notify = changed);
@@ -183,7 +190,9 @@ impl WorkTreeModel {
         if op_state.bisecting {
             ops.push("BISECTING");
         }
-        self.op_text = ops.join(" · ");
+        let mut named = ops.into_iter();
+        self.op_text = named.next().unwrap_or_default().to_string();
+        self.op_also = named.next().unwrap_or_default().to_string();
         // A merge steps through nothing, so it takes neither skip nor
         // quit; everything else here does.
         self.op_stepping = !matches!(

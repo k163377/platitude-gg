@@ -13,7 +13,10 @@ import platitude.ui
 // never picks a different zoom, it only shrinks.
 ColumnLayout {
     id: previewCell
-    required property string label
+    /// The side's own word — `Before` / `After`. The size stands beside
+    /// it with a drawn dot between them, so this cell composes its own
+    /// line rather than being handed one already spelled.
+    required property string caption
     required property string url
     required property string sizeText
     visible: sizeText !== ""
@@ -38,12 +41,22 @@ ColumnLayout {
         return 1
     }
 
-    Label {
+    RowLayout {
         Layout.fillWidth: true
-        text: previewCell.label
-        font.pixelSize: Theme.fontSm
-        color: Theme.textSecondary
-        elide: Text.ElideRight
+        spacing: Theme.spaceXs
+        Label {
+            text: previewCell.caption
+            font.pixelSize: Theme.fontSm
+            color: Theme.textSecondary
+        }
+        DotMark { tint: Theme.textSecondary }
+        Label {
+            Layout.fillWidth: true
+            text: previewCell.sizeText
+            font.pixelSize: Theme.fontSm
+            color: Theme.textSecondary
+            elide: Text.ElideRight
+        }
     }
     Rectangle {
         id: previewFrame

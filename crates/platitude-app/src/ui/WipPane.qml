@@ -891,19 +891,49 @@ ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: Theme.spaceXs
                         spacing: 0
-                        Label {
+                        RowLayout {
                             Layout.fillWidth: true
                             Layout.leftMargin: Theme.spaceXs
                             Layout.bottomMargin: Theme.spaceXs
-                            // What is stopped, and how far it got. The count is
-                            // the half a stopped rebase cannot say without it.
-                            text: wipPane.workTree.opSteps > 0
-                                  ? qsTr("%1 — %2 of %3").arg(wipPane.workTree.opText)
-                                    .arg(wipPane.workTree.opStep).arg(wipPane.workTree.opSteps)
-                                  : wipPane.workTree.opText
-                            font.pixelSize: Theme.fontSm
-                            font.weight: Font.DemiBold
-                            color: Theme.warning
+                            spacing: Theme.spaceXs
+                            // What is stopped.
+                            Label {
+                                text: wipPane.workTree.opText
+                                font.pixelSize: Theme.fontSm
+                                font.weight: Font.DemiBold
+                                color: Theme.warning
+                            }
+                            // Bisect, when it is running alongside. The
+                            // mark between the two names is drawn, not
+                            // typed (規約 §余白).
+                            DotMark {
+                                visible: wipPane.workTree.opAlso !== ""
+                                tint: Theme.warning
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+                            Label {
+                                visible: wipPane.workTree.opAlso !== ""
+                                text: wipPane.workTree.opAlso
+                                font.pixelSize: Theme.fontSm
+                                font.weight: Font.DemiBold
+                                color: Theme.warning
+                            }
+                            // How far it got. The count is the half a
+                            // stopped rebase cannot say without it. The
+                            // dash stays a dash: it is a sentence here,
+                            // and it measured the same on both OSes.
+                            Label {
+                                visible: wipPane.workTree.opSteps > 0
+                                text: qsTr("— %1 of %2")
+                                      .arg(wipPane.workTree.opStep)
+                                      .arg(wipPane.workTree.opSteps)
+                                font.pixelSize: Theme.fontSm
+                                font.weight: Font.DemiBold
+                                color: Theme.warning
+                            }
+                            // Someone takes the slack, or the engine
+                            // centres what it cannot fill.
+                            Item { Layout.fillWidth: true }
                         }
                         OpExitRow {
                             Layout.fillWidth: true

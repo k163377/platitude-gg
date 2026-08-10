@@ -23,12 +23,14 @@ CommandsPane 1.0 CommandsPane.qml
 DescriptionBox 1.0 DescriptionBox.qml
 DetailsPane 1.0 DetailsPane.qml
 DiffPane 1.0 DiffPane.qml
+DotMark 1.0 DotMark.qml
 FileRowDelegate 1.0 FileRowDelegate.qml
 FindBar 1.0 FindBar.qml
 FoldBlock 1.0 FoldBlock.qml
 FormField 1.0 FormField.qml
 GraphPane 1.0 GraphPane.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml
+HeadTrack 1.0 HeadTrack.qml
 HoldIcon 1.0 HoldIcon.qml
 HoverButton 1.0 HoverButton.qml
 HoverToolButton 1.0 HoverToolButton.qml

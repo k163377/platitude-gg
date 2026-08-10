@@ -18,8 +18,12 @@ ListView {
     /// proper the ground at the foot of the column takes it, and no
     /// section stretches (SidebarPane).
     property bool stretch: false
-    // "↑a ↓b" of the current branch (branches section only).
-    property string headTrack: ""
+    /// The current branch's ahead / behind (branches section only). Two
+    /// numbers and whether it has an upstream at all: the arrows are
+    /// drawn by the row, not spelled here.
+    property bool headTracks: false
+    property int headAhead: 0
+    property int headBehind: 0
     /// The sidebar, which owns the row gestures: which row was clicked
     /// last and which is being typed into outlive both the delegates and
     /// this list, and only one row at a time is either, whichever section
@@ -56,7 +60,9 @@ ListView {
         id: row
         listWidth: navList.width
         kindHint: navList.kindHint
-        headTrack: navList.headTrack
+        headTracks: navList.headTracks
+        headAhead: navList.headAhead
+        headBehind: navList.headBehind
         rowKey: navList.gestures ? navList.keyOf(full, name) : ""
         activeKey: navList.gestures ? navList.gestures.activeKey : ""
         editKey: navList.gestures ? navList.gestures.editKey : ""

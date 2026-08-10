@@ -4208,8 +4208,9 @@ Item {
                     // sessions each build their own exe and the windows are
                     // otherwise identical. Empty for every other build, so
                     // what ships reads plainly (デザイン規約 §アプリ名).
-                    Label {
+                    RowLayout {
                         id: gitCorner
+                        spacing: Theme.spaceXs
                         /// The band it needs: its own line and the margin
                         /// it hangs by — its own box and nothing more, so
                         /// it stays until a row would land on it. Air of
@@ -4250,12 +4251,25 @@ Item {
                         // reaching here — so this holds the order for
                         // whatever else the panes come to put here.
                         z: 1
-                        text: AppBackend.buildTree === ""
-                              ? qsTr("git %1").arg(AppBackend.gitVersion)
-                              : qsTr("git %1 · %2").arg(AppBackend.gitVersion)
-                                                   .arg(AppBackend.buildTree)
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fontSm
+                        Label {
+                            text: qsTr("git %1").arg(AppBackend.gitVersion)
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fontSm
+                        }
+                        // Only a build made in a worktree has a second
+                        // half, so the dot comes and goes with it. Drawn
+                        // rather than typed: as a glyph the spacing here
+                        // was a full-width cell's leftover (規約 §余白).
+                        DotMark {
+                            visible: AppBackend.buildTree !== ""
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        Label {
+                            visible: AppBackend.buildTree !== ""
+                            text: AppBackend.buildTree
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fontSm
+                        }
                     }
 
                     WipPane {

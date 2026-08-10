@@ -43,9 +43,24 @@ Canvas {
         default: return 16
         }
     }
+    /// The same span measured across the mark's other axis, for callers
+    /// that stand it upright (`rotation`). Only kinds that are actually
+    /// turned need an entry — the rest answer with their sideways figure,
+    /// which is what every seat written before this already assumed.
+    readonly property real inkTallGrid: {
+        switch (icon.kind) {
+        // Stood on end, what spans sideways is the pair of barbs
+        // (5.2..10.8 of the grid), not the shaft.
+        case "arrow": return 5.6
+        default: return icon.inkGrid
+        }
+    }
     /// The same in the item's own pixels, with the line that hangs off
-    /// either end of it.
-    readonly property real inkWidth: icon.inkGrid / 16 * icon.width + icon.stroke
+    /// either end of it. A quarter turn swaps which axis the caller is
+    /// asking about; a half turn does not.
+    readonly property real inkWidth:
+        (icon.rotation % 180 === 0 ? icon.inkGrid : icon.inkTallGrid)
+        / 16 * icon.width + icon.stroke
     width: Theme.iconMd
     height: Theme.iconMd
     onKindChanged: requestPaint()

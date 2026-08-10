@@ -356,8 +356,9 @@ Rectangle {
             kindHint: "branch"
             gestures: sidebar
             Layout.verticalStretchFactor: sidebar.sectionPull
-            headTrack: sidebar.workTree.upstream !== ""
-                       ? "↑" + sidebar.workTree.ahead + " ↓" + sidebar.workTree.behind : ""
+            headTracks: sidebar.workTree.upstream !== ""
+            headAhead: sidebar.workTree.ahead
+            headBehind: sidebar.workTree.behind
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
             onRefMenuRequested: (kind, name, full, oidHex) =>
                 sidebar.refMenuRequested(kind, name, full, oidHex)
@@ -420,11 +421,11 @@ Rectangle {
                         font.pixelSize: Theme.fontMd
                         elide: Text.ElideMiddle
                     }
-                    Label {
+                    HeadTrack {
                         visible: !sidebar.workTree.detached && sidebar.workTree.upstream !== ""
-                        text: "↑" + sidebar.workTree.ahead + " ↓" + sidebar.workTree.behind
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSm
+                        ahead: sidebar.workTree.ahead
+                        behind: sidebar.workTree.behind
+                        Layout.alignment: Qt.AlignVCenter
                     }
                     NavIcon {
                         visible: !sidebar.workTree.detached
@@ -730,10 +731,10 @@ Rectangle {
                 kindHint: sidebar.peekKind
                 gestures: sidebar
                 stretch: true
-                headTrack: sidebar.peekKind === "branch"
-                           && sidebar.workTree.upstream !== ""
-                           ? "↑" + sidebar.workTree.ahead
-                             + " ↓" + sidebar.workTree.behind : ""
+                headTracks: sidebar.peekKind === "branch"
+                            && sidebar.workTree.upstream !== ""
+                headAhead: sidebar.workTree.ahead
+                headBehind: sidebar.workTree.behind
                 onRefActivated: oidHex => sidebar.refActivated(oidHex)
                 onRefMenuRequested: (kind, name, full, oidHex) =>
                     sidebar.refMenuRequested(kind, name, full, oidHex)

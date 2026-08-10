@@ -36,7 +36,11 @@ Item {
     /// The pointer arrived at, or left, a row carrying the mark.
     signal eolPointed(string path, bool on)
     property string kindHint: "branch"
-    property string headTrack: ""
+    /// The current branch's ahead / behind. What travels is the two
+    /// numbers — the row draws the arrows itself (`HeadTrack`).
+    property bool headTracks: false
+    property int headAhead: 0
+    property int headBehind: 0
     property real listWidth: 200
     // Shows the hover stage/unstage affordance (WIP view).
     property bool showStage: false
@@ -243,12 +247,12 @@ Item {
             Layout.maximumWidth: navRow.listWidth / 2
         }
         // Current branch's ahead/behind, left of the state icon.
-        Label {
+        HeadTrack {
             visible: !navRow.folder && navRow.kindHint === "branch"
-                     && navRow.is_head && navRow.headTrack !== ""
-            text: navRow.headTrack
-            color: Theme.textSecondary
-            font.pixelSize: Theme.fontSm
+                     && navRow.is_head && navRow.headTracks
+            ahead: navRow.headAhead
+            behind: navRow.headBehind
+            Layout.alignment: Qt.AlignVCenter
         }
         // Branch remote state: nothing = local only, remote icon =
         // has a remote, PR icon = has a PR (real data in Phase 4;
