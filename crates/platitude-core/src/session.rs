@@ -3761,25 +3761,7 @@ async fn carry_across_rewrite(
         }
     }
 
-    let kept_index = stash::pop_with_index(executor, &repo.workdir, STASH_TOP, cancel).await;
-    if kept_index.is_ok() || conflicts_now(executor, repo, cancel).await? {
-        return Ok(());
-    }
-    // git refuses `--index` outright when the staged half is what collides
-    // ("conflicts in index. Try without --index.") and leaves everything
-    // where it was. Its own advice is the fallback: restore without the
-    // index, which brings the changes across merged and gives up only on
-    // the staged/unstaged split.
-    match stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            if conflicts_now(executor, repo, cancel).await? {
-                Ok(())
-            } else {
-                Err(error)
-            }
-        }
-    }
+    pop_back_split_first(executor, repo, cancel).await
 }
 
 /// Builds the synthetic row for uncommitted changes: zero id, no author,
@@ -3850,14 +3832,6 @@ async fn move_carrying(
 /// give — **the staged/unstaged split survives** (`--index`), and a
 /// conflict **keeps the stash entry**, so the work still exists somewhere
 /// other than a marked-up file.
-///
-/// A conflicting restore exits non-zero while having done exactly what was
-/// asked, so the exit code alone cannot judge it: the working tree decides.
-/// Unmerged paths mean the merge landed and is waiting to be settled; a
-/// clean tree means the restore did nothing, and then the split has to be
-/// given up on (see below) or git's message goes through. Nothing was
-/// unmerged when this began — the stash emptied the tree — so what is
-/// found afterwards can only have come from the restore.
 async fn carry_across(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -3891,25 +3865,7 @@ async fn carry_across(
         return Err(refusal);
     }
 
-    let kept_index = stash::pop_with_index(executor, &repo.workdir, STASH_TOP, cancel).await;
-    if kept_index.is_ok() || conflicts_now(executor, repo, cancel).await? {
-        return Ok(());
-    }
-    // git refuses `--index` outright when the staged half is what collides
-    // ("conflicts in index. Try without --index.") and leaves everything
-    // where it was. Its own advice is the fallback: restore without the
-    // index, which brings the changes across merged and gives up only on
-    // the staged/unstaged split.
-    match stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            if conflicts_now(executor, repo, cancel).await? {
-                Ok(())
-            } else {
-                Err(error)
-            }
-        }
-    }
+    pop_back_split_first(executor, repo, cancel).await
 }
 
 /// Stashes the whole working tree out of a move's way, and answers whether
@@ -3932,6 +3888,43 @@ async fn stash_everything(
     let before = stash::tip(executor, &repo.workdir, cancel).await?;
     stash::push(executor, &repo.workdir, "", options, &[], cancel).await?;
     Ok(stash::tip(executor, &repo.workdir, cancel).await? != before)
+}
+
+/// Puts the carried work back once the move or the rewrite has landed,
+/// keeping the staged/unstaged split for as long as git will take it. The
+/// last step of both carries, and the only one they share.
+///
+/// A conflicting restore exits non-zero while having done exactly what was
+/// asked, so the exit code alone cannot judge it: the working tree decides.
+/// Unmerged paths mean the merge landed and is waiting to be settled; a
+/// clean tree means the restore did nothing, and then the split has to be
+/// given up on (see below) or git's message goes through. Nothing was
+/// unmerged when the carry began — the stash emptied the tree — so what is
+/// found afterwards can only have come from the restore.
+async fn pop_back_split_first(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let kept_index = stash::pop_with_index(executor, &repo.workdir, STASH_TOP, cancel).await;
+    if kept_index.is_ok() || conflicts_now(executor, repo, cancel).await? {
+        return Ok(());
+    }
+    // git refuses `--index` outright when the staged half is what collides
+    // ("conflicts in index. Try without --index.") and leaves everything
+    // where it was. Its own advice is the fallback: restore without the
+    // index, which brings the changes across merged and gives up only on
+    // the staged/unstaged split.
+    match stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            if conflicts_now(executor, repo, cancel).await? {
+                Ok(())
+            } else {
+                Err(error)
+            }
+        }
+    }
 }
 
 /// Best-effort restore after a move or a replay that failed outright (an
