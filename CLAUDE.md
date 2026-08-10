@@ -63,7 +63,7 @@
 - force push しない
 - **rebase はその場でユーザーが指示した時だけ**(main への追従・履歴の squash を含む)。worktree ブランチが main より遅れたままは正常な状態で、直す対象ではない。自発の rebase はコンフリクト対応と広範な再ビルドを呼び、時短のつもりでかえってセッションを遅くする
 - **main へブランチを反映するのは、その場でユーザーが指示した時だけ**。セッションはコミットを `worktree-<名前>` に積んだまま「マージ可」と報告して終わる。自分の判断で ff-merge しない — 反映済みと未反映が混ざると管理できなくなる
-  - `cargo xtask hook pre-git` が main を書く git(`merge` / `:main` への refspec / `branch -f main` / `update-ref`)を deny する。**指示があった時だけ** `PG_ALLOW_MAIN=1` を先頭に付けて再実行する。使い捨てリポジトリと worktree ブランチ上のコミットは対象外
+  - `cargo xtask hook pre-git` が main を書く git(`merge` / `:main` への refspec / `branch -f main` / `update-ref`)と、本体 checkout からの `.claude/skills` / `.claude/rules` を含むコミットを deny する。**指示があった時だけ** `PG_ALLOW_MAIN=1` を先頭に付けて再実行する。使い捨てリポジトリと worktree ブランチ上のコミットは対象外
   - **反映は本体 checkout の `git merge` で行う** — `update-ref` / `branch -f` は本体の index と作業ツリーを置き去りにし、落差が staged に見える(**中身は HEAD より後ろ** — コミットすると反映済みの仕事が消える)。診断は `git reflog show main`、復旧は `git restore --source=HEAD --staged --worktree -- .`
 - 本体 checkout での直コミットは可(ドキュメント等。**`.claude/skills` / `.claude/rules` は除く** — worktree に積んで反映指示を待つ)。main の ref を動かす操作のうち止まるのは上記の反映系だけ
 
