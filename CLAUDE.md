@@ -62,6 +62,7 @@ UI の色・タイポグラフィ・寸法の正本は [デザイン規約.md](i
 
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)、メッセージは英語
 - force push しない
+- **rebase はその場でユーザーが指示した時だけ**(main への追従・履歴の squash を含む)。worktree ブランチが main より遅れたままは正常な状態で、直す対象ではない。自発の rebase はコンフリクト対応と広範な再ビルドを呼び、時短のつもりでかえってセッションを遅くする
 - **main へブランチを反映するのは、その場でユーザーが指示した時だけ**。セッションはコミットを `worktree-<名前>` に積んだまま「マージ可」と報告して終わる。自分の判断で ff-merge しない — 反映済みと未反映が混ざると管理できなくなる
   - `cargo xtask hook pre-git` が main を書く git(`merge` / `:main` への refspec / `branch -f main` / `update-ref`)を deny する。**指示があった時だけ** `PG_ALLOW_MAIN=1` を先頭に付けて再実行する。使い捨てリポジトリと worktree ブランチ上のコミットは対象外
   - **反映は本体 checkout の `git merge` で行う** — `update-ref` / `branch -f` で ref だけ進めると本体の index と作業ツリーが置き去りになり、落差が staged として見える。**「コミットし損ねた作業」に見えて中身は HEAD より後ろ**なので、コミットすると反映済みの仕事が消える。診断は `git reflog show main`(`merge …: Fast-forward` でない行が始まり)、復旧は `git restore --source=HEAD --staged --worktree -- .`
