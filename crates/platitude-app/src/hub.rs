@@ -170,6 +170,9 @@ pub enum GraphMsg {
         generation: u64,
         total: u32,
         elapsed_ms: u64,
+        /// Commits the walk emitted (the truncation footer's number —
+        /// see [`SessionEvent::LogFinished`]).
+        walked: u32,
         truncated: bool,
     },
     /// Whole-graph replacement in one message (see
@@ -179,6 +182,7 @@ pub enum GraphMsg {
         generation: u64,
         rows: Vec<LogRow>,
         elapsed_ms: u64,
+        walked: u32,
         truncated: bool,
     },
     Failed {
@@ -386,11 +390,13 @@ impl SessionSink for BridgeSink {
                 generation,
                 total,
                 elapsed_ms,
+                walked,
                 truncated,
             } => self.feeds.graph.push(GraphMsg::Finished {
                 generation,
                 total,
                 elapsed_ms,
+                walked,
                 truncated,
             }),
             SessionEvent::LogFailed { generation, error } => {
@@ -403,11 +409,13 @@ impl SessionSink for BridgeSink {
                 generation,
                 rows,
                 elapsed_ms,
+                walked,
                 truncated,
             } => self.feeds.graph.push(GraphMsg::Replaced {
                 generation,
                 rows,
                 elapsed_ms,
+                walked,
                 truncated,
             }),
             SessionEvent::LabelsChanged { generation, rows } => {

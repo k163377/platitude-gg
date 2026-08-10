@@ -250,6 +250,11 @@ pub enum SessionEvent {
         generation: u64,
         total: u32,
         elapsed_ms: u64,
+        /// Commits the walk emitted — what `--max-count` caps, so this
+        /// equals the window limit whenever `truncated`. The truncation
+        /// footer's number: `total` counts shown rows, which the WIP row
+        /// and sifted stash parents move off any round figure.
+        walked: u32,
         /// True when the stream stopped at the configured window limit
         /// (older history exists but is not shown).
         truncated: bool,
@@ -267,6 +272,8 @@ pub enum SessionEvent {
         generation: u64,
         rows: Vec<LogRow>,
         elapsed_ms: u64,
+        /// As on [`SessionEvent::LogFinished`].
+        walked: u32,
         truncated: bool,
     },
     /// Labels of already-delivered rows changed (refs arrived/refreshed).
@@ -1204,6 +1211,7 @@ impl RepoSession {
                     generation,
                     total: totals.shown,
                     elapsed_ms: started.elapsed().as_millis() as u64,
+                    walked: totals.walked,
                     // Truncation is a property of the walk: the shown count
                     // drifts from it in both directions (the WIP row adds
                     // one, sifted stash parents subtract), so comparing it
@@ -1298,6 +1306,7 @@ impl RepoSession {
                 generation,
                 rows,
                 elapsed_ms,
+                walked,
                 // See run_direct_pass: the walk decides truncation, not
                 // the shown row count.
                 truncated: options.limit.is_some_and(|n| walked >= n),

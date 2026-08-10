@@ -54,6 +54,10 @@ pub struct GraphModel {
     generation: u64,
     loading: bool,
     row_total: i32,
+    /// Commits the walk emitted — the truncation footer's number. Equals
+    /// the window limit whenever `truncated`, where `row_total` drifts
+    /// off it (the WIP row adds one, sifted stash parents subtract).
+    walked_total: i32,
     max_lanes: i32,
     first_chunk_ms: i32,
     total_ms: i32,
@@ -176,6 +180,7 @@ impl GraphModel {
 impl GraphModel {
     qproperty!("loading", Member = loading, Notify = stats_changed);
     qproperty!("rowTotal", Member = row_total, Notify = stats_changed);
+    qproperty!("walkedTotal", Member = walked_total, Notify = stats_changed);
     qproperty!("maxLanes", Member = max_lanes, Notify = stats_changed);
     qproperty!(
         "firstChunkMs",
@@ -220,6 +225,7 @@ impl GraphModel {
                         self.reset_count += 1;
                         self.loading = true;
                         self.row_total = 0;
+                        self.walked_total = 0;
                         self.max_lanes = 1;
                         self.first_chunk_ms = -1;
                         self.total_ms = -1;
@@ -266,12 +272,14 @@ impl GraphModel {
                     generation,
                     total,
                     elapsed_ms,
+                    walked,
                     truncated,
                 } => {
                     if generation == self.generation {
                         self.loading = false;
                         self.total_ms = elapsed_ms as i32;
                         self.row_total = total as i32;
+                        self.walked_total = walked as i32;
                         self.truncated = truncated;
                         self.finish_count += 1;
                         self.tail_geometry = if truncated {
@@ -290,6 +298,7 @@ impl GraphModel {
                     generation,
                     rows,
                     elapsed_ms,
+                    walked,
                     truncated,
                 } => {
                     if generation <= self.generation {
@@ -310,6 +319,7 @@ impl GraphModel {
                     self.first_chunk_ms = 0;
                     self.total_ms = elapsed_ms as i32;
                     self.row_total = self.rows.len() as i32;
+                    self.walked_total = walked as i32;
                     self.truncated = truncated;
                     self.finish_count += 1;
                     self.tail_geometry = if truncated {

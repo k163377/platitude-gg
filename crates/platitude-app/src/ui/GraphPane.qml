@@ -447,8 +447,11 @@ Rectangle {
                 leftPadding: Theme.spaceSm
                 rightPadding: Theme.spaceSm
                 wrapMode: Text.Wrap
+                // The walk's own count, not the row count: the WIP row and
+                // sifted stash parents move rows off the round window
+                // limit, and this footer only stands when the walk hit it.
                 text: qsTr("Only the first %L1 commits are loaded")
-                      .arg(graphArea.graphModel.rowTotal)
+                      .arg(graphArea.graphModel.walkedTotal)
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontMd
                 font.weight: Font.DemiBold

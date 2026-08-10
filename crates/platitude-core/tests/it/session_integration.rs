@@ -530,10 +530,12 @@ async fn log_limit_truncates_the_window() {
             SessionEvent::LogFinished {
                 generation,
                 total,
+                walked,
                 truncated,
                 ..
             } if *generation > first_gen => {
                 assert_eq!(*total, 2);
+                assert_eq!(*walked, 2, "the footer's number is the limit itself");
                 assert!(truncated);
                 Some(())
             }
@@ -588,10 +590,12 @@ async fn truncation_follows_the_walk_not_the_shown_rows() {
             SessionEvent::LogFinished {
                 generation,
                 total,
+                walked,
                 truncated,
                 ..
             } if *generation > first_gen => {
                 assert_eq!(*total, 3, "stash + three + two, index parent sifted");
+                assert_eq!(*walked, 4, "the walk count stays on the limit");
                 assert!(truncated, "the walk was cut before the root commit");
                 Some(())
             }
@@ -633,10 +637,12 @@ async fn the_wip_row_does_not_trigger_truncation() {
             SessionEvent::LogFinished {
                 generation,
                 total,
+                walked,
                 truncated,
                 ..
             } if *generation > first_gen => {
                 assert_eq!(*total, 3, "WIP row + two commits");
+                assert_eq!(*walked, 2, "the WIP row is shown but never walked");
                 assert!(!truncated, "the whole history fits the window");
                 Some(())
             }
