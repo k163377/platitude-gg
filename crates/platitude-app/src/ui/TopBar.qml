@@ -807,8 +807,30 @@ Rectangle {
                                          && topBar.curPage.commandsOpen
 
             visible: topBar.curPage !== null
-            implicitWidth: Theme.spaceXl
-            implicitHeight: Theme.iconLg
+            // Measured off the pair beside it rather than written to
+            // tokens of its own. This is the first of the band's three
+            // pressable boxes (デザイン規約 §ウィンドウの縁「並びは `>_` /
+            // fetch / push」), and what sets how big a target is here is
+            // the padding a Fusion `ToolButton` keeps around its content
+            // — a number the theme does not have and cannot be matched
+            // by choosing from the table. Sized from the table it came
+            // out a step under both of its neighbours and read as the
+            // odd one out (measured: 24x20 against their 92x32).
+            //
+            // The height is taken whole and the width is the mark plus
+            // that padding: the three only sit on one line if the
+            // heights are equal, while the width is the mark's own
+            // business — there is no word here for the box to be
+            // measured for.
+            //
+            // Not the seat the pair give their icon, either: that seat
+            // is widened to hold an icon and the hold mark side by side,
+            // and a button that is only ever clicked does not pay for a
+            // pairing it cannot have (`ActionButton.besideWord` hands
+            // the same air back for the same reason).
+            implicitWidth: commandsMark.implicitWidth
+                           + fetchButton.leftPadding + fetchButton.rightPadding
+            implicitHeight: fetchButton.implicitHeight
             radius: Theme.radiusSm
             color: open ? Theme.bgSelected
                    : commandsMouse.containsMouse ? Theme.bgHover
@@ -816,6 +838,7 @@ Rectangle {
             border.width: commandsToggle.wrong ? Theme.borderWidth : 0
             border.color: Theme.danger
             Label {
+                id: commandsMark
                 anchors.centerIn: parent
                 text: ">_"
                 font.family: Theme.monoFamily
