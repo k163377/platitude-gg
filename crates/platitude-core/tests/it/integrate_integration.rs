@@ -884,10 +884,9 @@ async fn dropping_a_commit_keeps_the_ones_after_it() {
     // The commit's own file goes with it; the later one stays.
     assert!(!repo.path.join("b.txt").exists());
     assert!(repo.path.join("c.txt").exists());
-    // The plan reaches back to the parent so that dropping the newest
-    // commit is not an all-drop plan — but that parent rides along as an
-    // ordinary pick and comes out with the object name it went in with.
-    // Nothing before the dropped commit is rewritten.
+    // The plan starts at the dropped commit's parent, and that parent is
+    // the upstream rather than a step in it: nothing below the gap is
+    // replayed, so it keeps the object name it had.
     assert_eq!(repo.git(&["rev-parse", "HEAD~1"]), kept);
 }
 
@@ -1333,8 +1332,119 @@ async fn a_range_holding_a_merge_is_refused_rather_than_flattened() {
             .await
             .expect_err("a rebase would drop the merge");
         assert!(err.to_string().contains("merge commit"), "{err}");
+        // The refusal is this application's own, and no rebase ever ran.
+        // Blaming it on a command's output puts a command the person
+        // never saw in front of them (規約 §git が言ったことを読む場所).
+        assert!(!err.to_string().contains("unexpected output"), "{err}");
     }
     assert_eq!(repo.git(&["rev-parse", "HEAD"]), before, "nothing ran");
+}
+
+/// A merge *below* the commit is not in the way: the replay stands on it
+/// rather than repeating it, so it keeps both its parents. Dropping the
+/// newest commit is the case that used to reach one commit too far and
+/// refuse over a merge it was never going to touch.
+#[tokio::test]
+async fn a_merge_under_the_dropped_commit_is_left_alone() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["checkout", "-b", "side"]);
+    repo.commit_file("s.txt", "side\n", "side work");
+    repo.git(&["checkout", "main"]);
+    repo.commit_file("m.txt", "main\n", "main work");
+    repo.git(&["merge", "--no-ff", "--no-edit", "side"]);
+    let merge = repo.git(&["rev-parse", "HEAD"]);
+    let (exec, cancel) = env();
+
+    // The newest commit, sitting straight on the merge: nothing follows
+    // it, so the whole plan is the one drop.
+    let newest = repo.commit_file("b.txt", "two\n", "on top of the merge");
+    let plan = sequencer::plan_edit(&exec, &repo.path, &newest, sequencer::Edit::Drop, &cancel)
+        .await
+        .expect("plan");
+    assert_eq!(plan.upstream, merge, "the merge is the ground, not a step");
+    sequencer::rebase_interactive(
+        &exec,
+        &info(&repo).await,
+        &plan.upstream,
+        &plan.steps,
+        &plan.options(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect("drop the newest");
+    assert_eq!(repo.git(&["rev-parse", "HEAD"]), merge);
+    assert!(!repo.path.join("b.txt").exists());
+
+    // And with a commit after it to replay.
+    let doomed = repo.commit_file("c.txt", "three\n", "the one to go");
+    repo.commit_file("d.txt", "four\n", "after it");
+    let plan = sequencer::plan_edit(&exec, &repo.path, &doomed, sequencer::Edit::Drop, &cancel)
+        .await
+        .expect("plan");
+    sequencer::rebase_interactive(
+        &exec,
+        &info(&repo).await,
+        &plan.upstream,
+        &plan.steps,
+        &plan.options(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect("drop the one under the newest");
+
+    assert_eq!(
+        repo.git(&["log", "--format=%s"])
+            .lines()
+            .collect::<Vec<_>>(),
+        vec![
+            "after it",
+            "Merge branch 'side'",
+            "main work",
+            "side work",
+            "root"
+        ],
+        "the merge is still there, with both sides under it"
+    );
+    assert_eq!(
+        repo.git(&["rev-list", "--merges", "--count", "HEAD"]),
+        "1",
+        "and it is still a merge"
+    );
+    assert!(!repo.path.join("c.txt").exists());
+    assert!(repo.path.join("d.txt").exists());
+}
+
+/// The one shape that has no ground to land on. `--root` replays onto a
+/// placeholder git makes up, so dropping every line leaves that
+/// placeholder behind as the branch tip: an empty tree with no message
+/// (measured). Refusing says so before anything moves.
+#[tokio::test]
+async fn dropping_the_only_commit_is_refused() {
+    let mut repo = TestRepo::init();
+    let only = repo.commit_file("a.txt", "one\n", "the only one");
+    let (exec, cancel) = env();
+
+    let plan = sequencer::plan_edit(&exec, &repo.path, &only, sequencer::Edit::Drop, &cancel)
+        .await
+        .expect("plan");
+    assert!(plan.root, "there is no parent to start at");
+    let err = sequencer::rebase_interactive(
+        &exec,
+        &info(&repo).await,
+        &plan.upstream,
+        &plan.steps,
+        &plan.options(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect_err("nothing would be left to point at");
+    assert!(err.to_string().contains("every commit"), "{err}");
+    assert!(!err.to_string().contains("unexpected output"), "{err}");
+    assert_eq!(repo.git(&["rev-parse", "HEAD"]), only, "nothing ran");
 }
 
 #[tokio::test]

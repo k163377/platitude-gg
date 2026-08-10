@@ -233,17 +233,16 @@ impl Edit {
     /// How many commits before the target the plan has to start at.
     ///
     /// `squash` folds into the line above it, so the parent must be in the
-    /// plan as well; a reword only needs the commit itself.
+    /// plan as well; a reword and a drop only need the commit itself.
     ///
-    /// A drop takes the parent in too, for a different reason: dropping
-    /// the newest commit would otherwise leave a plan whose every line is
-    /// a drop, which [`rebase_interactive`] refuses. The parent rides
-    /// along as an ordinary `pick` and keeps its own object name
-    /// (measured — `dropping_at_either_end_of_the_history`).
+    /// Reaching one further than that is not free: whatever sits below the
+    /// commit joins the range, and a merge down there is enough to refuse
+    /// the whole edit even though the replay would never have touched it
+    /// (measured — `a_merge_under_the_dropped_commit_is_left_alone`).
     fn depth(&self) -> u32 {
         match self {
-            Edit::SquashIntoParent | Edit::Drop => 2,
-            Edit::Reword(_) => 1,
+            Edit::SquashIntoParent => 2,
+            Edit::Reword(_) | Edit::Drop => 1,
         }
     }
 }
@@ -261,10 +260,11 @@ pub async fn plan_edit(
     edit: Edit,
     cancel: &CancellationToken,
 ) -> Result<EditPlan, GitError> {
-    let fail = |message: String| GitError::UnexpectedOutput {
-        command: "git rebase --interactive".to_string(),
-        message,
-    };
+    // These refusals are this application's own, decided before a rebase
+    // is ever spawned. Naming a command as having said something
+    // unexpected would put a command the person never ran in front of
+    // them; `Rejected` is shown as it stands (規約 §git が言ったことを読む場所).
+    let fail = |message: String| GitError::Rejected { message };
 
     // History shorter than the plan needs means the range starts at the
     // very first commit, which has no parent to name as upstream.
@@ -418,10 +418,14 @@ pub async fn rebase_interactive(
     if steps.is_empty() {
         return Ok(RebaseOutcome::Done);
     }
-    if steps.iter().all(|s| s.action == TodoAction::Drop) {
-        return Err(GitError::UnexpectedOutput {
-            command: "git rebase --interactive".to_string(),
-            message: "refusing a plan that drops every commit".to_string(),
+    // A plan of nothing but drops is ordinary as long as it has ground to
+    // land on: git moves the branch to the upstream and says so. `--root`
+    // is the one with none — it replays onto a placeholder commit git
+    // makes up, and with every line dropped that placeholder is what the
+    // branch is left pointing at: an empty tree with no message (実測).
+    if options.root && steps.iter().all(|s| s.action == TodoAction::Drop) {
+        return Err(GitError::Rejected {
+            message: "dropping every commit would leave the branch with no history".to_string(),
         });
     }
 
@@ -444,8 +448,7 @@ pub async fn rebase_interactive(
             continue;
         }
         let Some(message) = step.message.as_deref().filter(|m| !m.trim().is_empty()) else {
-            return Err(GitError::UnexpectedOutput {
-                command: "git rebase --interactive".to_string(),
+            return Err(GitError::Rejected {
                 message: format!("reword of {} has no message", step.oid),
             });
         };
