@@ -249,15 +249,34 @@ Rectangle {
         shiftTimer.pending += rows
         shiftTimer.restart()
     }
+    /// Brings `row` into view once the pass that put it there has settled,
+    /// and only if it is not already on screen — a row in sight is not
+    /// worth taking the reader's place for (the same rule `goToMatch`
+    /// answers to).
+    ///
+    /// Carried by the shift timer rather than one of its own: the two write
+    /// the same contentY for opposite reasons, and whether the row is on
+    /// screen is only true of the position the shift leaves behind. One
+    /// timer settles the order.
+    function showRowSoon(row) {
+        shiftTimer.showRow = row
+        shiftTimer.restart()
+    }
     Timer {
         id: shiftTimer
         property int pending: 0
+        property int showRow: -1
         interval: Metrics.anchorDelayMs
         onTriggered: {
             const rows = shiftTimer.pending
             shiftTimer.pending = 0
-            graphList.contentY = graphList.clampY(
-                graphList.contentY + rows * Theme.graphRowHeight)
+            if (rows !== 0)
+                graphList.contentY = graphList.clampY(
+                    graphList.contentY + rows * Theme.graphRowHeight)
+            const row = shiftTimer.showRow
+            shiftTimer.showRow = -1
+            if (row >= 0 && !graphArea.rowOnScreen(row))
+                graphList.positionViewAtIndex(row, ListView.Center)
         }
     }
     Timer {

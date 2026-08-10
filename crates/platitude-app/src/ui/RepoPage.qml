@@ -82,6 +82,7 @@ Item {
     function showWip() {
         page.wipShown = true
         page.pendingHeadSelect = false
+        page.pendingHeadAsked = false
         page.selectedOid = ""
         page.selectedStashRef = ""
         page.closeDiff()
@@ -1954,6 +1955,24 @@ Item {
             page.forcePush()
         }
     }
+    // Where the revert left the reader. The write, its refresh and the
+    // beat the viewport waits out all have to be behind it, and the
+    // picture cannot answer the second half: a row can be selected and
+    // still be somewhere nobody can see.
+    Timer {
+        id: revertLandedTimer
+        interval: 1800
+        onTriggered: {
+            const row = graphModel.rowOf(page.selectedOid)
+            AppBackend.report(
+                "revert_landed follows="
+                + (page.selectedOid !== "" && page.selectedOid === branchesModel.headOid)
+                + " onscreen=" + (row >= 0 && graphPane.rowOnScreen(row))
+                + " head=" + branchesModel.headOid.substring(0, 8)
+                + " selected=" + page.selectedOid.substring(0, 8)
+                + " row=" + row)
+        }
+    }
     // The message has to arrive before it can be typed over, and the
     // "is this commit ours to rewrite?" answer before it may be saved.
     Timer {
@@ -2869,8 +2888,24 @@ Item {
             // gating decides whether anything runs. "integrate-menu"
             // leaves the ref menu standing for a shot instead.
             if (act === "revert-commit") {
-                page.openRowMenu(arg)
-                repoTab.revert(arg)
+                // The click that opens this menu selects the row too
+                // (GraphRowDelegate), and where the selection stood before
+                // the write is half of what this verb is about — so the
+                // hook takes both steps a right-click takes. "row:<n>"
+                // names a commit the way the other graph verbs do, since a
+                // throwaway repository's hashes cannot be spelled from
+                // outside.
+                const oidHex = page.autoActOid(arg)
+                // Scrolled to, then clicked: in a history taller than the
+                // pane the row being undone is nowhere near the tip, and
+                // that is the whole of where the viewport has to end up.
+                // A short one clamps back to the top and the run reads the
+                // selection half only.
+                graphPane.jumpToRow(graphModel.rowOf(oidHex))
+                page.activateRow(oidHex)
+                page.openRowMenu(oidHex)
+                revertLandedTimer.start()
+                repoTab.revert(oidHex)
             } else {
                 page.openRefMenu("branch", arg, arg,
                                  branchesModel.oidOfName(arg))
@@ -3148,6 +3183,15 @@ Item {
             page.clearCommitEditor()
             wipPane.setAmendChecked(false)
             page.amending = false
+        }
+        // A revert lands a commit of its own at the tip, and that commit is
+        // the answer to what was asked here — not the row that was
+        // right-clicked, which is now history twice over. The selection
+        // goes to it, and the viewport follows: the new commit is at the
+        // top of the graph and the row it undoes can be anywhere.
+        if (repoTab.lastWriteOp === "revert") {
+            page.pendingHeadSelect = true
+            page.pendingHeadAsked = true
         }
         if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage"
                 || repoTab.lastWriteOp === "discard")
@@ -3541,6 +3585,14 @@ Item {
     // was just replaced. Resolved once the graph holds where the branch
     // points, which is only true of the refreshed pair.
     property bool pendingHeadSelect: false
+    // Whether the landing is one the person here asked for, in which case
+    // the viewport goes to it as well: a commit they meant to make is not
+    // an answer if it lands off screen. The other two ways this is set
+    // happen *to* the window — a commit made in a terminal, a rewrite that
+    // swept the selected commit away while the poll was watching — and a
+    // background pass that moves rows under a reader may not also move
+    // their view (§ListView.highlightFollowsCurrentItem).
+    property bool pendingHeadAsked: false
     function tryPendingHeadSelect() {
         if (!page.pendingHeadSelect || !branchesModel.refsLoaded)
             return
@@ -3549,8 +3601,14 @@ Item {
         if (row < 0)
             return
         page.pendingHeadSelect = false
+        const asked = page.pendingHeadAsked
+        page.pendingHeadAsked = false
         graphPane.setCurrentRow(row)
         page.activateRow(graphModel.oidAt(row))
+        // Held back by an unsaved message: the question put the highlight
+        // back where it was, so there is nowhere for the view to go yet.
+        if (asked && page.pendingMove === null)
+            graphPane.showRowSoon(row)
     }
 
     // The selected commit is gone from the graph and this page did not
@@ -3593,6 +3651,7 @@ Item {
         // answers any landing this page still owed.
         page.rewordRow = -1
         page.pendingHeadSelect = false
+        page.pendingHeadAsked = false
         // Clicking anywhere is the way out of the name box and of a
         // standing row question: both are offers, not work in progress.
         graphPane.stopNaming()
