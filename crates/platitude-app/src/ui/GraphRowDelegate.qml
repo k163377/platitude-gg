@@ -85,9 +85,6 @@ Item {
         // The seat is the ink, not the box. Drawn to the box, `!` would
         // stand five pixels from its own number while `+` stood two, and
         // neither would belong to it.
-        // The seat is the ink, not the box. Drawn to the box, `!` would
-        // stand five pixels from its own number while `+` stood two, and
-        // neither would belong to it.
         Item {
             Layout.preferredWidth: tallyMark.inkWidth
             Layout.preferredHeight: Theme.iconXs
