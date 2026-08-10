@@ -53,6 +53,8 @@ commands:
         unpublished  a branch never sent anywhere, two remotes, one taken name
         noremote  commits and no remote at all: the first push writes one down
         signed    ssh-signed commits: verified, unjudgeable, unsigned
+        errsig    an embedded OpenPGP signature no key can verify: the E
+                  verdict (signature-tip passes only on this preset)
         co-authors  one, three and no co-authors, signed and not
         authorship  every way an author and a committer can be two
         tags      a tag in every state a remote can put it in (fetch first)
@@ -104,7 +106,9 @@ commands:
                           a write git refused is what this verb shows, so
                           it does not sink the run (delete-branch-refused,
                           commands-fail, commands-clear, fetch-fail,
-                          push-retry)
+                          fetch-resume, push-retry, drop-commit on the
+                          drop-stops preset, and push / publish-new-go
+                          against an unreachable remote)
       The open-refused verbs (open-not-a-repo, open-bare, the -retry /
       -cancel ways out, and open-fail-tab for the road that keeps its
       tab) make their own folder when no argument names one: what they
