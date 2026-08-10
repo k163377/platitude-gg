@@ -509,7 +509,11 @@ fn session_start(input: &str) -> Result<(), String> {
             "This session runs in the primary checkout. Implementation work \
              belongs in a reused fixed-name worktree (`claude --worktree <name>`) \
              so parallel sessions do not fight over target/ and the release exe \
-             — see CLAUDE.md ビルド・テスト. Document edits and review are fine here."
+             — see CLAUDE.md ビルド・テスト. Document edits and review are fine \
+             here, except .claude/skills and .claude/rules: parallel sessions \
+             keep reaching for those same files, and a direct commit to main \
+             collides with theirs — edit them on a worktree branch and report \
+             the branch as ready to merge (CLAUDE.md Git 運用)."
         );
     }
     Ok(())
