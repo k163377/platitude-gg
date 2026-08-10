@@ -1955,19 +1955,21 @@ Item {
             page.forcePush()
         }
     }
-    // Where the revert left the reader. The write, its refresh and the
-    // beat the viewport waits out all have to be behind it, and the
-    // picture cannot answer the second half: a row can be selected and
-    // still be somewhere nobody can see.
+    // Where an operation that answers at the tip left the reader — one
+    // report for the three of them. The write, its refresh and the beat
+    // the viewport waits out all have to be behind it, and the picture
+    // cannot answer the second half: a row can be selected and still be
+    // somewhere nobody can see.
     Timer {
-        id: revertLandedTimer
+        id: tipLandedTimer
         interval: 1800
         onTriggered: {
             const row = graphModel.rowOf(page.selectedOid)
             AppBackend.report(
-                "revert_landed follows="
+                "tip_landed follows="
                 + (page.selectedOid !== "" && page.selectedOid === branchesModel.headOid)
                 + " onscreen=" + (row >= 0 && graphPane.rowOnScreen(row))
+                + " op=" + repoTab.lastWriteOp
                 + " head=" + branchesModel.headOid.substring(0, 8)
                 + " selected=" + page.selectedOid.substring(0, 8)
                 + " row=" + row)
@@ -2807,7 +2809,17 @@ Item {
                            ? branchesModel.headOid : graphModel.oidAt(0))
             rewordTimer.start()
         } else if (act === "cherry-pick") {
-            repoTab.cherryPick(arg)
+            // Scrolled to and clicked, the way the row it copies is
+            // reached; "row:<n>" names one the way the other graph verbs
+            // do, and a ref name reaches the commit it points at.
+            const pickOid = page.autoActOid(arg)
+            const pickRow = graphModel.rowOf(pickOid)
+            if (pickRow >= 0) {
+                graphPane.jumpToRow(pickRow)
+                page.activateRow(pickOid)
+            }
+            tipLandedTimer.start()
+            repoTab.cherryPick(pickOid)
         } else if (act === "reset-soft" || act === "reset-mixed") {
             // Through the menu, like clicking it: the row the menu was
             // opened on is where the branch lands.
@@ -2904,15 +2916,21 @@ Item {
                 graphPane.jumpToRow(graphModel.rowOf(oidHex))
                 page.activateRow(oidHex)
                 page.openRowMenu(oidHex)
-                revertLandedTimer.start()
+                tipLandedTimer.start()
                 repoTab.revert(oidHex)
             } else {
                 page.openRefMenu("branch", arg, arg,
                                  branchesModel.oidOfName(arg))
-                if (act === "merge-branch")
+                if (act === "merge-branch") {
+                    // Where the reader was before the merge is half of
+                    // what this reads, and the sidebar's row is not the
+                    // graph: the selection sits on whatever the page
+                    // opened with, which is the tip about to be replaced.
+                    tipLandedTimer.start()
                     repoTab.merge(arg, false, false, "")
-                else if (act === "rebase-onto")
+                } else if (act === "rebase-onto") {
                     repoTab.rebase(arg, "", true)
+                }
             }
         } else if (act === "op-exit" || act === "op-exit-go") {
             // The ways out of a stopped operation, which stand in the pane
@@ -3184,12 +3202,17 @@ Item {
             wipPane.setAmendChecked(false)
             page.amending = false
         }
-        // A revert lands a commit of its own at the tip, and that commit is
-        // the answer to what was asked here — not the row that was
-        // right-clicked, which is now history twice over. The selection
-        // goes to it, and the viewport follows: the new commit is at the
-        // top of the graph and the row it undoes can be anywhere.
-        if (repoTab.lastWriteOp === "revert") {
+        // These three answer with a commit at the tip — the undo, the
+        // copy, the merge — and that commit is what was asked for here,
+        // not the row or the ref that was clicked. The selection goes to
+        // it and the viewport follows: what was clicked can be anywhere in
+        // the history, while the answer is always at the top.
+        //
+        // A merge of something the branch already holds lands there too,
+        // and rightly: git says "Already up to date", and the tip is
+        // exactly where that merge would have put anyone.
+        if (repoTab.lastWriteOp === "revert" || repoTab.lastWriteOp === "cherry-pick"
+                || repoTab.lastWriteOp === "merge") {
             page.pendingHeadSelect = true
             page.pendingHeadAsked = true
         }

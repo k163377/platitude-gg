@@ -418,11 +418,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "details-grow" | "details-grow-squeeze" | "wip-grow" | "wip-grow-squeeze" => {
             Some("description_grow keeps=true")
         }
-        // Half of this one the picture holds — which row is lit, and whose
+        // Half of these the picture holds — which row is lit, and whose
         // commit fills the right-hand pane. The other half it cannot: in a
         // history short enough to fit on screen, a viewport that followed
         // the new commit and one that never moved frame the same way.
-        "revert-commit" => Some("revert_landed follows=true onscreen=true"),
+        "revert-commit" | "cherry-pick" | "merge-branch" => {
+            Some("tip_landed follows=true onscreen=true")
+        }
         // The caret is the whole of these two, and a hook that never
         // reached the box leaves a picture of the resting colour --
         // which is a real state, and the other half of each pair.
