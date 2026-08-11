@@ -338,10 +338,19 @@ Rectangle {
     readonly property real graphFullW: Metrics.laneInset
                                        + Math.max(1, graphModel.maxLanes) * Metrics.laneW
                                        + Theme.spaceSm
-    // The narrowest the column goes: one lane, with the rest sent
-    // sideways. One place, so the display, the divider's clamp and the
-    // question of whether there is a drag in it at all agree.
-    readonly property real graphColWMin: Metrics.laneInset + Metrics.laneW
+    // The narrowest the column goes: lane 0 with its co-author badge
+    // still whole, the rest sent sideways. The badge is the widest ink
+    // any row puts on that lane, and the clip edge stops exactly where
+    // its ink ends rather than cutting through it. The three steps
+    // mirror the badge geometry in **GraphRowDelegate's canvas**: the
+    // author steps up-left by a border, the badge centre sits a border
+    // inside the node's edge, and the outline rides half in half out.
+    // One place, so the display, the divider's clamp and the question
+    // of whether there is a drag in it at all agree.
+    readonly property real graphColWMin:
+        Metrics.laneInset + Metrics.laneW / 2
+        + Metrics.nodeIcon / 2 - 2 * Theme.borderWidth
+        + (Theme.iconSm + Theme.borderWidth) / 2
     // How far the divider may be pulled: as wide as the lanes ever get,
     // and no wider — a column past the last lane is emptiness taken from
     // the message column. A narrow window stops it earlier still, where

@@ -2910,6 +2910,14 @@ Item {
             page.setGraphColumns(graphPane.labelWManual,
                                  Metrics.laneInset + 2 * Metrics.laneW)
             graphPanTimer.start()
+        } else if (act === "graph-min") {
+            // The column pulled in past its floor, so the clamp answers.
+            // Where the floor is — lane 0's co-author badge kept whole —
+            // is the pane's own rule; this proves a drag cannot land
+            // below it, and the picture shows the badge uncut.
+            page.setGraphColumns(graphPane.labelWManual, 0)
+            AppBackend.report("graph_min w=" + graphPane.graphColW
+                              + " min=" + graphPane.graphColWMin)
         } else if (act === "graph-divider") {
             // What the divider answers with the pointer on it. Read
             // against two repositories: a line withheld on a linear

@@ -409,6 +409,9 @@ Item {
                     laneCanvas.face(ctx, ax, ay, r, rowItem.avatar,
                                     rowItem.avatar_url)
                     if (shared) {
+                        // **GraphPane.graphColWMin mirrors this geometry**:
+                        // the narrowest the column goes is exactly this
+                        // badge's right edge on lane 0, outline included.
                         const br = Theme.iconSm / 2
                         const bx = ax + r - Theme.borderWidth
                         const by = ay + r + Theme.borderWidth

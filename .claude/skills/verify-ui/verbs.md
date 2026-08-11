@@ -81,6 +81,7 @@
 - `delete-remote`
 - `delete-remote-go`(引数 `<remote>/<branch>`。同じく ref を名指しする。**質問は無く**畳みが開いてメニューが立ったまま止まり、-go が行の長押しを完走させる)
 - `graph-divider`(グラフ列の仕切り。ポインタを仕切りの上に置いて答えを読む(hover は注入できないので `restDividerPointer` = 実 hover と同じ 1 つのプロパティへ書く)。**2 つのリポジトリで対で読む** — `--preset noremote` = レーン 1 本で `line=false refuses=true`(幅が 1 通りしかない列は線を引かず、OS のカーソルの右下に禁止の輪を添える)/ `--preset basic` = 2 本で `line=true refuses=false`。報告行 `graph_divider shown= line= refuses= lanes= max= min=` の `line=` / `refuses=` は**縦線と輪それぞれの `visible`**、`shown=` は `MouseArea` が居ること。**輪は PNG に写る**ので絵でも読める(**OS のカーソル自体はどちらの PNG にも写らない** — カーソルとの重なりだけは実窓で見る)。**片側だけでは何も証明しない**)
+- `graph-min`(グラフ列を床まで縮める — 仕切りのクランプと同じ `setGraphColumns` へ 0 を渡し、止まった幅を読む。床は**レーン 0 の co-author バッジのインク右端**(`GraphPane.graphColWMin` がバッジの幾何を写す — 規約 §グラフ列は最も広い所のレーンまで)。報告行 `graph_min w= min=` は `must_say` が `w=28.5 min=28.5` を要求(トークン算術の答えそのもの — トークンを動かしたら verify.rs も焼き直す)。**`--preset co-authors` で撮る**(バッジ付きノードが並ぶ)— 絵はバッジの輪郭が切れていないことを拡大目視する)
 - `graph-bar`
 - `graph-bar-away`(レーンの横スクロールバー。**対で読む** — 出る側だけでは何も証明しない。報告行 `graph_bar shown= overflow=`)
 - `middle-scroll`(引数 `message` で subject 列から中クリックする。既定はレーン列。報告行 `middle_scroll lanes= x= max=` の `x` が 0 か max か = 横へ流れたかどうか)。**この 3 つはレーンが列に溢れている必要があり、どのデモリポジトリも既定の列幅では溢れない**ので、フックが先にレーン列を 2 本ぶんまで詰める(人が仕切りでやることと同じ)。**`--preset stashes` が 3 レーン**で摘みが 6 割になり絵として読める

@@ -476,6 +476,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // simply has a pane outside the frame, where a screenshot cannot
         // follow. What the floor came to is a number or it is nothing.
         "window-floor" => Some("window_floor fits=true"),
+        // The graph column pulled past its floor: the clamp has to land
+        // on the floor exactly, and the floor is lane 0's co-author
+        // badge kept whole (GraphPane.graphColWMin). The number is the
+        // token arithmetic spelled out — it moves only when those tokens
+        // do, and a clamp that stopped anywhere else photographs just as
+        // neatly, since the badge is four pixels of the frame.
+        "graph-min" => Some("graph_min w=28.5 min=28.5"),
         // The three badges are judged with the fit. A run where one of
         // them never stood photographs a band that was never crowded, and
         // that picture cannot be told from a band that took the crowd
