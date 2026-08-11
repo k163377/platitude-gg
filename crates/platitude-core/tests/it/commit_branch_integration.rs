@@ -606,3 +606,61 @@ async fn a_diverged_local_branch_is_moved_onto_the_remote_one() {
         "the commit only the local branch had is no longer on it"
     );
 }
+
+/// The reference point `branch --delete` measures "merged" against: the
+/// configured upstream where there is one, HEAD otherwise. `upstream_of`
+/// resolves the first half; the pairing pinned here is the side git's
+/// own refusal takes — a branch merged into HEAD but ahead of its
+/// upstream still reads as unmerged (measured; the delete row's early
+/// `-D` rides on this composition).
+#[tokio::test]
+async fn the_upstream_is_the_delete_reference_point() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("a.txt", "one\n", "root");
+
+    let mut clone = TestRepo::init();
+    let url = origin.file_url();
+    clone.git(&["remote", "add", "origin", &url]);
+    clone.git(&["fetch", "origin"]);
+    // Starting from the remote ref configures its upstream; starting the
+    // second branch from a local commit leaves none.
+    clone.git(&["checkout", "-b", "topic", "origin/main"]);
+    clone.commit_file("b.txt", "two\n", "ahead of the upstream");
+    clone.git(&["checkout", "-b", "keeper"]);
+    let (exec, cancel) = env();
+
+    assert_eq!(
+        branch::upstream_of(&exec, &clone.path, "topic", &cancel)
+            .await
+            .expect("upstream read")
+            .as_deref(),
+        Some("refs/remotes/origin/main"),
+        "the configured upstream comes back as the full refname"
+    );
+    assert_eq!(
+        branch::upstream_of(&exec, &clone.path, "keeper", &cancel)
+            .await
+            .expect("upstream read"),
+        None,
+        "a branch started from a local commit has none"
+    );
+
+    assert!(
+        branch::is_merged_into(&exec, &clone.path, "refs/heads/topic", "HEAD", &cancel)
+            .await
+            .expect("merge check"),
+        "HEAD stands on the same commit"
+    );
+    assert!(
+        !branch::is_merged_into(
+            &exec,
+            &clone.path,
+            "refs/heads/topic",
+            "refs/remotes/origin/main",
+            &cancel
+        )
+        .await
+        .expect("merge check"),
+        "the upstream does not reach the new commit, which is the measure git refuses over"
+    );
+}

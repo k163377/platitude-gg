@@ -207,6 +207,11 @@ pub async fn create(
 
 /// Deletes a local branch. `force` maps to `-D` (drops unmerged work);
 /// without it git refuses to delete an unmerged branch itself.
+///
+/// Both spellings are the ones the delete row wears as its chip, so the
+/// menu, this call, and the command log read as the same words: the
+/// long form for the everyday delete, and for the forced one the exact
+/// spelling git's own refusal hint suggests.
 pub async fn delete(
     executor: &GitExecutor,
     workdir: &Path,
@@ -214,7 +219,7 @@ pub async fn delete(
     force: bool,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let flag = if force { "-D" } else { "-d" };
+    let flag = if force { "-D" } else { "--delete" };
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["branch", flag, "--", name]);
@@ -235,6 +240,28 @@ pub async fn rename(
         .cwd(workdir)
         .args(["branch", flag, "--", from, to]);
     executor.run(cmd, cancel).await.map(drop)
+}
+
+/// The configured upstream of a local branch, as the full refname
+/// (`refs/remotes/origin/main`), or `None` where none is configured.
+///
+/// This is the reference point `branch --delete` measures "merged"
+/// against; without one the measure falls back to HEAD, and that choice
+/// stays with the caller — it is the one rule of git's not answered by
+/// git here.
+pub async fn upstream_of(
+    executor: &GitExecutor,
+    workdir: &Path,
+    name: &str,
+    cancel: &CancellationToken,
+) -> Result<Option<String>, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["for-each-ref", "--format=%(upstream)"])
+        .arg(format!("refs/heads/{name}"));
+    let out = executor.run(cmd, cancel).await?;
+    let upstream = out.stdout_utf8().trim().to_string();
+    Ok((!upstream.is_empty()).then_some(upstream))
 }
 
 /// True when every commit of `rev` is already reachable from `into`.

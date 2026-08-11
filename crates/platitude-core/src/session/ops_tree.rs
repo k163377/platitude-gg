@@ -228,6 +228,36 @@ impl RepoSession {
         );
     }
 
+    /// Asks whether `branch --delete` would go through for this branch:
+    /// merged into its reference point it deletes quietly, unmerged git
+    /// refuses. Asked when a menu opens over the branch, so its delete
+    /// row can wear `-D` from the start instead of only after a refused
+    /// try. Both halves of the answer are git's own — the upstream from
+    /// `for-each-ref`, the reachability from `merge-base` — and the only
+    /// rule copied here is which reference point wins. A read, not a
+    /// write, so it skips the queue the way the other checks do.
+    pub fn check_branch_delete(self: &Arc<Self>, branch: String) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            let reference =
+                match branch::upstream_of(&s.executor, &workdir, &branch, &cancel).await {
+                    Ok(Some(upstream)) => upstream,
+                    Ok(None) => "HEAD".to_string(),
+                    Err(_) => return,
+                };
+            let rev = format!("refs/heads/{branch}");
+            if let Ok(merged) =
+                branch::is_merged_into(&s.executor, &workdir, &rev, &reference, &cancel).await
+            {
+                s.sink.event(SessionEvent::BranchDeleteChecked { branch, merged });
+            }
+        });
+    }
+
     pub fn rename_branch(self: &Arc<Self>, from: String, to: String, force: bool) {
         self.write(
             "branch",

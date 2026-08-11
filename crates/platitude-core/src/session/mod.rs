@@ -351,6 +351,14 @@ pub enum SessionEvent {
         /// commit and the walk are here.
         theirs: u32,
     },
+    /// Answer to [`RepoSession::check_branch_delete`]: whether the branch
+    /// is merged into the reference point `branch --delete` measures
+    /// against (its upstream, or HEAD without one). The branch is echoed
+    /// back because the menu that asked may be open over another row by
+    /// the time this lands. No event is sent where the reads fail —
+    /// silence leaves the delete row on its plain form, and a refusal,
+    /// if any, lands the way it always has.
+    BranchDeleteChecked { branch: String, merged: bool },
     /// Answer to [`RepoSession::check_publish`].
     PublishChecked {
         range: String,
