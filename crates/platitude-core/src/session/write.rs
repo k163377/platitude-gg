@@ -100,7 +100,7 @@ impl RepoSession {
         // Anything that touched the repository can have brought a new
         // `.gitattributes` or changed what a directory's files look like,
         // and a stale house style is worse than asking again.
-        self.forget_eol_baselines();
+        self.forget_derived();
 
         // Settle the working tree and the refs before touching the graph:
         // the WIP row exists only while the tree is dirty and a write that

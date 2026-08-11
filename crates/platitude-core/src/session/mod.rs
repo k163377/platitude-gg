@@ -877,6 +877,49 @@ struct Shared {
     sent_footer: Option<Footer>,
 }
 
+/// One fact read out of the repository and kept until something that
+/// could have changed it happens.
+///
+/// **The point is that the invalidation is one place.** These are not a
+/// cache of a keyed lookup — each is a single answer about the repository
+/// as a whole (does git normalise line endings here, what remotes are
+/// configured), and every one of them is invalidated by the same two
+/// events: a write landed, or the refs moved. Scattering an
+/// `Option<T>` and its `= None` across the modules that happen to read it
+/// is how one gets forgotten, so they are cleared together in
+/// [`RepoSession::forget_derived`].
+///
+/// Deliberately not a cache crate. `salsa` tracks dependencies between
+/// pure synchronous queries; these are async subprocess reads that can be
+/// cancelled. `moka` evicts by age and size; these expire on an event and
+/// never on a clock. Neither axis is this one.
+#[derive(Default)]
+struct Derived<T>(Mutex<Option<T>>);
+
+impl<T: Clone> Derived<T> {
+    /// What was read last, if it still stands.
+    fn get(&self) -> Option<T> {
+        match self.0.lock() {
+            Ok(g) => g.clone(),
+            Err(e) => e.into_inner().clone(),
+        }
+    }
+
+    fn put(&self, value: T) {
+        match self.0.lock() {
+            Ok(mut g) => *g = Some(value),
+            Err(e) => *e.into_inner() = Some(value),
+        }
+    }
+
+    fn forget(&self) {
+        match self.0.lock() {
+            Ok(mut g) => *g = None,
+            Err(e) => *e.into_inner() = None,
+        }
+    }
+}
+
 /// Guards snapshot-replacing ops against out-of-order completion.
 #[derive(Default)]
 struct OpGate(AtomicU64);
@@ -1021,9 +1064,12 @@ pub struct RepoSession {
     /// refs move, since either can bring a new `.gitattributes` or change
     /// what the neighbours look like.
     eol_baselines: Mutex<HashMap<(String, String), Option<crate::eol::Baseline>>>,
-    /// Whether git normalises line endings here (`core.autocrlf`), read
-    /// once and dropped alongside the baselines above.
-    eol_normalises: Mutex<Option<bool>>,
+    /// Whether git normalises line endings here (`core.autocrlf`).
+    eol_normalises: Derived<bool>,
+    /// What remotes are configured. Read on every refs listing before
+    /// this, which is a process per poll tick for an answer that only a
+    /// write moves.
+    remotes: Derived<Vec<remote::Remote>>,
     /// Pending paths whose change has something to say about line endings,
     /// repeated by every status read until something asks for them again.
     eol_marks: Mutex<Arc<Vec<EolMark>>>,
@@ -1130,7 +1176,8 @@ impl RepoSession {
             merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),
             merge_tool_seen: Mutex::new(String::new()),
             eol_baselines: Mutex::new(HashMap::new()),
-            eol_normalises: Mutex::new(None),
+            eol_normalises: Derived::default(),
+            remotes: Derived::default(),
             eol_marks: Mutex::new(Arc::new(Vec::new())),
             eol_marks_stale: std::sync::atomic::AtomicBool::new(true),
             status_key: Mutex::new(None),

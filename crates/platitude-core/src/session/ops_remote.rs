@@ -55,7 +55,7 @@ impl RepoSession {
         timeout: std::time::Duration,
         cancel: &CancellationToken,
     ) -> bool {
-        let remotes = match remote::list(exec, workdir, cancel).await {
+        let remotes = match self.remotes(workdir, cancel).await {
             Ok(list) => list,
             Err(error) => {
                 tracing::debug!(%error, "remote tags: the remotes could not be listed");

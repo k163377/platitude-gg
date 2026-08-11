@@ -128,9 +128,7 @@ impl RepoSession {
         };
         // A repository with no remotes is normal, and so is a failure
         // to read the list; neither is a reason to lose the refs.
-        let remotes = remote::list(&self.executor, &workdir, &cancel)
-            .await
-            .unwrap_or_default();
+        let remotes = self.remotes(&workdir, &cancel).await.unwrap_or_default();
         match (refs, head) {
             (Ok(refs), Ok(head)) => {
                 if !self.refs_gate.is_current(op_gen) {
@@ -170,7 +168,7 @@ impl RepoSession {
                     self.settle_head_reach();
                     // HEAD moving swaps out the checked-out files, and with
                     // them whatever the neighbours of a path looked like.
-                    self.forget_eol_baselines();
+                    self.forget_derived();
                 }
                 previous.is_some_and(|previous| previous != key)
             }

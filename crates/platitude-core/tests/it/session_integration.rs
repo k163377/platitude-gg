@@ -1237,6 +1237,70 @@ async fn a_detached_head_is_still_read_correctly() {
     session.close();
 }
 
+/// The remotes are read once per refs listing no more: a poll tick that
+/// finds nothing moved spawns no `git config` to re-read them. A write
+/// puts the question back, because a write is what can add one.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    let (sink, session) = opened(&repo).await;
+    sink.settled_stream_gen(1).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    session.set_record_background(true);
+    sink.events.lock().unwrap().clear();
+
+    let reads = |sink: &CaptureSink| {
+        commands_of(sink)
+            .iter()
+            .filter(|c| c.contains("remote\\..*\\.(url|pushurl)"))
+            .count()
+    };
+    // Counted in snapshots delivered, not in elapsed time: a read that is
+    // merely slow must not read as a read that did not happen.
+    let snapshots =
+        |sink: &CaptureSink| sink.count(|e| matches!(e, SessionEvent::RefsLoaded { .. })) as u32;
+    let settle = async |want: u32| {
+        sink.wait_for("a refs snapshot", move |evs| {
+            (evs.iter()
+                .filter(|e| matches!(e, SessionEvent::RefsLoaded { .. }))
+                .count() as u32
+                >= want)
+                .then_some(())
+        })
+        .await
+    };
+
+    // One read warms it — the opening listing found the refs where it had
+    // never seen them before, which counts as a move and drops what was
+    // read once.
+    session.refresh_refs();
+    settle(1).await;
+    assert_eq!(reads(&sink), 1, "{:?}", commands_of(&sink));
+
+    // Now nothing moves, and the listings that follow ask git nothing.
+    let from = snapshots(&sink);
+    for n in 1..=3 {
+        session.refresh_refs();
+        settle(from + n).await;
+    }
+    assert_eq!(reads(&sink), 1, "still the one: {:?}", commands_of(&sink));
+
+    // A write can add one, so the answer is dropped and asked again.
+    session.create_branch("side".into(), None, false);
+    write_result(&sink, "branch").await;
+    sink.wait_for("the remotes read again", |evs| {
+        evs.iter()
+            .any(|e| {
+                matches!(e, SessionEvent::CommandStarted { display, .. }
+                              if display.contains("remote\\..*\\.(url|pushurl)"))
+            })
+            .then_some(())
+    })
+    .await;
+    session.close();
+}
+
 /// Whether git normalises line endings is repository configuration, so it
 /// is read once however many diffs are opened.
 #[tokio::test(flavor = "multi_thread")]

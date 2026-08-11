@@ -59,15 +59,32 @@ impl RepoSession {
         workdir: &Path,
         cancel: &CancellationToken,
     ) -> Result<bool, GitError> {
-        if let Ok(slot) = self.eol_normalises.lock()
-            && let Some(known) = *slot
-        {
+        if let Some(known) = self.eol_normalises.get() {
             return Ok(known);
         }
         let read = eol::normalises(&self.executor, workdir, cancel).await?;
-        if let Ok(mut slot) = self.eol_normalises.lock() {
-            *slot = Some(read);
+        self.eol_normalises.put(read);
+        Ok(read)
+    }
+
+    /// The remotes this repository has, read once.
+    ///
+    /// Every refs listing wanted them and every refs listing spawned a
+    /// `git config` to ask — a process per poll tick for a list that only
+    /// a write moves. A remote added in a terminal and then left alone is
+    /// the one thing this does not see until the next write or ref move;
+    /// fetching from it moves refs, so the window is narrower than it
+    /// looks.
+    pub(super) async fn remotes(
+        &self,
+        workdir: &Path,
+        cancel: &CancellationToken,
+    ) -> Result<Vec<remote::Remote>, GitError> {
+        if let Some(known) = self.remotes.get() {
+            return Ok(known);
         }
+        let read = remote::list(&self.executor, workdir, cancel).await?;
+        self.remotes.put(read.clone());
         Ok(read)
     }
 
@@ -94,16 +111,20 @@ impl RepoSession {
         fresh
     }
 
-    /// Drops every sampled baseline. A write or a moved ref can bring a new
-    /// `.gitattributes` or change what the neighbours look like, and there
-    /// is no cheaper way to find out than to ask again when next asked.
-    pub(super) fn forget_eol_baselines(&self) {
+    /// Drops everything read once and kept. A write or a moved ref can
+    /// bring a new `.gitattributes`, change what the neighbours look like
+    /// or add a remote, and there is no cheaper way to find out than to
+    /// ask again when next asked.
+    ///
+    /// **One place on purpose.** These expire on the same two events, and
+    /// a slot cleared where it happens to be read is a slot somebody
+    /// forgets (see [`Derived`]).
+    pub(super) fn forget_derived(&self) {
         if let Ok(mut cache) = self.eol_baselines.lock() {
             cache.clear();
         }
-        if let Ok(mut slot) = self.eol_normalises.lock() {
-            *slot = None;
-        }
+        self.eol_normalises.forget();
+        self.remotes.forget();
         self.eol_marks_stale.store(true, Ordering::SeqCst);
     }
 
