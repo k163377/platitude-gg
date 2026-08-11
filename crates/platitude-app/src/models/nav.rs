@@ -98,19 +98,260 @@ fn fold_state(expanded: bool) -> String {
     }
 }
 
+/// Where a section's rows come from.
+///
+/// A row that is only ever drawn does not have to be built. The two
+/// sections a large repository fills — its tags and its remote branches —
+/// read out of the refs snapshot the session already holds and this model
+/// already points at, so their whole lists cost one `Arc` and, where the
+/// shaping has anything to say, an index per visible row. Measured on
+/// `JetBrains/kotlin`: holding them as rows was 13.9MB of the process's
+/// Rust heap, all of it a second copy of what the snapshot says.
+enum Source {
+    /// Rows as they arrived, for the sections whose lists are short.
+    Kept(Vec<NavItem>),
+    /// `snapshot.tags`.
+    Tags(Arc<platitude_core::session::RefsSnapshot>),
+    /// `snapshot.remotes`.
+    Remotes(Arc<platitude_core::session::RefsSnapshot>),
+}
+
+impl Default for Source {
+    fn default() -> Self {
+        Self::Kept(Vec::new())
+    }
+}
+
+impl platitude_core::mem::Footprint for Source {
+    fn heap_bytes(&self) -> usize {
+        match self {
+            Self::Kept(items) => items.heap_bytes(),
+            // Nothing of its own: the snapshot belongs to the session,
+            // which is where the report counts it. A shared `Arc` added up
+            // at every pointer into it is a number that means nothing.
+            Self::Tags(_) | Self::Remotes(_) => 0,
+        }
+    }
+}
+
+impl Source {
+    fn len(&self) -> usize {
+        match self {
+            Self::Kept(items) => items.len(),
+            Self::Tags(snapshot) => snapshot.tags.len(),
+            Self::Remotes(snapshot) => snapshot.remotes.len(),
+        }
+    }
+
+    fn entry(&self, at: usize) -> Option<Entry<'_>> {
+        match self {
+            Self::Kept(items) => items.get(at).map(Entry::Item),
+            Self::Tags(snapshot) => snapshot.tags.get(at).map(Entry::Tag),
+            Self::Remotes(snapshot) => snapshot.remotes.get(at).map(Entry::Remote),
+        }
+    }
+
+    /// The rows as they arrived, for the shaping that still copies them.
+    /// Empty for a projected section, which has none to lend.
+    fn kept(&self) -> &[NavItem] {
+        match self {
+            Self::Kept(items) => items,
+            Self::Tags(_) | Self::Remotes(_) => &[],
+        }
+    }
+}
+
+/// One entry of a source, whichever kind the section has.
+#[derive(Clone, Copy)]
+enum Entry<'a> {
+    Item(&'a NavItem),
+    Tag(&'a platitude_core::session::TagItem),
+    Remote(&'a platitude_core::session::BranchItem),
+}
+
+impl<'a> Entry<'a> {
+    /// What git calls it, before any indenting takes it apart.
+    fn name(self) -> &'a str {
+        match self {
+            Self::Item(item) => &item.name,
+            Self::Tag(tag) => &tag.short,
+            Self::Remote(branch) => &branch.short,
+        }
+    }
+
+    /// The full name a row of this kind arrived with — which for a ref
+    /// read out of the snapshot is nothing, the way `branch_nav_items`
+    /// left it: only the tree writes one, and only into the rows it
+    /// shapes.
+    fn full(self) -> &'a str {
+        match self {
+            Self::Item(item) => &item.full,
+            Self::Tag(_) | Self::Remote(_) => "",
+        }
+    }
+}
+
+/// One row of the shaped list.
+///
+/// Sixteen bytes where a row of the source can be pointed at, against the
+/// two hundred a `NavItem` costs; a folder row is the one thing no source
+/// holds, so it is the one thing carried whole (behind a box, so the
+/// pointed-at rows are not all widened to hold one).
+enum Arranged {
+    At { at: u32, depth: i32 },
+    Made(Box<NavItem>),
+}
+
+impl platitude_core::mem::Footprint for Arranged {
+    fn heap_bytes(&self) -> usize {
+        match self {
+            Self::At { .. } => 0,
+            Self::Made(item) => item.heap_bytes(),
+        }
+    }
+}
+
+/// One row as the view reads it.
+#[derive(Clone, Copy)]
+enum Row<'a> {
+    /// A row this section built: the folder rows, and the shaped copies
+    /// the sections that still hold their rows make.
+    Made(&'a NavItem),
+    /// A row of the source, shown at this depth.
+    Shown { of: Entry<'a>, depth: i32 },
+}
+
+/// What a row answers for one role, before Qt is handed it.
+///
+/// A step between the row and `QVariant` so that Rust can read the same
+/// answer the delegate is given: automation asks for a row's name, the
+/// arranging asks which row is the current entry, and none of them should
+/// be reading a second opinion.
+enum Value<'a> {
+    /// Text the row already holds.
+    Said(&'a str),
+    /// Text the row has to spell out.
+    Spelled(String),
+    Flag(bool),
+    Number(i32),
+}
+
+impl Value<'_> {
+    fn variant(&self) -> QVariant {
+        match self {
+            Self::Said(text) => QVariant::from(*text),
+            Self::Spelled(text) => QVariant::from(text),
+            Self::Flag(flag) => QVariant::from(flag),
+            Self::Number(number) => QVariant::from(number),
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Said(text) => text,
+            Self::Spelled(text) => text,
+            Self::Flag(_) | Self::Number(_) => "",
+        }
+    }
+
+    fn flag(&self) -> bool {
+        matches!(self, Self::Flag(true))
+    }
+}
+
+/// The roles a delegate reads a row by.
+///
+/// The numbers are `NavItem`'s fields in order, which is what
+/// `#[derive(QModelItem)]` hands the view as names. The test at the foot
+/// of this file holds the two together: **a role answered under a name
+/// the delegate does not ask for draws nothing at all**, and says nothing
+/// about it — no warning, no error, an empty row.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Role {
+    Name,
+    Full,
+    OidHex,
+    Change,
+    Bucket,
+    Group,
+    OrigPath,
+    IsHead,
+    HasRemote,
+    OnlyRemote,
+    Upstream,
+    HasPr,
+    EolMark,
+    Depth,
+    Folder,
+}
+
+impl Role {
+    /// Every role, in the order their numbers run — which is the order
+    /// `NavItem` declares its fields in.
+    const ALL: [Self; 15] = [
+        Self::Name,
+        Self::Full,
+        Self::OidHex,
+        Self::Change,
+        Self::Bucket,
+        Self::Group,
+        Self::OrigPath,
+        Self::IsHead,
+        Self::HasRemote,
+        Self::OnlyRemote,
+        Self::Upstream,
+        Self::HasPr,
+        Self::EolMark,
+        Self::Depth,
+        Self::Folder,
+    ];
+
+    fn of(role: i32) -> Option<Self> {
+        usize::try_from(role)
+            .ok()
+            .and_then(|at| Self::ALL.get(at))
+            .copied()
+    }
+
+    /// The name the delegate asks for this role by.
+    fn spelling(self) -> &'static str {
+        match self {
+            Self::Name => "name",
+            Self::Full => "full",
+            Self::OidHex => "oid_hex",
+            Self::Change => "change",
+            Self::Bucket => "bucket",
+            Self::Group => "group",
+            Self::OrigPath => "orig_path",
+            Self::IsHead => "is_head",
+            Self::HasRemote => "has_remote",
+            Self::OnlyRemote => "only_remote",
+            Self::Upstream => "upstream",
+            Self::HasPr => "has_pr",
+            Self::EolMark => "eol_mark",
+            Self::Depth => "depth",
+            Self::Folder => "folder",
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct NavSectionModel {
     section: String,
-    all: Vec<NavItem>,
+    /// What the rows are read out of.
+    all: Source,
     /// The rows as shown — indented, folded, filtered — or `None` when
-    /// they are the arrived rows unchanged.
+    /// they are the source's rows in its own order.
     ///
     /// `None` is not an optimisation of an empty list but of an identical
-    /// one: a section with no tree and no filter (tags, stashes) shows
-    /// `all` exactly, and holding a copy of it means every row's strings
-    /// twice over (measured on `JetBrains/kotlin`: 45,901 tags, 12.3MB of
-    /// the process's Rust heap duplicating 12.3MB already there).
-    arranged: Option<Vec<NavItem>>,
+    /// one: a section with no tree and no filter (tags, stashes) shows the
+    /// source exactly, and an index per row would say only that the rows
+    /// are where they already are.
+    arranged: Option<Vec<Arranged>>,
+    /// Whether `arranged` is the indented form, where a row shows the
+    /// segment under its folder and its whole name is what git calls it.
+    /// A filtered list is not: it shows whole names and stands in no tree.
+    indented: bool,
     filter: String,
     total: i32,
     /// Current branch (branches section only) — feeds the sticky row
@@ -172,7 +413,7 @@ impl QAbstractItemModel for NavSectionModel {
     fn index(&self, row: i32, column: i32, parent: &QModelIndex) -> QModelIndex {
         let out_of_list = parent.is_valid()
             || column != 0
-            || usize::try_from(row).is_ok_and(|row| row >= self.rows().len());
+            || usize::try_from(row).is_ok_and(|row| row >= self.shown_rows());
         if out_of_list || row < 0 {
             return QModelIndex::default();
         }
@@ -188,7 +429,7 @@ impl QAbstractItemModel for NavSectionModel {
         if parent.is_valid() {
             0
         } else {
-            self.rows().len() as i32
+            self.shown_rows() as i32
         }
     }
 
@@ -197,23 +438,26 @@ impl QAbstractItemModel for NavSectionModel {
     }
 
     fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        let Some(item) = usize::try_from(index.row())
-            .ok()
-            .and_then(|row| self.rows().get(row))
-        else {
+        let (Some(role), Some(row)) = (
+            Role::of(role),
+            usize::try_from(index.row())
+                .ok()
+                .and_then(|at| self.row_at(at)),
+        ) else {
             return QVariant::default();
         };
-        item.get_role(role)
+        self.field(row, role).variant()
     }
 
-    /// The names QML resolves a role by, taken from the item's own derived
-    /// table so the two cannot drift apart: a role spelled differently
-    /// here draws nothing at all, and says nothing about it.
+    /// The names QML resolves a role by. Spelled where the answers are
+    /// (`Role`), and held to the item's own derived table by the test at
+    /// the foot of this file — a role the delegate cannot name draws
+    /// nothing at all, and says nothing about it.
     fn role_names(&self) -> QHash<i32, QByteArray> {
         let mut names = QHash::default();
-        <NavItem as QModelItem>::role_names()
-            .iter()
-            .for_each(|(role, name)| names.insert(role, &QByteArray::from(name)));
+        for (number, role) in Role::ALL.iter().enumerate() {
+            names.insert(&(number as i32), &QByteArray::from(role.spelling()));
+        }
         names
     }
 }
@@ -223,21 +467,24 @@ impl NavSectionModel {
     /// filtered — and finds the current entry among them.
     fn arrange(&mut self) {
         let needle = self.filter.to_lowercase();
+        self.indented =
+            needle.is_empty() && matches!(self.section.as_str(), "branches" | "remotes");
         self.arranged = if needle.is_empty() {
             match self.section.as_str() {
                 "branches" | "remotes" => Some(self.build_tree()),
                 // The worktree keeps its group runs (conflicts → unstaged →
                 // staged) and trees each run independently.
                 "worktree" if self.tree_view => {
+                    let kept = self.all.kept();
                     let mut out = Vec::new();
                     let mut i = 0;
-                    while i < self.all.len() {
-                        let group = self.all[i].group.clone();
+                    while i < kept.len() {
+                        let group = kept[i].group.clone();
                         let mut j = i + 1;
-                        while j < self.all.len() && self.all[j].group == group {
+                        while j < kept.len() && kept[j].group == group {
                             j += 1;
                         }
-                        wt_tree_into(&self.all[i..j], &group, &self.folder_overrides, &mut out);
+                        wt_tree_into(&kept[i..j], &group, &self.folder_overrides, &mut out);
                         i = j;
                     }
                     Some(out)
@@ -249,17 +496,25 @@ impl NavSectionModel {
         } else {
             // Filtering shows flat full names (folders would hide context).
             Some(
-                self.all
-                    .iter()
-                    .filter(|i| i.name.to_lowercase().contains(&needle))
-                    .cloned()
+                (0..self.all.len())
+                    .filter(|at| {
+                        self.all
+                            .entry(*at)
+                            .is_some_and(|of| of.name().to_lowercase().contains(&needle))
+                    })
+                    .map(|at| Arranged::At {
+                        at: at as u32,
+                        depth: 0,
+                    })
                     .collect(),
             )
         };
-        self.head_row = self
-            .rows()
-            .iter()
-            .position(|i| i.is_head && !i.folder)
+        self.head_row = (0..self.shown_rows())
+            .find(|at| {
+                self.row_at(*at).is_some_and(|row| {
+                    self.field(row, Role::IsHead).flag() && !self.field(row, Role::Folder).flag()
+                })
+            })
             .map_or(-1, |row| row as i32);
     }
 
@@ -274,13 +529,165 @@ impl NavSectionModel {
         self.end_reset_model();
     }
 
-    /// The rows on screen: the shaped list where there is one, and the
-    /// arrived rows themselves where the shaping would have copied them.
-    fn rows(&self) -> &[NavItem] {
+    /// How many rows are on screen: the shaped list where there is one,
+    /// and the source itself where the shaping had nothing to say.
+    fn shown_rows(&self) -> usize {
         match &self.arranged {
-            Some(arranged) => arranged,
-            None => &self.all,
+            Some(arranged) => arranged.len(),
+            None => self.all.len(),
         }
+    }
+
+    /// The row at one position on screen.
+    fn row_at(&self, at: usize) -> Option<Row<'_>> {
+        match &self.arranged {
+            Some(arranged) => match arranged.get(at)? {
+                Arranged::At { at, depth } => Some(Row::Shown {
+                    of: self.all.entry(*at as usize)?,
+                    depth: *depth,
+                }),
+                Arranged::Made(item) => Some(Row::Made(item)),
+            },
+            None => Some(Row::Shown {
+                of: self.all.entry(at)?,
+                depth: 0,
+            }),
+        }
+    }
+
+    /// What the row is called on screen: the segment under its folder
+    /// while the list is indented, and the whole name everywhere else.
+    fn shown_name<'a>(&self, of: Entry<'a>, depth: i32) -> &'a str {
+        let whole = of.name();
+        if !self.indented {
+            return whole;
+        }
+        let mut rest = whole;
+        for _ in 0..depth {
+            let Some((_, tail)) = rest.split_once('/') else {
+                break;
+            };
+            rest = tail;
+        }
+        rest
+    }
+
+    /// What one row answers for one role.
+    ///
+    /// **The only place a row's fields are worked out.** The view reads
+    /// it through `data`, and the slots below read it directly, so no row
+    /// can show the delegate one thing and tell automation another.
+    fn field<'a>(&self, row: Row<'a>, role: Role) -> Value<'a> {
+        let (of, depth) = match row {
+            // A row that was built holds what it shows already.
+            Row::Made(item) => {
+                return match role {
+                    Role::Name => Value::Said(&item.name),
+                    Role::Full => Value::Said(&item.full),
+                    Role::OidHex => Value::Said(&item.oid_hex),
+                    Role::Change => Value::Said(&item.change),
+                    Role::Bucket => Value::Said(&item.bucket),
+                    Role::Group => Value::Said(&item.group),
+                    Role::OrigPath => Value::Said(&item.orig_path),
+                    Role::IsHead => Value::Flag(item.is_head),
+                    Role::HasRemote => Value::Flag(item.has_remote),
+                    Role::OnlyRemote => Value::Flag(item.only_remote),
+                    Role::Upstream => Value::Said(&item.upstream),
+                    Role::HasPr => Value::Flag(item.has_pr),
+                    Role::EolMark => Value::Flag(item.eol_mark),
+                    Role::Depth => Value::Number(item.depth),
+                    Role::Folder => Value::Flag(item.folder),
+                };
+            }
+            Row::Shown { of, depth } => (of, depth),
+        };
+        match role {
+            Role::Name => Value::Said(self.shown_name(of, depth)),
+            // The tree is what writes a full name down; a row that stands
+            // in none is known by the one it arrived with.
+            Role::Full => Value::Said(if self.indented { of.name() } else { of.full() }),
+            Role::Depth => Value::Number(depth),
+            // A row of the source is a row of the list, never a folder.
+            Role::Folder => Value::Flag(false),
+            Role::OidHex => match of {
+                Entry::Item(item) => Value::Said(&item.oid_hex),
+                Entry::Tag(tag) => Value::Spelled(tag.oid.to_hex()),
+                Entry::Remote(branch) => Value::Spelled(branch.oid.to_hex()),
+            },
+            Role::IsHead => Value::Flag(match of {
+                Entry::Item(item) => item.is_head,
+                Entry::Tag(_) => false,
+                Entry::Remote(branch) => branch.is_head,
+            }),
+            Role::HasRemote => Value::Flag(match of {
+                Entry::Item(item) => item.has_remote,
+                // Same badge as a branch: nothing means this tag is only
+                // here. The bit comes off `ls-remote --tags`, which the
+                // fetch carries.
+                Entry::Tag(tag) => tag.has_remote,
+                Entry::Remote(branch) => branch.has_remote,
+            }),
+            Role::OnlyRemote => Value::Flag(match of {
+                Entry::Item(item) => item.only_remote,
+                // Written as the negative of core's `here`, so every other
+                // kind of row keeps it off by default.
+                Entry::Tag(tag) => !tag.here,
+                Entry::Remote(_) => false,
+            }),
+            Role::Upstream => Value::Said(match of {
+                Entry::Item(item) => &item.upstream,
+                Entry::Tag(_) => "",
+                Entry::Remote(branch) => &branch.upstream,
+            }),
+            Role::HasPr => Value::Flag(match of {
+                Entry::Item(item) => item.has_pr,
+                Entry::Tag(_) => false,
+                Entry::Remote(branch) => {
+                    crate::encode::fake_pr_set().contains(pr_key(&branch.short))
+                }
+            }),
+            Role::Change => Value::Said(match of {
+                Entry::Item(item) => &item.change,
+                Entry::Tag(_) | Entry::Remote(_) => "",
+            }),
+            Role::Bucket => Value::Said(match of {
+                Entry::Item(item) => &item.bucket,
+                Entry::Tag(_) | Entry::Remote(_) => "",
+            }),
+            Role::Group => Value::Said(match of {
+                Entry::Item(item) => &item.group,
+                Entry::Tag(_) | Entry::Remote(_) => "",
+            }),
+            Role::OrigPath => Value::Said(match of {
+                Entry::Item(item) => &item.orig_path,
+                Entry::Tag(_) | Entry::Remote(_) => "",
+            }),
+            Role::EolMark => Value::Flag(matches!(of, Entry::Item(item) if item.eol_mark)),
+        }
+    }
+
+    /// What the row identified by one field answers for another.
+    ///
+    /// Asks the section's whole source rather than the visible rows, so
+    /// an active filter or a collapsed folder does not hide the answer —
+    /// and asks it undented, because a name given from outside is the
+    /// whole one git knows.
+    fn told(&self, known: Role, text: &str, wanted: Role) -> String {
+        (0..self.all.len())
+            .filter_map(|at| self.all.entry(at))
+            .map(|of| Row::Shown { of, depth: 0 })
+            .find(|row| self.field(*row, known).as_str() == text)
+            .map(|row| self.field(row, wanted).as_str().to_string())
+            .unwrap_or_default()
+    }
+
+    /// What one row on screen shows for one role (empty out of range).
+    fn shows(&self, row: i32, role: Role) -> String {
+        usize::try_from(row)
+            .ok()
+            .and_then(|at| self.row_at(at))
+            .map(|row| self.field(row, role).as_str().to_string())
+            .unwrap_or_default()
     }
 
     /// Section default: remote roots (one per remote) start collapsed —
@@ -294,14 +701,22 @@ impl NavSectionModel {
 
     /// Turns the flat sorted name list into an indented tree with
     /// collapsible folder rows for every `/` level.
-    fn build_tree(&self) -> Vec<NavItem> {
+    ///
+    /// The leaves are pointed at rather than copied: what a row of the
+    /// tree adds to the name the source holds is its depth, and the
+    /// segment it shows falls out of that (`shown_name`).
+    fn build_tree(&self) -> Vec<Arranged> {
         let mut out = Vec::new();
         let mut open_path: Vec<String> = Vec::new();
         // Depth at which a collapsed folder swallows its descendants.
         let mut collapsed_at: Option<usize> = None;
 
-        for leaf in &self.all {
-            let segments: Vec<&str> = leaf.name.split('/').collect();
+        for at in 0..self.all.len() {
+            let Some(leaf) = self.all.entry(at) else {
+                continue;
+            };
+            let name = leaf.name();
+            let segments: Vec<&str> = name.split('/').collect();
             let folder_count = segments.len() - 1;
 
             // Longest common folder prefix with the previous entry.
@@ -326,49 +741,45 @@ impl NavSectionModel {
                 }
                 let key = open_path.join("/");
                 let expanded = self.folder_expanded(&key, depth as i32);
-                out.push(NavItem {
+                out.push(Arranged::Made(Box::new(NavItem {
                     name: (*segment).to_string(),
                     full: key,
                     depth: depth as i32,
                     folder: true,
                     change: fold_state(expanded),
                     ..Default::default()
-                });
+                })));
                 if !expanded {
                     collapsed_at = Some(depth);
                 }
             }
             if collapsed_at.is_none() {
-                let mut item = leaf.clone();
-                item.full = leaf.name.clone();
-                item.name = segments[folder_count].to_string();
-                item.depth = folder_count as i32;
-                out.push(item);
+                out.push(Arranged::At {
+                    at: at as u32,
+                    depth: folder_count as i32,
+                });
             }
         }
         out
     }
 }
 
-/// `remote` strips the remote prefix before the PR lookup, so
+/// A remote branch is looked up without its remote prefix, so
 /// `origin/main` matches a PR on `main`.
-fn branch_nav_items(list: &[platitude_core::session::BranchItem], remote: bool) -> Vec<NavItem> {
+fn pr_key(short: &str) -> &str {
+    short.split_once('/').map_or(short, |(_, rest)| rest)
+}
+
+fn branch_nav_items(list: &[platitude_core::session::BranchItem]) -> Vec<NavItem> {
     list.iter()
-        .map(|b| {
-            let pr_key = if remote {
-                b.short.split_once('/').map_or(b.short.as_str(), |(_, r)| r)
-            } else {
-                b.short.as_str()
-            };
-            NavItem {
-                name: b.short.to_string(),
-                oid_hex: b.oid.to_hex(),
-                is_head: b.is_head,
-                has_remote: b.has_remote,
-                upstream: b.upstream.to_string(),
-                has_pr: crate::encode::fake_pr_set().contains(pr_key),
-                ..Default::default()
-            }
+        .map(|b| NavItem {
+            name: b.short.to_string(),
+            oid_hex: b.oid.to_hex(),
+            is_head: b.is_head,
+            has_remote: b.has_remote,
+            upstream: b.upstream.to_string(),
+            has_pr: crate::encode::fake_pr_set().contains(b.short.as_str()),
+            ..Default::default()
         })
         .collect()
 }
@@ -380,7 +791,7 @@ fn wt_tree_into(
     entries: &[NavItem],
     group: &str,
     overrides: &HashMap<String, bool>,
-    out: &mut Vec<NavItem>,
+    out: &mut Vec<Arranged>,
 ) {
     #[derive(Default)]
     struct DirNode {
@@ -405,7 +816,7 @@ fn wt_tree_into(
         prefix: &str,
         depth: i32,
         overrides: &HashMap<String, bool>,
-        out: &mut Vec<NavItem>,
+        out: &mut Vec<Arranged>,
     ) {
         for (dir_name, child) in &node.dirs {
             let mut label = dir_name.clone();
@@ -421,7 +832,7 @@ fn wt_tree_into(
             let path = format!("{prefix}{label}");
             let key = format!("{group}:{path}");
             let expanded = overrides.get(&key).copied().unwrap_or(true);
-            out.push(NavItem {
+            out.push(Arranged::Made(Box::new(NavItem {
                 name: label,
                 full: key.clone(),
                 // The path itself, for the hover of a row the pane
@@ -433,7 +844,7 @@ fn wt_tree_into(
                 folder: true,
                 change: fold_state(expanded),
                 ..Default::default()
-            });
+            })));
             if expanded {
                 emit(
                     target,
@@ -448,7 +859,7 @@ fn wt_tree_into(
         for f in &node.files {
             let mut item = f.clone();
             item.depth = depth;
-            out.push(item);
+            out.push(Arranged::Made(Box::new(item)));
         }
     }
     emit(&root, group, "", 0, overrides, out);
@@ -676,20 +1087,49 @@ impl NavSectionModel {
     /// Swapping those in would still reset the Qt model — every delegate
     /// rebuilt, the inner list scrolled back — for an identical picture.
     fn take_rows(&mut self, rows: Vec<NavItem>) -> bool {
-        if self.all == rows {
+        if self.all.kept() == rows {
             return false;
         }
-        self.all = rows;
+        self.all = Source::Kept(rows);
         true
+    }
+
+    /// Points the section at a newly published snapshot, and answers
+    /// whether the rows it shows moved.
+    ///
+    /// The pointer check upstream has already said this is a different
+    /// snapshot; this is the other question — whether *these* rows differ
+    /// — and it is asked of the entries themselves, which is what the
+    /// projection leaves to compare. A poll that found one branch moved
+    /// is not a reason for the tag section to rebuild forty-five thousand
+    /// delegates.
+    ///
+    /// The new handle is taken either way: it holds what the old one did,
+    /// and the session has moved on to it, so keeping the old one alive
+    /// would be a second snapshot on the heap saying the same thing.
+    fn take_refs(&mut self, taken: Source) -> bool {
+        let moved = match (&self.all, &taken) {
+            (Source::Tags(held), Source::Tags(fresh)) => held.tags != fresh.tags,
+            (Source::Remotes(held), Source::Remotes(fresh)) => held.remotes != fresh.remotes,
+            _ => true,
+        };
+        self.all = taken;
+        moved
     }
 
     /// The arrived rows, and the shaped ones where they are a second list.
     ///
     /// Filed apart on purpose: `arranged` being nothing is what says the
-    /// view is reading `all` directly, and a single number would hide the
-    /// day that stops being true.
+    /// view is reading the source directly, and a single number would hide
+    /// the day that stops being true. A projected section reports no bytes
+    /// of its own — the snapshot it reads is the session's, counted there.
     fn note_footprint(&self) {
-        crate::memprobe::note(&format!("nav-{}-all", self.section), self.tab_id, &self.all);
+        crate::memprobe::note_bytes(
+            &format!("nav-{}-all", self.section),
+            self.tab_id,
+            platitude_core::mem::Footprint::heap_bytes(&self.all),
+            self.all.len(),
+        );
         crate::memprobe::note_bytes(
             &format!("nav-{}-arranged", self.section),
             self.tab_id,
@@ -726,33 +1166,19 @@ impl NavSectionModel {
                 .is_some_and(|last| Arc::ptr_eq(last, &snapshot));
             if fresh {
                 self.last_refs = Some(Arc::clone(&snapshot));
-                let rows = match self.section.as_str() {
+                arrived |= match self.section.as_str() {
                     "branches" => {
-                        let items = branch_nav_items(&snapshot.locals, false);
+                        let items = branch_nav_items(&snapshot.locals);
                         let head = items.iter().find(|b| b.is_head);
                         self.head_name = head.map(|b| b.name.clone()).unwrap_or_default();
                         self.head_oid = head.map(|b| b.oid_hex.clone()).unwrap_or_default();
                         self.head_has_remote = head.is_some_and(|b| b.has_remote);
                         self.head_has_pr = head.is_some_and(|b| b.has_pr);
-                        items
+                        self.take_rows(items)
                     }
-                    "remotes" => branch_nav_items(&snapshot.remotes, true),
-                    _ => snapshot
-                        .tags
-                        .iter()
-                        .map(|t| NavItem {
-                            name: t.short.to_string(),
-                            oid_hex: t.oid.to_hex(),
-                            // Same badge as a branch: nothing means this
-                            // tag is only here. The bit comes off
-                            // `ls-remote --tags`, which the fetch carries.
-                            has_remote: t.has_remote,
-                            only_remote: !t.here,
-                            ..Default::default()
-                        })
-                        .collect(),
+                    "remotes" => self.take_refs(Source::Remotes(snapshot)),
+                    _ => self.take_refs(Source::Tags(snapshot)),
                 };
-                arrived |= self.take_rows(rows);
             }
         }
         if let Some(feed) = self.status_feed.clone()
@@ -864,7 +1290,7 @@ impl NavSectionModel {
     /// filter lets through).
     #[qslot]
     fn shown(&self) -> i32 {
-        self.rows().len() as i32
+        self.shown_rows() as i32
     }
 
     /// Commit id of the ref with this name; empty when there is none.
@@ -873,22 +1299,14 @@ impl NavSectionModel {
     /// an active filter or a collapsed folder does not hide the answer.
     #[qslot]
     fn oid_of_name(&self, name: String) -> String {
-        self.all
-            .iter()
-            .find(|item| item.name == name)
-            .map(|item| item.oid_hex.clone())
-            .unwrap_or_default()
+        self.told(Role::Name, &name, Role::OidHex)
     }
 
     /// The remote branch this one speaks for (`origin/main`); empty when
     /// it speaks for none, and for every section but the branches.
     #[qslot]
     fn upstream_of(&self, name: String) -> String {
-        self.all
-            .iter()
-            .find(|item| item.name == name)
-            .map(|item| item.upstream.clone())
-            .unwrap_or_default()
+        self.told(Role::Name, &name, Role::Upstream)
     }
 
     /// What one row shows, and what git knows it by (empty out of range).
@@ -897,20 +1315,12 @@ impl NavSectionModel {
     /// reaches a row it has to act on.
     #[qslot]
     fn name_at(&self, row: i32) -> String {
-        usize::try_from(row)
-            .ok()
-            .and_then(|row| self.rows().get(row))
-            .map(|item| item.name.clone())
-            .unwrap_or_default()
+        self.shows(row, Role::Name)
     }
 
     #[qslot]
     fn full_at(&self, row: i32) -> String {
-        usize::try_from(row)
-            .ok()
-            .and_then(|row| self.rows().get(row))
-            .map(|item| item.full.clone())
-            .unwrap_or_default()
+        self.shows(row, Role::Full)
     }
 
     /// The two stage letters git reports for a working-tree path (`UU`,
@@ -922,11 +1332,206 @@ impl NavSectionModel {
     /// name what the two sides did.
     #[qslot]
     fn change_of(&self, path: String) -> String {
-        self.all
-            .iter()
-            .find(|item| item.full == path && !item.folder)
-            .map(|item| item.change.clone())
-            .unwrap_or_default()
+        self.told(Role::Full, &path, Role::Change)
     }
 }
 qml_register!(NavSectionModel, "NavSectionModel", singleton = false);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn oid(digit: &str) -> platitude_core::Oid {
+        platitude_core::Oid::from_hex_str(&digit.repeat(40)).unwrap()
+    }
+
+    /// The names the delegate asks by and the numbers `data` is called
+    /// with come from two places; a role that answers under the wrong one
+    /// draws an empty row and reports nothing, so they are pinned here.
+    #[test]
+    fn every_role_the_view_is_handed_is_answered_by_the_same_name() {
+        let handed = <NavItem as QModelItem>::role_names();
+        assert_eq!(handed.len(), 15, "the view is handed one role per field");
+        for (number, name) in handed {
+            let role = Role::of(number);
+            assert!(
+                role.is_some(),
+                "role {number} ({name}) has no answer at all"
+            );
+            assert_eq!(
+                role.map(Role::spelling),
+                Some(name.as_str()),
+                "role {number} is answered under another name",
+            );
+        }
+    }
+
+    fn tag(short: &str, has_remote: bool, here: bool) -> platitude_core::session::TagItem {
+        platitude_core::session::TagItem {
+            short: short.into(),
+            oid: oid("a"),
+            annotated: false,
+            created_unix: 0,
+            has_remote,
+            here,
+        }
+    }
+
+    fn remote(short: &str) -> platitude_core::session::BranchItem {
+        platitude_core::session::BranchItem {
+            short: short.into(),
+            full: format!("refs/remotes/{short}").into(),
+            oid: oid("b"),
+            has_remote: true,
+            is_head: false,
+            upstream: "".into(),
+        }
+    }
+
+    fn snapshot(
+        remotes: Vec<platitude_core::session::BranchItem>,
+        tags: Vec<platitude_core::session::TagItem>,
+    ) -> Arc<platitude_core::session::RefsSnapshot> {
+        Arc::new(platitude_core::session::RefsSnapshot {
+            locals: Vec::new(),
+            remotes,
+            tags,
+            head: None,
+            remote_names: Vec::new(),
+        })
+    }
+
+    /// One section, wired to nothing: the shaping and the answers are
+    /// plain Rust, so a test needs no Qt side at all.
+    fn section(kind: &str, all: Source) -> NavSectionModel {
+        let mut model = NavSectionModel::default();
+        model.section = kind.to_string();
+        model.all = all;
+        model
+    }
+
+    fn says(model: &NavSectionModel, row: usize, role: Role) -> String {
+        model
+            .row_at(row)
+            .map(|row| model.field(row, role).as_str().to_string())
+            .unwrap_or_else(|| "<no row>".to_string())
+    }
+
+    fn flags(model: &NavSectionModel, row: usize, role: Role) -> bool {
+        model
+            .row_at(row)
+            .is_some_and(|row| model.field(row, role).flag())
+    }
+
+    fn depth_of(model: &NavSectionModel, row: usize) -> i32 {
+        match model.row_at(row).map(|row| model.field(row, Role::Depth)) {
+            Some(Value::Number(depth)) => depth,
+            _ => -1,
+        }
+    }
+
+    /// A tag is drawn out of the snapshot, badges and all — the rows it
+    /// used to be held as were only ever a copy of this.
+    #[test]
+    fn a_tag_row_reads_out_of_the_snapshot() {
+        let mut model = section(
+            "tags",
+            Source::Tags(snapshot(
+                Vec::new(),
+                vec![tag("v1.0", true, true), tag("v2.0-theirs", true, false)],
+            )),
+        );
+        model.arrange();
+
+        assert_eq!(model.shown_rows(), 2);
+        assert_eq!(says(&model, 0, Role::Name), "v1.0");
+        // A tag never went through the tree, so it has no full name and
+        // the sidebar keys it by what it shows.
+        assert_eq!(says(&model, 0, Role::Full), "");
+        assert_eq!(says(&model, 0, Role::OidHex), oid("a").to_hex());
+        assert!(flags(&model, 0, Role::HasRemote));
+        assert!(!flags(&model, 0, Role::OnlyRemote));
+        // `here` is false: the name greys, which is the whole reason a tag
+        // no local ref reaches is listed at all.
+        assert!(flags(&model, 1, Role::OnlyRemote));
+        assert!(!flags(&model, 1, Role::Folder));
+        assert_eq!(depth_of(&model, 1), 0);
+    }
+
+    /// The remote tree indents rows it points at, and the segment each
+    /// one shows falls out of its depth.
+    #[test]
+    fn the_remote_tree_points_at_rows_and_folds_over_them() {
+        let mut model = section(
+            "remotes",
+            Source::Remotes(snapshot(
+                vec![remote("origin/feature/one"), remote("origin/main")],
+                Vec::new(),
+            )),
+        );
+        // Remote roots start collapsed, so the folder row is all there is.
+        model.arrange();
+        assert_eq!(model.shown_rows(), 1);
+        assert_eq!(says(&model, 0, Role::Name), "origin");
+        assert!(flags(&model, 0, Role::Folder));
+        assert_eq!(says(&model, 0, Role::Change), FOLDED);
+
+        model.folder_overrides.insert("origin".to_string(), true);
+        model.arrange();
+        // origin / feature / one / main
+        assert_eq!(model.shown_rows(), 4);
+        assert_eq!(says(&model, 1, Role::Name), "feature");
+        assert_eq!(says(&model, 2, Role::Name), "one");
+        assert_eq!(says(&model, 2, Role::Full), "origin/feature/one");
+        assert_eq!(depth_of(&model, 2), 2);
+        assert_eq!(says(&model, 3, Role::Name), "main");
+        assert_eq!(says(&model, 3, Role::Full), "origin/main");
+        assert_eq!(depth_of(&model, 3), 1);
+        assert_eq!(says(&model, 3, Role::OidHex), oid("b").to_hex());
+
+        // A name from outside is the whole one git knows, whatever the
+        // tree is showing.
+        assert_eq!(
+            model.oid_of_name("origin/main".to_string()),
+            oid("b").to_hex()
+        );
+        assert_eq!(model.name_at(2), "one");
+    }
+
+    /// Filtering shows whole names and stands in no tree.
+    #[test]
+    fn a_filtered_remote_row_shows_its_whole_name() {
+        let mut model = section(
+            "remotes",
+            Source::Remotes(snapshot(
+                vec![remote("origin/feature/one"), remote("origin/main")],
+                Vec::new(),
+            )),
+        );
+        model.filter = "feature".to_string();
+        model.arrange();
+
+        assert_eq!(model.shown_rows(), 1);
+        assert_eq!(says(&model, 0, Role::Name), "origin/feature/one");
+        assert_eq!(says(&model, 0, Role::Full), "");
+    }
+
+    /// A snapshot that carries the same tags is not a reason to rebuild
+    /// tens of thousands of delegates.
+    #[test]
+    fn a_republished_snapshot_moves_nothing() {
+        let mut model = section("tags", Source::default());
+        assert!(model.take_refs(Source::Tags(snapshot(
+            Vec::new(),
+            vec![tag("v1.0", true, true)]
+        ))));
+        assert!(!model.take_refs(Source::Tags(snapshot(
+            Vec::new(),
+            vec![tag("v1.0", true, true)]
+        ))));
+        assert!(model.take_refs(Source::Tags(snapshot(
+            Vec::new(),
+            vec![tag("v1.1", true, true)]
+        ))));
+    }
+}
