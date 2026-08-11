@@ -152,6 +152,11 @@ commands:
         --quit-ms <n>     PG_AUTO_QUIT_MS (default 40000)
         --no-scroll       leave the scroll benchmark out
         --no-select       do not select a row or open a diff
+        --no-open         start with no repository at all — the window and
+                          nothing in it. Subtracting this from a run that
+                          opened an empty repository leaves the cost of
+                          putting the page up, which is otherwise
+                          indistinguishable from the toolkit's own floor.
         --no-build        use the release binary already built
 
   linux [--rebuild] [--shell] [--stage core|app] <command…>

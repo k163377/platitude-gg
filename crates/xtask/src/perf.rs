@@ -34,6 +34,11 @@ struct Options {
     select: bool,
     breakdown: bool,
     build: bool,
+    /// Start with no repository at all — the window and nothing in it.
+    /// What it is for: subtracting this from a run that opened an empty
+    /// repository leaves the cost of putting the page up, which is
+    /// otherwise indistinguishable from the toolkit's own floor.
+    open: bool,
 }
 
 fn parse(args: &[String]) -> Result<Options, String> {
@@ -46,6 +51,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         select: true,
         breakdown: false,
         build: true,
+        open: true,
     };
     let mut i = 0;
     while i < args.len() {
@@ -71,21 +77,22 @@ fn parse(args: &[String]) -> Result<Options, String> {
             }
             "--no-scroll" => opts.scroll = false,
             "--no-select" => opts.select = false,
+            "--no-open" => opts.open = false,
             "--breakdown" => opts.breakdown = true,
             "--no-build" => opts.build = false,
             other => return Err(format!("unknown option: {other}")),
         }
         i += 1;
     }
-    if opts.repo.as_os_str().is_empty() {
-        return Err("--repo <path> is required".into());
+    if opts.repo.as_os_str().is_empty() && opts.open {
+        return Err("--repo <path> is required (or --no-open for the bare window)".into());
     }
     if opts.label.is_empty() {
         opts.label = opts
             .repo
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "repo".to_string());
+            .unwrap_or_else(|| "no repository".to_string());
     }
     Ok(opts)
 }
@@ -283,13 +290,15 @@ fn measure(
         .env("QT_FORCE_STDERR_LOGGING", "1")
         .env("PG_CONFIG_DIR", &config_dir)
         .env("PG_LOG", "info")
-        .env("PG_AUTO_OPEN", &opts.repo)
         .env("PG_AUTO_QUIT_MS", opts.quit_ms.to_string())
         // A real window, deliberately: `verify-ui` runs offscreen, and
         // offscreen Qt builds no scene graph worth measuring.
         .env_remove("QT_QPA_PLATFORM")
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
+    if opts.open {
+        cmd.env("PG_AUTO_OPEN", &opts.repo);
+    }
     if opts.select {
         cmd.env("PG_AUTO_SELECT", "1");
     }
