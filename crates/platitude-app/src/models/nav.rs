@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
+use qtbridge::qtbridge_type_lib::{QByteArray, QHash, QModelIndex, QVariant};
+use qtbridge::{QAbstractItemModel, QAbstractItemModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::hub::{Feed, Hub, StatusMsg};
 
@@ -160,16 +161,67 @@ pub struct NavSectionModel {
     tab_id: i32,
 }
 
-impl QListModel for NavSectionModel {
-    type Item = NavItem;
+// A list model that answers by value rather than by reference: `data()`
+// computes the field a role asks for, where `QListModel::get` would have
+// handed out a borrow of a stored `NavItem` and so forced every row to
+// exist. Nothing here is a tree — `parent` is always invalid and rows hang
+// off the root — but `QAbstractItemModel` is the base that lets a row be
+// answered instead of held (and the one CXX-Qt expects, via
+// `QAbstractListModel`).
+impl QAbstractItemModel for NavSectionModel {
+    fn index(&self, row: i32, column: i32, parent: &QModelIndex) -> QModelIndex {
+        let out_of_list = parent.is_valid()
+            || column != 0
+            || usize::try_from(row).is_ok_and(|row| row >= self.rows().len());
+        if out_of_list || row < 0 {
+            return QModelIndex::default();
+        }
+        self.create_index(row, column, 0)
+    }
 
-    fn len(&self) -> usize {
-        self.rows().len()
+    /// Every row is a child of the root.
+    fn parent(&self, _child: &QModelIndex) -> QModelIndex {
+        QModelIndex::default()
     }
-    fn get(&self, index: usize) -> Option<&NavItem> {
-        self.rows().get(index)
+
+    fn row_count(&self, parent: &QModelIndex) -> i32 {
+        if parent.is_valid() {
+            0
+        } else {
+            self.rows().len() as i32
+        }
     }
-    fn reset_unnotified(&mut self) {
+
+    fn column_count(&self, parent: &QModelIndex) -> i32 {
+        if parent.is_valid() { 0 } else { 1 }
+    }
+
+    fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
+        let Some(item) = usize::try_from(index.row())
+            .ok()
+            .and_then(|row| self.rows().get(row))
+        else {
+            return QVariant::default();
+        };
+        item.get_role(role)
+    }
+
+    /// The names QML resolves a role by, taken from the item's own derived
+    /// table so the two cannot drift apart: a role spelled differently
+    /// here draws nothing at all, and says nothing about it.
+    fn role_names(&self) -> QHash<i32, QByteArray> {
+        let mut names = QHash::default();
+        <NavItem as QModelItem>::role_names()
+            .iter()
+            .for_each(|(role, name)| names.insert(role, &QByteArray::from(name)));
+        names
+    }
+}
+
+impl NavSectionModel {
+    /// Shapes the arrived rows into the ones on screen — indented, folded,
+    /// filtered — and finds the current entry among them.
+    fn arrange(&mut self) {
         let needle = self.filter.to_lowercase();
         self.arranged = if needle.is_empty() {
             match self.section.as_str() {
@@ -210,9 +262,18 @@ impl QListModel for NavSectionModel {
             .position(|i| i.is_head && !i.folder)
             .map_or(-1, |row| row as i32);
     }
-}
 
-impl NavSectionModel {
+    /// Shapes the rows again and tells the view its whole list changed.
+    ///
+    /// The begin/end pair is written out here because the shaping is ours
+    /// now: `QListModel` had a `reset` that wrapped it, and answering by
+    /// value means there is no such wrapper to inherit.
+    fn reshape(&mut self) {
+        self.begin_reset_model();
+        self.arrange();
+        self.end_reset_model();
+    }
+
     /// The rows on screen: the shaped list where there is one, and the
     /// arrived rows themselves where the shaping would have copied them.
     fn rows(&self) -> &[NavItem] {
@@ -475,7 +536,7 @@ fn status_nav_items(
     rows
 }
 
-#[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
+#[qobject(Base = QAbstractItemModel, ConvertToCamelCase, NoQmlElement)]
 impl NavSectionModel {
     qproperty!("total", Member = total, Notify = changed);
     qproperty!("headName", Member = head_name, Notify = changed);
@@ -757,7 +818,7 @@ impl NavSectionModel {
         }
         if arrived {
             self.total = self.all.len() as i32;
-            self.reset();
+            self.reshape();
             self.changed();
         }
         if settled {
@@ -772,7 +833,7 @@ impl NavSectionModel {
     fn set_filter(&mut self, filter: String) {
         if self.filter != filter {
             self.filter = filter;
-            self.reset();
+            self.reshape();
             self.changed();
         }
     }
@@ -783,7 +844,7 @@ impl NavSectionModel {
         let depth = key.matches('/').count() as i32;
         let current = self.folder_expanded(&key, depth);
         self.folder_overrides.insert(key, !current);
-        self.reset();
+        self.reshape();
         // Folding moves rows around (and can swallow the current one).
         self.changed();
     }
@@ -795,7 +856,7 @@ impl NavSectionModel {
             return;
         }
         self.tree_view = tree;
-        self.reset();
+        self.reshape();
         self.changed();
     }
 
