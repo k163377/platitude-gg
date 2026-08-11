@@ -7,7 +7,8 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-/// Minimum supported git version (source of truth: 要望.md — Ubuntu 24.04 LTS
+/// Minimum supported git version (source of truth:
+/// internal-docs/git最低バージョン整合.md — Ubuntu 24.04 LTS
 /// ships this; modern features like `rebase --update-refs` are assumed).
 pub const MINIMUM_GIT: (u32, u32) = (2, 43);
 

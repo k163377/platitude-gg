@@ -1438,8 +1438,8 @@ Item {
     // it and it gets its own (デザイン規約 §グラフ行の右クリック).
     property string menuStashRef: ""
     // Whether a remote already has the menu's commit. Rewriting it is
-    // not asked about — nothing here leaves the machine — but 要望.md
-    // wants it said, so the squash row carries a tag the way the amend
+    // not asked about — nothing here leaves the machine — but 実装計画.md
+    // §13 wants it said, so the squash row carries a tag the way the amend
     // editor does. The answer lands a frame after the menu opens.
     property bool menuPublished: false
     /// What these menus offer, held still for as long as they stand
@@ -4111,7 +4111,7 @@ Item {
     /// first — the chips, then the lanes (`GraphPane.contentMinW`) — and
     /// stops where all three of them would stop saying anything. Never
     /// under what a side pane may be, so that three columns still read as
-    /// three at the floor (2026-08-09 ユーザー指示).
+    /// three at the floor.
     readonly property real centreMinWidth:
         Math.max(graphPane.contentMinW, sidebarPane.minOpenWidth)
     /// What the folded list costs is the rail, so folding lowers this and

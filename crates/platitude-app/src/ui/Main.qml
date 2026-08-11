@@ -87,7 +87,7 @@ ApplicationWindow {
     // floor of its own). Qt grows a window when a floor rises under it, so
     // putting the list back in a window too narrow for it widens the
     // window instead of cutting the pane off — which is the way back from
-    // fold → shrink → unfold (2026-08-09 ユーザー指示).
+    // fold → shrink → unfold.
     //
     // No exemption for automated runs, unlike `insideScreen` below: the
     // offscreen platform's screen is 800x800 and every floor here is
@@ -921,7 +921,7 @@ ApplicationWindow {
     //                  whether the way in lifts it
     //   fold           folded, put down exactly on that floor, then the
     //                  list put back: the floor rises under a window
-    //                  already standing on it (2026-08-09 ユーザー指示)
+    //                  already standing on it
     //   log            the same rise in the other direction — the window
     //                  put down on the floor it has without the log, and
     //                  then the log opened under it
