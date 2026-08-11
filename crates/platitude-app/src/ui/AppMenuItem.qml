@@ -42,11 +42,14 @@ MenuItem {
     readonly property real codeColSeat:
         menuItem.code !== "" ? codeLabel.implicitWidth : 0
 
-    /// Whether the row's words bid for the menu's width. Off for a row
-    /// whose text is data rather than sentence — the name a delete row
-    /// re-states: the menu is sized by its other rows, the name takes
-    /// what is left and elides, and the elided row's hover already says
-    /// the whole line (デザイン規約 §メニュー).
+    /// Whether the row's words bid their whole width from the menu. Off
+    /// for a row whose text is data rather than sentence — the name a
+    /// delete row re-states: it bids at most the seat a ref name gets in
+    /// the graph (`labelColW`), elides past that into the hover that
+    /// already says the whole line, and stretches further only into
+    /// width the other rows have paid for (デザイン規約 §メニュー).
+    /// A floor rather than nothing: a sparse menu at `menuMinW` with a
+    /// wide frozen chip column otherwise leaves the name zero width.
     property bool growsForText: true
 
     /// Held rather than clicked, for a row that would otherwise have to
@@ -103,7 +106,9 @@ MenuItem {
     implicitHeight: menuItem.offered ? Theme.rowHeight : 0
     implicitWidth: (menuItem.code !== ""
                       ? codeChip.implicitWidth + Theme.spaceSm : 0)
-                   + (menuItem.growsForText ? itemLabel.implicitWidth : 0)
+                   + (menuItem.growsForText
+                      ? itemLabel.implicitWidth
+                      : Math.min(itemLabel.implicitWidth, Metrics.labelColW))
                    + (menuItem.note !== ""
                       ? noteLabel.implicitWidth + Theme.spaceSm : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
