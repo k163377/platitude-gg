@@ -80,9 +80,24 @@ pub struct GraphBuilder {
     warned_out_of_order: bool,
 }
 
+/// The lane bookkeeping, which outlives every row it drew: `expects` and
+/// `rows` are keyed by commit id and keep growing with the walk.
+impl crate::mem::Footprint for GraphBuilder {
+    fn heap_bytes(&self) -> usize {
+        self.lanes.capacity() * size_of::<Option<LaneState>>()
+            + self.expects.heap_bytes()
+            + self.rows.heap_bytes()
+    }
+}
+
 impl GraphBuilder {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Commit ids the builder is holding — the count beside its bytes.
+    pub fn tracked_oids(&self) -> usize {
+        self.rows.len() + self.expects.len()
     }
 
     /// Row index of an already-processed commit.

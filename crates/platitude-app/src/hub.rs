@@ -327,6 +327,13 @@ impl<T> Feed<T> {
     pub fn drain(&self) -> Vec<T> {
         self.lock().queue.drain(..).collect()
     }
+
+    /// Messages waiting for their consumer. Only the memory report reads
+    /// it: a feed nobody drains keeps whole snapshots alive, and the
+    /// breakdown would otherwise show that as heap belonging to nothing.
+    pub fn depth(&self) -> usize {
+        self.lock().queue.len()
+    }
 }
 
 /// All feeds of one tab. Each feed is independently `Arc`-shared with the
@@ -883,6 +890,7 @@ impl Hub {
             if let Some(session) = tab.session {
                 session.close();
             }
+            crate::memprobe::forget(id);
             tracing::info!(tab = id, "closed repository tab");
         }
     }
@@ -904,6 +912,49 @@ impl Hub {
 
     pub fn feeds(&self, id: i32) -> Option<Arc<Feeds>> {
         self.tabs.get(&id).map(|t| Arc::clone(&t.feeds))
+    }
+
+    /// How many messages are waiting in each tab's feeds, as
+    /// `<name>:<depth>` for the ones holding anything. Empty when every
+    /// consumer is keeping up, which is the normal reading.
+    pub fn feed_depths(&self) -> String {
+        let mut waiting: Vec<String> = Vec::new();
+        for (id, tab) in &self.tabs {
+            let f = &tab.feeds;
+            let depths = [
+                ("tab", f.tab.depth()),
+                ("graph", f.graph.depth()),
+                ("refs-branches", f.refs_branches.depth()),
+                ("refs-remotes", f.refs_remotes.depth()),
+                ("refs-tags", f.refs_tags.depth()),
+                ("status", f.status.depth()),
+                ("status-nav", f.status_nav.depth()),
+                ("stash", f.stash.depth()),
+                ("worktrees", f.worktrees.depth()),
+                ("details", f.details.depth()),
+                ("diff", f.diff.depth()),
+                ("commands", f.commands.depth()),
+            ];
+            for (name, depth) in depths {
+                if depth > 0 {
+                    waiting.push(format!("{name}#{id}:{depth}"));
+                }
+            }
+        }
+        waiting.sort();
+        waiting.join(" ")
+    }
+
+    /// Every open session with its tab number, lowest first — what the
+    /// memory report walks.
+    pub fn sessions(&self) -> Vec<(i32, Arc<RepoSession>)> {
+        let mut open: Vec<(i32, Arc<RepoSession>)> = self
+            .tabs
+            .iter()
+            .filter_map(|(id, tab)| tab.session.clone().map(|s| (*id, s)))
+            .collect();
+        open.sort_by_key(|(id, _)| *id);
+        open
     }
 
     // -- settings and state -------------------------------------------------

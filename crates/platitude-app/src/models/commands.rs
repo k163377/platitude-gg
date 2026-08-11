@@ -227,9 +227,23 @@ impl CommandsModel {
         if touched {
             self.changed();
         }
+        if crate::memprobe::enabled() {
+            crate::memprobe::note("command-rows", self.tab_id, &self.rows);
+        }
     }
 }
 qml_register!(CommandsModel, "CommandsModel", singleton = false);
+
+impl platitude_core::mem::Footprint for CommandItem {
+    fn heap_bytes(&self) -> usize {
+        self.args.heap_bytes()
+            + self.full.heap_bytes()
+            + self.state.heap_bytes()
+            + self.result.heap_bytes()
+            + self.duration.heap_bytes()
+            + self.output.heap_bytes()
+    }
+}
 
 #[cfg(test)]
 mod tests {

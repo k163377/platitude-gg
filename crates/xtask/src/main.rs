@@ -8,6 +8,7 @@ mod check;
 mod demo;
 mod hook;
 mod linux;
+mod perf;
 mod qt;
 mod seats;
 mod verify;
@@ -134,6 +135,25 @@ commands:
       a screen still standing because the save did not take frames exactly
       like one nobody has answered yet.
 
+  perf --repo <path> [--label <name>] [--runs <n>] [--breakdown]
+      The measurement behind ci/baseline/perf-windows-x64.md, run the
+      same way every time: release build, a real window (offscreen
+      reports neither memory nor fps honestly), the PG_AUTO_* hooks,
+      WorkingSet and private bytes sampled every 100ms for their
+      maximum, and a deadline with a kill guard. The first run is
+      discarded — the record is a warm-cache number.
+      --breakdown builds with the `memprobe` feature and adds
+      PG_MEM_REPORT=1, then prints the largest `mem report` line the run
+      produced: live Rust heap, the models and the session parts holding
+      it, and what none of them account for. That remainder plus the
+      process total is what separates the toolkit's bytes from ours.
+      options:
+        --runs <n>        kept runs after the discarded first (default 3)
+        --quit-ms <n>     PG_AUTO_QUIT_MS (default 40000)
+        --no-scroll       leave the scroll benchmark out
+        --no-select       do not select a row or open a diff
+        --no-build        use the release binary already built
+
   linux [--rebuild] [--shell] [--stage core|app] <command…>
       Run a command against this checkout on Ubuntu, in a container built
       from ci/linux/Dockerfile. On Linux it skips the container and runs
@@ -184,6 +204,7 @@ fn main() -> ExitCode {
             println!("{}", path.display());
         }),
         Some("verify-ui") => verify::run(&args[1..]),
+        Some("perf") => perf::run(&args[1..]),
         Some("linux") => linux::run(&args[1..]),
         Some("seats") => seats::run(&args[1..]),
         Some("hook") => hook::run(&args[1..]),

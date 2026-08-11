@@ -71,6 +71,9 @@ pub struct AppBackend {
     auto_quit_ms: i32,
     auto_select: bool,
     auto_scroll: bool,
+    /// `PG_MEM_REPORT=1`: the window drives the memory breakdown off a
+    /// timer instead of leaving it to whoever remembers to ask.
+    mem_report: bool,
     auto_wip: bool,
     /// Verification hook: take the shape the platforms that cannot merge
     /// the band into the title bar get. Nobody here can run those two, so
@@ -223,6 +226,7 @@ impl Default for AppBackend {
                 .unwrap_or(0),
             auto_select: std::env::var("PG_AUTO_SELECT").as_deref() == Ok("1"),
             auto_scroll: std::env::var("PG_AUTO_SCROLL").as_deref() == Ok("1"),
+            mem_report: crate::memprobe::enabled(),
             auto_wip: std::env::var("PG_AUTO_WIP").as_deref() == Ok("1"),
             plain_chrome: std::env::var("PG_PLAIN_CHROME").as_deref() == Ok("1"),
             automated: platitude_core::settings::Env::system().automated(),
@@ -334,6 +338,31 @@ impl AppBackend {
     qproperty!("buildTree", Member = build_tree, Constant);
     qproperty!("alreadyRunning", Member = already_running, Constant);
     qproperty!("heldElsewhere", Member = held_elsewhere, Constant);
+    qproperty!("memReport", Member = mem_report, Constant);
+
+    /// Writes one line of the memory breakdown, tagged with where the run
+    /// had got to (`PG_MEM_REPORT=1` only).
+    ///
+    /// Here rather than on a timer inside Rust because the sessions live on
+    /// the Qt main thread: this is the one place that can reach both them
+    /// and the models' filings at a moment nothing is half-written.
+    #[qslot]
+    fn note_memory(&self, label: String) {
+        if !crate::memprobe::enabled() {
+            return;
+        }
+        let (session_parts, waiting) = Hub::with(|hub| {
+            (
+                hub.sessions()
+                    .into_iter()
+                    .flat_map(|(_, session)| session.heap_report())
+                    .collect::<Vec<_>>(),
+                hub.feed_depths(),
+            )
+        })
+        .unwrap_or_default();
+        crate::memprobe::report(&label, &session_parts, &waiting);
+    }
 
     #[qsignal]
     fn git_state_changed(&mut self);

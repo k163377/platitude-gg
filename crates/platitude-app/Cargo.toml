@@ -12,6 +12,12 @@ description = "platitude-gg: a thin, fast git GUI driving the system git CLI"
 name = "platitude-gg"
 path = "src/main.rs"
 
+[features]
+# Installs the counting global allocator (src/memprobe.rs) so a run can say
+# how much of its footprint is Rust heap. Off in a shipped build: the two
+# atomics per allocation exist only to be measured.
+memprobe = []
+
 [dependencies]
 base64 = "0.23.0"
 platitude-core.workspace = true

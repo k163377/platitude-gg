@@ -490,8 +490,8 @@ pub(super) fn build_label_map(
     head: &HeadState,
     remote_tags: &RemoteTagIndex,
     joins: &RefJoins<'_>,
-) -> HashMap<Oid, Vec<RefLabel>> {
-    let mut map: HashMap<Oid, Vec<RefLabel>> = HashMap::new();
+) -> LabelIndex {
+    let mut pairs: Vec<(Oid, RefLabel)> = Vec::with_capacity(refs.len());
     for r in refs {
         if r.kind == RefKind::RemoteBranch && joins.folded.contains(r.name.as_str()) {
             continue;
@@ -503,54 +503,60 @@ pub(super) fn build_label_map(
         };
         let has_remote = match r.kind {
             RefKind::LocalBranch => joins.remotes.has_counterpart(r),
-            RefKind::Tag => remote_tags.contains_key(&r.short),
+            RefKind::Tag => remote_tags.carries(&r.short),
             RefKind::RemoteBranch => false,
         };
-        map.entry(r.commit_oid()).or_default().push(RefLabel {
-            text: r.short.clone(),
-            kind,
-            has_remote,
-            is_head: r.is_head,
-            here: r.kind != RefKind::RemoteBranch,
-            remote: String::new(),
-        });
+        pairs.push((
+            r.commit_oid(),
+            RefLabel {
+                text: r.short.clone(),
+                kind,
+                has_remote,
+                is_head: r.is_head,
+                here: r.kind != RefKind::RemoteBranch,
+                remote: String::new(),
+            },
+        ));
     }
-    for (name, commits) in remote_tags {
-        let local = joins.tag_commit.get(name.as_str()).copied();
-        for (oid, place) in commits {
+    for (name, readings) in remote_tags.names() {
+        let local = joins.tag_commit.get(name).copied();
+        for reading in readings {
             // Where the two agree there is one tag to speak of, and the
             // local label is already carrying its cloud.
-            if local == Some(*oid) {
+            if local == Some(reading.commit) {
                 continue;
             }
-            map.entry(*oid).or_default().push(RefLabel {
-                text: name.clone(),
-                kind: LabelKind::Tag,
-                has_remote: true,
-                is_head: false,
-                here: false,
-                remote: place.remotes.join(", "),
-            });
+            pairs.push((
+                reading.commit,
+                RefLabel {
+                    text: name.to_string(),
+                    kind: LabelKind::Tag,
+                    has_remote: true,
+                    is_head: false,
+                    here: false,
+                    remote: reading.remotes.join(", "),
+                },
+            ));
         }
     }
     if head.detached
         && let Some(oid) = head.oid
     {
-        map.entry(oid).or_default().push(RefLabel {
-            text: "HEAD".to_string(),
-            kind: LabelKind::Head,
-            has_remote: false,
-            is_head: true,
-            here: true,
-            remote: String::new(),
-        });
+        pairs.push((
+            oid,
+            RefLabel {
+                text: "HEAD".to_string(),
+                kind: LabelKind::Head,
+                has_remote: false,
+                is_head: true,
+                here: true,
+                remote: String::new(),
+            },
+        ));
     }
-    for labels in map.values_mut() {
-        labels.sort_by(|a, b| {
-            (!a.is_head, a.kind, a.text.as_str()).cmp(&(!b.is_head, b.kind, b.text.as_str()))
-        });
-    }
-    map
+    // The order the chips are drawn in is settled here, once, by the sort
+    // that groups them (see `LabelIndex::from_pairs`).
+    LabelIndex::from_pairs(pairs)
 }
 
 /// Fingerprint of what status reported: which paths, in which state.
@@ -609,7 +615,7 @@ pub(super) fn build_snapshot(
             RefKind::LocalBranch => snapshot.locals.push(BranchItem {
                 short: r.short.clone(),
                 full: r.name.clone(),
-                oid_hex: r.commit_oid().to_hex(),
+                oid: r.commit_oid(),
                 has_remote: joins.remotes.has_counterpart(r),
                 is_head: r.is_head,
                 upstream: joins
@@ -621,34 +627,34 @@ pub(super) fn build_snapshot(
             RefKind::RemoteBranch => snapshot.remotes.push(BranchItem {
                 short: r.short.clone(),
                 full: r.name.clone(),
-                oid_hex: r.commit_oid().to_hex(),
+                oid: r.commit_oid(),
                 has_remote: true,
                 is_head: false,
                 upstream: String::new(),
             }),
             RefKind::Tag => snapshot.tags.push(TagItem {
                 short: r.short.clone(),
-                oid_hex: r.commit_oid().to_hex(),
+                oid: r.commit_oid(),
                 annotated: r.peeled.is_some(),
                 created_unix: r.created_unix,
-                has_remote: remote_tags.contains_key(&r.short),
+                has_remote: remote_tags.carries(&r.short),
                 here: true,
             }),
         }
     }
-    for (name, commits) in remote_tags {
-        if joins.tag_commit.contains_key(name.as_str()) {
+    for (name, readings) in remote_tags.names() {
+        if joins.tag_commit.contains_key(name) {
             continue;
         }
         // Remotes that disagree about a name still name one tag, and the
         // sidebar answers "does this name exist" rather than "where".
-        let Some((oid, place)) = commits.iter().next() else {
+        let Some(reading) = readings.first() else {
             continue;
         };
         snapshot.tags.push(TagItem {
-            short: name.clone(),
-            oid_hex: oid.to_hex(),
-            annotated: place.annotated,
+            short: name.to_string(),
+            oid: reading.commit,
+            annotated: reading.annotated,
             // An advertisement carries no date; these sort last, after
             // every tag whose creation this repository can see.
             created_unix: 0,
@@ -664,5 +670,11 @@ pub(super) fn build_snapshot(
             .cmp(&a.created_unix)
             .then(a.short.cmp(&b.short))
     });
+    // Built by pushing, so each list is holding up to twice the room it
+    // needs, and this one is kept for as long as the repository is open
+    // (45,901 tags overshoot by 1.2MB on their own).
+    snapshot.locals.shrink_to_fit();
+    snapshot.remotes.shrink_to_fit();
+    snapshot.tags.shrink_to_fit();
     snapshot
 }

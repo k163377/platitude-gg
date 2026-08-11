@@ -93,18 +93,13 @@ impl RepoSession {
     /// says whether that changed anything. The only place the index is
     /// built: everything downstream shares the one it leaves behind.
     fn remerge_remote_tags(&self) -> bool {
-        let mut index = RemoteTagIndex::new();
-        for (remote, tags) in self.lock_remote_tags().iter() {
-            for tag in tags {
-                let place: &mut RemoteTagPlace = index
-                    .entry(tag.name.clone())
-                    .or_default()
-                    .entry(tag.commit)
-                    .or_default();
-                place.annotated |= tag.annotated;
-                place.remotes.push(remote.clone());
-            }
-        }
+        let index = {
+            let by_remote = self.lock_remote_tags();
+            RemoteTagIndex::build(by_remote.iter().flat_map(|(remote, tags)| {
+                tags.iter()
+                    .map(move |tag| (tag.name.clone(), tag.commit, tag.annotated, remote.clone()))
+            }))
+        };
         let mut slot = match self.remote_tag_index.lock() {
             Ok(g) => g,
             Err(e) => e.into_inner(),

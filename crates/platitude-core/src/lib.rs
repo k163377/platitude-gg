@@ -16,6 +16,7 @@ pub mod find;
 pub mod graph;
 pub mod identity;
 pub mod integrate;
+pub mod mem;
 pub mod model;
 pub mod oid;
 pub mod opstate;

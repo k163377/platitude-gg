@@ -230,11 +230,12 @@ impl RepoSession {
             let elapsed_ms = started.elapsed().as_millis() as u64;
             let mut applied: HashMap<u32, Vec<RefLabel>> = HashMap::new();
             for row in &mut rows {
-                if let Ok(oid) = Oid::from_hex_str(&row.oid_hex)
-                    && let Some(labels) = shared.label_map.get(&oid)
-                {
-                    row.labels = labels.clone();
-                    applied.insert(row.row, labels.clone());
+                if let Ok(oid) = Oid::from_hex_str(&row.oid_hex) {
+                    let labels = shared.label_map.labels_of(&oid);
+                    if !labels.is_empty() {
+                        row.labels = labels.to_vec();
+                        applied.insert(row.row, labels.to_vec());
+                    }
                 }
             }
             let footer = Footer {
@@ -590,9 +591,10 @@ impl RepoSession {
             if let Some(r) = &item.stash_ref {
                 row.stash_ref = r.clone();
             }
-            if let Some(labels) = shared.label_map.get(&item.meta.oid) {
+            let labels = shared.label_map.labels_of(&item.meta.oid).to_vec();
+            if !labels.is_empty() {
                 row.labels = labels.clone();
-                shared.applied.insert(row.row, labels.clone());
+                shared.applied.insert(row.row, labels);
             }
             rows.push(row);
         }
@@ -634,14 +636,14 @@ impl RepoSession {
     /// pass that installs late leaves `shared` describing a graph the
     /// consumer already dropped, and its row numbers point at other
     /// commits there.
-    pub(super) fn apply_refs(&self, label_map: HashMap<Oid, Vec<RefLabel>>) {
+    pub(super) fn apply_refs(&self, label_map: LabelIndex) {
         let mut shared = self.lock_shared();
         shared.label_map = label_map;
 
         let mut fresh: HashMap<u32, Vec<RefLabel>> = HashMap::new();
-        for (oid, labels) in &shared.label_map {
-            if let Some(row) = shared.builder.row_of(oid) {
-                fresh.insert(row, labels.clone());
+        for (oid, labels) in shared.label_map.commits() {
+            if let Some(row) = shared.builder.row_of(&oid) {
+                fresh.insert(row, labels.to_vec());
             }
         }
         let mut changed: Vec<(u32, Vec<RefLabel>)> = Vec::new();

@@ -34,6 +34,12 @@ pub struct DiffLineItem {
     markers: String,
 }
 
+impl platitude_core::mem::Footprint for DiffLineItem {
+    fn heap_bytes(&self) -> usize {
+        self.kind.heap_bytes() + self.text.heap_bytes() + self.markers.heap_bytes()
+    }
+}
+
 #[derive(Default)]
 pub struct DiffModel {
     lines: Vec<DiffLineItem>,
@@ -225,6 +231,9 @@ impl DiffModel {
             })
             .collect();
         self.extend_notified(rows);
+        if crate::memprobe::enabled() {
+            crate::memprobe::note("diff-lines", self.tab_id, &self.lines);
+        }
         self.changed();
     }
 }

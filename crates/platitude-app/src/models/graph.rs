@@ -59,6 +59,21 @@ pub struct GraphRowItem {
     matched: bool,
 }
 
+impl platitude_core::mem::Footprint for GraphRowItem {
+    fn heap_bytes(&self) -> usize {
+        self.oid_hex.heap_bytes()
+            + self.author.heap_bytes()
+            + self.author_email.heap_bytes()
+            + self.subject.heap_bytes()
+            + self.avatar_url.heap_bytes()
+            + self.co_authors.heap_bytes()
+            + self.body.heap_bytes()
+            + self.geometry.heap_bytes()
+            + self.labels.heap_bytes()
+            + self.stash_ref.heap_bytes()
+    }
+}
+
 #[derive(Default)]
 pub struct GraphModel {
     rows: Vec<GraphRowItem>,
@@ -529,6 +544,9 @@ impl GraphModel {
                     }
                 }
             }
+        }
+        if crate::memprobe::enabled() {
+            crate::memprobe::note("graph-rows", self.tab_id, &self.rows);
         }
         self.stats_changed();
     }

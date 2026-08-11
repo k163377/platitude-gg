@@ -73,6 +73,19 @@ pub struct NavItem {
     folder: bool,
 }
 
+impl platitude_core::mem::Footprint for NavItem {
+    fn heap_bytes(&self) -> usize {
+        self.name.heap_bytes()
+            + self.full.heap_bytes()
+            + self.oid_hex.heap_bytes()
+            + self.change.heap_bytes()
+            + self.bucket.heap_bytes()
+            + self.group.heap_bytes()
+            + self.orig_path.heap_bytes()
+            + self.upstream.heap_bytes()
+    }
+}
+
 /// What a folder row puts in `change` while it is closed.
 pub const FOLDED: &str = "FOLDED";
 
@@ -88,7 +101,15 @@ fn fold_state(expanded: bool) -> String {
 pub struct NavSectionModel {
     section: String,
     all: Vec<NavItem>,
-    items: Vec<NavItem>,
+    /// The rows as shown — indented, folded, filtered — or `None` when
+    /// they are the arrived rows unchanged.
+    ///
+    /// `None` is not an optimisation of an empty list but of an identical
+    /// one: a section with no tree and no filter (tags, stashes) shows
+    /// `all` exactly, and holding a copy of it means every row's strings
+    /// twice over (measured on `JetBrains/kotlin`: 45,901 tags, 12.3MB of
+    /// the process's Rust heap duplicating 12.3MB already there).
+    arranged: Option<Vec<NavItem>>,
     filter: String,
     total: i32,
     /// Current branch (branches section only) — feeds the sticky row
@@ -143,16 +164,16 @@ impl QListModel for NavSectionModel {
     type Item = NavItem;
 
     fn len(&self) -> usize {
-        self.items.len()
+        self.rows().len()
     }
     fn get(&self, index: usize) -> Option<&NavItem> {
-        self.items.get(index)
+        self.rows().get(index)
     }
     fn reset_unnotified(&mut self) {
         let needle = self.filter.to_lowercase();
-        self.items = if needle.is_empty() {
+        self.arranged = if needle.is_empty() {
             match self.section.as_str() {
-                "branches" | "remotes" => self.build_tree(),
+                "branches" | "remotes" => Some(self.build_tree()),
                 // The worktree keeps its group runs (conflicts → unstaged →
                 // staged) and trees each run independently.
                 "worktree" if self.tree_view => {
@@ -167,20 +188,24 @@ impl QListModel for NavSectionModel {
                         wt_tree_into(&self.all[i..j], &group, &self.folder_overrides, &mut out);
                         i = j;
                     }
-                    out
+                    Some(out)
                 }
-                _ => self.all.clone(),
+                // Nothing to indent, fold or leave out: these rows are the
+                // ones that arrived.
+                _ => None,
             }
         } else {
             // Filtering shows flat full names (folders would hide context).
-            self.all
-                .iter()
-                .filter(|i| i.name.to_lowercase().contains(&needle))
-                .cloned()
-                .collect()
+            Some(
+                self.all
+                    .iter()
+                    .filter(|i| i.name.to_lowercase().contains(&needle))
+                    .cloned()
+                    .collect(),
+            )
         };
         self.head_row = self
-            .items
+            .rows()
             .iter()
             .position(|i| i.is_head && !i.folder)
             .map_or(-1, |row| row as i32);
@@ -188,6 +213,15 @@ impl QListModel for NavSectionModel {
 }
 
 impl NavSectionModel {
+    /// The rows on screen: the shaped list where there is one, and the
+    /// arrived rows themselves where the shaping would have copied them.
+    fn rows(&self) -> &[NavItem] {
+        match &self.arranged {
+            Some(arranged) => arranged,
+            None => &self.all,
+        }
+    }
+
     /// Section default: remote roots (one per remote) start collapsed —
     /// that is the per-repository fold — everything else starts open.
     fn folder_expanded(&self, key: &str, depth: i32) -> bool {
@@ -267,7 +301,7 @@ fn branch_nav_items(list: &[platitude_core::session::BranchItem], remote: bool) 
             };
             NavItem {
                 name: b.short.clone(),
-                oid_hex: b.oid_hex.clone(),
+                oid_hex: b.oid.to_hex(),
                 is_head: b.is_head,
                 has_remote: b.has_remote,
                 upstream: b.upstream.clone(),
@@ -588,6 +622,23 @@ impl NavSectionModel {
         true
     }
 
+    /// The arrived rows, and the shaped ones where they are a second list.
+    ///
+    /// Filed apart on purpose: `arranged` being nothing is what says the
+    /// view is reading `all` directly, and a single number would hide the
+    /// day that stops being true.
+    fn note_footprint(&self) {
+        crate::memprobe::note(&format!("nav-{}-all", self.section), self.tab_id, &self.all);
+        crate::memprobe::note_bytes(
+            &format!("nav-{}-arranged", self.section),
+            self.tab_id,
+            self.arranged
+                .as_ref()
+                .map_or(0, platitude_core::mem::Footprint::heap_bytes),
+            self.arranged.as_ref().map_or(0, Vec::len),
+        );
+    }
+
     #[qslot]
     fn drain(&mut self) {
         // Every push queues its own `drain`, so a second call can find the
@@ -630,7 +681,7 @@ impl NavSectionModel {
                         .iter()
                         .map(|t| NavItem {
                             name: t.short.clone(),
-                            oid_hex: t.oid_hex.clone(),
+                            oid_hex: t.oid.to_hex(),
                             // Same badge as a branch: nothing means this
                             // tag is only here. The bit comes off
                             // `ls-remote --tags`, which the fetch carries.
@@ -712,6 +763,9 @@ impl NavSectionModel {
         if settled {
             self.refs_settled();
         }
+        if crate::memprobe::enabled() {
+            self.note_footprint();
+        }
     }
 
     #[qslot]
@@ -749,7 +803,7 @@ impl NavSectionModel {
     /// filter lets through).
     #[qslot]
     fn shown(&self) -> i32 {
-        self.items.len() as i32
+        self.rows().len() as i32
     }
 
     /// Commit id of the ref with this name; empty when there is none.
@@ -784,7 +838,7 @@ impl NavSectionModel {
     fn name_at(&self, row: i32) -> String {
         usize::try_from(row)
             .ok()
-            .and_then(|row| self.items.get(row))
+            .and_then(|row| self.rows().get(row))
             .map(|item| item.name.clone())
             .unwrap_or_default()
     }
@@ -793,7 +847,7 @@ impl NavSectionModel {
     fn full_at(&self, row: i32) -> String {
         usize::try_from(row)
             .ok()
-            .and_then(|row| self.items.get(row))
+            .and_then(|row| self.rows().get(row))
             .map(|item| item.full.clone())
             .unwrap_or_default()
     }

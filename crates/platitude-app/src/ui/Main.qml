@@ -371,6 +371,19 @@ ApplicationWindow {
     property int frameCounter: 0
     onFrameSwapped: frameCounter++
 
+    // Memory breakdown (PG_MEM_REPORT=1). A tick rather than a few chosen
+    // moments: the harness samples the process every 100ms and takes the
+    // largest reading, so the breakdown has to be a series to be lined up
+    // against it at all — one report at the end would name a moment the
+    // peak had already passed.
+    Timer {
+        interval: 500
+        repeat: true
+        running: AppBackend.memReport
+        triggeredOnStart: true
+        onTriggered: AppBackend.noteMemory(root.curPage === null ? "idle" : "open")
+    }
+
     TabsModel {
         id: tabsModel
         onOpenRejected: (path, kind, message, near) =>

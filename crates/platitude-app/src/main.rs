@@ -6,6 +6,7 @@
 
 mod encode;
 mod hub;
+mod memprobe;
 mod models;
 mod urlpath;
 mod winframe;

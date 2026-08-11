@@ -139,6 +139,93 @@ pub struct RefLabel {
     pub remote: String,
 }
 
+/// The chips every commit carries, as one sorted run.
+///
+/// **Not a map of vectors.** A repository's refs are almost all singletons
+/// — one name on one commit — and `HashMap<Oid, Vec<RefLabel>>` charges
+/// twice for that shape: the table's power-of-two buckets, and a separate
+/// four-slot `Vec` for every commit, because a `Vec` grown by one `push`
+/// asks for four. Measured on `JetBrains/kotlin` (47,715 labelled
+/// commits): 4.3MB of table plus 10.7MB of four-slot vectors, to hold
+/// 2.7MB of labels.
+///
+/// Flat, the two questions asked of it stay as cheap. A streamed row looks
+/// its own commit up (binary search, once per shown row), and the refresh
+/// walks the whole thing in commit order.
+#[derive(Debug, Default)]
+pub(super) struct LabelIndex {
+    /// `(commit, first label, how many)`, sorted by commit.
+    commits: Vec<(Oid, u32, u32)>,
+    /// Every chip, grouped by commit and in the order they are drawn.
+    labels: Vec<RefLabel>,
+}
+
+impl LabelIndex {
+    /// Sorts loose `(commit, chip)` pairs into the run.
+    ///
+    /// The chips of one commit keep the order the row draws them in: the
+    /// current branch first, then by kind, then by name.
+    pub(super) fn from_pairs(mut pairs: Vec<(Oid, RefLabel)>) -> Self {
+        pairs.sort_by(|(left_oid, left), (right_oid, right)| {
+            left_oid.cmp(right_oid).then_with(|| {
+                (!left.is_head, left.kind, left.text.as_str()).cmp(&(
+                    !right.is_head,
+                    right.kind,
+                    right.text.as_str(),
+                ))
+            })
+        });
+        let mut commits: Vec<(Oid, u32, u32)> = Vec::new();
+        let mut labels: Vec<RefLabel> = Vec::with_capacity(pairs.len());
+        for (oid, label) in pairs {
+            match commits.last_mut() {
+                Some((last, _, count)) if *last == oid => *count += 1,
+                _ => commits.push((oid, labels.len() as u32, 1)),
+            }
+            labels.push(label);
+        }
+        commits.shrink_to_fit();
+        Self { commits, labels }
+    }
+
+    /// The chips on one commit; empty when it carries none.
+    pub(super) fn labels_of(&self, oid: &Oid) -> &[RefLabel] {
+        let Ok(at) = self.commits.binary_search_by(|(c, _, _)| c.cmp(oid)) else {
+            return &[];
+        };
+        match self.commits.get(at) {
+            Some((_, first, count)) => self
+                .labels
+                .get(*first as usize..(*first + *count) as usize)
+                .unwrap_or_default(),
+            None => &[],
+        }
+    }
+
+    /// Every commit carrying chips, in commit order, with them.
+    pub(super) fn commits(&self) -> impl Iterator<Item = (Oid, &[RefLabel])> {
+        self.commits.iter().map(|(oid, first, count)| {
+            (
+                *oid,
+                self.labels
+                    .get(*first as usize..(*first + *count) as usize)
+                    .unwrap_or_default(),
+            )
+        })
+    }
+
+    /// Commits carrying chips.
+    pub(super) fn len(&self) -> usize {
+        self.commits.len()
+    }
+}
+
+impl crate::mem::Footprint for LabelIndex {
+    fn heap_bytes(&self) -> usize {
+        self.commits.capacity() * size_of::<(Oid, u32, u32)>() + self.labels.heap_bytes()
+    }
+}
+
 /// Display-ready row of the commit graph.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogRow {
@@ -169,21 +256,110 @@ pub struct LogRow {
     pub stash_ref: String,
 }
 
-/// What the remotes last said they carry under `refs/tags/`: tag name →
-/// every commit some remote has it on, and what is known about it there.
+/// What the remotes last said they carry under `refs/tags/`: for each tag
+/// name, every commit some remote has it on and what is known about it
+/// there.
 ///
 /// Two commits under one name means the remotes disagree, which reads on
 /// screen exactly like a tag that drifted from the one here — the name
 /// standing on more than one row.
-type RemoteTagIndex = BTreeMap<String, BTreeMap<Oid, RemoteTagPlace>>;
+///
+/// **One sorted run rather than a map of maps.** A tag standing on two
+/// commits is rare, so nearly every name has exactly one reading — and a
+/// `BTreeMap` per name allocates a whole eleven-slot node to hold that one
+/// (measured on `JetBrains/kotlin`, 45,901 remote tags: 43.5MB, a third of
+/// the process's entire Rust heap, in 45,901 nodes holding one entry each).
+/// Flat, the same readings are 4.4MB. The operations are the ones the two
+/// joins need — is this name out there, and walk the names in order — and
+/// both are as good on a sorted run as on a tree.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(super) struct RemoteTagIndex {
+    /// Sorted by name, then by commit. Built once per merge and read many
+    /// times, so it is sorted on the way in and never mutated after.
+    entries: Vec<RemoteTagEntry>,
+}
 
-/// One reading of a tag: what the remotes holding it there call themselves,
-/// and whether it is annotated.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct RemoteTagPlace {
-    annotated: bool,
+/// One tag name standing on one commit, as the remotes told it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct RemoteTagEntry {
+    pub(super) name: String,
+    pub(super) commit: Oid,
+    pub(super) annotated: bool,
     /// Sorted, and more than one when several remotes agree on the commit.
-    remotes: Vec<String>,
+    pub(super) remotes: Vec<String>,
+}
+
+impl RemoteTagIndex {
+    /// Collects readings into the sorted run. Each `(name, commit)` is one
+    /// entry however many remotes carry it, and their names gather on it.
+    fn build(readings: impl Iterator<Item = (String, Oid, bool, String)>) -> Self {
+        let mut entries: Vec<RemoteTagEntry> = Vec::new();
+        for (name, commit, annotated, remote) in readings {
+            entries.push(RemoteTagEntry {
+                name,
+                commit,
+                annotated,
+                remotes: vec![remote],
+            });
+        }
+        entries.sort_by(|a, b| a.name.cmp(&b.name).then(a.commit.cmp(&b.commit)));
+        // Fold the duplicates the sort brought together: the same name on
+        // the same commit, carried by more than one remote.
+        let mut folded: Vec<RemoteTagEntry> = Vec::with_capacity(entries.len());
+        for entry in entries {
+            match folded.last_mut() {
+                Some(last) if last.name == entry.name && last.commit == entry.commit => {
+                    last.annotated |= entry.annotated;
+                    last.remotes.extend(entry.remotes);
+                }
+                _ => folded.push(entry),
+            }
+        }
+        for entry in &mut folded {
+            entry.remotes.sort();
+            entry.remotes.dedup();
+        }
+        folded.shrink_to_fit();
+        Self { entries: folded }
+    }
+
+    /// Whether any remote carries this name — the cloud badge's question.
+    pub(super) fn carries(&self, name: &str) -> bool {
+        self.entries
+            .binary_search_by(|e| e.name.as_str().cmp(name))
+            .is_ok()
+    }
+
+    /// The names in order, each with every reading of it. One name is one
+    /// run of the sorted entries.
+    pub(super) fn names(&self) -> impl Iterator<Item = (&str, &[RemoteTagEntry])> {
+        let mut rest = self.entries.as_slice();
+        std::iter::from_fn(move || {
+            let (first, _) = rest.split_first()?;
+            let name = first.name.as_str();
+            let end = rest.partition_point(|e| e.name == name);
+            let (run, tail) = rest.split_at(end);
+            rest = tail;
+            Some((name, run))
+        })
+    }
+
+    /// Readings held, across every name.
+    pub(super) fn len(&self) -> usize {
+        self.entries.len()
+    }
+}
+
+impl crate::mem::Footprint for RemoteTagIndex {
+    fn heap_bytes(&self) -> usize {
+        self.entries.heap_bytes()
+    }
+}
+
+impl crate::mem::Footprint for RemoteTagEntry {
+    fn heap_bytes(&self) -> usize {
+        self.name.heap_bytes() + self.remotes.heap_bytes()
+    }
 }
 
 /// The same thing before it is merged, kept per remote so one that could
@@ -204,11 +380,18 @@ pub struct RefsSnapshot {
     pub remote_names: Vec<String>,
 }
 
+/// One sidebar branch row.
+///
+/// The commit is kept as an [`Oid`] and spelled out where it is shown.
+/// Forty hex characters is a string allocation per row for something no
+/// reader ever sees in full — the graph is what it is for — and a
+/// repository's branches and tags together made 2.6MB of them
+/// (`JetBrains/kotlin`, 53,724 refs).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BranchItem {
     pub short: String,
     pub full: String,
-    pub oid_hex: String,
+    pub oid: Oid,
     pub has_remote: bool,
     pub is_head: bool,
     /// For a local branch, the remote branch it speaks for (`origin/main`),
@@ -220,8 +403,9 @@ pub struct BranchItem {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TagItem {
     pub short: String,
-    /// Peeled commit id (what the graph row is keyed on).
-    pub oid_hex: String,
+    /// Peeled commit id (what the graph row is keyed on). Binary, for the
+    /// reason [`BranchItem::oid`] is.
+    pub oid: Oid,
     pub annotated: bool,
     /// Creator date (unix seconds); the sidebar sorts tags newest-first.
     /// Zero for a tag only a remote has: an advertisement carries the name
@@ -635,7 +819,7 @@ struct Shared {
     /// everything here still belongs to the walk that was shown.
     generation: u64,
     /// Label chips per commit id, derived from the last refs snapshot.
-    label_map: HashMap<Oid, Vec<RefLabel>>,
+    label_map: LabelIndex,
     /// Labels currently shown per row (for diffing on refs refresh).
     applied: HashMap<u32, Vec<RefLabel>>,
     /// Rows exactly as delivered to the UI (labels included), kept so a
@@ -837,7 +1021,7 @@ impl RepoSession {
             write_tx,
             network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
             remote_tags: Mutex::new(RemoteTagsByRemote::new()),
-            remote_tag_index: Mutex::new(Arc::new(RemoteTagIndex::new())),
+            remote_tag_index: Mutex::new(Arc::new(RemoteTagIndex::default())),
             remote_tags_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             head_hold: Mutex::new(None),
             head_reach_seen: Mutex::new(None),
@@ -955,6 +1139,77 @@ impl RepoSession {
             Err(e) => e.into_inner(),
         }
     }
+
+    /// What this session is holding on to, part by part.
+    ///
+    /// Everything named here outlives the operation that filled it: it is
+    /// still there when the window is idle, which is what the memory budget
+    /// is about. `refs-snapshot` is an `Arc` the sidebar models hold too —
+    /// counted in full on both sides, and the app's report says so.
+    pub fn heap_report(&self) -> Vec<crate::mem::Part> {
+        use crate::mem::{Footprint as _, Part};
+        let shared = self.lock_shared();
+        let mut parts = vec![
+            Part::of("sent-rows", &shared.sent_rows),
+            Part::new(
+                "label-map",
+                shared.label_map.heap_bytes(),
+                shared.label_map.len(),
+            ),
+            Part::new("applied", shared.applied.heap_bytes(), shared.applied.len()),
+            Part::new(
+                "graph-builder",
+                shared.builder.heap_bytes(),
+                shared.builder.tracked_oids(),
+            ),
+        ];
+        drop(shared);
+
+        let snapshot = match self.last_snapshot.lock() {
+            Ok(g) => g.clone(),
+            Err(e) => e.into_inner().clone(),
+        };
+        let (snap_bytes, snap_refs) = match &snapshot {
+            Some(s) => (
+                s.heap_bytes(),
+                s.locals.len() + s.remotes.len() + s.tags.len(),
+            ),
+            None => (0, 0),
+        };
+        parts.push(Part::new("refs-snapshot", snap_bytes, snap_refs));
+
+        let (tag_bytes, tag_count) = match self.remote_tags.lock() {
+            Ok(g) => (g.heap_bytes(), g.values().map(Vec::len).sum()),
+            Err(e) => {
+                let g = e.into_inner();
+                (g.heap_bytes(), g.values().map(Vec::len).sum())
+            }
+        };
+        parts.push(Part::new("remote-tags", tag_bytes, tag_count));
+
+        let index = self.remote_tag_index();
+        parts.push(Part::new(
+            "remote-tag-index",
+            index.heap_bytes(),
+            index.len(),
+        ));
+
+        let marks = match self.eol_marks.lock() {
+            Ok(g) => Arc::clone(&g),
+            Err(e) => Arc::clone(&e.into_inner()),
+        };
+        parts.push(Part::new("eol-marks", marks.heap_bytes(), marks.len()));
+
+        let (base_bytes, base_count) = match self.eol_baselines.lock() {
+            Ok(g) => (g.heap_bytes(), g.len()),
+            Err(e) => {
+                let g = e.into_inner();
+                (g.heap_bytes(), g.len())
+            }
+        };
+        parts.push(Part::new("eol-baselines", base_bytes, base_count));
+        parts
+    }
 }
 
 impl Drop for RepoSession {
@@ -1000,17 +1255,10 @@ mod tests {
     }
 
     fn index_of(remote: &str, tags: Vec<RemoteTag>) -> RemoteTagIndex {
-        let mut index = RemoteTagIndex::new();
-        for t in tags {
-            let place = index
-                .entry(t.name)
-                .or_default()
-                .entry(t.commit)
-                .or_default();
-            place.annotated |= t.annotated;
-            place.remotes.push(remote.to_string());
-        }
-        index
+        RemoteTagIndex::build(
+            tags.into_iter()
+                .map(|t| (t.name, t.commit, t.annotated, remote.to_string())),
+        )
     }
 
     /// A tag both sides agree on is one tag: the local label carries the
@@ -1028,7 +1276,7 @@ mod tests {
         );
         let joins = RefJoins::new(&refs);
         let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
-        let labels = map.get(&oid(1)).expect("a label on the commit");
+        let labels = map.labels_of(&oid(1));
         assert_eq!(labels.len(), 1, "one name, one chip: {labels:?}");
         assert!(labels[0].has_remote, "the cloud says the remote has it");
         assert!(labels[0].here);
@@ -1053,8 +1301,9 @@ mod tests {
         );
         let joins = RefJoins::new(&refs);
         let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
-        assert!(map.get(&oid(1)).is_some_and(|l| l[0].here));
-        let theirs = map.get(&oid(2)).expect("the remote's reading");
+        assert!(map.labels_of(&oid(1))[0].here);
+        let theirs = map.labels_of(&oid(2));
+        assert!(!theirs.is_empty(), "the remote's reading");
         assert!(!theirs[0].here);
         assert_eq!(theirs[0].remote, "origin");
 

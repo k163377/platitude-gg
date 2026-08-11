@@ -28,6 +28,15 @@ pub struct FileItem {
     collapsed: bool,
 }
 
+impl platitude_core::mem::Footprint for FileItem {
+    fn heap_bytes(&self) -> usize {
+        self.change.heap_bytes()
+            + self.path.heap_bytes()
+            + self.orig_path.heap_bytes()
+            + self.name.heap_bytes()
+    }
+}
+
 /// Turns flat changed-file entries into an indented tree: directories
 /// first (alphabetical), single-child directory chains compacted into one
 /// row (`a/b/c`), leaves labeled by their last segment.
@@ -348,6 +357,9 @@ impl DetailsModel {
         self.folder_overrides.clear();
         self.rebuild_rows();
         self.reset();
+        if crate::memprobe::enabled() {
+            crate::memprobe::note("details-files", self.tab_id, &self.raw_files);
+        }
         self.changed();
     }
 
