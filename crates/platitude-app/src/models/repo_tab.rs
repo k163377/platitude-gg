@@ -76,6 +76,13 @@ pub struct RepoTab {
     /// How many commits that tip has that this branch does not: what an
     /// overwrite would take off it.
     remote_branch_theirs: i32,
+    /// Last answer to `checkBranchDelete`: the branch asked about, and
+    /// whether it is merged into what `branch --delete` measures against
+    /// (its upstream, or HEAD without one). Empty branch means nothing
+    /// asked; the menu that reads it checks the echo, because it may be
+    /// open over another row by now.
+    branch_delete_asked: String,
+    branch_delete_merged: bool,
     /// Last answer to `checkPublish`: how much of a range a remote has.
     publish_range: String,
     publish_total: i32,
@@ -186,6 +193,8 @@ impl Default for RepoTab {
             remote_branch_state: String::new(),
             remote_branch_tip: String::new(),
             remote_branch_theirs: 0,
+            branch_delete_asked: String::new(),
+            branch_delete_merged: true,
             publish_range: String::new(),
             publish_total: 0,
             publish_published: 0,
@@ -350,6 +359,16 @@ impl RepoTab {
     qproperty!(
         "remoteBranchTheirs",
         Member = remote_branch_theirs,
+        Notify = changed
+    );
+    qproperty!(
+        "branchDeleteAsked",
+        Member = branch_delete_asked,
+        Notify = changed
+    );
+    qproperty!(
+        "branchDeleteMerged",
+        Member = branch_delete_merged,
         Notify = changed
     );
     qproperty!("publishRange", Member = publish_range, Notify = changed);
@@ -583,6 +602,10 @@ impl RepoTab {
                     self.remote_branch_state = state;
                     self.remote_branch_tip = tip;
                     self.remote_branch_theirs = theirs;
+                }
+                TabMsg::BranchDelete { branch, merged } => {
+                    self.branch_delete_asked = branch;
+                    self.branch_delete_merged = merged;
                 }
                 TabMsg::HeadCommit {
                     message,
@@ -1123,6 +1146,19 @@ impl RepoTab {
         self.remote_branch_theirs = 0;
         self.changed();
         self.with_session(|s| s.check_remote_branch(remote.clone(), branch.clone()));
+    }
+
+    /// Asks whether `git branch --delete` would refuse this branch (not
+    /// merged into its upstream, or HEAD without one), so a menu's
+    /// delete row can wear `-D` from the start. The answer arrives as
+    /// `branchDeleteAsked` / `branchDeleteMerged`; no answer arrives
+    /// where the reads fail, and the row stays on its plain form.
+    #[qslot]
+    fn check_branch_delete(&mut self, branch: String) {
+        self.branch_delete_asked = String::new();
+        self.branch_delete_merged = true;
+        self.changed();
+        self.with_session(|s| s.check_branch_delete(branch.clone()));
     }
 
     /// `git push`. `force` is `""` / `"lease"` / `"force"`; `lease_expect`

@@ -112,6 +112,10 @@ pub enum TabMsg {
         /// Commits that tip has and this history does not.
         theirs: i32,
     },
+    /// Whether `branch --delete` would go through for the branch a menu
+    /// just opened over. The branch rides along: the menu may be open
+    /// over another row by the time this lands.
+    BranchDelete { branch: String, merged: bool },
     /// Merge tool names the settings field can offer. Empty is an answer.
     /// `settled` false is the fast half, with the slow read still out.
     MergeTools {
@@ -542,6 +546,9 @@ impl SessionSink for BridgeSink {
                     tip,
                     theirs: i32::try_from(theirs).unwrap_or(i32::MAX),
                 });
+            }
+            SessionEvent::BranchDeleteChecked { branch, merged } => {
+                self.feeds.tab.push(TabMsg::BranchDelete { branch, merged });
             }
             SessionEvent::SignatureChecked { oid, signature } => {
                 use platitude_core::identity::SignatureStatus;
