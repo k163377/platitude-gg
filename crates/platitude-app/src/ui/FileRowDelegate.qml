@@ -125,11 +125,15 @@ Item {
     // Tree leaves show only their file name; hover reveals the path. A
     // paths-view row the pane elided answers the same way — its display
     // name is the full path, so elision is the one thing that leaves
-    // the whole name unsaid (デザイン規約 §hover のツールチップ).
+    // the whole name unsaid (デザイン規約 §hover のツールチップ). A
+    // folder row is the elision case alone: the rows above it already
+    // spell its prefix, so only a chain the pane cut short has anything
+    // left to say.
     ToolTip.visible: (fileMouse.containsMouse || fileRow.tipPointedAt)
-                     && !fileRow.isFolder
-                     && (fileRow.nameText !== fileRow.pathText
-                         || newName.truncated || origName.truncated)
+                     && (fileRow.isFolder
+                         ? newName.truncated
+                         : (fileRow.nameText !== fileRow.pathText
+                            || newName.truncated || origName.truncated))
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: fileRow.pathText
 }

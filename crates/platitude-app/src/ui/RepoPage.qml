@@ -2812,18 +2812,22 @@ Item {
             page.activateRow(graphModel.oidAt(Number(arg)))
             stashTipTimer.start()
         } else if (act === "path-tip") {
-            // The whole name an elided paths-view row keeps for its
-            // hover: the view is flattened, its first row is pointed at
-            // the way a pointer would be, and the shared tip answers.
-            // The argument picks the pane the way `corner` does — "wip"
-            // for the working tree, a row for the commit's file list.
-            pathTipTimer.wipSide = arg === "" || arg === "wip"
+            // The whole name an elided row keeps for its hover: row 0 is
+            // the elided leaf in the flattened view, and the folder chain
+            // the same pane elides in the tree (`-tree`). Either way it
+            // is pointed at the way a pointer would be, and the shared
+            // tip answers. The argument picks the pane the way `corner`
+            // does — "wip" for the working tree, a row for the commit's
+            // file list.
+            const wantsTree = ("" + arg).endsWith("-tree")
+            const pane = wantsTree ? ("" + arg).slice(0, -5) : arg
+            pathTipTimer.wipSide = pane === "" || pane === "wip"
             if (pathTipTimer.wipSide) {
                 page.showWip()
-                worktreeModel.setTreeView(false)
+                worktreeModel.setTreeView(wantsTree)
             } else {
-                page.activateRow(graphModel.oidAt(Number(arg)))
-                detailsModel.setTreeView(false)
+                page.activateRow(graphModel.oidAt(Number(pane)))
+                detailsModel.setTreeView(wantsTree)
             }
             pathTipTimer.start()
         } else if (act === "row-card") {

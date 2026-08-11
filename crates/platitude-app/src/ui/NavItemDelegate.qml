@@ -421,8 +421,14 @@ Item {
     // (§hover のツールチップ「足すものが 1 つも無い的には、何も出さない」).
     readonly property string hoverText: {
         const full = navRow.fullName
+        // A folder in the working tree's list: the chained rows elide at
+        // pane width, and elision is the one thing that leaves the chain
+        // unsaid — the path rides in `orig_path` (`full` is the fold
+        // key). A ref folder stays silent either way: its full path only
+        // reads the tree back (デザイン規約 §hover のツールチップ).
         if (navRow.folder)
-            return ""
+            return navRow.kindHint === "wt" && nameLabel.truncated
+                   ? navRow.orig_path : ""
         if (navRow.kindHint === "remote")
             return qsTr("Switch to %1").arg(full)
         if (navRow.kindHint === "worktree")

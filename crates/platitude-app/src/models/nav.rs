@@ -43,6 +43,11 @@ pub struct NavItem {
     /// files count as `unstaged` here while `bucket` keeps the real
     /// routing for diffs and staging.
     group: String,
+    /// The old path of a renamed working-tree file. **A folder row in
+    /// the working tree's list carries its clean path here** — its
+    /// `full` is the group-prefixed fold key, and the hover of an
+    /// elided chain needs the path itself (a folder never uses the
+    /// rename slot, the way `change` carries the fold state).
     orig_path: String,
     is_head: bool,
     has_remote: bool,
@@ -324,6 +329,10 @@ fn wt_tree_into(
             out.push(NavItem {
                 name: label,
                 full: key.clone(),
+                // The path itself, for the hover of a row the pane
+                // elided: `full` is the fold key, not a path. It rides
+                // in the rename slot, which a folder never uses.
+                orig_path: path.clone(),
                 group: group.to_string(),
                 depth,
                 folder: true,
