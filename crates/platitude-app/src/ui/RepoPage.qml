@@ -2009,9 +2009,29 @@ Item {
             + " pane=" + Math.round(sidebarPane.height))
     }
     Timer {
+        id: chipMenuTimer
+        interval: 200
+        onTriggered: AppBackend.report("chip_menu ref=" + refMenu.opened
+                                       + " commit=" + commitMenu.opened
+                                       + " delete=" + refDeleteItem.code
+                                       + " " + refDeleteItem.text)
+    }
+    // Waits on the early answer, not on a refusal: nothing here writes.
+    Timer {
+        id: earlyDeleteTimer
+        interval: 800
+        onTriggered: AppBackend.report("delete_early asked="
+                                       + (repoTab.branchDeleteAsked !== "")
+                                       + " merged=" + repoTab.branchDeleteMerged
+                                       + " code=" + refDeleteItem.code
+                                       + " held=" + (refDeleteItem.holdMs > 0)
+                                       + " note=" + refDeleteItem.note)
+    }
+    Timer {
         id: refusedRowTimer
         interval: 800
-        onTriggered: AppBackend.report("ref_menu delete=" + refDeleteItem.text
+        onTriggered: AppBackend.report("ref_menu delete=" + refDeleteItem.code
+                                       + " " + refDeleteItem.text
                                        + " note=" + refDeleteItem.note)
     }
     // The lane column has to have taken its narrower width before there
@@ -2932,6 +2952,26 @@ Item {
             page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
             page.deleteRow("branch", arg, arg, branchesModel.oidOfName(arg))
             refusedRowTimer.start()
+        } else if (act === "chip-menu") {
+            // The chip's right-click, through the one door the page keeps
+            // for it: the argument names a local branch, and the menu that
+            // opens is the sidebar's ref menu. Only the kind letter and
+            // the name of the record are read.
+            page.openRecordMenu("L0000" + arg, branchesModel.oidOfName(arg))
+            chipMenuTimer.start()
+        } else if (act === "chip-menu-current") {
+            // The current branch's chip: its ref menu offers nothing, and
+            // the right-click falls back to the commit menu of the row.
+            page.openRecordMenu("L1001" + workTree.branch,
+                                branchesModel.oidOfName(workTree.branch))
+            chipMenuTimer.start()
+        } else if (act === "delete-branch-early") {
+            // The menu opened over a branch and left alone: the early
+            // answer dresses the delete row before any click — `-D` and
+            // the note where git would refuse, the plain spelling where
+            // it would not. The argument picks which half is on show.
+            page.openRecordMenu("L0000" + arg, branchesModel.oidOfName(arg))
+            earlyDeleteTimer.start()
         } else if (act === "stash-menu" || act === "delete-stash-row") {
             // The graph's way to the same three rows, entered where a
             // right-click enters it: the row menu on the first stash's
