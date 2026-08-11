@@ -1,18 +1,17 @@
 # platitude-gg 開発規約
 
 **platitude-gg** — 軽量・マルチプラットフォーム(Windows / macOS arm64 / Ubuntu)の git GUI。
-「インストール済み git の CLI を実行するだけの薄い GUI」に徹する。
 機能要件・性能要件・スコープ外の正本は [要望.md](internal-docs/要望.md) — 機能実装の前に必ず該当セクションを読むこと。
 本ファイルは全セッション共通の不変条件だけを持つ。**規約の本体は分割配置**: core の git サブプロセス規約・セッション実装は [.claude/rules/core.md](.claude/rules/core.md)、app の Qt Bridges / QML / 意匠実装は [.claude/rules/app-ui.md](.claude/rules/app-ui.md)(いずれも該当クレートのファイルに触れると自動ロード。**各論は `.claude/rules-refs/` の同名ファイル** — rules 本体の指示に従い、触る項を Grep で引く)、ヘッドレス動確の手順と `PG_AUTO_ACT` 動詞表は **verify-ui スキル**。
 
 ## 絶対制約(変更には人間の明示承認が必要)
 
-- git 操作は**システム git のサブプロセス実行のみ**。libgit2 / gitoxide(gix)等の git 実装ライブラリを導入しない
-- ネットワーク通信は**git コマンド経由のみ**。HTTP クライアント・telemetry・forge API(GitHub API 等)のクレートを導入しない
-- 認証(ssh / credential helper)・hooks・gitconfig・**署名(gpg / ssh)** は git に委譲し、アプリ側で再実装しない。**パスフレーズ・認証情報をアプリが受け取らない**(agent / helper が自前の pinentry で聞く)
-- AI 機能を実装しない
-- ライセンス: アプリ本体は MIT。依存追加は MIT / Apache-2.0 / BSD / Zlib / MPL-2.0 系のみ。**GPL 系依存は禁止**(Qt 本体と qtbridge は LGPL-3.0-only で利用 — 承認済みの例外)
+- git に存在する機能は git に委譲し、アプリ側で再実装しない。**パスフレーズ・認証情報をアプリが受け取らない**(agent / helper が自前の pinentry で聞く)
 - 対応 git の最低バージョンは [要望.md](internal-docs/要望.md) の定めに従う。それ未満向けのフォールバックコードを書かない
+- ライセンス: アプリ本体は MIT。依存追加は MIT / Apache-2.0 / BSD / Zlib / MPL-2.0 系のみ。**GPL 系依存は禁止**(Qt 本体と qtbridge は LGPL-3.0-only で利用 — 承認済みの例外)
+- ライブラリ新規導入について、以下は明示的禁止。他ライブラリ追加やバージョン変更はライセンス確認と人の許可が必須
+  - git 操作は**システム git のサブプロセス実行のみ**。 git 実装ライブラリを導入しない
+  - ネットワーク通信は**git コマンド経由のみ**。外部クレートを導入しない
 - UI はダークテーマ(青系)のみ。文言は英語のみ・ハードコード禁止(`qsTr()` 必須、将来の i18n に備える)
 - **内部コマンドと UI 表記は意図して分ける**。内部は最新 git の適切なコマンド(`switch` / `restore` 等)、UI 文言はコマンド名に引きずられず「その操作が何をするか」で選ぶ。用語とコード表記(チップ)の正本は [デザイン規約.md](internal-docs/デザイン規約.md) の用語表・§git 用語のコード表記
 - UI の値は [デザイン規約.md](internal-docs/デザイン規約.md) のトークンのみ使用 — QML を書く前に必ず該当 § を引き、値は表から選ぶ(**数値を検討・微調整しない**)。数値・色・フォント名の直書き禁止。トークンの追加・変更には人間の承認が必要
@@ -46,7 +45,6 @@
 - エラーは core が `thiserror` で型付き、app は `anyhow` 可
 - `#[expect(...)]` を `#[allow(...)]` より優先
 - `unsafe` は原則禁止(やむを得ない場合は `// SAFETY:` コメント必須)
-- 依存追加は最小限(軽量が目標)。追加時はライセンス確認必須
 - 識別子・コメント・ログ・コミットメッセージは英語(設計メモ等の docs は日本語可)。ログは `tracing`(`println!` / `eprintln!` 禁止)
 - スナップショット(insta)の手編集禁止。再生成して差分をレビューする
 - パーサのテストは実 git の出力を fixture として保存して回す。git 実行系は一時ディレクトリに実リポジトリを作る統合テストで検証する
@@ -62,7 +60,7 @@
 
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)、メッセージは英語
 - force push しない
-- **rebase はその場でユーザーが指示した時だけ**(main への追従・履歴の squash を含む)。worktree ブランチが main より遅れたままは正常な状態で、直す対象ではない(例外は座席のマージ済みブランチの `reset --hard main` — §ビルド・テスト)。自発の rebase はコンフリクトと広範な再ビルドを呼ぶ
+- **rebase はその場でユーザーが指示した時だけ**(main への追従・履歴の squash を含む)。worktree ブランチが main より遅れたままは正常な状態で、直す対象ではない(例外は座席のマージ済みブランチの `reset --hard main` — §ビルド・テスト)
 - **main へブランチを反映するのは、その場でユーザーが指示した時だけ**。セッションはコミットを `worktree-<名前>` に積んだまま「マージ可」と報告して終わる。自分の判断で ff-merge しない — 反映済みと未反映が混ざると管理できなくなる
   - `cargo xtask hook pre-shell` が main を書く git(`merge` / `:main` への refspec / `branch -f main` / `update-ref`)と、本体 checkout からの `.claude/skills` / `.claude/rules` / `.claude/rules-refs` を含むコミットを deny する。**指示があった時だけ** `PG_ALLOW_MAIN=1` を先頭に付けて再実行する。使い捨てリポジトリと worktree ブランチ上のコミットは対象外
   - **反映は本体 checkout の `git merge` で行う** — `update-ref` / `branch -f` は本体の index と作業ツリーを置き去りにし、落差が staged に見える(**中身は HEAD より後ろ** — コミットすると反映済みの仕事が消える)。診断は `git reflog show main`、復旧は `git restore --source=HEAD --staged --worktree -- .`
@@ -70,7 +68,7 @@
 
 ## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
 
-- Phase 1(読み取り専用ビューア)は**完了**。性能 4 項目は最終確認でクリア: [phase1 実測](ci/baseline/perf-windows-x64.md)
+- 性能 4 項目は8/3時点ではクリア: [実測](ci/baseline/perf-windows-x64.md)
 - **配線済み操作の一覧・個々の意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**(触る項を Grep で引く。app の不変条件は [.claude/rules/app-ui.md](.claude/rules/app-ui.md) が自動ロード)。**本ファイルは未配線だけを持つ** — ここに一覧を置くと機能を足すたび太る
 - **未配線**: フル interactive rebase 画面のみ(その周辺の日常操作は配線済み — 一覧は rules-refs)
 - 残作業と要判断事項は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読むこと**。配布準備期に検証する項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
