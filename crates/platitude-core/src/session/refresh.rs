@@ -118,7 +118,14 @@ impl RepoSession {
         let op_gen = self.refs_gate.begin();
         let cancel = self.root_cancel.clone();
         let refs = refs::load(&self.executor, &workdir, &cancel).await;
-        let head = refs::head_state(&self.executor, &workdir, &cancel).await;
+        // The listing marks the branch HEAD is on, so the ordinary case is
+        // already answered and the two processes that ask again are not
+        // spawned at all. Detached and unborn have no marked ref, and only
+        // those pay (`refs::head_in`).
+        let head = match refs.as_ref().ok().and_then(|refs| refs::head_in(refs)) {
+            Some(head) => Ok(head),
+            None => refs::head_state(&self.executor, &workdir, &cancel).await,
+        };
         // A repository with no remotes is normal, and so is a failure
         // to read the list; neither is a reason to lose the refs.
         let remotes = remote::list(&self.executor, &workdir, &cancel)

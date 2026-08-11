@@ -984,6 +984,9 @@ pub struct RepoSession {
     /// refs move, since either can bring a new `.gitattributes` or change
     /// what the neighbours look like.
     eol_baselines: Mutex<HashMap<(String, String), Option<crate::eol::Baseline>>>,
+    /// Whether git normalises line endings here (`core.autocrlf`), read
+    /// once and dropped alongside the baselines above.
+    eol_normalises: Mutex<Option<bool>>,
     /// Pending paths whose change has something to say about line endings,
     /// repeated by every status read until something asks for them again.
     eol_marks: Mutex<Arc<Vec<EolMark>>>,
@@ -1091,6 +1094,7 @@ impl RepoSession {
             merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),
             merge_tool_seen: Mutex::new(String::new()),
             eol_baselines: Mutex::new(HashMap::new()),
+            eol_normalises: Mutex::new(None),
             eol_marks: Mutex::new(Arc::new(Vec::new())),
             eol_marks_stale: std::sync::atomic::AtomicBool::new(true),
             status_key: Mutex::new(None),

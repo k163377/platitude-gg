@@ -1161,6 +1161,119 @@ async fn a_request_made_while_a_read_runs_gets_a_read_of_its_own() {
     session.close();
 }
 
+/// Every command the session recorded, in order.
+fn commands_of(sink: &CaptureSink) -> Vec<String> {
+    sink.events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|e| match e {
+            SessionEvent::CommandStarted { display, .. } => Some(display.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The refs listing already marks the branch HEAD is on, so a refs read
+/// does not ask a second and third process where HEAD is.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refs_read_takes_head_out_of_the_listing_it_already_has() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    let (sink, session) = opened(&repo).await;
+    // Let the opening pipeline finish first: it walks the graph, and that
+    // walk asks where HEAD is by a path of its own.
+    sink.settled_stream_gen(1).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    session.set_record_background(true);
+    sink.events.lock().unwrap().clear();
+
+    session.refresh_refs();
+    sink.wait_for("the listing", |evs| {
+        evs.iter()
+            .any(|e| {
+                matches!(e, SessionEvent::CommandStarted { display, .. }
+                              if display.contains("for-each-ref"))
+            })
+            .then_some(())
+    })
+    .await;
+    // Give the two it used to spawn every chance to turn up.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let seen = commands_of(&sink);
+    assert!(
+        !seen.iter().any(|c| c.contains("symbolic-ref")),
+        "HEAD came out of the listing: {seen:?}"
+    );
+    assert!(
+        !seen.iter().any(|c| c.contains("rev-parse --verify")),
+        "and so did the commit it is on: {seen:?}"
+    );
+    session.close();
+}
+
+/// Detached HEAD is the case the listing cannot answer — no ref is marked
+/// — and it still gets a right answer, by asking.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_detached_head_is_still_read_correctly() {
+    let mut repo = TestRepo::init();
+    let root = repo.commit_file("f.txt", "0\n", "root");
+    repo.commit_file("g.txt", "1\n", "second");
+    repo.git(&["checkout", "--detach", &root]);
+
+    let (sink, session) = opened(&repo).await;
+    let head = sink
+        .wait_for("the refs snapshot", |evs| {
+            evs.iter().rev().find_map(|e| match e {
+                SessionEvent::RefsLoaded { snapshot } => snapshot.head.clone(),
+                _ => None,
+            })
+        })
+        .await;
+    assert!(head.detached, "{head:?}");
+    assert_eq!(head.branch, None);
+    assert_eq!(head.oid.map(|o| o.to_hex()), Some(root));
+    session.close();
+}
+
+/// Whether git normalises line endings is repository configuration, so it
+/// is read once however many diffs are opened.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_line_ending_setting_is_read_once_for_the_repository() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.commit_file("b.txt", "two\n", "second");
+    let (sink, session) = opened(&repo).await;
+    session.set_record_background(true);
+    sink.events.lock().unwrap().clear();
+
+    let head = platitude_core::Oid::from_hex_str(&repo.git(&["rev-parse", "HEAD"])).unwrap();
+    let parent = platitude_core::Oid::from_hex_str(&repo.git(&["rev-parse", "HEAD^"])).unwrap();
+    for path in ["a.txt", "b.txt"] {
+        session.load_diff(DiffTarget::Commit {
+            oid: head,
+            parent: Some(parent),
+            path: path.to_string(),
+            orig_path: None,
+        });
+        sink.wait_for("the diff", |evs| {
+            evs.iter()
+                .any(|e| matches!(e, SessionEvent::DiffLoaded { target, .. }
+                                  if matches!(target, DiffTarget::Commit { path: p, .. } if p == path)))
+                .then_some(())
+        })
+        .await;
+    }
+
+    let reads = commands_of(&sink)
+        .iter()
+        .filter(|c| c.contains("autocrlf"))
+        .count();
+    assert_eq!(reads, 1, "{:?}", commands_of(&sink));
+    session.close();
+}
+
 /// Waits for the write named `op` to finish and returns git's error, if any.
 async fn write_result(sink: &CaptureSink, op: &'static str) -> Option<String> {
     sink.wait_for(op, |evs| {

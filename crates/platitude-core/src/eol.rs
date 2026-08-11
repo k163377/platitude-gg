@@ -310,10 +310,26 @@ pub async fn rulings(
     paths: &[String],
     cancel: &CancellationToken,
 ) -> Result<Vec<Ruling>, GitError> {
+    let converting = normalises(executor, workdir, cancel).await?;
+    rulings_given(executor, workdir, paths, converting, cancel).await
+}
+
+/// [`rulings`] for a caller that already knows whether git normalises.
+///
+/// Whether it does is a property of the repository's configuration, not of
+/// the path, so a session that has read it once can hand the answer down
+/// and every diff after the first opens with one fewer process
+/// (`RepoSession::normalising`).
+pub async fn rulings_given(
+    executor: &GitExecutor,
+    workdir: &Path,
+    paths: &[String],
+    converting: bool,
+    cancel: &CancellationToken,
+) -> Result<Vec<Ruling>, GitError> {
     if paths.is_empty() {
         return Ok(Vec::new());
     }
-    let converting = normalises(executor, workdir, cancel).await?;
     let mut out = Vec::with_capacity(paths.len());
     // 200 paths answer in 71ms against the reference repository, measured;
     // one at a time is 42ms each. The chunk is also what keeps a very long
@@ -442,7 +458,7 @@ async fn attributes(
 /// it only takes effect where a path is already text by attribute or by
 /// `autocrlf`, both of which have answered by then, so on its own it never
 /// decides anything.
-async fn normalises(
+pub async fn normalises(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,

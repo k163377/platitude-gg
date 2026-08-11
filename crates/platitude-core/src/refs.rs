@@ -253,6 +253,22 @@ pub struct HeadState {
     pub detached: bool,
 }
 
+/// Reads HEAD out of a listing that already has it.
+///
+/// `%(HEAD)` marks the branch HEAD is on, so a caller holding a listing
+/// has the answer in hand and [`head_state`]'s two processes are two
+/// processes spent asking again. `None` means the listing cannot say —
+/// HEAD is detached, or on a branch with no commits yet, and neither has
+/// a marked ref to be found — so ask git.
+pub fn head_in(refs: &[RefEntry]) -> Option<HeadState> {
+    let on = refs.iter().find(|r| r.is_head)?;
+    Some(HeadState {
+        branch: Some(on.short.to_string()),
+        oid: Some(on.commit_oid()),
+        detached: false,
+    })
+}
+
 /// Loads the refs listing.
 pub async fn load(
     executor: &GitExecutor,

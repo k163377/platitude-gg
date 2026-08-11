@@ -22,7 +22,14 @@ impl RepoSession {
             | DiffTarget::Unstaged { path }
             | DiffTarget::Untracked { path } => (path, false),
         };
-        match eol::ruling(&self.executor, workdir, path, cancel).await {
+        let one = [path.clone()];
+        let ruling = match self.normalising(workdir, cancel).await {
+            Ok(converting) => eol::rulings_given(&self.executor, workdir, &one, converting, cancel)
+                .await
+                .map(|mut r| r.pop().unwrap_or(eol::Ruling::Open)),
+            Err(e) => Err(e),
+        };
+        match ruling {
             Ok(eol::Ruling::NotText) => EndingContext::Excluded,
             Ok(eol::Ruling::Normalised) => EndingContext::Open(None),
             Ok(eol::Ruling::Open) if historical => EndingContext::Open(None),
@@ -38,6 +45,30 @@ impl RepoSession {
                 EndingContext::Excluded
             }
         }
+    }
+
+    /// Whether git normalises line endings on its own here, read once.
+    ///
+    /// A property of the repository's configuration rather than of any
+    /// path, and it was being read again for every diff opened — a whole
+    /// process on the way to showing a file. Dropped by the same event
+    /// that drops the sampled baselines, because a write or a moved ref is
+    /// also what can bring a different `.gitattributes` along with it.
+    async fn normalising(
+        &self,
+        workdir: &Path,
+        cancel: &CancellationToken,
+    ) -> Result<bool, GitError> {
+        if let Ok(slot) = self.eol_normalises.lock()
+            && let Some(known) = *slot
+        {
+            return Ok(known);
+        }
+        let read = eol::normalises(&self.executor, workdir, cancel).await?;
+        if let Ok(mut slot) = self.eol_normalises.lock() {
+            *slot = Some(read);
+        }
+        Ok(read)
     }
 
     /// The cached baseline for a path's (directory, extension), sampling it
@@ -69,6 +100,9 @@ impl RepoSession {
     pub(super) fn forget_eol_baselines(&self) {
         if let Ok(mut cache) = self.eol_baselines.lock() {
             cache.clear();
+        }
+        if let Ok(mut slot) = self.eol_normalises.lock() {
+            *slot = None;
         }
         self.eol_marks_stale.store(true, Ordering::SeqCst);
     }
@@ -175,7 +209,8 @@ impl RepoSession {
         // git's word on which of these are text at all, in one spawn for
         // the lot rather than one per file.
         let paths: Vec<String> = readings.keys().cloned().collect();
-        let rulings = eol::rulings(&self.executor, workdir, &paths, cancel)
+        let converting = self.normalising(workdir, cancel).await.unwrap_or(false);
+        let rulings = eol::rulings_given(&self.executor, workdir, &paths, converting, cancel)
             .await
             .unwrap_or_else(|e| {
                 if !e.is_cancelled() {
