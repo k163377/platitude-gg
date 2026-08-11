@@ -456,10 +456,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "identity-tip" => Some("identity_tip unsaved=true badge=true tip=true"),
         "signature-tip" => Some("signature_tip code=E tip=true"),
         "stash-tip" => Some("stash_tip blocked=true tip=true"),
-        // The fourth: an elided paths-view row whose hover says the
-        // whole name. One verb serves both panes (the argument picks
-        // one), so the wanted line names neither — `tree=false` is the
-        // flattened view, `tip=` the shared instance's own visible.
+        // The fourth: an elided row whose hover says the whole name.
+        // One verb serves both panes (the argument picks one), so the
+        // wanted line names neither — `tree=` echoes which view the
+        // argument asked for (`-tree` keeps the tree, where row 0 is
+        // the elided folder chain), `tip=` the shared instance's own
+        // visible.
+        "path-tip" if opts.arg.ends_with("-tree") => Some("tree=true tip=true"),
         "path-tip" => Some("tree=false tip=true"),
         // An emptied panel with a red mark over it and an emptied panel
         // with a quiet one frame the same from the waist down: the panel
@@ -477,12 +480,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // follow. What the floor came to is a number or it is nothing.
         "window-floor" => Some("window_floor fits=true"),
         // The graph column pulled past its floor: the clamp has to land
-        // on the floor exactly, and the floor is lane 0's co-author
-        // badge kept whole (GraphPane.graphColWMin). The number is the
-        // token arithmetic spelled out — it moves only when those tokens
-        // do, and a clamp that stopped anywhere else photographs just as
-        // neatly, since the badge is four pixels of the frame.
-        "graph-min" => Some("graph_min w=28.5 min=28.5"),
+        // on the floor exactly, and the floor is the message tick
+        // brought up against lane 0's co-author badge without touching
+        // it (GraphPane.graphColWMin). The number is the token
+        // arithmetic spelled out — it moves only when those tokens do,
+        // and a clamp that stopped anywhere else photographs just as
+        // neatly, since the gap in question is one pixel of the frame.
+        "graph-min" => Some("graph_min w=21 min=21"),
         // The three badges are judged with the fit. A run where one of
         // them never stood photographs a band that was never crowded, and
         // that picture cannot be told from a band that took the crowd
