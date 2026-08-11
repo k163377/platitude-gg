@@ -1,6 +1,11 @@
 # 最低 git バージョン整合チェック
 
-アプリが発行する全 git コマンド・オプションが、対応最低バージョン([要望.md](要望.md) §その他 — 照合時点で **2.43**)に存在するかの論理チェック記録。
+**対応最低バージョンは 2.43 で、この数値の正本は本ファイル**(コード側の定義は `platitude-core::version::MINIMUM_GIT`)。
+根拠は **Ubuntu 24.04 LTS の標準版**であること — ここを下限に取ると fsmonitor(mac / Windows)や
+`rebase --update-refs` 等のモダン機能を前提にでき、それ未満向けのフォールバックコードを書かずに済む
+([CLAUDE.md](../CLAUDE.md) 絶対制約)。
+
+以下は、アプリが発行する全 git コマンド・オプションがその 2.43 に存在するかの論理チェック記録。
 実バイナリでの実測ではなく**マニュアル照合**(git-scm.com のバージョン付きマニュアル + git.git の v タグ付きドキュメントソース)。実バイナリでの一巡は [P5-確認事項.md](P5-確認事項.md) §6。
 
 - 洗い出し: `platitude-core/src` の `GitCommand` 構築の全数(`-c` 固定引数・環境変数・pathspec magic 含む)。app 側に git 実行は無い(core に集約)ことも確認済み
@@ -9,7 +14,7 @@
 
 ## 結論
 
-**発行する全コマンド・全オプションが 2.43 に存在する。** 個別マニュアルに無いのは `cherry-pick --no-edit` 1 件のみで、gitcli(7) の「long option は `--no-` で否定できる」一般規定(§Negating options)+ 実測でカバーされる。最も新しい依存は `rebase --update-refs`(2.38 — 要望.md が明示的に前提化)。
+**発行する全コマンド・全オプションが 2.43 に存在する。** 個別マニュアルに無いのは `cherry-pick --no-edit` 1 件のみで、gitcli(7) の「long option は `--no-` で否定できる」一般規定(§Negating options)+ 実測でカバーされる。最も新しい依存は `rebase --update-refs`(2.38 — 冒頭のとおり前提化している機能)。
 
 **マニュアル照合が拾えない例外が 1 つある — `reset` は `--end-of-options` を受け付けない。** gitcli(7) の一般規定に載っていても、`git reset` は 2.43 で位置によらず `fatal: option '--end-of-options' must come before non-option arguments`(exit 128)を返す。アプリが発行する動詞のうちこれだけで、`branch` / `switch` / `tag` / `remote add` / `remote set-url` / `ls-remote` / `rev-parse --verify --quiet` / `log -1 --format=` / `stash list` は全て通る(2.43 実測。`ls-remote` は最低バージョンのコンテナの統合テスト `the_remote_branch_check_answers_for_the_exact_name_only` が踏む)。名前を渡したい経路が将来できたら、`rev-parse --end-of-options` で解決してから object id を渡す。**この差は開発機の git(新しい版は受け付ける)では出ない** — 最低バージョンを積んだ Linux コンテナ(`cargo xtask linux`)が唯一の検出点。
 

@@ -2,7 +2,7 @@
 //! stepped operation has got, and handing resolution to `git mergetool`.
 //!
 //! Resolving conflicts is explicitly out of scope for this application
-//! (要望.md「内蔵conflictエディタ」): the built-in editor belongs to
+//! (実装計画.md §1 スコープ外「内蔵conflictエディタ」): the built-in editor belongs to
 //! whatever tool the user already configured.
 
 use std::path::Path;

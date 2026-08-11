@@ -70,5 +70,5 @@ qml\**\*plugin.dll（QtQuick/QtQml の QML モジュール群 12個）
 
 ## 4. 補足
 
-- mac / Linux の baseline は Phase 1 の CI 初回ビルドで取得する（計画 §3 S6 注記）
+- mac / Linux の baseline は CI 初回ビルドで取得する（初回実行は配布準備期 = 計画 §11.2）
 - 本ファイルの数値・一覧を更新する場合は、必ず実測（上記コマンド）とセットで行うこと

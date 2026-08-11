@@ -160,7 +160,7 @@ impl ResetMode {
 /// position ("must come before non-option arguments", exit 128), alone
 /// among the verbs this crate issues — branch, switch, tag, remote,
 /// rev-parse, log and stash all take it (実測 on 2.43, which is the
-/// floor 要望.md sets). Nothing is lost, because what reaches this is an
+/// floor git最低バージョン整合.md sets). Nothing is lost, because what reaches this is an
 /// object id off a graph row and an object id cannot read as an option.
 /// A caller that ever wants to pass a *name* has to resolve it first
 /// with `rev-parse --end-of-options`, since reset itself cannot say it.

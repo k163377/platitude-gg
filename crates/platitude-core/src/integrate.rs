@@ -259,7 +259,8 @@ pub async fn revert(
 /// (デザイン規約 §履歴を合流させる). A `rebase` needs none of this: it
 /// drops such commits by itself, and the `--empty=drop` that would say
 /// so in one word only reached these two commands in git 2.45, past the
-/// minimum this app supports ([要望.md](../../internal-docs/要望.md)).
+/// minimum this app supports
+/// ([git最低バージョン整合.md](../../internal-docs/git最低バージョン整合.md)).
 ///
 /// The number of commits bounds the loop: each `--skip` moves the
 /// sequence on by one, so no more skips can be wanted than there were
