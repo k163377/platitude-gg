@@ -79,9 +79,15 @@ Rectangle {
     /// The narrowest a badge is drawn before the group gives up on words:
     /// its opening letters and the ellipsis that says the rest was cut.
     /// Counted in characters rather than pixels, for the reason the tab
-    /// names are (規約 §ウィンドウの縁) — three characters cost a
+    /// names are (規約 §ウィンドウの縁) — the same count costs a
     /// different number of pixels in each platform's UI font.
-    readonly property int stateMinChars: 3
+    ///
+    /// **Two, where the tab names keep three** (2026-08-11 ユーザー指示).
+    /// A wider floor here spends the last of the narrowing early and puts
+    /// the step to the mark where there was still room to give: two
+    /// upper-case letters already tell these three apart, and the give-way
+    /// reads as gradual rather than as a jump.
+    readonly property int stateMinChars: 2
     readonly property real stateBadgeMinW:
         Math.ceil(stateFont.advanceWidth("…")
                   + topBar.stateMinChars * stateFont.averageCharacterWidth)
