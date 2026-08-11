@@ -640,7 +640,8 @@ ApplicationWindow {
 
     /// Everything the next launch should come back to. One place, because
     /// what is worth writing is the shape the window settled into, not
-    /// every value it passed through on the way (実装計画 §7).
+    /// every value it passed through on the way
+    /// (rules-refs/core.md — settings.toml / state.toml).
     function reportState() {
         // A minimised window has nothing to say about the shape it will
         // come back as, so it says nothing and the file keeps what the

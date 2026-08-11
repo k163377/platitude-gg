@@ -33,7 +33,8 @@ ColumnLayout {
     // where the text is: the row under the boxes turns into it.
     property bool asking: false
     // A remote already has this commit. Rewriting is not asked about,
-    // but 実装計画.md §13 wants it said, so the save row carries the warning.
+    // but デザイン規約「push 済みの範囲は尋ねずに言う」 wants it said, so the
+    // save row carries the warning.
     property bool published: false
     // What git makes of this commit's signature, once the check comes
     // back: "" (unsigned, or not answered yet), "verified", "signed" or

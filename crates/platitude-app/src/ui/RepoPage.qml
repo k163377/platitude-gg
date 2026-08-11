@@ -1438,8 +1438,9 @@ Item {
     // it and it gets its own (デザイン規約 §グラフ行の右クリック).
     property string menuStashRef: ""
     // Whether a remote already has the menu's commit. Rewriting it is
-    // not asked about — nothing here leaves the machine — but 実装計画.md
-    // §13 wants it said, so the squash row carries a tag the way the amend
+    // not asked about — nothing here leaves the machine — but デザイン規約
+    // 「push 済みの範囲は尋ねずに言う」 wants it said, so the squash row
+    // carries a tag the way the amend
     // editor does. The answer lands a frame after the menu opens.
     property bool menuPublished: false
     /// What these menus offer, held still for as long as they stand

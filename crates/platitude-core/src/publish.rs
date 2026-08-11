@@ -2,7 +2,7 @@
 //!
 //! Rewriting published history is legal and sometimes right, so this only
 //! answers the question — the warning and the decision belong to the UI
-//! (実装計画 §6).
+//! (デザイン規約「push 済みの範囲は尋ねずに言う」).
 //!
 //! "Published" means reachable from some remote-tracking ref, which is only
 //! as fresh as the last fetch. A repository with no remotes has nothing
