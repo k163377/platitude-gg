@@ -88,7 +88,8 @@ pub fn encode_labels(labels: &[RefLabel]) -> String {
         });
         out.push(if l.is_head { '1' } else { '0' });
         out.push(if l.has_remote { '1' } else { '0' });
-        let pr = matches!(l.kind, LabelKind::LocalBranch) && fake_pr_set().contains(&l.text);
+        let pr =
+            matches!(l.kind, LabelKind::LocalBranch) && fake_pr_set().contains(l.text.as_str());
         out.push(if pr { '1' } else { '0' });
         out.push(if l.here { '1' } else { '0' });
         out.push_str(&l.text);

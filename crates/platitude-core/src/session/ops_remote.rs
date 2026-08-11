@@ -96,8 +96,14 @@ impl RepoSession {
         let index = {
             let by_remote = self.lock_remote_tags();
             RemoteTagIndex::build(by_remote.iter().flat_map(|(remote, tags)| {
-                tags.iter()
-                    .map(move |tag| (tag.name.clone(), tag.commit, tag.annotated, remote.clone()))
+                tags.iter().map(move |tag| {
+                    (
+                        tag.name.clone(),
+                        tag.commit,
+                        tag.annotated,
+                        crate::Name::from(remote.as_str()),
+                    )
+                })
             }))
         };
         let mut slot = match self.remote_tag_index.lock() {

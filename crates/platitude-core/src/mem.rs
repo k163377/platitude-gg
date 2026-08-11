@@ -70,6 +70,19 @@ impl Footprint for String {
     }
 }
 
+/// Nothing at all while the text fits inline, which is the whole point of
+/// [`crate::Name`] — so this has to ask rather than read `capacity()`,
+/// which answers for the inline buffer too.
+impl Footprint for crate::Name {
+    fn heap_bytes(&self) -> usize {
+        if self.is_heap_allocated() {
+            self.capacity()
+        } else {
+            0
+        }
+    }
+}
+
 impl Footprint for str {
     fn heap_bytes(&self) -> usize {
         0
@@ -107,6 +120,23 @@ impl<T: Footprint + ?Sized> Footprint for std::sync::Arc<T> {
 impl<T: Footprint> Footprint for [T] {
     fn heap_bytes(&self) -> usize {
         self.iter().map(Footprint::heap_bytes).sum()
+    }
+}
+
+/// **Needed explicitly**, or the deref to `[T]` answers instead and a
+/// spilled buffer goes uncounted — the one case this type exists to make
+/// rare is also the one that would then be invisible.
+impl<A: smallvec::Array> Footprint for smallvec::SmallVec<A>
+where
+    A::Item: Footprint,
+{
+    fn heap_bytes(&self) -> usize {
+        let buffer = if self.spilled() {
+            self.capacity() * size_of::<A::Item>()
+        } else {
+            0
+        };
+        buffer + self.iter().map(Footprint::heap_bytes).sum::<usize>()
     }
 }
 

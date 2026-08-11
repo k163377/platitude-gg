@@ -94,8 +94,8 @@ mod tests {
 
     fn entry(name: &str, kind: RefKind, oid: &str, is_head: bool) -> RefEntry {
         RefEntry {
-            name: format!("refs/{name}"),
-            short: name.to_string(),
+            name: crate::Name::from(format!("refs/{name}")),
+            short: crate::Name::from(name),
             kind,
             target: Oid::from_hex_str(oid).expect("test oid"),
             peeled: None,

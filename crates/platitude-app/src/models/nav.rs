@@ -300,11 +300,11 @@ fn branch_nav_items(list: &[platitude_core::session::BranchItem], remote: bool) 
                 b.short.as_str()
             };
             NavItem {
-                name: b.short.clone(),
+                name: b.short.to_string(),
                 oid_hex: b.oid.to_hex(),
                 is_head: b.is_head,
                 has_remote: b.has_remote,
-                upstream: b.upstream.clone(),
+                upstream: b.upstream.to_string(),
                 has_pr: crate::encode::fake_pr_set().contains(pr_key),
                 ..Default::default()
             }
@@ -680,7 +680,7 @@ impl NavSectionModel {
                         .tags
                         .iter()
                         .map(|t| NavItem {
-                            name: t.short.clone(),
+                            name: t.short.to_string(),
                             oid_hex: t.oid.to_hex(),
                             // Same badge as a branch: nothing means this
                             // tag is only here. The bit comes off

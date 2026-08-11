@@ -117,7 +117,7 @@ pub enum LabelKind {
 /// One label chip on a graph row (branch / tag / HEAD).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RefLabel {
-    pub text: String,
+    pub text: crate::Name,
     pub kind: LabelKind,
     /// Cloud badge: this name is on a remote as well. The PR dimension is
     /// wired in Phase 4.
@@ -282,24 +282,28 @@ pub(super) struct RemoteTagIndex {
 /// One tag name standing on one commit, as the remotes told it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct RemoteTagEntry {
-    pub(super) name: String,
+    pub(super) name: crate::Name,
     pub(super) commit: Oid,
     pub(super) annotated: bool,
     /// Sorted, and more than one when several remotes agree on the commit.
-    pub(super) remotes: Vec<String>,
+    ///
+    /// **Inline while there is one**, which is nearly always: a `Vec` would
+    /// be an allocation per tag to hold a single remote's name, and a
+    /// repository with 45,901 of them pays that 45,901 times.
+    pub(super) remotes: smallvec::SmallVec<[crate::Name; 1]>,
 }
 
 impl RemoteTagIndex {
     /// Collects readings into the sorted run. Each `(name, commit)` is one
     /// entry however many remotes carry it, and their names gather on it.
-    fn build(readings: impl Iterator<Item = (String, Oid, bool, String)>) -> Self {
+    fn build(readings: impl Iterator<Item = (crate::Name, Oid, bool, crate::Name)>) -> Self {
         let mut entries: Vec<RemoteTagEntry> = Vec::new();
         for (name, commit, annotated, remote) in readings {
             entries.push(RemoteTagEntry {
                 name,
                 commit,
                 annotated,
-                remotes: vec![remote],
+                remotes: smallvec::smallvec![remote],
             });
         }
         entries.sort_by(|a, b| a.name.cmp(&b.name).then(a.commit.cmp(&b.commit)));
@@ -389,20 +393,20 @@ pub struct RefsSnapshot {
 /// (`JetBrains/kotlin`, 53,724 refs).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BranchItem {
-    pub short: String,
-    pub full: String,
+    pub short: crate::Name,
+    pub full: crate::Name,
     pub oid: Oid,
     pub has_remote: bool,
     pub is_head: bool,
     /// For a local branch, the remote branch it speaks for (`origin/main`),
     /// wherever the two stand — the one its badge is about, and the one a
     /// rename offers to carry over. Empty when it speaks for none.
-    pub upstream: String,
+    pub upstream: crate::Name,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TagItem {
-    pub short: String,
+    pub short: crate::Name,
     /// Peeled commit id (what the graph row is keyed on). Binary, for the
     /// reason [`BranchItem::oid`] is.
     pub oid: Oid,
@@ -1231,8 +1235,8 @@ mod tests {
 
     fn tag(name: &str, commit: Oid, annotated: bool) -> RefEntry {
         RefEntry {
-            name: format!("refs/tags/{name}"),
-            short: name.to_string(),
+            name: crate::Name::from(format!("refs/tags/{name}")),
+            short: crate::Name::from(name),
             kind: RefKind::Tag,
             target: commit,
             peeled: annotated.then_some(commit),
@@ -1257,7 +1261,7 @@ mod tests {
     fn index_of(remote: &str, tags: Vec<RemoteTag>) -> RemoteTagIndex {
         RemoteTagIndex::build(
             tags.into_iter()
-                .map(|t| (t.name, t.commit, t.annotated, remote.to_string())),
+                .map(|t| (t.name, t.commit, t.annotated, crate::Name::from(remote))),
         )
     }
 
@@ -1269,7 +1273,7 @@ mod tests {
         let remote_tags = index_of(
             "origin",
             vec![RemoteTag {
-                name: "v1".to_string(),
+                name: crate::Name::const_new("v1"),
                 commit: oid(1),
                 annotated: false,
             }],
@@ -1294,7 +1298,7 @@ mod tests {
         let remote_tags = index_of(
             "origin",
             vec![RemoteTag {
-                name: "v1".to_string(),
+                name: crate::Name::const_new("v1"),
                 commit: oid(2),
                 annotated: false,
             }],
@@ -1321,7 +1325,7 @@ mod tests {
         let remote_tags = index_of(
             "origin",
             vec![RemoteTag {
-                name: "v9".to_string(),
+                name: crate::Name::const_new("v9"),
                 commit: oid(9),
                 annotated: true,
             }],

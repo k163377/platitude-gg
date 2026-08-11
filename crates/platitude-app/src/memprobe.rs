@@ -13,10 +13,14 @@
 //!   the report sums them, and prints what is left over as a remainder
 //!   rather than pretending the named parts are everything.
 //!
-//! Off unless asked for. The allocator is behind the `memprobe` feature (a
+//! Off unless asked for. The counting is behind the `memprobe` feature (a
 //! shipped build counts nothing), and even in that build the per-model
 //! walks only run when `PG_MEM_REPORT=1` — they are O(rows), and a
 //! measurement must not pay for itself on every drain of a normal run.
+//!
+//! The process's allocator is chosen here too, because there is only one
+//! `#[global_allocator]` slot and the counter has to sit in front of
+//! whatever fills it.
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
@@ -25,13 +29,32 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use platitude_core::mem::{Footprint, Part};
 
 // ---------------------------------------------------------------------------
-// The counting allocator
+// The allocator
 // ---------------------------------------------------------------------------
+
+/// What every allocation actually goes to.
+///
+/// **The platform's own, measured against the alternative.** mimalloc was
+/// tried here and is worse for this workload — the numbers and the reason
+/// are in `ci/baseline/perf-windows-x64.md`, so the next reader does not
+/// have to re-run it.
+///
+/// A shipped build links it straight into the `#[global_allocator]` slot
+/// below; a measuring build has the counter in front of it, so both are
+/// reporting the same allocator.
+type Base = std::alloc::System;
+const BASE: Base = std::alloc::System;
+
+#[cfg(not(feature = "memprobe"))]
+#[global_allocator]
+static ALLOCATOR: Base = BASE;
 
 #[cfg(feature = "memprobe")]
 mod counting {
-    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::alloc::{GlobalAlloc, Layout};
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::BASE;
 
     pub(super) static LIVE: AtomicUsize = AtomicUsize::new(0);
     pub(super) static PEAK: AtomicUsize = AtomicUsize::new(0);
@@ -55,7 +78,7 @@ mod counting {
         (usize::BITS - size.leading_zeros()) as usize % 32
     }
 
-    /// Adds two relaxed counters to the system allocator and nothing else —
+    /// Adds relaxed counters in front of [`super::BASE`] and nothing else —
     /// no side table, no per-allocation header, so what it measures is what
     /// the process would have without it.
     pub struct Counting;
@@ -77,14 +100,14 @@ mod counting {
         }
     }
 
-    // SAFETY: every method forwards to `System` with the layout it was
-    // given and returns its pointer unchanged; the counters are plain
-    // atomics that allocate nothing.
+    // SAFETY: every method forwards to `BASE` with the layout it was given
+    // and returns its pointer unchanged; the counters are plain atomics
+    // that allocate nothing.
     #[expect(unsafe_code)]
     unsafe impl GlobalAlloc for Counting {
         unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
             // SAFETY: forwarded unchanged.
-            let p = unsafe { System.alloc(layout) };
+            let p = unsafe { BASE.alloc(layout) };
             if !p.is_null() {
                 Self::took(layout.size());
             }
@@ -93,7 +116,7 @@ mod counting {
 
         unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
             // SAFETY: forwarded unchanged.
-            let p = unsafe { System.alloc_zeroed(layout) };
+            let p = unsafe { BASE.alloc_zeroed(layout) };
             if !p.is_null() {
                 Self::took(layout.size());
             }
@@ -103,12 +126,12 @@ mod counting {
         unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
             Self::gave_back(layout.size());
             // SAFETY: forwarded unchanged.
-            unsafe { System.dealloc(ptr, layout) }
+            unsafe { BASE.dealloc(ptr, layout) }
         }
 
         unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
             // SAFETY: forwarded unchanged.
-            let p = unsafe { System.realloc(ptr, layout, new_size) };
+            let p = unsafe { BASE.realloc(ptr, layout, new_size) };
             if !p.is_null() {
                 Self::gave_back(layout.size());
                 Self::took(new_size);

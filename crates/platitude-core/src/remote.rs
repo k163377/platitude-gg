@@ -164,7 +164,7 @@ pub async fn list_tags(
 /// One tag as a remote advertises it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteTag {
-    pub name: String,
+    pub name: crate::Name,
     /// The commit it designates, annotated tags peeled — the same thing
     /// [`crate::refs::RefEntry::commit_oid`] answers for a local one, so
     /// the two can be compared directly.
@@ -202,7 +202,7 @@ pub fn parse_ls_remote_tags(bytes: &[u8]) -> Vec<RemoteTag> {
             }
             Some(_) => {}
             None => out.push(RemoteTag {
-                name: name.to_string(),
+                name: name.into(),
                 commit: oid,
                 annotated: peeled,
             }),

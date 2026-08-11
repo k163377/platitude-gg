@@ -529,7 +529,7 @@ pub(super) fn build_label_map(
             pairs.push((
                 reading.commit,
                 RefLabel {
-                    text: name.to_string(),
+                    text: name.into(),
                     kind: LabelKind::Tag,
                     has_remote: true,
                     is_head: false,
@@ -545,7 +545,7 @@ pub(super) fn build_label_map(
         pairs.push((
             oid,
             RefLabel {
-                text: "HEAD".to_string(),
+                text: crate::Name::const_new("HEAD"),
                 kind: LabelKind::Head,
                 has_remote: false,
                 is_head: true,
@@ -630,7 +630,7 @@ pub(super) fn build_snapshot(
                 oid: r.commit_oid(),
                 has_remote: true,
                 is_head: false,
-                upstream: String::new(),
+                upstream: crate::Name::default(),
             }),
             RefKind::Tag => snapshot.tags.push(TagItem {
                 short: r.short.clone(),
@@ -652,7 +652,7 @@ pub(super) fn build_snapshot(
             continue;
         };
         snapshot.tags.push(TagItem {
-            short: name.to_string(),
+            short: name.into(),
             oid: reading.commit,
             annotated: reading.annotated,
             // An advertisement carries no date; these sort last, after

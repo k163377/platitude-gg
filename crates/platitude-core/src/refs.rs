@@ -30,9 +30,9 @@ pub enum RefKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RefEntry {
     /// Full refname (`refs/heads/main`).
-    pub name: String,
+    pub name: crate::Name,
     /// Display name (`main`, `origin/main`, `v1.0`).
-    pub short: String,
+    pub short: crate::Name,
     pub kind: RefKind,
     /// Direct target of the ref (a tag object for annotated tags).
     pub target: Oid,
@@ -40,7 +40,7 @@ pub struct RefEntry {
     pub peeled: Option<Oid>,
     /// Configured upstream refname (`refs/remotes/origin/main`), if any.
     /// May point at a deleted remote branch; see [`branches_with_remote`].
-    pub upstream: Option<String>,
+    pub upstream: Option<crate::Name>,
     /// True for the branch HEAD is on (never true when detached).
     pub is_head: bool,
     /// Creator date (unix seconds); tag date for annotated tags, commit
@@ -87,18 +87,18 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
     if fields.len() != REFS_FIELDS {
         return Err(RefsParseError(lossy()));
     }
-    let name = String::from_utf8_lossy(fields[0]).into_owned();
+    let name: crate::Name = String::from_utf8_lossy(fields[0]).into_owned().into();
 
     let (kind, short) = if let Some(rest) = name.strip_prefix("refs/heads/") {
-        (RefKind::LocalBranch, rest.to_string())
+        (RefKind::LocalBranch, crate::Name::from(rest))
     } else if let Some(rest) = name.strip_prefix("refs/remotes/") {
         // `origin/HEAD` is a symref to the remote's default branch; hide it.
         if rest.ends_with("/HEAD") {
             return Ok(None);
         }
-        (RefKind::RemoteBranch, rest.to_string())
+        (RefKind::RemoteBranch, crate::Name::from(rest))
     } else if let Some(rest) = name.strip_prefix("refs/tags/") {
-        (RefKind::Tag, rest.to_string())
+        (RefKind::Tag, crate::Name::from(rest))
     } else {
         return Ok(None);
     };
@@ -112,7 +112,7 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
     let upstream = if fields[4].is_empty() {
         None
     } else {
-        Some(String::from_utf8_lossy(fields[4]).into_owned())
+        Some(String::from_utf8_lossy(fields[4]).into_owned().into())
     };
     let is_head = fields[5] == b"*";
     let created_unix = std::str::from_utf8(fields[6])
@@ -224,7 +224,7 @@ impl<'a> RemoteBranches<'a> {
 
 /// Local branches that verifiably have a remote counterpart right now
 /// ([`RemoteBranches::has_counterpart`]), by full refname.
-pub fn branches_with_remote(refs: &[RefEntry]) -> HashSet<String> {
+pub fn branches_with_remote(refs: &[RefEntry]) -> HashSet<crate::Name> {
     let remotes = RemoteBranches::index(refs);
     refs.iter()
         .filter(|r| r.kind == RefKind::LocalBranch)
@@ -413,12 +413,12 @@ mod tests {
 
     fn entry(kind: RefKind, name: &str, short: &str, upstream: Option<&str>) -> RefEntry {
         RefEntry {
-            name: name.to_string(),
-            short: short.to_string(),
+            name: crate::Name::from(name),
+            short: crate::Name::from(short),
             kind,
             target: Oid::from_hex_str(SHA_A).expect("valid test sha"),
             peeled: None,
-            upstream: upstream.map(String::from),
+            upstream: upstream.map(crate::Name::from),
             is_head: false,
             created_unix: 0,
         }

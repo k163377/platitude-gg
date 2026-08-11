@@ -18,6 +18,8 @@ tracing.workspace = true
 png = "0.18"
 zune-jpeg = "0.5"
 zune-core = "0.5"
+compact_str = { version = "0.10.0", default-features = false, features = ["std"] }
+smallvec = { version = "1.15.2", features = ["union"] }
 
 [dev-dependencies]
 insta = "1"
