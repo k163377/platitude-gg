@@ -977,14 +977,25 @@ Rectangle {
                 }
                 // Two ways the words stop being worth their room: the
                 // opening letters would no longer tell one badge from
-                // another, or the tabs beside them have narrowed as far
-                // as they go and are about to start scrolling — at which
-                // point what the band is short of is tabs, and this
-                // group's whole width is the readiest thing to hand them
+                // another, or the strip beside them has gone to scrolling
+                // and is down to under three tabs in view — at that point
+                // what the band is short of is tabs, and this group's
+                // whole width is the readiest thing to hand them
                 // (2026-08-11 ユーザー指示: タブ等幅化 → この群の等幅化
                 // → タブ横スク → 群を畳む → 床).
+                //
+                // Counted off what the tabs are actually drawn at, not off
+                // their cap: the cap is a ceiling the names may be nowhere
+                // near, and a strip of short names would otherwise read as
+                // out of room while it still had plenty. Reading the cap
+                // instead folded the group for good at seven tabs, whose
+                // names reach the floor early and stay there — the state
+                // never got to narrow at all (2026-08-11 報告 →実測).
+                const each = tabs.count > 0 ? tabs.contentWidth / tabs.count : 0
+                const inView = each > 0 ? Math.floor(tabs.runAvail / each) : 3
+                const scrolling = tabs.contentWidth > tabs.runAvail
                 stateGroup.folded = cap < topBar.stateBadgeMinW
-                                    || topBar.tabTitleCap <= topBar.tabTitleMinW
+                                    || (scrolling && inView < 3)
                 stateGroup.cap = cap
             }
             onWidthChanged: stateGroup.settleCap()
