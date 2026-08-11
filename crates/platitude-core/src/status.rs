@@ -207,6 +207,7 @@ impl Kinds {
         }
     }
 
+    #[cfg(test)]
     pub fn total(&self) -> usize {
         self.added + self.modified + self.deleted + self.renamed + self.copied + self.conflicted
     }

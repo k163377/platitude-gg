@@ -108,6 +108,7 @@ impl Env {
         }
     }
 
+    #[cfg(test)]
     pub fn from_pairs(pairs: &[(&str, &str)]) -> Self {
         Self {
             vars: pairs
@@ -315,6 +316,7 @@ impl Store {
     }
 
     /// True when this store is not backed by any file.
+    #[cfg(test)]
     pub fn is_ephemeral(&self) -> bool {
         self.settings_path.is_none() && self.state_path.is_none()
     }

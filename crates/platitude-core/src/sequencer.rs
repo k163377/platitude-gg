@@ -83,6 +83,7 @@ impl TodoAction {
         }
     }
 
+    #[cfg(test)]
     fn from_keyword(word: &str) -> Option<Self> {
         match word {
             "p" | "pick" => Some(TodoAction::Pick),
@@ -161,7 +162,10 @@ pub fn render_todo(lines: &[TodoLine]) -> String {
 }
 
 /// Parses a todo file (git's own, or one we wrote). Comments, blank lines
-/// and commands this application does not model are skipped.
+/// and commands this application does not model are skipped. Production
+/// only writes todos (render_todo → apply_plan overwrites git's file
+/// whole), so the read half exists for the tests that pin the format.
+#[cfg(test)]
 pub fn parse_todo(text: &str) -> Vec<TodoLine> {
     let mut out = Vec::new();
     for line in text.lines() {

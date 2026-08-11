@@ -90,11 +90,13 @@ impl GraphBuilder {
         self.rows.get(oid).copied()
     }
 
+    #[cfg(test)]
     pub fn row_count(&self) -> u32 {
         self.next_row
     }
 
     /// Widest row emitted so far.
+    #[cfg(test)]
     pub fn max_width(&self) -> u16 {
         self.max_width
     }
