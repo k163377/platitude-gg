@@ -1237,6 +1237,74 @@ async fn a_detached_head_is_still_read_correctly() {
     session.close();
 }
 
+/// A read that finds nothing moved publishes the snapshot it published
+/// last — the same one, by pointer — instead of building an equal one.
+///
+/// It used to sort every ref into a snapshot and a label map on every
+/// tick and then compare the result with the last to be told nothing had
+/// changed: 39ms of a core against `JetBrains/kotlin`, ten seconds apart,
+/// for an answer the key already had.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unmoved_repository_republishes_the_snapshot_it_already_built() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    repo.git(&["branch", "side"]);
+    let (sink, session) = opened(&repo).await;
+
+    let latest = |sink: &CaptureSink| {
+        sink.events
+            .lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find_map(|e| match e {
+                SessionEvent::RefsLoaded { snapshot } => Some(Arc::clone(snapshot)),
+                _ => None,
+            })
+            .expect("a snapshot")
+    };
+    let settle = async |want: usize| {
+        sink.wait_for("a refs snapshot", move |evs| {
+            (evs.iter()
+                .filter(|e| matches!(e, SessionEvent::RefsLoaded { .. }))
+                .count()
+                >= want)
+                .then_some(())
+        })
+        .await
+    };
+
+    settle(1).await;
+    let first = latest(&sink);
+    let before = sink.count(|e| matches!(e, SessionEvent::RefsLoaded { .. }));
+
+    session.refresh_refs();
+    settle(before + 1).await;
+    let again = latest(&sink);
+    assert!(
+        Arc::ptr_eq(&first, &again),
+        "the same snapshot, not an equal one"
+    );
+
+    // A ref really moving still rebuilds, and the sidebar is told.
+    repo.git(&["branch", "-D", "side"]);
+    let before = sink.count(|e| matches!(e, SessionEvent::RefsLoaded { .. }));
+    session.refresh_refs();
+    settle(before + 1).await;
+    let after = latest(&sink);
+    assert!(
+        !Arc::ptr_eq(&first, &after),
+        "a moved ref is a new snapshot"
+    );
+    assert_eq!(
+        after.locals.len(),
+        1,
+        "and it is the repository as it stands: {:?}",
+        after.locals
+    );
+    session.close();
+}
+
 /// Once a refs read has said where HEAD is, the walk stops asking.
 ///
 /// It used to spawn `symbolic-ref` and `rev-parse` before every rebuild —

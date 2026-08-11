@@ -118,6 +118,7 @@ impl RepoSession {
             return false;
         }
         *slot = Arc::new(index);
+        self.remote_tag_gen.fetch_add(1, Ordering::SeqCst);
         true
     }
 

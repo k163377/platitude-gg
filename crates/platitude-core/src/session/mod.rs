@@ -1138,6 +1138,9 @@ pub struct RepoSession {
     /// every poll tick copies the whole tag list for nothing
     /// (`JetBrains/kotlin`: 45,782 names).
     remote_tag_index: Mutex<Arc<RemoteTagIndex>>,
+    /// Bumped whenever the index above became different readings, so the
+    /// refs key can cover it without walking 45,909 entries.
+    remote_tag_gen: AtomicU64,
     /// One permit for the background read of the above, so a second
     /// permission-granting call cannot stack another on top of it.
     remote_tags_slot: Arc<tokio::sync::Semaphore>,
@@ -1222,6 +1225,7 @@ impl RepoSession {
             write_tx,
             network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
             remote_tag_index: Mutex::new(Arc::new(RemoteTagIndex::default())),
+            remote_tag_gen: AtomicU64::new(0),
             remote_tags_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             head_hold: Mutex::new(None),
             head_tip: Mutex::new(None),

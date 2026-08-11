@@ -161,17 +161,40 @@ impl RepoSession {
                 // returns. What it settles is every rebuild after — a
                 // commit, a fetch, a poll tick that found a ref moved.
                 self.remember_head_hold(&refs, &head);
-                let key = refs_key(&refs, &head);
+                let remote_tags = self.remote_tag_index();
+                let key = refs_key(
+                    &refs,
+                    &head,
+                    self.remote_tag_gen.load(Ordering::SeqCst),
+                    &remotes,
+                );
                 let previous = self
                     .refs_key
                     .lock()
                     .map(|mut slot| slot.replace(key))
                     .unwrap_or_default();
+                // **The key covers every input to the two joins**, so an
+                // unmoved repository does not build them at all. It used
+                // to: a quiet tick sorted 53,724 refs into a snapshot and
+                // 47,715 into a label map, then compared the result with
+                // the last one to be told nothing had changed — 39ms of a
+                // core, every tick, for an answer the key already had
+                // (ci/baseline/refs-join-windows-x64.md).
+                //
+                // The snapshot still goes out. A consumer that attached
+                // after the last one is waiting for it, and it is the one
+                // already published, so the sidebar reads it by pointer
+                // and rebuilds nothing (`share_snapshot`).
+                if previous == Some(key)
+                    && let Some(held) = self.published_snapshot()
+                {
+                    self.sink.event(SessionEvent::RefsLoaded { snapshot: held });
+                    return false;
+                }
                 // One index and one set of joins for both halves: the
                 // sidebar snapshot and the row chips read the same
                 // listing, and building either twice is one whole join
                 // thrown away.
-                let remote_tags = self.remote_tag_index();
                 let joins = RefJoins::new(&refs);
                 let mut snapshot = build_snapshot(&refs, &head, &remote_tags, &joins);
                 snapshot.remote_names = remotes.into_iter().map(|r| r.name).collect();

@@ -584,7 +584,12 @@ pub(super) fn status_key(status: &WorkTreeStatus) -> u64 {
 /// date redraws chips through the label diff, and rebuilding for those
 /// would repaint the graph over nothing. `git for-each-ref` lists in
 /// refname order, so equal layouts hash equal.
-pub(super) fn refs_key(refs: &[RefEntry], head: &HeadState) -> u64 {
+pub(super) fn refs_key(
+    refs: &[RefEntry],
+    head: &HeadState,
+    remote_tags_gen: u64,
+    remotes: &[remote::Remote],
+) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     for entry in refs {
@@ -595,6 +600,18 @@ pub(super) fn refs_key(refs: &[RefEntry], head: &HeadState) -> u64 {
     head.branch.hash(&mut hasher);
     head.oid.hash(&mut hasher);
     head.detached.hash(&mut hasher);
+    // **Everything the two joins read, not just the listing.** The key is
+    // what says a tick can keep the snapshot it already published, so it
+    // has to cover every input to it: what the remotes carry decides the
+    // cloud badges and adds the tags only they have, and their names are
+    // a field of the snapshot. A counter the session bumps when the index
+    // actually changed, rather than the index's contents, keeps this
+    // O(refs) — and an index rebuilt into the same readings does not
+    // bump it, so a fetch that changed nothing costs nothing here.
+    remote_tags_gen.hash(&mut hasher);
+    for r in remotes {
+        r.name.hash(&mut hasher);
+    }
     hasher.finish()
 }
 
