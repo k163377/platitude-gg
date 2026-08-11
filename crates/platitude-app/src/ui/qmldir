@@ -13,6 +13,7 @@ AuthorCard 1.0 AuthorCard.qml
 AutoScrollBar 1.0 AutoScrollBar.qml
 ChangeIcon 1.0 ChangeIcon.qml
 ClipboardHelper 1.0 ClipboardHelper.qml
+BandStateCard 1.0 BandStateCard.qml
 CoAuthorCard 1.0 CoAuthorCard.qml
 CoAuthorLine 1.0 CoAuthorLine.qml
 CodeChip 1.0 CodeChip.qml
