@@ -945,10 +945,30 @@ Rectangle {
             readonly property real foldedWidth:
                 stateMark.implicitWidth + 2 * fetchButton.padding
             /// What each badge's box is drawn at, once they have given way
-            /// together, and whether the giving way has gone as far as it
-            /// can. `Number.MAX_VALUE` is "nothing is narrowed".
+            /// together. `Number.MAX_VALUE` is "nothing is narrowed".
+            /// Settled by hand (`settleCap`), since it is read off a list
+            /// of measurements.
             property real cap: Number.MAX_VALUE
-            property bool folded: false
+            /// Whether the words have been given up altogether. Three
+            /// things ask for that, and this is bound rather than assigned
+            /// beside the cap because two of them can change without the
+            /// group's own width moving — a window that comes back down to
+            /// its floor after a trip upwards leaves this group the width
+            /// it already had, and an assignment made in `settleCap` would
+            /// never be asked for again (2026-08-11 報告).
+            readonly property bool tabsScrolling:
+                tabs.contentWidth > tabs.runAvail
+            /// How many tabs the strip has room for as they are drawn now.
+            /// Off their real width rather than their cap: a cap is a
+            /// ceiling the names may be nowhere near.
+            readonly property int tabsInView: {
+                const each = tabs.count > 0 ? tabs.contentWidth / tabs.count : 0
+                return each > 0 ? Math.floor(tabs.runAvail / each) : 3
+            }
+            readonly property bool folded:
+                stateGroup.cap < topBar.stateBadgeMinW
+                || (stateGroup.tabsScrolling && stateGroup.tabsInView < 3)
+                || topBar.windowAtFloor
 
             /// Hands the run out among the badges, the widest giving way
             /// last — the same max-min share the tab names are settled
@@ -969,7 +989,6 @@ Rectangle {
                     want.push(topBar.identityBadgeW)
                 if (want.length === 0) {
                     stateGroup.cap = Number.MAX_VALUE
-                    stateGroup.folded = false
                     return
                 }
                 let left = Math.floor(stateGroup.width)
@@ -984,28 +1003,10 @@ Rectangle {
                     }
                     left -= want[i]
                 }
-                // Two ways the words stop being worth their room: the
-                // opening letters would no longer tell one badge from
-                // another, or the strip beside them has gone to scrolling
-                // and is down to under three tabs in view — at that point
-                // what the band is short of is tabs, and this group's
-                // whole width is the readiest thing to hand them
-                // (2026-08-11 ユーザー指示: タブ等幅化 → この群の等幅化
-                // → タブ横スク → 群を畳む → 床).
-                //
-                // Counted off what the tabs are actually drawn at, not off
-                // their cap: the cap is a ceiling the names may be nowhere
-                // near, and a strip of short names would otherwise read as
-                // out of room while it still had plenty. Reading the cap
-                // instead folded the group for good at seven tabs, whose
-                // names reach the floor early and stay there — the state
-                // never got to narrow at all (2026-08-11 報告 →実測).
-                const each = tabs.count > 0 ? tabs.contentWidth / tabs.count : 0
-                const inView = each > 0 ? Math.floor(tabs.runAvail / each) : 3
-                const scrolling = tabs.contentWidth > tabs.runAvail
-                stateGroup.folded = cap < topBar.stateBadgeMinW
-                                    || (scrolling && inView < 3)
-                                    || topBar.windowAtFloor
+                // Whether this is narrow enough to give the words up
+                // altogether is `folded`'s to answer, and it is bound
+                // (above) — two of the three things that ask for it can
+                // change while this width stands still.
                 stateGroup.cap = cap
             }
             onWidthChanged: stateGroup.settleCap()
