@@ -86,10 +86,18 @@ impl RepoSession {
     }
 
     pub fn refresh_refs(self: &Arc<Self>) {
+        if !self.refs_read.claim() {
+            return;
+        }
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            if s.publish_refs().await {
-                s.refresh_log();
+            loop {
+                if s.publish_refs().await {
+                    s.refresh_log();
+                }
+                if !s.refs_read.finish() {
+                    break;
+                }
             }
         });
     }
@@ -167,12 +175,20 @@ impl RepoSession {
     }
 
     pub fn refresh_status(self: &Arc<Self>) {
+        if !self.status_read.claim() {
+            return;
+        }
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            // An external change (another tool, the terminal) can make the
-            // tree dirty or clean, which adds or removes the WIP row.
-            if s.publish_status().await {
-                s.refresh_log();
+            loop {
+                // An external change (another tool, the terminal) can make
+                // the tree dirty or clean, which adds or removes the WIP row.
+                if s.publish_status().await {
+                    s.refresh_log();
+                }
+                if !s.status_read.finish() {
+                    break;
+                }
             }
         });
     }
@@ -345,17 +361,25 @@ impl RepoSession {
         let Some(workdir) = self.workdir() else {
             return;
         };
+        if !self.stash_read.claim() {
+            return;
+        }
         let s = Arc::clone(self);
-        let op_gen = self.stash_gate.begin();
         self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            match stash::load(&s.executor, &workdir, &cancel).await {
-                Ok(stashes) => {
-                    if s.stash_gate.is_current(op_gen) {
-                        s.sink.event(SessionEvent::StashesLoaded { stashes });
+            loop {
+                let op_gen = s.stash_gate.begin();
+                let cancel = s.root_cancel.clone();
+                match stash::load(&s.executor, &workdir, &cancel).await {
+                    Ok(stashes) => {
+                        if s.stash_gate.is_current(op_gen) {
+                            s.sink.event(SessionEvent::StashesLoaded { stashes });
+                        }
                     }
+                    Err(e) => s.fail("stash", e),
                 }
-                Err(e) => s.fail("stash", e),
+                if !s.stash_read.finish() {
+                    break;
+                }
             }
         });
     }
@@ -364,18 +388,26 @@ impl RepoSession {
         let Some(workdir) = self.workdir() else {
             return;
         };
+        if !self.worktrees_read.claim() {
+            return;
+        }
         let s = Arc::clone(self);
-        let op_gen = self.worktrees_gate.begin();
         self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            match crate::worktrees::load(&s.executor, &workdir, &cancel).await {
-                Ok(list) => {
-                    if s.worktrees_gate.is_current(op_gen) {
-                        s.sink
-                            .event(SessionEvent::WorktreesLoaded { worktrees: list });
+            loop {
+                let op_gen = s.worktrees_gate.begin();
+                let cancel = s.root_cancel.clone();
+                match crate::worktrees::load(&s.executor, &workdir, &cancel).await {
+                    Ok(list) => {
+                        if s.worktrees_gate.is_current(op_gen) {
+                            s.sink
+                                .event(SessionEvent::WorktreesLoaded { worktrees: list });
+                        }
                     }
+                    Err(e) => s.fail("worktrees", e),
                 }
-                Err(e) => s.fail("worktrees", e),
+                if !s.worktrees_read.finish() {
+                    break;
+                }
             }
         });
     }

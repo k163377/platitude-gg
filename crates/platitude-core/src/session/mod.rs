@@ -853,6 +853,76 @@ impl OpGate {
     }
 }
 
+/// One read of a snapshot at a time, with at most one repeat booked
+/// behind it.
+///
+/// Nothing coordinates the places that ask for a re-read — opening a
+/// repository asks, and so does the window becoming active a moment
+/// later, which at startup is the same moment. Both used to be granted,
+/// and [`OpGate`] then threw the older answer away: two `for-each-ref`
+/// and two `status -uall` for one snapshot, which on `JetBrains/kotlin`
+/// is about a second of disk work landing exactly where the first click
+/// goes.
+///
+/// The second caller does not start its own read and does not lose its
+/// request either — it books the repeat, and the read in flight goes
+/// round again when it lands. That distinction is the whole point: a
+/// dropped request would leave a write's own refresh reading the
+/// repository as it was *before* the write, with the correction waiting
+/// on the next poll tick.
+#[derive(Default)]
+struct ReadSlot(std::sync::atomic::AtomicU8);
+
+/// Nobody is reading.
+const SLOT_IDLE: u8 = 0;
+/// A read is in flight.
+const SLOT_RUNNING: u8 = 1;
+/// A read is in flight and somebody asked for another behind it.
+const SLOT_AGAIN: u8 = 2;
+
+impl ReadSlot {
+    /// Whether this caller is the one that runs. `false` = a read is
+    /// already in flight and has been booked to repeat.
+    fn claim(&self) -> bool {
+        let mut seen = self.0.load(Ordering::SeqCst);
+        loop {
+            let next = if seen == SLOT_IDLE {
+                SLOT_RUNNING
+            } else {
+                SLOT_AGAIN
+            };
+            match self
+                .0
+                .compare_exchange(seen, next, Ordering::SeqCst, Ordering::SeqCst)
+            {
+                Ok(_) => return seen == SLOT_IDLE,
+                Err(actual) => seen = actual,
+            }
+        }
+    }
+
+    /// Called by the reader when its pass lands. `true` = somebody asked
+    /// while it was running, so it goes round once more.
+    fn finish(&self) -> bool {
+        loop {
+            if self
+                .0
+                .compare_exchange(SLOT_RUNNING, SLOT_IDLE, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                return false;
+            }
+            if self
+                .0
+                .compare_exchange(SLOT_AGAIN, SLOT_RUNNING, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                return true;
+            }
+        }
+    }
+}
+
 /// One pending file whose change has something to say about line endings.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EolMark {
@@ -939,6 +1009,12 @@ pub struct RepoSession {
     /// One permit, held by a running poll: a tick that arrives while the
     /// previous one is still reading is dropped rather than queued.
     poll_slot: Arc<tokio::sync::Semaphore>,
+    /// One in flight per snapshot, for the reads a repository can be asked
+    /// for from more than one place at once (see [`ReadSlot`]).
+    refs_read: ReadSlot,
+    status_read: ReadSlot,
+    stash_read: ReadSlot,
+    worktrees_read: ReadSlot,
     /// Submission end of the write queue (see the module docs).
     write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,
     /// Time budget for fetch / push. Persisted as the settings key
@@ -1022,6 +1098,10 @@ impl RepoSession {
             last_snapshot: Mutex::new(None),
             write_busy: std::sync::atomic::AtomicBool::new(false),
             poll_slot: Arc::new(tokio::sync::Semaphore::new(1)),
+            refs_read: ReadSlot::default(),
+            status_read: ReadSlot::default(),
+            stash_read: ReadSlot::default(),
+            worktrees_read: ReadSlot::default(),
             write_tx,
             network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
             remote_tags: Mutex::new(RemoteTagsByRemote::new()),
@@ -1232,6 +1312,33 @@ mod tests {
     use super::build::{RefJoins, build_label_map, build_snapshot};
     use super::*;
     use crate::remote::RemoteTag;
+
+    #[test]
+    fn the_first_caller_reads_and_the_second_books_one_more_pass() {
+        let slot = ReadSlot::default();
+        assert!(slot.claim(), "nothing was running");
+        assert!(!slot.claim(), "a read is in flight, so this one waits");
+        assert!(!slot.claim(), "and so does the next");
+        // Two callers queued behind one read, and one repeat answers both:
+        // they asked for the same thing.
+        assert!(slot.finish(), "somebody asked while it ran");
+        assert!(!slot.finish(), "nobody asked during the repeat");
+        assert!(slot.claim(), "and the slot is free again");
+    }
+
+    #[test]
+    fn a_request_that_arrives_as_a_read_lands_is_not_lost() {
+        // The window where a write's own refresh would otherwise read the
+        // repository as it stood before the write.
+        let slot = ReadSlot::default();
+        assert!(slot.claim());
+        assert!(!slot.claim());
+        assert!(slot.finish());
+        // Mid-repeat, a third caller: still exactly one more pass.
+        assert!(!slot.claim());
+        assert!(slot.finish());
+        assert!(!slot.finish());
+    }
 
     fn tag(name: &str, commit: Oid, annotated: bool) -> RefEntry {
         RefEntry {

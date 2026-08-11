@@ -1111,6 +1111,56 @@ async fn opened(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
     (sink, session)
 }
 
+/// Opening a repository asks for a read, and so does the window becoming
+/// active a moment later; on a large repository that pair was two
+/// `for-each-ref` and two `status -uall` for one answer. The second
+/// caller now books a repeat instead of starting its own — and the point
+/// of booking rather than dropping is that the repeat still sees what
+/// happened in between.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_request_made_while_a_read_runs_gets_a_read_of_its_own() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    let (sink, session) = opened(&repo).await;
+    sink.wait_for("the opening status read", |evs| {
+        evs.iter()
+            .any(|e| matches!(e, SessionEvent::StatusLoaded { .. }))
+            .then_some(())
+    })
+    .await;
+
+    // Park a read on its way out, which is where a reader stands after it
+    // has seen the repository and before it asks whether to go round
+    // again. Everything below happens inside that window.
+    let (arrived, at_the_window) = tokio::sync::oneshot::channel();
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    sink.hook_once(
+        |e| matches!(e, SessionEvent::StatusLoaded { status, .. } if !status.is_dirty()),
+        move || {
+            let _ = arrived.send(());
+            let _ = held.recv_timeout(Duration::from_secs(20));
+        },
+    );
+    session.refresh_status();
+    at_the_window.await.expect("the read reached the window");
+
+    // The tree turns dirty behind the parked read — so what it is holding
+    // is already out of date — and somebody asks again. Dropping that ask
+    // for being a duplicate is what this is here to catch: the only read
+    // that could answer it is the one that already looked.
+    repo.write_file("f.txt", "dirty\n");
+    session.refresh_status();
+    release.send(()).expect("let the read finish");
+
+    sink.wait_for("a status read that sees the dirty tree", |evs| {
+        evs.iter()
+            .any(|e| matches!(e, SessionEvent::StatusLoaded { status, .. } if status.is_dirty()))
+            .then_some(())
+    })
+    .await;
+    session.close();
+}
+
 /// Waits for the write named `op` to finish and returns git's error, if any.
 async fn write_result(sink: &CaptureSink, op: &'static str) -> Option<String> {
     sink.wait_for(op, |evs| {
