@@ -27,6 +27,7 @@ core のファイルを読み書きすると自動ロードされる。常時必
 ## セッション・実装の決定事項
 
 - **core の API は純 Rust 型のみ**(`String` / `Vec` / serde DTO)。`Rc<RefCell>` パターンや qtbridge の型を core に漏らさない。**core → UI の通知は core 定義の trait / チャネルで抽象化**し、app 側でブリッジ機構に接続する — ブリッジ差し替え(Qt Bridges → CXX-Qt)を可能に保つための条件
+  - **承認済みの例外は `crate::Name`(`compact_str::CompactString`)1 つだけ**(2026-08-11 ユーザー承認)。**条件は「app が型を名指ししないこと」** — `as_str` / `&str` との `==` / `to_string` で読めるうちは、ブリッジを差し替えても app 側は無変更で済むので、この規約の目的は保たれる。**app に `compact_str` を依存として足さねばならなくなったら、その時点で例外の前提が崩れている**(理由と実測は rules-refs/core.md の同項)
 - 書き込みは `RepoSession` のキュー経由で直列化され、成功・失敗いずれでも refresh する。失敗は git の文言のまま `WriteFinished{error}` → 既存のエラー表示へ流れる
 - **コマンドログは executor の observer 1 本で取る**(`process::CommandObserver`。spawn は `execute` の 1 箇所)。セッションは同じ observer に**利用者用と背景用の 2 つのハンドル**を挿し(`GitExecutor::observed`)、書き込みキューだけが利用者用を使う = 分類がキューの分岐 1 箇所で決まる。**auto fetch はキューを通るが背景扱い**(オフラインで毎分パネルが開くのを防ぐ)。表示用文字列(`describe`)とコピー用の完全形(`-c` 群 + 環境変数まで)は別で、記録しない時は `records()` で早期に降りて組み立てない
 - **終了コードで答える問い合わせはコマンドログの失敗にしない**(`GitCommand::answers_by_code()`。`merge-base --is-ancestor` の exit 1 は答えなので、受け取っただけでログが飛び出さない)。**`run_unchecked` で非ゼロを分岐に使っている箇所は全部これが要る** — `sequencer::resolve` の `rev-parse --verify --quiet` は「最初のコミットに親は無い」を exit 1 で受けており、付け忘れると**根に届く squash / drop のたびにパネルが開いた**(実測・修正済み)
