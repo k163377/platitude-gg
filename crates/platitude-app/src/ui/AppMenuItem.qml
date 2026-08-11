@@ -42,6 +42,13 @@ MenuItem {
     readonly property real codeColSeat:
         menuItem.code !== "" ? codeLabel.implicitWidth : 0
 
+    /// Whether the row's words bid for the menu's width. Off for a row
+    /// whose text is data rather than sentence — the name a delete row
+    /// re-states: the menu is sized by its other rows, the name takes
+    /// what is left and elides, and the elided row's hover already says
+    /// the whole line (デザイン規約 §メニュー).
+    property bool growsForText: true
+
     /// Held rather than clicked, for a row that would otherwise have to
     /// raise a question of its own (デザイン規約 §長押し). Zero is an
     /// ordinary row. A hold row reports no click at all — the press is
@@ -96,7 +103,7 @@ MenuItem {
     implicitHeight: menuItem.offered ? Theme.rowHeight : 0
     implicitWidth: (menuItem.code !== ""
                       ? codeChip.implicitWidth + Theme.spaceSm : 0)
-                   + itemLabel.implicitWidth
+                   + (menuItem.growsForText ? itemLabel.implicitWidth : 0)
                    + (menuItem.note !== ""
                       ? noteLabel.implicitWidth + Theme.spaceSm : 0)
                    + menuItem.leftPadding + menuItem.rightPadding

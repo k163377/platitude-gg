@@ -76,14 +76,22 @@ Menu {
     // end past where the other rows' words begin (`cherry-pick` past
     // the head of "into main") and the column would break (デザイン規約
     // §git 用語のコード表記).
-    readonly property real codeColW: {
+    //
+    // Settled as the menu opens rather than bound: a row that changes
+    // its chip while the card stands — the delete row morphing to
+    // `branch -D` — must not drag every other row's words with it.
+    // What the menu shows is decided as it opens and left alone
+    // (デザイン規約 §メニュー); the forced spelling is narrower than
+    // the plain one, so it sits inside the column it inherited.
+    property real codeColW: 0
+    onAboutToShow: {
         let widest = 0
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
             if (row && row.offered && row.codeColSeat !== undefined)
                 widest = Math.max(widest, row.codeColSeat)
         }
-        return widest
+        appMenu.codeColW = widest
     }
 
     // The seat every row of a menu that holds one held row leaves for the

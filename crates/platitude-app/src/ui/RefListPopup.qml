@@ -23,6 +23,11 @@ Popup {
     property string currentBranch: ""
     /// One was chosen; the whole record, so its kind travels with it.
     signal picked(string record)
+    /// One was right-clicked: its menu is asked for, the same one the
+    /// chip itself answers with. The rows that lead nowhere still have
+    /// one — a tag goes nowhere but deletes fine — except the marker,
+    /// which names no ref at all.
+    signal menuAsked(string record)
 
     /// What a row has to divide between the chip and the reading's remote
     /// — the window this opens over, less the padding and the gaps. Both
@@ -175,6 +180,14 @@ Popup {
                     onTapped: {
                         refList.close()
                         refList.picked(refRow.modelData)
+                    }
+                }
+                TapHandler {
+                    acceptedButtons: Qt.RightButton
+                    enabled: !refRow.unavailable
+                    onTapped: {
+                        refList.close()
+                        refList.menuAsked(refRow.modelData)
                     }
                 }
             }

@@ -720,8 +720,18 @@ Item {
             rowItem.ListView.view.rowSelected(rowItem.oid_hex)
             // The synthetic WIP row is not a commit, so nothing in the
             // commit menu applies to it.
-            if (mouse.button === Qt.RightButton && !rowItem.isWip)
-                rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex)
+            if (mouse.button === Qt.RightButton && !rowItem.isWip) {
+                // On the chip the menu is the named ref's — what the name
+                // on screen names — and everywhere else the row's. The
+                // stacked names under +N take the same right-click on the
+                // list the chip unfolds into.
+                const p = rowItem.mapToItem(rowChip, mouse.x, mouse.y)
+                if (rowChip.visible && rowChip.contains(Qt.point(p.x, p.y)))
+                    rowItem.ListView.view.chipMenuRequested(
+                        rowItem.oid_hex, rowItem.labelRecords[0])
+                else
+                    rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex)
+            }
         }
         // Where the row leads: the chip it shows, or — with no branch on
         // it — the offer to put one there. The page decides which.

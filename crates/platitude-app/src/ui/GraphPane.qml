@@ -26,6 +26,11 @@ Rectangle {
     /// Right-click on a row. What the row is decides which menu opens,
     /// and that is the page's call.
     signal rowMenuOpenRequested(string oidHex)
+    /// Right-click on the chip itself: the menu is the named ref's
+    /// rather than the row's — and the page still falls back to the
+    /// row's where the chip names nothing to act on. `record` is the
+    /// chip as drawn (kind + flags + name).
+    signal chipMenuOpenRequested(string oidHex, string record)
     /// A row was double-clicked. `record` is the chip it shows (kind +
     /// flags + name); empty when the row shows no branch at all.
     signal rowSwitchRequested(string oidHex, string record)
@@ -701,6 +706,7 @@ Rectangle {
         readonly property bool findOn: graphArea.findOn
         signal rowSelected(string oidHex)
         signal rowMenuRequested(string oidHex)
+        signal chipMenuRequested(string oidHex, string record)
         signal rowSwitchRequested(string oidHex, string record)
         signal chipExpandRequested(var records, var anchor)
         signal chipCollapseRequested()
@@ -710,6 +716,8 @@ Rectangle {
         signal namingSubmitted(string oidHex, string name)
         signal namingCancelled()
         onRowMenuRequested: oidHex => graphArea.rowMenuOpenRequested(oidHex)
+        onChipMenuRequested: (oidHex, record) =>
+            graphArea.chipMenuOpenRequested(oidHex, record)
         onRowSelected: oidHex => graphArea.rowActivated(oidHex)
         onRowSwitchRequested: (oidHex, record) =>
             graphArea.rowSwitchRequested(oidHex, record)

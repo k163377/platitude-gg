@@ -780,7 +780,41 @@ Item {
                              && !(kind === "branch" && full === workTree.branch)
         if (repoTab.state === "open" && page.rebaseRange !== "")
             repoTab.checkPublish(page.rebaseRange)
-        refMenu.offer()
+        // Whether the everyday delete would be refused, asked as the menu
+        // opens: the unmerged answer usually lands before the pointer
+        // does, and the delete row wears `-D` from the start instead of
+        // only after a refused click (§左メニューの所作). The chip
+        // column is settled at open, so the swap moves no other row.
+        if (repoTab.state === "open" && kind === "branch" && page.menuCanDelete)
+            repoTab.checkBranchDelete(full)
+        return refMenu.offer()
+    }
+
+    /// Where a chip's right-click lands: the ref menu for the name the
+    /// chip shows, through the same door the sidebar's rows use. A chip
+    /// that names nothing to act on — the detached-HEAD marker, a stash,
+    /// or the current branch (whose ref menu has no rows) — falls back
+    /// to the menu the rest of the row opens: the row is still a commit,
+    /// and a right-click that finds nothing is an unanswered hand. The
+    /// stacked list's rows pass no `oidHex` and have no row to fall back
+    /// to; they close over nothing the way the sidebar's current branch
+    /// does (デザイン規約 §メニュー).
+    function openRecordMenu(record, oidHex) {
+        const kind = record === "" ? ""
+                   : record[0] === "L" ? "branch"
+                   : record[0] === "R" ? "remote"
+                   : record[0] === "T" ? "tag" : ""
+        if (kind === "") {
+            if (oidHex !== "")
+                page.openRowMenu(oidHex)
+            return
+        }
+        const name = record.substring(5).split(String.fromCharCode(30))[0]
+        const oid = kind === "branch" ? branchesModel.oidOfName(name)
+                  : kind === "remote" ? remotesModel.oidOfName(name)
+                  : tagsModel.oidOfName(name)
+        if (!page.openRefMenu(kind, name, name, oid) && oidHex !== "")
+            page.openRowMenu(oidHex)
     }
 
     // ---- bringing two lines of history together --------------------
@@ -865,41 +899,46 @@ Item {
             // A stash is held down here instead of raising a bar over the
             // graph: it is one row, kept nowhere else, and the question
             // has nothing to add that the words on the row do not already
-            // say (デザイン規約 §長押し). The ellipsis goes with it — the
-            // row no longer promises a question.
+            // say (デザイン規約 §長押し).
             //
-            // A branch on a remote is held for the same reason, and the
-            // chip is what tells the two apart: this one runs a command
-            // that leaves this machine, and says so in git's own spelling
-            // (デザイン規約 §git 用語のコード表記).
+            // Every delete leads with the command it runs, spelt as git
+            // spells it, and — alone in this menu — re-states its target:
+            // the menu opens off a chip, a stacked list or a sidebar row,
+            // and during the hold the name of what is about to go has to
+            // be readable on the row itself (デザイン規約 §メニュー
+            // 言い直さない、の例外). The stash is the one target whose
+            // identity is its message, which its own row is showing.
             readonly property bool stashRow: page.menuRefKind === "stash"
             readonly property bool remoteRow: page.menuRefKind === "remote"
             readonly property bool tagRow: page.menuRefKind === "tag"
-            // A branch git already refused to delete. Until then a branch
-            // is the one row here that is not held: `-d` takes nothing
-            // away that git would not refuse over, so making the everyday
-            // tidy-up cost a hold would spend the gesture where there is
-            // nothing to lose (デザイン規約 §左メニューの所作).
+            readonly property bool branchRow: page.menuRefKind === "branch"
+            // git already refused `--delete` while this menu stood — or
+            // the check that ran as it opened came back unmerged, which
+            // is the same answer a click ahead of time. Either way the
+            // row wears the spelling git's own hint suggests, and the
+            // hold the everyday delete does not need (§左メニューの所作).
             readonly property bool refusedRow:
-                page.menuRefKind === "branch"
-                && page.forceDeleteBranch === page.menuRefId
+                branchRow
+                && (page.forceDeleteBranch === page.menuRefId
+                    || (repoTab.branchDeleteAsked === page.menuRefId
+                        && !repoTab.branchDeleteMerged))
             readonly property bool heldRow: stashRow || remoteRow || tagRow
                                             || refusedRow
-            code: remoteRow ? "push --delete" : ""
-            // The verb and nothing else: the gesture is the mark ahead of
-            // it, and the ellipsis is what tells a row that asks first
-            // from one that is held (デザイン規約 §長押し).
-            text: refusedRow ? qsTr("Delete anyway")
-                : heldRow ? qsTr("Delete") : qsTr("Delete…")
-            // What git said, in the row rather than on a bar: the branch
-            // holds commits its reference point does not (§左メニューの所作).
+            code: refusedRow ? "branch -D"
+                : branchRow ? "branch --delete"
+                : tagRow ? "tag --delete"
+                : remoteRow ? "push --delete"
+                : "drop"
+            // The name is data, not sentence: never translated, and it
+            // does not bid for the menu's width (`growsForText`).
+            text: stashRow ? "" : page.menuRefId
+            growsForText: false
             note: refusedRow ? qsTr("not merged") : ""
-            offered: (page.menuRefKind === "branch" || heldRow)
-                     && page.menuCanDelete
+            offered: (branchRow || heldRow) && page.menuCanDelete
             holdMs: heldRow ? Metrics.holdMs : 0
             // A branch's plain delete keeps the menu up: git's answer has
             // nowhere to land otherwise, and this row is where it lands.
-            staysOpen: page.menuRefKind === "branch"
+            staysOpen: branchRow
             // Reaching past this machine is the warning tone; throwing
             // away what is in hand is danger (デザイン規約 §状態).
             holdTone: remoteRow ? Theme.warning : Theme.danger
@@ -1363,7 +1402,10 @@ Item {
         // is (デザイン規約 §長押し).
         AppMenuItem {
             id: stashDeleteItem
-            text: qsTr("Delete")
+            // The word git gives it, with the `stash` dropped the way
+            // apply and pop drop it — this menu is standing on the stash
+            // (デザイン規約 §グラフ行の右クリック).
+            code: "drop"
             offered: page.menuStashCanWrite
             holdMs: Metrics.holdMs
             onHeld: {
@@ -1533,6 +1575,9 @@ Item {
         id: refList
         currentBranch: workTree.branch
         onPicked: record => page.activateRecord(record)
+        // The stacked rows answer the same right-click the chip does,
+        // with no row of the graph to fall back to.
+        onMenuAsked: record => page.openRecordMenu(record, "")
         onClosed: {
             page.refListWanted = false
             page.refListAnchor = null
@@ -4486,6 +4531,8 @@ Item {
                                 page.activateRow(oidHex)
                         }
                         onRowMenuOpenRequested: oidHex => page.openRowMenu(oidHex)
+                        onChipMenuOpenRequested: (oidHex, record) =>
+                            page.openRecordMenu(record, oidHex)
                         onRowSwitchRequested: (oidHex, record) =>
                             page.rowDoubleClicked(oidHex, record)
                         onChipExpandRequested: (records, anchor) =>
