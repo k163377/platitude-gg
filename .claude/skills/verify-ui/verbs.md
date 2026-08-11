@@ -36,9 +36,12 @@
 - `diff-keep-folded`(引数はパス。diff が左メニューを畳む / `✕` で閉じて戻す / **一覧を戻すと diff が閉じる**のを帯のブロックと改名の入力欄の 2 経路で / 先に手で畳んであれば畳んだまま。同じ `nav_rail` 行の `collapsed=` と `diff=` で判定する)
 - `rename-branch` / `rename-tag` / `rename-stash`
 - `branch-at-tag`(いずれも引数は新しい名前)
-- `delete-branch`(**3 つとも引数はブランチ名** — 省かれると `git branch -d -- ''` を撃つだけで何も撮れない。メニューを開いたまま `-d`。マージ済みなら消えてメニューが閉じ、拒まれたら行が `Delete anyway` に化ける。**拒まれる側は `--preset basic` の `feature/topic-a`**)
-- `delete-branch-refused`(その化けた行を出したまま止める)
+- `delete-branch`(**3 つとも引数はブランチ名** — 省かれると `git branch --delete -- ''` を撃つだけで何も撮れない。メニューを開いたまま `--delete`。マージ済みなら消えてメニューが閉じ、拒まれたら行が `branch -D` + `not merged` に化ける。**拒まれる側は `--preset basic` の `feature/topic-a`**)
+- `delete-branch-refused`(その化けた行を出したまま止める。報告行 `ref_menu delete=<チップ> <名前> note=`)
 - `delete-branch-go`(化けた行の長押しまで走らせて `-D`)
+- `delete-branch-early`(引数はブランチ名。メニューを開いて**待つだけ・書き込み無し** — 開いた時の `checkBranchDelete` が着いた後の削除行を報告する。未マージ(`feature/topic-a`)なら `code=branch -D held=true note=not merged`、マージ済みの引数なら `--delete` のまま `held=false`。報告行 `delete_early asked= merged= code= held= note=`)
+- `chip-menu`(引数はブランチ名。**チップ右クリック相当** — `openRecordMenu` 経由で ref メニューを開く。報告行 `chip_menu ref= commit= delete=` の `ref=true commit=false` が正。`delete=` は 200ms 時点のスナップショットで、未マージブランチでは早着した `-D` にも素の `--delete` にもなり得る — どちらも正)
+- `chip-menu-current`(引数なし。現在ブランチのチップ → ref メニュー 0 行 → **コミット行メニューへフォールスルー**。`ref=false commit=true` が正)
 - `delete-tag` / `delete-stash`(`delete-remote` / `-go` は下のリモートブランチの並びの行が正 — 重複掲載しない)
 - `delete-stash-row`(**質問は無く**メニューが開いたまま止まり、`-go`(delete-stash-row は引数 `go`)が行の長押しを走らせる)
 - `stash-apply-row`
