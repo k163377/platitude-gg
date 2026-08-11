@@ -331,9 +331,14 @@ impl RepoSession {
         options: LogOptions,
         cancel: &CancellationToken,
     ) -> Result<LogTotals, GitError> {
-        // An unborn HEAD has nothing to log.
-        let head = refs::head_state(&self.executor, workdir, cancel).await?;
-        if head.oid.is_none() {
+        // An unborn HEAD has nothing to log. The refs read already
+        // answered this, and asking git again is two processes in front
+        // of the first chunk on every rebuild (`known_head_tip`).
+        let head_tip = match self.known_head_tip() {
+            Some(tip) => tip,
+            None => refs::head_state(&self.executor, workdir, cancel).await?.oid,
+        };
+        if head_tip.is_none() {
             return Ok(LogTotals::default());
         }
 
@@ -373,7 +378,7 @@ impl RepoSession {
         // Dirty working tree: prepend the synthetic WIP row so the current
         // chain owns lane 0 from the very first paint.
         if self.wip_dirty.load(Ordering::SeqCst)
-            && let Some(head_oid) = head.oid
+            && let Some(head_oid) = head_tip
         {
             self.emit_wip_row(generation, &head_oid);
             totals.shown += 1;
@@ -451,16 +456,19 @@ impl RepoSession {
         builder: &mut GraphBuilder,
         out: &mut Vec<LogRow>,
     ) -> Result<u32, GitError> {
-        // An unborn HEAD has nothing to log.
-        let head = refs::head_state(&self.executor, workdir, cancel).await?;
-        if head.oid.is_none() {
+        // An unborn HEAD has nothing to log (see stream_log).
+        let head_tip = match self.known_head_tip() {
+            Some(tip) => tip,
+            None => refs::head_state(&self.executor, workdir, cancel).await?.oid,
+        };
+        if head_tip.is_none() {
             return Ok(0);
         }
 
         // Dirty working tree: prepend the synthetic WIP row (mirrors
         // stream_log).
         if self.wip_dirty.load(Ordering::SeqCst)
-            && let Some(head_oid) = head.oid
+            && let Some(head_oid) = head_tip
         {
             out.push(wip_row(&head_oid, builder));
         }

@@ -1144,6 +1144,15 @@ pub struct RepoSession {
     /// What the last refs read saw of the branch tip, so the walk behind
     /// [`reachable`] can be started without reading the listing again.
     head_hold: Mutex<Option<HeadHold>>,
+    /// The same read's answer to "what commit is HEAD on", kept where the
+    /// graph walk can reach it: `None` until a refs read has landed,
+    /// `Some(None)` for a branch with no commits yet.
+    ///
+    /// Two levels because the walk has to tell "nobody has looked" from
+    /// "looked, and there is nothing there" — they take opposite actions.
+    /// Separate from [`Self::head_hold`], whose own `None` already means
+    /// the second of those.
+    head_tip: Mutex<Option<Option<Oid>>>,
     /// The last answer sent, so a re-check landing on the same one says
     /// nothing.
     head_reach_seen: Mutex<Option<bool>>,
@@ -1215,6 +1224,7 @@ impl RepoSession {
             remote_tag_index: Mutex::new(Arc::new(RemoteTagIndex::default())),
             remote_tags_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             head_hold: Mutex::new(None),
+            head_tip: Mutex::new(None),
             head_reach_seen: Mutex::new(None),
             head_reach_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             merge_tools_slot: Arc::new(tokio::sync::Semaphore::new(1)),

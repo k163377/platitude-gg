@@ -24,6 +24,22 @@ impl RepoSession {
         if let Ok(mut slot) = self.head_hold.lock() {
             *slot = hold;
         }
+        // Written after the hold and before the snapshot goes out, so
+        // anything the read wakes finds both settled.
+        if let Ok(mut slot) = self.head_tip.lock() {
+            *slot = Some(head.oid);
+        }
+    }
+
+    /// Where the last refs read left HEAD, for a caller that would
+    /// otherwise spawn two processes to ask again.
+    ///
+    /// `None` means no read has landed and there is nothing to go on.
+    pub(super) fn known_head_tip(&self) -> Option<Option<Oid>> {
+        match self.head_tip.lock() {
+            Ok(slot) => *slot,
+            Err(e) => *e.into_inner(),
+        }
     }
 
     /// Answers whether the branch HEAD is on is the only thing holding its

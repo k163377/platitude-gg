@@ -1237,6 +1237,38 @@ async fn a_detached_head_is_still_read_correctly() {
     session.close();
 }
 
+/// Once a refs read has said where HEAD is, the walk stops asking.
+///
+/// It used to spawn `symbolic-ref` and `rev-parse` before every rebuild —
+/// two processes in front of the first chunk, on the path a commit or a
+/// fetch takes to reach the screen.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_walk_reads_head_from_the_refs_read_that_already_landed() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    let (sink, session) = opened(&repo).await;
+    sink.settled_stream_gen(1).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    session.set_record_background(true);
+    sink.events.lock().unwrap().clear();
+
+    // An external commit moves the refs, which is what rebuilds the graph.
+    repo.commit_file("g.txt", "1\n", "second");
+    session.refresh_refs();
+    sink.settled_stream_gen(2).await;
+
+    let seen = commands_of(&sink);
+    assert!(
+        seen.iter().any(|c| c.contains("log -z")),
+        "the walk did run: {seen:?}"
+    );
+    assert!(
+        !seen.iter().any(|c| c.contains("symbolic-ref")),
+        "and did not ask where HEAD is: {seen:?}"
+    );
+    session.close();
+}
+
 /// The remotes are read once per refs listing no more: a poll tick that
 /// finds nothing moved spawns no `git config` to re-read them. A write
 /// puts the question back, because a write is what can add one.
