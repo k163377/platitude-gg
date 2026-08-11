@@ -2455,7 +2455,7 @@ Item {
                 descGrowTimer.pane.pullDescriptionPast(
                     descGrowTimer.refuse === "desc-max")
                 AppBackend.report(
-                    "divider_refuse refuses=" + descGrowTimer.pane.descRefuses
+                    "divider_refuse refuses=" + page.refusalShown
                     // The grip itself, still offered: the box moves the
                     // other way, and a corner that withdrew its mark would
                     // be answering a different question.
@@ -4797,10 +4797,6 @@ Item {
         return true
     }
 
-    /// What is drawn, not what was asked for — the badge's own `shown`
-    /// (`RefusalBadge`, on why not its `visible`).
-    readonly property alias splitRefuses: splitBadge.shown
-
     /// Automation: the drag and its answer for every boundary in the
     /// window (`PG_AUTO_ACT=divider-refuse`). One place, so the run that
     /// has to wait for the log to lay out reports exactly what the
@@ -4815,9 +4811,10 @@ Item {
             page.dragSplitPast(which)
         else
             graphPane.dragDividerPast(which)
-        AppBackend.report("divider_refuse refuses="
-                          + (split ? page.splitRefuses
-                                   : graphPane.graphDividerRefuses)
+        // The one badge, whichever boundary raised it — there is one
+        // pointer, so a run that lit the wrong one would have to have lit
+        // this one too.
+        AppBackend.report("divider_refuse refuses=" + page.refusalShown
                           // The boundary itself, still drawn and still
                           // promising the drag the other way. For a split
                           // bar this also catches a hook that never found
@@ -4848,6 +4845,9 @@ Item {
         id: splitRefusal
         anchors.fill: parent
         z: 50
+        /// Where the split bar's hand is, in scene coordinates, and
+        /// whether it is being refused. The other two sources keep their
+        /// own; this one is the overlay's because only it can see them.
         property point at: Qt.point(0, 0)
         property bool refuses: false
         PointHandler {
@@ -4857,12 +4857,46 @@ Item {
             // end theirs — nothing to remember to take back down.
             onActiveChanged: if (!active) splitRefusal.refuses = false
         }
+
+        // ---- the one badge in the window ----------------------------
+        // Drawn here and nowhere else. A refused drag has the hand
+        // *outside* the thing it was dragging — that is what refused
+        // means — so a badge parented to the divider's own pane or to the
+        // description box lands outside its parent, where it is
+        // composited among the page's panes instead of over them: under
+        // the author card, under the file list (2026-08-11 ユーザー報告).
+        // Over the whole page it is above all of them, and there is one
+        // of it because there is one pointer.
+        //
+        // Every source hands its point over in scene coordinates, so this
+        // is the only place a frame has to be converted. `mapFromItem` is
+        // a method and would not re-run on its own, but the point it
+        // reads changes on every move of the drag that raised it, which
+        // is the only time this is up (app-ui.md).
         RefusalBadge {
-            id: splitBadge
-            at: splitRefusal.at
-            shown: splitRefusal.refuses
+            id: refusalBadge
+            at: page.refusalAt(page.refusalSource)
+            shown: page.refusalSource !== null
         }
     }
+
+    /// Whichever boundary is refusing, or null. One pointer, so the order
+    /// only decides which answers in the frame where two could — and two
+    /// cannot, since a hand is on one boundary at a time.
+    readonly property var refusalSource:
+        graphPane.refused ? graphPane.refusedAt
+        : detailsPane.descRefuses ? detailsPane.descPoint
+        : wipPane.descRefuses ? wipPane.descPoint
+        : splitRefusal.refuses ? splitRefusal.at
+        : null
+    function refusalAt(scene) {
+        return scene === null ? Qt.point(0, 0)
+                              : splitRefusal.mapFromItem(null, scene.x, scene.y)
+    }
+
+    /// What is drawn, not what was asked for — the one badge's own
+    /// `shown` (`RefusalBadge`, on why not its `visible`).
+    readonly property alias refusalShown: refusalBadge.shown
 
     function jumpToRef(oidHex) {
         page.guardEdits(oidHex, function () {

@@ -86,7 +86,9 @@ Rectangle {
     /// What the last pull asked for, clamped or not — the only thing that
     /// can tell a refusal from a rest (規約 §掴める境界は答える).
     property real askedHeight: 0
-    /// Where the hand is, in this box's own coordinates.
+    /// Where the hand is, **in scene coordinates** — the badge is drawn a
+    /// long way from here (`RepoPage`'s overlay), and scene is the one
+    /// frame both ends already share.
     property point gripPoint: Qt.point(0, 0)
     /// Automation only: stands in for the press the hooks cannot make.
     property bool gripHeld: false
@@ -115,17 +117,18 @@ Rectangle {
         //
         // Off `boxHeight`, which settles with the clamp, rather than off
         // the grip, which is anchored and moves on the next layout.
-        box.gripPoint = Qt.point(box.width - grip.width / 2,
-                                 box.boxHeight - grip.height / 2
-                                 + (down ? over : -over))
+        box.gripPoint = box.mapToItem(null, box.width - grip.width / 2,
+                                      box.boxHeight - grip.height / 2
+                                      + (down ? over : -over))
     }
-    /// What is drawn, not what was asked for.
-    readonly property alias gripRefuses: refusedGrip.shown
-    RefusalBadge {
-        id: refusedGrip
-        at: box.gripPoint
-        shown: box.gripRefused
-    }
+    // The badge itself is not drawn here. A pull that has run out has the
+    // hand somewhere outside this box — below it for the ceiling, above it
+    // for the floor — and a badge parented to the box lands outside its
+    // own parent, where it is composited with the box among the pane's
+    // children: under the author card, under the file list (2026-08-11
+    // ユーザー報告). The page draws the one badge in a layer over
+    // everything, and this only says where the hand is and whether it is
+    // being refused (`RepoPage`).
     /// A wheel this box had nothing left to do with, in pixels. Whoever
     /// put the box on a surface that scrolls moves that surface by it.
     ///
@@ -256,7 +259,7 @@ Rectangle {
             box.askedPast = false
         }
         onPositionChanged: mouse => {
-            box.gripPoint = Qt.point(grip.x + mouse.x, grip.y + mouse.y)
+            box.gripPoint = grip.mapToItem(null, mouse.x, mouse.y)
             if (!grip.pressed)
                 return
             box.pullTo(grip.fromHeight

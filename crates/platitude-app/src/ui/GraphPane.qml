@@ -1014,10 +1014,10 @@ Rectangle {
             // Entering does not always bring a move with it, and the
             // badge is drawn where this says the hand is.
             if (containsMouse)
-                graphArea.labelPoint = Qt.point(labelDivider.x + mouseX, mouseY)
+                graphArea.labelPoint = labelDivider.mapToItem(null, mouseX, mouseY)
         }
         onPositionChanged: mouse => {
-            graphArea.labelPoint = Qt.point(labelDivider.x + mouse.x, mouse.y)
+            graphArea.labelPoint = labelDivider.mapToItem(null, mouse.x, mouse.y)
             if (!pressed)
                 return
             graphArea.dragLabelTo(mapToItem(graphArea, mouse.x, 0).x)
@@ -1046,10 +1046,10 @@ Rectangle {
             // Entering does not always bring a move with it, and the
             // mark is drawn where this says the hand is.
             if (containsMouse)
-                graphArea.dividerPoint = Qt.point(graphDivider.x + mouseX, mouseY)
+                graphArea.dividerPoint = graphDivider.mapToItem(null, mouseX, mouseY)
         }
         onPositionChanged: mouse => {
-            graphArea.dividerPoint = Qt.point(graphDivider.x + mouse.x, mouse.y)
+            graphArea.dividerPoint = graphDivider.mapToItem(null, mouse.x, mouse.y)
             if (!pressed)
                 return
             graphArea.dragDividerTo(mapToItem(graphArea, mouse.x, 0).x)
@@ -1134,8 +1134,8 @@ Rectangle {
     function restDividerPointer(inside) {
         graphArea.dividerPointed = inside
         if (inside)
-            graphArea.dividerPoint = Qt.point(graphDivider.x + graphDivider.width / 2,
-                                              graphArea.height / 2)
+            graphArea.dividerPoint = graphDivider.mapToItem(
+                null, graphDivider.width / 2, graphArea.height / 2)
     }
     /// Automation: a drag carried out past one of the four bounds these
     /// two dividers have (`PG_AUTO_ACT=divider-refuse`, whose argument
@@ -1149,7 +1149,7 @@ Rectangle {
                                              : graphArea.labelColWMin - over
             graphArea.labelPointed = true
             graphArea.labelHeld = true
-            graphArea.labelPoint = Qt.point(lx, graphArea.height / 2)
+            graphArea.labelPoint = graphArea.mapToItem(null, lx, graphArea.height / 2)
             graphArea.dragLabelTo(lx)
             return
         }
@@ -1158,33 +1158,34 @@ Rectangle {
                                             : graphArea.graphColWMax + over)
         graphArea.dividerPointed = true
         graphArea.dividerHeld = true
-        graphArea.dividerPoint = Qt.point(px, graphArea.height / 2)
+        graphArea.dividerPoint = graphArea.mapToItem(null, px, graphArea.height / 2)
         graphArea.dragDividerTo(px)
     }
-    /// The one badge, and where it goes. One pointer, so one answer at a
-    /// time: the two dividers cannot both have the hand.
+    /// Whether either divider is refusing, and where the hand is while it
+    /// does (**scene coordinates**). One pointer, so one answer at a time:
+    /// the two dividers cannot both have the hand.
+    ///
+    /// Two ways to it, and they are asked differently. A column squeezed
+    /// until it has no drag left in either direction answers on hover —
+    /// there is nothing to try. A column at a bound answers only the drag
+    /// that tried, because it still moves the other way.
+    ///
+    /// The badge is not drawn here: a drag carries the hand out past this
+    /// pane, and a badge parented to it would be composited among the
+    /// page's panes rather than over them. The page owns the one badge.
     readonly property bool refused:
         dividerRefused || labelRefused
         || (graphColWFixed && dividerPointed)
     readonly property point refusedAt: labelRefused ? labelPoint : dividerPoint
-    // Two ways to it, and they are asked differently. A column squeezed
-    // until it has no drag left in either direction answers on hover —
-    // there is nothing to try. A column at a bound answers only the drag
-    // that tried, because it still moves the other way.
-    RefusalBadge {
-        id: refusedCursor
-        at: graphArea.refusedAt
-        shown: graphArea.refused
-    }
     /// What is drawn, not what was asked for: the automation hook reports
     /// the line and the badge themselves, so a column that cannot be
     /// resized but still promises a drag cannot pass.
     readonly property alias graphDividerShown: graphDivider.visible
     readonly property alias graphDividerLineShown: graphDividerLine.visible
     readonly property alias labelDividerLineShown: labelDividerLine.visible
-    /// The badge's own `shown`, not its `visible` — read from another file
-    /// `visible` comes back stale (`RefusalBadge`).
-    readonly property alias graphDividerRefuses: refusedCursor.shown
+    /// Whether the badge the page draws for this pane is up. The page owns
+    /// it, so this is the pane's half of that answer.
+    readonly property bool graphDividerRefuses: graphArea.refused
     /// The line of whichever divider has the hand. A refused drag has to
     /// leave it drawn — the boundary still moves the other way — so this
     /// is the half of the picture the badge does not hold, and it is the
