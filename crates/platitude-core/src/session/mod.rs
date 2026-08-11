@@ -284,26 +284,48 @@ pub(super) struct RemoteTagIndex {
 pub(super) struct RemoteTagEntry {
     pub(super) name: crate::Name,
     pub(super) commit: Oid,
-    pub(super) annotated: bool,
     /// Sorted, and more than one when several remotes agree on the commit.
     ///
     /// **Inline while there is one**, which is nearly always: a `Vec` would
     /// be an allocation per tag to hold a single remote's name, and a
     /// repository with 45,901 of them pays that 45,901 times.
-    pub(super) remotes: smallvec::SmallVec<[crate::Name; 1]>,
+    pub(super) remotes: smallvec::SmallVec<[Carrier; 1]>,
+}
+
+/// One remote's reading of one tag.
+///
+/// **What that remote advertised, kept per remote rather than folded into
+/// the entry.** Two remotes can carry the same name on the same commit
+/// with one of them holding a tag object and the other pointing straight
+/// at the commit, and a single flag for the pair could only be the two
+/// OR-ed together. That is lossy in exactly the direction this index has
+/// to survive: readings are taken out of it again when a remote is fetched
+/// on its own or stops being configured, and a fold cannot be undone.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) struct Carrier {
+    pub(super) remote: crate::Name,
+    pub(super) annotated: bool,
+}
+
+impl RemoteTagEntry {
+    /// Whether any remote holds this as a tag object.
+    pub(super) fn annotated(&self) -> bool {
+        self.remotes.iter().any(|c| c.annotated)
+    }
 }
 
 impl RemoteTagIndex {
     /// Collects readings into the sorted run. Each `(name, commit)` is one
     /// entry however many remotes carry it, and their names gather on it.
-    fn build(readings: impl Iterator<Item = (crate::Name, Oid, bool, crate::Name)>) -> Self {
+    pub(super) fn build(
+        readings: impl Iterator<Item = (crate::Name, Oid, bool, crate::Name)>,
+    ) -> Self {
         let mut entries: Vec<RemoteTagEntry> = Vec::new();
         for (name, commit, annotated, remote) in readings {
             entries.push(RemoteTagEntry {
                 name,
                 commit,
-                annotated,
-                remotes: smallvec::smallvec![remote],
+                remotes: smallvec::smallvec![Carrier { remote, annotated }],
             });
         }
         entries.sort_by(|a, b| a.name.cmp(&b.name).then(a.commit.cmp(&b.commit)));
@@ -313,7 +335,6 @@ impl RemoteTagIndex {
         for entry in entries {
             match folded.last_mut() {
                 Some(last) if last.name == entry.name && last.commit == entry.commit => {
-                    last.annotated |= entry.annotated;
                     last.remotes.extend(entry.remotes);
                 }
                 _ => folded.push(entry),
@@ -321,10 +342,26 @@ impl RemoteTagIndex {
         }
         for entry in &mut folded {
             entry.remotes.sort();
-            entry.remotes.dedup();
+            entry.remotes.dedup_by(|a, b| a.remote == b.remote);
         }
         folded.shrink_to_fit();
         Self { entries: folded }
+    }
+
+    /// Every reading held, in the shape [`Self::build`] takes them back.
+    ///
+    /// **This is what makes the index the only copy.** The per-remote
+    /// answers used to be kept beside it so one remote's could be replaced
+    /// on its own — a second 45,909 names, 4.3MB of the memory budget, for
+    /// data already here. Taking them out again costs one pass.
+    pub(super) fn readings(
+        &self,
+    ) -> impl Iterator<Item = (crate::Name, Oid, bool, crate::Name)> + '_ {
+        self.entries.iter().flat_map(|e| {
+            e.remotes
+                .iter()
+                .map(move |c| (e.name.clone(), e.commit, c.annotated, c.remote.clone()))
+        })
     }
 
     /// Whether any remote carries this name — the cloud badge's question.
@@ -366,11 +403,11 @@ impl crate::mem::Footprint for RemoteTagEntry {
     }
 }
 
-/// The same thing before it is merged, kept per remote so one that could
-/// not be reached keeps its last answer instead of dropping every badge it
-/// accounted for. `refs/remotes/` does this for branches; a tag has no such
-/// local record, so the session holds it.
-type RemoteTagsByRemote = BTreeMap<String, Vec<remote::RemoteTag>>;
+impl crate::mem::Footprint for Carrier {
+    fn heap_bytes(&self) -> usize {
+        self.remote.heap_bytes()
+    }
+}
 
 /// Sidebar-ready refs snapshot (sorted).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -1024,12 +1061,11 @@ pub struct RepoSession {
     /// `network_timeout_secs`; only the settings dialog's input field is
     /// missing (実装計画 §7).
     network_timeout: Mutex<std::time::Duration>,
-    /// What each remote last advertised under `refs/tags/`. Empty until a
-    /// fetch has been through: asking costs the network, so it rides the
-    /// one command the user already meant to spend it on, and before that
-    /// every tag reads as one this repository alone has.
-    remote_tags: Mutex<RemoteTagsByRemote>,
-    /// The same answers merged into the shape the joins read, rebuilt only
+    /// What the remotes last advertised under `refs/tags/`, merged into
+    /// the shape the joins read. Empty until a fetch has been through:
+    /// asking costs the network, so it rides the one command the user
+    /// already meant to spend it on, and before that every tag reads as
+    /// one this repository alone has. Rebuilt only
     /// when a remote has spoken. Shared because every refs read wants it
     /// and none of them changes it: merging tens of thousands of names on
     /// every poll tick copies the whole tag list for nothing
@@ -1108,7 +1144,6 @@ impl RepoSession {
             worktrees_read: ReadSlot::default(),
             write_tx,
             network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
-            remote_tags: Mutex::new(RemoteTagsByRemote::new()),
             remote_tag_index: Mutex::new(Arc::new(RemoteTagIndex::default())),
             remote_tags_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             head_hold: Mutex::new(None),
@@ -1266,15 +1301,6 @@ impl RepoSession {
         };
         parts.push(Part::new("refs-snapshot", snap_bytes, snap_refs));
 
-        let (tag_bytes, tag_count) = match self.remote_tags.lock() {
-            Ok(g) => (g.heap_bytes(), g.values().map(Vec::len).sum()),
-            Err(e) => {
-                let g = e.into_inner();
-                (g.heap_bytes(), g.values().map(Vec::len).sum())
-            }
-        };
-        parts.push(Part::new("remote-tags", tag_bytes, tag_count));
-
         let index = self.remote_tag_index();
         parts.push(Part::new(
             "remote-tag-index",
@@ -1374,6 +1400,62 @@ mod tests {
             tags.into_iter()
                 .map(|t| (t.name, t.commit, t.annotated, crate::Name::from(remote))),
         )
+    }
+
+    /// Taking one remote's readings back out leaves the others exactly as
+    /// they were told — including the one thing a folded flag would lose.
+    ///
+    /// Two remotes can carry a name on the same commit with one holding a
+    /// tag object and the other pointing straight at it (measured: only
+    /// the annotated side advertises the `^{}` line). The index is the
+    /// only copy of the readings, so a fetch of one remote rebuilds from
+    /// what it hands back — and if `annotated` were one flag per entry it
+    /// could only be the two OR-ed, and dropping the annotated side would
+    /// leave the lightweight one still calling itself annotated.
+    #[test]
+    fn a_remotes_readings_come_back_out_the_way_they_went_in() {
+        let commit = oid(7);
+        let both = RemoteTagIndex::build(
+            [
+                (
+                    crate::Name::from("v1"),
+                    commit,
+                    true,
+                    crate::Name::from("up"),
+                ),
+                (
+                    crate::Name::from("v1"),
+                    commit,
+                    false,
+                    crate::Name::from("mirror"),
+                ),
+            ]
+            .into_iter(),
+        );
+        assert_eq!(both.len(), 1, "one name on one commit is one entry");
+        assert!(
+            both.entries[0].annotated(),
+            "one of the two holds an object"
+        );
+
+        // `up` stops being configured: rebuild from what the index hands
+        // back, minus its readings.
+        let without_up = RemoteTagIndex::build(
+            both.readings()
+                .filter(|(_, _, _, remote)| remote.as_str() != "up"),
+        );
+        assert_eq!(without_up.len(), 1);
+        assert!(
+            !without_up.entries[0].annotated(),
+            "what is left is the lightweight reading, and says so"
+        );
+
+        // The other way round, from the same index.
+        let without_mirror = RemoteTagIndex::build(
+            both.readings()
+                .filter(|(_, _, _, remote)| remote.as_str() != "mirror"),
+        );
+        assert!(without_mirror.entries[0].annotated());
     }
 
     /// A tag both sides agree on is one tag: the local label carries the

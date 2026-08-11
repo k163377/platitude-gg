@@ -62,16 +62,23 @@ impl RepoSession {
                 return false;
             }
         };
-        // A remote that is no longer configured stops answering for names.
-        self.lock_remote_tags()
-            .retain(|name, _| remotes.iter().any(|r| r.name == *name));
-        for r in remotes {
+        // Only the remotes that actually answered are replaced. One that
+        // could not be reached keeps the readings it last gave, which is
+        // what `refs/remotes/` does for branches on its own.
+        let mut answered: Vec<crate::Name> = Vec::new();
+        let mut fresh: Vec<(crate::Name, Oid, bool, crate::Name)> = Vec::new();
+        for r in &remotes {
             if only.is_some_and(|wanted| wanted != r.name) {
                 continue;
             }
             match remote::list_tags(exec, workdir, &r.name, timeout, cancel).await {
                 Ok(tags) => {
-                    self.lock_remote_tags().insert(r.name, tags);
+                    let remote = crate::Name::from(r.name.as_str());
+                    answered.push(remote.clone());
+                    fresh.extend(
+                        tags.into_iter()
+                            .map(|t| (t.name, t.commit, t.annotated, remote.clone())),
+                    );
                 }
                 Err(error) if error.is_cancelled() => return false,
                 Err(error) => {
@@ -79,33 +86,30 @@ impl RepoSession {
                 }
             }
         }
-        self.remerge_remote_tags()
+        self.remerge_remote_tags(&remotes, &answered, fresh)
     }
 
-    fn lock_remote_tags(&self) -> std::sync::MutexGuard<'_, RemoteTagsByRemote> {
-        match self.remote_tags.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        }
-    }
-
-    /// Merges the per-remote answers into the index the joins read, and
-    /// says whether that changed anything. The only place the index is
-    /// built: everything downstream shares the one it leaves behind.
-    fn remerge_remote_tags(&self) -> bool {
-        let index = {
-            let by_remote = self.lock_remote_tags();
-            RemoteTagIndex::build(by_remote.iter().flat_map(|(remote, tags)| {
-                tags.iter().map(move |tag| {
-                    (
-                        tag.name.clone(),
-                        tag.commit,
-                        tag.annotated,
-                        crate::Name::from(remote.as_str()),
-                    )
-                })
-            }))
-        };
+    /// Rebuilds the index with `fresh` in place of what `answered` said
+    /// last, and says whether that changed anything. The only place the
+    /// index is built: everything downstream shares the one it leaves.
+    ///
+    /// Reads what it keeps out of the index itself, so the readings are
+    /// held once (see [`RemoteTagIndex::readings`]).
+    fn remerge_remote_tags(
+        &self,
+        configured: &[remote::Remote],
+        answered: &[crate::Name],
+        fresh: Vec<(crate::Name, Oid, bool, crate::Name)>,
+    ) -> bool {
+        let current = self.remote_tag_index();
+        let kept = current.readings().filter(|(_, _, _, remote)| {
+            // A remote that is no longer configured stops answering for
+            // names, and one that just answered is replaced rather than
+            // added to.
+            configured.iter().any(|r| r.name == remote.as_str())
+                && !answered.iter().any(|a| a == remote)
+        });
+        let index = RemoteTagIndex::build(kept.chain(fresh.iter().cloned()));
         let mut slot = match self.remote_tag_index.lock() {
             Ok(g) => g,
             Err(e) => e.into_inner(),

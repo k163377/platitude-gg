@@ -534,7 +534,12 @@ pub(super) fn build_label_map(
                     has_remote: true,
                     is_head: false,
                     here: false,
-                    remote: reading.remotes.join(", "),
+                    remote: reading
+                        .remotes
+                        .iter()
+                        .map(|c| c.remote.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", "),
                 },
             ));
         }
@@ -654,7 +659,7 @@ pub(super) fn build_snapshot(
         snapshot.tags.push(TagItem {
             short: name.into(),
             oid: reading.commit,
-            annotated: reading.annotated,
+            annotated: reading.annotated(),
             // An advertisement carries no date; these sort last, after
             // every tag whose creation this repository can see.
             created_unix: 0,
