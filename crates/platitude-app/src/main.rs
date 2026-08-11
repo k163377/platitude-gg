@@ -177,6 +177,16 @@ fn claim_store(build: Build) -> (Store, String, Option<platitude_core::settings:
 }
 
 /// stderr logging; level via `PG_LOG` (error/warn/info/debug/trace).
+///
+/// **Never coloured.** This stream is read by machines — `xtask perf`
+/// takes the interaction and startup numbers out of it, `xtask verify-ui`
+/// decides pass or fail on it — and the escapes go around the field name
+/// and the `=`, so `first_chunk_ms=317` reaches a reader as
+/// `first_chunk_ms\e[0m\e[2m=\e[0m317` and no substring search finds it.
+/// The colouring is also invisible in a terminal, which is what let it
+/// quietly cost this measurement three of its numbers: the writer is a
+/// pipe when xtask spawns the app and a file when a shell redirects it,
+/// and only the pipe gets the escapes.
 fn init_tracing() {
     let level = match std::env::var("PG_LOG").as_deref() {
         Ok("error") => tracing::Level::ERROR,
@@ -187,6 +197,7 @@ fn init_tracing() {
     };
     tracing_subscriber::fmt()
         .with_max_level(level)
+        .with_ansi(false)
         .with_writer(std::io::stderr)
         .init();
 }

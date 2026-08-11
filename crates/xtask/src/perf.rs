@@ -360,7 +360,50 @@ fn measure(
             opts.quit_ms + GRACE_MS
         ));
     }
+    missing(&reading, opts)?;
     Ok(reading)
+}
+
+/// Refuses a reading that lost a number this run was asked to take.
+///
+/// A gap used to print as `-` and the report simply left the row out, so
+/// a run that measured nothing looked like a run that measured well. That
+/// is how the app's log picking up colour went unnoticed until the
+/// interaction budget needed re-measuring: every `key=value` in it stopped
+/// being findable, and three of the five numbers quietly became `-`
+/// (`platitude_gg::init_tracing`).
+fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
+    // The bare window (`--no-open`) has no repository, so it has no graph
+    // to walk, no row to select and nothing to scroll: it takes the memory
+    // floor and nothing else.
+    if !opts.open {
+        return Ok(());
+    }
+    let mut gaps = Vec::new();
+    if reading.startup_ms.is_none() {
+        gaps.push("startup (no `graph first chunk`)");
+    }
+    if reading.first_chunk_ms.is_none() {
+        gaps.push("the walk (no `first_chunk_ms=`)");
+    }
+    if reading.total_ms.is_none() {
+        gaps.push("the finished graph (no `elapsed_ms=`)");
+    }
+    if opts.select && reading.details_ms.is_empty() {
+        gaps.push("the interaction (no `details request round trip`)");
+    }
+    if opts.scroll && reading.fps.is_none() {
+        gaps.push("fps (no `scroll_bench fps=`)");
+    }
+    if gaps.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "the run ended without {} — the app's log did not say what this \
+         measurement reads, so the numbers it did take cannot be published \
+         as a whole reading",
+        gaps.join(", ")
+    ))
 }
 
 /// Picks the numbers this measurement is about out of one stderr line.
