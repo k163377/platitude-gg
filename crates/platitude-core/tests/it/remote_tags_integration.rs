@@ -313,6 +313,89 @@ async fn an_interval_that_is_on_is_permission_to_look_without_being_asked() {
     );
 }
 
+/// Learning what the remotes carry repaints chips. It does not rebuild
+/// the graph.
+///
+/// No ref moved — the commits and where they sit are exactly what they
+/// were — so the rows on screen are still the right rows and only their
+/// badges are stale. Swapping the graph for that resets the view: the
+/// scroll anchor and the selection are re-resolved against a model the
+/// consumer is handed whole. The chip diff exists so this case does not
+/// have to (`session::apply_refs`).
+#[tokio::test(flavor = "multi_thread")]
+async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_graph() {
+    let (mut bare, work, root, _head) = tag_scenario();
+    let (sink, session) = opened(&work).await;
+    session.set_auto_fetch(Some(Duration::from_secs(600)));
+    // The first look settles the badges. Counting from before it would
+    // race the interval this session opened with.
+    assert!(
+        tags_settle(&sink, Duration::from_secs(20), some_tag_has_a_remote).await,
+        "opening with the interval on reads the remotes' tags"
+    );
+    let named = |tags: &[TagItem]| tags.iter().any(|t| t.short == "v-later");
+    session.set_record_background(true);
+    let swaps = |sink: &CaptureSink| sink.count(|e| matches!(e, SessionEvent::LogReplaced { .. }));
+    let chips =
+        |sink: &CaptureSink| sink.count(|e| matches!(e, SessionEvent::LabelsChanged { .. }));
+    let walks = |sink: &CaptureSink| {
+        sink.count(
+            |e| matches!(e, SessionEvent::CommandStarted { display, .. } if display.contains("log -z")),
+        )
+    };
+    // **Count from where the opening stopped walking, not from where the
+    // badges arrived.** The two are not the same moment: the tags can
+    // settle while the swap pass is still running, and under the load of
+    // the whole suite that pass lands after the baseline and reads as a
+    // walk this test caused.
+    let mut settled_walks = walks(&sink);
+    loop {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let now = walks(&sink);
+        if now == settled_walks {
+            break;
+        }
+        settled_walks = now;
+    }
+    let (settled_swaps, settled_chips) = (swaps(&sink), chips(&sink));
+
+    // Somebody tags the commit this repository is already sitting on,
+    // over there. **No local ref moves**: what changed is only what the
+    // remote says it carries.
+    let bare_path = bare.path.clone();
+    bare.git_in(&bare_path, &["tag", "v-later", &root]);
+    session.set_auto_fetch(Some(Duration::from_secs(600)));
+    assert!(
+        tags_settle(&sink, Duration::from_secs(20), named).await,
+        "the new name reached the sidebar"
+    );
+    // The chips have to arrive by their own event…
+    sink.wait_for("the chips", move |evs| {
+        (evs.iter()
+            .filter(|e| matches!(e, SessionEvent::LabelsChanged { .. }))
+            .count()
+            > settled_chips)
+            .then_some(())
+    })
+    .await;
+    // …and nothing may have replaced the graph to deliver them.
+    assert_eq!(
+        swaps(&sink),
+        settled_swaps,
+        "badges are not a reason to hand the consumer a new graph"
+    );
+    // Nor to walk one. A walk that ends in "the same picture" costs the
+    // whole walk to find that out — on a repository the size of the
+    // reference one, that is the most expensive read there is.
+    assert_eq!(
+        walks(&sink),
+        settled_walks,
+        "and not a reason to re-walk the history either (chips {settled_chips} -> {})",
+        chips(&sink)
+    );
+    session.close();
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn with_the_interval_off_nothing_reaches_the_network_unasked() {
     let (_bare, work, _root, _head) = tag_scenario();

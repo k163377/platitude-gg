@@ -1104,6 +1104,10 @@ pub struct RepoSession {
     /// can tell an external commit / fetch / switch from a quiet re-read.
     /// `None` until the first read: opening already streams the graph.
     refs_key: Mutex<Option<u64>>,
+    /// The same for everything the joins read, which is more than the
+    /// listing: `refs_key` moving means the history is walked again, this
+    /// moving means only that the snapshot and the chips are rebuilt.
+    join_key: Mutex<Option<u64>>,
     /// The snapshot last published. A read that finds nothing moved hands
     /// this one out again rather than an equal copy, so the sidebar can
     /// tell "the same" from "equal" by pointer — a repository with tens of
@@ -1215,6 +1219,7 @@ impl RepoSession {
             eol_marks_stale: std::sync::atomic::AtomicBool::new(true),
             status_key: Mutex::new(None),
             refs_key: Mutex::new(None),
+            join_key: Mutex::new(None),
             last_snapshot: Mutex::new(None),
             write_busy: std::sync::atomic::AtomicBool::new(false),
             poll_slot: Arc::new(tokio::sync::Semaphore::new(1)),

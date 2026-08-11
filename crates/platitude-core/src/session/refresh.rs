@@ -1,7 +1,7 @@
 //! Snapshot refreshes: refs, status (+ op state), author identity, head
 //! reachability, stashes and worktrees.
 
-use super::build::{RefJoins, build_label_map, build_snapshot, refs_key, status_key};
+use super::build::{RefJoins, build_label_map, build_snapshot, join_key, refs_key, status_key};
 use super::*;
 
 impl RepoSession {
@@ -162,33 +162,36 @@ impl RepoSession {
                 // commit, a fetch, a poll tick that found a ref moved.
                 self.remember_head_hold(&refs, &head);
                 let remote_tags = self.remote_tag_index();
-                let key = refs_key(
-                    &refs,
-                    &head,
-                    self.remote_tag_gen.load(Ordering::SeqCst),
-                    &remotes,
-                );
+                let key = refs_key(&refs, &head);
                 let previous = self
                     .refs_key
                     .lock()
                     .map(|mut slot| slot.replace(key))
                     .unwrap_or_default();
-                // **The key covers every input to the two joins**, so an
-                // unmoved repository does not build them at all. It used
-                // to: a quiet tick sorted 53,724 refs into a snapshot and
-                // 47,715 into a label map, then compared the result with
-                // the last one to be told nothing had changed — 39ms of a
-                // core, every tick, for an answer the key already had
-                // (ci/baseline/refs-join-windows-x64.md).
+                // **The joins have a key of their own** (`join_key`), and
+                // an unmoved repository does not build them at all. It
+                // used to: a quiet tick sorted 53,724 refs into a snapshot
+                // and 47,715 into a label map, then compared the result
+                // with the last one to be told nothing had changed —
+                // 43.4ms of a core, every tick, for an answer a hash
+                // already had (ci/baseline/refs-join-windows-x64.md).
                 //
                 // The snapshot still goes out. A consumer that attached
                 // after the last one is waiting for it, and it is the one
                 // already published, so the sidebar reads it by pointer
                 // and rebuilds nothing (`share_snapshot`).
-                if previous == Some(key)
+                let inputs = join_key(key, self.remote_tag_gen.load(Ordering::SeqCst), &remotes);
+                let seen = self
+                    .join_key
+                    .lock()
+                    .map(|mut slot| slot.replace(inputs))
+                    .unwrap_or_default();
+                if seen == Some(inputs)
                     && let Some(held) = self.published_snapshot()
                 {
                     self.sink.event(SessionEvent::RefsLoaded { snapshot: held });
+                    // The refs are part of `inputs`, so they are where
+                    // they were: nothing to walk, nothing to re-ask.
                     return false;
                 }
                 // One index and one set of joins for both halves: the
