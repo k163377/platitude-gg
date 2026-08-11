@@ -949,7 +949,14 @@ Item {
             text: stashRow ? "" : page.menuRefId
             growsForText: false
             note: refusedRow ? qsTr("not merged") : ""
-            offered: (branchRow || heldRow) && page.menuCanDelete
+            // On a branch the three delete forms are a fixed table — rows
+            // that cannot be chosen stay and grey out, the app-menu rule
+            // rather than the assembled-menu one (デザイン規約 §メニュー、
+            // 2026-08-11 ユーザー判断): the current branch keeps its rows,
+            // saying why nothing here answers. The other kinds keep the
+            // assembled rule.
+            offered: branchRow || (heldRow && page.menuCanDelete)
+            enabled: !branchRow || page.menuCanDelete
             holdMs: heldRow ? Metrics.holdMs : 0
             // A branch's plain delete keeps the menu up: git's answer has
             // nowhere to land otherwise, and this row is where it lands.
@@ -980,7 +987,11 @@ Item {
             code: "push --delete"
             text: page.menuRemoteCounterpart
             growsForText: false
-            offered: page.menuRefKind === "branch" && page.menuCanDeleteRemote
+            // Part of the fixed table: with no remote reading the row
+            // stays, wordless and grey — that is how it says there is
+            // nothing over there to shed.
+            offered: page.menuRefKind === "branch"
+            enabled: page.menuCanDeleteRemote
             holdMs: Metrics.holdMs
             holdTone: Theme.warning
             onHeld: {
@@ -997,8 +1008,8 @@ Item {
             id: refBothDeleteItem
             text: qsTr("Delete both")
             note: refDeleteItem.refusedRow ? qsTr("not merged") : ""
-            offered: page.menuRefKind === "branch" && page.menuCanDelete
-                     && page.menuCanDeleteRemote
+            offered: page.menuRefKind === "branch"
+            enabled: page.menuCanDelete && page.menuCanDeleteRemote
             holdMs: Metrics.holdMs
             holdTone: Theme.warning
             onHeld: {
