@@ -1100,7 +1100,6 @@ Rectangle {
         Rectangle {
             visible: topBar.captionMerged
             Layout.alignment: Qt.AlignVCenter
-            Layout.leftMargin: Theme.spaceXs
             implicitWidth: Theme.borderWidth
             implicitHeight: Theme.iconMd
             color: Theme.borderDefault
@@ -1112,7 +1111,6 @@ Rectangle {
         WindowButton {
             id: minimizeButton
             visible: topBar.captionMerged
-            Layout.leftMargin: Theme.spaceXs
             kind: "window-minimize"
             Accessible.name: qsTr("Minimize")
             onTriggered: topBar.minimizeRequested()
