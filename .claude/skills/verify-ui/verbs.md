@@ -41,7 +41,7 @@
 - `delete-branch-go`(化けた行の長押しまで走らせて `-D`)
 - `delete-branch-early`(引数はブランチ名。メニューを開いて**待つだけ・書き込み無し** — 開いた時の `checkBranchDelete` が着いた後の削除行を報告する。未マージ(`feature/topic-a`)なら `code=branch -D held=true note=not merged`、マージ済みの引数なら `--delete` のまま `held=false`。報告行 `delete_early asked= merged= code= held= note=`)
 - `chip-menu`(引数はブランチ名。**チップ右クリック相当** — `openRecordMenu` 経由で ref メニューを開く。報告行 `chip_menu ref= commit= delete=` の `ref=true commit=false` が正。`delete=` は 200ms 時点のスナップショットで、未マージブランチでは早着した `-D` にも素の `--delete` にもなり得る — どちらも正)
-- `chip-menu-current`(引数なし。現在ブランチのチップ → ref メニュー 0 行 → **コミット行メニューへフォールスルー**。`ref=false commit=true` が正)
+- `chip-menu-current`(引数なし。現在ブランチのチップ — **upstream があれば `push --delete` 1 行の ref メニュー**(`--preset basic` の main はこちら = `ref=true commit=false`)、**無ければコミット行メニューへフォールスルー**(`ref=false commit=true`)。どちらが正かは preset の upstream で決まる)
 - `delete-tag` / `delete-stash`(`delete-remote` / `-go` は下のリモートブランチの並びの行が正 — 重複掲載しない)
 - `delete-stash-row`(**質問は無く**メニューが開いたまま止まり、`-go`(delete-stash-row は引数 `go`)が行の長押しを走らせる)
 - `stash-apply-row`

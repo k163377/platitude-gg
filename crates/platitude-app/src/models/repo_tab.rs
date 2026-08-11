@@ -1198,6 +1198,28 @@ impl RepoTab {
         self.with_session(|s| s.delete_remote_branch(remote.clone(), branch.clone()));
     }
 
+    /// `git branch --delete` (`-D` under `force`) and then
+    /// `git push <remote> --delete`, as one queued write: the local half
+    /// refuses first where it refuses at all, and then the remote is
+    /// never touched.
+    #[qslot]
+    fn delete_branch_everywhere(
+        &mut self,
+        branch: String,
+        remote: String,
+        remote_branch: String,
+        force: bool,
+    ) {
+        self.with_session(|s| {
+            s.delete_branch_everywhere(
+                branch.clone(),
+                remote.clone(),
+                remote_branch.clone(),
+                force,
+            );
+        });
+    }
+
     /// `git merge <rev>`.
     #[qslot]
     fn merge(&mut self, rev: String, no_ff: bool, ff_only: bool, message: String) {

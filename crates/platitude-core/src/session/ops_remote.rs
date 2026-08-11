@@ -338,6 +338,39 @@ impl RepoSession {
         );
     }
 
+    /// Deletes a branch here and on its remote as one write. The local
+    /// half goes first because it is the half that can refuse: a refusal
+    /// stops the pair with nothing touched anywhere, and the menu row
+    /// that asked morphs the way the plain delete's does. The remote
+    /// half reaches the network, which is why the pair sits on the write
+    /// queue as one command with one answer (合成は 1 手目が失敗したら
+    /// 止める — core.md).
+    pub fn delete_branch_everywhere(
+        self: &Arc<Self>,
+        branch: String,
+        remote_name: String,
+        remote_branch: String,
+        force: bool,
+    ) {
+        let timeout = self.network_timeout();
+        self.write(
+            "branch",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                branch::delete(&exec, &repo.workdir, &branch, force, &cancel).await?;
+                remote::delete_remote_branch(
+                    &exec,
+                    &repo.workdir,
+                    &remote_name,
+                    &remote_branch,
+                    timeout,
+                    &cancel,
+                )
+                .await
+            },
+        );
+    }
+
     /// Renames a branch on a remote, which git does as a push and a delete
     /// (see [`remote::rename_remote_branch`]). The UI asks first: the old
     /// name is destroyed, not moved.

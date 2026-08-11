@@ -185,10 +185,10 @@ Popup {
                 TapHandler {
                     acceptedButtons: Qt.RightButton
                     enabled: !refRow.unavailable
-                    onTapped: {
-                        refList.close()
-                        refList.menuAsked(refRow.modelData)
-                    }
+                    // The list stays: the menu opens over it, and the
+                    // owner keeps the list up for as long as the menu
+                    // stands (its settle checks the menu).
+                    onTapped: refList.menuAsked(refRow.modelData)
                 }
             }
         }

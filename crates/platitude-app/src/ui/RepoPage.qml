@@ -764,6 +764,10 @@ Item {
     property bool menuCanSwitch: false
     property bool menuCanIntegrateFrom: false
     property bool menuCanDelete: false
+    /// The remote reading a branch row can also shed (`origin/main`),
+    /// empty where it has none. What the remote-side delete rows name.
+    property string menuRemoteCounterpart: ""
+    property bool menuCanDeleteRemote: false
     function openRefMenu(kind, name, full, oidHex) {
         page.menuRefKind = kind
         page.menuRefName = name
@@ -775,9 +779,14 @@ Item {
                              && full !== workTree.branch
         page.menuCanIntegrateFrom = page.canIntegrateFrom
         // The branch the working tree is on cannot be deleted at all, and
-        // git says so rather than doing something else.
+        // git says so rather than doing something else. Its remote
+        // reading can be, which is the one row its menu keeps.
         page.menuCanDelete = repoTab.busyCount === 0
                              && !(kind === "branch" && full === workTree.branch)
+        page.menuRemoteCounterpart =
+            kind === "branch" ? branchesModel.upstreamOf(full) : ""
+        page.menuCanDeleteRemote = repoTab.busyCount === 0
+                                   && page.menuRemoteCounterpart !== ""
         if (repoTab.state === "open" && page.rebaseRange !== "")
             repoTab.checkPublish(page.rebaseRange)
         // Whether the everyday delete would be refused, asked as the menu
@@ -836,7 +845,13 @@ Item {
     AppMenu {
         id: refMenu
         // Walking away from a refused delete takes the offer with it.
-        onClosed: page.forceDeleteBranch = ""
+        // The settle re-run is for a menu that stood on the stacked
+        // list's row: the list stayed up under it, and whether it stays
+        // now is the pointer's to answer again.
+        onClosed: {
+            page.forceDeleteBranch = ""
+            page.settleRefList()
+        }
         AppMenuItem {
             // The command alone: this menu was opened on the row it means,
             // and the row is already showing that name (デザイン規約
@@ -954,6 +969,48 @@ Item {
                     repoTab.deleteTag(page.menuRefId)
                 else
                     repoTab.deleteBranch(page.menuRefId, true)
+            }
+        }
+        // The other half a branch can shed: its remote reading, deleted
+        // without touching the local one — and on the current branch the
+        // one delete on offer at all, since the local half is ground git
+        // refuses (デザイン規約 §左メニューの所作).
+        AppMenuItem {
+            id: refRemoteDeleteItem
+            code: "push --delete"
+            text: page.menuRemoteCounterpart
+            growsForText: false
+            offered: page.menuRefKind === "branch" && page.menuCanDeleteRemote
+            holdMs: Metrics.holdMs
+            holdTone: Theme.warning
+            onHeld: {
+                refMenu.close()
+                page.deleteRemoteNow(page.menuRemoteCounterpart)
+            }
+        }
+        // Both halves at once. A composite of two commands is no one
+        // command, so the row is words rather than a chip (§git 用語の
+        // コード表記 の 1:1 規則); the two rows above have already named
+        // the halves, and this one takes them together. The local half
+        // runs first and a refusal stops the pair with nothing touched.
+        AppMenuItem {
+            id: refBothDeleteItem
+            text: qsTr("Delete both")
+            note: refDeleteItem.refusedRow ? qsTr("not merged") : ""
+            offered: page.menuRefKind === "branch" && page.menuCanDelete
+                     && page.menuCanDeleteRemote
+            holdMs: Metrics.holdMs
+            holdTone: Theme.warning
+            onHeld: {
+                refMenu.close()
+                const c = page.menuRemoteCounterpart
+                const cut = c.indexOf("/")
+                if (cut < 0)
+                    return
+                repoTab.deleteBranchEverywhere(page.menuRefId,
+                                               c.substring(0, cut),
+                                               c.substring(cut + 1),
+                                               refDeleteItem.refusedRow)
             }
         }
     }
@@ -1679,7 +1736,12 @@ Item {
         id: refListSettle
         interval: Metrics.hoverKeepMs
         onTriggered: {
-            if (!refList.pointerInside && !page.refListWanted)
+            // A ref menu standing on one of the list's rows keeps the
+            // list up under it: the hand went into the menu, not away,
+            // and closing the list would pull the ground out from what
+            // it right-clicked. The menu's own close settles this again.
+            if (!refList.pointerInside && !page.refListWanted
+                    && !refMenu.opened)
                 refList.close()
         }
     }
