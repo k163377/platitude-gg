@@ -177,6 +177,15 @@ Rectangle {
     readonly property bool stateCardOpen: stateCard.opened
     readonly property string stateCardRows: stateCard.rowsLaidOut()
     readonly property string stateCardSize: stateCard.laidOutSize
+    /// Whether the window is standing on its floor. Handed in, because
+    /// the floor is the larger of this band's and the page's and only
+    /// `Main` has both (`Main.floorWidth`).
+    ///
+    /// The group gives up its words there whatever else is true: the
+    /// floor is the one width with nothing left to share out, and a band
+    /// that is out of room is one where the tabs are what the room is
+    /// for (2026-08-11 ユーザー指示).
+    property bool windowAtFloor: false
     /// Stands in for the pointer where headless cannot put one, so the
     /// card can be photographed (`badges-hover` / `identity-tip`). The
     /// real hover writes this same one property — hover is the input that
@@ -996,6 +1005,7 @@ Rectangle {
                 const scrolling = tabs.contentWidth > tabs.runAvail
                 stateGroup.folded = cap < topBar.stateBadgeMinW
                                     || (scrolling && inView < 3)
+                                    || topBar.windowAtFloor
                 stateGroup.cap = cap
             }
             onWidthChanged: stateGroup.settleCap()

@@ -1519,6 +1519,11 @@ ApplicationWindow {
             curPage: root.curPage
             captionMerged: root.captionMerged
             windowMaximized: root.visibility === Window.Maximized
+            // Standing on the floor is the one width with nothing left to
+            // share out, and the band's state group gives up its words
+            // there (`TopBar.windowAtFloor`). Read here because the floor
+            // is the larger of the band's and the page's.
+            windowAtFloor: root.width <= Math.ceil(root.floorWidth)
             onOpenRepositoryRequested: root.openRepositoryPicker()
             onIdentityEditRequested: root.identityEditing = true
             onSettingsRequested: settingsDialog.open()
