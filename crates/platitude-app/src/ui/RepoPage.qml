@@ -4518,7 +4518,7 @@ Item {
         }
     }
 
-    // Automation (PG_AUTO_SELECT=1): select the newest row, then open
+    // Automation (PG_AUTO_SELECT=1): select the newest commit, then open
     // the first changed file's diff — exercises the full pipeline for
     // screenshot-based smoke tests.
     property bool autoSelected: false
@@ -4526,10 +4526,22 @@ Item {
         target: graphModel
         enabled: AppBackend.autoSelect
         function onStatsChanged() {
-            if (!page.autoSelected && graphModel.rowTotal > 0) {
-                page.autoSelected = true
-                graphPane.setCurrentRow(0)
-                page.activateRow(graphModel.oidAt(0))
+            if (page.autoSelected || graphModel.rowTotal === 0)
+                return
+            // **The newest commit, not the newest row.** A dirty working
+            // tree puts the WIP row on top, and selecting that one shows
+            // the pending changes instead of a commit — no details are
+            // asked for, so a measurement that reads the interaction
+            // budget off this hook measures nothing and says so
+            // (`xtask perf`'s `missing`). Every demo repository is dirty.
+            for (let row = 0; row < graphModel.rowTotal; row++) {
+                const oid = graphModel.oidAt(row)
+                if (oid !== "" && /[^0]/.test(oid)) {
+                    page.autoSelected = true
+                    graphPane.setCurrentRow(row)
+                    page.activateRow(oid)
+                    return
+                }
             }
         }
     }

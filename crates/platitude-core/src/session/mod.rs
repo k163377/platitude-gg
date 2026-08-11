@@ -1001,6 +1001,27 @@ impl ReadSlot {
             }
         }
     }
+
+    /// Opens the slot from wherever it was left.
+    ///
+    /// For the reader that never reached [`Self::finish`] — its task was
+    /// dropped with the runtime, or it unwound. Without this, a slot left
+    /// running turns one lost pass into a section of the window that
+    /// never updates again and never says why, which is a far worse
+    /// failure than the duplicate read the slot exists to stop.
+    fn abandon(&self) {
+        self.0.store(SLOT_IDLE, Ordering::SeqCst);
+    }
+}
+
+/// Opens a [`ReadSlot`] when the reader holding it goes away without
+/// finishing (see [`ReadSlot::abandon`]).
+struct SlotHeld<'a>(&'a ReadSlot);
+
+impl Drop for SlotHeld<'_> {
+    fn drop(&mut self) {
+        self.0.abandon();
+    }
 }
 
 /// One pending file whose change has something to say about line endings.
@@ -1401,6 +1422,23 @@ mod tests {
         assert!(slot.finish(), "somebody asked while it ran");
         assert!(!slot.finish(), "nobody asked during the repeat");
         assert!(slot.claim(), "and the slot is free again");
+    }
+
+    /// A reader that goes away without finishing leaves the slot open.
+    ///
+    /// Otherwise one lost pass is a section of the window that never
+    /// updates again and never says why — which is a worse failure than
+    /// the duplicate read the slot is here to stop.
+    #[test]
+    fn a_reader_that_never_finishes_does_not_take_the_slot_with_it() {
+        let slot = ReadSlot::default();
+        assert!(slot.claim());
+        assert!(!slot.claim(), "and somebody is waiting behind it");
+        drop(SlotHeld(&slot));
+        assert!(
+            slot.claim(),
+            "the next ask runs rather than waiting on a reader that is gone"
+        );
     }
 
     #[test]

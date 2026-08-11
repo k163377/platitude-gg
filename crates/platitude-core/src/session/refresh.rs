@@ -91,6 +91,7 @@ impl RepoSession {
         }
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
+            let _held = SlotHeld(&s.refs_read);
             loop {
                 if s.publish_refs().await {
                     s.refresh_log();
@@ -185,6 +186,7 @@ impl RepoSession {
         }
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
+            let _held = SlotHeld(&s.status_read);
             loop {
                 // An external change (another tool, the terminal) can make
                 // the tree dirty or clean, which adds or removes the WIP row.
@@ -371,6 +373,7 @@ impl RepoSession {
         }
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
+            let _held = SlotHeld(&s.stash_read);
             loop {
                 let op_gen = s.stash_gate.begin();
                 let cancel = s.root_cancel.clone();
@@ -398,6 +401,7 @@ impl RepoSession {
         }
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
+            let _held = SlotHeld(&s.worktrees_read);
             loop {
                 let op_gen = s.worktrees_gate.begin();
                 let cancel = s.root_cancel.clone();
