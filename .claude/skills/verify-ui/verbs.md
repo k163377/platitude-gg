@@ -25,6 +25,7 @@
 - `fetch-resume`(3 回失敗させてから、止まったボタンの長押しを完走させる)
 - `fetch-recover`(失敗 → 成功の遷移: fetch の失敗がヘッダの 1 行と赤い `>_` を立て、**後続の fetch 成功がその両方を自動で下ろす**側を見る — 意匠の正本は rules-refs/app-ui.md の同名の項。**仕込み不要 = 既定 preset で自己完結** — 失敗側は**存在しないリモート名**への fetch(`git fetch --prune pg-no-such-remote` が exit 128)、回復側は届く file:// origin への fetch。**`--allow-write-failure` が要る**(前半の拒否がこの動詞の見せ物)。報告行 `fetch_recover was= hadline= wrong= line= failures= open=` は**成功の前(`was=` / `hadline=`)と後(残り)を対で読む** — 絵は退いた後しか持てない。ログ本体の失敗行は残るのが正 = 履歴は読者のもの)
 - `nav-dbl`(引数 `<section>:<name>`)
+- `nav-filter`(引数は打ち込む文字列。左メニュー上端の帯に**入力欄そのものへ**書く = 5 セクションが一斉に絞り込まれる。**絞り込んだ行はツリーを外れて全名で並ぶ**ので、フォルダ行が消えて `origin/main` のような名前がそのまま出るのが正。報告行 `nav_filter typed= branches= remotes= tags= stashes=` は各セクションの `shown()/total`(0 件のセクションが在るのが普通 — 見出しは総数のまま残る))
 - `nav-fold`(引数 `no-tags` でグラフからタグを外した状態にしてから畳む = レールの旗の消えた側が撮れる)
 - `nav-peek`(引数はセクション名 `branch` / `remote` / `worktree` / `stash` / `tag`)
 - `nav-peek-away` / `nav-peek-into` / `nav-peek-out`

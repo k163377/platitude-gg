@@ -2110,6 +2110,19 @@ Item {
             + " ground=" + Math.round(sidebarPane.groundTop)
             + " pane=" + Math.round(sidebarPane.height))
     }
+    /// What each section kept of what it holds. The rows a filter leaves
+    /// are the ones the sections work out for themselves, so the counts
+    /// are read off the models and the picture says what they drew.
+    Timer {
+        id: navFilterTimer
+        interval: 400
+        onTriggered: AppBackend.report(
+            "nav_filter typed=" + AppBackend.autoActArg
+            + " branches=" + branchesModel.shown() + "/" + branchesModel.total
+            + " remotes=" + remotesModel.shown() + "/" + remotesModel.total
+            + " tags=" + tagsModel.shown() + "/" + tagsModel.total
+            + " stashes=" + stashesModel.shown() + "/" + stashesModel.total)
+    }
     // The blocked row's line, worn where the pointer would put it.
     // Past `tipDelayMs`, like the other forced tooltips: read any sooner
     // and the attached ToolTip has not opened yet, so the line reports
@@ -2969,6 +2982,12 @@ Item {
             // the failure this watches for.
             sidebarPane.closeSection(arg)
             navSectionTimer.start()
+        } else if (act === "nav-filter") {
+            // Typed into the filter band, which every section answers for
+            // itself: the rows it keeps are flat and whole-named, where
+            // the tree it replaced showed segments under folders.
+            sidebarPane.typeFilter(arg)
+            navFilterTimer.start()
         } else if (act === "nav-rename" || act === "rename-branch"
                    || act === "rename-tag" || act === "rename-stash") {
             // The box the second click opens, entered at the same place.

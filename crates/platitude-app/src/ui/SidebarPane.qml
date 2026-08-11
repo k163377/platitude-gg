@@ -147,6 +147,15 @@ Rectangle {
         sidebar.startEdit("tag", "tag:" + id, "branch", id, oidHex, "")
     }
 
+    /// Smoke hook (PG_AUTO_ACT=nav-filter): type into the filter band.
+    /// Written into the field itself, so what the sections are asked is
+    /// what a typist asks them, and how many rows each keeps is its own
+    /// answer.
+    function typeFilter(text) {
+        refFilter.text = text
+        return refFilter.text
+    }
+
     /// Smoke hook (PG_AUTO_ACT=nav-peek): rest on one section's cell.
     /// Named rather than hovered — hover cannot be injected (verify-ui
     /// スキル). Whether that opens anything is the cell's answer, not this

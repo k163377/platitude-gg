@@ -1628,6 +1628,28 @@ mod tests {
         }
     }
 
+    /// Which entries a bucket holds is git's answer, and core is where it
+    /// is written down — this list asks one entry at a time so a row can
+    /// name the bucket it came out of, and the two must not drift.
+    #[test]
+    fn a_bucket_holds_what_core_says_it_holds() {
+        let status = pending();
+        for (bucket, theirs) in [
+            (Bucket::Conflicts, status.conflicted().collect::<Vec<_>>()),
+            (Bucket::Unstaged, status.unstaged().collect()),
+            (Bucket::Untracked, status.untracked().collect()),
+            (Bucket::Staged, status.staged().collect()),
+        ] {
+            let ours: Vec<_> = status.items.iter().filter(|i| bucket.holds(i)).collect();
+            assert_eq!(
+                ours,
+                theirs,
+                "{} does not hold what core puts in it",
+                bucket.routing(),
+            );
+        }
+    }
+
     /// The pane's own order, and the letters and buckets that go with it.
     /// An entry with both halves changed is two rows.
     #[test]
