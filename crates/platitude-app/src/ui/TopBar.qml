@@ -227,8 +227,16 @@ Rectangle {
     /// for with the strip at its floor *is* the floor, and a control added
     /// to the band later is counted without anybody remembering to. The
     /// margin is the row's own, which the fill does not cover.
+    ///
+    /// Read off the row's *minimum* rather than what it asks for: the
+    /// state group asks for its words and gives way to a mark, so the row
+    /// preferring the words is what lets the two of them share the band
+    /// — but the window may still be dragged down to where the mark is
+    /// all that is left. Both numbers come from the same row, and a
+    /// control added to the band later is counted in either without
+    /// anybody remembering to.
     readonly property real floorWidth:
-        bandRow.implicitWidth + bandRow.anchors.rightMargin
+        bandRow.Layout.minimumWidth + bandRow.anchors.rightMargin
 
     /// One of the window's own buttons: the same cell the app menu sits in
     /// at the other end of the band, so the two ends are built alike and
@@ -416,6 +424,17 @@ Rectangle {
     /// What every tab's name is capped at right now — the strip's answer
     /// to how much room it was given (`settleTitleCap`).
     property real tabTitleCap: topBar.tabTitleMaxW
+    /// What the strip would take with nothing cut (`settleTitleCap`), and
+    /// the least it is ever laid out at.
+    ///
+    /// **Two tabs, not one** (2026-08-11 ユーザー指示): a window narrow
+    /// enough to leave one tab is narrow enough to have lost what tabs are
+    /// for, and the band gives up the state group's words before it gives
+    /// up the second tab (規約 §ウィンドウの縁).
+    property real tabsWantWidth: 0
+    readonly property int tabStripFloorW:
+        menuButton.width + plusButton.width + tabs.grabRun
+        + 2 * (tabs.tabFixedW + topBar.tabTitleMinW)
     FontMetrics {
         id: tabTitleFont
         font.family: Theme.uiFamily
@@ -446,6 +465,17 @@ Rectangle {
                 want.push(Math.min(Math.ceil(label.implicitWidth),
                                    topBar.tabTitleMaxW))
         }
+        // What the strip would take with no name cut. This is what the
+        // row is asked for, so that the band's leftover is shared with
+        // the state group in proportion to what each of them wants —
+        // asking for the floor instead had the tabs down to three
+        // characters beside two whole badges (reported 2026-08-11).
+        // Measured off the same hidden labels the cap is, so it does not
+        // move with the run it is about to be handed.
+        topBar.tabsWantWidth =
+            menuButton.width + plusButton.width + tabs.grabRun
+            + want.reduce((sum, w) => sum + w, 0)
+            + want.length * tabs.tabFixedW
         if (want.length === 0) {
             topBar.tabTitleCap = topBar.tabTitleMaxW
             return
@@ -518,9 +548,6 @@ Rectangle {
             id: tabStrip
             Layout.fillWidth: true
             Layout.fillHeight: true
-            // Second in line for the row's leftover, behind the state
-            // group's ceiling (the comment there carries the reasoning).
-            Layout.horizontalStretchFactor: 1
             // What the strip costs when everything in it has given all it
             // can: the menu cell, one tab with its name cut to the three
             // characters the table allows, the way to open another, and
@@ -530,9 +557,17 @@ Rectangle {
             // it costs, which is one half of the window's own floor
             // (`floorWidth`). Measured before there was one: at 320px the
             // close button was outside the window.
-            implicitWidth: menuButton.width + tabs.tabFixedW
-                           + topBar.tabTitleMinW + plusButton.width
-                           + tabs.grabRun
+            implicitWidth: topBar.tabsWantWidth
+            Layout.minimumWidth: topBar.tabStripFloorW
+            // First to give and first to take. The band's order when it
+            // runs short is: the tab names narrow together, then the state
+            // group's words do, then the strip scrolls, then the group
+            // becomes a mark (2026-08-11 ユーザー指示) — and a stretch
+            // this much larger than the group's is what puts the strip at
+            // the front of both queues. It takes the leftover too, since
+            // the group stops at its own ceiling: room past the words is
+            // grab run, which is the tabs' business.
+            Layout.horizontalStretchFactor: 100
             // App menu (Claude-Desktop-style hamburger); most entries are
             // placeholders until their phases land.
             //
@@ -647,7 +682,13 @@ Rectangle {
                 readonly property real runAvail:
                     Math.max(0, tabStrip.width - menuButton.width
                                 - plusButton.width - tabs.grabRun)
-                onRunAvailChanged: topBar.settleTitleCap()
+                onRunAvailChanged: {
+                    topBar.settleTitleCap()
+                    // The state group folds off this strip's width as well
+                    // as its own, and the two do not always change in the
+                    // same frame.
+                    stateGroup.settleCap()
+                }
                 /// The air a tab is set in: `spaceSm` before the name, and
                 /// after the mark what is left of `spaceSm` once the air
                 /// the mark brings with it is taken off (デザイン規約 §余白;
@@ -928,29 +969,41 @@ Rectangle {
                     }
                     left -= want[i]
                 }
-                // Past the point where the opening letters would still
-                // tell one badge from another, the words stop being worth
-                // the room and the group becomes the mark.
+                // Two ways the words stop being worth their room: the
+                // opening letters would no longer tell one badge from
+                // another, or the tabs beside them have narrowed as far
+                // as they go and are about to start scrolling — at which
+                // point what the band is short of is tabs, and this
+                // group's whole width is the readiest thing to hand them
+                // (2026-08-11 ユーザー指示: タブ等幅化 → この群の等幅化
+                // → タブ横スク → 群を畳む → 床).
                 stateGroup.folded = cap < topBar.stateBadgeMinW
+                                    || topBar.tabTitleCap <= topBar.tabTitleMinW
                 stateGroup.cap = cap
             }
             onWidthChanged: stateGroup.settleCap()
 
             visible: topBar.stateShown
-            implicitWidth: stateGroup.foldedWidth
             implicitHeight: fetchButton.implicitHeight
+            // Asks for its words and will come down to the mark. The row
+            // hands its leftover out in proportion to what each filling
+            // item asked for, so **what is asked for is what decides who
+            // gives way** — asking for the mark got this group a sliver
+            // (104px of 794 at a 1440-wide window) and asking with a
+            // stretch of 100 got it everything, and the tabs came down to
+            // three characters beside two whole words (both measured
+            // 2026-08-11, both reported). Asking for the words and no
+            // more puts the two of them in proportion: the tabs narrow
+            // and this group narrows, each by its own rule.
+            implicitWidth: stateGroup.naturalWidth
             Layout.fillWidth: true
             Layout.maximumWidth: stateGroup.naturalWidth
-            // The row hands its leftover out in proportion to what each
-            // filling item asked for, and this one asks for the mark — so
-            // without a stretch of its own it is handed a sliver and folds
-            // in a window with 800px going spare (measured 2026-08-11: 104
-            // of 794 at a 1440-wide window, and the words never came back).
-            // The tabs take what is left past this group's ceiling: they
-            // have a narrowing of their own and a floor under it
-            // (`settleTitleCap`), and what they do with room they do not
-            // need is hold it as grab run.
-            Layout.horizontalStretchFactor: 100
+            Layout.minimumWidth: stateGroup.foldedWidth
+            // Second in both queues (the strip's comment carries the
+            // order). Asking for the words is what keeps the strip from
+            // taking them; the small stretch is what makes the strip give
+            // way first when there is not enough for both.
+            Layout.horizontalStretchFactor: 1
             // The pointer anywhere on the group opens the card — over the
             // words as much as over the mark, since the words are narrowed
             // and the card is where the whole of them is. A handler rather

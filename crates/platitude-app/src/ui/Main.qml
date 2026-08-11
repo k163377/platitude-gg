@@ -1108,6 +1108,12 @@ ApplicationWindow {
             + " mark=" + topBar.stateMarkShown
             + " cap=" + topBar.stateCapW
             + " groupW=" + topBar.stateGroupW
+            // The two floors the fold is decided against — the badge's own
+            // (three characters and an ellipsis) and the tabs' cap, which
+            // takes the group's width when it has nothing left to give.
+            + " badgeMin=" + topBar.stateBadgeMinW
+            + " tabCap=" + Math.round(topBar.tabTitleCap)
+            + " tabMin=" + topBar.tabTitleMinW
             + " card=" + topBar.stateCardOpen
             + " rows=" + topBar.stateCardRows
             + " cardSize=" + topBar.stateCardSize
