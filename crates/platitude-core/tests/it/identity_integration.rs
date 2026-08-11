@@ -10,16 +10,48 @@
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use crate::support::TestRepo;
 use platitude_core::commit::{self, CommitOptions};
 use platitude_core::identity::{self, ConfigScope, SignatureFormat, SignatureStatus};
-use platitude_core::process::GitExecutor;
+use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor};
 use platitude_core::repo::RepoInfo;
 use tokio_util::sync::CancellationToken;
 
 fn env() -> (GitExecutor, CancellationToken) {
     (GitExecutor::new(), CancellationToken::new())
+}
+
+/// Records what was spawned, so a test can count processes rather than
+/// take the answer's word for how it was reached.
+#[derive(Default)]
+struct Spawns(Mutex<Vec<String>>);
+
+impl Spawns {
+    fn seen(&self) -> Vec<String> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+impl CommandObserver for Spawns {
+    fn records(&self, _user: bool) -> bool {
+        true
+    }
+
+    fn started(&self, display: &str, _full: &str, _user: bool) -> u64 {
+        let mut seen = self.0.lock().unwrap();
+        seen.push(display.to_string());
+        seen.len() as u64
+    }
+
+    fn finished(&self, _id: u64, _end: CommandEnd, _elapsed_ms: u64, _message: &str) {}
+}
+
+fn counted() -> (GitExecutor, Arc<Spawns>, CancellationToken) {
+    let spawns = Arc::new(Spawns::default());
+    let exec = GitExecutor::new().observed(Arc::clone(&spawns) as Arc<dyn CommandObserver>, false);
+    (exec, spawns, CancellationToken::new())
 }
 
 async fn info(repo: &TestRepo) -> RepoInfo {
@@ -388,4 +420,58 @@ async fn commits_are_signed_and_verify_against_a_trusted_key() {
         .expect("verify");
     assert_eq!(signature.status, SignatureStatus::Absent);
     assert!(!signature.status.is_signed());
+}
+
+/// A commit carrying no signature is answered by the object alone. Every
+/// selected row asks this question, so the common case paying for a
+/// verification run that has nothing to verify is a process per click.
+#[tokio::test]
+async fn an_unsigned_commit_is_answered_without_asking_git_to_verify() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "unsigned");
+    let (exec, spawns, cancel) = counted();
+
+    let signature = identity::verify_commit(&exec, &repo.path, "HEAD", &cancel)
+        .await
+        .expect("verify");
+    assert_eq!(signature.status, SignatureStatus::Absent);
+
+    let seen = spawns.seen();
+    assert_eq!(seen.len(), 1, "one process, not two: {seen:?}");
+    assert!(seen[0].starts_with("git cat-file commit"), "{seen:?}");
+}
+
+/// A signed one costs the second process, and it is the verification —
+/// the order only spares the case that had nothing to verify.
+#[tokio::test]
+async fn a_signed_commit_still_costs_the_verification() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    let key = repo.path.join("id_test");
+    let out = std::process::Command::new("ssh-keygen")
+        .args(["-t", "ed25519", "-N", "", "-C", "test@example.com", "-f"])
+        .arg(&key)
+        .output()
+        .expect("run ssh-keygen");
+    assert!(out.status.success(), "ssh-keygen failed");
+    repo.git(&["config", "gpg.format", "ssh"]);
+    repo.git(&[
+        "config",
+        "user.signingkey",
+        &config_path(&key.with_extension("pub")),
+    ]);
+    repo.write_file("b.txt", "two\n");
+    repo.git(&["add", "--", "b.txt"]);
+    repo.git(&["commit", "-S", "-m", "signed"]);
+
+    let (exec, spawns, cancel) = counted();
+    let signature = identity::verify_commit(&exec, &repo.path, "HEAD", &cancel)
+        .await
+        .expect("verify");
+    // No allowed-signers file, so git cannot judge it — and the header is
+    // what keeps that from reading as "unsigned".
+    assert_eq!(signature.status, SignatureStatus::CannotCheck);
+    let seen = spawns.seen();
+    assert_eq!(seen.len(), 2, "{seen:?}");
+    assert!(seen[1].starts_with("git log -1"), "{seen:?}");
 }

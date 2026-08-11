@@ -243,17 +243,32 @@ pub struct Signature {
 /// ssh-keygen, and the details pane has a 100ms budget. The UI asks for
 /// this only where it shows the result.
 ///
-/// `%G?` alone is not enough. An SSH-signed commit in a repository with no
-/// `gpg.ssh.allowedSignersFile` reports `N` — the same code as an unsigned
-/// commit — so a signed commit would be shown as unsigned. When `%G?` says
-/// `N`, the commit object itself is checked for a signature header, and a
-/// signature that cannot be judged is reported as exactly that.
+/// **The object is read first, and for an unsigned commit it is the only
+/// thing read.** `%G?` cannot be trusted on its own — an SSH-signed commit
+/// in a repository with no `gpg.ssh.allowedSignersFile` reports `N`, the
+/// same code as an unsigned one, and measured on git 2.55 so does every
+/// other placeholder git has for the question (`%GS` `%GK` `%GG` `%GF`
+/// `%GP` are all empty for both, `%GT` is `undefined` for both). So the
+/// header is what says whether a signature exists at all, and asking for
+/// it first means a commit that carries none costs one process rather than
+/// two — and never starts gpg or ssh-keygen to be told there was nothing
+/// to check. Most commits in most repositories are that commit.
+///
+/// With a header present, `N` no longer reads as "unsigned": it means git
+/// could not judge what is there, which is its own answer.
 pub async fn verify_commit(
     executor: &GitExecutor,
     workdir: &Path,
     rev: &str,
     cancel: &CancellationToken,
 ) -> Result<Signature, GitError> {
+    if !has_signature_header(executor, workdir, rev, cancel).await? {
+        return Ok(Signature {
+            status: SignatureStatus::Absent,
+            signer: String::new(),
+            key: String::new(),
+        });
+    }
     let cmd =
         GitCommand::new()
             .cwd(workdir)
@@ -266,9 +281,7 @@ pub async fn verify_commit(
         signer: fields.next().unwrap_or_default().trim().to_string(),
         key: fields.next().unwrap_or_default().trim().to_string(),
     };
-    if signature.status == SignatureStatus::Absent
-        && has_signature_header(executor, workdir, rev, cancel).await?
-    {
+    if signature.status == SignatureStatus::Absent {
         signature.status = SignatureStatus::CannotCheck;
     }
     Ok(signature)
