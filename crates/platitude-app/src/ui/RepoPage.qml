@@ -2032,17 +2032,38 @@ Item {
         /// The view sent away from the selection before the step, so the
         /// row stepped onto has no reading position to preserve.
         property bool away: false
+        /// The third refusing ground, and the one that was reported: a
+        /// diff opened over the graph from CHANGES. The path is the
+        /// argument — the file has to be one the selected commit touched.
+        property string diffPath: ""
         onTriggered: {
             if (graphStepTimer.dirty)
                 detailsPane.setMessageText("wip: half of a subject", "")
             if (graphStepTimer.named)
                 graphPane.startNaming(
                     graphModel.oidAt(graphPane.view.currentIndex))
+            // The press that says the keyboard works here comes first,
+            // because the diff below is what has to take it away again:
+            // a run that opened the diff and only then reached for the
+            // keyboard would be proving nothing (it would be pressing on
+            // a pane that is no longer on the screen).
+            graphPane.view.takeKeyboard()
+            if (graphStepTimer.diffPath !== "")
+                page.toggleDiff("commit", graphStepTimer.diffPath, "")
+            graphStepWalk.start()
+        }
+    }
+    // A beat between the setup and the walk: the layout swaps the graph
+    // away in its own pass, so a step taken in the same tick as the diff
+    // opened would still find the pane on screen.
+    Timer {
+        id: graphStepWalk
+        interval: 200
+        onTriggered: {
             if (graphStepTimer.away)
                 graphPane.view.contentY = graphPane.view.clampY(Infinity)
             graphStepReport.from = graphPane.view.currentIndex
             graphStepReport.refused = 0
-            graphPane.view.takeKeyboard()
             const way = graphStepTimer.steps < 0 ? -1 : 1
             for (let n = 0; n < Math.abs(graphStepTimer.steps); n++) {
                 // Where the view stood before each step, so what is read
@@ -2077,8 +2098,9 @@ Item {
                 + " held=" + (page.pendingMove !== null)
                 + " back=" + (row === graphStepReport.from)
                 + " refused=" + graphStepReport.refused
-                + " onscreen=" + graphPane.rowOnScreen(row)
                 + " focused=" + graphPane.view.activeFocus
+                + " diff=" + page.diffShown
+                + " onscreen=" + graphPane.rowOnScreen(row)
                 + " selected=" + (page.selectedOid === graphModel.oidAt(row)))
         }
     }
@@ -2973,7 +2995,7 @@ Item {
             cornerTimer.start()
         } else if (act === "graph-step" || act === "graph-step-edge"
                    || act === "graph-step-far" || act === "graph-step-named"
-                   || act === "graph-step-dirty") {
+                   || act === "graph-step-dirty" || act === "graph-step-diff") {
             // Walking the history with the arrow keys. Keystrokes cannot
             // be injected, so the run enters at the same `stepRow` the
             // key handler enters — and takes the keyboard first through
@@ -2989,16 +3011,23 @@ Item {
             // to the end first, so the row it steps off has nowhere on
             // screen to be — the two answer the second paragraph of
             // §矢印で履歴を辿る, which a picture cannot (an edge reached
-            // one row at a time frames like an edge jumped to).
+            // one row at a time frames like an edge jumped to). `-diff`
+            // opens a file over the graph the way CHANGES does and takes
+            // its argument as the path: the pane swapped off the screen
+            // has to let the keyboard go, or the arrows walk the
+            // selection behind the diff — and moving the selection closes
+            // the diff, so the screen is pulled back to the graph.
             page.activateRow(branchesModel.headOid !== ""
                              ? branchesModel.headOid : graphModel.oidAt(0))
             graphStepTimer.named = act === "graph-step-named"
             graphStepTimer.dirty = act === "graph-step-dirty"
             graphStepTimer.away = act === "graph-step-far"
+            graphStepTimer.diffPath = act === "graph-step-diff" ? arg : ""
             graphStepTimer.steps = act === "graph-step-named" ? 1
                                  : act === "graph-step-dirty" ? 2
                                  : act === "graph-step-edge" ? 10
                                  : act === "graph-step-far" ? 1
+                                 : act === "graph-step-diff" ? 1
                                  : arg === "" ? 1 : Number(arg)
             graphStepTimer.start()
         } else if (act === "name-box") {

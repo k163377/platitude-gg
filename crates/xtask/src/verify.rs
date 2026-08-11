@@ -515,14 +515,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // onto. A walk that moved nothing frames as a graph sitting still,
         // which is what a graph does most of the time.
         "graph-step" => Some(
-            "landing=in held=false back=false refused=0 onscreen=true focused=true selected=true",
+            "landing=in held=false back=false refused=0 focused=true diff=false onscreen=true selected=true",
         ),
         // The other two landings, which no picture holds: a row brought in
         // flush against the bottom one step at a time, and a row centered
         // because the one it stepped off was nowhere on screen. Both frame
         // as a graph with a lit row somewhere in it.
-        "graph-step-edge" => Some("landing=edge held=false back=false refused=0 onscreen=true"),
-        "graph-step-far" => Some("landing=center held=false back=false refused=0 onscreen=true"),
+        "graph-step-edge" => Some("landing=edge held=false back=false refused=0 focused=true"),
+        "graph-step-far" => Some("landing=center held=false back=false refused=0 focused=true"),
         // The refusing halves. `back=true` is the whole of them — nothing
         // moved — and it is worth nothing without `refused=`, since a walk
         // that was never attempted leaves the same row lit. Read them
@@ -530,6 +530,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // these two on its own.
         "graph-step-named" => Some("held=false back=true refused=1"),
         "graph-step-dirty" => Some("held=true back=true refused=1"),
+        // A diff opened over the graph. `focused=false` is the mechanism —
+        // Qt leaves active focus on a pane it has just swapped away, and
+        // the keys go on arriving there — and `diff=true` is what the
+        // report was about: a step behind the diff moves the selection,
+        // and moving the selection closes the diff, so the screen jumps
+        // back to the graph. A picture of the diff still standing is also
+        // a picture of a run where the arrow was never pressed.
+        "graph-step-diff" => Some("back=true refused=1 focused=false diff=true"),
         _ => None,
     };
     let outcome = Outcome {

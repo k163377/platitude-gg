@@ -253,7 +253,7 @@ Rectangle {
     /// single-line box does not consume Up and Down — they come up
     /// through the delegate to this list.
     function stepRow(delta) {
-        if (graphArea.selectionHeld || askBar.label !== ""
+        if (!graphArea.visible || graphArea.selectionHeld || askBar.label !== ""
                 || graphList.namingOid !== "" || graphList.count === 0)
             return false
         const from = graphList.currentIndex
@@ -643,6 +643,19 @@ Rectangle {
         /// answer to "what does a press do to the keyboard".
         function takeKeyboard() {
             graphList.forceActiveFocus()
+        }
+        /// And gives it up when this pane is taken off the screen. Qt
+        /// leaves active focus on an item it has just made invisible, and
+        /// the keys go on arriving there (qmltestrunner で実測
+        /// 2026-08-11: a StackLayout child swapped away reports
+        /// `visible=false activeFocus=true`, and the next Down still
+        /// fires; `focus = false` is what lets go). Opening a diff over
+        /// the graph did exactly that: the arrows walked the selection
+        /// behind the diff, and moving the selection closes the diff — so
+        /// the screen was pulled back to the graph (2026-08-11 ユーザー報告).
+        onVisibleChanged: {
+            if (!graphList.visible)
+                graphList.focus = false
         }
         boundsBehavior: Flickable.StopAtBounds
         flickDeceleration: 8000
