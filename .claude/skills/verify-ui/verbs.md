@@ -39,6 +39,8 @@
 - `delete-branch`(**3 つとも引数はブランチ名** — 省かれると `git branch --delete -- ''` を撃つだけで何も撮れない。メニューを開いたまま `--delete`。マージ済みなら消えてメニューが閉じ、拒まれたら行が `branch -D` + `not merged` に化ける。**拒まれる側は `--preset basic` の `feature/topic-a`**)
 - `delete-branch-refused`(その化けた行を出したまま止める。報告行 `ref_menu delete=<チップ> <名前> note=`)
 - `delete-branch-go`(化けた行の長押しまで走らせて `-D`)
+- `delete-blocked-tip`(引数なし。現在ブランチのチップメニューを開き、**押せない削除行のツールチップを強制表示**する(`AppMenuItem.tipForced` = 実 hover と同じ `ToolTip.visible` へ書く)。報告行 `delete_blocked code= tip= reason=` の **`tip=true` が must_say 相当** — **報告のタイマは `tipDelayMs` より後**(800ms。400ms で読んで false を報告し、絵にだけ出ている状態を作った実績)
+- `menu-highlight`(引数はブランチ名・省略で現在ブランチ。**ポインタの代わりにキーボードの道でハイライトを作る**(`refMenu.currentIndex = 1` = merge の行)ので、重ね色のハイライトを絵で見られる唯一の経路。hover は注入できない)
 - `delete-branch-early`(引数はブランチ名。メニューを開いて**待つだけ・書き込み無し** — 開いた時の `checkBranchDelete` が着いた後の削除行を報告する。未マージ(`feature/topic-a`)なら `code=branch -D held=true note=not merged`、マージ済みの引数なら `--delete` のまま `held=false`。報告行 `delete_early asked= merged= code= held= note=`)
 - `chip-menu`(引数はブランチ名。**チップ右クリック相当** — `openRecordMenu` 経由で ref メニューを開く。報告行 `chip_menu ref= commit= delete=` の `ref=true commit=false` が正。`delete=` は 200ms 時点のスナップショットで、未マージブランチでは早着した `-D` にも素の `--delete` にもなり得る — どちらも正)
 - `chip-menu-current`(引数なし。現在ブランチのチップ — **削除の表が常に開く**(`ref=true commit=false` が正)。ローカルは無効表示。リモートの読み(upstream か同名リモート)があればリモートの 2 行も並び、押せるのは `push --delete` だけ・両方は無効(`--preset basic` の main はこちら)。読みが無ければローカル無効 1 行だけ。コミット行メニューへのフォールスルーは HEAD マーカー等、名前の無いチップだけに残る)

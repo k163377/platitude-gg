@@ -52,6 +52,19 @@ MenuItem {
     /// wide frozen chip column otherwise leaves the name zero width.
     property bool growsForText: true
 
+    /// Why this row cannot be chosen right now, in one line — and, by
+    /// being non-empty, that it cannot. A blocked row is greyed the way
+    /// a disabled one is (§無効) but stays hoverable, because the line
+    /// is the whole point: a row of a fixed table that says nothing
+    /// about why it is out is worse than no row at all (デザイン規約
+    /// §メニュー の削除の表). Presses and holds do nothing.
+    property string blockedReason: ""
+    readonly property bool blocked: menuItem.blockedReason !== ""
+    /// Automation: show the tooltip with no pointer behind it. The same
+    /// property the real hover drives, so a run that never reached the
+    /// row photographs a row without one (verify-ui §hover の絵の撮り方).
+    property bool tipForced: false
+
     /// Held rather than clicked, for a row that would otherwise have to
     /// raise a question of its own (デザイン規約 §長押し). Zero is an
     /// ordinary row. A hold row reports no click at all — the press is
@@ -123,15 +136,19 @@ MenuItem {
     // one row in the menu that takes something away (デザイン規約
     // §状態); over the fill the words cross the tone itself and lift
     // clear of it.
-    readonly property color wordColor: !menuItem.enabled ? Theme.textMuted
+    readonly property color wordColor: !menuItem.enabled || menuItem.blocked
+                                       ? Theme.textMuted
                                      : menuItem.holding ? Theme.textOnAccent
                                      : menuItem.holdMs > 0 ? menuItem.holdTone
-                                     : menuItem.highlighted ? Theme.textOnAccent
-                                                            : Theme.textPrimary
+                                                           : Theme.textPrimary
 
-    ToolTip.visible: menuItem.hovered && itemLabel.truncated
+    // A blocked row's line is what the hover is for, so it comes before
+    // the elision's. Nothing else changes: one tooltip, one delay.
+    ToolTip.visible: (menuItem.hovered || menuItem.tipForced)
+                     && (menuItem.blocked || itemLabel.truncated)
     ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: menuItem.code !== ""
+    ToolTip.text: menuItem.blocked ? menuItem.blockedReason
+                : menuItem.code !== ""
                   ? menuItem.code + " " + menuItem.text : menuItem.text
 
     // The mark, inside the padding the whole menu carries for it rather
@@ -235,13 +252,15 @@ MenuItem {
 
     background: Rectangle {
         radius: Theme.radiusSm
-        // A held row hovers to a wash rather than to the solid accent:
-        // its words are the tone, and the accent underneath them would
-        // both fight the colour and take the warning away at the exact
-        // moment the pointer is on the row (the same reason the pill
-        // hovers to `bgHover`).
-        color: !menuItem.highlighted ? "transparent"
-             : menuItem.holdMs > 0 ? Theme.bgHover : Theme.accent
+        // Every row hovers to the same wash (デザイン規約 §メニュー).
+        // The held rows could never take the solid accent — their words
+        // are the tone, and a face under them would both fight the
+        // colour and take the warning away at the moment the pointer
+        // arrives — and one menu holding two strengths of highlight
+        // read as two different states rather than one pointer
+        // (2026-08-11 ユーザー報告). The list the combo drops has said
+        // it this way all along (§選ぶ欄と打つ欄).
+        color: menuItem.highlighted ? Theme.bgHover : "transparent"
         // The hold filling the row from the left, the same report the
         // pill and the toolbar button give (デザイン規約 §長押し), and
         // never thinner than `holdFillMin` while it runs.
@@ -272,14 +291,19 @@ MenuItem {
     MouseArea {
         id: rowPress
         anchors.fill: parent
-        enabled: (menuItem.holdMs > 0 || menuItem.staysOpen) && menuItem.enabled
-        onPressed: holdDrive.begin()
+        // A blocked row takes the press and does nothing with it: the
+        // row underneath would otherwise run and close the menu, and
+        // the line explaining why it is out would never be read.
+        enabled: menuItem.blocked
+                 || ((menuItem.holdMs > 0 || menuItem.staysOpen)
+                     && menuItem.enabled)
+        onPressed: if (!menuItem.blocked) holdDrive.begin()
         // Released anywhere, or dragged off the row: both call it off.
         // A stays-open row has no fill to call off — letting go on the row
         // is its click, and letting go outside it is not.
         onReleased: mouse => {
             holdDrive.letUp()
-            if (menuItem.holdMs <= 0 && menuItem.staysOpen
+            if (!menuItem.blocked && menuItem.holdMs <= 0 && menuItem.staysOpen
                     && mouse.x >= 0 && mouse.y >= 0
                     && mouse.x <= width && mouse.y <= height)
                 menuItem.picked()
@@ -291,6 +315,12 @@ MenuItem {
     // Accepting the key keeps the menu from triggering the row outright,
     // and auto-repeat is dropped on both edges (デザイン規約 §長押し).
     Keys.onPressed: event => {
+        // Same for the keyboard: the row is walked to and reads its
+        // line, and the key that would run it is taken and dropped.
+        if (menuItem.blocked) {
+            event.accepted = holdDrive.holdKey(event.key)
+            return
+        }
         if (menuItem.holdMs <= 0 || event.isAutoRepeat
                 || !holdDrive.holdKey(event.key))
             return

@@ -768,6 +768,19 @@ Item {
     /// empty where it has none. What the remote-side delete rows name.
     property string menuRemoteCounterpart: ""
     property bool menuCanDeleteRemote: false
+    /// Why the delete table's rows are out, when they are — decided as
+    /// the menu opens, like everything else it shows. The rows wear it
+    /// as their `blockedReason`, which is what a greyed row says when
+    /// the pointer rests on it (デザイン規約 §無効).
+    property bool menuOnCurrentBranch: false
+    property bool menuWriteRunning: false
+    /// One line each, conclusion first (規約 §hover のツールチップ). The
+    /// branch one names no branch: the row it sits on is already showing
+    /// which, and the tooltip adds the one thing the row cannot say.
+    readonly property string deleteBlockedOnCurrent:
+        qsTr("Switch away first — this is the branch you are on")
+    readonly property string deleteBlockedWhileBusy:
+        qsTr("Another git command is still running")
     function openRefMenu(kind, name, full, oidHex) {
         page.menuRefKind = kind
         page.menuRefName = name
@@ -787,6 +800,8 @@ Item {
             kind === "branch" ? branchesModel.upstreamOf(full) : ""
         page.menuCanDeleteRemote = repoTab.busyCount === 0
                                    && page.menuRemoteCounterpart !== ""
+        page.menuOnCurrentBranch = kind === "branch" && full === workTree.branch
+        page.menuWriteRunning = repoTab.busyCount !== 0
         if (repoTab.state === "open" && page.rebaseRange !== "")
             repoTab.checkPublish(page.rebaseRange)
         // Whether the everyday delete would be refused, asked as the menu
@@ -956,7 +971,11 @@ Item {
             // saying why nothing here answers. The other kinds keep the
             // assembled rule.
             offered: branchRow || (heldRow && page.menuCanDelete)
-            enabled: !branchRow || page.menuCanDelete
+            // Greyed rather than gone, and it says why on the hover
+            // (デザイン規約 §メニュー の削除の表).
+            blockedReason: !branchRow || page.menuCanDelete ? ""
+                         : page.menuOnCurrentBranch ? page.deleteBlockedOnCurrent
+                                                    : page.deleteBlockedWhileBusy
             holdMs: heldRow ? Metrics.holdMs : 0
             // A branch's plain delete keeps the menu up: git's answer has
             // nowhere to land otherwise, and this row is where it lands.
@@ -993,7 +1012,10 @@ Item {
             // not for "no such thing".
             offered: page.menuRefKind === "branch"
                      && page.menuRemoteCounterpart !== ""
-            enabled: page.menuCanDeleteRemote
+            // The seat is only here because a reading exists, so the one
+            // thing left that can hold this row up is a write in flight.
+            blockedReason: page.menuCanDeleteRemote
+                           ? "" : page.deleteBlockedWhileBusy
             holdMs: Metrics.holdMs
             holdTone: Theme.warning
             onHeld: {
@@ -1012,7 +1034,10 @@ Item {
             note: refDeleteItem.refusedRow ? qsTr("not merged") : ""
             offered: page.menuRefKind === "branch"
                      && page.menuRemoteCounterpart !== ""
-            enabled: page.menuCanDelete && page.menuCanDeleteRemote
+            // Both halves, so the local half's refusal speaks for it.
+            blockedReason: page.menuCanDelete && page.menuCanDeleteRemote ? ""
+                         : page.menuOnCurrentBranch ? page.deleteBlockedOnCurrent
+                                                    : page.deleteBlockedWhileBusy
             holdMs: Metrics.holdMs
             holdTone: Theme.warning
             onHeld: {
@@ -2084,6 +2109,18 @@ Item {
             + " ground=" + Math.round(sidebarPane.groundTop)
             + " pane=" + Math.round(sidebarPane.height))
     }
+    // The blocked row's line, worn where the pointer would put it.
+    // Past `tipDelayMs`, like the other forced tooltips: read any sooner
+    // and the attached ToolTip has not opened yet, so the line reports
+    // false while the picture taken at quit holds it.
+    Timer {
+        id: blockedTipTimer
+        interval: 800
+        onTriggered: AppBackend.report(
+            "delete_blocked code=" + refDeleteItem.code
+            + " tip=" + refDeleteItem.ToolTip.visible
+            + " reason=" + refDeleteItem.blockedReason)
+    }
     Timer {
         id: chipMenuTimer
         interval: 200
@@ -3041,6 +3078,24 @@ Item {
             page.openRecordMenu("L1001" + workTree.branch,
                                 branchesModel.oidOfName(workTree.branch))
             chipMenuTimer.start()
+        } else if (act === "delete-blocked-tip") {
+            // The current branch's own menu, with the row that cannot be
+            // chosen wearing its line. Forced rather than hovered: the
+            // pointer cannot be put on a row from here, and this writes
+            // to the property the real hover writes to.
+            page.openRecordMenu("L1001" + workTree.branch,
+                                branchesModel.oidOfName(workTree.branch))
+            refDeleteItem.tipForced = true
+            blockedTipTimer.start()
+        } else if (act === "menu-highlight") {
+            // The pointer's row, reached by the keyboard's road: the two
+            // land on the same `highlighted`, and only this one can be
+            // driven from here. The argument picks the row.
+            page.openRecordMenu("L0000" + (arg === "" ? workTree.branch : arg),
+                                branchesModel.oidOfName(
+                                    arg === "" ? workTree.branch : arg))
+            refMenu.currentIndex = 1
+            AppBackend.report("menu_highlight index=" + refMenu.currentIndex)
         } else if (act === "delete-branch-early") {
             // The menu opened over a branch and left alone: the early
             // answer dresses the delete row before any click — `-D` and
