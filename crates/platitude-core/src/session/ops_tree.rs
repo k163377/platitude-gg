@@ -243,17 +243,18 @@ impl RepoSession {
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let cancel = s.root_cancel.clone();
-            let reference =
-                match branch::upstream_of(&s.executor, &workdir, &branch, &cancel).await {
-                    Ok(Some(upstream)) => upstream,
-                    Ok(None) => "HEAD".to_string(),
-                    Err(_) => return,
-                };
+            let reference = match branch::upstream_of(&s.executor, &workdir, &branch, &cancel).await
+            {
+                Ok(Some(upstream)) => upstream,
+                Ok(None) => "HEAD".to_string(),
+                Err(_) => return,
+            };
             let rev = format!("refs/heads/{branch}");
             if let Ok(merged) =
                 branch::is_merged_into(&s.executor, &workdir, &rev, &reference, &cancel).await
             {
-                s.sink.event(SessionEvent::BranchDeleteChecked { branch, merged });
+                s.sink
+                    .event(SessionEvent::BranchDeleteChecked { branch, merged });
             }
         });
     }

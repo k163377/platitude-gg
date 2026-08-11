@@ -115,7 +115,10 @@ pub enum TabMsg {
     /// Whether `branch --delete` would go through for the branch a menu
     /// just opened over. The branch rides along: the menu may be open
     /// over another row by the time this lands.
-    BranchDelete { branch: String, merged: bool },
+    BranchDelete {
+        branch: String,
+        merged: bool,
+    },
     /// Merge tool names the settings field can offer. Empty is an answer.
     /// `settled` false is the fast half, with the slow read still out.
     MergeTools {
