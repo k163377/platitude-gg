@@ -13,8 +13,8 @@
 - `cherry-pick`(引数は ref 名 / 完全な oid / `row:<n>`。グラフ行にある commit なら先にそこへスクロールして選ぶ。下の `tip_landed` を読む)
 - `stage-hunk` / `stage-line` / `push` / `force-push` / `force-push-hold`
 - `push-retry`(**ボタンが黄 + `!` になる形は push を届かないリモートへ撃つ** — `fetch-fail` と同じ仕込み。push-retry は `--preset diverged` で実際の非早送り拒否を受けてから force で着地させ、報告行 `push_retry refused= branch=` が印の立った側を言う。**印が消えた側は最後の絵で見る**)
-- `reset-soft` / `reset-mixed` / `reset-hard`
-- `reset-hard-confirm`(hard はサブメニューの長押し行 — -confirm はメニューと行を出した所で止まり、reset-hard が長押しを完走させて実行)
+- `reset-soft` / `reset-mixed` / `reset-hard`(引数は完全な oid か `row:<n>`。**省略時は HEAD の 1 つ下の行** — 先端への reset は何も動かず絵にならない)
+- `reset-hard-confirm`(hard はサブメニューの長押し行 — -confirm はメニューと行を出した所で止まり、reset-hard が長押しを完走させて実行。引数の解決は reset-soft と同じ)
 - `commit-menu` / `reset-menu` / `fetch` / `settings`
 - `open-picker`(**ダイアログはプラットフォームの窓なのでどちらの PNG にも写らない** — 判定は報告行 `picker folder=` = 開いているリポジトリの親フォルダの `file:` URL)
 - `open-not-a-repo` / `open-bare` / `open-not-a-repo-retry` / `open-not-a-repo-cancel` / `open-fail-tab` / `open-fail-tab-bare`

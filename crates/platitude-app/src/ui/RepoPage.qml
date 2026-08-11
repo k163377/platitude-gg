@@ -2951,15 +2951,26 @@ Item {
             repoTab.cherryPick(pickOid)
         } else if (act === "reset-soft" || act === "reset-mixed") {
             // Through the menu, like clicking it: the row the menu was
-            // opened on is where the branch lands.
-            page.openRowMenu(arg)
+            // opened on is where the branch lands. "row:<n>" or a full
+            // oid names that row; with nothing given, the row under
+            // HEAD's — a reset to where the branch already stands would
+            // move nothing worth photographing, and an empty name would
+            // reach git as `reset ''`.
+            page.openRowMenu(arg === ""
+                             ? graphModel.oidAt(
+                                   graphModel.rowOf(workTree.headOid) + 1)
+                             : page.autoActOid(arg))
             page.moveBranchHere(act === "reset-soft" ? "soft" : "mixed")
         } else if (act === "reset-hard" || act === "reset-hard-confirm") {
             // Both stand where the click path stands: menu open, submenu
             // up, the held row on screen. "-confirm" stops there —
             // nothing has moved until the hold runs — and "reset-hard"
             // runs the hold to its end for the discarding write itself.
-            page.openRowMenu(arg)
+            // The row resolves the way reset-soft's does.
+            page.openRowMenu(arg === ""
+                             ? graphModel.oidAt(
+                                   graphModel.rowOf(workTree.headOid) + 1)
+                             : page.autoActOid(arg))
             resetMenu.offer()
             if (act === "reset-hard")
                 hardResetItem.completeHold()
