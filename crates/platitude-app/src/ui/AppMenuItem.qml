@@ -34,8 +34,11 @@ MenuItem {
     /// whatever of the sentence is left ("this file"), often nothing.
     property string code: ""
     /// The width this row asks the menu's shared chip column to hold:
-    /// its chip's own glyphs, when words follow them. A chip that ends
-    /// its row has nothing to line up with and asks for nothing.
+    /// its chip's own glyphs, whether or not words follow them. A chip
+    /// that ends its row asks too — the column has to clear the widest
+    /// command, or it would end past where the other rows' words begin
+    /// (デザイン規約 §git 用語のコード表記). Only a row with no chip
+    /// asks for nothing.
     readonly property real codeColSeat:
         menuItem.code !== "" ? codeLabel.implicitWidth : 0
 
@@ -137,9 +140,9 @@ MenuItem {
     contentItem: RowLayout {
         spacing: Theme.spaceSm
         // The chip spends no width of its own beyond the column: the
-        // layout sees the glyphs — or the menu's shared chip column
-        // when a sentence follows, so every such row's words start on
-        // the same x (デザイン規約 §git 用語のコード表記). The word
+        // layout sees the menu's shared chip column — never less than
+        // its own glyphs — so every row's words start on the same x
+        // (デザイン規約 §git 用語のコード表記). The word
         // itself starts where every other row starts its words, and the
         // tint hangs outside its glyphs — left into the row padding,
         // right into the gap — half tint, half air; the column's spare

@@ -69,11 +69,13 @@ Menu {
         }
     }
 
-    // The one column this menu's chips share when a sentence follows
-    // them: as wide as the widest such chip, so every row's words start
-    // on the same x and the chips read as a table's first column. A
-    // chip that ends its row has nothing to line up and stays its own
-    // width, claiming no seat.
+    // The one column this menu's chips share: as wide as the widest
+    // chip on offer, so every row's words start on the same x and the
+    // chips read as a table's first column. A chip that ends its row
+    // holds a seat like any other — left out, the widest command would
+    // end past where the other rows' words begin (`cherry-pick` past
+    // the head of "into main") and the column would break (デザイン規約
+    // §git 用語のコード表記).
     readonly property real codeColW: {
         let widest = 0
         for (let i = 0; i < appMenu.count; i++) {
