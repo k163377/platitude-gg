@@ -231,6 +231,132 @@ Rectangle {
     function setCurrentRow(row) {
         graphList.currentIndex = row
     }
+
+    // ---- walking the history with the arrow keys -------------------
+    // (規約 §矢印で履歴を辿る)
+
+    /// The page is holding the selection where it is: a half-written
+    /// message has put a question up and the highlight back, and it
+    /// stands until it is answered. The keys must not tug against it —
+    /// each press would be pushed back and the pair would fight.
+    property bool selectionHeld: false
+
+    /// Moves the selection one row (`delta` = ∓1) and brings it into
+    /// view; answers whether it moved. The keys and the automation hook
+    /// both come through here — a headless run cannot inject a keystroke,
+    /// so the step has to be callable as well as pressable (verify-ui).
+    ///
+    /// Refused while something stands over a row: a question waiting to
+    /// be answered, a name box being typed into, or the page holding the
+    /// selection back. The name box is the one that has to be named
+    /// here rather than left to the focus: it lives inside a row, and a
+    /// single-line box does not consume Up and Down — they come up
+    /// through the delegate to this list.
+    function stepRow(delta) {
+        if (graphArea.selectionHeld || askBar.label !== ""
+                || graphList.namingOid !== "" || graphList.count === 0)
+            return false
+        const from = graphList.currentIndex
+        const row = from < 0 ? 0
+                  : Math.max(0, Math.min(from + delta, graphList.count - 1))
+        if (row === from)
+            return false
+        // Asked before the move: whether there was a reading position to
+        // keep. A step off the edge is one row short of being on screen,
+        // but a selection that was nowhere in sight is nobody's place —
+        // that one is centered instead.
+        const near = graphArea.rowOnScreen(from)
+        graphList.currentIndex = row
+        graphArea.revealStep(row, near)
+        graphArea.noteStep()
+        return true
+    }
+    /// Brings a stepped-onto row into view. `near` moves as little as
+    /// will do, which is the row itself; anything else centers.
+    ///
+    /// Row positions are worked out rather than read off the items:
+    /// `itemAtIndex` answers null for rows the view has not built, and a
+    /// walk that trusts it is cut to the viewport (P3-確認事項: the WIP
+    /// list's range selection is the standing example).
+    function revealStep(row, near) {
+        if (!near) {
+            graphList.positionViewAtIndex(row, ListView.Center)
+            return
+        }
+        // The first row's box carries the list's top margin with it — its
+        // highlight is painted over that sliver — so stepping onto it
+        // goes the whole way to the top rather than leaving a dark band.
+        const top = graphList.originY + row * Theme.graphRowHeight
+                    - (row === 0 ? graphList.topMargin : 0)
+        const bottom = graphList.originY + (row + 1) * Theme.graphRowHeight
+        if (top < graphList.contentY)
+            graphList.contentY = graphList.clampY(top)
+        else if (bottom > graphList.contentY + graphList.height)
+            graphList.contentY = graphList.clampY(bottom - graphList.height)
+    }
+    /// How the last step left `row` sitting in the viewport, for the
+    /// headless run: `in` when the view never moved (the row was already
+    /// there), `edge` when it came in flush against the top or the bottom
+    /// (the least a step can move the view), `center` when it was put in
+    /// the middle instead. Which of the three is right is the whole of
+    /// 規約 §矢印で履歴を辿る's second paragraph, and a screenshot cannot
+    /// tell an edge that was reached by one row from one that was jumped
+    /// to. `wasY` is where the view stood before that step.
+    function stepLanding(row, wasY) {
+        if (Math.abs(graphList.contentY - wasY) < 1)
+            return "in"
+        const top = graphList.originY + row * Theme.graphRowHeight
+        const bottom = top + Theme.graphRowHeight
+        const viewBottom = graphList.contentY + graphList.height
+        if (Math.abs(top - graphList.contentY) < 1
+                || Math.abs(bottom - viewBottom) < 1)
+            return "edge"
+        if (Math.abs((top + bottom) / 2
+                     - (graphList.contentY + viewBottom) / 2)
+                < Theme.graphRowHeight)
+            return "center"
+        return "adrift"
+    }
+
+    /// Books the reading of the row stepped onto. The first step of a run
+    /// is read at once — a single press has to answer inside the
+    /// interaction budget — and the ones behind it only push the settle
+    /// back. So a held arrow is read exactly twice: where it set off, and
+    /// where it stopped. A selection carries three git processes with it
+    /// (`git show`, the history question, the signature question), which
+    /// is not a thing to run at the keyboard's repeat rate.
+    function noteStep() {
+        if (stepTimer.running) {
+            graphArea.stepPending = true
+            stepTimer.restart()
+            return
+        }
+        graphArea.stepPending = false
+        graphArea.landStep()
+        stepTimer.restart()
+    }
+    /// Whether a step went by unread while the settle was running. Without
+    /// it the settle behind a single press would read the same row twice.
+    property bool stepPending: false
+    function landStep() {
+        // The row under the highlight as it stands, not the one the key
+        // asked for: a background rebuild during the settle writes the
+        // rows in place, and what was stepped onto is whatever is there
+        // to be seen now.
+        const oidHex = graphArea.graphModel.oidAt(graphList.currentIndex)
+        if (oidHex !== "")
+            graphArea.rowActivated(oidHex)
+    }
+    Timer {
+        id: stepTimer
+        interval: Metrics.keyStepSettleMs
+        onTriggered: {
+            if (!graphArea.stepPending)
+                return
+            graphArea.stepPending = false
+            graphArea.landStep()
+        }
+    }
     /// Moves the selection and centers the viewport on it.
     function jumpToRow(row) {
         graphList.currentIndex = row
@@ -471,7 +597,7 @@ Rectangle {
                   - anchors.rightMargin
         onDismissed: {
             graphArea.runFind()
-            graphList.forceActiveFocus()
+            graphList.takeKeyboard()
         }
         onQueryChanged: graphArea.runFind()
         onNextRequested: graphArea.findNext()
@@ -500,8 +626,24 @@ Rectangle {
         // the list chases its current item: a background rebuild that
         // re-resolves the selection onto a row one further down drags a
         // reader parked in the history to wherever the selection is. The
-        // graph has no key navigation to want the chase for.
+        // arrow keys move the view themselves, by as little as will do
+        // (`revealStep`), which is not what the chase would do for them.
         highlightFollowsCurrentItem: false
+        // Qt's own key navigation moves `currentIndex` and tells nobody:
+        // the highlight would walk off screen — the chase above is off —
+        // while the panes on the right went on showing the commit it set
+        // off from. The arrows are answered below instead, where the page
+        // hears about where they landed (規約 §矢印で履歴を辿る).
+        keyNavigationEnabled: false
+        Keys.onUpPressed: event => event.accepted = graphArea.stepRow(-1)
+        Keys.onDownPressed: event => event.accepted = graphArea.stepRow(1)
+        /// Where the keyboard goes when a press lands in this pane. Every
+        /// way in comes through here — a row click, a press on the lanes,
+        /// the find card closing, the headless hook — so there is one
+        /// answer to "what does a press do to the keyboard".
+        function takeKeyboard() {
+            graphList.forceActiveFocus()
+        }
         boundsBehavior: Flickable.StopAtBounds
         flickDeceleration: 8000
         maximumFlickVelocity: 9000
@@ -828,6 +970,10 @@ Rectangle {
             const idx = graphList.indexAt(graphArea.labelW + 1,
                                           graphList.contentY + p.y)
             if (idx >= 0) {
+                // Same as a click on the row itself: the lanes are part
+                // of the row, so a press that lands on them leaves the
+                // keyboard here too (規約 §矢印で履歴を辿る).
+                graphList.takeKeyboard()
                 graphList.currentIndex = idx
                 graphList.rowSelected(graphArea.graphModel.oidAt(idx))
             }

@@ -2012,6 +2012,76 @@ Item {
             + " x=" + Math.round(graphPane.graphX)
             + " max=" + Math.round(graphPane.graphXMax))
     }
+    // The arrow keys, which no headless run can press: the walk enters
+    // where `Keys.onDownPressed` enters (`GraphPane.stepRow`) after
+    // taking the keyboard the way a row click takes it. The selected
+    // commit's message has to have arrived before it can be typed over,
+    // which is what the wait is for — the same one the reword verbs keep.
+    Timer {
+        id: graphStepTimer
+        interval: 800
+        /// How many rows, and which way. The refusing runs fix their own.
+        property int steps: 1
+        /// The two grounds a step is refused on that a run can stand up:
+        /// a name box open on the row, and a half-written message the
+        /// move is already being asked about. (The third — a question
+        /// standing on the bar — is refused by the same expression, and
+        /// its pill holds the keyboard anyway.)
+        property bool named: false
+        property bool dirty: false
+        /// The view sent away from the selection before the step, so the
+        /// row stepped onto has no reading position to preserve.
+        property bool away: false
+        onTriggered: {
+            if (graphStepTimer.dirty)
+                detailsPane.setMessageText("wip: half of a subject", "")
+            if (graphStepTimer.named)
+                graphPane.startNaming(
+                    graphModel.oidAt(graphPane.view.currentIndex))
+            if (graphStepTimer.away)
+                graphPane.view.contentY = graphPane.view.clampY(Infinity)
+            graphStepReport.from = graphPane.view.currentIndex
+            graphStepReport.refused = 0
+            graphPane.view.takeKeyboard()
+            const way = graphStepTimer.steps < 0 ? -1 : 1
+            for (let n = 0; n < Math.abs(graphStepTimer.steps); n++) {
+                // Where the view stood before each step, so what is read
+                // is how the last one landed: a walk that runs off the
+                // bottom moves the view once per row from there on.
+                graphStepReport.wasY = graphPane.view.contentY
+                if (!graphPane.stepRow(way))
+                    graphStepReport.refused++
+            }
+            graphStepReport.start()
+        }
+    }
+    // Longer than the settle behind the walk (`keyStepSettleMs`), so what
+    // is read is the reading a hand coming off the key would get: a run
+    // that moved the highlight and never landed the selection has to be
+    // told apart from one that did, and both frame alike from the waist
+    // down — the picture holds the lit row, not which commit the panes
+    // on the right ended up on.
+    Timer {
+        id: graphStepReport
+        interval: 400
+        property int from: -1
+        property real wasY: 0
+        property int refused: 0
+        onTriggered: {
+            const row = graphPane.view.currentIndex
+            AppBackend.report(
+                "graph_step from=" + graphStepReport.from
+                + " row=" + row
+                + " steps=" + graphStepTimer.steps
+                + " landing=" + graphPane.stepLanding(row, graphStepReport.wasY)
+                + " held=" + (page.pendingMove !== null)
+                + " back=" + (row === graphStepReport.from)
+                + " refused=" + graphStepReport.refused
+                + " onscreen=" + graphPane.rowOnScreen(row)
+                + " focused=" + graphPane.view.activeFocus
+                + " selected=" + (page.selectedOid === graphModel.oidAt(row)))
+        }
+    }
     // The fetch has to land, and its answer reach the chips, before the
     // stacked ones are worth unstacking.
     Timer {
@@ -2901,6 +2971,36 @@ Item {
             else
                 page.activateRow(graphModel.oidAt(Number(arg)))
             cornerTimer.start()
+        } else if (act === "graph-step" || act === "graph-step-edge"
+                   || act === "graph-step-far" || act === "graph-step-named"
+                   || act === "graph-step-dirty") {
+            // Walking the history with the arrow keys. Keystrokes cannot
+            // be injected, so the run enters at the same `stepRow` the
+            // key handler enters — and takes the keyboard first through
+            // the same call a row click makes, since a graph nobody has
+            // pressed hears no arrows at all (規約 §矢印で履歴を辿る).
+            // The argument is the signed number of rows; every run but the
+            // plain one sets its own, because each is about one particular
+            // step. `-dirty` takes two: the first raises the question
+            // about the half-written message and is put back by it, and
+            // the second is the one that must not tug against it. `-edge`
+            // walks off the bottom of a window seeded at its floor, where
+            // the history is taller than the pane; `-far` sends the view
+            // to the end first, so the row it steps off has nowhere on
+            // screen to be — the two answer the second paragraph of
+            // §矢印で履歴を辿る, which a picture cannot (an edge reached
+            // one row at a time frames like an edge jumped to).
+            page.activateRow(branchesModel.headOid !== ""
+                             ? branchesModel.headOid : graphModel.oidAt(0))
+            graphStepTimer.named = act === "graph-step-named"
+            graphStepTimer.dirty = act === "graph-step-dirty"
+            graphStepTimer.away = act === "graph-step-far"
+            graphStepTimer.steps = act === "graph-step-named" ? 1
+                                 : act === "graph-step-dirty" ? 2
+                                 : act === "graph-step-edge" ? 10
+                                 : act === "graph-step-far" ? 1
+                                 : arg === "" ? 1 : Number(arg)
+            graphStepTimer.start()
         } else if (act === "name-box") {
             // Opened and left standing, for a look at it. The argument is
             // the row, since the box only belongs on one with no chips.
@@ -4220,6 +4320,12 @@ Item {
                         workTree: workTree
                         blank: page.blank
                         chipListAnchor: page.refListAnchor
+                        // A half-written message has put the move back
+                        // and a question up: until it is answered the
+                        // arrows stay still, or every press would be
+                        // pushed back by `guardEdits` and the two would
+                        // fight (規約 §矢印で履歴を辿る).
+                        selectionHeld: page.pendingMove !== null
                         onRowActivated: oidHex => page.activateRow(oidHex)
                         // A search that lands somewhere lands the way a
                         // click does: the row is selected and the panes

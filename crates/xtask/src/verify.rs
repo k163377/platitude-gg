@@ -262,13 +262,20 @@ pub fn run(args: &[String]) -> Result<(), String> {
     std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
     println!("config dir: {}", config_dir.display());
 
-    // The one verb that needs the configuration to say something before
-    // the run starts: a window smaller than any floor the layout has. It
-    // is what a file written before there was a floor looks like, and the
+    // The verbs that need the configuration to say something before the
+    // run starts: a window smaller than any floor the layout has. It is
+    // what a file written before there was a floor looks like, and the
     // way in is the only place that can put it right. Written here rather
     // than by hand in the app, because the app never writes a shape it
     // could not take — so nothing inside it could produce this state.
-    if opts.verb == "window-floor" {
+    // `window-floor` is about the lift itself; the two stepping verbs ride
+    // the same seed for the height, since no demo repository has more
+    // commits than the default window shows at once, and a graph with
+    // nothing below the fold has no viewport rule to answer.
+    if opts.verb == "window-floor"
+        || opts.verb == "graph-step-edge"
+        || opts.verb == "graph-step-far"
+    {
         let state = config_dir.join("state.toml");
         std::fs::write(
             &state,
@@ -500,6 +507,29 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // that picture cannot be told from a band that took the crowd
         // well — so the crowd itself has to be said out loud.
         "badges" => Some("badges fits=true op=true conflicts=true identity=true"),
+        // Walking the graph with the arrows. The picture holds which row
+        // is lit and whose commit fills the right-hand pane, but not the
+        // three things that make the walk work: that the keyboard was on
+        // the list at all, that the settle behind a held key landed the
+        // selection, and that the viewport carried the row it stepped
+        // onto. A walk that moved nothing frames as a graph sitting still,
+        // which is what a graph does most of the time.
+        "graph-step" => Some(
+            "landing=in held=false back=false refused=0 onscreen=true focused=true selected=true",
+        ),
+        // The other two landings, which no picture holds: a row brought in
+        // flush against the bottom one step at a time, and a row centered
+        // because the one it stepped off was nowhere on screen. Both frame
+        // as a graph with a lit row somewhere in it.
+        "graph-step-edge" => Some("landing=edge held=false back=false refused=0 onscreen=true"),
+        "graph-step-far" => Some("landing=center held=false back=false refused=0 onscreen=true"),
+        // The refusing halves. `back=true` is the whole of them — nothing
+        // moved — and it is worth nothing without `refused=`, since a walk
+        // that was never attempted leaves the same row lit. Read them
+        // beside a plain `graph-step`: a step that always refuses passes
+        // these two on its own.
+        "graph-step-named" => Some("held=false back=true refused=1"),
+        "graph-step-dirty" => Some("held=true back=true refused=1"),
         _ => None,
     };
     let outcome = Outcome {

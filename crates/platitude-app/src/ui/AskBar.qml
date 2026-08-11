@@ -418,8 +418,10 @@ Rectangle {
             }
         }
     }
-    // The bar has no focus of its own — neither list takes any — so
-    // Escape is heard as a shortcut while it stands.
+    // Escape is heard as a shortcut rather than as a key handler on the
+    // bar: while a question stands the focus is on the pill or on the
+    // form's own box, and the graph list — which takes it on a row click
+    // — holds no Escape of its own to swallow it first.
     Shortcut {
         // `sequences` rather than `sequence`: Cancel is more than one key
         // on some platforms, and binding the single form takes only the

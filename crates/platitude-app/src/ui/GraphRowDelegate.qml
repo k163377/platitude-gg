@@ -710,6 +710,12 @@ Item {
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         onClicked: mouse => {
+            // A press here says where the keyboard is working, so the
+            // arrows walk the history from the row that was just picked
+            // (規約 §矢印で履歴を辿る). Taken by the list rather than by
+            // this row: the delegate is recycled the moment the row
+            // scrolls off, and either button is the same claim.
+            rowItem.ListView.view.takeKeyboard()
             rowItem.ListView.view.currentIndex = rowItem.index
             rowItem.ListView.view.rowSelected(rowItem.oid_hex)
             // The synthetic WIP row is not a commit, so nothing in the

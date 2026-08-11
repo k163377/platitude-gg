@@ -24,6 +24,7 @@ QtObject {
     readonly property int messageMinW: 160
     readonly property int detailsAvatar: 40
     readonly property int anchorDelayMs: 50
+    readonly property int keyStepSettleMs: 150
     readonly property int pollIntervalMs: 10000
     readonly property int spinMs: 1000
     readonly property int holdMs: 500
