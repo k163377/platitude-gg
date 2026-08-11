@@ -50,17 +50,14 @@ MenuItem {
     /// down the same column as the rest (`AppMenu.holdIndent`).
     property int holdMs: 0
     /// How far into the hold the press has got, 0 to 1.
-    property real holdProgress: 0
+    readonly property alias holdProgress: holdDrive.progress
     /// The colour the hold fills the row with.
     property color holdTone: Theme.danger
     /// Held all the way down.
     signal held()
     /// Automation: run the hold to its end without a press behind it.
     function completeHold() {
-        if (menuItem.holdMs > 0) {
-            rowBackAnim.stop()
-            rowHoldAnim.restart()
-        }
+        holdDrive.begin()
     }
     readonly property bool holding: menuItem.holdProgress > 0
 
@@ -247,33 +244,10 @@ MenuItem {
         }
     }
 
-    NumberAnimation {
-        id: rowHoldAnim
-        target: menuItem
-        property: "holdProgress"
-        from: 0
-        to: 1
-        duration: Math.max(menuItem.holdMs, 1)
-        // A press that stopped short slides back out. A held row reports
-        // no click at all, so without this the answer to a plain click on
-        // it is nothing happening at all (デザイン規約 §長押し). Pressed
-        // all the way through, the row has already run and there is
-        // nothing left to say — that one blanks.
-        onStopped: {
-            if (menuItem.holdProgress >= 1)
-                menuItem.holdProgress = 0
-            else if (menuItem.holdProgress > 0)
-                rowBackAnim.restart()
-        }
+    HoldDriver {
+        id: holdDrive
+        holdMs: menuItem.holdMs
         onFinished: menuItem.held()
-    }
-    NumberAnimation {
-        id: rowBackAnim
-        target: menuItem
-        property: "holdProgress"
-        to: 0
-        duration: Metrics.holdBackMs
-        easing.type: Easing.OutCubic
     }
     // Takes the press before the MenuItem underneath can: a click here
     // would emit `triggered`, which both runs the row and closes the menu
@@ -284,43 +258,35 @@ MenuItem {
         id: rowPress
         anchors.fill: parent
         enabled: (menuItem.holdMs > 0 || menuItem.staysOpen) && menuItem.enabled
-        onPressed: {
-            if (menuItem.holdMs > 0) {
-                rowBackAnim.stop()
-                rowHoldAnim.restart()
-            }
-        }
+        onPressed: holdDrive.begin()
         // Released anywhere, or dragged off the row: both call it off.
         // A stays-open row has no fill to call off — letting go on the row
         // is its click, and letting go outside it is not.
         onReleased: mouse => {
-            rowHoldAnim.stop()
+            holdDrive.letUp()
             if (menuItem.holdMs <= 0 && menuItem.staysOpen
                     && mouse.x >= 0 && mouse.y >= 0
                     && mouse.x <= width && mouse.y <= height)
                 menuItem.picked()
         }
-        onCanceled: rowHoldAnim.stop()
-        onPositionChanged: if (!containsMouse) rowHoldAnim.stop()
+        onCanceled: holdDrive.letUp()
+        onPositionChanged: if (!containsMouse) holdDrive.letUp()
     }
     // The same row from the keyboard: walk to it and hold Space or Enter.
     // Accepting the key keeps the menu from triggering the row outright,
     // and auto-repeat is dropped on both edges (デザイン規約 §長押し).
     Keys.onPressed: event => {
-        if (menuItem.holdMs <= 0 || event.isAutoRepeat || !holdKey(event.key))
+        if (menuItem.holdMs <= 0 || event.isAutoRepeat
+                || !holdDrive.holdKey(event.key))
             return
-        rowBackAnim.stop()
-        rowHoldAnim.restart()
+        holdDrive.begin()
         event.accepted = true
     }
     Keys.onReleased: event => {
-        if (menuItem.holdMs <= 0 || event.isAutoRepeat || !holdKey(event.key))
+        if (menuItem.holdMs <= 0 || event.isAutoRepeat
+                || !holdDrive.holdKey(event.key))
             return
-        rowHoldAnim.stop()
+        holdDrive.letUp()
         event.accepted = true
-    }
-    function holdKey(key) {
-        return key === Qt.Key_Space || key === Qt.Key_Return
-                || key === Qt.Key_Enter
     }
 }

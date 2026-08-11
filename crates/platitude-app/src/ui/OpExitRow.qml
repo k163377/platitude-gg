@@ -27,7 +27,7 @@ Item {
     /// Zero is an ordinary row.
     property int holdMs: 0
     /// How far into the hold the press has got, 0 to 1.
-    property real holdProgress: 0
+    readonly property alias holdProgress: holdDrive.progress
     property color holdTone: Theme.danger
     property bool enabled: true
     /// The width this row's chip asks the card's shared column to hold,
@@ -45,10 +45,7 @@ Item {
 
     /// Automation: run the hold to its end without a press behind it.
     function completeHold() {
-        if (opRow.holdMs > 0) {
-            backAnim.stop()
-            holdAnim.restart()
-        }
+        holdDrive.begin()
     }
     readonly property bool holding: opRow.holdProgress > 0
 
@@ -155,25 +152,20 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         enabled: opRow.enabled
-        onPressed: {
-            if (opRow.holdMs > 0) {
-                backAnim.stop()
-                holdAnim.restart()
-            }
-        }
+        onPressed: holdDrive.begin()
         // Released anywhere, or dragged off the row: both call it off. A
         // plain row runs on the release that lands on it.
         onReleased: mouse => {
             if (opRow.holdMs > 0) {
-                holdAnim.stop()
+                holdDrive.letUp()
                 return
             }
             if (mouse.x >= 0 && mouse.y >= 0
                     && mouse.x <= width && mouse.y <= height)
                 opRow.picked()
         }
-        onCanceled: holdAnim.stop()
-        onPositionChanged: if (!containsMouse) holdAnim.stop()
+        onCanceled: holdDrive.letUp()
+        onPositionChanged: if (!containsMouse) holdDrive.letUp()
     }
     // The same row from the keyboard, the one alternative a hold has
     // anywhere in this app: focus it, then hold Space or Enter.
@@ -181,52 +173,27 @@ Item {
     // zero for as long as the key is down and can never complete.
     activeFocusOnTab: opRow.enabled
     Keys.onPressed: event => {
-        if (!holdKey(event.key) || event.isAutoRepeat)
+        if (!holdDrive.holdKey(event.key) || event.isAutoRepeat)
             return
         if (opRow.holdMs <= 0) {
             opRow.picked()
             event.accepted = true
             return
         }
-        backAnim.stop()
-        holdAnim.restart()
+        holdDrive.begin()
         event.accepted = true
     }
     Keys.onReleased: event => {
-        if (opRow.holdMs <= 0 || event.isAutoRepeat || !holdKey(event.key))
+        if (opRow.holdMs <= 0 || event.isAutoRepeat
+                || !holdDrive.holdKey(event.key))
             return
-        holdAnim.stop()
+        holdDrive.letUp()
         event.accepted = true
     }
-    function holdKey(key) {
-        return key === Qt.Key_Space || key === Qt.Key_Return
-                || key === Qt.Key_Enter
-    }
 
-    NumberAnimation {
-        id: holdAnim
-        target: opRow
-        property: "holdProgress"
-        from: 0
-        to: 1
-        duration: Math.max(opRow.holdMs, 1)
-        // A press that stopped short slides back out: a held row reports
-        // no click, so without this the answer to a plain click on one is
-        // nothing happening at all (デザイン規約 §長押し).
-        onStopped: {
-            if (opRow.holdProgress >= 1)
-                opRow.holdProgress = 0
-            else if (opRow.holdProgress > 0)
-                backAnim.restart()
-        }
+    HoldDriver {
+        id: holdDrive
+        holdMs: opRow.holdMs
         onFinished: opRow.picked()
-    }
-    NumberAnimation {
-        id: backAnim
-        target: opRow
-        property: "holdProgress"
-        to: 0
-        duration: Metrics.holdBackMs
-        easing.type: Easing.OutCubic
     }
 }

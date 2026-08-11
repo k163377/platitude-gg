@@ -31,6 +31,7 @@ FormField 1.0 FormField.qml
 GraphPane 1.0 GraphPane.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml
 HeadTrack 1.0 HeadTrack.qml
+HoldDriver 1.0 HoldDriver.qml
 HoldIcon 1.0 HoldIcon.qml
 HoverToolButton 1.0 HoverToolButton.qml
 IdentIcon 1.0 IdentIcon.qml

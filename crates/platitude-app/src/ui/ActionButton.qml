@@ -39,7 +39,7 @@ HoverToolButton {
     /// §進行中・長押しの定数).
     property int holdMs: 0
     /// How far into the hold the press has got, 0 to 1.
-    property real holdProgress: 0
+    readonly property alias holdProgress: holdDrive.progress
     /// Frame drawn around the button. Transparent leaves the button bare.
     property color frameColor: "transparent"
     /// The last go at what this button does did not work. Drawn as a mark
@@ -180,10 +180,7 @@ HoverToolButton {
 
     /// Automation: run the hold to its end without a press behind it.
     function completeHold() {
-        if (actionBtn.holdMs > 0) {
-            backAnim.stop()
-            holdAnim.restart()
-        }
+        holdDrive.begin()
     }
 
     // Tab reaches the buttons that need a second way in. The rest of the
@@ -198,12 +195,10 @@ HoverToolButton {
     onDownChanged: {
         if (actionBtn.holdMs <= 0 || !actionBtn.live)
             return
-        if (actionBtn.down) {
-            backAnim.stop()
-            holdAnim.restart()
-        } else {
-            holdAnim.stop()
-        }
+        if (actionBtn.down)
+            holdDrive.begin()
+        else
+            holdDrive.letUp()
     }
     // The hold's other hand: focus it, then hold Space or Enter. Accepting
     // the key keeps AbstractButton from also taking Space as a press, which
@@ -215,50 +210,22 @@ HoverToolButton {
     // then never complete.
     Keys.onPressed: event => {
         if (actionBtn.holdMs <= 0 || !actionBtn.live
-                || event.isAutoRepeat || !holdKey(event.key))
+                || event.isAutoRepeat || !holdDrive.holdKey(event.key))
             return
-        backAnim.stop()
-        holdAnim.restart()
+        holdDrive.begin()
         event.accepted = true
     }
     Keys.onReleased: event => {
         if (actionBtn.holdMs <= 0 || !actionBtn.live
-                || event.isAutoRepeat || !holdKey(event.key))
+                || event.isAutoRepeat || !holdDrive.holdKey(event.key))
             return
-        holdAnim.stop()
+        holdDrive.letUp()
         event.accepted = true
     }
-    function holdKey(key) {
-        return key === Qt.Key_Space || key === Qt.Key_Return
-                || key === Qt.Key_Enter
-    }
-    NumberAnimation {
-        id: holdAnim
-        target: actionBtn
-        property: "holdProgress"
-        from: 0
-        to: 1
-        duration: Math.max(actionBtn.holdMs, 1)
-        // A press that stopped short slides back out instead of blanking:
-        // a hold button reports no click at all, so without this the only
-        // answer to a plain click is nothing happening (デザイン規約
-        // §長押し). Pressed all the way through, it has already fired and
-        // there is nothing left to say — that one blanks.
-        onStopped: {
-            if (actionBtn.holdProgress >= 1)
-                actionBtn.holdProgress = 0
-            else if (actionBtn.holdProgress > 0)
-                backAnim.restart()
-        }
+    HoldDriver {
+        id: holdDrive
+        holdMs: actionBtn.holdMs
         onFinished: actionBtn.held()
-    }
-    NumberAnimation {
-        id: backAnim
-        target: actionBtn
-        property: "holdProgress"
-        to: 0
-        duration: Metrics.holdBackMs
-        easing.type: Easing.OutCubic
     }
     background: Rectangle {
         // The same wash every other tool button answers with

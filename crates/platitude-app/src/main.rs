@@ -93,6 +93,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/GraphPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphRowDelegate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HeadTrack.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/HoldDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HoldIcon.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HoverToolButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/IdentIcon.qml", "qt/qml/platitude");

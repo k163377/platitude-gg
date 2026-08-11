@@ -61,7 +61,7 @@ Rectangle {
     /// answer.
     property bool hold: false
     /// How far into the hold the press has got, 0 to 1.
-    property real holdProgress: 0
+    readonly property alias holdProgress: holdDrive.progress
     /// What the question needs in order to have an answer at all — a
     /// chooser, a name box. Declared by whoever raises the question, since
     /// only they know what is being asked; the bar just gives it a place
@@ -78,24 +78,17 @@ Rectangle {
     property bool answerable: true
     /// Automation: run the hold to its end without a press behind it.
     function completeHold() {
-        if (bar.hold) {
-            backAnim.stop()
-            holdAnim.restart()
-        }
+        holdDrive.begin()
     }
     /// Called off without the hand letting go — the question itself has
-    /// gone. Blanks the fill rather than sliding it back: the slide is an
-    /// answer to a press that stopped short, and there is no longer
-    /// anything here for it to be an answer about.
+    /// gone, so the fill blanks instead of sliding back (HoldDriver.blank).
     function blankHold() {
-        holdAnim.stop()
-        backAnim.stop()
-        bar.holdProgress = 0
+        holdDrive.blank()
     }
-    /// The keys that stand in for the press (デザイン規約 §長押し).
-    function holdKey(key) {
-        return key === Qt.Key_Space || key === Qt.Key_Return
-                || key === Qt.Key_Enter
+    HoldDriver {
+        id: holdDrive
+        holdMs: bar.hold ? Metrics.holdMs : 0
+        onFinished: bar.confirmed()
     }
 
     /// The pill was clicked: the owner runs what the question guarded.
@@ -379,62 +372,30 @@ Rectangle {
                 onContainsPressChanged: {
                     if (!bar.hold)
                         return
-                    if (containsPress) {
-                        backAnim.stop()
-                        holdAnim.restart()
-                    } else {
-                        holdAnim.stop()
-                    }
+                    if (containsPress)
+                        holdDrive.begin()
+                    else
+                        holdDrive.letUp()
                 }
             }
             // The same answer without a pointer: Space or Enter, held where
             // the question asks for a hold and simply pressed where it does
             // not. Auto-repeat is dropped on both edges — see ActionButton.
             Keys.onPressed: event => {
-                if (event.isAutoRepeat || !bar.holdKey(event.key))
+                if (event.isAutoRepeat || !holdDrive.holdKey(event.key))
                     return
-                if (bar.hold) {
-                    backAnim.stop()
-                    holdAnim.restart()
-                }
+                if (bar.hold)
+                    holdDrive.begin()
                 event.accepted = true
             }
             Keys.onReleased: event => {
-                if (event.isAutoRepeat || !bar.holdKey(event.key))
+                if (event.isAutoRepeat || !holdDrive.holdKey(event.key))
                     return
                 if (bar.hold)
-                    holdAnim.stop()
+                    holdDrive.letUp()
                 else
                     bar.confirmed()
                 event.accepted = true
-            }
-            NumberAnimation {
-                id: holdAnim
-                target: bar
-                property: "holdProgress"
-                from: 0
-                to: 1
-                duration: Metrics.holdMs
-                // A press that stopped short slides back out. A hold pill
-                // reports no click at all, so without this a plain click
-                // on it is answered by nothing happening (デザイン規約
-                // §長押し). Pressed all the way through, the question has
-                // already been answered and the bar is on its way out.
-                onStopped: {
-                    if (bar.holdProgress >= 1)
-                        bar.holdProgress = 0
-                    else if (bar.holdProgress > 0)
-                        backAnim.restart()
-                }
-                onFinished: bar.confirmed()
-            }
-            NumberAnimation {
-                id: backAnim
-                target: bar
-                property: "holdProgress"
-                to: 0
-                duration: Metrics.holdBackMs
-                easing.type: Easing.OutCubic
             }
         }
         // Escape and a click anywhere else walk away too; this is the
