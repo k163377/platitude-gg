@@ -107,9 +107,9 @@ commands:
                           a write git refused is what this verb shows, so
                           it does not sink the run (delete-branch-refused,
                           commands-fail, commands-clear, fetch-fail,
-                          fetch-resume, push-retry, drop-commit on the
-                          drop-stops preset, and push / publish-new-go
-                          against an unreachable remote)
+                          fetch-recover, fetch-resume, push-retry,
+                          drop-commit on the drop-stops preset, and push /
+                          publish-new-go against an unreachable remote)
       The open-refused verbs (open-not-a-repo, open-bare, the -retry /
       -cancel ways out, and open-fail-tab for the road that keeps its
       tab) make their own folder when no argument names one: what they

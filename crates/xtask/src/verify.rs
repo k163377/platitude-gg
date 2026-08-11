@@ -470,6 +470,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // `was=` is judged with it — a refusal that never landed leaves
         // a mark that was never red, and clearing nothing would pass.
         "commands-clear" => Some("commands_clear was=true wrong=false"),
+        // Recovery is the show, and the picture can only hold its quiet
+        // half: a band that failed and healed ends the run looking like
+        // one that never failed at all. `was=`/`hadline=` are the red
+        // half — without them, a fetch that never failed raised no line,
+        // and taking down nothing would pass as recovery.
+        "fetch-recover" => {
+            Some("fetch_recover was=true hadline=true wrong=false line=false failures=0")
+        }
         // `edge=` rides along in that report but is not judged: whether an
         // edge would land off the screen is a question about a real
         // monitor, and the offscreen platform has none to answer with.

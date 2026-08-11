@@ -755,6 +755,45 @@ ApplicationWindow {
         }
     }
 
+    // PG_AUTO_ACT=fetch-recover: a fetch that failed put one line in the
+    // panel's header and turned the band's `>_` red; the next fetch that
+    // lands takes both down on its own. Nothing is pressed — recovery,
+    // not the reader, is what retires fetch news, while the rows below
+    // stay whatever they were (history is the reader's to clear). The
+    // page has already fired the fetch that cannot land; this waits for
+    // its refusal, reads the mark, fires the fetch that can, and reads
+    // the same mark again. Judged off the band for the commands-clear
+    // reason: the proof is that the page's news reached the mark and
+    // then left it, and the picture can only hold the quiet half.
+    Timer {
+        id: fetchRecoverActTimer
+        interval: 3000
+        onTriggered: {
+            fetchRecoverReport.was = topBar.commandsWrong
+            fetchRecoverReport.hadLine = root.curPage !== null
+                && root.curPage.pageTab.lastError !== ""
+            if (root.curPage !== null)
+                root.curPage.pageTab.fetch("")
+            fetchRecoverReport.start()
+        }
+    }
+    Timer {
+        id: fetchRecoverReport
+        interval: 1600
+        property bool was: false
+        property bool hadLine: false
+        onTriggered: AppBackend.report(
+            "fetch_recover was=" + was
+            + " hadline=" + hadLine
+            + " wrong=" + topBar.commandsWrong
+            + " line=" + (root.curPage !== null
+                          && root.curPage.pageTab.lastError !== "")
+            + " failures=" + (root.curPage !== null
+                              ? root.curPage.pageTab.fetchFailures : -1)
+            + " open=" + (root.curPage !== null
+                          && root.curPage.commandsShown))
+    }
+
     // PG_AUTO_ACT=band: the shape the title-bar band settled into. The
     // numbers rather than a screenshot, because the headless platform
     // draws no window buttons of its own — a band that lost the grab run
@@ -1159,6 +1198,8 @@ ApplicationWindow {
             stateActTimer.start()
         if (AppBackend.autoAct === "commands-clear")
             commandsClearActTimer.start()
+        if (AppBackend.autoAct === "fetch-recover")
+            fetchRecoverActTimer.start()
         if (AppBackend.autoAct === "band")
             bandActTimer.start()
         if (AppBackend.autoAct === "tab-widths")

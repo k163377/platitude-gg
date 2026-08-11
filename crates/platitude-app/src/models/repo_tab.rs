@@ -37,6 +37,10 @@ pub struct RepoTab {
     /// The folder that would not open, for the line under the heading.
     error_path: String,
     last_error: String,
+    /// Whether `last_error` is fetch news. Only that line is taken down
+    /// by a later fetch that lands — the state it described is over. A
+    /// background read's line has no such ending and waits for a reader.
+    last_error_from_fetch: bool,
     tags_shown: bool,
     /// Write commands currently in flight (they are serialized per session,
     /// but requests can queue up).
@@ -170,6 +174,7 @@ impl Default for RepoTab {
             error_kind: String::new(),
             error_path: String::new(),
             last_error: String::new(),
+            last_error_from_fetch: false,
             // Mirrors core LogOptions::default().
             tags_shown: true,
             busy_count: 0,
@@ -240,12 +245,23 @@ impl RepoTab {
         if error.is_empty() {
             self.fetch_failures = 0;
             self.auto_fetch_error = String::new();
+            // The header line is state, not history: a fetch that has
+            // just landed makes "fetch cannot reach the remote" untrue,
+            // and red kept up over that would contradict the button that
+            // is already back to normal (デザイン規約 §リモートから取り込む
+            // 「成功が 1 回入れば数は 0 に戻る」— its command-log side).
+            // Rows are left alone: history stays until a reader clears it.
+            if self.last_error_from_fetch {
+                self.last_error = String::new();
+                self.last_error_from_fetch = false;
+            }
             return;
         }
         self.fetch_failures += 1;
         if self.fetch_failures == 1 {
             // The panel reads this; the ones after it are the same news.
             self.last_error = error.to_string();
+            self.last_error_from_fetch = true;
             self.fetch_first_failed();
         }
         if self.fetch_failures < FETCH_FAILURES_BEFORE_STOP || self.auto_fetch_suspended {
@@ -426,7 +442,12 @@ impl RepoTab {
         self.auto_fetch_suspended = false;
         self.fetch_failures = 0;
         self.auto_fetch_error = String::new();
-        self.last_error = String::new();
+        // Only the line fetch wrote: a background read's news is not
+        // this button's to take down.
+        if self.last_error_from_fetch {
+            self.last_error = String::new();
+            self.last_error_from_fetch = false;
+        }
         self.with_session(|s| s.resume_auto_fetch());
         self.with_session(|s| s.fetch(None));
         self.changed();
@@ -511,6 +532,7 @@ impl RepoTab {
                 }
                 TabMsg::OpError { message } => {
                     self.last_error = message;
+                    self.last_error_from_fetch = false;
                 }
                 TabMsg::Author {
                     name,
@@ -666,6 +688,7 @@ impl RepoTab {
     #[qslot]
     fn clear_last_error(&mut self) {
         self.last_error = String::new();
+        self.last_error_from_fetch = false;
         self.changed();
     }
 
@@ -1351,3 +1374,53 @@ impl RepoTab {
     }
 }
 qml_register!(RepoTab, "RepoTab", singleton = false);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // These stay off the first-failure branch: that one raises a Qt
+    // signal, which wants an attached object. The fetch-recover verb
+    // walks it in the real window instead.
+
+    #[test]
+    fn a_fetch_that_lands_takes_down_the_line_a_fetch_put_up() {
+        let mut tab = RepoTab::default();
+        tab.fetch_failures = 2;
+        tab.last_error = "fatal: unable to access".into();
+        tab.last_error_from_fetch = true;
+        tab.fetch_settled("");
+        assert_eq!(tab.fetch_failures, 0);
+        assert_eq!(tab.last_error, "");
+        assert!(!tab.last_error_from_fetch);
+    }
+
+    #[test]
+    fn a_fetch_that_lands_leaves_a_background_reads_line_standing() {
+        let mut tab = RepoTab::default();
+        tab.last_error = "fatal: bad revision".into();
+        tab.last_error_from_fetch = false;
+        tab.fetch_settled("");
+        assert_eq!(tab.fetch_failures, 0);
+        assert_eq!(tab.last_error, "fatal: bad revision");
+    }
+
+    #[test]
+    fn later_failures_neither_rewrite_nor_reclaim_the_line() {
+        let mut tab = RepoTab::default();
+        // The first failure's line has been dismissed, and a background
+        // read has written its own news since.
+        tab.fetch_failures = 1;
+        tab.last_error = "fatal: bad revision".into();
+        tab.last_error_from_fetch = false;
+        tab.fetch_settled("fatal: unable to access");
+        assert_eq!(tab.fetch_failures, 2);
+        // The second failure is the same news as the first: it does not
+        // touch the line, so it cannot claim it either.
+        assert_eq!(tab.last_error, "fatal: bad revision");
+        assert!(!tab.last_error_from_fetch);
+        // And the recovery that follows respects the standing owner.
+        tab.fetch_settled("");
+        assert_eq!(tab.last_error, "fatal: bad revision");
+    }
+}

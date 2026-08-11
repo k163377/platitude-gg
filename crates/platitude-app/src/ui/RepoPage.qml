@@ -3280,6 +3280,13 @@ Item {
             // clearing verb starts from the same failure — `Main` waits
             // for it to land, presses Clear, and reads the band.
             repoTab.checkoutBranch("pg-no-such-branch")
+        } else if (act === "fetch-recover") {
+            // One fetch that cannot land — the remote name it asks for
+            // is not there — so a failure is standing: the header takes
+            // the line, the band's `>_` goes red. `Main` then fires the
+            // fetch that can land (the demo origin answers) and reads
+            // what the success takes down by itself.
+            repoTab.fetch("pg-no-such-remote")
         } else if (act === "fetch-fail") {
             // Against a remote that is not there, every fetch comes back
             // non-zero. The argument is how many to run, so one verb

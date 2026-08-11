@@ -23,6 +23,7 @@
 - `commands-clear`(**ヘッダの `Clear` が空にするのは行だけではない** — 帯の `>_` は行と**ヘッダの 1 行**の両方で赤くなるので、行だけ消すと空のパネルの上に赤が残る(2026-08-10 報告)。`commands-fail` と同じ拒否から始め、着いてから `Clear` を押す。**`--allow-write-failure` が要る**。報告行 `commands_clear was= wrong= mark= open=` は**同じ 1 つの印を押す前と後に読む** — `was=true` が無いと、拒否が着かなかった run の休息状態が修正に化ける(`must_say` は両方)。`mark=` は印自身の色で、**パネルは開いたままなので `textPrimary`(`#e2e8f0`)が正**・`open=true` がその席)
 - `fetch-fail`(引数は連続で失敗させる回数 — 1〜2 で警告の形、3 で auto fetch が止まった形。**リモートが届かないリポジトリが要る**: demo repo の origin を存在しないパスへ向けておく)
 - `fetch-resume`(3 回失敗させてから、止まったボタンの長押しを完走させる)
+- `fetch-recover`(失敗 → 成功の遷移: fetch の失敗がヘッダの 1 行と赤い `>_` を立て、**後続の fetch 成功がその両方を自動で下ろす**側を見る — 意匠の正本は rules-refs/app-ui.md の同名の項。**仕込み不要 = 既定 preset で自己完結** — 失敗側は**存在しないリモート名**への fetch(`git fetch --prune pg-no-such-remote` が exit 128)、回復側は届く file:// origin への fetch。**`--allow-write-failure` が要る**(前半の拒否がこの動詞の見せ物)。報告行 `fetch_recover was= hadline= wrong= line= failures= open=` は**成功の前(`was=` / `hadline=`)と後(残り)を対で読む** — 絵は退いた後しか持てない。ログ本体の失敗行は残るのが正 = 履歴は読者のもの)
 - `nav-dbl`(引数 `<section>:<name>`)
 - `nav-fold`(引数 `no-tags` でグラフからタグを外した状態にしてから畳む = レールの旗の消えた側が撮れる)
 - `nav-peek`(引数はセクション名 `branch` / `remote` / `worktree` / `stash` / `tag`)
@@ -188,7 +189,8 @@
 
 **ヘッドレスで色を確かめる時はデモリモートの URL を疑う** — 届かないリモートを使う
 検証(`fetch-fail` / `fetch-resume` / 黄の `push`)で通信が成功してしまうと失敗の記録が
-消え、黄も赤も出ない。実験で `remote set-url` を触ったら戻すこと。**URL は demo repo の
+消え、黄も赤も出ない(逆に `fetch-recover` は**回復側が届く origin に乗っている** —
+塞いだままだと成功が来ず、退く絵が撮れない)。実験で `remote set-url` を触ったら戻すこと。**URL は demo repo の
 `.git/config` を直接書き換えるのが早い**(`git -C` が通らない worktree セッションでも
 届く)。`--preset diverged` は `push -f` の形をそのまま出すので、**枠のある状態と
 `!` の同居**はこれで撮る。
