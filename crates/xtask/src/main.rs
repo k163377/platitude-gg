@@ -9,6 +9,7 @@ mod demo;
 mod hook;
 mod linux;
 mod qt;
+mod seats;
 mod verify;
 
 use std::path::{Path, PathBuf};
@@ -157,6 +158,17 @@ commands:
         --shell          open a shell in the container instead
         --stage <name>   core or app, when the guess is not the one wanted
 
+  seats
+      Where the six worktree seats a-f stand right now, one line each:
+      branch, whether HEAD sits at main's tip, commits ahead of main
+      (main..HEAD), uncommitted changes (status --porcelain lines), and
+      how long since the seat's own index was written. The session
+      greeting reads the same survey, but only once, when the session
+      starts — a seat that looked free then can hold another session's
+      work minutes later, so this is the line to read before entering
+      one (CLAUDE.md ビルド・テスト). Ends with how to read the columns,
+      and a locked seat carries the mark past them.
+
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads
       the hook payload from stdin). Events: pre-write, post-write,
@@ -173,6 +185,7 @@ fn main() -> ExitCode {
         }),
         Some("verify-ui") => verify::run(&args[1..]),
         Some("linux") => linux::run(&args[1..]),
+        Some("seats") => seats::run(&args[1..]),
         Some("hook") => hook::run(&args[1..]),
         _ => {
             print!("{USAGE}");
@@ -205,4 +218,21 @@ pub(crate) fn run_captured(
     let display = format!("{cmd:?}");
     cmd.output()
         .map_err(|e| format!("failed to spawn {display}: {e}"))
+}
+
+/// Runs git in `dir`, answering its trimmed stdout with backslashes
+/// forward, and None when it fails at all — callers treat a repository
+/// that cannot answer as one they are not judging.
+pub(crate) fn git_query(dir: &str, arguments: &[&str]) -> Option<String> {
+    if dir.is_empty() {
+        return None;
+    }
+    let mut command = std::process::Command::new("git");
+    command.arg("-C").arg(dir).args(arguments);
+    let output = run_captured(&mut command).ok()?;
+    output.status.success().then(|| {
+        String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .replace('\\', "/")
+    })
 }
