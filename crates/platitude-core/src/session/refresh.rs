@@ -24,8 +24,8 @@ impl RepoSession {
         if let Ok(mut slot) = self.head_hold.lock() {
             *slot = hold;
         }
-        // Written after the hold and before the snapshot goes out, so
-        // anything the read wakes finds both settled.
+        // Beside the hold, and both are written before anything this
+        // read wakes can look.
         if let Ok(mut slot) = self.head_tip.lock() {
             *slot = Some(head.oid);
         }
@@ -151,6 +151,16 @@ impl RepoSession {
                 if !self.refs_gate.is_current(op_gen) {
                     return false;
                 }
+                // First, and before the joins: the walk asks git where
+                // HEAD is only while nothing has told it, so the answer
+                // goes down as early as this read can put it there.
+                //
+                // It does not save the two walks `open` starts. Measured
+                // on `JetBrains/kotlin`: the listing above is 300ms on its
+                // own, and both of them are past this point before it
+                // returns. What it settles is every rebuild after — a
+                // commit, a fetch, a poll tick that found a ref moved.
+                self.remember_head_hold(&refs, &head);
                 let key = refs_key(&refs, &head);
                 let previous = self
                     .refs_key
@@ -166,11 +176,6 @@ impl RepoSession {
                 let mut snapshot = build_snapshot(&refs, &head, &remote_tags, &joins);
                 snapshot.remote_names = remotes.into_iter().map(|r| r.name).collect();
                 let label_map = build_label_map(&refs, &head, &remote_tags, &joins);
-                // The listing is here and the answer is one pass over it,
-                // so the cheap half of the reachability question is taken
-                // now and the walk is spared whenever a ref already sits
-                // on the tip (see `settle_head_reach`).
-                self.remember_head_hold(&refs, &head);
                 self.sink.event(SessionEvent::RefsLoaded {
                     snapshot: self.share_snapshot(snapshot),
                 });
