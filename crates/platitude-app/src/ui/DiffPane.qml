@@ -150,6 +150,58 @@ Rectangle {
         out.sort((a, b) => a[0] === b[0] ? a[1] - b[1] : a[0] - b[0])
         return out
     }
+    // ---- the keyboard -----------------------------------------------
+    /// Where the keyboard goes when this pane comes on screen. Unlike the
+    /// graph, which waits to be clicked because a window has several
+    /// places worth typing into, the diff arrives *because* a hand pressed
+    /// a file in CHANGES — that press already said "read here", so the
+    /// pane takes the keyboard by arriving (デザイン規約 §diff を上下に送る).
+    ///
+    /// Refused to a list that is not on screen: an image-only preview
+    /// hands its space to the picture and draws no rows. Focus on
+    /// something invisible is the hole the graph closed from the other
+    /// side — Qt keeps active focus there and the keys go on arriving.
+    function takeKeyboard() {
+        if (diffList.visible)
+            diffList.forceActiveFocus()
+    }
+    /// Sends the view `delta` rows (∓1 per press) and answers whether it
+    /// moved. The keys and the automation hook both come through here — a
+    /// headless run cannot inject a keystroke, so the step has to be
+    /// callable as well as pressable (verify-ui).
+    ///
+    /// The view is what moves, not a selection: nothing in this pane
+    /// follows a lit row, and the "selection" it does own is the set of
+    /// lines the next write carries, which the arrows must not touch
+    /// (デザイン規約 §diff を上下に送る). Answering `false` at either end
+    /// is how it stops rather than wraps — the key goes unaccepted there.
+    function stepRows(delta) {
+        if (!diffPane.visible || !diffList.visible || diffList.count === 0)
+            return false
+        const was = diffList.contentY
+        diffList.cancelFlick()
+        diffList.contentY = diffList.clampY(was + delta * Theme.rowHeight)
+        return diffList.contentY !== was
+    }
+    /// Whether the view is as far down as it goes — the end the arrows
+    /// stop at, which a picture of a diff cannot be told from a short one.
+    /// A diff with nothing to scroll reads as at its end, because it is.
+    readonly property bool atEnd: diffList.contentY >= diffList.maxY - 0.5
+    /// Automation only: the list itself, for a run that has to read where
+    /// the view stands (`GraphPane.view` is the same exposure).
+    readonly property alias view: diffList
+
+    // Taken on the way in, let go on the way out. The second half is the
+    // rule the graph is already keeping (規約 §矢印で履歴を辿る「画面から
+    // 退いたペインはキーボードを手放す」): a pane swapped off the screen
+    // that keeps focus goes on answering arrows nobody can see.
+    onVisibleChanged: {
+        if (diffPane.visible)
+            diffPane.takeKeyboard()
+        else
+            diffList.focus = false
+    }
+
     /// Throw one hunk away. Offered on the unstaged side only — the
     /// staged side unstages first. No question comes before it: the
     /// heading's own button is held down (デザイン規約 §その他の操作).
@@ -556,6 +608,23 @@ Rectangle {
             // (SVG edits keep both).
             visible: diffPane.diffModel.previewKind !== "image"
                      || count > 0
+            /// How far down the view can go, and the clamp both hands that
+            /// send it share — the wheel by the notch, the arrows by the
+            /// row. One surface moves within one set of bounds
+            /// (デザイン規約 §diff を上下に送る); two expressions of it
+            /// drift apart the moment one of them is fixed.
+            readonly property real maxY: Math.max(0, contentHeight - height)
+            function clampY(y) {
+                return Math.max(0, Math.min(y, diffList.maxY))
+            }
+            // Qt's own key navigation moves `currentIndex` and tells
+            // nobody. Nothing in this pane follows a current row, so it
+            // would scroll the view to a selection that means nothing;
+            // the arrows are answered below instead, where they move the
+            // view itself (規約 §diff を上下に送る).
+            keyNavigationEnabled: false
+            Keys.onUpPressed: event => event.accepted = diffPane.stepRows(-1)
+            Keys.onDownPressed: event => event.accepted = diffPane.stepRows(1)
             // Mouse wheels scroll a fixed number of rows per notch — the
             // same Metrics.wheelRows every other surface answers a notch
             // with (GraphPane, the right panes). This list was the one
@@ -569,9 +638,8 @@ Rectangle {
                     diffList.cancelFlick()
                     const step = (event.angleDelta.y / 120)
                                * Metrics.wheelRows * Theme.rowHeight
-                    diffList.contentY = Math.max(0, Math.min(
-                        diffList.contentY - step,
-                        Math.max(0, diffList.contentHeight - diffList.height)))
+                    diffList.contentY = diffList.clampY(
+                        diffList.contentY - step)
                 }
             }
             delegate: Rectangle {

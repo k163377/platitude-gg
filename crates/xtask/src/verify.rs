@@ -268,13 +268,18 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // way in is the only place that can put it right. Written here rather
     // than by hand in the app, because the app never writes a shape it
     // could not take — so nothing inside it could produce this state.
-    // `window-floor` is about the lift itself; the two stepping verbs ride
+    // `window-floor` is about the lift itself; the stepping verbs ride
     // the same seed for the height, since no demo repository has more
     // commits than the default window shows at once, and a graph with
-    // nothing below the fold has no viewport rule to answer.
+    // nothing below the fold has no viewport rule to answer. The diff's
+    // arrows want it for the same reason from the other side: no demo
+    // file's diff is taller than a default window either, and a pane with
+    // nothing to scroll answers every step the way a broken one would.
     if opts.verb == "window-floor"
         || opts.verb == "graph-step-edge"
         || opts.verb == "graph-step-far"
+        || opts.verb == "diff-step"
+        || opts.verb == "diff-step-edge"
     {
         let state = config_dir.join("state.toml");
         std::fs::write(
@@ -538,6 +543,21 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // back to the graph. A picture of the diff still standing is also
         // a picture of a run where the arrow was never pressed.
         "graph-step-diff" => Some("back=true refused=1 focused=false diff=true"),
+        // The diff's own arrows, where the picture is the weakest witness
+        // in the app: a diff scrolled two rows and a diff never scrolled
+        // at all are the same photograph of the same file. Everything that
+        // matters is in the line. `focused=true` is the arrival taking the
+        // keyboard — nothing pressed this pane, so a false here means the
+        // arrows would have been dead in a real window — and `moved=true`
+        // with `atEnd=false stopped=false` is a walk that had somewhere to
+        // go and went there.
+        "diff-step" => Some("moved=true atEnd=false stopped=false focused=true"),
+        // And the end it stops at rather than wraps past. `stopped=true`
+        // is the refusal itself: the walk asks for twenty rows, gets as
+        // far as the bottom, and the rest answer false. Without `moved=`
+        // beside it a pane that refused every step from the start — never
+        // on screen, never focused — would read the same.
+        "diff-step-edge" => Some("moved=true atEnd=true stopped=true focused=true"),
         _ => None,
     };
     let outcome = Outcome {

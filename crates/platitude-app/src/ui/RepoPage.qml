@@ -2104,6 +2104,52 @@ Item {
                 + " selected=" + (page.selectedOid === graphModel.oidAt(row)))
         }
     }
+    // The diff's own arrows, which no headless run can press either: the
+    // walk enters where `Keys.onDownPressed` enters (`DiffPane.stepRows`).
+    // Nothing reaches for the keyboard first, and that is half of what
+    // this reads — the diff takes it by coming on screen, so `focused=`
+    // is a claim about the arrival and not about a press this made
+    // (規約 §diff を上下に送る). The wait is for the file's rows to land:
+    // a list still empty has nothing to send and refuses every step.
+    Timer {
+        id: diffStepTimer
+        interval: 800
+        /// How many rows, and which way.
+        property int steps: 1
+        onTriggered: {
+            diffStepReport.from = page.diffRow()
+            diffStepReport.stopped = false
+            const way = diffStepTimer.steps < 0 ? -1 : 1
+            for (let n = 0; n < Math.abs(diffStepTimer.steps); n++) {
+                // A step that moved nothing is the end answering. Read
+                // beside `atEnd=`: a walk that was refused every step
+                // because the pane was never on screen leaves the view at
+                // row 0, which is also where an unscrollable diff sits.
+                if (!diffPane.stepRows(way))
+                    diffStepReport.stopped = true
+            }
+            diffStepReport.start()
+        }
+    }
+    Timer {
+        id: diffStepReport
+        interval: 300
+        property int from: -1
+        property bool stopped: false
+        onTriggered: AppBackend.report(
+            "diff_step from=" + diffStepReport.from
+            + " rows=" + page.diffRow()
+            + " steps=" + diffStepTimer.steps
+            + " moved=" + (page.diffRow() !== diffStepReport.from)
+            + " atEnd=" + diffPane.atEnd
+            + " stopped=" + diffStepReport.stopped
+            + " focused=" + diffPane.view.activeFocus)
+    }
+    /// Where the diff's view stands, in rows — what the walk is counted
+    /// in, and steadier than a pixel count to read off a report line.
+    function diffRow() {
+        return Math.round(diffPane.view.contentY / Theme.rowHeight)
+    }
     // The fetch has to land, and its answer reach the chips, before the
     // stacked ones are worth unstacking.
     Timer {
@@ -3030,6 +3076,26 @@ Item {
                                  : act === "graph-step-diff" ? 1
                                  : arg === "" ? 1 : Number(arg)
             graphStepTimer.start()
+        } else if (act === "diff-step" || act === "diff-step-edge") {
+            // Sending the diff itself, which moves the view and not a
+            // selection (規約 §diff を上下に送る). The argument is the
+            // path, opened the way CHANGES opens one; the step count is
+            // the verb's own, since each is about one particular end of
+            // the walk. The plain one takes a single row — which is the
+            // whole of "1 打 = 1 行", and it has to land short of the
+            // bottom (`atEnd=false`); `-edge` walks well past it, so the
+            // last presses are refused and the view stops rather than
+            // wrapping.
+            //
+            // Both ride the 320x240 seed the graph's stepping verbs use:
+            // no demo file's diff is longer than a default window, and a
+            // pane with nothing to scroll has no rule to answer. Even
+            // there the room below the fold is two rows (実測), which is
+            // why the plain walk is one and not more.
+            page.showWip()
+            page.toggleDiff("untracked", arg, "")
+            diffStepTimer.steps = act === "diff-step-edge" ? 20 : 1
+            diffStepTimer.start()
         } else if (act === "name-box") {
             // Opened and left standing, for a look at it. The argument is
             // the row, since the box only belongs on one with no chips.
