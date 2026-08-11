@@ -14,6 +14,9 @@ use crate::seats::{self, SEATS, commits_in, worktree_root};
 /// move. It rides in the command itself so the transcript records the ask.
 const MAIN_ESCAPE: &str = "PG_ALLOW_MAIN";
 
+/// The same, for an instruction that asked for a rebase.
+const REBASE_ESCAPE: &str = "PG_ALLOW_REBASE";
+
 /// The same, for an instruction that asked for a real window.
 const WINDOW_ESCAPE: &str = "PG_ALLOW_GUI";
 
@@ -166,71 +169,124 @@ fn qml_font_notes(content: &str) -> Vec<String> {
 
 /// PreToolUse(Bash|PowerShell): the git this repository holds until the
 /// user asks for it in so many words (CLAUDE.md Git 運用) — landing a
-/// branch on main, and committing the shared session rules from the
-/// primary checkout. Answers whether it refused, so the guard after it
-/// stays quiet when it did.
+/// branch on main, rewriting a branch under the session, and committing
+/// the shared session rules from the primary checkout. Answers whether it
+/// refused, so the guard after it stays quiet when it did.
 fn pre_git(input: &str) -> Result<bool, String> {
     let Some(command) = string_field(input, "command") else {
         return Ok(false);
     };
-    if command.contains(MAIN_ESCAPE) {
-        return Ok(false);
-    }
     let cwd = string_field(input, "cwd").unwrap_or_default();
-    Ok(main_landing_denied(&command, &cwd) || shared_rules_denied(&command, &cwd))
+    // Each rule keeps its own escape, so asking for one is not asking for
+    // the others: a merge the user called for still may not rebase.
+    Ok(guarded_git_denied(&command, &cwd)
+        || (!command.contains(MAIN_ESCAPE) && shared_rules_denied(&command, &cwd)))
 }
 
-/// Putting a branch onto main is the user's call. Which worktree branches
-/// have landed and which have not is only answerable if every landing was
-/// asked for, so a session that merges on its own way out is the thing to
-/// stop (CLAUDE.md Git 運用). Prints the refusal and says so.
-fn main_landing_denied(command: &str, cwd: &str) -> bool {
+/// Putting a branch onto main and rewriting the branch under the session
+/// are both the user's call. Which worktree branches have landed is only
+/// answerable if every landing was asked for, so a session that merges on
+/// its own way out is the thing to stop; and a rebase nobody asked for
+/// spends the session on conflicts and a wide rebuild, to catch up a branch
+/// that was fine behind main (CLAUDE.md Git 運用). Prints the refusal and
+/// says so.
+fn guarded_git_denied(command: &str, cwd: &str) -> bool {
     let Some(reflection) = reflection(command) else {
         return false;
     };
+    if command.contains(reflection.offence.escape()) {
+        return false;
+    }
     let dir = reflection.dir.unwrap_or(cwd);
     // Any git that cannot answer is git we are not guarding: a throwaway
     // repository (CLAUDE.md Rust 規約: measure git in one) is on main as
-    // often as not, and the command would fail here anyway if the path is
-    // not a repository at all.
+    // often as not and rebases freely, and the command would fail here
+    // anyway if the path is not a repository at all.
     let (Some(session_repo), Some(target_repo)) = (common_git_dir(cwd), common_git_dir(dir)) else {
         return false;
     };
     if !session_repo.eq_ignore_ascii_case(&target_repo) {
         return false;
     }
-    if reflection.only_from_main
+    if reflection.offence.only_from_main()
         && git_query(dir, &["rev-parse", "--abbrev-ref", "HEAD"]).as_deref() != Some("main")
     {
         return false;
     }
     println!(
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
-         \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
-         \"{} would put commits on main, and main moves only when the user \
-         asks for it in so many words (CLAUDE.md Git 運用). Leave the work on \
-         its branch and report it as ready to merge instead. If the user did \
-         ask for this one, run the same command again with {}=1 in front of \
-         it.\"}}}}",
-        reflection.what, MAIN_ESCAPE
+         \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"{}\"}}}}",
+        reflection.offence.reason(reflection.what)
     );
     true
 }
 
-/// A git command in a shell line that would land commits on main.
+/// A git command in a shell line that a rule holds back.
 struct Reflection<'a> {
     /// The repository it acts on: `git -C <dir>`, else a `cd` that preceded
     /// it, else wherever the session sits.
     dir: Option<&'a str>,
-    /// Whether it only reaches main when main is the checked-out branch.
-    /// A refspec or a forced update names main from anywhere.
-    only_from_main: bool,
+    offence: Offence,
     what: &'static str,
 }
 
-/// The first main-landing git invocation in `command`, if any. Read-only git
-/// and git that names main as a source (`git log main`, `git switch main`)
-/// are not it — only the verbs that write refs/heads/main.
+/// Which rule the command runs into.
+#[derive(Debug, PartialEq)]
+enum Offence {
+    /// Writes refs/heads/main. `only_from_main` is whether it reaches main
+    /// only while main is the checked-out branch — a refspec or a forced
+    /// update names main from anywhere.
+    LandsOnMain { only_from_main: bool },
+    /// Rewrites the branch it runs on, whichever branch that is.
+    Rebase,
+}
+
+impl Offence {
+    /// What a command carries to say this rule's exception was asked for.
+    fn escape(&self) -> &'static str {
+        match self {
+            Offence::LandsOnMain { .. } => MAIN_ESCAPE,
+            Offence::Rebase => REBASE_ESCAPE,
+        }
+    }
+
+    fn only_from_main(&self) -> bool {
+        matches!(
+            self,
+            Offence::LandsOnMain {
+                only_from_main: true
+            }
+        )
+    }
+
+    /// Why the command is held, said to the session that ran it.
+    fn reason(&self, what: &str) -> String {
+        match self {
+            Offence::LandsOnMain { .. } => format!(
+                "{what} would put commits on main, and main moves only when the \
+                 user asks for it in so many words (CLAUDE.md Git 運用). Leave \
+                 the work on its branch and report it as ready to merge instead. \
+                 If the user did ask for this one, run the same command again \
+                 with {MAIN_ESCAPE}=1 in front of it."
+            ),
+            Offence::Rebase => format!(
+                "{what} rewrites the branch under the session, and a rebase runs \
+                 only when the user asks for it in so many words (CLAUDE.md Git \
+                 運用). A branch behind main is a seat's normal resting state, \
+                 not something to fix — leave it and report what is on the \
+                 branch. A merged seat starts over with `git reset --hard main`, \
+                 which is not a rebase and needs nothing. If the user did ask \
+                 for this one, run the same command again with \
+                 {REBASE_ESCAPE}=1 in front of it."
+            ),
+        }
+    }
+}
+
+/// The first guarded git invocation in `command`, if any. Read-only git and
+/// git that names main as a source (`git log main`, `git switch main`) are
+/// not it — the verbs that write refs/heads/main, and rebase, which
+/// rewrites whichever branch it runs on.
 fn reflection(command: &str) -> Option<Reflection<'_>> {
     let tokens: Vec<&str> = command.split_whitespace().collect();
     let mut cd_dir = None;
@@ -264,13 +320,23 @@ fn reflection(command: &str) -> Option<Reflection<'_>> {
             .take_while(|token| !matches!(**token, "&&" | "||" | ";" | "|" | "git"))
             .copied()
             .collect();
-        let landing = match *subcommand {
+        let lands = |only_from_main| Offence::LandsOnMain { only_from_main };
+        let guarded = match *subcommand {
             // --abort and --quit walk a merge back; they never move the branch on.
             "merge" if !arguments.iter().any(|a| matches!(*a, "--abort" | "--quit")) => {
-                Some(("`git merge`", true))
+                Some(("`git merge`", lands(true)))
+            }
+            // The same two exits walk a rebase back. Every other form moves
+            // the rewrite on, --continue and --skip included: a rebase that
+            // stopped is one nobody asked to start.
+            "rebase" if !arguments.iter().any(|a| matches!(*a, "--abort" | "--quit")) => {
+                Some(("`git rebase`", Offence::Rebase))
             }
             "push" | "fetch" | "pull" if arguments.iter().any(|a| writes_main(a)) => {
-                Some(("A refspec writing main", false))
+                Some(("A refspec writing main", lands(false)))
+            }
+            "pull" if arguments.iter().any(|a| matches!(*a, "--rebase" | "-r")) => {
+                Some(("`git pull --rebase`", Offence::Rebase))
             }
             "branch"
                 if arguments
@@ -278,17 +344,17 @@ fn reflection(command: &str) -> Option<Reflection<'_>> {
                     .any(|a| matches!(*a, "-f" | "--force" | "-M"))
                     && arguments.iter().any(|a| is_main_ref(a)) =>
             {
-                Some(("Forcing the main branch", false))
+                Some(("Forcing the main branch", lands(false)))
             }
             "update-ref" if arguments.iter().any(|a| is_main_ref(a)) => {
-                Some(("Updating refs/heads/main", false))
+                Some(("Updating refs/heads/main", lands(false)))
             }
             _ => None,
         };
-        if let Some((what, only_from_main)) = landing {
+        if let Some((what, offence)) = guarded {
             return Some(Reflection {
                 dir: dir.or(cd_dir),
-                only_from_main,
+                offence,
                 what,
             });
         }
@@ -953,8 +1019,8 @@ fn string_field(input: &str, key: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        commit, launch_objections, names_shared_rules, qml_font_notes, reflection, resolve,
-        seat_buckets, string_field, worktree_objection,
+        Offence, commit, launch_objections, names_shared_rules, qml_font_notes, reflection,
+        resolve, seat_buckets, string_field, worktree_objection,
     };
     use crate::seats::{Seat, SeatState, worktree_root};
 
@@ -1076,6 +1142,39 @@ mod tests {
             "git show HEAD:main",
             "git push origin worktree-labels",
             "git branch main-ish",
+            // How a merged seat starts over (CLAUDE.md ビルド・テスト): it
+            // writes the seat's own branch, and rewrites no history.
+            "git reset --hard main",
+        ] {
+            assert!(reflection(command).is_none(), "{command}");
+        }
+    }
+
+    #[test]
+    fn flags_a_rebase_however_it_starts_and_lets_its_exits_alone() {
+        for command in [
+            "git rebase main",
+            "git rebase -i HEAD~3",
+            "git rebase --onto main HEAD~2",
+            "git rebase --continue",
+            "git rebase --skip",
+            "git pull --rebase",
+            "git pull -r origin main",
+        ] {
+            assert_eq!(
+                reflection(command).map(|r| r.offence),
+                Some(Offence::Rebase),
+                "{command}"
+            );
+        }
+        for command in ["git rebase --abort", "git rebase --quit"] {
+            assert!(reflection(command).is_none(), "{command}");
+        }
+        // The demo repositories rebase on purpose, through the task runner —
+        // no `git` token, so nothing here sees them.
+        for command in [
+            "cargo xtask demo-repo rebase-conflict",
+            "cargo xtask verify-ui rebase-stop --preset rebase-conflict",
         ] {
             assert!(reflection(command).is_none(), "{command}");
         }
@@ -1091,7 +1190,12 @@ mod tests {
             Some(Some("C:/IdeaProjects/platitude-gg"))
         );
         let refspec = reflection("git push . HEAD:main");
-        assert_eq!(refspec.map(|r| r.only_from_main), Some(false));
+        assert_eq!(
+            refspec.map(|r| r.offence),
+            Some(Offence::LandsOnMain {
+                only_from_main: false
+            })
+        );
     }
 
     #[test]
