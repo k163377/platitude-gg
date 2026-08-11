@@ -300,6 +300,25 @@ impl Footprint for crate::worktrees::WorktreeEntry {
     }
 }
 
+impl Footprint for crate::status::StatusItem {
+    fn heap_bytes(&self) -> usize {
+        match self {
+            Self::Tracked {
+                path, orig_path, ..
+            } => path.heap_bytes() + orig_path.heap_bytes(),
+            Self::Unmerged { path, .. } | Self::Untracked { path } | Self::Ignored { path } => {
+                path.heap_bytes()
+            }
+        }
+    }
+}
+
+impl Footprint for crate::status::WorkTreeStatus {
+    fn heap_bytes(&self) -> usize {
+        self.branch_head.heap_bytes() + self.upstream.heap_bytes() + self.items.heap_bytes()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Reports
 // ---------------------------------------------------------------------------

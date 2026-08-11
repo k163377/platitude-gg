@@ -17,12 +17,14 @@ use super::qml_register;
 // WIP view shows.
 // ---------------------------------------------------------------------------
 
-// PartialEq feeds the unchanged-drain check: refs and status are
-// republished on every poll tick whether or not they moved, and rebuilding
-// the section (plus the Qt model reset behind it) for identical rows is
-// work the sidebar can see — a repository with tens of thousands of tags
-// pays it in the view, on the main thread.
-#[derive(QModelItem, Default, Clone, PartialEq)]
+// What a row of the sidebar can say, and the one row that is held rather
+// than read: **a folder row**, which no section's data arrives as, so
+// there is nothing to project it from. Every other row is answered field
+// by field out of what arrived (`Source`), and the fields below are then
+// only the declaration — `#[derive(QModelItem)]` turns them into the role
+// names the delegate resolves by, and `Role` answers under those names
+// (held to this list by the test at the foot of the file).
+#[derive(QModelItem, Default)]
 pub struct NavItem {
     /// Display text: the last path segment in tree mode, the full name in
     /// flat/filter mode.
@@ -33,10 +35,10 @@ pub struct NavItem {
     oid_hex: String,
     /// git's change code for a file row (`M`, `?`, `UU`). **A folder row
     /// has no change to report and carries its fold state here instead**
-    /// (`FOLDED`, empty when open) — the item is a union of five kinds of
-    /// row and qtbridge's `QModelItem` allows fifteen fields, so a slot
-    /// that structurally cannot be used twice at once is shared. Reading it
-    /// is guarded by `folder` everywhere, as the other shared fields are
+    /// (`FOLDED`, empty when open) — a row is one of five kinds and
+    /// qtbridge's `QModelItem` allows fifteen fields, so a slot that
+    /// structurally cannot be used twice at once is shared. Reading it is
+    /// guarded by `folder` everywhere, as the other shared fields are
     /// (`bucket` carries a branch on a worktree row, `full` a folder key).
     change: String,
     bucket: String,
@@ -100,36 +102,55 @@ fn fold_state(expanded: bool) -> String {
 
 /// Where a section's rows come from.
 ///
-/// A row that is only ever drawn does not have to be built. The two
-/// sections a large repository fills — its tags and its remote branches —
-/// read out of the refs snapshot the session already holds and this model
-/// already points at, so their whole lists cost one `Arc` and, where the
-/// shaping has anything to say, an index per visible row. Measured on
-/// `JetBrains/kotlin`: holding them as rows was 13.9MB of the process's
-/// Rust heap, all of it a second copy of what the snapshot says.
+/// A row that is only ever drawn does not have to be built: every section
+/// keeps what arrived, in the shape it arrived in, and answers for a row
+/// as the view asks. The two a large repository fills read out of the
+/// refs snapshot the session already holds and this model already points
+/// at, so their whole lists cost one `Arc` and, where the shaping has
+/// anything to say, an index per visible row. Measured on
+/// `JetBrains/kotlin`: holding those two as rows was 13.9MB of the
+/// process's Rust heap, all of it a second copy of what the snapshot says.
+#[derive(Default)]
 enum Source {
-    /// Rows as they arrived, for the sections whose lists are short.
-    Kept(Vec<NavItem>),
-    /// `snapshot.tags`.
-    Tags(Arc<platitude_core::session::RefsSnapshot>),
+    /// Nothing has arrived yet.
+    #[default]
+    Waiting,
+    /// `snapshot.locals`.
+    Locals(Arc<platitude_core::session::RefsSnapshot>),
     /// `snapshot.remotes`.
     Remotes(Arc<platitude_core::session::RefsSnapshot>),
-}
-
-impl Default for Source {
-    fn default() -> Self {
-        Self::Kept(Vec::new())
-    }
+    /// `snapshot.tags`.
+    Tags(Arc<platitude_core::session::RefsSnapshot>),
+    Stashes(Vec<platitude_core::stash::StashEntry>),
+    /// The working copies, and which of them this window is showing —
+    /// the one fact about a worktree row that is not in the entry.
+    Worktrees {
+        list: Vec<platitude_core::worktrees::WorktreeEntry>,
+        current: String,
+    },
+    /// The pending changes, with the order the pane shows them in. **A
+    /// row is a bucket and an entry**, not an entry: an entry with both
+    /// halves changed (`MM`) is one row under the index and another under
+    /// the working tree.
+    Files {
+        status: platitude_core::status::WorkTreeStatus,
+        order: Vec<FileAt>,
+    },
 }
 
 impl platitude_core::mem::Footprint for Source {
     fn heap_bytes(&self) -> usize {
         match self {
-            Self::Kept(items) => items.heap_bytes(),
+            Self::Waiting => 0,
             // Nothing of its own: the snapshot belongs to the session,
             // which is where the report counts it. A shared `Arc` added up
             // at every pointer into it is a number that means nothing.
-            Self::Tags(_) | Self::Remotes(_) => 0,
+            Self::Locals(_) | Self::Remotes(_) | Self::Tags(_) => 0,
+            Self::Stashes(list) => list.heap_bytes(),
+            Self::Worktrees { list, current } => list.heap_bytes() + current.heap_bytes(),
+            Self::Files { status, order } => {
+                status.heap_bytes() + order.capacity() * size_of::<FileAt>()
+            }
         }
     }
 }
@@ -137,26 +158,110 @@ impl platitude_core::mem::Footprint for Source {
 impl Source {
     fn len(&self) -> usize {
         match self {
-            Self::Kept(items) => items.len(),
-            Self::Tags(snapshot) => snapshot.tags.len(),
+            Self::Waiting => 0,
+            Self::Locals(snapshot) => snapshot.locals.len(),
             Self::Remotes(snapshot) => snapshot.remotes.len(),
+            Self::Tags(snapshot) => snapshot.tags.len(),
+            Self::Stashes(list) => list.len(),
+            Self::Worktrees { list, .. } => list.len(),
+            Self::Files { order, .. } => order.len(),
         }
     }
 
     fn entry(&self, at: usize) -> Option<Entry<'_>> {
         match self {
-            Self::Kept(items) => items.get(at).map(Entry::Item),
-            Self::Tags(snapshot) => snapshot.tags.get(at).map(Entry::Tag),
+            Self::Waiting => None,
+            Self::Locals(snapshot) => snapshot.locals.get(at).map(Entry::Local),
             Self::Remotes(snapshot) => snapshot.remotes.get(at).map(Entry::Remote),
+            Self::Tags(snapshot) => snapshot.tags.get(at).map(Entry::Tag),
+            Self::Stashes(list) => list.get(at).map(Entry::Stash),
+            Self::Worktrees { list, current } => {
+                list.get(at).map(|entry| Entry::Worktree { entry, current })
+            }
+            Self::Files { status, order } => order.get(at).and_then(|row| {
+                status.items.get(row.at as usize).map(|item| Entry::File {
+                    item,
+                    bucket: row.bucket,
+                })
+            }),
         }
     }
 
-    /// The rows as they arrived, for the shaping that still copies them.
-    /// Empty for a projected section, which has none to lend.
-    fn kept(&self) -> &[NavItem] {
+    /// The working copies that arrived, with the pane's order worked out
+    /// once rather than per row.
+    fn files(status: platitude_core::status::WorkTreeStatus) -> Self {
+        let mut order = Vec::new();
+        for bucket in Bucket::SHOWN {
+            for (at, item) in status.items.iter().enumerate() {
+                if bucket.holds(item) {
+                    order.push(FileAt {
+                        bucket,
+                        at: at as u32,
+                    });
+                }
+            }
+        }
+        Self::Files { status, order }
+    }
+}
+
+/// One file row: which of git's four answers it came out of, and the
+/// entry in the status it came from.
+struct FileAt {
+    bucket: Bucket,
+    at: u32,
+}
+
+/// Which of git's four answers a file row came out of.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Bucket {
+    Conflicts,
+    Unstaged,
+    Untracked,
+    Staged,
+}
+
+impl Bucket {
+    /// GitKraken display order, which is also the order the pane's group
+    /// runs come in.
+    const SHOWN: [Self; 4] = [
+        Self::Conflicts,
+        Self::Unstaged,
+        Self::Untracked,
+        Self::Staged,
+    ];
+
+    /// Whether an entry belongs in this bucket — the same test
+    /// `WorkTreeStatus` makes for its four iterators, asked one entry at a
+    /// time because a row has to know which of them it came out of.
+    fn holds(self, item: &platitude_core::status::StatusItem) -> bool {
+        use platitude_core::status::StatusItem;
+        match (self, item) {
+            (Self::Conflicts, StatusItem::Unmerged { .. })
+            | (Self::Untracked, StatusItem::Untracked { .. }) => true,
+            (Self::Unstaged, StatusItem::Tracked { unstaged, .. }) => *unstaged != '.',
+            (Self::Staged, StatusItem::Tracked { staged, .. }) => *staged != '.',
+            _ => false,
+        }
+    }
+
+    /// What the row routes diffs and staging by.
+    fn routing(self) -> &'static str {
         match self {
-            Self::Kept(items) => items,
-            Self::Tags(_) | Self::Remotes(_) => &[],
+            Self::Conflicts => "conflicts",
+            Self::Unstaged => "unstaged",
+            Self::Untracked => "untracked",
+            Self::Staged => "staged",
+        }
+    }
+
+    /// The run the pane shows it in — where an untracked file counts as
+    /// unstaged, while `routing` keeps the real answer.
+    fn run(self) -> &'static str {
+        match self {
+            Self::Conflicts => "conflicts",
+            Self::Unstaged | Self::Untracked => "unstaged",
+            Self::Staged => "staged",
         }
     }
 }
@@ -164,31 +269,54 @@ impl Source {
 /// One entry of a source, whichever kind the section has.
 #[derive(Clone, Copy)]
 enum Entry<'a> {
-    Item(&'a NavItem),
-    Tag(&'a platitude_core::session::TagItem),
+    Local(&'a platitude_core::session::BranchItem),
     Remote(&'a platitude_core::session::BranchItem),
+    Tag(&'a platitude_core::session::TagItem),
+    Stash(&'a platitude_core::stash::StashEntry),
+    Worktree {
+        entry: &'a platitude_core::worktrees::WorktreeEntry,
+        /// The working copy this window is showing, spelled the way
+        /// `path` is compared (forward slashes, lower case).
+        current: &'a str,
+    },
+    File {
+        item: &'a platitude_core::status::StatusItem,
+        bucket: Bucket,
+    },
 }
 
 impl<'a> Entry<'a> {
     /// What git calls it, before any indenting takes it apart.
     fn name(self) -> &'a str {
         match self {
-            Self::Item(item) => &item.name,
+            Self::Local(branch) | Self::Remote(branch) => &branch.short,
             Self::Tag(tag) => &tag.short,
-            Self::Remote(branch) => &branch.short,
+            // A stash shows its message; the selector that names it to
+            // git rides in `full`.
+            Self::Stash(stash) => &stash.message,
+            Self::Worktree { entry, .. } => leaf_of(&entry.path),
+            Self::File { item, .. } => item.path(),
         }
     }
 
-    /// The full name a row of this kind arrived with — which for a ref
-    /// read out of the snapshot is nothing, the way `branch_nav_items`
-    /// left it: only the tree writes one, and only into the rows it
-    /// shapes.
+    /// What git knows the row by, where that is not what it shows. A ref
+    /// has none until the tree writes one (`field`), because a name is
+    /// all git needs to be given.
     fn full(self) -> &'a str {
         match self {
-            Self::Item(item) => &item.full,
-            Self::Tag(_) | Self::Remote(_) => "",
+            Self::Local(_) | Self::Remote(_) | Self::Tag(_) => "",
+            Self::Stash(stash) => &stash.name,
+            Self::Worktree { entry, .. } => &entry.path,
+            Self::File { item, .. } => item.path(),
         }
     }
+}
+
+/// The last segment of a path, however it is spelled. A worktree row
+/// shows the folder it lives in, and git prints the path the platform's
+/// way.
+fn leaf_of(path: &str) -> &str {
+    path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
 /// One row of the shaped list.
@@ -197,8 +325,14 @@ impl<'a> Entry<'a> {
 /// two hundred a `NavItem` costs; a folder row is the one thing no source
 /// holds, so it is the one thing carried whole (behind a box, so the
 /// pointed-at rows are not all widened to hold one).
+///
+/// `from` is where in the whole name the segment this row shows begins —
+/// worked out by whichever tree placed the row, because the two do not
+/// agree on it: the refs tree indents one folder per `/`, while the
+/// working tree's compacts a chain of single-child folders into one row
+/// and leaves the file showing only its last segment.
 enum Arranged {
-    At { at: u32, depth: i32 },
+    At { at: u32, depth: i32, from: u32 },
     Made(Box<NavItem>),
 }
 
@@ -214,11 +348,16 @@ impl platitude_core::mem::Footprint for Arranged {
 /// One row as the view reads it.
 #[derive(Clone, Copy)]
 enum Row<'a> {
-    /// A row this section built: the folder rows, and the shaped copies
-    /// the sections that still hold their rows make.
+    /// A folder row — the one kind of row no source holds, so the one
+    /// kind this section had to build.
     Made(&'a NavItem),
-    /// A row of the source, shown at this depth.
-    Shown { of: Entry<'a>, depth: i32 },
+    /// A row of the source, shown at this depth and from this point in
+    /// its name.
+    Shown {
+        of: Entry<'a>,
+        depth: i32,
+        from: usize,
+    },
 }
 
 /// What a row answers for one role, before Qt is handed it.
@@ -467,25 +606,27 @@ impl NavSectionModel {
     /// filtered — and finds the current entry among them.
     fn arrange(&mut self) {
         let needle = self.filter.to_lowercase();
-        self.indented =
-            needle.is_empty() && matches!(self.section.as_str(), "branches" | "remotes");
+        // A tree is what gives a ref row a full name to be known by, and
+        // it is the shaping a filter replaces.
+        self.indented = needle.is_empty()
+            && matches!(self.section.as_str(), "branches" | "remotes")
+            || needle.is_empty() && self.section == "worktree" && self.tree_view;
         self.arranged = if needle.is_empty() {
             match self.section.as_str() {
                 "branches" | "remotes" => Some(self.build_tree()),
                 // The worktree keeps its group runs (conflicts → unstaged →
                 // staged) and trees each run independently.
                 "worktree" if self.tree_view => {
-                    let kept = self.all.kept();
                     let mut out = Vec::new();
-                    let mut i = 0;
-                    while i < kept.len() {
-                        let group = kept[i].group.clone();
-                        let mut j = i + 1;
-                        while j < kept.len() && kept[j].group == group {
-                            j += 1;
+                    let mut at = 0;
+                    while at < self.all.len() {
+                        let run = self.run_of(at);
+                        let mut end = at + 1;
+                        while end < self.all.len() && self.run_of(end) == run {
+                            end += 1;
                         }
-                        wt_tree_into(&kept[i..j], &group, &self.folder_overrides, &mut out);
-                        i = j;
+                        self.wt_tree_into(at..end, run, &mut out);
+                        at = end;
                     }
                     Some(out)
                 }
@@ -505,6 +646,7 @@ impl NavSectionModel {
                     .map(|at| Arranged::At {
                         at: at as u32,
                         depth: 0,
+                        from: 0,
                     })
                     .collect(),
             )
@@ -542,34 +684,26 @@ impl NavSectionModel {
     fn row_at(&self, at: usize) -> Option<Row<'_>> {
         match &self.arranged {
             Some(arranged) => match arranged.get(at)? {
-                Arranged::At { at, depth } => Some(Row::Shown {
+                Arranged::At { at, depth, from } => Some(Row::Shown {
                     of: self.all.entry(*at as usize)?,
                     depth: *depth,
+                    from: *from as usize,
                 }),
                 Arranged::Made(item) => Some(Row::Made(item)),
             },
             None => Some(Row::Shown {
                 of: self.all.entry(at)?,
                 depth: 0,
+                from: 0,
             }),
         }
     }
 
-    /// What the row is called on screen: the segment under its folder
-    /// while the list is indented, and the whole name everywhere else.
-    fn shown_name<'a>(&self, of: Entry<'a>, depth: i32) -> &'a str {
+    /// What the row is called on screen: what the tree left of its whole
+    /// name, which is the whole of it wherever no tree placed the row.
+    fn shown_name(of: Entry<'_>, from: usize) -> &str {
         let whole = of.name();
-        if !self.indented {
-            return whole;
-        }
-        let mut rest = whole;
-        for _ in 0..depth {
-            let Some((_, tail)) = rest.split_once('/') else {
-                break;
-            };
-            rest = tail;
-        }
-        rest
+        whole.get(from..).unwrap_or(whole)
     }
 
     /// What one row answers for one role.
@@ -578,8 +712,9 @@ impl NavSectionModel {
     /// it through `data`, and the slots below read it directly, so no row
     /// can show the delegate one thing and tell automation another.
     fn field<'a>(&self, row: Row<'a>, role: Role) -> Value<'a> {
-        let (of, depth) = match row {
-            // A row that was built holds what it shows already.
+        let (of, depth, from) = match row {
+            // A folder row is the one kind nothing arrived as, so it is
+            // the one kind held whole — and it holds what it shows.
             Row::Made(item) => {
                 return match role {
                     Role::Name => Value::Said(&item.name),
@@ -599,70 +734,96 @@ impl NavSectionModel {
                     Role::Folder => Value::Flag(item.folder),
                 };
             }
-            Row::Shown { of, depth } => (of, depth),
+            Row::Shown { of, depth, from } => (of, depth, from),
         };
         match role {
-            Role::Name => Value::Said(self.shown_name(of, depth)),
-            // The tree is what writes a full name down; a row that stands
-            // in none is known by the one it arrived with.
-            Role::Full => Value::Said(if self.indented { of.name() } else { of.full() }),
+            Role::Name => Value::Said(Self::shown_name(of, from)),
+            // A tree is what writes a full name down for a ref; every
+            // other row arrived knowing what git calls it.
+            Role::Full => Value::Said(if self.indented && of.full().is_empty() {
+                of.name()
+            } else {
+                of.full()
+            }),
             Role::Depth => Value::Number(depth),
             // A row of the source is a row of the list, never a folder.
             Role::Folder => Value::Flag(false),
             Role::OidHex => match of {
-                Entry::Item(item) => Value::Said(&item.oid_hex),
+                Entry::Local(branch) | Entry::Remote(branch) => Value::Spelled(branch.oid.to_hex()),
                 Entry::Tag(tag) => Value::Spelled(tag.oid.to_hex()),
-                Entry::Remote(branch) => Value::Spelled(branch.oid.to_hex()),
+                // The commit makes the row clickable: the details pane
+                // then shows the stashed changes.
+                Entry::Stash(stash) => Value::Spelled(stash.oid.to_hex()),
+                Entry::Worktree { .. } | Entry::File { .. } => Value::Said(""),
             },
             Role::IsHead => Value::Flag(match of {
-                Entry::Item(item) => item.is_head,
-                Entry::Tag(_) => false,
-                Entry::Remote(branch) => branch.is_head,
+                Entry::Local(branch) | Entry::Remote(branch) => branch.is_head,
+                // The working copy this window shows is marked the way the
+                // current branch is.
+                Entry::Worktree { entry, current } => {
+                    entry.path.replace('\\', "/").to_lowercase() == current
+                }
+                Entry::Tag(_) | Entry::Stash(_) | Entry::File { .. } => false,
             }),
             Role::HasRemote => Value::Flag(match of {
-                Entry::Item(item) => item.has_remote,
+                Entry::Local(branch) | Entry::Remote(branch) => branch.has_remote,
                 // Same badge as a branch: nothing means this tag is only
                 // here. The bit comes off `ls-remote --tags`, which the
                 // fetch carries.
                 Entry::Tag(tag) => tag.has_remote,
-                Entry::Remote(branch) => branch.has_remote,
+                Entry::Stash(_) | Entry::Worktree { .. } | Entry::File { .. } => false,
             }),
-            Role::OnlyRemote => Value::Flag(match of {
-                Entry::Item(item) => item.only_remote,
-                // Written as the negative of core's `here`, so every other
-                // kind of row keeps it off by default.
-                Entry::Tag(tag) => !tag.here,
-                Entry::Remote(_) => false,
-            }),
+            // Written as the negative of core's `here`, so every other
+            // kind of row keeps it off by default.
+            Role::OnlyRemote => Value::Flag(matches!(of, Entry::Tag(tag) if !tag.here)),
             Role::Upstream => Value::Said(match of {
-                Entry::Item(item) => &item.upstream,
-                Entry::Tag(_) => "",
-                Entry::Remote(branch) => &branch.upstream,
+                Entry::Local(branch) | Entry::Remote(branch) => &branch.upstream,
+                _ => "",
             }),
             Role::HasPr => Value::Flag(match of {
-                Entry::Item(item) => item.has_pr,
-                Entry::Tag(_) => false,
+                Entry::Local(branch) => {
+                    crate::encode::fake_pr_set().contains(branch.short.as_str())
+                }
                 Entry::Remote(branch) => {
                     crate::encode::fake_pr_set().contains(pr_key(&branch.short))
                 }
+                Entry::Worktree { entry, .. } => entry
+                    .branch
+                    .as_deref()
+                    .is_some_and(|branch| crate::encode::fake_pr_set().contains(branch)),
+                Entry::Tag(_) | Entry::Stash(_) | Entry::File { .. } => false,
             }),
-            Role::Change => Value::Said(match of {
-                Entry::Item(item) => &item.change,
-                Entry::Tag(_) | Entry::Remote(_) => "",
-            }),
+            // The letters git reports for the file, which for a conflict
+            // is what each side did to it.
+            Role::Change => match of {
+                Entry::File { item, bucket } => Value::Spelled(letters_of(item, bucket)),
+                _ => Value::Said(""),
+            },
             Role::Bucket => Value::Said(match of {
-                Entry::Item(item) => &item.bucket,
-                Entry::Tag(_) | Entry::Remote(_) => "",
+                Entry::File { bucket, .. } => bucket.routing(),
+                // A worktree row carries its branch here (empty =
+                // detached), which is what the row shows on its right.
+                Entry::Worktree { entry, .. } => entry.branch.as_deref().unwrap_or(""),
+                _ => "",
             }),
             Role::Group => Value::Said(match of {
-                Entry::Item(item) => &item.group,
-                Entry::Tag(_) | Entry::Remote(_) => "",
+                Entry::File { bucket, .. } => bucket.run(),
+                _ => "",
             }),
             Role::OrigPath => Value::Said(match of {
-                Entry::Item(item) => &item.orig_path,
-                Entry::Tag(_) | Entry::Remote(_) => "",
+                // Where a rename came from, which only the staged side of
+                // one knows.
+                Entry::File {
+                    item: platitude_core::status::StatusItem::Tracked { orig_path, .. },
+                    bucket: Bucket::Staged,
+                } => orig_path.as_deref().unwrap_or(""),
+                _ => "",
             }),
-            Role::EolMark => Value::Flag(matches!(of, Entry::Item(item) if item.eol_mark)),
+            // Kept once on the model rather than on every row: the marks
+            // are few, and the row only has to say that it has one (the
+            // sentence is `pointEol`).
+            Role::EolMark => Value::Flag(matches!(of, Entry::File { item, .. }
+                if self.eol_marks.iter().any(|mark| mark.path == item.path()))),
         }
     }
 
@@ -675,7 +836,11 @@ impl NavSectionModel {
     fn told(&self, known: Role, text: &str, wanted: Role) -> String {
         (0..self.all.len())
             .filter_map(|at| self.all.entry(at))
-            .map(|of| Row::Shown { of, depth: 0 })
+            .map(|of| Row::Shown {
+                of,
+                depth: 0,
+                from: 0,
+            })
             .find(|row| self.field(*row, known).as_str() == text)
             .map(|row| self.field(row, wanted).as_str().to_string())
             .unwrap_or_default()
@@ -688,6 +853,99 @@ impl NavSectionModel {
             .and_then(|at| self.row_at(at))
             .map(|row| self.field(row, role).as_str().to_string())
             .unwrap_or_default()
+    }
+
+    /// The display run a source row sits in — what the working tree's
+    /// list is built one of at a time, so that a folder of the same name
+    /// under two of them folds apart.
+    fn run_of(&self, at: usize) -> &'static str {
+        match self.all.entry(at) {
+            Some(Entry::File { bucket, .. }) => bucket.run(),
+            _ => "",
+        }
+    }
+
+    /// Trees one group run of file rows: single-child directory chains
+    /// compact into one `a/b/c` row; fold-toggle keys are group-prefixed
+    /// so equal paths in different groups fold apart.
+    fn wt_tree_into(&self, run: std::ops::Range<usize>, group: &str, out: &mut Vec<Arranged>) {
+        #[derive(Default)]
+        struct DirNode {
+            dirs: std::collections::BTreeMap<String, DirNode>,
+            /// The source rows sitting in this directory, each with where
+            /// in its path the file's own name begins.
+            files: Vec<(u32, u32)>,
+        }
+        let mut root = DirNode::default();
+        for at in run {
+            let Some(of) = self.all.entry(at) else {
+                continue;
+            };
+            let mut node = &mut root;
+            let mut rest = of.full();
+            let mut from = 0;
+            while let Some((dir, tail)) = rest.split_once('/') {
+                node = node.dirs.entry(dir.to_string()).or_default();
+                from += dir.len() + 1;
+                rest = tail;
+            }
+            node.files.push((at as u32, from as u32));
+        }
+        fn emit(
+            node: &DirNode,
+            group: &str,
+            prefix: &str,
+            depth: i32,
+            overrides: &HashMap<String, bool>,
+            out: &mut Vec<Arranged>,
+        ) {
+            for (dir_name, child) in &node.dirs {
+                let mut label = dir_name.clone();
+                let mut target = child;
+                while target.files.is_empty() && target.dirs.len() == 1 {
+                    let Some((next_name, next)) = target.dirs.iter().next() else {
+                        break;
+                    };
+                    label.push('/');
+                    label.push_str(next_name);
+                    target = next;
+                }
+                let path = format!("{prefix}{label}");
+                let key = format!("{group}:{path}");
+                let expanded = overrides.get(&key).copied().unwrap_or(true);
+                out.push(Arranged::Made(Box::new(NavItem {
+                    name: label,
+                    full: key.clone(),
+                    // The path itself, for the hover of a row the pane
+                    // elided: `full` is the fold key, not a path. It rides
+                    // in the rename slot, which a folder never uses.
+                    orig_path: path.clone(),
+                    group: group.to_string(),
+                    depth,
+                    folder: true,
+                    change: fold_state(expanded),
+                    ..Default::default()
+                })));
+                if expanded {
+                    emit(
+                        target,
+                        group,
+                        &format!("{path}/"),
+                        depth + 1,
+                        overrides,
+                        out,
+                    );
+                }
+            }
+            for (at, from) in &node.files {
+                out.push(Arranged::At {
+                    at: *at,
+                    depth,
+                    from: *from,
+                });
+            }
+        }
+        emit(&root, group, "", 0, &self.folder_overrides, out);
     }
 
     /// Section default: remote roots (one per remote) start collapsed —
@@ -757,6 +1015,9 @@ impl NavSectionModel {
                 out.push(Arranged::At {
                     at: at as u32,
                     depth: folder_count as i32,
+                    // One folder per `/`, so the segment on show starts
+                    // after the last of them.
+                    from: (name.len() - segments[folder_count].len()) as u32,
                 });
             }
         }
@@ -770,181 +1031,18 @@ fn pr_key(short: &str) -> &str {
     short.split_once('/').map_or(short, |(_, rest)| rest)
 }
 
-fn branch_nav_items(list: &[platitude_core::session::BranchItem]) -> Vec<NavItem> {
-    list.iter()
-        .map(|b| NavItem {
-            name: b.short.to_string(),
-            oid_hex: b.oid.to_hex(),
-            is_head: b.is_head,
-            has_remote: b.has_remote,
-            upstream: b.upstream.to_string(),
-            has_pr: crate::encode::fake_pr_set().contains(b.short.as_str()),
-            ..Default::default()
-        })
-        .collect()
-}
-
-/// Trees one group run of worktree entries: single-child directory
-/// chains compact into one `a/b/c` row; fold-toggle keys are
-/// group-prefixed so equal paths in different groups fold apart.
-fn wt_tree_into(
-    entries: &[NavItem],
-    group: &str,
-    overrides: &HashMap<String, bool>,
-    out: &mut Vec<Arranged>,
-) {
-    #[derive(Default)]
-    struct DirNode {
-        dirs: std::collections::BTreeMap<String, DirNode>,
-        files: Vec<NavItem>,
+/// The letters git reports for one file row: what each side did to a
+/// conflicted file, the half of an ordinary change this row is about, or
+/// the mark for a file git has never been told about.
+fn letters_of(item: &platitude_core::status::StatusItem, bucket: Bucket) -> String {
+    use platitude_core::status::StatusItem;
+    match (item, bucket) {
+        (StatusItem::Unmerged { ours, theirs, .. }, _) => format!("{ours}{theirs}"),
+        (StatusItem::Tracked { unstaged, .. }, Bucket::Unstaged) => unstaged.to_string(),
+        (StatusItem::Tracked { staged, .. }, Bucket::Staged) => staged.to_string(),
+        (StatusItem::Untracked { .. }, _) => "?".to_string(),
+        _ => String::new(),
     }
-    let mut root = DirNode::default();
-    for entry in entries {
-        let mut node = &mut root;
-        let mut rest = entry.full.as_str();
-        while let Some((dir, tail)) = rest.split_once('/') {
-            node = node.dirs.entry(dir.to_string()).or_default();
-            rest = tail;
-        }
-        let mut leaf = entry.clone();
-        leaf.name = rest.to_string();
-        node.files.push(leaf);
-    }
-    fn emit(
-        node: &DirNode,
-        group: &str,
-        prefix: &str,
-        depth: i32,
-        overrides: &HashMap<String, bool>,
-        out: &mut Vec<Arranged>,
-    ) {
-        for (dir_name, child) in &node.dirs {
-            let mut label = dir_name.clone();
-            let mut target = child;
-            while target.files.is_empty() && target.dirs.len() == 1 {
-                let Some((next_name, next)) = target.dirs.iter().next() else {
-                    break;
-                };
-                label.push('/');
-                label.push_str(next_name);
-                target = next;
-            }
-            let path = format!("{prefix}{label}");
-            let key = format!("{group}:{path}");
-            let expanded = overrides.get(&key).copied().unwrap_or(true);
-            out.push(Arranged::Made(Box::new(NavItem {
-                name: label,
-                full: key.clone(),
-                // The path itself, for the hover of a row the pane
-                // elided: `full` is the fold key, not a path. It rides
-                // in the rename slot, which a folder never uses.
-                orig_path: path.clone(),
-                group: group.to_string(),
-                depth,
-                folder: true,
-                change: fold_state(expanded),
-                ..Default::default()
-            })));
-            if expanded {
-                emit(
-                    target,
-                    group,
-                    &format!("{path}/"),
-                    depth + 1,
-                    overrides,
-                    out,
-                );
-            }
-        }
-        for f in &node.files {
-            let mut item = f.clone();
-            item.depth = depth;
-            out.push(Arranged::Made(Box::new(item)));
-        }
-    }
-    emit(&root, group, "", 0, overrides, out);
-}
-
-/// Working-tree entries in GitKraken display order: conflicts → unstaged
-/// (untracked files count as unstaged for display, via `group`, while
-/// `bucket` keeps the real diff/staging routing) → staged. `full` always
-/// carries the real path (tree leaves rename `name` to their last
-/// segment).
-fn status_nav_items(
-    status: &platitude_core::status::WorkTreeStatus,
-    eol_marks: &[platitude_core::session::EolMark],
-) -> Vec<NavItem> {
-    let push = |out: &mut Vec<NavItem>,
-                bucket: &str,
-                group: &str,
-                change: String,
-                path: &str,
-                orig: String| {
-        out.push(NavItem {
-            name: path.to_string(),
-            full: path.to_string(),
-            change,
-            bucket: bucket.into(),
-            group: group.into(),
-            orig_path: orig,
-            eol_mark: eol_marks.iter().any(|m| m.path == path),
-            ..Default::default()
-        });
-    };
-    let mut rows = Vec::new();
-    for entry in status.conflicted() {
-        if let platitude_core::status::StatusItem::Unmerged { ours, theirs, path } = entry {
-            push(
-                &mut rows,
-                "conflicts",
-                "conflicts",
-                format!("{ours}{theirs}"),
-                path,
-                String::new(),
-            );
-        }
-    }
-    for entry in status.unstaged() {
-        if let platitude_core::status::StatusItem::Tracked { unstaged, path, .. } = entry {
-            push(
-                &mut rows,
-                "unstaged",
-                "unstaged",
-                unstaged.to_string(),
-                path,
-                String::new(),
-            );
-        }
-    }
-    for entry in status.untracked() {
-        push(
-            &mut rows,
-            "untracked",
-            "unstaged",
-            "?".to_string(),
-            entry.path(),
-            String::new(),
-        );
-    }
-    for entry in status.staged() {
-        if let platitude_core::status::StatusItem::Tracked {
-            staged,
-            path,
-            orig_path,
-            ..
-        } = entry
-        {
-            push(
-                &mut rows,
-                "staged",
-                "staged",
-                staged.to_string(),
-                path,
-                orig_path.clone().unwrap_or_default(),
-            );
-        }
-    }
-    rows
 }
 
 #[qobject(Base = QAbstractItemModel, ConvertToCamelCase, NoQmlElement)]
@@ -1080,40 +1178,43 @@ impl NavSectionModel {
         }
     }
 
-    /// Installs freshly built rows, and answers whether they were new.
+    /// Points the section at what just arrived, and answers whether the
+    /// rows it shows moved.
     ///
     /// A poll tick republishes refs and status whether or not they moved,
     /// so most arrivals carry exactly what the section already shows.
     /// Swapping those in would still reset the Qt model — every delegate
     /// rebuilt, the inner list scrolled back — for an identical picture.
-    fn take_rows(&mut self, rows: Vec<NavItem>) -> bool {
-        if self.all.kept() == rows {
-            return false;
-        }
-        self.all = Source::Kept(rows);
-        true
-    }
-
-    /// Points the section at a newly published snapshot, and answers
-    /// whether the rows it shows moved.
+    /// The question is asked of the entries themselves, which is what a
+    /// section that builds no rows has left to compare: a poll that found
+    /// one branch moved is not a reason for the tag section to rebuild
+    /// forty-five thousand delegates.
     ///
-    /// The pointer check upstream has already said this is a different
-    /// snapshot; this is the other question — whether *these* rows differ
-    /// — and it is asked of the entries themselves, which is what the
-    /// projection leaves to compare. A poll that found one branch moved
-    /// is not a reason for the tag section to rebuild forty-five thousand
-    /// delegates.
-    ///
-    /// The new handle is taken either way: it holds what the old one did,
-    /// and the session has moved on to it, so keeping the old one alive
-    /// would be a second snapshot on the heap saying the same thing.
-    fn take_refs(&mut self, taken: Source) -> bool {
-        let moved = match (&self.all, &taken) {
-            (Source::Tags(held), Source::Tags(fresh)) => held.tags != fresh.tags,
+    /// What arrived is taken either way. It holds what the old one did,
+    /// and the session has moved on to it, so keeping the old one would be
+    /// a second copy on the heap saying the same thing.
+    fn take(&mut self, arrived: Source) -> bool {
+        let moved = match (&self.all, &arrived) {
+            (Source::Locals(held), Source::Locals(fresh)) => held.locals != fresh.locals,
             (Source::Remotes(held), Source::Remotes(fresh)) => held.remotes != fresh.remotes,
+            (Source::Tags(held), Source::Tags(fresh)) => held.tags != fresh.tags,
+            (Source::Stashes(held), Source::Stashes(fresh)) => held != fresh,
+            (
+                Source::Worktrees {
+                    list: held,
+                    current: was,
+                },
+                Source::Worktrees {
+                    list: fresh,
+                    current,
+                },
+            ) => held != fresh || was != current,
+            (Source::Files { status: held, .. }, Source::Files { status: fresh, .. }) => {
+                held.items != fresh.items
+            }
             _ => true,
         };
-        self.all = taken;
+        self.all = arrived;
         moved
     }
 
@@ -1168,16 +1269,17 @@ impl NavSectionModel {
                 self.last_refs = Some(Arc::clone(&snapshot));
                 arrived |= match self.section.as_str() {
                     "branches" => {
-                        let items = branch_nav_items(&snapshot.locals);
-                        let head = items.iter().find(|b| b.is_head);
-                        self.head_name = head.map(|b| b.name.clone()).unwrap_or_default();
-                        self.head_oid = head.map(|b| b.oid_hex.clone()).unwrap_or_default();
+                        let head = snapshot.locals.iter().find(|b| b.is_head);
+                        self.head_name = head.map(|b| b.short.to_string()).unwrap_or_default();
+                        self.head_oid = head.map(|b| b.oid.to_hex()).unwrap_or_default();
                         self.head_has_remote = head.is_some_and(|b| b.has_remote);
-                        self.head_has_pr = head.is_some_and(|b| b.has_pr);
-                        self.take_rows(items)
+                        self.head_has_pr = head.is_some_and(|b| {
+                            crate::encode::fake_pr_set().contains(b.short.as_str())
+                        });
+                        self.take(Source::Locals(snapshot))
                     }
-                    "remotes" => self.take_refs(Source::Remotes(snapshot)),
-                    _ => self.take_refs(Source::Tags(snapshot)),
+                    "remotes" => self.take(Source::Remotes(snapshot)),
+                    _ => self.take(Source::Tags(snapshot)),
                 };
             }
         }
@@ -1186,61 +1288,35 @@ impl NavSectionModel {
                 status, eol_marks, ..
             }) = feed.drain().pop()
         {
-            let rows = status_nav_items(&status, &eol_marks);
+            // The marks are the other half of what a file row shows, and
+            // they can move on their own — a line-ending answer arrives
+            // after the status it is about.
+            let marked = self.eol_marks != eol_marks;
             self.eol_marks = eol_marks;
-            arrived |= self.take_rows(rows);
+            arrived |= self.take(Source::files(status)) || marked;
         }
         if let Some(feed) = self.worktrees_feed.clone()
             && let Some(list) = feed.drain().pop()
         {
-            // The current worktree is marked like the current branch;
-            // `bucket` carries the branch (empty = detached) and `full`
-            // the absolute path (tooltip + click-to-open).
+            // Which working copy this window is showing is the one thing
+            // about a worktree row that git's list does not say, so it is
+            // asked for once and kept beside the list.
             let current = Hub::with(|hub| hub.session(self.tab_id).and_then(|s| s.workdir()))
                 .flatten()
                 .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
                 .unwrap_or_default();
-            let rows = list
-                .into_iter()
-                .filter(|w| !w.bare)
-                .map(|w| {
-                    let norm = w.path.replace('\\', "/");
-                    let name = norm.rsplit('/').next().unwrap_or(norm.as_str()).to_string();
-                    let has_pr = w
-                        .branch
-                        .as_deref()
-                        .is_some_and(|b| crate::encode::fake_pr_set().contains(b));
-                    NavItem {
-                        name,
-                        is_head: norm.to_lowercase() == current,
-                        full: w.path,
-                        bucket: w.branch.unwrap_or_default(),
-                        has_pr,
-                        ..Default::default()
-                    }
-                })
-                .collect();
-            arrived |= self.take_rows(rows);
+            // A bare entry has no working copy to show.
+            let list = list.into_iter().filter(|w| !w.bare).collect();
+            arrived |= self.take(Source::Worktrees { list, current });
         }
         if let Some(feed) = self.stash_feed.clone()
             && let Some(stashes) = feed.drain().pop()
         {
             // The message is the whole of what a stash shows: the reflog
             // selector (stash@{0}) stays out of sight by request, but it
-            // rides along in `full` because it is what names the entry to
-            // git — renaming one takes the selector, not the message.
-            // The commit id makes rows clickable: the details pane then
-            // shows the stashed changes.
-            let rows = stashes
-                .into_iter()
-                .map(|s| NavItem {
-                    name: s.message,
-                    full: s.name,
-                    oid_hex: s.oid.to_hex(),
-                    ..Default::default()
-                })
-                .collect();
-            arrived |= self.take_rows(rows);
+            // is what names the entry to git — renaming one takes the
+            // selector, not the message — so `full` answers with it.
+            arrived |= self.take(Source::Stashes(stashes));
         }
         if arrived {
             self.total = self.all.len() as i32;
@@ -1516,20 +1592,206 @@ mod tests {
         assert_eq!(says(&model, 0, Role::Full), "");
     }
 
+    fn tracked(staged: char, unstaged: char, path: &str) -> platitude_core::status::StatusItem {
+        platitude_core::status::StatusItem::Tracked {
+            staged,
+            unstaged,
+            path: path.to_string(),
+            orig_path: None,
+        }
+    }
+
+    /// One of each kind of pending change, in the order git reports them
+    /// rather than the order the pane shows them.
+    fn pending() -> platitude_core::status::WorkTreeStatus {
+        use platitude_core::status::StatusItem;
+        platitude_core::status::WorkTreeStatus {
+            items: vec![
+                StatusItem::Unmerged {
+                    ours: 'U',
+                    theirs: 'U',
+                    path: "a.txt".to_string(),
+                },
+                // Both halves changed: one row under each.
+                tracked('M', 'M', "src/b.txt"),
+                StatusItem::Untracked {
+                    path: "c.txt".to_string(),
+                },
+                StatusItem::Tracked {
+                    staged: 'R',
+                    unstaged: '.',
+                    path: "d.txt".to_string(),
+                    orig_path: Some("old.txt".to_string()),
+                },
+            ],
+            ..Default::default()
+        }
+    }
+
+    /// The pane's own order, and the letters and buckets that go with it.
+    /// An entry with both halves changed is two rows.
+    #[test]
+    fn a_file_row_reads_out_of_the_status() {
+        let mut model = section("worktree", Source::files(pending()));
+        model.tree_view = false;
+        model.arrange();
+
+        assert_eq!(model.shown_rows(), 5, "the MM entry is a row on each side");
+        let row = |at| {
+            (
+                says(&model, at, Role::Name),
+                says(&model, at, Role::Full),
+                says(&model, at, Role::Change),
+                says(&model, at, Role::Bucket),
+                says(&model, at, Role::Group),
+            )
+        };
+        // A conflict says what each side did to the file.
+        assert_eq!(
+            row(0),
+            (
+                "a.txt".into(),
+                "a.txt".into(),
+                "UU".into(),
+                "conflicts".into(),
+                "conflicts".into()
+            )
+        );
+        assert_eq!(
+            row(1),
+            (
+                "src/b.txt".into(),
+                "src/b.txt".into(),
+                "M".into(),
+                "unstaged".into(),
+                "unstaged".into()
+            )
+        );
+        // Untracked routes as itself and shows in the unstaged run.
+        assert_eq!(
+            row(2),
+            (
+                "c.txt".into(),
+                "c.txt".into(),
+                "?".into(),
+                "untracked".into(),
+                "unstaged".into()
+            )
+        );
+        assert_eq!(
+            row(3),
+            (
+                "src/b.txt".into(),
+                "src/b.txt".into(),
+                "M".into(),
+                "staged".into(),
+                "staged".into()
+            )
+        );
+        assert_eq!(says(&model, 4, Role::OrigPath), "old.txt");
+        // The unstaged half is what a path asked for by name answers with,
+        // as it did when the rows were built.
+        assert_eq!(model.change_of("src/b.txt".to_string()), "M");
+        assert_eq!(model.change_of("a.txt".to_string()), "UU");
+    }
+
+    /// The working tree's own tree: one run at a time, folders compacted,
+    /// and a file showing only its last segment.
+    #[test]
+    fn the_file_tree_folds_each_run_of_its_own() {
+        let mut model = section("worktree", Source::files(pending()));
+        // What `attach_section` starts the working tree's list on.
+        model.tree_view = true;
+        model.arrange();
+
+        // conflicts: a.txt / unstaged: src, b.txt, c.txt / staged: src,
+        // b.txt, d.txt
+        assert_eq!(model.shown_rows(), 7);
+        assert_eq!(says(&model, 0, Role::Name), "a.txt");
+        assert_eq!(says(&model, 1, Role::Name), "src");
+        assert!(flags(&model, 1, Role::Folder));
+        // A folder's fold key is prefixed with its run, so the same folder
+        // under two of them folds apart; the path itself rides along for
+        // the hover of an elided row.
+        assert_eq!(says(&model, 1, Role::Full), "unstaged:src");
+        assert_eq!(says(&model, 1, Role::OrigPath), "src");
+        assert_eq!(says(&model, 2, Role::Name), "b.txt");
+        assert_eq!(says(&model, 2, Role::Full), "src/b.txt");
+        assert_eq!(depth_of(&model, 2), 1);
+        assert_eq!(says(&model, 3, Role::Name), "c.txt");
+        assert_eq!(says(&model, 4, Role::Full), "staged:src");
+
+        // Folding one run leaves the other alone.
+        model
+            .folder_overrides
+            .insert("unstaged:src".to_string(), false);
+        model.arrange();
+        assert_eq!(model.shown_rows(), 6);
+        assert_eq!(says(&model, 1, Role::Change), FOLDED);
+        assert_eq!(says(&model, 2, Role::Name), "c.txt");
+    }
+
+    /// A stash shows its message and answers with the selector git knows
+    /// it by; a worktree row shows its folder and marks the one this
+    /// window has open.
+    #[test]
+    fn the_short_sections_read_out_of_what_arrived() {
+        let mut model = section(
+            "stashes",
+            Source::Stashes(vec![platitude_core::stash::StashEntry {
+                name: "stash@{0}".to_string(),
+                oid: oid("c"),
+                time: 0,
+                message: "On main: a thing".to_string(),
+            }]),
+        );
+        model.arrange();
+        assert_eq!(says(&model, 0, Role::Name), "On main: a thing");
+        assert_eq!(says(&model, 0, Role::Full), "stash@{0}");
+        assert_eq!(says(&model, 0, Role::OidHex), oid("c").to_hex());
+
+        let entry = |path: &str, branch: &str| platitude_core::worktrees::WorktreeEntry {
+            path: path.to_string(),
+            branch: Some(branch.to_string()),
+            head_hex: None,
+            bare: false,
+            detached: false,
+            locked: false,
+        };
+        let mut model = section(
+            "worktrees",
+            Source::Worktrees {
+                list: vec![
+                    entry("C:\\work\\repo", "main"),
+                    entry("C:\\work\\other", "topic"),
+                ],
+                current: "c:/work/other".to_string(),
+            },
+        );
+        model.arrange();
+        assert_eq!(says(&model, 0, Role::Name), "repo");
+        assert_eq!(says(&model, 0, Role::Full), "C:\\work\\repo");
+        assert_eq!(says(&model, 0, Role::Bucket), "main");
+        assert!(!flags(&model, 0, Role::IsHead));
+        // The one this window is showing is marked, however git spelled it.
+        assert!(flags(&model, 1, Role::IsHead));
+        assert_eq!(model.head_row, 1);
+    }
+
     /// A snapshot that carries the same tags is not a reason to rebuild
     /// tens of thousands of delegates.
     #[test]
     fn a_republished_snapshot_moves_nothing() {
         let mut model = section("tags", Source::default());
-        assert!(model.take_refs(Source::Tags(snapshot(
+        assert!(model.take(Source::Tags(snapshot(
             Vec::new(),
             vec![tag("v1.0", true, true)]
         ))));
-        assert!(!model.take_refs(Source::Tags(snapshot(
+        assert!(!model.take(Source::Tags(snapshot(
             Vec::new(),
             vec![tag("v1.0", true, true)]
         ))));
-        assert!(model.take_refs(Source::Tags(snapshot(
+        assert!(model.take(Source::Tags(snapshot(
             Vec::new(),
             vec![tag("v1.1", true, true)]
         ))));
