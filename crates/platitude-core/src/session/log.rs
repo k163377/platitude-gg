@@ -249,7 +249,13 @@ impl RepoSession {
             // truncation notice claiming history the user just asked to
             // see — a rebuild is the only thing that speaks when one
             // overtakes the stream the change asked for (core.md).
-            let unchanged = shared.sent_rows == rows && shared.sent_footer == Some(footer);
+            let unchanged = shared.sent_footer == Some(footer)
+                && shared.sent_rows.len() == rows.len()
+                && shared
+                    .sent_rows
+                    .iter()
+                    .zip(&rows)
+                    .all(|(sent, fresh)| *sent == RowPrint::of(fresh));
             shared.builder = builder;
             shared.applied = applied;
             if unchanged {
@@ -267,7 +273,7 @@ impl RepoSession {
                 tracing::debug!(generation, total, "graph rebuild unchanged; swap skipped");
                 return;
             }
-            shared.sent_rows = rows.clone();
+            shared.sent_rows = rows.iter().map(RowPrint::of).collect();
             shared.sent_footer = Some(footer);
             shared.generation = generation;
             // Still under the lock (see run_direct_pass): a refs read that
@@ -567,7 +573,7 @@ impl RepoSession {
             return; // this stream is not the graph on screen (see emit_rows)
         }
         let row = wip_row(head, &mut guard.builder);
-        guard.sent_rows.push(row.clone());
+        guard.sent_rows.push(RowPrint::of(&row));
         self.sink.event(SessionEvent::LogChunk {
             generation,
             rows: vec![row],
@@ -606,7 +612,7 @@ impl RepoSession {
             }
             rows.push(row);
         }
-        shared.sent_rows.extend(rows.iter().cloned());
+        shared.sent_rows.extend(rows.iter().map(RowPrint::of));
         self.sink.event(SessionEvent::LogChunk { generation, rows });
     }
 
@@ -684,7 +690,7 @@ impl RepoSession {
         // an identical graph.
         for (row, labels) in &changed {
             if let Some(sent) = shared.sent_rows.get_mut(*row as usize) {
-                sent.labels = labels.clone();
+                sent.labels = RowPrint::labels_of(labels);
             }
         }
         if changed.is_empty() {
