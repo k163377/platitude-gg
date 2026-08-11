@@ -556,6 +556,24 @@ Rectangle {
             // (SVG edits keep both).
             visible: diffPane.diffModel.previewKind !== "image"
                      || count > 0
+            // Mouse wheels scroll a fixed number of rows per notch — the
+            // same Metrics.wheelRows every other surface answers a notch
+            // with (GraphPane, the right panes). This list was the one
+            // place still on Flickable's default wheel, a pseudo-flick
+            // that eases in and moves less per notch, which read as
+            // sluggish next to the rest of the app (2026-08-11 ユーザー
+            // 報告). Touchpads keep native Flickable panning.
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse
+                onWheel: event => {
+                    diffList.cancelFlick()
+                    const step = (event.angleDelta.y / 120)
+                               * Metrics.wheelRows * Theme.rowHeight
+                    diffList.contentY = Math.max(0, Math.min(
+                        diffList.contentY - step,
+                        Math.max(0, diffList.contentHeight - diffList.height)))
+                }
+            }
             delegate: Rectangle {
                 id: diffRow
                 required property string kind
