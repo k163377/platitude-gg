@@ -487,10 +487,14 @@ pub struct NavSectionModel {
     /// source exactly, and an index per row would say only that the rows
     /// are where they already are.
     arranged: Option<Vec<Arranged>>,
-    /// Whether `arranged` is the indented form, where a row shows the
-    /// segment under its folder and its whole name is what git calls it.
-    /// A filtered list is not: it shows whole names and stands in no tree.
-    indented: bool,
+    /// Whether a tree placed these rows, which is the one thing that
+    /// gives a **ref** row a full name: a branch arrives knowing only
+    /// what it is called, and the tree is what decides that `main` shown
+    /// under `origin` is `origin/main` to git. Every other kind of row
+    /// arrived with both, so this does not concern them — and a filtered
+    /// list stands in no tree, which is why its refs have no full name
+    /// (as they did not when the filter built them by hand).
+    tree_named: bool,
     filter: String,
     total: i32,
     /// Current branch (branches section only) — feeds the sticky row
@@ -608,9 +612,8 @@ impl NavSectionModel {
         let needle = self.filter.to_lowercase();
         // A tree is what gives a ref row a full name to be known by, and
         // it is the shaping a filter replaces.
-        self.indented = needle.is_empty()
-            && matches!(self.section.as_str(), "branches" | "remotes")
-            || needle.is_empty() && self.section == "worktree" && self.tree_view;
+        self.tree_named =
+            needle.is_empty() && matches!(self.section.as_str(), "branches" | "remotes");
         self.arranged = if needle.is_empty() {
             match self.section.as_str() {
                 "branches" | "remotes" => Some(self.build_tree()),
@@ -740,7 +743,7 @@ impl NavSectionModel {
             Role::Name => Value::Said(Self::shown_name(of, from)),
             // A tree is what writes a full name down for a ref; every
             // other row arrived knowing what git calls it.
-            Role::Full => Value::Said(if self.indented && of.full().is_empty() {
+            Role::Full => Value::Said(if self.tree_named && of.full().is_empty() {
                 of.name()
             } else {
                 of.full()
