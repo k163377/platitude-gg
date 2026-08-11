@@ -355,6 +355,13 @@ ColumnLayout {
     }
     // -- smoke hooks, forwarded to the box --
     function growDescription(dy) { bodyArea.grow(dy) }
+    function pullDescriptionPast(down) { bodyArea.pullPast(down) }
+    /// An alias rather than a binding over one: a binding laid on top of
+    /// the box's own alias to the badge's `visible` reads stale — the
+    /// answer was already true at the source while this still said false
+    /// in the same breath (2026-08-11 実測). One hop, like the graph
+    /// pane's.
+    readonly property alias descRefuses: bodyArea.gripRefuses
     readonly property bool descGrips: bodyArea.grips
     readonly property real descHeight: bodyArea.boxHeight
     readonly property real descWants: bodyArea.wants

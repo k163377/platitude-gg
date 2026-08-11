@@ -527,11 +527,16 @@ Rectangle {
     // Divider hover-lines live under the list so the message ticks and
     // lane strokes stay in front.
     Rectangle {
+        id: labelDividerLine
         x: labelDivider.x + Theme.borderWidth
         width: Theme.splitterWidth - 2 * Theme.borderWidth
         height: parent.height
         color: Theme.borderStrong
-        visible: labelDivider.containsMouse || labelDivider.pressed
+        // Reads the pane's own property rather than the MouseArea's hover,
+        // so the automation hook can raise it too — hover cannot be
+        // injected, and a line nothing can prove is a line nothing checks
+        // (app-ui.md, the same shape the graph divider's line uses).
+        visible: graphArea.labelPointed || labelDivider.pressed
     }
     Rectangle {
         id: graphDividerLine
@@ -1004,14 +1009,18 @@ Rectangle {
         hoverEnabled: true
         cursorShape: Qt.SplitHCursor
         preventStealing: true
+        onContainsMouseChanged: {
+            graphArea.labelPointed = containsMouse
+            // Entering does not always bring a move with it, and the
+            // badge is drawn where this says the hand is.
+            if (containsMouse)
+                graphArea.labelPoint = Qt.point(labelDivider.x + mouseX, mouseY)
+        }
         onPositionChanged: mouse => {
+            graphArea.labelPoint = Qt.point(labelDivider.x + mouse.x, mouse.y)
             if (!pressed)
                 return
-            const nx = mapToItem(graphArea, mouse.x, 0).x
-            // The same pair the column itself is clamped to, so a drag
-            // cannot leave a width the pane would not lay out.
-            graphArea.labelWManual = Math.max(graphArea.labelColWMin,
-                Math.min(nx, graphArea.labelColWMax))
+            graphArea.dragLabelTo(mapToItem(graphArea, mouse.x, 0).x)
         }
     }
     MouseArea {
@@ -1058,39 +1067,68 @@ Rectangle {
         graphArea.graphColWManual = Math.max(graphArea.graphColWMin,
             Math.min(graphArea.dividerAsked, graphArea.graphColWMax))
     }
-    /// Whether the pointer is on the graph divider, and where. Real hover
-    /// and the automation hook write the same two — hover cannot be
-    /// injected (verify-ui), and both the line and the mark have to be
+    /// The same for the chip column's divider, whose asked width is simply
+    /// where the pointer is — that column starts at the pane's edge.
+    function dragLabelTo(px) {
+        graphArea.labelAsked = px
+        graphArea.labelWManual = Math.max(graphArea.labelColWMin,
+            Math.min(px, graphArea.labelColWMax))
+    }
+    /// Whether the pointer is on each divider, and where. Real hover and
+    /// the automation hooks write the same pairs — hover cannot be
+    /// injected (verify-ui), and both the lines and the badge have to be
     /// provable.
     property bool dividerPointed: false
     property point dividerPoint: Qt.point(0, 0)
-    /// The width the last drag asked the column for, clamped or not.
+    property bool labelPointed: false
+    property point labelPoint: Qt.point(0, 0)
+    /// What each divider's last drag asked its column for, clamped or not.
+    /// The clamped answer is the column's width; this is what the hand
+    /// wanted, which is the only thing that can tell a refusal from a rest.
     property real dividerAsked: 0
-    /// Whether a drag is under way on the divider. The hook's own flag
-    /// rides beside the real press because a press is no more injectable
-    /// than hover is (verify-ui) — and it rides here rather than inside
-    /// the refusal, so the refusal stays one expression both roads reach.
+    property real labelAsked: 0
+    /// Whether a drag is under way. The hooks' own flags ride beside the
+    /// real presses because a press is no more injectable than hover is
+    /// (verify-ui) — and they ride here rather than inside the refusals,
+    /// so each refusal stays one expression that both roads reach.
     readonly property bool dividerDragging: graphDivider.pressed || dividerHeld
-    /// Automation only: stands in for the press `dragDividerPastMax()`
-    /// cannot make. Nothing a hand can reach writes this.
+    readonly property bool labelDragging: labelDivider.pressed || labelHeld
+    /// Automation only: stand in for the presses the hooks cannot make.
+    /// Nothing a hand can reach writes these.
     property bool dividerHeld: false
-    /// Whether a drag is asking the column for more than it can be. Held
-    /// apart from hover on purpose: at its ceiling the column still
-    /// narrows, so a badge worn merely for standing there would say
-    /// "this does not move" about a divider that does.
+    property bool labelHeld: false
+    /// Whether a drag is asking a column for a width it cannot have.
+    /// **Either end** — a hand that has run out has run out whichever way
+    /// it was going, and answering only one way leaves the other reading
+    /// as a divider that broke.
     ///
-    /// Past the ceiling by more than the divider is wide, so a press on
-    /// its own cannot trip it: grabbing the line lands the column
-    /// anywhere within half that width of where it already sat, and at
-    /// the ceiling half of those grabs would be asking for more.
+    /// Held apart from hover on purpose: at either bound the column still
+    /// moves the other way, so a badge worn merely for standing there
+    /// would say "this does not move" about a divider that does.
     ///
-    /// A binding, not something set and taken back down: letting go ends
+    /// Bindings, not something set and taken back down: letting go ends
     /// the ask, and a badge left on screen by a teardown nobody ran is
     /// exactly the failure a hand would see and a run could not.
     readonly property bool dividerRefused:
-        dividerDragging
-        && dividerAsked > graphColWMax + Theme.splitterWidth
-    /// Automation: the pointer resting on the divider, at its middle
+        dividerDragging && graphArea.outOfRange(dividerAsked,
+                                                graphColWMin, graphColWMax)
+    readonly property bool labelRefused:
+        labelDragging && graphArea.outOfRange(labelAsked,
+                                              labelColWMin, labelColWMax)
+    /// Whether an ask has run out past either end of what it is allowed,
+    /// by more than the divider is wide — so a press on its own cannot
+    /// trip it: grabbing a line lands its column anywhere within half that
+    /// width of where it already sat, and at a bound half of those grabs
+    /// would be asking for more.
+    ///
+    /// Safe to call from a binding: everything that varies arrives as an
+    /// argument, so the binding takes its dependencies from the call site
+    /// (unlike a method that reads them itself — app-ui.md).
+    function outOfRange(asked, floor, ceiling) {
+        return asked > ceiling + Theme.splitterWidth
+            || asked < floor - Theme.splitterWidth
+    }
+    /// Automation: the pointer resting on the graph divider, at its middle
     /// (`PG_AUTO_ACT=graph-divider`). Where that is stays here rather
     /// than in the hook — one answer, not a second one to keep in step.
     function restDividerPointer(inside) {
@@ -1099,50 +1137,60 @@ Rectangle {
             graphArea.dividerPoint = Qt.point(graphDivider.x + graphDivider.width / 2,
                                               graphArea.height / 2)
     }
-    /// Automation: a drag carried out past the column's ceiling
-    /// (`PG_AUTO_ACT=graph-divider-max`). Presses are no more injectable
-    /// than hover is (verify-ui), so the hook walks the road the handler
-    /// walks and takes the pointer where a hand would have carried it.
-    function dragDividerPastMax() {
-        const px = graphArea.labelW + graphArea.graphColWMax + Theme.spaceSm
-                   + Theme.borderWidth + 2 * Theme.splitterWidth
+    /// Automation: a drag carried out past one of the four bounds these
+    /// two dividers have (`PG_AUTO_ACT=divider-refuse`, whose argument
+    /// names which). Presses are no more injectable than hover is
+    /// (verify-ui), so each walks the road its own handler walks and takes
+    /// the pointer where a hand would have carried it.
+    function dragDividerPast(which) {
+        const over = 2 * Theme.splitterWidth
+        if (which === "label-min" || which === "label-max") {
+            const lx = which === "label-max" ? graphArea.labelColWMax + over
+                                             : graphArea.labelColWMin - over
+            graphArea.labelPointed = true
+            graphArea.labelHeld = true
+            graphArea.labelPoint = Qt.point(lx, graphArea.height / 2)
+            graphArea.dragLabelTo(lx)
+            return
+        }
+        const px = graphArea.labelW + Theme.spaceSm + Theme.borderWidth
+                   + (which === "graph-min" ? graphArea.graphColWMin - over
+                                            : graphArea.graphColWMax + over)
         graphArea.dividerPointed = true
         graphArea.dividerHeld = true
         graphArea.dividerPoint = Qt.point(px, graphArea.height / 2)
         graphArea.dragDividerTo(px)
     }
-    // What a column that will not go further answers with: the platform's
-    // own cursor, untouched, and this badge below and right of it (規約
-    // §グラフ列は最も広い所のレーンまで). Tucked into the corner the
-    // cursor leaves empty — the platform's own badged cursors sit that
-    // close, and a badge held further out reads as a separate mark
-    // rather than as something the cursor is wearing.
-    //
+    /// The one badge, and where it goes. One pointer, so one answer at a
+    /// time: the two dividers cannot both have the hand.
+    readonly property bool refused:
+        dividerRefused || labelRefused
+        || (graphColWFixed && dividerPointed)
+    readonly property point refusedAt: labelRefused ? labelPoint : dividerPoint
     // Two ways to it, and they are asked differently. A column squeezed
     // until it has no drag left in either direction answers on hover —
-    // there is nothing to try. A column at its ceiling answers only the
-    // drag that tried, because it still moves the other way.
-    NavIcon {
+    // there is nothing to try. A column at a bound answers only the drag
+    // that tried, because it still moves the other way.
+    RefusalBadge {
         id: refusedCursor
-        kind: "no"
-        tint: Theme.textPrimary
-        width: Theme.iconMd
-        height: Theme.iconMd
-        x: graphArea.dividerPoint.x + Theme.spaceXs
-        y: graphArea.dividerPoint.y + Theme.spaceXs
-        z: 4
-        visible: (graphArea.graphColWFixed && graphArea.dividerPointed)
-                 || graphArea.dividerRefused
-        // A Canvas that was never visible was never asked to paint, and
-        // the first thing this one does is appear (app-ui.md).
-        onVisibleChanged: if (visible) requestPaint()
+        at: graphArea.refusedAt
+        shown: graphArea.refused
     }
     /// What is drawn, not what was asked for: the automation hook reports
     /// the line and the badge themselves, so a column that cannot be
     /// resized but still promises a drag cannot pass.
     readonly property alias graphDividerShown: graphDivider.visible
     readonly property alias graphDividerLineShown: graphDividerLine.visible
-    readonly property alias graphDividerRefuses: refusedCursor.visible
+    readonly property alias labelDividerLineShown: labelDividerLine.visible
+    /// The badge's own `shown`, not its `visible` — read from another file
+    /// `visible` comes back stale (`RefusalBadge`).
+    readonly property alias graphDividerRefuses: refusedCursor.shown
+    /// The line of whichever divider has the hand. A refused drag has to
+    /// leave it drawn — the boundary still moves the other way — so this
+    /// is the half of the picture the badge does not hold, and it is the
+    /// pane that knows which of the two lines is being asked about.
+    readonly property bool refusedLineShown:
+        labelDragging ? labelDividerLine.visible : graphDividerLine.visible
     /// Whether the pointer is anywhere in this pane. A `HoverHandler`
     /// rather than a `MouseArea`: handlers are passive, so the rows',
     /// chips' and dividers' own hover does not take this one away. Real

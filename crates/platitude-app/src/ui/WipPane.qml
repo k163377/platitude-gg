@@ -362,6 +362,9 @@ ColumnLayout {
     }
     // -- smoke hooks, forwarded to the box --
     function growDescription(dy) { wipBody.grow(dy) }
+    function pullDescriptionPast(down) { wipBody.pullPast(down) }
+    /// An alias, not a binding over one — see `DetailsPane.descRefuses`.
+    readonly property alias descRefuses: wipBody.gripRefuses
     readonly property bool descGrips: wipBody.grips
     readonly property real descHeight: wipBody.boxHeight
     readonly property real descWants: wipBody.wants

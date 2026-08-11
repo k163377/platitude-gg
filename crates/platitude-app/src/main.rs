@@ -109,11 +109,13 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/PaneHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefChip.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefListPopup.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/RefusalBadge.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RemoteDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RepoPage.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SidebarPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SlimField.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SplitHandleBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SummaryArea.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TopBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipBucketHeader.qml", "qt/qml/platitude");

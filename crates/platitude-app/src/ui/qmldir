@@ -47,11 +47,13 @@ OpenFailedDialog 1.0 OpenFailedDialog.qml
 PaneHeader 1.0 PaneHeader.qml
 RefChip 1.0 RefChip.qml
 RefListPopup 1.0 RefListPopup.qml
+RefusalBadge 1.0 RefusalBadge.qml
 RemoteDialog 1.0 RemoteDialog.qml
 RepoPage 1.0 RepoPage.qml
 SettingsDialog 1.0 SettingsDialog.qml
 SidebarPane 1.0 SidebarPane.qml
 SlimField 1.0 SlimField.qml
+SplitHandleBar 1.0 SplitHandleBar.qml
 SummaryArea 1.0 SummaryArea.qml
 TopBar 1.0 TopBar.qml
 WipBucketHeader 1.0 WipBucketHeader.qml

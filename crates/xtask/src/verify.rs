@@ -507,14 +507,16 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // and a clamp that stopped anywhere else photographs just as
         // neatly, since the gap in question is one pixel of the frame.
         "graph-min" => Some("graph_min w=21 min=21"),
-        // The drag carried past the ceiling. The badge is 12 pixels in
-        // the middle of a pane, and a run where the hook never reached
-        // the divider photographs a graph that looks entirely well — so
-        // the refusal is said out loud. `line=` rides with it because
-        // the two are a pair: the column still moves inward, and a
-        // divider that withdrew its line would be answering the wrong
-        // question (that is `graph-divider`'s squeezed half).
-        "graph-divider-max" => Some("graph_divider_max line=true refuses=true"),
+        // A drag carried past one of a divider's bounds. The badge is 12
+        // pixels in the middle of a pane, and a run where the hook never
+        // reached the divider photographs a window that looks entirely
+        // well — so the refusal is said out loud. `line=` rides with it
+        // because the two are a pair: the boundary still moves the other
+        // way, and one that withdrew its line would be answering a
+        // different question (that is `graph-divider`'s squeezed half).
+        // One wanted line for every case: `line=` is already whichever
+        // divider has the hand, so the argument does not change it.
+        "divider-refuse" => Some("divider_refuse refuses=true line=true"),
         // The three badges are judged with the fit. A run where one of
         // them never stood photographs a band that was never crowded, and
         // that picture cannot be told from a band that took the crowd

@@ -60,10 +60,71 @@ Rectangle {
         box.cap = Math.max(Theme.messageMaxHeight,
                            Math.min(want, box.wants, box.boxHeight + box.room))
     }
+    /// Where a pull leaves the ceiling, and what it asked for on the way.
+    /// The drag and the smoke hooks all come through here, so the clamp
+    /// and the refusal below are one answer rather than two kept in step.
+    function pullTo(want) {
+        box.askedHeight = want
+        // Judged here, against the bound as it stood when the hand asked.
+        // Unlike a column divider's, this bound moves under its own ask:
+        // it is `boxHeight + room`, and `room` is what the pane has left
+        // to lend, which the pane only recomputes on the next layout. Read
+        // back afterwards it has grown by exactly what the box just took,
+        // so a comparison made later always says the ask fitted.
+        box.askedPast =
+            want > Math.min(box.wants, box.boxHeight + box.room) + Theme.splitterWidth
+            || want < Theme.messageMaxHeight - Theme.splitterWidth
+        box.setBoxHeight(want)
+    }
     /// Smoke hook: pull the grip down by dy, the way a drag does, and
     /// through the same clamp. Headless has no pointer at all.
     function grow(dy) {
-        box.setBoxHeight(box.boxHeight + dy)
+        box.pullTo(box.boxHeight + dy)
+    }
+
+    // ---- a pull the box has nothing left to answer with -----------------
+    /// What the last pull asked for, clamped or not — the only thing that
+    /// can tell a refusal from a rest (規約 §掴める境界は答える).
+    property real askedHeight: 0
+    /// Where the hand is, in this box's own coordinates.
+    property point gripPoint: Qt.point(0, 0)
+    /// Automation only: stands in for the press the hooks cannot make.
+    property bool gripHeld: false
+    readonly property bool gripDragging: grip.pressed || box.gripHeld
+    /// Whether the last ask was past what the box could give. Written by
+    /// `pullTo`, which is the only moment the bound is still the one the
+    /// ask was measured against.
+    property bool askedPast: false
+    /// Whether a pull is asking for a height the box cannot be — either
+    /// way, since a hand that has run out has run out whichever way it was
+    /// going. The dragging half is a binding, so letting go ends the
+    /// answer whatever the last ask was: nothing here can strand a badge.
+    readonly property bool gripRefused: box.gripDragging && box.askedPast
+    /// Automation: a pull carried past one of the two ends
+    /// (`PG_AUTO_ACT=divider-refuse`, cases `desc-max` / `desc-min`).
+    function pullPast(down) {
+        const over = 4 * Theme.splitterWidth
+        box.gripHeld = true
+        box.pullTo(down ? Math.min(box.wants, box.boxHeight + box.room) + over
+                        : Theme.messageMaxHeight - over)
+        // Where the hand got to — read after the pull, and past the bound
+        // by what the pull asked for. A real drag writes this every move,
+        // so it is always the hand; a hook that wrote it beforehand would
+        // leave the badge at the corner the grip has since left (the
+        // picture then shows it stranded halfway up the box).
+        //
+        // Off `boxHeight`, which settles with the clamp, rather than off
+        // the grip, which is anchored and moves on the next layout.
+        box.gripPoint = Qt.point(box.width - grip.width / 2,
+                                 box.boxHeight - grip.height / 2
+                                 + (down ? over : -over))
+    }
+    /// What is drawn, not what was asked for.
+    readonly property alias gripRefuses: refusedGrip.shown
+    RefusalBadge {
+        id: refusedGrip
+        at: box.gripPoint
+        shown: box.gripRefused
     }
     /// A wheel this box had nothing left to do with, in pixels. Whoever
     /// put the box on a surface that scrolls moves that surface by it.
@@ -189,12 +250,17 @@ Rectangle {
         onPressed: mouse => {
             grip.fromY = mapToItem(box.parent, 0, mouse.y).y
             grip.fromHeight = box.boxHeight
+            // A grab is not yet an ask, and the last drag's answer is not
+            // this one's. Forgetting this shows the badge a frame early on
+            // the next grab, never longer — the dragging half still ends it.
+            box.askedPast = false
         }
         onPositionChanged: mouse => {
+            box.gripPoint = Qt.point(grip.x + mouse.x, grip.y + mouse.y)
             if (!grip.pressed)
                 return
-            box.setBoxHeight(grip.fromHeight
-                             + mapToItem(box.parent, 0, mouse.y).y - grip.fromY)
+            box.pullTo(grip.fromHeight
+                       + mapToItem(box.parent, 0, mouse.y).y - grip.fromY)
         }
         NavIcon {
             anchors.fill: parent

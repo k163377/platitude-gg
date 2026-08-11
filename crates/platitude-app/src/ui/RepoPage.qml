@@ -2445,7 +2445,26 @@ Item {
         /// raising the command log under it — the one way a headless run
         /// can make the pane shorter than the box it is already holding.
         property bool squeeze: false
+        /// Which end this run is carrying the grip past, or empty for the
+        /// ordinary pull. Same wait and same box — the difference is that
+        /// the grip is in hand, so the box answers instead of just
+        /// stopping (規約 §掴める境界は答える).
+        property string refuse: ""
         onTriggered: {
+            if (descGrowTimer.refuse !== "") {
+                descGrowTimer.pane.pullDescriptionPast(
+                    descGrowTimer.refuse === "desc-max")
+                AppBackend.report(
+                    "divider_refuse refuses=" + descGrowTimer.pane.descRefuses
+                    // The grip itself, still offered: the box moves the
+                    // other way, and a corner that withdrew its mark would
+                    // be answering a different question.
+                    + " line=" + descGrowTimer.pane.descGrips
+                    + " case=" + descGrowTimer.refuse
+                    + " box=" + Math.round(descGrowTimer.pane.descHeight)
+                    + " wants=" + Math.round(descGrowTimer.pane.descWants))
+                return
+            }
             descGrowTimer.pane.growDescription(descGrowTimer.pull)
             if (descGrowTimer.squeeze)
                 page.toggleCommands()
@@ -3117,17 +3136,43 @@ Item {
             page.setGraphColumns(graphPane.labelWManual, 0)
             AppBackend.report("graph_min w=" + graphPane.graphColW
                               + " min=" + graphPane.graphColWMin)
-        } else if (act === "graph-divider-max") {
-            // The drag that ran out past the last lane. The line stays
-            // where the column stopped and the badge goes on with the
-            // pointer, so the picture holds both halves: a divider that
-            // still promises the inward drag, and an answer out where
-            // the hand got to.
-            graphPane.dragDividerPastMax()
-            AppBackend.report("graph_divider_max line=" + graphPane.graphDividerLineShown
-                              + " refuses=" + graphPane.graphDividerRefuses
-                              + " w=" + graphPane.graphColW
-                              + " max=" + Math.round(graphPane.graphColWMax))
+        } else if (act === "divider-refuse") {
+            // A drag carried past one of the bounds a divider has, named
+            // by the argument. The line stays where the boundary stopped
+            // and the badge goes on with the pointer, so the picture
+            // holds both halves: a divider that still promises the drag
+            // the other way, and an answer out where the hand got to.
+            // Which road it takes is which road a hand would take: the
+            // graph's own dividers know what was asked, a split bar is
+            // read from where the pointer went instead.
+            // The log is shut until it is asked for, and a bar between a
+            // pane and something that is not on screen is not on screen
+            // either — there would be nothing for a hand to grab. Open it
+            // and let it lay out before measuring against a bar that has
+            // no geometry yet (the beat `graphPanTimer` waits for too).
+            if (arg === "log-min" && !page.commandsOpen) {
+                page.commandsOpen = true
+                splitRefuseTimer.start()
+            } else if (arg === "desc-max" || arg === "desc-min") {
+                // The corner grip. Same wait as `details-grow`, for the
+                // same reason: the message has to be in the box, and the
+                // box laid out with it, before there is a bound to carry
+                // anything past.
+                //
+                // Row 1, not row 0: row 0 of every preset is the
+                // uncommitted row, and landing on it puts the working
+                // tree in the right-hand pane — leaving the box this
+                // pulls on correct but off screen, which is a picture
+                // that cannot show the badge it was taken for.
+                page.activateRow(graphModel.oidAt(1))
+                descGrowTimer.pane = detailsPane
+                descGrowTimer.paneName = "details"
+                descGrowTimer.squeeze = false
+                descGrowTimer.refuse = arg
+                descGrowTimer.start()
+            } else {
+                page.reportDividerRefusal(arg)
+            }
         } else if (act === "graph-divider") {
             // What the divider answers with the pointer on it. Read
             // against two repositories: a line withheld on a linear
@@ -4296,10 +4341,8 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             orientation: Qt.Vertical
-            handle: Rectangle {
-                implicitWidth: Theme.splitterWidth
-                implicitHeight: Theme.splitterWidth
-                color: Theme.borderSubtle
+            handle: SplitHandleBar {
+                onHandChanged: (which, held) => page.holdSplitBar(which, held)
             }
 
             // ---- open failed ------------------------------------------
@@ -4378,10 +4421,8 @@ Item {
                 SplitView.fillHeight: true
                 SplitView.minimumHeight: page.panesMinHeight
                 orientation: Qt.Horizontal
-                handle: Rectangle {
-                    implicitWidth: Theme.splitterWidth
-                    implicitHeight: Theme.splitterWidth
-                    color: Theme.borderSubtle
+                handle: SplitHandleBar {
+                    onHandChanged: (which, held) => page.holdSplitBar(which, held)
                 }
 
                 SidebarPane {
@@ -4670,6 +4711,156 @@ Item {
             }
             page.commandsOpen = true
             commandsPane.showLatest()
+        }
+    }
+
+    // ---- a split bar that has run out of room ---------------------------
+    // The graph's own dividers can answer a refused drag themselves: their
+    // MouseAreas know what the hand asked for, so they compare the ask
+    // against the clamp (`GraphPane`). A `SplitView` bar cannot. Measured
+    // 2026-08-11 with throwaway qmltestrunner scenes: SplitView takes the
+    // press before anything inside the delegate sees it, and no observer
+    // behind the view ever becomes active — so the ask is not knowable
+    // there. What *is* knowable is where the pointer went and where the
+    // bar stopped, and past a clamp those part company. That is the same
+    // refusal read from the other end.
+
+    /// Every split bar in this page, and whichever one has the hand. One
+    /// pointer, so at most one at a time. The list is collected rather
+    /// than declared: one `handle:` Component builds every bar of its
+    /// SplitView, so there is nothing to hang an id on.
+    property var splitBars: []
+    property Item heldSplit: null
+    function holdSplitBar(bar, held) {
+        if (page.splitBars.indexOf(bar) < 0)
+            page.splitBars.push(bar)
+        if (held)
+            page.heldSplit = bar
+        else if (page.heldSplit === bar)
+            page.heldSplit = null
+    }
+
+    /// What the watcher settles on, given where the hand is in the scene.
+    /// The `PointHandler` and the automation hook both come through here,
+    /// so the refusal is one answer rather than two kept in step.
+    ///
+    /// Not a binding: `mapToItem` is a method, and a binding over it would
+    /// take no dependency on the geometry it reads and freeze on its first
+    /// answer (app-ui.md). A drag moves the bar every frame, so this is
+    /// pushed on each point instead.
+    function settleSplitRefusal(sceneX, sceneY) {
+        const bar = page.heldSplit
+        if (!bar) {
+            splitRefusal.refuses = false
+            return
+        }
+        const mid = bar.mapToItem(null, bar.width / 2, bar.height / 2)
+        const gap = bar.sideways ? sceneX - mid.x : sceneY - mid.y
+        splitRefusal.at = splitRefusal.mapFromItem(null, sceneX, sceneY)
+        // Past the bar by more than the bar is wide, for the reason the
+        // graph's dividers use the same slack: the pointer sits somewhere
+        // inside the bar it grabbed, and SplitView carries the bar along
+        // at that offset for as long as the layout lets it.
+        splitRefusal.refuses = Math.abs(gap) > Theme.splitterWidth
+    }
+
+    /// Automation: a drag on one of the split bars carried past where the
+    /// layout stops it (`PG_AUTO_ACT=divider-refuse`, cases `sidebar-min`
+    /// / `details-min` / `log-min`). A press is no more injectable than
+    /// hover is, so the hook puts the bar in hand the way a press does and
+    /// then walks the same road the pointer walks.
+    function dragSplitPast(which) {
+        // Only bars that are drawn. A SplitView builds a handle between
+        // every pair of items including the ones standing invisible (the
+        // open-failed screen sits beside the panes), and one that is not
+        // on screen is not one a hand could have grabbed — nor one with a
+        // width and height to tell its direction from.
+        const wanted = page.splitBars.filter(b =>
+            b.visible && (which === "log-min" ? !b.sideways : b.sideways))
+        if (wanted.length === 0)
+            return false
+        // Left to right, so the sidebar's bar is the first of the two the
+        // horizontal view builds and the details pane's is the last.
+        wanted.sort((a, b) => a.mapToItem(null, 0, 0).x - b.mapToItem(null, 0, 0).x)
+        const bar = which === "details-min" ? wanted[wanted.length - 1] : wanted[0]
+        page.heldSplit = bar
+        const mid = bar.mapToItem(null, bar.width / 2, bar.height / 2)
+        const over = 4 * Theme.splitterWidth
+        // Into the pane that has no more to give: the sidebar and the log
+        // are squeezed from their own side, the details pane from the left.
+        if (which === "details-min")
+            page.settleSplitRefusal(mid.x + over, mid.y)
+        else if (which === "sidebar-min")
+            page.settleSplitRefusal(mid.x - over, mid.y)
+        else
+            page.settleSplitRefusal(mid.x, mid.y + over)
+        return true
+    }
+
+    /// What is drawn, not what was asked for — the badge's own `shown`
+    /// (`RefusalBadge`, on why not its `visible`).
+    readonly property alias splitRefuses: splitBadge.shown
+
+    /// Automation: the drag and its answer for every boundary in the
+    /// window (`PG_AUTO_ACT=divider-refuse`). One place, so the run that
+    /// has to wait for the log to lay out reports exactly what the
+    /// immediate one does.
+    function reportDividerRefusal(which) {
+        // Which road it takes is which road a hand would take: the
+        // graph's own dividers know what was asked, a split bar is read
+        // from where the pointer went instead.
+        const split = which === "sidebar-min" || which === "details-min"
+                      || which === "log-min"
+        if (split)
+            page.dragSplitPast(which)
+        else
+            graphPane.dragDividerPast(which)
+        AppBackend.report("divider_refuse refuses="
+                          + (split ? page.splitRefuses
+                                   : graphPane.graphDividerRefuses)
+                          // The boundary itself, still drawn and still
+                          // promising the drag the other way. For a split
+                          // bar this also catches a hook that never found
+                          // one to put in hand.
+                          + " line=" + (split
+                                        ? (page.heldSplit ? page.heldSplit.visible
+                                                          : false)
+                                        : graphPane.refusedLineShown)
+                          + " case=" + which
+                          + " labelW=" + graphPane.labelW
+                          + " graphW=" + graphPane.graphColW)
+    }
+
+    // The log has to be on screen and laid out before the bar above it has
+    // a place to be measured from.
+    Timer {
+        id: splitRefuseTimer
+        interval: 400
+        onTriggered: page.reportDividerRefusal(AppBackend.autoActArg)
+    }
+
+    // Front-most over the page and drawing nothing but the badge. A
+    // passive grab is the only thing that sees the pointer while SplitView
+    // has the drag, and being passive it leaves SplitView the drag
+    // (measured: the boundary still moved while this reported the hand out
+    // past it).
+    Item {
+        id: splitRefusal
+        anchors.fill: parent
+        z: 50
+        property point at: Qt.point(0, 0)
+        property bool refuses: false
+        PointHandler {
+            onPointChanged: page.settleSplitRefusal(point.scenePosition.x,
+                                                    point.scenePosition.y)
+            // Letting go ends the ask, the same way the graph's dividers
+            // end theirs — nothing to remember to take back down.
+            onActiveChanged: if (!active) splitRefusal.refuses = false
+        }
+        RefusalBadge {
+            id: splitBadge
+            at: splitRefusal.at
+            shown: splitRefusal.refuses
         }
     }
 
