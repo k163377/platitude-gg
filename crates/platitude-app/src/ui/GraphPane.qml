@@ -1041,13 +1041,22 @@ Rectangle {
         }
         onPositionChanged: mouse => {
             graphArea.dividerPoint = Qt.point(graphDivider.x + mouse.x, mouse.y)
-            if (!pressed || graphArea.graphColWFixed)
+            if (!pressed)
                 return
-            const nx = mapToItem(graphArea, mouse.x, 0).x
-                          - Theme.spaceSm - Theme.borderWidth
-            graphArea.graphColWManual = Math.max(graphArea.graphColWMin,
-                Math.min(nx - graphArea.labelW, graphArea.graphColWMax))
+            graphArea.dragDividerTo(mapToItem(graphArea, mouse.x, 0).x)
         }
+    }
+    /// Where a drag on the graph divider leaves the column, and what it
+    /// asked for on the way. The handler and the automation hook both come
+    /// through here, so the clamp is one answer rather than two kept in
+    /// step — and the refusal below reads the ask, so it is one too.
+    function dragDividerTo(px) {
+        if (graphArea.graphColWFixed)
+            return
+        graphArea.dividerAsked =
+            px - Theme.spaceSm - Theme.borderWidth - graphArea.labelW
+        graphArea.graphColWManual = Math.max(graphArea.graphColWMin,
+            Math.min(graphArea.dividerAsked, graphArea.graphColWMax))
     }
     /// Whether the pointer is on the graph divider, and where. Real hover
     /// and the automation hook write the same two — hover cannot be
@@ -1055,6 +1064,32 @@ Rectangle {
     /// provable.
     property bool dividerPointed: false
     property point dividerPoint: Qt.point(0, 0)
+    /// The width the last drag asked the column for, clamped or not.
+    property real dividerAsked: 0
+    /// Whether a drag is under way on the divider. The hook's own flag
+    /// rides beside the real press because a press is no more injectable
+    /// than hover is (verify-ui) — and it rides here rather than inside
+    /// the refusal, so the refusal stays one expression both roads reach.
+    readonly property bool dividerDragging: graphDivider.pressed || dividerHeld
+    /// Automation only: stands in for the press `dragDividerPastMax()`
+    /// cannot make. Nothing a hand can reach writes this.
+    property bool dividerHeld: false
+    /// Whether a drag is asking the column for more than it can be. Held
+    /// apart from hover on purpose: at its ceiling the column still
+    /// narrows, so a badge worn merely for standing there would say
+    /// "this does not move" about a divider that does.
+    ///
+    /// Past the ceiling by more than the divider is wide, so a press on
+    /// its own cannot trip it: grabbing the line lands the column
+    /// anywhere within half that width of where it already sat, and at
+    /// the ceiling half of those grabs would be asking for more.
+    ///
+    /// A binding, not something set and taken back down: letting go ends
+    /// the ask, and a badge left on screen by a teardown nobody ran is
+    /// exactly the failure a hand would see and a run could not.
+    readonly property bool dividerRefused:
+        dividerDragging
+        && dividerAsked > graphColWMax + Theme.splitterWidth
     /// Automation: the pointer resting on the divider, at its middle
     /// (`PG_AUTO_ACT=graph-divider`). Where that is stays here rather
     /// than in the hook — one answer, not a second one to keep in step.
@@ -1064,12 +1099,29 @@ Rectangle {
             graphArea.dividerPoint = Qt.point(graphDivider.x + graphDivider.width / 2,
                                               graphArea.height / 2)
     }
-    // What a column that will not move answers with: the platform's own
-    // cursor, untouched, and this badge below and right of it (規約
+    /// Automation: a drag carried out past the column's ceiling
+    /// (`PG_AUTO_ACT=graph-divider-max`). Presses are no more injectable
+    /// than hover is (verify-ui), so the hook walks the road the handler
+    /// walks and takes the pointer where a hand would have carried it.
+    function dragDividerPastMax() {
+        const px = graphArea.labelW + graphArea.graphColWMax + Theme.spaceSm
+                   + Theme.borderWidth + 2 * Theme.splitterWidth
+        graphArea.dividerPointed = true
+        graphArea.dividerHeld = true
+        graphArea.dividerPoint = Qt.point(px, graphArea.height / 2)
+        graphArea.dragDividerTo(px)
+    }
+    // What a column that will not go further answers with: the platform's
+    // own cursor, untouched, and this badge below and right of it (規約
     // §グラフ列は最も広い所のレーンまで). Tucked into the corner the
     // cursor leaves empty — the platform's own badged cursors sit that
     // close, and a badge held further out reads as a separate mark
     // rather than as something the cursor is wearing.
+    //
+    // Two ways to it, and they are asked differently. A column squeezed
+    // until it has no drag left in either direction answers on hover —
+    // there is nothing to try. A column at its ceiling answers only the
+    // drag that tried, because it still moves the other way.
     NavIcon {
         id: refusedCursor
         kind: "no"
@@ -1079,7 +1131,8 @@ Rectangle {
         x: graphArea.dividerPoint.x + Theme.spaceXs
         y: graphArea.dividerPoint.y + Theme.spaceXs
         z: 4
-        visible: graphArea.graphColWFixed && graphArea.dividerPointed
+        visible: (graphArea.graphColWFixed && graphArea.dividerPointed)
+                 || graphArea.dividerRefused
         // A Canvas that was never visible was never asked to paint, and
         // the first thing this one does is appear (app-ui.md).
         onVisibleChanged: if (visible) requestPaint()

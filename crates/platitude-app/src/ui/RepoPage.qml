@@ -3117,6 +3117,17 @@ Item {
             page.setGraphColumns(graphPane.labelWManual, 0)
             AppBackend.report("graph_min w=" + graphPane.graphColW
                               + " min=" + graphPane.graphColWMin)
+        } else if (act === "graph-divider-max") {
+            // The drag that ran out past the last lane. The line stays
+            // where the column stopped and the badge goes on with the
+            // pointer, so the picture holds both halves: a divider that
+            // still promises the inward drag, and an answer out where
+            // the hand got to.
+            graphPane.dragDividerPastMax()
+            AppBackend.report("graph_divider_max line=" + graphPane.graphDividerLineShown
+                              + " refuses=" + graphPane.graphDividerRefuses
+                              + " w=" + graphPane.graphColW
+                              + " max=" + Math.round(graphPane.graphColWMax))
         } else if (act === "graph-divider") {
             // What the divider answers with the pointer on it. Read
             // against two repositories: a line withheld on a linear
