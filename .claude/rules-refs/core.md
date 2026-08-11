@@ -33,6 +33,10 @@
 
 ## セッション・実装の決定事項(各論)
 
+- **メモリの内訳は `cargo xtask perf --breakdown` で出す**(推測しない)。`memprobe` feature の計数グローバルアロケータが Rust ヒープの実数を持ち(Qt は C++ の `operator new` を通るのでこの境界が「アプリのデータ」と「その下の道具」を正確に分ける)、`mem::Footprint` が中身を保持者へ割り当て、**名前の付かない残りを残りとして印字する** — 割り当ての取りこぼしは残りが膨らむ形で出るので総量が嘘にならない。**サイズ級別(`classes=`)は bytes と件数の両方**を出す: 1 個の 30MB バッファと 3 万個の小ノードは同じ bytes で全く別の話になる。実測記録は [ci/baseline/perf-windows-x64.md](../../ci/baseline/perf-windows-x64.md)
+- **refs に比例する常駐データは「1 要素の器」を作らない** — タグ 45,901 本で実測した 3 つ: `BTreeMap` の内側マップは 1 件でも **11 スロットのノードを丸ごと確保**する(45,901 個で 43.5MB → 平坦な整列 Vec の `RemoteTagIndex` で 6.5MB)/ `Vec` は `push` 1 回で **4 スロット要求**するので `HashMap<K, Vec<V>>` は 47,715 個の 4 スロット Vec + テーブルで 20.5MB(整列 Vec + 二分探索の `LabelIndex` で 6.4MB)/ 40 字の hex を `String` で持つと 1 行 1 確保(`BranchItem` / `TagItem` は `Oid` を持ち、表示する所で綴る)。**`String` → `Vec<u8>` に替えても 1 バイトも減らない**(どちらも 24 バイト + capacity)— 減るのは**表現を変えた時だけ**
+- **メモリ予算の 44% は空リポジトリで既に埋まっている**(実測 131MB = Qt ランタイム + QML エンジン + シーングラフ。その時点の Rust ヒープは 1.2MB)。予算の議論はこの床の上で行う — アプリ側のデータをゼロにしても 131MB は動かない
+
 - interactive rebase は `GIT_SEQUENCE_EDITOR` に**別実行ファイル `pg-todo-editor`** を差す方式。**配布物に同梱必須**(本体と同じディレクトリ)
 - **全行が `drop` のプランを拒むのは `--root` の時だけ**(`sequencer::rebase_interactive`)— 足場があれば git はブランチを upstream へ置いて成功する。`--root` にはそれが無く、git が用意する placeholder へ replay するので、全行落とすと**空 tree・空メッセージのコミット**が先端に残る(いずれも実測)。**全行 drop を避けるために範囲を 1 つ広げない** — 下にマージが居るだけでそれが範囲に入り、`plan_edit` が**触るはずのない replay を拒む**(`Edit::depth` は squash だけが 2)
 - **テストが差し込む実行ファイルは rename で置く** — Linux は**書き込みで開かれているファイルを exec できない**(`ETXTBSY`)。`session_integration` の replay 系 5 本は `pg-todo-editor` を**テストバイナリの隣**(`target/debug/deps/`。session が `current_exe()` から探すため)へ置いてから git に渡すので、素の `fs::copy` を各テストが撃つと**片方の write fd の下でもう片方が exec** する。git は自分では失敗せず `sh` が `pg-todo-editor: 1: …: Text file busy` を返す = **rebase が失敗したように見える**。落ちるテストが毎回入れ替わるので interactive rebase 側のロジック不具合に見えるが、**同じ 5 本の持ち回り**なら疑うのはここ(実測: 24 スレッドで 8 回中 6 回赤 → `Once` + staging 名へ copy して `rename` で publish 後は 12 回中 0 回。`the_helper_is_replaced_rather_than_written_over` が inode で固定)
