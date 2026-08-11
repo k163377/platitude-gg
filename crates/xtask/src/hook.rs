@@ -840,9 +840,11 @@ fn seat_report(cwd: &str) -> Option<String> {
     let mut pending = Vec::new();
     let mut in_use = Vec::new();
     let mut missing = Vec::new();
+    let mut takeable: Vec<&'static str> = Vec::new();
     for seat in SEATS {
         let Some((_, branch, locked)) = entries.iter().find(|(name, ..)| *name == seat) else {
             missing.push(seat);
+            takeable.push(seat);
             continue;
         };
         if *locked {
@@ -851,13 +853,17 @@ fn seat_report(cwd: &str) -> Option<String> {
             // Detached HEAD: nothing pre-git guards stands on it, so treat
             // it like a merged seat that wants resetting to the tip.
             free.push(format!("{seat} (detached — reset --hard main first)"));
+            takeable.push(seat);
         } else if let Some(ahead) = commits_in(cwd, &format!("main..{branch}")) {
             if ahead > 0 {
                 pending.push(format!("{seat} ({branch} +{ahead})"));
-            } else if commits_in(cwd, &format!("{branch}..main")).unwrap_or(0) > 0 {
-                free.push(format!("{seat} (reset --hard main first)"));
             } else {
-                free.push(format!("{seat} (at main)"));
+                if commits_in(cwd, &format!("{branch}..main")).unwrap_or(0) > 0 {
+                    free.push(format!("{seat} (reset --hard main first)"));
+                } else {
+                    free.push(format!("{seat} (at main)"));
+                }
+                takeable.push(seat);
             }
         }
     }
@@ -874,7 +880,34 @@ fn seat_report(cwd: &str) -> Option<String> {
     if !missing.is_empty() {
         parts.push(format!("not created yet: {}", missing.join(", ")));
     }
-    Some(format!("Worktree seats — {}.", parts.join("; ")))
+    let mut report = format!("Worktree seats — {}.", parts.join("; "));
+    if let Some(pick) = spread_pick(&takeable) {
+        report.push_str(&format!(
+            " Take seat {pick} this session — the recommendation is \
+             randomized so sessions started in one burst spread out. Seats \
+             are first come, first served: if creating or entering {pick} \
+             fails because another session already has it, take a different \
+             free letter instead of retrying this one."
+        ));
+    }
+    Some(report)
+}
+
+/// One takeable seat, chosen off the clock's nanoseconds. Sessions started
+/// in one burst all read the same inventory, and a deterministic "first
+/// free letter" sent every one of them to the same seat (measured
+/// 2026-08-11: a burst of new sessions all fought for seat a). A spread
+/// recommendation lets a burst self-assign; the losers of any remaining
+/// race are told above to move on rather than retry.
+fn spread_pick(takeable: &[&'static str]) -> Option<&'static str> {
+    if takeable.is_empty() {
+        return None;
+    }
+    let entropy = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.subsec_nanos() as usize)
+        .unwrap_or(0);
+    takeable.get(entropy % takeable.len()).copied()
 }
 
 /// (seat, branch, locked) for every roster seat the listing shows.

@@ -28,16 +28,16 @@
 
 開発は debug ビルド。**`--release` は性能計測と起動確認だけ**だが、release でないと QML(exe 埋め込み)が反映されない。以下 `cargo` / `cargo xtask` を省略。
 
-**確認は 3 段**(混ぜると日常が重くなるか反映が甘くなる)。**1 日常** = コンテナ無し / **2 反映前** = 軽量 CI = workspace の fmt / clippy / test + `linux test -p platitude-core` + 触った動詞の `linux verify-ui` + `linux bare` / **3 フル** = 完全性 CI = 2 + `linux bare --discover` + 3OS CI + 性能実測(リリース前と、依存や環境を触った時)。**段 2 は `check --verb <触った動詞>…` で一括実行**(ホスト側とコンテナ側は書き込み先が別 = 並列で回り、壁時計は遅い側だけになる)。
+**確認は 3 段**(混ぜると日常が重くなるか反映が甘くなる)。**1 日常** = コンテナ無し / **2 反映前** = 軽量 CI = workspace の fmt / clippy / test + `linux test -p platitude-core` + 触った動詞の `linux verify-ui` + `linux bare` / **3 フル** = 完全性 CI = 2 + `linux bare --discover` + 3OS CI + 性能実測(リリース前と、依存や環境を触った時)。**段 2 は `check --verb <触った動詞>…` で一括実行**(ホストとコンテナは書き込み先が別 = 並列で回る)。
 
 **Done の基準**: 段 2 が全て通ること。テストを実行していないコードは動かないものとして扱う。UI 配線の Done は **両 OS の `verify-ui` が同じ動詞で PASS し、両方の PNG を目視するまで**(手順・動詞表・Windows の罠は **verify-ui スキル**を必ず呼ぶ)。
 
 - **起動だけの要求(「rebase して起動」等)は fast path** — 起動までを複合コマンドで先に済ませて即報告し、fmt / clippy / test は報告後にバックグラウンドで追報する(Done の基準は不変)。手順は verify-ui スキル §起動 fast path
 - **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ。Linux ではその場で実行 — `bare` だけは常にコンテナ)。イメージは core / app / runtime(**宣言した依存だけ**)から自動で選び、ビルド先は docker volume でこの `target/` を汚さない。要望.md の最低 git バージョンを積んだ唯一の環境。**`bare` は建てた場所の外で動くかだけを見る**(依存が増えた瞬間その名前で止まる。実測は P5-確認事項 §実測済み)
 - **並行セッション(複数エージェント)は git worktree で分ける** — 同一 checkout の共有は `target/` が単一障害点(ビルドロック直列化・incremental 相互無効化・別セッション編集の焼き込み実績)。worktree なら target も demo / screenshot も自然に分離される
-- **worktree は固定の座席 `a`〜`f` だけ**: `claude --worktree a` / セッション内は EnterWorktree で**空き座席の path** へ。トピック名・自動命名で**新造しない**(用途名は再利用されず、席の `target/` 温存が働かない — 非座席名は hook が確認を挟む)。空き・マージ状態はセッション開始の挨拶が言う。**席のブランチ(`worktree-<席>`)がマージ済みなら `git reset --hard main` で先頭に揃えてから始める**。未マージの席は前の仕事のマージ待ち — 続き以外は別の席へ、全席詰まりなら増設せず報告する。**完了しても main へは戻さない**(§Git 運用)
+- **worktree は固定の座席 `a`〜`f` だけ**: `claude --worktree a` / セッション内は EnterWorktree で**空き座席の path** へ。トピック名・自動命名で**新造しない**(用途名は再利用されず、席の `target/` 温存が働かない — 非座席名は hook が確認を挟む)。空き状況と**推薦席(ランダム — 同時起動をばらす)**は開始時の挨拶が言う。**席は早い者勝ち**、取り損ねたら別の空き文字へ。**席のブランチ(`worktree-<席>`)がマージ済みなら `git reset --hard main` で先頭に揃えてから始める**。未マージの席は前の仕事のマージ待ち — 続き以外は別の席へ、全席詰まりなら増設せず報告する。**完了しても main へは戻さない**(§Git 運用)
 - **本体 checkout で実装作業をしない**(ドキュメント編集・レビューは可。**ただしスキル・`.claude/rules`・`.claude/rules-refs` の編集は worktree で** — 並行セッションが同じファイルを触りやすく、main 直コミットが衝突する)
-- **worktree からのアプリ起動は headless だけ** — 実ウィンドウは画面(と別セッションの窓検証)を横取りし、居座るプロセスは exe を掴んでリンクを塞ぐ。`cargo xtask verify-ui` を使うか、自分で叩くなら `QT_QPA_PLATFORM=offscreen` + `PG_AUTO_QUIT_MS` + **自分の worktree の** exe。`cargo xtask hook pre-shell` がそれ以外を deny する(ユーザーが窓を明示指示した時だけ `PG_ALLOW_GUI=1` を先頭に付ける)。本体 checkout からの起動は対象外(ユーザー自身の起動)。**窓に出たビルドがどのツリーのものかは右下が名乗る**(実装は [rules-refs/app-ui.md](.claude/rules-refs/app-ui.md))
+- **worktree からのアプリ起動は headless だけ** — 実ウィンドウは画面(と別セッションの窓検証)を横取りし、居座るプロセスは exe を掴んでリンクを塞ぐ。`cargo xtask verify-ui` を使うか、自分で叩くなら `QT_QPA_PLATFORM=offscreen` + `PG_AUTO_QUIT_MS` + **自分の worktree の** exe。`cargo xtask hook pre-shell` がそれ以外を deny する(ユーザーが窓を明示指示した時だけ `PG_ALLOW_GUI=1` を先頭に付ける)。本体 checkout からの起動は対象外(ユーザー自身の起動)。**窓に出たビルドがどのツリーのものかは右下が名乗る**(実装は rules-refs/app-ui.md)
 - 開発補助ツール(検証・デモ環境生成等)を **Windows 専用形式(.ps1 / .bat)で作らない** — タスクランナーが要る時は `cargo xtask` パターン(ワークスペース内クレート + `.cargo/config.toml` の alias、依存は std のみ)で 3OS 同一に書き、OS 差(Qt の PATH / フォント等)はコード内の分岐に焼き込む。just / make 等の外部タスクランナーも導入しない
 
 ## Rust 規約
