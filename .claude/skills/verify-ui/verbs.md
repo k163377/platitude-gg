@@ -41,7 +41,7 @@
 - `delete-branch-go`(化けた行の長押しまで走らせて `-D`)
 - `delete-branch-early`(引数はブランチ名。メニューを開いて**待つだけ・書き込み無し** — 開いた時の `checkBranchDelete` が着いた後の削除行を報告する。未マージ(`feature/topic-a`)なら `code=branch -D held=true note=not merged`、マージ済みの引数なら `--delete` のまま `held=false`。報告行 `delete_early asked= merged= code= held= note=`)
 - `chip-menu`(引数はブランチ名。**チップ右クリック相当** — `openRecordMenu` 経由で ref メニューを開く。報告行 `chip_menu ref= commit= delete=` の `ref=true commit=false` が正。`delete=` は 200ms 時点のスナップショットで、未マージブランチでは早着した `-D` にも素の `--delete` にもなり得る — どちらも正)
-- `chip-menu-current`(引数なし。現在ブランチのチップ — **削除 3 段の固定の表が常に開く**(`ref=true commit=false` が正)。ローカルと両方は無効表示、押せるのは upstream がある時の `push --delete` だけ。コミット行メニューへのフォールスルーは HEAD マーカー等、名前の無いチップだけに残る)
+- `chip-menu-current`(引数なし。現在ブランチのチップ — **削除の表が常に開く**(`ref=true commit=false` が正)。ローカルは無効表示。リモートの読み(upstream か同名リモート)があればリモートの 2 行も並び、押せるのは `push --delete` だけ・両方は無効(`--preset basic` の main はこちら)。読みが無ければローカル無効 1 行だけ。コミット行メニューへのフォールスルーは HEAD マーカー等、名前の無いチップだけに残る)
 - `delete-tag` / `delete-stash`(`delete-remote` / `-go` は下のリモートブランチの並びの行が正 — 重複掲載しない)
 - `delete-stash-row`(**質問は無く**メニューが開いたまま止まり、`-go`(delete-stash-row は引数 `go`)が行の長押しを走らせる)
 - `stash-apply-row`

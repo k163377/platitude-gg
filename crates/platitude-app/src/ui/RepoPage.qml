@@ -987,10 +987,12 @@ Item {
             code: "push --delete"
             text: page.menuRemoteCounterpart
             growsForText: false
-            // Part of the fixed table: with no remote reading the row
-            // stays, wordless and grey — that is how it says there is
-            // nothing over there to shed.
+            // In the table only while the branch has a remote reading at
+            // all: a row for a target that does not exist keeps no seat
+            // (2026-08-11 ユーザー判断). Grey is for "not now" — busy —
+            // not for "no such thing".
             offered: page.menuRefKind === "branch"
+                     && page.menuRemoteCounterpart !== ""
             enabled: page.menuCanDeleteRemote
             holdMs: Metrics.holdMs
             holdTone: Theme.warning
@@ -1009,6 +1011,7 @@ Item {
             text: qsTr("Delete both")
             note: refDeleteItem.refusedRow ? qsTr("not merged") : ""
             offered: page.menuRefKind === "branch"
+                     && page.menuRemoteCounterpart !== ""
             enabled: page.menuCanDelete && page.menuCanDeleteRemote
             holdMs: Metrics.holdMs
             holdTone: Theme.warning
