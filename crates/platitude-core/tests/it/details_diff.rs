@@ -136,6 +136,48 @@ async fn details_report_renames_with_scores() {
 }
 
 #[tokio::test]
+async fn details_of_a_commit_that_changed_nothing_list_no_files() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "add file");
+    repo.git(&["commit", "--allow-empty", "-m", "nothing to see"]);
+    let sha = repo.git(&["rev-parse", "HEAD"]);
+
+    let executor = GitExecutor::new();
+    let cancel = CancellationToken::new();
+    let oid = Oid::from_hex_str(&sha).unwrap();
+    let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
+        .await
+        .unwrap();
+    // The one input where git writes the record and then stops: the file
+    // list and the newline in front of it are both absent.
+    assert_eq!(d.message, "nothing to see");
+    assert!(d.files.is_empty(), "got {:?}", d.files);
+}
+
+#[tokio::test]
+async fn a_message_that_reads_like_a_file_list_is_not_read_as_one() {
+    let mut repo = TestRepo::init();
+    // The metadata and the changed files arrive from one `git show`, so
+    // the boundary between them has to be the NUL count and nothing else.
+    // A commit is free to describe its own diff in prose.
+    let sha = repo.commit_file(
+        "real.txt",
+        "one\n",
+        "docs: explain the notation\n\nA\tinvented/one.txt\nM\tinvented/two.txt",
+    );
+
+    let executor = GitExecutor::new();
+    let cancel = CancellationToken::new();
+    let oid = Oid::from_hex_str(&sha).unwrap();
+    let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
+        .await
+        .unwrap();
+    assert!(d.message.contains("A\tinvented/one.txt"));
+    let paths: Vec<&str> = d.files.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(paths, vec!["real.txt"]);
+}
+
+#[tokio::test]
 async fn commit_file_diff_has_hunks_and_line_numbers() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "one\ntwo\nthree\n", "add");
