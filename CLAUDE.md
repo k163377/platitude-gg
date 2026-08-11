@@ -70,7 +70,7 @@
 
 ## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
 
-- Phase 1(読み取り専用ビューア)は**完了**。性能 4 項目は最終確認でクリア: [phase1 実測](ci/baseline/phase1-perf-windows-x64.md)
+- Phase 1(読み取り専用ビューア)は**完了**。性能 4 項目は最終確認でクリア: [phase1 実測](ci/baseline/perf-windows-x64.md)
 - **配線済み操作の一覧・個々の意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**(触る項を Grep で引く。app の不変条件は [.claude/rules/app-ui.md](.claude/rules/app-ui.md) が自動ロード)。**本ファイルは未配線だけを持つ** — ここに一覧を置くと機能を足すたび太る
 - **未配線**: フル interactive rebase 画面のみ(その周辺の日常操作は配線済み — 一覧は rules-refs)
 - 残作業と要判断事項は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読むこと**。配布準備期に検証する項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
