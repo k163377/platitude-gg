@@ -768,7 +768,13 @@ Rectangle {
                         font.pixelSize: Theme.fontSm
                     }
                     Label {
+                        // A hunk heading shares its row with the two words
+                        // that act on the hunk, and git's `@@` line is as
+                        // long as the enclosing signature: without giving
+                        // that space up the heading runs under them.
                         width: parent.width - oldNoCol.width - newNoCol.width
+                               - (hunkTools.visible
+                                  ? hunkTools.width + Theme.spaceSm * 2 : 0)
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
                         text: diffRow.text
@@ -780,7 +786,18 @@ Rectangle {
                                                  : Text.PlainText
                         elide: Text.ElideRight
                         font.family: Theme.monoFamily
-                        font.pixelSize: Theme.fontMd
+                        // A step above the rest of the app's text: this
+                        // is the one surface where reading the characters
+                        // *is* the task (デザイン規約 §タイポグラフィ).
+                        // `fontLg` and `rowHeight` are the same pair the
+                        // token table lists together (16 / 24).
+                        //
+                        // The hunk heading stays where it was: it is the
+                        // pane's own words rather than the file's, and at
+                        // the larger step its `@@` line runs under the two
+                        // words sitting at the right of the same row.
+                        font.pixelSize: diffRow.kind === "hunk"
+                                        ? Theme.fontMd : Theme.fontLg
                         // Where the theme said nothing — an uncoloured
                         // language, a hunk heading — this is still the
                         // whole of the row's colour.
@@ -845,6 +862,7 @@ Rectangle {
                 // is shown — and so is what is thrown away. Absent on a
                 // diff with no pieces in it (see `partial`).
                 Row {
+                    id: hunkTools
                     visible: diffPane.partial && diffRow.kind === "hunk"
                     anchors.right: parent.right
                     anchors.rightMargin: Theme.spaceSm

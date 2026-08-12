@@ -599,8 +599,8 @@ fn styled(text: &str, spans: &[Span]) -> String {
     // 実測: a 0-space `pub fn` and a 4-space `let` landed on the same
     // pixel). `<pre>` is the one thing in the subset that turns that off,
     // and it costs nothing else: the row is one line either way.
-    out.push_str("<pre>");
     let mut at = 0;
+    let mut col = 0usize;
     for span in spans {
         let end = (at + span.len).min(text.len());
         // The runs are byte offsets into this same string, so they cut
@@ -615,29 +615,52 @@ fn styled(text: &str, spans: &[Span]) -> String {
         push_hex(&mut out, span.color.g);
         push_hex(&mut out, span.color.b);
         out.push_str("\">");
-        push_escaped(&mut out, piece);
+        push_escaped(&mut out, piece, &mut col);
         out.push_str("</font>");
         at = end;
     }
     // Whatever the runs did not reach — a lexer that stopped short still
     // leaves a whole line on screen.
     if let Some(rest) = text.get(at..) {
-        push_escaped(&mut out, rest);
+        push_escaped(&mut out, rest, &mut col);
     }
-    out.push_str("</pre>");
     out
 }
 
-/// The three characters `Text.StyledText` would otherwise read as markup.
-/// Source lines are full of them: `&&`, `->`, `<T>`.
-fn push_escaped(out: &mut String, text: &str) {
+/// Columns a tab stands for. Spelled out because the markup below has to
+/// put real spaces where the tab was, and something has to say how many
+/// (デザイン規約 §シンタックスハイライト).
+const TAB_WIDTH: usize = 4;
+
+/// What `Text.StyledText` would otherwise read as markup, plus the
+/// whitespace it would otherwise fold away.
+///
+/// Source lines are full of the first three: `&&`, `->`, `<T>`. The
+/// whitespace is the second half of the same problem — rich text folds
+/// runs of it exactly as HTML does, and code that starts at the left
+/// margin is code nobody can read. `<pre>` turns the folding off in one
+/// tag and was the first thing tried, but Qt renders what is inside it in
+/// a substituted font: thinner strokes, and every colour in the pane
+/// looked washed out next to the window's own words (2026-08-13 ユーザー
+/// 報告 → A/B で確認).
+fn push_escaped(out: &mut String, text: &str, col: &mut usize) {
     for ch in text.chars() {
         match ch {
             '&' => out.push_str("&amp;"),
             '<' => out.push_str("&lt;"),
             '>' => out.push_str("&gt;"),
+            ' ' => out.push_str("&nbsp;"),
+            '\t' => {
+                let stop = TAB_WIDTH - (*col % TAB_WIDTH);
+                for _ in 0..stop {
+                    out.push_str("&nbsp;");
+                }
+                *col += stop;
+                continue;
+            }
             _ => out.push(ch),
         }
+        *col += 1;
     }
 }
 
@@ -690,15 +713,24 @@ mod tests {
         );
         assert_eq!(
             out,
-            "<pre><font color=\"#112233\">fn </font>\
-             <font color=\"#aabbcc\">a&lt;&amp;b&gt;</font></pre>"
+            "<font color=\"#112233\">fn&nbsp;</font>\
+             <font color=\"#aabbcc\">a&lt;&amp;b&gt;</font>"
         );
+    }
+
+    #[test]
+    fn a_tab_becomes_the_columns_it_stands_for() {
+        // A tab at the margin reaches column 4; two characters later the
+        // next one has only two columns left to give, not another four.
+        let out = styled("\tab\tc", &[run(5, 0, 0, 0)]);
+        let spaces = out.matches("&nbsp;").count();
+        assert_eq!(spaces, 6, "4 to the first stop, 2 to the second: {out}");
     }
 
     #[test]
     fn a_line_the_runs_fall_short_of_is_still_whole() {
         let out = styled("ab cd", &[run(2, 0, 0, 0)]);
-        assert!(out.ends_with(" cd</pre>"), "{out}");
+        assert!(out.ends_with("&nbsp;cd"), "{out}");
     }
 
     #[test]
@@ -721,7 +753,7 @@ diff --git a/src/a.rs b/src/a.rs
         assert!(
             rows.iter()
                 .filter(|r| r.kind == "add" || r.kind == "del" || r.kind == "ctx")
-                .all(|r| r.rich && r.text.starts_with("<pre>")),
+                .all(|r| r.rich && r.text.starts_with("<font")),
             "every line of a language the set knows is marked up: {rows:?}"
         );
         // The heading is the pane's own words, not the file's.

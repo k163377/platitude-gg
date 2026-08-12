@@ -30,7 +30,6 @@ syntect = { version = "5.3", default-features = false, features = [
     "regex-fancy",
     "dump-load",
     "default-syntaxes",
-    "default-themes",
 ] }
 # The languages Sublime's own set leaves out, Kotlin among them. Its
 # Kotlin is the Sublime Text 2-era one (Apache-2.0): it knows `suspend`

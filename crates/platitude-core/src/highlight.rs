@@ -36,15 +36,59 @@
 
 use std::sync::OnceLock;
 
-use syntect::highlighting::{HighlightIterator, HighlightState, Highlighter, Theme, ThemeSet};
+use syntect::highlighting::{
+    Color, HighlightIterator, HighlightState, Highlighter, StyleModifier, Theme, ThemeItem,
+    ThemeSettings,
+};
 use syntect::parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet};
 
 use crate::parse::diff::{DiffLineKind, FilePatch};
 
-/// The theme token colours are taken from. Only foregrounds are read:
-/// backgrounds, the row wash and the diff's own green and red stay the
-/// app's (デザイン規約 §シンタックスハイライト).
-const THEME: &str = "base16-ocean.dark";
+/// The colour a run gets when no rule below claims it — identifiers,
+/// parameters, punctuation. **The app's own `textPrimary`**: code is the
+/// thing on this screen worth reading, and anything dimmer than the
+/// window's own words reads as though it were not
+/// (デザイン規約 §シンタックスハイライト).
+const PLAIN: u32 = 0xE2E8F0;
+
+/// Scope → colour, in the app's palette rather than a theme's. Every
+/// value here is in デザイン規約's table; the mapping is what that
+/// section owns, and this array is its mirror (same rule as `Theme.qml`).
+///
+/// syntect scores selectors and takes the best match, so a broad name
+/// sits safely beside a narrow one — `keyword` and `keyword.operator`
+/// both belong here and the narrower one wins where it applies.
+const PALETTE: [(&str, u32); 19] = [
+    // Context, not content — the colour the app gives every secondary
+    // word. Emphatically not `textMuted`: dimming text is how this app
+    // says "disabled" (規約 §無効), and a comment is not disabled.
+    ("comment", 0x94A3B8),
+    ("punctuation.definition.comment", 0x94A3B8),
+    // The words that make it a language.
+    ("keyword", 0x60A5FA),
+    ("storage", 0x60A5FA),
+    // …but not its operators: `=` and `+` in accent blue turns every
+    // line into a row of lights.
+    ("keyword.operator", PLAIN),
+    ("punctuation", PLAIN),
+    // What things are.
+    ("entity.name.type", 0x7DD3FC),
+    ("entity.name.class", 0x7DD3FC),
+    ("entity.other.inherited-class", 0x7DD3FC),
+    ("support.type", 0x7DD3FC),
+    ("support.class", 0x7DD3FC),
+    // What things do.
+    ("entity.name.function", 0xA78BFA),
+    ("support.function", 0xA78BFA),
+    ("variable.function", 0xA78BFA),
+    // What is written down literally.
+    ("string", 0xFCD34D),
+    ("constant.numeric", 0xF0ABFC),
+    ("constant.language", 0xF0ABFC),
+    // What is said *about* the code — annotations, attributes, macros.
+    ("meta.annotation", 0xFDA4AF),
+    ("variable.annotation", 0xFDA4AF),
+];
 
 /// How far into a file the reading will walk to reach a hunk. The walk is
 /// linear and was measured at ~28,000 lines a second (2026-08-13,
@@ -180,11 +224,44 @@ fn assets() -> &'static Assets {
     static ASSETS: OnceLock<Assets> = OnceLock::new();
     ASSETS.get_or_init(|| Assets {
         syntaxes: two_face::syntax::extra_newlines(),
-        theme: ThemeSet::load_defaults()
-            .themes
-            .remove(THEME)
-            .unwrap_or_default(),
+        theme: palette(),
     })
+}
+
+/// The app's palette as something syntect can highlight against. Built
+/// rather than loaded: every published theme is drawn for its own ground
+/// and its own idea of how loud code should be, and next to this window's
+/// words all of them read as though the code were the caption
+/// (2026-08-13 実測 — base16-ocean, Catppuccin Mocha, Dracula, Monokai
+/// were all tried against the real thing).
+fn palette() -> Theme {
+    let color = |rgb: u32| Color {
+        r: ((rgb >> 16) & 0xff) as u8,
+        g: ((rgb >> 8) & 0xff) as u8,
+        b: (rgb & 0xff) as u8,
+        a: 0xff,
+    };
+    Theme {
+        name: Some("platitude".to_string()),
+        settings: ThemeSettings {
+            foreground: Some(color(PLAIN)),
+            ..ThemeSettings::default()
+        },
+        scopes: PALETTE
+            .iter()
+            .filter_map(|(selector, rgb)| {
+                Some(ThemeItem {
+                    scope: selector.parse().ok()?,
+                    style: StyleModifier {
+                        foreground: Some(color(*rgb)),
+                        background: None,
+                        font_style: None,
+                    },
+                })
+            })
+            .collect(),
+        ..Theme::default()
+    }
 }
 
 /// The language for a path, or `None` — which is the answer for every
