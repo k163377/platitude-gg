@@ -88,6 +88,10 @@ QtObject {
     readonly property int fontSmLine: 16
     readonly property int fontMd: 14
     readonly property int fontMdLine: 20
+    // Off the ramp on purpose: the size an editor puts source at, which
+    // is not a step in a UI scale. IntelliJ's default (JetBrains Mono 13)
+    // is what this matches.
+    readonly property int fontCode: 13
     readonly property int fontLg: 16
     readonly property int fontLgLine: 24
     readonly property int fontXl: 20

@@ -853,18 +853,16 @@ Rectangle {
                                                  : Text.PlainText
                         elide: Text.ElideRight
                         font.family: Theme.monoFamily
-                        // A step above the rest of the app's text: this
-                        // is the one surface where reading the characters
-                        // *is* the task (デザイン規約 §タイポグラフィ).
-                        // `fontLg` and `rowHeight` are the same pair the
-                        // token table lists together (16 / 24).
+                        // The size an editor puts source at rather than a
+                        // step in the UI's scale — `fontCode`, matched to
+                        // IntelliJ's default (デザイン規約 §タイポグラフィ).
                         //
-                        // The hunk heading stays where it was: it is the
+                        // The hunk heading is smaller still: it is the
                         // pane's own words rather than the file's, and at
-                        // the larger step its `@@` line runs under the two
+                        // the file's size its `@@` line runs under the two
                         // words sitting at the right of the same row.
                         font.pixelSize: diffRow.kind === "hunk"
-                                        ? Theme.fontMd : Theme.fontLg
+                                        ? Theme.fontSm : Theme.fontCode
                         // Where the theme said nothing — an uncoloured
                         // language, a hunk heading — this is still the
                         // whole of the row's colour.
