@@ -173,10 +173,14 @@ Item {
             change: navRow.change
             showChange: navRow.kindHint === "wt"
             name: navRow.name
-            // `origPath` stays empty: this list names a file by what it is
-            // called now, and the pair a rename makes is read in the
-            // commit's own file list.
-            //
+            // Where a renamed file came from, said the same way the
+            // commit's own file list says it: a rename is two names, and a
+            // row that shows only the new one leaves the reader to work
+            // out what moved. Empty on everything else — the model fills
+            // it for staged files alone, which is the only side git names
+            // a source on, and a folder row keeps its own path in the
+            // slot (the cell asks `folder` before drawing it).
+            origPath: navRow.orig_path
             // The name says where the ref is, the way a chip's does: grey
             // for one this repository does not hold (デザイン規約
             // §ref の種別).
