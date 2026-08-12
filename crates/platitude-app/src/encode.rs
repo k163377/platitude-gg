@@ -713,7 +713,11 @@ diff --git a/src/a.rs b/src/a.rs
 +    let a = 2;
 ";
         let patches = parse_patch(patch.as_bytes());
-        let rows = flatten_patches(&patches, true, &platitude_core::highlight::colors(&patches));
+        let rows = flatten_patches(
+            &patches,
+            true,
+            &platitude_core::highlight::colors(&patches, None),
+        );
         assert!(
             rows.iter()
                 .filter(|r| r.kind == "add" || r.kind == "del" || r.kind == "ctx")

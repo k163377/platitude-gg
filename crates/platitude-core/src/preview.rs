@@ -99,8 +99,65 @@ pub async fn file_preview(
     })
 }
 
-/// The path whose extension decides whether this target is an image.
-fn target_path(target: &DiffTarget) -> &str {
+/// A file bigger than this is not walked for syntax context: the reading
+/// is linear in what comes before the hunk, and past this the wait costs
+/// more than a first line in the wrong colour.
+pub const SOURCE_BYTE_CAP: u64 = 4 * 1024 * 1024;
+
+/// The whole of the side a diff's colours are read against — the new one
+/// where the target has it, the old one for a file that was deleted.
+///
+/// What it is for is context. A hunk starts wherever it starts, and a
+/// lexer only knows what a line means if it walked the file to get there
+/// ([`crate::highlight`]). `None` where the side cannot be read, is not
+/// UTF-8, or is over [`SOURCE_BYTE_CAP`] — the colours then start each
+/// hunk clean, which is what they did before there was any of this.
+///
+/// One process, not two: unlike a preview this has no use for the size on
+/// its own, and the diff it rides beside has already read the same file.
+pub async fn source_text(
+    executor: &GitExecutor,
+    workdir: &Path,
+    target: &DiffTarget,
+    cancel: &CancellationToken,
+) -> Option<String> {
+    let (old, new) = side_sources(workdir, target);
+    let bytes = match read_source(executor, workdir, &new, cancel).await {
+        Some(bytes) => bytes,
+        // No new side: the file was deleted, and every row of its diff
+        // comes from the old one.
+        None => read_source(executor, workdir, &old, cancel).await?,
+    };
+    if bytes.len() as u64 > SOURCE_BYTE_CAP {
+        tracing::debug!(bytes = bytes.len(), "file too big to read colours against");
+        return None;
+    }
+    String::from_utf8(bytes).ok()
+}
+
+async fn read_source(
+    executor: &GitExecutor,
+    workdir: &Path,
+    source: &SideSource,
+    cancel: &CancellationToken,
+) -> Option<Vec<u8>> {
+    match source {
+        SideSource::Blob(spec) => {
+            let cmd = GitCommand::new()
+                .cwd(workdir)
+                .args(["cat-file", "blob"])
+                .arg(spec);
+            let out = executor.run_unchecked(cmd, cancel).await.ok()?;
+            (out.code == 0).then_some(out.stdout)
+        }
+        SideSource::WorkTree(path) => tokio::fs::read(path).await.ok(),
+        SideSource::Absent => None,
+    }
+}
+
+/// The path whose extension decides whether this target is an image, and
+/// whether anything can be said about its colours.
+pub(crate) fn target_path(target: &DiffTarget) -> &str {
     match target {
         DiffTarget::Commit { path, .. }
         | DiffTarget::Staged { path, .. }

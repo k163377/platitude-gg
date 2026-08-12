@@ -89,9 +89,21 @@ impl RepoSession {
             // only answer, are read **beside** the diff rather than after
             // it: a notice that turns up a moment later is one the reader
             // has already scrolled past.
-            let (diff, endings) = tokio::join!(
+            // The file the diff is of, fetched beside it rather than
+            // after: the colours are read against it (`highlight`), and a
+            // second round trip would land after the rows are on screen.
+            // Only for a language something can be said about — otherwise
+            // it is a process spent on a file nobody will colour.
+            let wants_source = crate::highlight::knows(preview::target_path(&target));
+            let (diff, endings, source) = tokio::join!(
                 details::file_diff_raw(&s.executor, &workdir, &target, &cancel),
                 s.ending_context(&workdir, &target, &cancel),
+                async {
+                    match wants_source {
+                        true => preview::source_text(&s.executor, &workdir, &target, &cancel).await,
+                        false => None,
+                    }
+                },
             );
             match diff {
                 Ok(raw) => {
@@ -110,7 +122,7 @@ impl RepoSession {
                     // if it goes down the diff must not go with it, and
                     // the bytes are still here to be read again.
                     let (patches, colors) = match tokio::task::spawn_blocking(move || {
-                        let colors = crate::highlight::colors(&patches);
+                        let colors = crate::highlight::colors(&patches, source.as_deref());
                         (patches, colors)
                     })
                     .await

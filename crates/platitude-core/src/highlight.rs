@@ -1,14 +1,20 @@
 //! Syntax colours for the lines a diff shows.
 //!
-//! What arrives here is a parsed patch, not a file: a hunk and the few
-//! lines of context around it. So the reading starts clean at every hunk
-//! heading rather than at the top of a file nobody fetched, and a block
-//! comment that opened fifty lines above the hunk is not known about. The
-//! seam for ever fixing that is the shape of [`colors`]: what a line is
-//! read against is a state value carried from the line before, so a
-//! caller that does hold the whole file can walk it into the hunk instead
-//! of starting over. Nothing downstream would change — the rows are
-//! addressed the same way either way.
+//! A patch is a few lines out of the middle of a file, and what those
+//! lines mean depends on everything above them. So the file itself is
+//! walked from line 1 down to each hunk and the reading is *forked*
+//! there: the hunk's rows are coloured from where the file stands, and
+//! the file's own walk carries on to the next hunk. A block comment that
+//! opened fifty lines up, a `class` two hundred lines up — both are in
+//! the state by the time the hunk begins.
+//!
+//! Without the file (it could not be read, it is too big, the language is
+//! unknown) each hunk starts clean instead. That is not merely less
+//! context: the top-of-file rules are *different* rules, so the hunk's
+//! first line comes out coloured in a way the file itself never would
+//! (2026-08-13 実測: QML's `readonly property` reads as storage keywords
+//! at file scope and as plain identifiers inside an `Item {}`, so the
+//! first line of every hunk disagreed with the rest of it).
 //!
 //! # Conflicts
 //!
@@ -39,6 +45,13 @@ use crate::parse::diff::{DiffLineKind, FilePatch};
 /// backgrounds, the row wash and the diff's own green and red stay the
 /// app's (デザイン規約 §シンタックスハイライト).
 const THEME: &str = "base16-ocean.dark";
+
+/// How far into a file the reading will walk to reach a hunk. The walk is
+/// linear and was measured at ~28,000 lines a second (2026-08-13,
+/// release), so this is about 180ms — as long as opening a diff can spend
+/// on colour. A hunk past it reads cold, which is what every file the set
+/// does not know reads like anyway.
+const CONTEXT_LINE_CAP: usize = 5_000;
 
 /// A colour as the theme gives it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,14 +141,27 @@ impl DiffColors {
 ///
 /// This is CPU work with no waiting in it. Callers on an async runtime
 /// should hand it to a blocking thread rather than hold a worker.
-pub fn colors(patches: &[FilePatch]) -> DiffColors {
+/// `source` is the whole of the side the diff's line numbers count in
+/// ([`crate::preview::source_text`]), and what makes the first line of a
+/// hunk read like the rest of its file: a lexer reaching line 400 from
+/// line 1 knows it is inside an object, a class, a comment. Without it
+/// every hunk starts at the top-of-file rules, which paints its first
+/// line under rules the file itself never applies there.
+pub fn colors(patches: &[FilePatch], source: Option<&str>) -> DiffColors {
     let assets = assets();
     DiffColors {
         patches: patches
             .iter()
-            .map(|patch| patch_colors(assets, patch))
+            .map(|patch| patch_colors(assets, patch, source))
             .collect(),
     }
+}
+
+/// Whether the set has a language for this path. Asked before the file
+/// behind a diff is fetched: reading it costs a process, and a file
+/// nothing can be said about is not worth one.
+pub fn knows(path: &str) -> bool {
+    syntax_for(&assets().syntaxes, path).is_some()
 }
 
 // ---------------------------------------------------------------------------
@@ -179,7 +205,7 @@ fn syntax_for<'a>(syntaxes: &'a SyntaxSet, path: &str) -> Option<&'a SyntaxRefer
 // Walking a patch
 // ---------------------------------------------------------------------------
 
-fn patch_colors(assets: &Assets, patch: &FilePatch) -> PatchColors {
+fn patch_colors(assets: &Assets, patch: &FilePatch, source: Option<&str>) -> PatchColors {
     if patch.is_binary || patch.unmerged {
         return Vec::new();
     }
@@ -191,14 +217,72 @@ fn patch_colors(assets: &Assets, patch: &FilePatch) -> PatchColors {
         return Vec::new();
     }
     let highlighter = Highlighter::new(&assets.theme);
-    patch
-        .hunks
-        .iter()
-        .map(|hunk| {
-            let mut walk = Walk::new(assets, &highlighter, syntax, patch.is_combined);
-            hunk.lines.iter().map(|line| walk.read(line)).collect()
-        })
-        .collect()
+    // Which side the file we were handed is, and therefore which of the
+    // hunk's two line numbers counts in it. A deleted file has no new
+    // side and every row of its diff comes from the old one.
+    let new_side = patch.new_path.is_some();
+    let lines: Vec<&str> = source.map(|s| s.lines().collect()).unwrap_or_default();
+    // The file itself, walked to wherever the next hunk starts. Kept
+    // apart from the walk that colours the rows: a hunk's rows are the
+    // two sides interleaved, and feeding those back would leave the
+    // reading somewhere the file never goes.
+    let mut file = Walk::new(assets, &highlighter, syntax, patch.is_combined);
+    let mut at = 0usize;
+    let mut out = Vec::with_capacity(patch.hunks.len());
+    for hunk in &patch.hunks {
+        let (start, count) = if new_side {
+            (hunk.new_start, hunk.new_count)
+        } else {
+            (hunk.old_start, hunk.old_count)
+        };
+        let start = start.saturating_sub(1) as usize;
+        let mut rows = None;
+        if !lines.is_empty() && start <= lines.len() && start <= CONTEXT_LINE_CAP {
+            while at < start {
+                file.paint(lines[at]);
+                at += 1;
+            }
+            if hunk_agrees(hunk, &lines, start, new_side) {
+                rows = Some(file.fork());
+            }
+        }
+        // Nothing to start from — no file, or one that does not say what
+        // this hunk says it does. A clean start reads the first line of
+        // the hunk under whatever rules apply at the top of a file, which
+        // is wrong in a different way than it is useful.
+        let mut rows =
+            rows.unwrap_or_else(|| Walk::new(assets, &highlighter, syntax, patch.is_combined));
+        out.push(hunk.lines.iter().map(|line| rows.read(line)).collect());
+        // Step the file over the lines this hunk covers, so the next one
+        // starts from where the file really is.
+        for _ in 0..count {
+            let Some(line) = lines.get(at) else {
+                break;
+            };
+            file.paint(line);
+            at += 1;
+        }
+    }
+    out
+}
+
+/// Whether the file we were handed says at `start` what the hunk says is
+/// there. A diff and a file read a moment apart can disagree — someone
+/// saved between them — and a reading walked through the wrong text is
+/// worse than one that admits it does not know.
+fn hunk_agrees(
+    hunk: &crate::parse::diff::DiffHunk,
+    lines: &[&str],
+    start: usize,
+    new_side: bool,
+) -> bool {
+    let first = hunk.lines.iter().find(|line| match line.kind {
+        DiffLineKind::Context => true,
+        DiffLineKind::Addition => new_side,
+        DiffLineKind::Deletion => !new_side,
+        DiffLineKind::NoNewline => false,
+    });
+    first.is_none_or(|line| lines.get(start) == Some(&line.text.as_str()))
 }
 
 /// Where the reading of a hunk has got to.
@@ -223,6 +307,7 @@ struct LineState {
 }
 
 /// A conflict region being walked through.
+#[derive(Clone)]
 struct Region {
     /// Where the lexer stood on the line above `<<<<<<<`. Both later
     /// sides start from here.
@@ -264,6 +349,18 @@ impl<'a> Walk<'a> {
             }),
             combined,
             region: None,
+        }
+    }
+
+    /// A reading that starts where this one stands — what a hunk's rows
+    /// are coloured against while the file's own walk carries on.
+    fn fork(&self) -> Walk<'a> {
+        Walk {
+            assets: self.assets,
+            highlighter: self.highlighter,
+            state: self.state.clone(),
+            combined: self.combined,
+            region: self.region.clone(),
         }
     }
 
@@ -453,7 +550,7 @@ diff --cc src/main.rs
 
     #[test]
     fn rust_lines_are_taken_apart() {
-        let colors = colors(&patches(RUST));
+        let colors = colors(&patches(RUST), None);
         // `-    let x = 1;` is the second line of the only hunk.
         let deleted = colors.line(0, 0, 1);
         assert!(
@@ -462,6 +559,53 @@ diff --cc src/main.rs
         );
         let total: usize = deleted.spans.iter().map(|s| s.len).sum();
         assert_eq!(total, "    let x = 1;".len(), "runs cover the whole line");
+    }
+
+    /// A hunk in the middle of a block comment: read from the top of the
+    /// file it is a comment, read cold it is code. The one line the diff
+    /// shows is the same line either way — only the walk that reached it
+    /// differs.
+    const INSIDE_A_COMMENT: &str = "\
+diff --git a/src/a.rs b/src/a.rs
+--- a/src/a.rs
++++ b/src/a.rs
+@@ -2,1 +2,1 @@
+-let x = 1;
++let x = 2;
+";
+    const COMMENTED_OUT: &str = "/* an old idea:\nlet x = 2;\n*/\nfn main() {}\n";
+
+    #[test]
+    fn the_file_is_walked_into_the_hunk() {
+        let colors = colors(&patches(INSIDE_A_COMMENT), Some(COMMENTED_OUT));
+        let line = colors.line(0, 0, 1);
+        assert_eq!(
+            line.spans.len(),
+            1,
+            "line 2 of that file is inside a comment, whatever it says: {line:?}"
+        );
+    }
+
+    #[test]
+    fn without_the_file_a_hunk_starts_cold() {
+        // The same patch, and the difference is the whole point of
+        // fetching the file: cold, the lexer has no idea it is inside
+        // anything and reads a statement.
+        let colors = colors(&patches(INSIDE_A_COMMENT), None);
+        assert!(colors.line(0, 0, 1).spans.len() > 1);
+    }
+
+    #[test]
+    fn a_file_that_disagrees_with_the_hunk_is_not_used() {
+        // Saved between the diff and the read: line 2 is not what the
+        // hunk says is there, so walking it would place the reading
+        // somewhere the diff never was.
+        let elsewhere = "/* an old idea:\nsomething else entirely\n*/\nfn main() {}\n";
+        let colors = colors(&patches(INSIDE_A_COMMENT), Some(elsewhere));
+        assert!(
+            colors.line(0, 0, 1).spans.len() > 1,
+            "fell back to the cold read rather than trusting the wrong file"
+        );
     }
 
     #[test]
@@ -474,7 +618,7 @@ diff --git a/A.kt b/A.kt
 -fun a(): Int = 1
 +fun b(): Int = 2
 ";
-        let colors = colors(&patches(patch));
+        let colors = colors(&patches(patch), None);
         assert!(
             colors.line(0, 0, 0).spans.len() > 1,
             "Kotlin is one of the languages two-face adds to Sublime's own set"
@@ -491,7 +635,7 @@ diff --git a/notes.qqq b/notes.qqq
 -one
 +two
 ";
-        assert!(colors(&patches(patch)).is_empty());
+        assert!(colors(&patches(patch), None).is_empty());
     }
 
     #[test]
@@ -502,14 +646,14 @@ diff --git a/logo.png b/logo.png
 +++ b/logo.png
 Binary files a/logo.png and b/logo.png differ
 ";
-        assert!(colors(&patches(patch)).is_empty());
+        assert!(colors(&patches(patch), None).is_empty());
     }
 
     #[test]
     fn a_conflicts_sides_do_not_run_into_each_other() {
         let parsed = patches(CONFLICTED);
         assert!(parsed[0].is_combined, "the fixture is a combined diff");
-        let colors = colors(&parsed);
+        let colors = colors(&parsed, None);
         // Rows: 0 ` fn main() {`, 1 `<<<<<<<`, 2 `/* ours`, 3 `=======`,
         // 4 `let x = 2;`, 5 `>>>>>>>`, 6 `}`.
         for row in [1, 3, 5] {
@@ -534,7 +678,7 @@ Binary files a/logo.png and b/logo.png differ
         // What follows the region belongs to the branch being worked on,
         // so the closing brace is inside a comment here — one run, the
         // comment's colour, and the same colour the `/* ours` line got.
-        let colors = colors(&patches(CONFLICTED));
+        let colors = colors(&patches(CONFLICTED), None);
         let opened = colors.line(0, 0, 2);
         let after = colors.line(0, 0, 6);
         assert_eq!(
@@ -561,7 +705,7 @@ diff --cc notes.qqq
 ++theirs
 ++>>>>>>> other
 ";
-        let colors = colors(&patches(patch));
+        let colors = colors(&patches(patch), None);
         assert!(
             colors.line(0, 0, 0).fence,
             "the fence is git's, not the file's"
@@ -594,7 +738,7 @@ diff --git a/README.md b/README.md
 ";
         let parsed = patches(patch);
         assert!(!parsed[0].is_combined);
-        let colors = colors(&parsed);
+        let colors = colors(&parsed, None);
         let line = colors.line(0, 0, 1);
         assert!(!line.fence, "nothing here is a fence");
         assert!(
