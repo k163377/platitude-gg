@@ -53,6 +53,10 @@ impl platitude_core::mem::Footprint for DiffLineItem {
 #[derive(Default)]
 pub struct DiffModel {
     lines: Vec<DiffLineItem>,
+    /// The largest line number the rows carry, on either side. The gutter
+    /// is as wide as the widest number it will hold, so counting it is a
+    /// fact about the rows rather than something QML works out.
+    widest_no: i32,
     title: String,
     is_binary: bool,
     /// The file has no old side: everything in the diff was added by it
@@ -115,6 +119,7 @@ impl_extend_notified!(DiffModel, lines, DiffLineItem);
 
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
 impl DiffModel {
+    qproperty!("widestNo", Member = widest_no, Notify = changed);
     qproperty!("title", Member = title, Notify = changed);
     qproperty!("isBinary", Member = is_binary, Notify = changed);
     qproperty!("isNewFile", Member = is_new_file, Notify = changed);
@@ -196,6 +201,7 @@ impl DiffModel {
     #[qslot]
     fn clear(&mut self) {
         self.current_key = String::new();
+        self.widest_no = 0;
         self.title = String::new();
         self.is_binary = false;
         self.is_new_file = false;
@@ -228,20 +234,29 @@ impl DiffModel {
         self.apply_endings(msg.endings.as_ref());
         self.apply_preview(msg.preview.as_ref());
         self.reset();
-        let rows = flatten_patches(&msg.patches, msg.preview.is_none(), &msg.colors)
-            .into_iter()
-            .map(|r: DiffRow| DiffLineItem {
-                kind: r.kind.to_string(),
-                old_no: r.old_no,
-                new_no: r.new_no,
-                text: r.text,
-                rich: r.rich,
-                fence: r.fence,
-                hunk: r.hunk,
-                line: r.line,
-                markers: r.markers,
-            })
-            .collect();
+        let rows: Vec<DiffLineItem> =
+            flatten_patches(&msg.patches, msg.preview.is_none(), &msg.colors)
+                .into_iter()
+                .map(|r: DiffRow| DiffLineItem {
+                    kind: r.kind.to_string(),
+                    old_no: r.old_no,
+                    new_no: r.new_no,
+                    text: r.text,
+                    rich: r.rich,
+                    fence: r.fence,
+                    hunk: r.hunk,
+                    line: r.line,
+                    markers: r.markers,
+                })
+                .collect();
+        // Both sides at once: the two columns are laid out to one width,
+        // and a file whose old side ran further than its new one would
+        // otherwise hand the wider number to the narrower column.
+        self.widest_no = rows
+            .iter()
+            .map(|r| r.old_no.max(r.new_no))
+            .max()
+            .unwrap_or(0);
         self.extend_notified(rows);
         if crate::memprobe::enabled() {
             crate::memprobe::note("diff-lines", self.tab_id, &self.lines);
@@ -278,6 +293,7 @@ impl DiffModel {
             self.is_new_file = false;
             self.is_combined = false;
             self.unmerged = false;
+            self.widest_no = 0;
             self.apply_preview(None);
             self.reset();
         }

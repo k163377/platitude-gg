@@ -318,6 +318,31 @@ Rectangle {
         return -1
     }
 
+    /// How wide one line-number column is: the widest number this diff
+    /// carries, plus the one gap that stands between everything in the
+    /// gutter (デザイン規約 §レイアウト初期値).
+    ///
+    /// Sized off the number rather than fixed, so the row reads
+    /// `gap 140 gap 153 gap }`. A fixed column leaves the slack of the
+    /// numbers it is *not* holding to the left of the one it is, and
+    /// that slack lands between the two numbers while the code — which
+    /// has none — sits one gap away: the same distance came out several
+    /// times over in one row (2026-08-13 ユーザー指示).
+    ///
+    /// Measured with a Label that is never drawn, the way `ActionButton`
+    /// and `TopBar` measure: `TextMetrics` reports a few pixels tighter
+    /// than the Label the number is actually set in. Whole pixels — two
+    /// columns and the code's run are laid out from this one number.
+    readonly property int numberColW:
+        Math.ceil(numberMeasure.implicitWidth) + Theme.spaceXs
+    Label {
+        id: numberMeasure
+        visible: false
+        text: diffPane.diffModel.widestNo
+        font.family: Theme.monoFamily
+        font.pixelSize: Theme.fontSm
+    }
+
     color: Theme.bgSurface
     ColumnLayout {
         anchors.fill: parent
@@ -745,7 +770,17 @@ Rectangle {
                     spacing: 0
                     Label {
                         id: oldNoCol
-                        width: 42
+                        // The pane's edge, the two numbers and the code
+                        // all stand one `spaceXs` apart: the column is
+                        // cut to the widest number the diff has, and the
+                        // first one carries the gap on its left as well.
+                        //
+                        // Both columns close on a hunk heading, which has
+                        // no line to number: the heading takes the row
+                        // from its left edge.
+                        width: diffRow.kind === "hunk"
+                               ? 0 : diffPane.numberColW + Theme.spaceXs
+                        leftPadding: Theme.spaceXs
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
                         text: diffRow.old_no >= 0 ? diffRow.old_no : ""
@@ -757,7 +792,8 @@ Rectangle {
                     }
                     Label {
                         id: newNoCol
-                        width: 42
+                        width: diffRow.kind === "hunk"
+                               ? 0 : diffPane.numberColW
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
                         text: diffRow.new_no >= 0 ? diffRow.new_no : ""
@@ -777,6 +813,15 @@ Rectangle {
                                   ? hunkTools.width + Theme.spaceSm * 2 : 0)
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
+                        // A hunk heading starts at the row's own left edge
+                        // (2026-08-13 ユーザー指示): the two columns beside
+                        // it are empty — a heading has no line to number —
+                        // so indenting it by them lines the pane's own
+                        // words up with the file's, behind a gutter that
+                        // says nothing. One `spaceXs`, the same gap
+                        // everything else in the gutter stands at.
+                        leftPadding: diffRow.kind === "hunk"
+                                     ? Theme.spaceXs : 0
                         text: diffRow.text
                         // A coloured line arrives already marked up, and
                         // the plain ones must stay plain: `StyledText` on
