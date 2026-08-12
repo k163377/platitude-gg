@@ -2884,8 +2884,28 @@ async fn a_poll_rebuilds_the_graph_once() {
     let (quiet_replacements, quiet_starts) = (replacements(), starts());
 
     // An idle repository is what the poll spends nearly all its ticks on.
+    let quiet_refs = sink.count(|e| matches!(e, SessionEvent::RefsLoaded { .. }));
+    let quiet_status = sink.count(|e| matches!(e, SessionEvent::StatusLoaded { .. }));
     session.refresh_poll();
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    // What has to be over before the commit below is this tick, and the
+    // tick says so itself: it publishes both of its reads whatever it
+    // finds, so one more of each is it landing (規約 §「もう起きない」を
+    // sleep で確かめない). A fixed wait here failed the assertion two
+    // paragraphs down the moment the machine was busy enough for the tick
+    // to outlast it — the poll's two reads then straddled the commit,
+    // reported different worlds, and the graph rebuilt once for each.
+    sink.wait_for("the idle poll's two reads", |evs| {
+        let refs = evs
+            .iter()
+            .filter(|e| matches!(e, SessionEvent::RefsLoaded { .. }))
+            .count();
+        let status = evs
+            .iter()
+            .filter(|e| matches!(e, SessionEvent::StatusLoaded { .. }))
+            .count();
+        (refs > quiet_refs && status > quiet_status).then_some(())
+    })
+    .await;
     assert_eq!(
         (replacements(), starts()),
         (quiet_replacements, quiet_starts),
