@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::support::TestRepo;
+use crate::support::{Patience, TestRepo};
 use platitude_core::process::GitExecutor;
 use platitude_core::remote;
 use platitude_core::session::{
@@ -144,19 +144,27 @@ impl CaptureSink {
             .count()
     }
 
+    /// Polls until `pred` over the event list returns `Some`, giving up
+    /// only once the session has gone quiet on it (see [`Patience`]).
     async fn wait_for<T>(&self, what: &str, pred: impl Fn(&[SessionEvent]) -> Option<T>) -> T {
-        let deadline = Instant::now() + Duration::from_secs(20);
+        let mut patience = Patience::new();
         loop {
-            if let Some(v) = pred(&self.events.lock().unwrap()) {
-                return v;
+            {
+                let events = self.events.lock().unwrap();
+                if let Some(v) = pred(&events) {
+                    return v;
+                }
+                patience.note(events.len());
             }
-            assert!(
-                Instant::now() < deadline,
-                "timed out waiting for {what}; events so far: {:?}",
-                self.events.lock().unwrap()
-            );
+            patience.check(what, &self.events);
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
+    }
+
+    /// Waits until the session has finished what it already had going
+    /// (see [`crate::support::settled`]).
+    async fn settled(&self) {
+        crate::support::settled(&self.events).await;
     }
 
     /// The refs snapshot published after the fetch landed. Opening
@@ -187,6 +195,12 @@ async fn opened(work: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
         work.path.clone(),
         Arc::clone(&sink) as Arc<dyn SessionSink>,
     );
+    // Here and not in the test that reads them: the reads the opening makes
+    // on its own are the ones [`CaptureSink::settled`] tells running work
+    // from an idle session by, and by the time `Opened` has been delivered
+    // the first walk is already on its way. Switched on before the wait
+    // below, this is ahead of everything the session spawns off `Opened`.
+    session.set_record_background(true);
     sink.wait_for("Opened", |evs| {
         evs.iter()
             .any(|e| matches!(e, SessionEvent::Opened { .. }))
@@ -334,7 +348,6 @@ async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_gra
         "opening with the interval on reads the remotes' tags"
     );
     let named = |tags: &[TagItem]| tags.iter().any(|t| t.short == "v-later");
-    session.set_record_background(true);
     let swaps = |sink: &CaptureSink| sink.count(|e| matches!(e, SessionEvent::LogReplaced { .. }));
     let chips =
         |sink: &CaptureSink| sink.count(|e| matches!(e, SessionEvent::LabelsChanged { .. }));
@@ -345,19 +358,22 @@ async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_gra
     };
     // **Count from where the opening stopped walking, not from where the
     // badges arrived.** The two are not the same moment: the tags can
-    // settle while the swap pass is still running, and under the load of
-    // the whole suite that pass lands after the baseline and reads as a
-    // walk this test caused.
-    let mut settled_walks = walks(&sink);
-    loop {
-        tokio::time::sleep(Duration::from_millis(300)).await;
-        let now = walks(&sink);
-        if now == settled_walks {
-            break;
-        }
-        settled_walks = now;
-    }
-    let (settled_swaps, settled_chips) = (swaps(&sink), chips(&sink));
+    // settle while the tag-inclusive pass has not even been spawned yet,
+    // and under the load of the whole suite that pass lands after the
+    // baseline and reads as a walk this test caused (実測: it started its
+    // `log -z` 639ms after the badges were on screen). What the baseline
+    // waits for is therefore the session going quiet, not a fixed number
+    // of looks at the walk count — 規約 §「もう起きない」を sleep で確かめない.
+    sink.settled().await;
+    let (settled_walks, settled_swaps, settled_chips) = (walks(&sink), swaps(&sink), chips(&sink));
+    // Which rests on the opening's own reads being recorded (`opened`): a
+    // walk nobody wrote down is one the wait reads as silence, and the
+    // baseline goes back to being taken mid-opening. A zero here is that
+    // regression, said out loud rather than left to come back as a flake.
+    assert!(
+        settled_walks > 0,
+        "the opening walks, so the baseline has to have one to show for it"
+    );
 
     // Somebody tags the commit this repository is already sitting on,
     // over there. **No local ref moves**: what changed is only what the
