@@ -50,11 +50,12 @@ Rectangle {
     /// at all (`PG_AUTO_ACT=commands-clear`).
     readonly property bool commandsWrong: commandsToggle.wrong
     readonly property color commandsMarkColor: commandsMark.color
-    /// The three things this repository can be in the middle of. All three
-    /// can stand at once — a stopped operation that hit a conflict, on a
-    /// machine that has never been told who is committing — and as words
-    /// beside the tabs that was the widest this band ever got, so they are
-    /// folded into one mark and opened as a card (`BandStateCard`).
+    /// The four things that can be the matter here. All four can stand at
+    /// once — a stopped operation that hit a conflict, on a machine that
+    /// has never been told who is committing and whose git is older than
+    /// this app is built for — and as words beside the tabs that is the
+    /// widest this band ever gets, so they are folded into one mark and
+    /// opened as a card (`BandStateCard`).
     ///
     /// One expression each, read by the mark and by the card: written
     /// twice, the two could disagree about whether there is anything here
@@ -73,9 +74,14 @@ Rectangle {
         || AppBackend.identityUnsaved
         || (topBar.curPage !== null
             && !topBar.curPage.pageTab.identityReady)
+    /// Last of the four, and the only one that is about neither this
+    /// repository nor this window: it stands until git itself is replaced.
+    /// The three in front of it are what somebody is in the middle of.
+    readonly property bool oldGitBadgeShown: AppBackend.gitUnsupported
     readonly property bool stateShown: topBar.opBadgeShown
                                        || topBar.conflictBadgeShown
                                        || topBar.identityBadgeShown
+                                       || topBar.oldGitBadgeShown
     /// The narrowest a badge is drawn before the group gives up on words:
     /// its opening letters and the ellipsis that says the rest was cut.
     /// Counted in characters rather than pixels, for the reason the tab
@@ -135,6 +141,10 @@ Rectangle {
         id: mIdentity
         text: qsTr("SET IDENTITY")
     }
+    BadgeWord {
+        id: mOldGit
+        text: qsTr("OLD GIT")
+    }
     DotMark {
         id: mDot
         visible: false
@@ -164,6 +174,8 @@ Rectangle {
         Math.ceil(mConflict.implicitWidth) + 2 * Theme.spaceXs
     readonly property int identityBadgeW:
         Math.ceil(mIdentity.implicitWidth) + 2 * Theme.spaceXs
+    readonly property int oldGitBadgeW:
+        Math.ceil(mOldGit.implicitWidth) + 2 * Theme.spaceXs
 
     /// Automation: which of the group's three shapes is on screen, what
     /// the badges were narrowed to, and what the card came back with. The
@@ -171,6 +183,11 @@ Rectangle {
     /// made of it (`PG_AUTO_ACT=badges` / `badges-hover`).
     readonly property bool stateWordsShown: badgeRow.visible
     readonly property bool stateMarkShown: stateToggle.visible
+    /// What the mark was actually painted with — the heaviest state's
+    /// colour (規約 §状態). Read off the group rather than recomputed, for
+    /// the reason `commandsMarkColor` is: what is being checked is that the
+    /// rule reached the paint, and a second copy of the rule cannot say so.
+    readonly property color stateMarkColor: stateGroup.tint
     readonly property int stateCapW: stateGroup.cap === Number.MAX_VALUE
                                      ? -1 : Math.round(stateGroup.cap)
     readonly property int stateGroupW: Math.round(stateGroup.width)
@@ -941,6 +958,8 @@ Rectangle {
                    ? topBar.conflictBadgeW + Theme.spaceXs : 0)
                 + (topBar.identityBadgeShown
                    ? topBar.identityBadgeW + Theme.spaceXs : 0)
+                + (topBar.oldGitBadgeShown
+                   ? topBar.oldGitBadgeW + Theme.spaceXs : 0)
                 - Theme.spaceXs
             readonly property real foldedWidth:
                 stateMark.implicitWidth + 2 * fetchButton.padding
@@ -976,10 +995,10 @@ Rectangle {
             /// reason: the widths are read off a list of items, and a
             /// binding cannot see one of those arrive.
             function settleCap() {
-                // Already whole (`TopBar.opBadgeW` and its two neighbours),
-                // and the ceiling above is summed from the same three —
-                // so a group handed its natural width has exactly what
-                // this share-out is about to hand back out.
+                // Already whole (`TopBar.opBadgeW` and its three
+                // neighbours), and the ceiling above is summed from the
+                // same four — so a group handed its natural width has
+                // exactly what this share-out is about to hand back out.
                 let want = []
                 if (topBar.opBadgeShown)
                     want.push(topBar.opBadgeW)
@@ -987,6 +1006,8 @@ Rectangle {
                     want.push(topBar.conflictBadgeW)
                 if (topBar.identityBadgeShown)
                     want.push(topBar.identityBadgeW)
+                if (topBar.oldGitBadgeShown)
+                    want.push(topBar.oldGitBadgeW)
                 if (want.length === 0) {
                     stateGroup.cap = Number.MAX_VALUE
                     return
@@ -1169,12 +1190,28 @@ Rectangle {
                     id: identityBadge
                     visible: topBar.identityBadgeShown
                     naturalW: topBar.identityBadgeW
-                    // The one badge of the three that is also a way
+                    // The one badge of the four that is also a way
                     // somewhere, narrowed or not.
                     pressable: true
                     onPressed: topBar.identityEditRequested()
                     Label {
                         text: qsTr("SET IDENTITY")
+                        color: Theme.warning
+                        font.pixelSize: Theme.fontSm
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: implicitWidth
+                    }
+                }
+                // Not a way anywhere: replacing git is done outside this
+                // window, so the card's line is the whole of the answer.
+                Badge {
+                    id: oldGitBadge
+                    visible: topBar.oldGitBadgeShown
+                    naturalW: topBar.oldGitBadgeW
+                    Label {
+                        text: qsTr("OLD GIT")
                         color: Theme.warning
                         font.pixelSize: Theme.fontSm
                         font.weight: Font.DemiBold
@@ -1216,7 +1253,7 @@ Rectangle {
                 border.width: Theme.borderWidth
                 border.color: stateGroup.tint
                 Accessible.role: Accessible.Button
-                Accessible.name: qsTr("What this repository is in the middle of")
+                Accessible.name: qsTr("What needs attention here")
                 Label {
                     id: stateMark
                     anchors.centerIn: parent
@@ -1250,9 +1287,12 @@ Rectangle {
                 conflictCount: topBar.stateWt !== null
                                ? topBar.stateWt.conflictCount : 0
                 identityUnsaved: AppBackend.identityUnsaved
+                gitVersion: AppBackend.gitVersion
+                minimumGit: AppBackend.minimumGit
                 opShown: topBar.opBadgeShown
                 conflictShown: topBar.conflictBadgeShown
                 identityShown: topBar.identityBadgeShown
+                oldGitShown: topBar.oldGitBadgeShown
                 onIdentityRequested: topBar.identityEditRequested()
             }
         }

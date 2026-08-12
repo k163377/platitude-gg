@@ -7,7 +7,7 @@ import platitude.ui
 
 // The band's state badges, opened out. The band itself keeps one mark for
 // however many of them are standing (`TopBar` の `…`): the tabs are what
-// that row is for, and three badges of words beside them is the widest
+// that row is for, and four badges of words beside them is the widest
 // thing this app ever puts there (デザイン規約 §ウィンドウの縁).
 //
 // A card rather than a `ToolTip`, for the reason `EolHoverCard` is one: a
@@ -34,6 +34,10 @@ Popup {
     property int opSteps: 0
     property int conflictCount: 0
     property bool identityUnsaved: false
+    /// The two halves of the old-git row's sentence: what answered, and
+    /// what this app is built for.
+    property string gitVersion: ""
+    property string minimumGit: ""
     /// Which rows stand. Handed in for the same reason, and read by the
     /// mark as well — the mark is out exactly when at least one of these
     /// is, so the two cannot disagree about whether there is anything
@@ -41,6 +45,7 @@ Popup {
     property bool opShown: false
     property bool conflictShown: false
     property bool identityShown: false
+    property bool oldGitShown: false
 
     /// The one row that is also a way somewhere. The badge it replaced was
     /// pressable, and folding the band must not cost the way back to the
@@ -61,7 +66,8 @@ Popup {
     readonly property real badgeRun:
         Math.max(stateCard.opShown ? opBadge.implicitWidth : 0,
                  stateCard.conflictShown ? conflictBadge.implicitWidth : 0,
-                 stateCard.identityShown ? identityBadge.implicitWidth : 0)
+                 stateCard.identityShown ? identityBadge.implicitWidth : 0,
+                 stateCard.oldGitShown ? oldGitBadge.implicitWidth : 0)
 
     /// Automation: which rows the card actually laid out, in band order.
     /// Read off the rows themselves rather than off the flags above —
@@ -75,6 +81,8 @@ Popup {
             out.push("conflicts")
         if (identityRow.visible)
             out.push("identity")
+        if (oldGitRow.visible)
+            out.push("old-git")
         return out.join(",")
     }
 
@@ -253,6 +261,40 @@ Popup {
                 text: stateCard.identityUnsaved
                       ? qsTr("Name and email were not both saved")
                       : qsTr("No name or email set for commits")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+            }
+        }
+
+        // The git on this machine is older than the one this app is built
+        // for. Which two versions those are is what the badge had no room
+        // for, and it is the whole of what can be done about it — the way
+        // out is installing a newer git, which is not in this window.
+        RowLayout {
+            id: oldGitRow
+            visible: stateCard.oldGitShown
+            spacing: Theme.spaceSm
+            Rectangle {
+                id: oldGitBadge
+                color: "transparent"
+                border.color: Theme.warning
+                border.width: Theme.borderWidth
+                radius: Theme.radiusSm
+                implicitHeight: Theme.iconLg
+                implicitWidth: oldGitLabel.implicitWidth + 2 * Theme.spaceXs
+                Layout.preferredWidth: stateCard.badgeRun
+                Label {
+                    id: oldGitLabel
+                    anchors.centerIn: parent
+                    text: qsTr("OLD GIT")
+                    color: Theme.warning
+                    font.pixelSize: Theme.fontSm
+                    font.weight: Font.DemiBold
+                }
+            }
+            Label {
+                text: qsTr("git %1 is older than the %2 this app is built for")
+                          .arg(stateCard.gitVersion).arg(stateCard.minimumGit)
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
             }

@@ -14,11 +14,12 @@ use super::qml_register;
 enum AppMsg {
     GitOk {
         version: String,
+        /// Whether that version is at or above the supported minimum. Old
+        /// git is a badge, not a closed door — the app runs on it and says
+        /// so (規約 §リポジトリが今どうなっているか).
+        supported: bool,
     },
     GitMissing {
-        message: String,
-    },
-    GitUnsupported {
         message: String,
     },
     GitError {
@@ -45,8 +46,14 @@ enum AppMsg {
 pub struct AppBackend {
     git_state: String,
     git_version: String,
-    /// The supported minimum, printed by the missing-git gate. Read from
-    /// core so the screen cannot drift from the version actually enforced.
+    /// The git that answered is older than [`platitude_core::version::MINIMUM_GIT`].
+    /// Everything still runs — this is the band's fourth badge, not a gate:
+    /// most of what the app asks for works on an older git, and the ones
+    /// that do not fail with git's own words where they are asked for.
+    git_unsupported: bool,
+    /// The supported minimum, printed by the missing-git screen and by the
+    /// badge's card. Read from core so neither can drift from the version
+    /// the check actually compares against.
     minimum_git: String,
     git_error: String,
     /// "unknown" until the check runs, then "checking" / "missing" /
@@ -206,6 +213,7 @@ impl Default for AppBackend {
         Self {
             git_state: "checking".into(),
             git_version: String::new(),
+            git_unsupported: false,
             minimum_git: platitude_core::version::minimum_string(),
             git_error: String::new(),
             identity_state: "unknown".into(),
@@ -261,6 +269,11 @@ impl AppBackend {
     qproperty!(
         "gitVersion",
         Member = git_version,
+        Notify = git_state_changed
+    );
+    qproperty!(
+        "gitUnsupported",
+        Member = git_unsupported,
         Notify = git_state_changed
     );
     qproperty!(
@@ -700,16 +713,17 @@ impl AppBackend {
             let executor = hub.executor();
             handle.spawn(async move {
                 let cancel = tokio_util::sync::CancellationToken::new();
-                let msg = match version::ensure_supported(&executor, &cancel).await {
-                    Ok(v) => AppMsg::GitOk { version: v.raw },
+                let msg = match version::detect(&executor, &cancel).await {
+                    // An answer is what this gate is for; how old the
+                    // answer is decides a badge, not whether the window
+                    // becomes an application.
+                    Ok(v) => AppMsg::GitOk {
+                        supported: v.supported(),
+                        version: v.raw,
+                    },
                     Err(e @ platitude_core::GitError::GitNotFound { .. }) => AppMsg::GitMissing {
                         message: e.to_string(),
                     },
-                    Err(e @ platitude_core::GitError::UnsupportedVersion { .. }) => {
-                        AppMsg::GitUnsupported {
-                            message: e.to_string(),
-                        }
-                    }
                     Err(e) => AppMsg::GitError {
                         message: e.to_string(),
                     },
@@ -837,17 +851,14 @@ impl AppBackend {
         let mut wrote = false;
         for msg in self.check_feed.drain() {
             match msg {
-                AppMsg::GitOk { version } => {
+                AppMsg::GitOk { version, supported } => {
                     self.git_state = "ok".into();
                     self.git_version = version;
+                    self.git_unsupported = !supported;
                     check_identity = true;
                 }
                 AppMsg::GitMissing { message } => {
                     self.git_state = "missing".into();
-                    self.git_error = message;
-                }
-                AppMsg::GitUnsupported { message } => {
-                    self.git_state = "unsupported".into();
                     self.git_error = message;
                 }
                 AppMsg::GitError { message } => {

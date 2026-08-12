@@ -61,10 +61,6 @@ pub enum GitError {
     #[error("`{command}` was cancelled")]
     Cancelled { command: String },
 
-    /// Installed git is older than the supported minimum.
-    #[error("unsupported git version {found} (minimum supported is {minimum})")]
-    UnsupportedVersion { found: String, minimum: String },
-
     /// The given path is not inside a git repository (or does not exist).
     ///
     /// `bare` separates the one folder that *is* a repository and still

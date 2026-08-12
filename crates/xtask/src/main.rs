@@ -112,6 +112,11 @@ commands:
                           fetch-recover, fetch-resume, push-retry,
                           drop-commit on the drop-stops preset, and push /
                           publish-new-go against an unreachable remote)
+        --old-git <ver>   run the app against a git that answers --version
+                          with <ver> and passes everything else to the real
+                          one, so an installation older than the supported
+                          minimum can be photographed working. Implied by
+                          the verbs old-git and old-git-card.
       The open-refused verbs (open-not-a-repo, open-bare, the -retry /
       -cancel ways out, and open-fail-tab for the road that keeps its
       tab) make their own folder when no argument names one: what they
@@ -201,6 +206,9 @@ commands:
 ";
 
 fn main() -> ExitCode {
+    if let Some(code) = verify::git_shim() {
+        return code;
+    }
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("check") => check::run(&args[1..]),

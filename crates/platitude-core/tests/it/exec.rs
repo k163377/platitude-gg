@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 async fn detects_a_supported_git_version() {
     let executor = GitExecutor::new();
     let cancel = CancellationToken::new();
-    let v = version::ensure_supported(&executor, &cancel).await.unwrap();
+    let v = version::detect(&executor, &cancel).await.unwrap();
     assert!(v.supported(), "dev/CI machines must have git >= 2.43");
 }
 

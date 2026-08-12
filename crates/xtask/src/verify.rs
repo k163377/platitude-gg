@@ -7,14 +7,84 @@
 //! guard (never an unbounded one — the lessons of the locked-screen
 //! hangs), and the `screenshot saved=true` stderr line as the verdict.
 
+use std::ffi::OsString;
 use std::io::BufRead;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitCode, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Grace on top of PG_AUTO_QUIT_MS before the run is killed: startup,
 /// repository load, and the write itself happen inside this.
 const GRACE_MS: u64 = 20_000;
+
+/// Set on the app when `--old-git` asks for one: the version a copy of this
+/// binary, standing on PATH under git's name, answers `--version` with.
+const SHIM_VERSION: &str = "PG_SHIM_GIT_VERSION";
+/// The git that copy passes everything else to.
+const SHIM_REAL: &str = "PG_SHIM_REAL_GIT";
+
+/// Stands in for git when this binary was copied onto a run's PATH under
+/// git's name (`--old-git`), and returns `None` in every other process —
+/// including the xtask that set it up, which never has these two set.
+///
+/// One command is answered here and the rest are handed to the real git, so
+/// what the app sees is an installation that works and is old. Faking the
+/// answer to `--version` is the whole of it: the app's own reading of that
+/// line is what the badge hangs on, and every other command it runs is
+/// answered by a real git — which is what makes the picture proof of the
+/// path from `git --version` to the band, rather than of a flag imitating
+/// the state (`solo` holds a real lock for the same reason).
+///
+/// Not a script: CLAUDE.md rules out `.bat`/`.ps1` dev tooling, and a
+/// second binary would have to be built before it could be copied. This one
+/// is already built — it is the one running.
+pub fn git_shim() -> Option<ExitCode> {
+    let version = std::env::var(SHIM_VERSION).ok()?;
+    let real = std::env::var_os(SHIM_REAL)?;
+    let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    if args.iter().any(|a| a == "--version") {
+        println!("git version {version}");
+        return Some(ExitCode::SUCCESS);
+    }
+    // Straight through, stdio and all: the app reads this child's output as
+    // if it were git's, because it is.
+    let status = Command::new(&real).args(&args).status();
+    let code = match status {
+        // 128 is git's own "fatal", which is what a git that could not be
+        // reached at all amounts to here.
+        Err(e) => {
+            eprintln!("fatal: shim could not run {}: {e}", real.to_string_lossy());
+            128
+        }
+        Ok(s) => s.code().unwrap_or(1),
+    };
+    Some(ExitCode::from(u8::try_from(code).unwrap_or(1)))
+}
+
+/// The git the shim hands everything else to, found the way the app finds
+/// it — the first one on the PATH the run was going to use.
+fn real_git(path: &std::ffi::OsStr) -> Result<PathBuf, String> {
+    let name = if cfg!(windows) { "git.exe" } else { "git" };
+    std::env::split_paths(path)
+        .map(|dir| dir.join(name))
+        .find(|candidate| candidate.is_file())
+        .ok_or_else(|| format!("--old-git needs a real git on PATH; no {name} found on it"))
+}
+
+/// Puts a copy of this binary on the front of `path` under git's name, and
+/// returns the PATH the app should run with.
+fn stage_old_git(shot_dir: &std::path::Path, path: &std::ffi::OsStr) -> Result<OsString, String> {
+    let dir = shot_dir.join("gitshim");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+    let me = std::env::current_exe().map_err(|e| format!("could not find this binary: {e}"))?;
+    let shim = dir.join(if cfg!(windows) { "git.exe" } else { "git" });
+    // Copies the permission bits with it, which is what makes the Unix side
+    // executable without a chmod of its own.
+    std::fs::copy(&me, &shim).map_err(|e| format!("could not write {}: {e}", shim.display()))?;
+    let mut parts = vec![dir];
+    parts.extend(std::env::split_paths(path));
+    std::env::join_paths(parts).map_err(|e| format!("rebuilding PATH failed: {e}"))
+}
 
 /// What the identity verbs type in when nothing else is asked for. Both
 /// halves differ from anything the seed below holds, so a mark means the
@@ -81,6 +151,10 @@ struct Options {
     restore: bool,
     /// Whether a write git refused is part of what the verb is showing.
     allow_write_failure: bool,
+    /// Run the app against a git that answers `--version` with this and
+    /// passes everything else to the real one (`git_shim`). Empty is the
+    /// ordinary case: the git this machine has.
+    old_git: String,
 }
 
 /// What the run is judged on.
@@ -137,6 +211,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         config_dir: None,
         restore: false,
         allow_write_failure: false,
+        old_git: String::new(),
     };
     let mut positional: Vec<&str> = Vec::new();
     let mut it = args.iter();
@@ -166,6 +241,9 @@ fn parse(args: &[String]) -> Result<Options, String> {
             }
             "--restore" => opts.restore = true,
             "--allow-write-failure" => opts.allow_write_failure = true,
+            "--old-git" => {
+                opts.old_git = it.next().ok_or("--old-git needs a version")?.clone();
+            }
             other => positional.push(other),
         }
     }
@@ -313,9 +391,24 @@ pub fn run(args: &[String]) -> Result<(), String> {
             &opened
         }
     );
+    // The three verbs named for it bring their own version, so that the
+    // run reads `verify-ui old-git` and nothing else. Below any minimum
+    // this app will ever have: minimums only go up.
+    let old_git = match (opts.old_git.as_str(), opts.verb.as_str()) {
+        ("", "old-git" | "old-git-card" | "old-git-fold") => "2.42.0",
+        (asked, _) => asked,
+    };
+    let child_path = if old_git.is_empty() {
+        path.clone()
+    } else {
+        let staged = stage_old_git(&shot_dir, &path)?;
+        println!("git for this run: {old_git} (real git behind it)");
+        staged
+    };
+
     let mut cmd = Command::new(&exe);
     cmd.current_dir(&root)
-        .env("PATH", &path)
+        .env("PATH", &child_path)
         .env("QT_QPA_PLATFORM", "offscreen")
         .env("QT_FORCE_STDERR_LOGGING", "1")
         .env("PG_CONFIG_DIR", &config_dir)
@@ -329,6 +422,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // Offscreen Qt does not discover system fonts on Windows; without
         // this every glyph is a box (verify-ui skill).
         cmd.env("QT_QPA_FONTDIR", "C:\\Windows\\Fonts");
+    }
+    if !old_git.is_empty() {
+        // The two the copy on the front of PATH reads: what to answer
+        // `--version` with, and who to hand the rest to. Both are set on
+        // the app, so every git it starts inherits them.
+        cmd.env(SHIM_VERSION, old_git)
+            .env(SHIM_REAL, real_git(&path)?);
     }
     // The automation hooks report through tracing at info; without this
     // their lines never reach the verdict output.
@@ -533,6 +633,25 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // same way once it is cropped to the band, and which rows arrived
         // is the whole question the group raises when it gives way.
         "badges-hover" => Some("card=true rows=op,conflicts,identity"),
+        // The fourth badge. A run whose shim never reached PATH reads the
+        // git this machine has, wears no badge, and photographs an
+        // ordinary window — which is exactly what an ordinary window looks
+        // like. `badge=` is the band's own reading, so the whole path from
+        // `git --version` to the row is what passes or fails here.
+        "old-git" => Some("old-git badge=true"),
+        // And the card it opens. `rows=` is not judged: the other three
+        // rows come and go with the machine (a container with no identity
+        // configured stands one of them), and only this row is the verb's.
+        "old-git-card" => Some("old-git badge=true card=true"),
+        // The band folded with nothing red standing in it. Two halves, and
+        // the picture holds neither on its own: a mark that never came up
+        // frames as a band with room to spare, and the colour of three
+        // dots is not something a cropped screenshot settles an argument
+        // about. `tint=` is named rather than spelled in hex — what is
+        // being judged is which rule painted it (規約 §状態: 最も重い状態が
+        // 決める), and a red mark over a lone warning is the way that rule
+        // fails silently.
+        "old-git-fold" => Some("mark=true tint=warning"),
         // Walking the graph with the arrows. The picture holds which row
         // is lit and whose commit fills the right-hand pane, but not the
         // three things that make the walk work: that the keyboard was on

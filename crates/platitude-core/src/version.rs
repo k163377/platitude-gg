@@ -1,4 +1,9 @@
-//! Detection of the installed git version and the supported-minimum gate.
+//! Detection of the installed git version, and how it stands against the
+//! supported minimum.
+//!
+//! Below that minimum is a fact reported, not a door closed: what the app
+//! does about it is the app's to decide, and it keeps working while saying
+//! so (規約 §リポジトリが今どうなっているか の 4 つ目のバッジ).
 
 use std::time::Duration;
 
@@ -68,22 +73,6 @@ pub async fn detect(
         command: "git --version".to_string(),
         message: text.trim().to_string(),
     })
-}
-
-/// Detects the installed git and fails with [`GitError::UnsupportedVersion`]
-/// when it is older than [`MINIMUM_GIT`].
-pub async fn ensure_supported(
-    executor: &GitExecutor,
-    cancel: &CancellationToken,
-) -> Result<GitVersion, GitError> {
-    let version = detect(executor, cancel).await?;
-    if !version.supported() {
-        return Err(GitError::UnsupportedVersion {
-            found: version.raw,
-            minimum: minimum_string(),
-        });
-    }
-    Ok(version)
 }
 
 #[cfg(test)]

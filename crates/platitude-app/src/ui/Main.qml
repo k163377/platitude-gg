@@ -1087,6 +1087,16 @@ ApplicationWindow {
         interval: Metrics.anchorDelayMs
         onTriggered: root.reportBadges()
     }
+    /// Which of the two rules painted the folded group's mark, named
+    /// rather than spelled in hex: what the runs check is that the rule
+    /// reached the paint (規約 §状態: 色は最も重い状態が決める), and a
+    /// verdict written as a token's value would be a second copy of that
+    /// token. Read off the band's own colour, not off the conditions —
+    /// recomputing the rule here would agree with itself whatever the
+    /// band did.
+    readonly property string stateTint:
+        Qt.colorEqual(topBar.stateMarkColor, Theme.danger)
+        ? "danger" : "warning"
     /// What the band came to with every badge it can wear. `fits=` leads,
     /// and the three badges are judged with it: a run where one of them
     /// never stood photographs a band that was never crowded, and that
@@ -1098,6 +1108,7 @@ ApplicationWindow {
             + " op=" + topBar.opBadgeShown
             + " conflicts=" + topBar.conflictBadgeShown
             + " identity=" + topBar.identityBadgeShown
+            + " oldGit=" + topBar.oldGitBadgeShown
             // What the band drew and what came up, past what was asked
             // for: the three above are conditions, and a condition that
             // reached no badge is not a picture anybody can read. Which of
@@ -1106,6 +1117,11 @@ ApplicationWindow {
             // of them was).
             + " words=" + topBar.stateWordsShown
             + " mark=" + topBar.stateMarkShown
+            // Which rule painted the mark, named rather than in hex. The
+            // fold takes away the words that would otherwise say which
+            // state is the heaviest, so this is the only thing left
+            // carrying it (規約 §状態).
+            + " tint=" + root.stateTint
             + " cap=" + topBar.stateCapW
             + " groupW=" + topBar.stateGroupW
             // The two floors the fold is decided against — the badge's own
@@ -1124,6 +1140,72 @@ ApplicationWindow {
             + " floorW=" + floorW + " w=" + root.width
             + " tabsW=" + Math.round(topBar.bandTabsWidth)
             + " grabRun=" + Math.round(topBar.bandGrabRun))
+    }
+
+    // PG_AUTO_ACT=old-git / old-git-card / old-git-fold: the band's fourth
+    // badge, the card it opens, and the mark a narrowed window comes down
+    // to with only this one standing.
+    //
+    // Nothing here stages the state — the run is handed a
+    // git that answers `--version` with an older number
+    // (`verify-ui --old-git`), so the badge is answering a real reading of
+    // a real program, the way `solo` is photographed against a lock that is
+    // really held.
+    Timer {
+        id: oldGitActTimer
+        interval: 1200
+        running: AppBackend.autoAct === "old-git"
+                 || AppBackend.autoAct === "old-git-card"
+                 || AppBackend.autoAct === "old-git-fold"
+        onTriggered: {
+            // The pointer, where headless cannot put one — the same one
+            // property the real hover writes (app-ui.md).
+            if (AppBackend.autoAct === "old-git-card")
+                topBar.statePointedAt = true
+            // The same argument `badges` takes, for the same reason: the
+            // group's three shapes are what a narrowing window walks
+            // through. `-fold` brings its own width instead of taking one,
+            // because the shape it is for is the one this badge can reach
+            // alone — a folded group with nothing red in it, which is the
+            // only place the mark's colour is the mark's whole meaning
+            // (規約 §状態).
+            const arg = AppBackend.autoAct === "old-git-fold"
+                        ? "floor" : AppBackend.autoActArg
+            const wantedW = parseInt(arg)
+            if (arg === "floor") {
+                root.width = Math.ceil(root.floorWidth)
+                root.height = Math.ceil(root.floorHeight)
+            } else if (!isNaN(wantedW) && wantedW > 0) {
+                root.width = wantedW
+            }
+            oldGitReportTimer.start()
+        }
+    }
+    // A beat later, for the reason the badges report waits: what is read is
+    // where the layout came to rest.
+    Timer {
+        id: oldGitReportTimer
+        interval: Metrics.anchorDelayMs
+        onTriggered: AppBackend.report(
+            // `badge=` is the band's own reading rather than the condition
+            // behind it, and `version=` says which git answered — a run
+            // whose shim never got onto PATH photographs an ordinary
+            // window, and an ordinary window photographs well.
+            "old-git badge=" + topBar.oldGitBadgeShown
+            + " card=" + topBar.stateCardOpen
+            + " rows=" + topBar.stateCardRows
+            // Which of the group's shapes this width landed on, and what
+            // the mark was painted with — the fold is where a lone warning
+            // could have borrowed the conflict's red without anyone
+            // noticing, since the words that would have said otherwise are
+            // exactly what the fold takes away.
+            + " words=" + topBar.stateWordsShown
+            + " mark=" + topBar.stateMarkShown
+            + " tint=" + root.stateTint
+            + " cap=" + topBar.stateCapW
+            + " version=" + AppBackend.gitVersion
+            + " min=" + AppBackend.minimumGit
+            + " w=" + root.width)
     }
 
     // PG_AUTO_ACT=state: what a launch came back to, and (with the
@@ -1328,9 +1410,14 @@ ApplicationWindow {
     }
 
     // ---- the two ways the window has nothing to show ---------------------
-    // git is missing or too old, or another process already has the files
-    // this one would have used. Both are "this window is not going to be
-    // an application", and both wear the same shape.
+    // There is no git to ask, or another process already has the files this
+    // one would have used. Both are "this window is not going to be an
+    // application", and both wear the same shape.
+    //
+    // A git older than the supported minimum is not one of them: it answers,
+    // and most of what this app asks for it answers correctly, so it runs
+    // and wears the band's `OLD GIT` badge instead (規約 §リポジトリが今
+    // どうなっているか).
     Item {
         id: gate
         anchors.fill: parent
@@ -1418,7 +1505,7 @@ ApplicationWindow {
                 horizontalAlignment: Text.AlignHCenter
             }
             Label {
-                visible: AppBackend.gitState === "unsupported" || AppBackend.gitState === "error"
+                visible: AppBackend.gitState === "error"
                 text: AppBackend.gitError
                 color: Theme.danger
                 wrapMode: Text.Wrap
