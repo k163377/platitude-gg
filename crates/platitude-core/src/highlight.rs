@@ -58,36 +58,66 @@ pub struct Span {
     pub color: Rgb,
 }
 
-type LineSpans = Vec<Span>;
-type HunkSpans = Vec<LineSpans>;
-type PatchSpans = Vec<HunkSpans>;
+/// What was read off one line.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LineColors {
+    /// The theme's runs, empty where the line has none.
+    pub spans: Vec<Span>,
+    /// One of git's conflict markers — the fence around a region rather
+    /// than anything the file says, so the pane draws it as scaffolding.
+    /// Read whether or not the language is one the set knows: a conflict
+    /// in a plain text file has the same fences.
+    pub fence: bool,
+}
+
+impl LineColors {
+    fn nothing() -> Self {
+        Self::default()
+    }
+
+    fn said_nothing(&self) -> bool {
+        self.spans.is_empty() && !self.fence
+    }
+}
+
+type HunkColors = Vec<LineColors>;
+type PatchColors = Vec<HunkColors>;
 
 /// Colours for one diff, addressed the way its rows already are: which
 /// patch, which hunk, which line of it.
 ///
-/// Every patch and every line gets an entry even where there is no colour
-/// to give — a binary file, a language nothing was found for, a marker
-/// line — so the shape always matches the diff it was made from and a
-/// caller can walk the two together without counting.
+/// Every patch and every line gets an entry even where there is nothing
+/// to say — a binary file, a language nothing was found for — so the
+/// shape always matches the diff it was made from and a caller can walk
+/// the two together without counting.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DiffColors {
-    patches: Vec<PatchSpans>,
+    patches: Vec<PatchColors>,
 }
 
 impl DiffColors {
-    /// The runs of one line, empty where it has none.
-    pub fn line(&self, patch: usize, hunk: usize, line: usize) -> &[Span] {
+    /// What was read off one line — nothing, where nothing was. Borrowed
+    /// rather than handed over: the caller asks once per row of a diff
+    /// that can be tens of thousands of rows long.
+    pub fn line(&self, patch: usize, hunk: usize, line: usize) -> &LineColors {
+        static NOTHING: LineColors = LineColors {
+            spans: Vec::new(),
+            fence: false,
+        };
         self.patches
             .get(patch)
             .and_then(|p| p.get(hunk))
             .and_then(|h| h.get(line))
-            .map_or(&[], Vec::as_slice)
+            .unwrap_or(&NOTHING)
     }
 
-    /// Whether nothing in this diff has a colour — the pane then draws
+    /// Whether nothing in this diff was read — the pane then draws
     /// exactly what it drew before there was any of this.
     pub fn is_empty(&self) -> bool {
-        self.patches.iter().flatten().all(Vec::is_empty)
+        self.patches
+            .iter()
+            .flatten()
+            .all(|hunk| hunk.iter().all(LineColors::said_nothing))
     }
 }
 
@@ -149,13 +179,17 @@ fn syntax_for<'a>(syntaxes: &'a SyntaxSet, path: &str) -> Option<&'a SyntaxRefer
 // Walking a patch
 // ---------------------------------------------------------------------------
 
-fn patch_colors(assets: &Assets, patch: &FilePatch) -> PatchSpans {
+fn patch_colors(assets: &Assets, patch: &FilePatch) -> PatchColors {
     if patch.is_binary || patch.unmerged {
         return Vec::new();
     }
-    let Some(syntax) = syntax_for(&assets.syntaxes, patch.path()) else {
+    let syntax = syntax_for(&assets.syntaxes, patch.path());
+    // A language nothing was found for still has its fences read: the
+    // markers are git's, not the file's, and a conflict in a plain text
+    // file has exactly the same ones.
+    if syntax.is_none() && !patch.is_combined {
         return Vec::new();
-    };
+    }
     let highlighter = Highlighter::new(&assets.theme);
     patch
         .hunks
@@ -171,7 +205,9 @@ fn patch_colors(assets: &Assets, patch: &FilePatch) -> PatchSpans {
 struct Walk<'a> {
     assets: &'a Assets,
     highlighter: &'a Highlighter<'a>,
-    state: LineState,
+    /// `None` for a language the set does not know — the fences are still
+    /// read, the words are simply left the colour they were.
+    state: Option<LineState>,
     /// Only a combined diff — the form git prints for a path it stopped
     /// on — has its markers read as structure. See the module note.
     combined: bool,
@@ -216,80 +252,101 @@ impl<'a> Walk<'a> {
     fn new(
         assets: &'a Assets,
         highlighter: &'a Highlighter<'a>,
-        syntax: &SyntaxReference,
+        syntax: Option<&SyntaxReference>,
         combined: bool,
     ) -> Self {
         Self {
             assets,
             highlighter,
-            state: LineState {
+            state: syntax.map(|syntax| LineState {
                 parse: ParseState::new(syntax),
                 highlight: HighlightState::new(highlighter, ScopeStack::new()),
-            },
+            }),
             combined,
             region: None,
         }
     }
 
-    fn read(&mut self, line: &crate::parse::diff::DiffLine) -> LineSpans {
+    fn read(&mut self, line: &crate::parse::diff::DiffLine) -> LineColors {
         // `\ No newline at end of file` is git talking, not the file.
         if line.kind == DiffLineKind::NoNewline {
-            return Vec::new();
+            return LineColors::nothing();
         }
         if self.combined
             && let Some(marker) = conflict_marker(&line.text)
         {
             self.cross(marker);
-            // The marker keeps the colour its row already has — it is an
-            // added line of the working tree, and green is the truth
-            // about it.
-            return Vec::new();
+            // No runs: the fence is not the file talking, and the pane
+            // draws it as the scaffolding it is.
+            return LineColors {
+                spans: Vec::new(),
+                fence: true,
+            };
         }
-        self.paint(&line.text)
+        LineColors {
+            spans: self.paint(&line.text),
+            fence: false,
+        }
     }
 
     /// Moves the lexer over one of git's markers.
     fn cross(&mut self, marker: Marker) {
+        // Nothing to put back where no lexer is running — the fences of a
+        // language the set does not know are still fences.
+        if self.state.is_none() {
+            return;
+        }
         match marker {
             Marker::Open => {
-                self.region = Some(Region {
-                    entry: self.state.clone(),
+                self.region = self.state.clone().map(|entry| Region {
+                    entry,
                     ours_end: None,
                     in_ours: true,
                 });
             }
             Marker::Base | Marker::Split => {
+                let here = self.state.clone();
                 if let Some(region) = self.region.as_mut() {
                     if region.in_ours {
-                        region.ours_end = Some(self.state.clone());
+                        region.ours_end = here;
                         region.in_ours = false;
                     }
-                    self.state = region.entry.clone();
+                    self.state = Some(region.entry.clone());
                 }
             }
             Marker::Close => {
                 if let Some(region) = self.region.take() {
-                    self.state = region.ours_end.unwrap_or(region.entry);
+                    self.state = Some(region.ours_end.unwrap_or(region.entry));
                 }
             }
         }
     }
 
-    fn paint(&mut self, text: &str) -> LineSpans {
+    fn paint(&mut self, text: &str) -> Vec<Span> {
+        // Split so the lexer's own state can be borrowed apart from the
+        // set and the theme it reads against.
+        let Walk {
+            assets,
+            highlighter,
+            state,
+            ..
+        } = self;
+        let Some(state) = state.as_mut() else {
+            return Vec::new();
+        };
         // syntect's default set is the one built for lines that still
         // carry their terminator: several of its contexts close on `$`,
         // and a line handed over without one holds them open.
         let mut buf = String::with_capacity(text.len() + 1);
         buf.push_str(text);
         buf.push('\n');
-        let Ok(ops) = self.state.parse.parse_line(&buf, &self.assets.syntaxes) else {
+        let Ok(ops) = state.parse.parse_line(&buf, &assets.syntaxes) else {
             // A rule that would not run leaves the state where it was.
             // One line goes out plain; the pane does not go out empty.
             return Vec::new();
         };
-        let mut spans: LineSpans = Vec::new();
-        for (style, piece) in
-            HighlightIterator::new(&mut self.state.highlight, &ops, &buf, self.highlighter)
+        let mut spans: Vec<Span> = Vec::new();
+        for (style, piece) in HighlightIterator::new(&mut state.highlight, &ops, &buf, highlighter)
         {
             // The terminator was ours to add and is not part of the row.
             let len = piece.strip_suffix('\n').unwrap_or(piece).len();
@@ -400,10 +457,10 @@ diff --cc src/main.rs
         // `-    let x = 1;` is the second line of the only hunk.
         let deleted = colors.line(0, 0, 1);
         assert!(
-            deleted.len() > 1,
+            deleted.spans.len() > 1,
             "a line with a keyword and a number in it is not one colour: {deleted:?}"
         );
-        let total: usize = deleted.iter().map(|s| s.len).sum();
+        let total: usize = deleted.spans.iter().map(|s| s.len).sum();
         assert_eq!(total, "    let x = 1;".len(), "runs cover the whole line");
     }
 
@@ -419,7 +476,7 @@ diff --git a/A.kt b/A.kt
 ";
         let colors = colors(&patches(patch));
         assert!(
-            colors.line(0, 0, 0).len() > 1,
+            colors.line(0, 0, 0).spans.len() > 1,
             "Kotlin is one of the languages two-face adds to Sublime's own set"
         );
     }
@@ -455,10 +512,16 @@ Binary files a/logo.png and b/logo.png differ
         let colors = colors(&parsed);
         // Rows: 0 ` fn main() {`, 1 `<<<<<<<`, 2 `/* ours`, 3 `=======`,
         // 4 `let x = 2;`, 5 `>>>>>>>`, 6 `}`.
-        assert!(colors.line(0, 0, 1).is_empty(), "the marker keeps its row");
-        assert!(colors.line(0, 0, 3).is_empty(), "the marker keeps its row");
-        assert!(colors.line(0, 0, 5).is_empty(), "the marker keeps its row");
-        let theirs = colors.line(0, 0, 4);
+        for row in [1, 3, 5] {
+            let fence = colors.line(0, 0, row);
+            assert!(fence.fence, "row {row} is one of git's fences");
+            assert!(fence.spans.is_empty(), "and it is not read as code");
+        }
+        assert!(
+            !colors.line(0, 0, 4).fence,
+            "the side itself is not a fence"
+        );
+        let theirs = colors.line(0, 0, 4).spans.clone();
         assert!(
             theirs.len() > 1,
             "`let x = 2;` is code, not the inside of the comment `ours` opened: {theirs:?}"
@@ -474,10 +537,44 @@ Binary files a/logo.png and b/logo.png differ
         let colors = colors(&patches(CONFLICTED));
         let opened = colors.line(0, 0, 2);
         let after = colors.line(0, 0, 6);
-        assert_eq!(after.len(), 1, "still inside what `ours` opened: {after:?}");
         assert_eq!(
-            after.first().map(|s| s.color),
-            opened.last().map(|s| s.color)
+            after.spans.len(),
+            1,
+            "still inside what `ours` opened: {after:?}"
+        );
+        assert_eq!(
+            after.spans.first().map(|s| s.color),
+            opened.spans.last().map(|s| s.color)
+        );
+    }
+
+    #[test]
+    fn a_conflict_in_a_language_nobody_knows_still_has_its_fences() {
+        let patch = "\
+diff --cc notes.qqq
+--- a/notes.qqq
++++ b/notes.qqq
+@@@ -1,1 -1,1 +1,5 @@@
+++<<<<<<< HEAD
+++ours
+++=======
+++theirs
+++>>>>>>> other
+";
+        let colors = colors(&patches(patch));
+        assert!(
+            colors.line(0, 0, 0).fence,
+            "the fence is git's, not the file's"
+        );
+        assert!(colors.line(0, 0, 2).fence);
+        assert!(colors.line(0, 0, 4).fence);
+        assert!(
+            !colors.line(0, 0, 1).fence,
+            "and what is between them is not"
+        );
+        assert!(
+            colors.line(0, 0, 1).spans.is_empty(),
+            "nothing was found to colour it with"
         );
     }
 
@@ -498,8 +595,10 @@ diff --git a/README.md b/README.md
         let parsed = patches(patch);
         assert!(!parsed[0].is_combined);
         let colors = colors(&parsed);
+        let line = colors.line(0, 0, 1);
+        assert!(!line.fence, "nothing here is a fence");
         assert!(
-            !colors.line(0, 0, 1).is_empty(),
+            !line.spans.is_empty(),
             "read as text, so it has the colour text has"
         );
     }

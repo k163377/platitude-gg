@@ -436,6 +436,12 @@ pub struct DiffRow {
     /// nothing to say — a language the set has never heard of, a hunk
     /// heading, git's own `\ No newline` note, a conflict marker.
     pub rich: bool,
+    /// One of git's conflict fences (`<<<<<<<` / `|||||||` / `=======` /
+    /// `>>>>>>>`). It is a line of the working tree like any other and
+    /// carries the same background, but it is git talking rather than the
+    /// file, and the pane says so by dropping its voice
+    /// (デザイン規約 §シンタックスハイライト).
+    pub fence: bool,
     /// Which hunk of the file this row belongs to, and which line of that
     /// hunk it is (-1 on the hunk header). These are the same indices
     /// [`platitude_core::patch::HunkSelect`] addresses, so a row can be
@@ -519,6 +525,7 @@ pub fn flatten_patches(
                     new_no: -1,
                     text: String::from("(binary file)"),
                     rich: false,
+                    fence: false,
                     hunk: -1,
                     line: -1,
                     markers: String::new(),
@@ -539,6 +546,7 @@ pub fn flatten_patches(
                 new_no: -1,
                 text: hunk_header(hunk, &heading),
                 rich: false,
+                fence: false,
                 hunk: hunk_no,
                 line: -1,
                 markers: String::new(),
@@ -550,7 +558,8 @@ pub fn flatten_patches(
                     DiffLineKind::Deletion => "del",
                     DiffLineKind::NoNewline => "meta",
                 };
-                let markup = styled(&line.text, colors.line(patch_index, hunk_index, line_index));
+                let read = colors.line(patch_index, hunk_index, line_index);
+                let markup = styled(&line.text, &read.spans);
                 let rich = !markup.is_empty();
                 rows.push(DiffRow {
                     kind,
@@ -558,6 +567,7 @@ pub fn flatten_patches(
                     new_no: line.new_no.map_or(-1, |n| n as i32),
                     text: if rich { markup } else { line.text.clone() },
                     rich,
+                    fence: read.fence,
                     hunk: hunk_no,
                     line: i32::try_from(line_index).unwrap_or(-1),
                     markers: line.markers.clone(),

@@ -674,6 +674,8 @@ Rectangle {
                 /// (`encode::DiffRow`). Read from the row rather than
                 /// guessed at: a line of C++ is full of `<` and `>`.
                 required property bool rich
+                /// One of git's conflict fences (`encode::DiffRow`).
+                required property bool fence
                 required property int hunk
                 required property int line
                 required property string markers
@@ -780,9 +782,18 @@ Rectangle {
                         font.family: Theme.monoFamily
                         font.pixelSize: Theme.fontMd
                         // Where the theme said nothing — an uncoloured
-                        // language, a hunk heading, a conflict marker —
-                        // this is still the whole of the row's colour.
-                        color: diffRow.kind === "add" ? Theme.diffAddedFg
+                        // language, a hunk heading — this is still the
+                        // whole of the row's colour.
+                        //
+                        // A fence drops its voice: `<<<<<<<` is git's
+                        // scaffolding round the two sides, not a line the
+                        // file has anything to say with, and painting it
+                        // the added-line green puts the loudest thing in
+                        // the pane on the part nobody is reading
+                        // (デザイン規約 §シンタックスハイライト). It keeps
+                        // its background — it really is in the file.
+                        color: diffRow.fence ? Theme.textMuted
+                               : diffRow.kind === "add" ? Theme.diffAddedFg
                                : diffRow.kind === "del" ? Theme.diffRemovedFg
                                : diffRow.kind === "hunk" ? Theme.diffHunkHeaderFg
                                : diffRow.kind === "meta" ? Theme.textMuted

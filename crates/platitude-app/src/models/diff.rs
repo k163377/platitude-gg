@@ -31,6 +31,10 @@ pub struct DiffLineItem {
     /// rather than sniffing the string — a line of C++ full of `<>` is
     /// not markup, and guessing would eventually decide it was.
     rich: bool,
+    /// One of git's conflict fences. Not the same thing as `markers`
+    /// below: that says which side a line came from, this says the line
+    /// is not the file talking at all (see `encode::DiffRow`).
+    fence: bool,
     /// Where this row sits in the patch, so staging it needs no lookup.
     hunk: i32,
     line: i32,
@@ -232,6 +236,7 @@ impl DiffModel {
                 new_no: r.new_no,
                 text: r.text,
                 rich: r.rich,
+                fence: r.fence,
                 hunk: r.hunk,
                 line: r.line,
                 markers: r.markers,
