@@ -38,6 +38,7 @@ HoverToolButton 1.0 HoverToolButton.qml
 IdentIcon 1.0 IdentIcon.qml
 IdentityDialog 1.0 IdentityDialog.qml
 ImagePreviewCell 1.0 ImagePreviewCell.qml
+NameCell 1.0 NameCell.qml
 NavHeader 1.0 NavHeader.qml
 NavIcon 1.0 NavIcon.qml
 NavItemDelegate 1.0 NavItemDelegate.qml

@@ -156,66 +156,39 @@ Item {
         anchors.leftMargin: Theme.spaceMd + navRow.depth * Theme.spaceMd
         anchors.rightMargin: Theme.spaceSm
         spacing: Theme.spaceXs
-        // Every row opens with this slot, held open even when empty, so
-        // that at a given depth all names begin in the same column: a
-        // folder's fold arrow, a worktree file's change icon, and later
-        // the mark for a hidden branch all live here. Letting the slot
-        // collapse is what put a leaf's name to the *left* of the folder
-        // it sits under (layouts drop invisible children entirely).
-        Item {
-            Layout.preferredWidth: Theme.iconMd
-            Layout.preferredHeight: Theme.iconMd
-            Layout.alignment: Qt.AlignVCenter
-            NavIcon {
-                anchors.centerIn: parent
-                visible: navRow.folder
-                width: Theme.iconSm
-                height: Theme.iconSm
-                kind: "chevron"
-                // A folder row has no change code, so it keeps its fold
-                // state in that field (`models::nav::FOLDED`).
-                rotation: navRow.change === "FOLDED" ? 0 : 90
-                tint: Theme.textSecondary
-            }
-            ChangeIcon {
-                anchors.fill: parent
-                visible: !navRow.folder && navRow.kindHint === "wt"
-                change: navRow.change
-            }
-        }
-        // The name says where the ref is, the way a chip's does: grey for
-        // one this repository does not hold (デザイン規約 §ref の種別).
-        Label {
-            id: nameLabel
-            visible: !navRow.editing
-            Layout.fillWidth: true
-            text: navRow.name
-            elide: Text.ElideMiddle
-            font.weight: navRow.is_head ? Font.DemiBold : Font.Normal
-            color: navRow.folder ? Theme.textSecondary
-                   : navRow.is_head ? Theme.textLink
-                   : navRow.only_remote ? Theme.textSecondary : Theme.textPrimary
-            font.pixelSize: Theme.fontMd
+        // The mark and the name, in the part both file lists share
+        // (`NameCell`): the slot every row opens with — a folder's fold
+        // arrow, a worktree file's change icon, and later the mark for a
+        // hidden branch — and the name after it. A ref row has nothing to
+        // put in the slot and it stays open all the same, which is what
+        // keeps every name at a given depth beginning in one column.
+        NameCell {
+            id: nameCell
+            // The box below takes the row's slack while it is open, and
+            // the slot stays where it is: a name going into a box must not
+            // walk the columns beside it sideways.
+            Layout.fillWidth: !navRow.editing
+            showName: !navRow.editing
+            folder: navRow.folder
+            change: navRow.change
+            showChange: navRow.kindHint === "wt"
+            name: navRow.name
+            // `origPath` stays empty: this list names a file by what it is
+            // called now, and the pair a rename makes is read in the
+            // commit's own file list.
+            //
+            // The name says where the ref is, the way a chip's does: grey
+            // for one this repository does not hold (デザイン規約
+            // §ref の種別).
+            tone: navRow.is_head ? Theme.textLink
+                  : navRow.only_remote ? Theme.textSecondary
+                                       : Theme.textPrimary
+            weight: navRow.is_head ? Font.DemiBold : Font.Normal
             // A pending file whose change says something about its line
-            // endings. On the name's shoulder, the way a button in trouble
-            // wears one (`ActionButton.alert`) — **outside the layout**, so
-            // no row moves and the stage button's seat at the right edge
-            // stays its own. What it is about is the row's hover; the
-            // sentence in full is the diff pane's.
-            NavIcon {
-                visible: navRow.kindHint === "wt" && navRow.eol_mark
-                kind: "bang"
-                tint: Theme.warning
-                width: Theme.iconSm
-                height: Theme.iconSm
-                // Clamped: an elided name is wider than its box, and the
-                // mark belongs to the name that is on screen. Half a gap
-                // back into the name's own trailing bearing, so it reads
-                // as part of the word rather than as the next column.
-                x: Math.min(nameLabel.implicitWidth - Theme.spaceXs / 2,
-                            nameLabel.width - Theme.iconSm)
-                y: 0
-            }
+            // endings wears the mark on the name's shoulder. What it is
+            // about is the row's hover; the sentence in full is the diff
+            // pane's.
+            marked: navRow.kindHint === "wt" && navRow.eol_mark
         }
         // The name, in a box, where the name was. Nothing is asked before
         // it opens or when it is walked away from: what it costs is the
@@ -427,7 +400,7 @@ Item {
         // key). A ref folder stays silent either way: its full path only
         // reads the tree back (デザイン規約 §hover のツールチップ).
         if (navRow.folder)
-            return navRow.kindHint === "wt" && nameLabel.truncated
+            return navRow.kindHint === "wt" && nameCell.truncated
                    ? navRow.orig_path : ""
         if (navRow.kindHint === "remote")
             return qsTr("Switch to %1").arg(full)
@@ -447,7 +420,7 @@ Item {
         // the paths view's display name *is* the full path, so elision
         // alone leaves it unsaid (the menu rows' own rule, デザイン規約
         // §メニュー).
-        return full !== navRow.name || nameLabel.truncated ? full : ""
+        return full !== navRow.name || nameCell.truncated ? full : ""
     }
     /// Whether the words on the model are this row's. Only one row can be
     /// pointed at, so they are kept once there rather than on every row

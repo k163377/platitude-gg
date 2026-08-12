@@ -38,78 +38,19 @@ Item {
         visible: fileMouse.containsMouse
     }
 
-    RowLayout {
+    // The mark and the name are the part both file lists say the same way
+    // (`NameCell`), down to the arrow a rename puts between its two names.
+    // The whole of this row is that part; what a click means is the only
+    // thing it keeps to itself.
+    NameCell {
+        id: nameCell
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceSm + (fileRow.model.depth ?? 0) * Theme.spaceMd
         anchors.rightMargin: Theme.spaceSm
-        spacing: Theme.spaceXs
-        NavIcon {
-            visible: fileRow.isFolder
-            width: Theme.iconSm
-            height: Theme.iconSm
-            kind: "chevron"
-            // A folder row has no change code, so it keeps its fold state
-            // in that field (`models::nav::FOLDED`).
-            rotation: fileRow.changeText === "FOLDED" ? 0 : 90
-            tint: Theme.textSecondary
-        }
-        ChangeIcon {
-            visible: !fileRow.isFolder
-            change: fileRow.changeText
-            width: Theme.iconMd
-            height: Theme.iconMd
-        }
-        // A rename is two names with the way between them drawn rather
-        // than typed: U+2192 is East Asian Ambiguous, so the CJK families
-        // this app names hold it in a full-width cell and each draws its
-        // own arrow inside it (規約 §寸法「印はフォントの字に任せない」).
-        // Both names give ground when the row is narrow. The old name is
-        // capped at its own width so it shrinks without growing
-        // (app-ui.md §`Layout.fillWidth` を書いていない子は縮まない床);
-        // **the new one is not capped** — someone in the row has to take
-        // the slack, and a row where every child refuses it hands the
-        // leftover to the engine, which centres what it cannot fill
-        // (measured: plain rows drifted to the middle of the pane).
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 0
-            Label {
-                id: origName
-                visible: !fileRow.isFolder && fileRow.origPathText !== ""
-                Layout.fillWidth: true
-                Layout.maximumWidth: origName.implicitWidth
-                text: fileRow.origPathText
-                elide: Text.ElideMiddle
-                font.pixelSize: Theme.fontMd
-                color: Theme.textPrimary
-            }
-            Item {
-                visible: origName.visible
-                Layout.preferredWidth: renameMark.inkWidth + Theme.spaceXs * 2
-                Layout.preferredHeight: Theme.iconSm
-                Layout.alignment: Qt.AlignVCenter
-                NavIcon {
-                    id: renameMark
-                    anchors.centerIn: parent
-                    kind: "arrow"
-                    // Beside a word, so a step under the row's own mark,
-                    // with the line taken down by the same ratio
-                    // (app-ui.md §語の隣に立つ印).
-                    width: Theme.iconSm
-                    height: Theme.iconSm
-                    stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
-                    tint: Theme.textSecondary
-                }
-            }
-            Label {
-                id: newName
-                Layout.fillWidth: true
-                text: fileRow.nameText
-                elide: Text.ElideMiddle
-                font.pixelSize: Theme.fontMd
-                color: fileRow.isFolder ? Theme.textSecondary : Theme.textPrimary
-            }
-        }
+        folder: fileRow.isFolder
+        change: fileRow.changeText
+        name: fileRow.nameText
+        origPath: fileRow.origPathText
     }
     MouseArea {
         id: fileMouse
@@ -131,9 +72,9 @@ Item {
     // left to say.
     ToolTip.visible: (fileMouse.containsMouse || fileRow.tipPointedAt)
                      && (fileRow.isFolder
-                         ? newName.truncated
+                         ? nameCell.truncated
                          : (fileRow.nameText !== fileRow.pathText
-                            || newName.truncated || origName.truncated))
+                            || nameCell.truncated))
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: fileRow.pathText
 }
