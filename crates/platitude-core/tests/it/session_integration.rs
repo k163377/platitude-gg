@@ -2916,15 +2916,26 @@ async fn a_poll_rebuilds_the_graph_once() {
     // Both signals move at once: `new.txt` becomes a commit, so the ref
     // advances and the WIP row goes away.
     repo.commit_file("new.txt", "content\n", "outside commit");
-    session.refresh_poll();
-    sink.wait_for("the poll's rebuild", |evs| {
+    // A poll steps aside while another one is still running, so the tick
+    // that sees the commit need not be the first one asked for — the
+    // ticker would simply ask again. Asking again cannot add a rebuild of
+    // its own: a poll over a repository that has not moved is silent,
+    // which is exactly what the paragraph above established.
+    let rebuilt = sink.wait_for("the poll's rebuild", |evs| {
         evs.iter()
             .filter(|e| matches!(e, SessionEvent::LogReplaced { .. }))
             .count()
             .gt(&quiet_replacements)
             .then_some(())
-    })
-    .await;
+    });
+    tokio::pin!(rebuilt);
+    loop {
+        session.refresh_poll();
+        tokio::select! {
+            () = &mut rebuilt => break,
+            () = tokio::time::sleep(Duration::from_millis(100)) => {}
+        }
+    }
     // Give the second rebuild this guards against time to show up.
     tokio::time::sleep(Duration::from_millis(600)).await;
     assert_eq!(
