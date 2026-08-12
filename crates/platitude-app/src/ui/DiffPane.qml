@@ -318,11 +318,10 @@ Rectangle {
         return -1
     }
 
-    /// How wide one line-number column is: the widest number this diff
-    /// carries, plus the one gap that stands between everything in the
-    /// gutter (デザイン規約 §レイアウト初期値).
+    /// How wide a line number is: the widest one this diff carries
+    /// (デザイン規約 §レイアウト初期値).
     ///
-    /// Sized off the number rather than fixed, so the row reads
+    /// The columns are cut to it rather than fixed, so the row reads
     /// `gap 140 gap 153 gap }`. A fixed column leaves the slack of the
     /// numbers it is *not* holding to the left of the one it is, and
     /// that slack lands between the two numbers while the code — which
@@ -333,8 +332,7 @@ Rectangle {
     /// and `TopBar` measure: `TextMetrics` reports a few pixels tighter
     /// than the Label the number is actually set in. Whole pixels — two
     /// columns and the code's run are laid out from this one number.
-    readonly property int numberColW:
-        Math.ceil(numberMeasure.implicitWidth) + Theme.spaceXs
+    readonly property int numberW: Math.ceil(numberMeasure.implicitWidth)
     Label {
         id: numberMeasure
         visible: false
@@ -735,6 +733,21 @@ Rectangle {
                 readonly property int pickedInHunk:
                     diffPane.partial && diffRow.kind === "hunk"
                     ? diffPane.chosenIn(diffRow.hunk) : 0
+                /// The room held between the two line numbers for the mark
+                /// this line puts out for the hand (2026-08-13 ユーザー
+                /// 指示). A hairline of air on each side of it: the mark
+                /// belongs to neither number, and anything wider reads as
+                /// the new number having drifted off its own column.
+                ///
+                /// Where no line can be staged on its own the seat closes
+                /// to the plain gap — a diff with no pieces in it never
+                /// puts a mark out, and holding the room open would leave
+                /// a hole nothing ever stands in.
+                readonly property int stageSeatW:
+                    diffRow.kind === "hunk" ? 0
+                    : diffPane.partial
+                      ? Theme.iconMd + 2 * Theme.borderWidth
+                      : Theme.spaceXs
                 // The hunk under the pointer, and every line picked by
                 // hand, wear the wash a row anywhere else in the app wears
                 // under the pointer. A picked line also carries the mark
@@ -770,30 +783,39 @@ Rectangle {
                     spacing: 0
                     Label {
                         id: oldNoCol
-                        // The pane's edge, the two numbers and the code
-                        // all stand one `spaceXs` apart: the column is
-                        // cut to the widest number the diff has, and the
-                        // first one carries the gap on its left as well.
+                        // The pane's edge and the code stand one
+                        // `spaceXs` from the numbers; what stands between
+                        // the two numbers is the line's own mark
+                        // (`stageSeatW`), so this column keeps no padding
+                        // on that side — the seat carries the whole gap.
                         //
                         // Both columns close on a hunk heading, which has
                         // no line to number: the heading takes the row
                         // from its left edge.
                         width: diffRow.kind === "hunk"
-                               ? 0 : diffPane.numberColW + Theme.spaceXs
+                               ? 0 : Theme.spaceXs + diffPane.numberW
                         leftPadding: Theme.spaceXs
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
                         text: diffRow.old_no >= 0 ? diffRow.old_no : ""
                         horizontalAlignment: Text.AlignRight
-                        rightPadding: Theme.spaceXs
                         color: Theme.textMuted
                         font.family: Theme.monoFamily
                         font.pixelSize: Theme.fontSm
                     }
+                    // Where the mark below stands. Empty, and held open on
+                    // every row of a diff that can be taken apart: a
+                    // context line has no mark, and a seat that closed on
+                    // the rows without one would walk the numbers left and
+                    // right under the pointer.
+                    Item {
+                        width: diffRow.stageSeatW
+                        height: parent.height
+                    }
                     Label {
                         id: newNoCol
                         width: diffRow.kind === "hunk"
-                               ? 0 : diffPane.numberColW
+                               ? 0 : diffPane.numberW + Theme.spaceXs
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
                         text: diffRow.new_no >= 0 ? diffRow.new_no : ""
@@ -1004,12 +1026,18 @@ Rectangle {
                 // this size reads as a control that came loose from the
                 // toolbar, and the ground it needs is the one the pointer
                 // brings with it.
+                //
+                // It stands in the seat the row holds between the two
+                // numbers (`stageSeatW`), and stays out here rather than
+                // in it: the row-wide hover area below the columns is
+                // declared before this, so a mark laid out inside the
+                // gutter would have its clicks taken by that instead.
                 Rectangle {
                     visible: diffPane.partial
                              && (diffRow.underPointer || diffRow.picked)
                              && (diffRow.kind === "add"
                                  || diffRow.kind === "del")
-                    x: Theme.spaceXs
+                    x: oldNoCol.width + Theme.borderWidth
                     anchors.verticalCenter: parent.verticalCenter
                     width: Theme.iconMd
                     height: Theme.iconMd
