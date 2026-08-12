@@ -17,6 +17,10 @@ Item {
     required property string change
     required property string bucket
     required property string orig_path
+    /// The same source written the way this row writes names — what the
+    /// row shows. `orig_path` stays whole beside it: that one addresses a
+    /// diff (`models::nav`).
+    required property string orig_name
     required property bool is_head
     required property bool has_remote
     required property bool only_remote
@@ -179,8 +183,8 @@ Item {
             // out what moved. Empty on everything else — the model fills
             // it for staged files alone, which is the only side git names
             // a source on, and a folder row keeps its own path in the
-            // slot (the cell asks `folder` before drawing it).
-            origPath: navRow.orig_path
+            // slot beside it (`orig_path`, which this is not).
+            origPath: navRow.orig_name
             // The name says where the ref is, the way a chip's does: grey
             // for one this repository does not hold (デザイン規約
             // §ref の種別).

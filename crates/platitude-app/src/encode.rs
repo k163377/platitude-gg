@@ -375,6 +375,26 @@ pub fn ending_words(notice: Option<&platitude_core::eol::Notice>) -> EndingWords
     out
 }
 
+/// How a rename's source is written beside the new name.
+///
+/// The old path is cut back exactly as far as the new one is: a file that
+/// moved inside its own directory shows two bare names, and one that came
+/// from somewhere else keeps the path that says where. `cut` is how many
+/// bytes of the new path its row does not have to spell — the folders
+/// above it already do (a flat list passes 0, and both names stay whole).
+///
+/// Nothing is guessed from the paths themselves: a prefix the new name
+/// dropped is a prefix the old one can drop only if it had the same one.
+pub fn rename_source<'a>(orig_path: &'a str, path: &str, cut: usize) -> &'a str {
+    if cut == 0 || orig_path.is_empty() {
+        return orig_path;
+    }
+    let Some(prefix) = path.get(..cut) else {
+        return orig_path;
+    };
+    orig_path.strip_prefix(prefix).unwrap_or(orig_path)
+}
+
 /// Human-readable byte size ("67 B", "1.5 KB", "234 KB", "1.2 MB").
 /// 1024-based; one decimal below ten so small differences stay visible.
 pub fn human_size(bytes: u64) -> String {
@@ -546,6 +566,38 @@ fn hunk_header(hunk: &platitude_core::parse::diff::DiffHunk, heading: &str) -> S
 mod tests {
     use super::*;
     use platitude_core::parse::diff::parse_patch;
+
+    #[test]
+    fn a_rename_inside_one_directory_drops_the_prefix_both_names_share() {
+        // The tree row already sits under `docs/a`, so neither name has
+        // to spell it.
+        let path = "docs/a/new.txt";
+        let cut = path.len() - "new.txt".len();
+        assert_eq!(rename_source("docs/a/old.txt", path, cut), "old.txt");
+    }
+
+    #[test]
+    fn a_rename_from_elsewhere_keeps_the_path_that_says_where() {
+        let path = "docs/b/new.txt";
+        let cut = path.len() - "new.txt".len();
+        assert_eq!(rename_source("docs/a/old.txt", path, cut), "docs/a/old.txt");
+    }
+
+    #[test]
+    fn a_flat_list_leaves_both_names_whole() {
+        assert_eq!(
+            rename_source("docs/a/old.txt", "docs/a/new.txt", 0),
+            "docs/a/old.txt"
+        );
+    }
+
+    #[test]
+    fn a_cut_that_lands_inside_a_character_changes_nothing() {
+        // The offset comes from the row's own name, so this cannot
+        // happen — but a panic here would take the whole list down.
+        let path = "文/new.txt";
+        assert_eq!(rename_source("文/old.txt", path, 1), "文/old.txt");
+    }
 
     #[test]
     fn geometry_tokens_round_trip_by_eye() {

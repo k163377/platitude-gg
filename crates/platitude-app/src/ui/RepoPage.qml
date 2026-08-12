@@ -3644,8 +3644,13 @@ Item {
             const named = head === "staged" || head === "unstaged"
                           || head === "untracked" || head === "conflicts"
             page.showWip()
-            page.toggleDiff(named ? head : "unstaged",
-                            named ? arg.substring(cut + 1) : arg, "")
+            // The source of a rename comes off the model rather than out
+            // of the argument: a row hands it over when it is clicked, and
+            // a run that opened the destination alone would photograph a
+            // file git thinks appeared out of nowhere.
+            const wtPath = named ? arg.substring(cut + 1) : arg
+            page.toggleDiff(named ? head : "unstaged", wtPath,
+                            worktreeModel.origOf(wtPath))
             stageRowTimer.start()
         } else if (act === "diff-fold" || act === "diff-unfold"
                    || act === "diff-fold-by-hand"

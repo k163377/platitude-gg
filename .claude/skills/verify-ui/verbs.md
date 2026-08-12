@@ -53,7 +53,7 @@
 - `discard-staged`(引数はパス。同じ 1 行を unstaged / 未追跡 / staged の行から入る。メニューを出したまま止まり、行の文言を報告する)
 - `discard-file-go` / `delete-file-go`
 - `discard-staged-go`(行の長押しを走らせる)
-- `diff-file` / `line-tools` / `hunk-tools` / `pick-lines` / `stage-lines`
+- `diff-file` / `line-tools` / `hunk-tools` / `pick-lines` / `stage-lines`(**改名の source は渡さなくてよい** — ページが `NavSectionModel.origOf(path)` で行と同じ値を埋める。渡さない diff を git は「無から現れたファイル」として読むので、この経路が無いと**改名の diff は全行追加の絵にしかならない**)
 - `keep-place`(**引数は `<パス>` か `<bucket>:<パス>`** — bucket は `unstaged`(既定)/ `staged` / `untracked` / `conflicts`。diff を開く / 行がポインタの下で出す `+` を出す / **1 つ目の hunk 見出しの 2 語をポインタの下の色に戻し、その hunk 全体を照らす** / **1 つ目の hunk の変更行を 2 本選ぶ**(`picked_lines <件数>` を報告。見出しが `Stage 2 lines` になる)/ 選んでから書き込む / **contentY 400 まで読み進めてから partial stage し、戻った位置を `diff_place` で報告する**(20 hunk 級の diff が要る = 300 行超のファイルに 20 か所の変更)。hover は注入できないので行を名指しする。休息時の語は `textSecondary` なので、色の付いた形はこれらの動詞でしか撮れない。**新規ファイルは分ける道具を出さない**(規約 §diff の中のステージ)ので、`untracked:` で開くと `+` も hunk 見出しの 2 語も出ない —— それが正)
 - `eol-hover`(引数はパス。WIP のファイル行の改行コード警告 `!` を名指しし、カードを開く — hover は注入できないので実 hover と同じ 1 つのプロパティへ書く。報告行 `eol_hover path= card= text=` の **`card=` はカード自身の `opened`**。overlay.png に写る)
 - `eol-commit`(引数 `amend` 可。警告が index に乗った木で本文だけ入れ、コミットボタンにポインタを置く — 枠 + `!` + カードの絵で、何もコミットしない。報告行 `eol_commit staged= warned= card=`。**この 2 つは `--preset eol`** = 4 ケース + 印の付かない普通の変更 1 つ)

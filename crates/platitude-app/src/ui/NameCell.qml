@@ -30,7 +30,10 @@ RowLayout {
     property bool showChange: true
     property string name: ""
     /// Where a renamed file came from, drawn ahead of the new name with
-    /// the way between them. Empty on everything else.
+    /// the way between them. Empty on everything else. **Already written
+    /// the way the row writes names** — the models cut it back exactly as
+    /// far as they cut the new one (`encode::rename_source`), so nothing
+    /// here takes a path apart.
     property string origPath: ""
     /// The colour a named row wears. A folder is not asked: it is the
     /// quieter one wherever it appears, in both lists.
@@ -100,7 +103,12 @@ RowLayout {
             text: nameCell.origPath
             elide: Text.ElideMiddle
             font.pixelSize: Theme.fontMd
-            color: Theme.textPrimary
+            // The name the file has now is the subject; where it came
+            // from is context, and wears the colour the rest of the app
+            // gives context (§テキスト: author / 日時 / 短縮ハッシュ).
+            // **Not `textMuted`** — that one is the disabled signal
+            // (§無効), and a second meaning for it cannot be read apart.
+            color: Theme.textSecondary
         }
         Item {
             visible: origName.visible

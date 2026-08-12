@@ -23,6 +23,10 @@ pub struct FileItem {
     /// Display text: the last segment in tree view, the full path in
     /// path view.
     name: String,
+    /// The same for a rename's source, cut back exactly as far as `name`
+    /// is (`encode::rename_source`). `orig_path` stays whole beside it —
+    /// that one addresses a diff, this one is only read.
+    orig_name: String,
     depth: i32,
     folder: bool,
     collapsed: bool,
@@ -34,6 +38,7 @@ impl platitude_core::mem::Footprint for FileItem {
             + self.path.heap_bytes()
             + self.orig_path.heap_bytes()
             + self.name.heap_bytes()
+            + self.orig_name.heap_bytes()
     }
 }
 
@@ -56,6 +61,11 @@ fn build_file_tree(raw: &[FileItem], overrides: &HashMap<String, bool>) -> Vec<F
         }
         let mut leaf = entry.clone();
         leaf.name = rest.to_string();
+        // The folders above the row spell this much of its path; a
+        // rename's source gives up the same prefix when it had one.
+        let cut = entry.path.len() - rest.len();
+        leaf.orig_name =
+            crate::encode::rename_source(&entry.orig_path, &entry.path, cut).to_string();
         node.files.push(leaf);
     }
     fn emit(
@@ -350,6 +360,9 @@ impl DetailsModel {
                 path: f.path.clone(),
                 orig_path: f.orig_path.clone().unwrap_or_default(),
                 name: f.path.clone(),
+                // The flat view spells every row whole, both names with
+                // it; the tree cuts them together (`build_file_tree`).
+                orig_name: f.orig_path.clone().unwrap_or_default(),
                 ..Default::default()
             })
             .collect();

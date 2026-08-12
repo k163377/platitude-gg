@@ -52,6 +52,12 @@ pub struct NavItem {
     /// elided chain needs the path itself (a folder never uses the
     /// rename slot, the way `change` carries the fold state).
     orig_path: String,
+    /// The same source written the way the row writes names — what a
+    /// delegate shows (`encode::rename_source`). A made row never carries
+    /// one; the field is here because **the view's role table is one role
+    /// per field of this struct** (the test at the foot of this file), and
+    /// a role no field stands for cannot be asked for by name.
+    orig_name: String,
     is_head: bool,
     has_remote: bool,
     /// This repository does not hold the ref, so the name greys. Only tags
@@ -60,10 +66,6 @@ pub struct NavItem {
     /// all. Written as the negative of core's `here` so every other kind
     /// of row keeps it off by default.
     only_remote: bool,
-    /// The remote branch a local one speaks for (`origin/main`), empty for
-    /// every other kind of row. What a rename of this row offers to carry
-    /// over, and what the badge beside it is about.
-    upstream: String,
     /// PR-state badge. Real data arrives in Phase 4 (ls-remote refs/pull
     /// matching); until then PG_FAKE_PR previews the look.
     has_pr: bool,
@@ -85,7 +87,7 @@ impl platitude_core::mem::Footprint for NavItem {
             + self.bucket.heap_bytes()
             + self.group.heap_bytes()
             + self.orig_path.heap_bytes()
-            + self.upstream.heap_bytes()
+            + self.orig_name.heap_bytes()
     }
 }
 
@@ -414,6 +416,7 @@ enum Role {
     Bucket,
     Group,
     OrigPath,
+    OrigName,
     IsHead,
     HasRemote,
     OnlyRemote,
@@ -425,8 +428,15 @@ enum Role {
 }
 
 impl Role {
-    /// Every role, in the order their numbers run — which is the order
-    /// `NavItem` declares its fields in.
+    /// Every role the view is handed, in the order their numbers run —
+    /// which is the order `NavItem` declares its fields in, one for one
+    /// (the test at the foot of this file holds them together).
+    ///
+    /// **`Upstream` is not among them.** A `QModelItem` holds fifteen
+    /// fields at most, no delegate has ever asked for that one, and the
+    /// row that a rename's source has to reach is a delegate. It is still
+    /// answered — `upstream_of` reads it straight out of `field`, which
+    /// works it out from the entry rather than from a table.
     const ALL: [Self; 15] = [
         Self::Name,
         Self::Full,
@@ -435,10 +445,10 @@ impl Role {
         Self::Bucket,
         Self::Group,
         Self::OrigPath,
+        Self::OrigName,
         Self::IsHead,
         Self::HasRemote,
         Self::OnlyRemote,
-        Self::Upstream,
         Self::HasPr,
         Self::EolMark,
         Self::Depth,
@@ -462,6 +472,7 @@ impl Role {
             Self::Bucket => "bucket",
             Self::Group => "group",
             Self::OrigPath => "orig_path",
+            Self::OrigName => "orig_name",
             Self::IsHead => "is_head",
             Self::HasRemote => "has_remote",
             Self::OnlyRemote => "only_remote",
@@ -727,10 +738,16 @@ impl NavSectionModel {
                     Role::Bucket => Value::Said(&item.bucket),
                     Role::Group => Value::Said(&item.group),
                     Role::OrigPath => Value::Said(&item.orig_path),
+                    // A folder row has no rename to write down; the slot
+                    // beside this one is carrying its own path instead.
+                    Role::OrigName => Value::Said(""),
                     Role::IsHead => Value::Flag(item.is_head),
                     Role::HasRemote => Value::Flag(item.has_remote),
                     Role::OnlyRemote => Value::Flag(item.only_remote),
-                    Role::Upstream => Value::Said(&item.upstream),
+                    // Nothing made here speaks for a remote branch: the
+                    // rows that do arrive from the source, where this is
+                    // read off the entry.
+                    Role::Upstream => Value::Said(""),
                     Role::HasPr => Value::Flag(item.has_pr),
                     Role::EolMark => Value::Flag(item.eol_mark),
                     Role::Depth => Value::Number(item.depth),
@@ -820,6 +837,21 @@ impl NavSectionModel {
                     item: platitude_core::status::StatusItem::Tracked { orig_path, .. },
                     bucket: Bucket::Staged,
                 } => orig_path.as_deref().unwrap_or(""),
+                _ => "",
+            }),
+            // The same source, written the way this row writes names: the
+            // tree has already spelled `from` bytes of the new path in the
+            // folders above, and a source that shared them gives them up
+            // too (`encode::rename_source`). The flat view cuts nothing.
+            Role::OrigName => Value::Said(match of {
+                Entry::File {
+                    item: platitude_core::status::StatusItem::Tracked { orig_path, .. },
+                    bucket: Bucket::Staged,
+                } => crate::encode::rename_source(
+                    orig_path.as_deref().unwrap_or(""),
+                    of.name(),
+                    from,
+                ),
                 _ => "",
             }),
             // Kept once on the model rather than on every row: the marks
@@ -1412,6 +1444,32 @@ impl NavSectionModel {
     #[qslot]
     fn change_of(&self, path: String) -> String {
         self.told(Role::Full, &path, Role::Change)
+    }
+
+    /// Where a renamed file came from, by path — whole, the way a diff
+    /// wants it (a rename's diff is read by naming both of its sides).
+    ///
+    /// A hand never needs this: it reaches a diff through the row, which
+    /// is holding the source already. A headless run has only the path,
+    /// and without this it opens the destination alone — which git reads
+    /// as a file appearing out of nowhere.
+    ///
+    /// The first row of that path that names a source, not the first row
+    /// of that path: a file renamed and then edited again has a row on
+    /// each side, and only the staged one knows where it came from.
+    #[qslot]
+    fn orig_of(&self, path: String) -> String {
+        (0..self.all.len())
+            .filter_map(|at| self.all.entry(at))
+            .map(|of| Row::Shown {
+                of,
+                depth: 0,
+                from: 0,
+            })
+            .filter(|row| self.field(*row, Role::Full).as_str() == path)
+            .map(|row| self.field(row, Role::OrigPath).as_str().to_string())
+            .find(|orig| !orig.is_empty())
+            .unwrap_or_default()
     }
 }
 qml_register!(NavSectionModel, "NavSectionModel", singleton = false);

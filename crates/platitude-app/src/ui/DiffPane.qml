@@ -570,6 +570,28 @@ Rectangle {
             // it cannot fill (FileRowDelegate learned this the hard way).
             Item { Layout.fillWidth: true }
         }
+        // -- a diff whose body is empty. git prints headers and no hunks
+        //    for a rename that changed nothing, for a mode-only change and
+        //    for an empty file added, and a pane that answers all three
+        //    with a blank frame reads as one that failed to load. The
+        //    binary notice's seat and voice: one line about the file
+        //    rather than about anything in it.
+        //
+        //    Said the same way for all three rather than naming the
+        //    rename: what the pane knows is that there is nothing to
+        //    show, and git is not asked a second question to find out why.
+        Label {
+            visible: diffList.count === 0 && !diffPane.diffModel.loading
+                     && !diffPane.diffModel.isBinary
+                     && !diffPane.diffModel.unmerged
+                     && diffPane.diffModel.previewKind === ""
+                     && diffPane.diffModel.title !== ""
+            Layout.margins: Theme.spaceSm
+            Layout.fillWidth: true
+            elide: Text.ElideRight
+            text: qsTr("No changes to show")
+            color: Theme.textMuted
+        }
         RowLayout {
             visible: diffPane.diffModel.previewKind === "image"
             Layout.fillWidth: true

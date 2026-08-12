@@ -17,6 +17,9 @@ Item {
     readonly property string nameText: model.name ?? ""
     readonly property string pathText: model.path ?? ""
     readonly property string origPathText: model.orig_path ?? ""
+    /// The same source written the way this row writes names — what the
+    /// row shows. The one above stays whole: that one addresses a diff.
+    readonly property string origNameText: model.orig_name ?? ""
     readonly property bool isFolder: (model.folder ?? false) === true
 
     /// Stands in for the pointer where headless cannot put one, so a
@@ -50,7 +53,7 @@ Item {
         folder: fileRow.isFolder
         change: fileRow.changeText
         name: fileRow.nameText
-        origPath: fileRow.origPathText
+        origPath: fileRow.origNameText
     }
     MouseArea {
         id: fileMouse
