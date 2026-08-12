@@ -5,6 +5,7 @@
 use base64::Engine as _;
 use platitude_core::details::DiffTarget;
 use platitude_core::graph::{Segment, SegmentKind};
+use platitude_core::highlight::{DiffColors, Span};
 use platitude_core::parse::diff::{DiffLineKind, FilePatch};
 use platitude_core::patch::HunkSelect;
 use platitude_core::session::{LabelKind, RefLabel};
@@ -426,7 +427,15 @@ pub struct DiffRow {
     /// -1 when the side has no line number.
     pub old_no: i32,
     pub new_no: i32,
+    /// What the row draws — plain text, or the same line marked up for
+    /// `Text.StyledText` when [`DiffRow::rich`]. Only one of the two is
+    /// ever held: keeping the plain copy beside the marked-up one doubles
+    /// what a long diff costs and nothing reads it.
     pub text: String,
+    /// Whether [`DiffRow::text`] is markup. False wherever the theme had
+    /// nothing to say — a language the set has never heard of, a hunk
+    /// heading, git's own `\ No newline` note, a conflict marker.
+    pub rich: bool,
     /// Which hunk of the file this row belongs to, and which line of that
     /// hunk it is (-1 on the hunk header). These are the same indices
     /// [`platitude_core::patch::HunkSelect`] addresses, so a row can be
@@ -486,9 +495,16 @@ pub fn is_unmerged_only(patches: &[FilePatch]) -> bool {
 /// Flattens parsed patches into displayable rows (hunk headers inline).
 /// `binary_note` inserts the "(binary file)" meta row; the caller turns it
 /// off when a preview (image / size summary) already covers that file.
-pub fn flatten_patches(patches: &[FilePatch], binary_note: bool) -> Vec<DiffRow> {
+pub fn flatten_patches(
+    patches: &[FilePatch],
+    binary_note: bool,
+    colors: &DiffColors,
+) -> Vec<DiffRow> {
     let mut rows = Vec::new();
-    for patch in patches {
+    // The colours are addressed by the same three indices this walk is
+    // already counting out, so the two are read together rather than
+    // matched up afterwards (`platitude_core::highlight::DiffColors`).
+    for (patch_index, patch) in patches.iter().enumerate() {
         if patch.unmerged {
             // No patch, and no words for one here: what the two sides did
             // is a sentence the pane builds from the stage letters, in the
@@ -502,6 +518,7 @@ pub fn flatten_patches(patches: &[FilePatch], binary_note: bool) -> Vec<DiffRow>
                     old_no: -1,
                     new_no: -1,
                     text: String::from("(binary file)"),
+                    rich: false,
                     hunk: -1,
                     line: -1,
                     markers: String::new(),
@@ -515,13 +532,14 @@ pub fn flatten_patches(patches: &[FilePatch], binary_note: bool) -> Vec<DiffRow>
             } else {
                 format!(" {}", hunk.heading)
             };
-            let hunk_index = i32::try_from(hunk_index).unwrap_or(-1);
+            let hunk_no = i32::try_from(hunk_index).unwrap_or(-1);
             rows.push(DiffRow {
                 kind: "hunk",
                 old_no: -1,
                 new_no: -1,
                 text: hunk_header(hunk, &heading),
-                hunk: hunk_index,
+                rich: false,
+                hunk: hunk_no,
                 line: -1,
                 markers: String::new(),
             });
@@ -532,12 +550,15 @@ pub fn flatten_patches(patches: &[FilePatch], binary_note: bool) -> Vec<DiffRow>
                     DiffLineKind::Deletion => "del",
                     DiffLineKind::NoNewline => "meta",
                 };
+                let markup = styled(&line.text, colors.line(patch_index, hunk_index, line_index));
+                let rich = !markup.is_empty();
                 rows.push(DiffRow {
                     kind,
                     old_no: line.old_no.map_or(-1, |n| n as i32),
                     new_no: line.new_no.map_or(-1, |n| n as i32),
-                    text: line.text.clone(),
-                    hunk: hunk_index,
+                    text: if rich { markup } else { line.text.clone() },
+                    rich,
+                    hunk: hunk_no,
                     line: i32::try_from(line_index).unwrap_or(-1),
                     markers: line.markers.clone(),
                 });
@@ -545,6 +566,75 @@ pub fn flatten_patches(patches: &[FilePatch], binary_note: bool) -> Vec<DiffRow>
         }
     }
     rows
+}
+
+/// Lays the theme's runs over one line and writes what `Text.StyledText`
+/// reads. Empty when there are no runs — the row then draws its own text
+/// in the colour its kind gives it, which is what every row did before
+/// there was any of this.
+///
+/// Built here rather than in QML because it is data, not drawing: the
+/// pane is handed a string and shows it (規約 §QML にビジネスロジックを
+/// 書かない).
+fn styled(text: &str, spans: &[Span]) -> String {
+    if spans.is_empty() {
+        return String::new();
+    }
+    // An opening tag with six hex digits in it and a closing one, per
+    // run: twice the line is close enough to save the regrowth.
+    let mut out = String::with_capacity(text.len() * 2);
+    // `StyledText` reads the line as HTML does, and HTML throws leading
+    // whitespace away and folds the rest into single spaces — which on
+    // source code means every line starts at the left margin (2026-08-12
+    // 実測: a 0-space `pub fn` and a 4-space `let` landed on the same
+    // pixel). `<pre>` is the one thing in the subset that turns that off,
+    // and it costs nothing else: the row is one line either way.
+    out.push_str("<pre>");
+    let mut at = 0;
+    for span in spans {
+        let end = (at + span.len).min(text.len());
+        // The runs are byte offsets into this same string, so they cut
+        // where characters do. `None` would mean they did not, and the
+        // rest of the line goes out plain rather than half a character
+        // going out at all.
+        let Some(piece) = text.get(at..end) else {
+            break;
+        };
+        out.push_str("<font color=\"#");
+        push_hex(&mut out, span.color.r);
+        push_hex(&mut out, span.color.g);
+        push_hex(&mut out, span.color.b);
+        out.push_str("\">");
+        push_escaped(&mut out, piece);
+        out.push_str("</font>");
+        at = end;
+    }
+    // Whatever the runs did not reach — a lexer that stopped short still
+    // leaves a whole line on screen.
+    if let Some(rest) = text.get(at..) {
+        push_escaped(&mut out, rest);
+    }
+    out.push_str("</pre>");
+    out
+}
+
+/// The three characters `Text.StyledText` would otherwise read as markup.
+/// Source lines are full of them: `&&`, `->`, `<T>`.
+fn push_escaped(out: &mut String, text: &str) {
+    for ch in text.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            _ => out.push(ch),
+        }
+    }
+}
+
+fn push_hex(out: &mut String, byte: u8) {
+    for digit in [byte >> 4, byte & 0xf] {
+        out.push(char::from_digit(u32::from(digit), 16).unwrap_or('0'));
+    }
 }
 
 /// The `@@` line as git writes it: one range per old side, and a run of
@@ -565,7 +655,64 @@ fn hunk_header(hunk: &platitude_core::parse::diff::DiffHunk, heading: &str) -> S
 #[cfg(test)]
 mod tests {
     use super::*;
+    use platitude_core::highlight::Rgb;
     use platitude_core::parse::diff::parse_patch;
+
+    fn run(len: usize, r: u8, g: u8, b: u8) -> Span {
+        Span {
+            len,
+            color: Rgb { r, g, b },
+        }
+    }
+
+    #[test]
+    fn a_line_without_runs_stays_plain() {
+        assert!(styled("plain", &[]).is_empty());
+    }
+
+    #[test]
+    fn runs_become_markup_and_source_characters_are_escaped() {
+        // The second run is the three characters `StyledText` would
+        // otherwise read as markup, which is what source code is full of.
+        let out = styled(
+            "fn a<&b>",
+            &[run(3, 0x11, 0x22, 0x33), run(5, 0xaa, 0xbb, 0xcc)],
+        );
+        assert_eq!(
+            out,
+            "<pre><font color=\"#112233\">fn </font>\
+             <font color=\"#aabbcc\">a&lt;&amp;b&gt;</font></pre>"
+        );
+    }
+
+    #[test]
+    fn a_line_the_runs_fall_short_of_is_still_whole() {
+        let out = styled("ab cd", &[run(2, 0, 0, 0)]);
+        assert!(out.ends_with(" cd</pre>"), "{out}");
+    }
+
+    #[test]
+    fn rows_carry_the_markup_the_theme_gave_them() {
+        let patch = "\
+diff --git a/src/a.rs b/src/a.rs
+--- a/src/a.rs
++++ b/src/a.rs
+@@ -1,2 +1,2 @@
+ fn main() {
+-    let a = 1;
++    let a = 2;
+";
+        let patches = parse_patch(patch.as_bytes());
+        let rows = flatten_patches(&patches, true, &platitude_core::highlight::colors(&patches));
+        assert!(
+            rows.iter()
+                .filter(|r| r.kind == "add" || r.kind == "del" || r.kind == "ctx")
+                .all(|r| r.rich && r.text.starts_with("<pre>")),
+            "every line of a language the set knows is marked up: {rows:?}"
+        );
+        // The heading is the pane's own words, not the file's.
+        assert!(rows.first().is_some_and(|r| r.kind == "hunk" && !r.rich));
+    }
 
     #[test]
     fn a_rename_inside_one_directory_drops_the_prefix_both_names_share() {
@@ -796,7 +943,7 @@ mod tests {
 -old
 +new
 ";
-        let rows = flatten_patches(&parse_patch(patch.as_bytes()), true);
+        let rows = flatten_patches(&parse_patch(patch.as_bytes()), true, &DiffColors::default());
         assert_eq!(rows[0].kind, "hunk");
         assert!(rows[0].text.contains("@@ -1,2 +1,2 @@ heading"));
         assert_eq!(rows[1].kind, "ctx");
@@ -855,7 +1002,7 @@ mod tests {
 -removed
  tail
 ";
-        let rows = flatten_patches(&parse_patch(patch.as_bytes()), true);
+        let rows = flatten_patches(&parse_patch(patch.as_bytes()), true, &DiffColors::default());
         // The header carries its hunk but no line; the lines that follow
         // are numbered from zero within that hunk — exactly what
         // `HunkSelect` addresses.
@@ -958,11 +1105,18 @@ index bd43ee2..0000000
 diff --git a/x.png b/x.png
 Binary files a/x.png and b/x.png differ
 ";
-        let rows = flatten_patches(&parse_patch(patch.as_bytes()), true);
+        let rows = flatten_patches(&parse_patch(patch.as_bytes()), true, &DiffColors::default());
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].kind, "meta");
         // With a preview covering the file, the note is dropped entirely.
-        assert!(flatten_patches(&parse_patch(patch.as_bytes()), false).is_empty());
+        assert!(
+            flatten_patches(
+                &parse_patch(patch.as_bytes()),
+                false,
+                &DiffColors::default()
+            )
+            .is_empty()
+        );
     }
 
     /// `git diff` on a conflicted path, verbatim (git 2.55).
@@ -1031,7 +1185,11 @@ index 804ce7b,ba44bb1..0000000
 
     #[test]
     fn a_combined_diff_flattens_with_its_marker_columns() {
-        let rows = flatten_patches(&parse_patch(CONFLICTED.as_bytes()), true);
+        let rows = flatten_patches(
+            &parse_patch(CONFLICTED.as_bytes()),
+            true,
+            &DiffColors::default(),
+        );
         // The heading counts its sides on both ends, so the row reads the
         // way git printed it rather than as a unified one that lost a
         // range.
@@ -1097,12 +1255,16 @@ index 5b79a82,34a1fdf..0000000
         assert!(is_unmerged_only(&patches));
         assert!(!is_combined(&patches));
         assert!(!is_new_file(&patches), "it is not a new file either");
-        assert!(flatten_patches(&patches, true).is_empty());
+        assert!(flatten_patches(&patches, true, &DiffColors::default()).is_empty());
     }
 
     #[test]
     fn a_unified_hunk_heading_is_unchanged_by_the_combined_form() {
-        let rows = flatten_patches(&parse_patch(EDITED.as_bytes()), true);
+        let rows = flatten_patches(
+            &parse_patch(EDITED.as_bytes()),
+            true,
+            &DiffColors::default(),
+        );
         assert_eq!(rows[0].text, "@@ -1,2 +1,2 @@");
         assert!(rows.iter().all(|r| r.markers.is_empty()));
     }

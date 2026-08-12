@@ -745,6 +745,11 @@ pub enum SessionEvent {
         /// with the diff rather than following it: a notice that appears
         /// after the reader has started is worse than none.
         endings: Option<crate::eol::Notice>,
+        /// Syntax colours for the same lines, addressed the same way they
+        /// are. Rides with the diff for the reason a notice does, and one
+        /// more: text that lands grey and turns colour a moment later is
+        /// a flash on every file that is opened.
+        colors: crate::highlight::DiffColors,
     },
     /// A background refresh/query failed (op is a stable identifier).
     OpFailed {

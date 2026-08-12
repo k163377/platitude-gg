@@ -20,6 +20,25 @@ zune-jpeg = "0.5"
 zune-core = "0.5"
 compact_str = { version = "0.10.0", default-features = false, features = ["std"] }
 smallvec = { version = "1.15.2", features = ["union"] }
+# Syntax colours for the lines a diff shows (`highlight`). fancy-regex
+# rather than syntect's default Oniguruma: a build script that wants a C
+# compiler is the one thing this crate's dependencies are kept clear of
+# (see png above), and the whole price is four syntaxes fancy cannot
+# compile — ARM assembly, Babel JavaScript, PowerShell, Salt.
+syntect = { version = "5.3", default-features = false, features = [
+    "parsing",
+    "regex-fancy",
+    "dump-load",
+    "default-syntaxes",
+    "default-themes",
+] }
+# The languages Sublime's own set leaves out, Kotlin among them. Its
+# Kotlin is the Sublime Text 2-era one (Apache-2.0): it knows `suspend`
+# and `sealed` but not `lateinit`, and it leaves `@Annotation` plain.
+# Replacing or patching it is a P5 item (P5-確認事項 §同梱する構文定義).
+two-face = { version = "0.5", default-features = false, features = [
+    "syntect-fancy",
+] }
 
 [dev-dependencies]
 insta = "1"

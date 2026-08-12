@@ -24,7 +24,13 @@ pub struct DiffLineItem {
     kind: String,
     old_no: i32,
     new_no: i32,
+    /// What the row draws: the line, or the same line marked up in the
+    /// theme's colours when `rich` (see `encode::DiffRow`).
     text: String,
+    /// Whether `text` is markup. The pane reads the text format off this
+    /// rather than sniffing the string — a line of C++ full of `<>` is
+    /// not markup, and guessing would eventually decide it was.
+    rich: bool,
     /// Where this row sits in the patch, so staging it needs no lookup.
     hunk: i32,
     line: i32,
@@ -218,13 +224,14 @@ impl DiffModel {
         self.apply_endings(msg.endings.as_ref());
         self.apply_preview(msg.preview.as_ref());
         self.reset();
-        let rows = flatten_patches(&msg.patches, msg.preview.is_none())
+        let rows = flatten_patches(&msg.patches, msg.preview.is_none(), &msg.colors)
             .into_iter()
             .map(|r: DiffRow| DiffLineItem {
                 kind: r.kind.to_string(),
                 old_no: r.old_no,
                 new_no: r.new_no,
                 text: r.text,
+                rich: r.rich,
                 hunk: r.hunk,
                 line: r.line,
                 markers: r.markers,

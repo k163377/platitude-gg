@@ -103,6 +103,27 @@ impl RepoSession {
                             eol::settle(eol::read_one(&raw), baseline.as_ref())
                         }
                     };
+                    // Colouring is the one thing in this task that computes
+                    // rather than waits, so it goes to a blocking thread
+                    // instead of holding a runtime worker for as long as a
+                    // large diff takes. It is also somebody else's code:
+                    // if it goes down the diff must not go with it, and
+                    // the bytes are still here to be read again.
+                    let (patches, colors) = match tokio::task::spawn_blocking(move || {
+                        let colors = crate::highlight::colors(&patches);
+                        (patches, colors)
+                    })
+                    .await
+                    {
+                        Ok(pair) => pair,
+                        Err(e) => {
+                            tracing::warn!(error = %e, "syntax colours failed; showing the diff plain");
+                            (
+                                crate::parse::diff::parse_patch(&raw),
+                                crate::highlight::DiffColors::default(),
+                            )
+                        }
+                    };
                     let is_binary = patches.iter().any(|p| p.is_binary);
                     let preview =
                         preview::file_preview(&s.executor, &workdir, &target, is_binary, &cancel)
@@ -113,6 +134,7 @@ impl RepoSession {
                         preview,
                         fingerprint,
                         endings,
+                        colors,
                     });
                 }
                 Err(e) => s.fail("diff", e),

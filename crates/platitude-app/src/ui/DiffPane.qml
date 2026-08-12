@@ -670,6 +670,10 @@ Rectangle {
                 required property int old_no
                 required property int new_no
                 required property string text
+                /// Whether `text` is markup rather than the line itself
+                /// (`encode::DiffRow`). Read from the row rather than
+                /// guessed at: a line of C++ is full of `<` and `>`.
+                required property bool rich
                 required property int hunk
                 required property int line
                 required property string markers
@@ -766,9 +770,18 @@ Rectangle {
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
                         text: diffRow.text
+                        // A coloured line arrives already marked up, and
+                        // the plain ones must stay plain: `StyledText` on
+                        // a line of source would read its `<T>` as a tag
+                        // and drop it (規約 §シンタックスハイライト).
+                        textFormat: diffRow.rich ? Text.StyledText
+                                                 : Text.PlainText
                         elide: Text.ElideRight
                         font.family: Theme.monoFamily
                         font.pixelSize: Theme.fontMd
+                        // Where the theme said nothing — an uncoloured
+                        // language, a hunk heading, a conflict marker —
+                        // this is still the whole of the row's colour.
                         color: diffRow.kind === "add" ? Theme.diffAddedFg
                                : diffRow.kind === "del" ? Theme.diffRemovedFg
                                : diffRow.kind === "hunk" ? Theme.diffHunkHeaderFg

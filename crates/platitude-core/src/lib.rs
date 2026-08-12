@@ -14,6 +14,7 @@ pub mod eol;
 pub mod error;
 pub mod find;
 pub mod graph;
+pub mod highlight;
 pub mod identity;
 pub mod integrate;
 pub mod mem;
