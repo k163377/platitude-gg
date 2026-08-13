@@ -1991,11 +1991,59 @@ Item {
     }
     // The diff has to arrive before a row of it can be staged — or
     // thrown away, which stops at the question the pill answers.
+    //
+    // Asked for rather than waited out. How long a read takes is the
+    // repository's business, and a wait that suits a demo repo is one a
+    // real one walks past — but the worse half is that nothing noticed:
+    // every verb below acted on the empty pane, and a pane with nothing
+    // in it photographs the same whether the rows were late or the file
+    // was never dirty at all (2026-08-13 実測: `pick-lines` against this
+    // repository picked no lines and passed). So the tick asks, and when
+    // the asking runs out it acts anyway — the report goes out either
+    // way carrying `ready=`, which is what the run is failed on.
     Timer {
         id: stageRowTimer
-        interval: 800
+        interval: 50
+        repeat: true
+        // Where the asking stops. Long enough for a repository still
+        // reading tens of thousands of refs beside the diff, and short
+        // enough to leave the write some of these end with room to land
+        // before `PG_AUTO_QUIT_MS` takes the picture.
+        readonly property int waitMs: 5000
+        property int waited: 0
+        function begin() {
+            stageRowTimer.waited = 0
+            stageRowTimer.start()
+        }
+        // Whether what the verb is about to name is on screen. They all
+        // act on the first hunk, so a changed line in it is the one
+        // answer they share — "diff-file" alone reads the model instead
+        // of a row, and the pictures and binary files it also opens have
+        // no rows to find.
+        function ready() {
+            if (AppBackend.autoAct === "diff-file")
+                return diffPane.diffSettled()
+            return diffPane.firstChangedLine(0) >= 0
+        }
         onTriggered: {
+            stageRowTimer.waited += stageRowTimer.interval
+            const arrived = stageRowTimer.ready()
+            if (!arrived && stageRowTimer.waited < stageRowTimer.waitMs)
+                return
+            stageRowTimer.stop()
             const act = AppBackend.autoAct
+            // Which line the line-level verbs mean. Not 0: a hunk numbers
+            // its lines through the context it carries, and the context is
+            // not part of the change (see `firstChangedLine`).
+            const line = diffPane.firstChangedLine(0)
+            // Said before the acting, so a verb that goes on to fail its
+            // write says both. `waited=` is how long the asking went on
+            // (ticks, not a clock) — near enough to say which side of a
+            // fixed wait the read would have fallen on.
+            AppBackend.report("diff_row act=" + act + " ready=" + arrived
+                              + " rows=" + diffPane.view.count
+                              + " line=" + line
+                              + " waited=" + stageRowTimer.waited)
             // Nothing to do but be looked at: the diff is the shot. The
             // line endings get a line of their own — the sentence is in
             // the picture, but a picture cannot say which of the four the
@@ -2011,10 +2059,6 @@ Item {
                                       d.endingLines, d.endingScope, d.endingExt))
                 return
             }
-            // Which line the line-level verbs mean. Not 0: a hunk numbers
-            // its lines through the context it carries, and the context is
-            // not part of the change (see `firstChangedLine`).
-            const line = diffPane.firstChangedLine(0)
             // The squares a line only puts out under the pointer, named
             // rather than hovered (hover cannot be injected on Windows).
             if (act === "line-tools") {
@@ -2038,16 +2082,24 @@ Item {
             // partial stage. `diff_place` is reported by the restore.
             if (act === "keep-place") {
                 diffPane.scrollTo(400)
-                page.stageSelection(0, diffPane.firstChangedLine(0))
+                page.stageSelection(0, line)
                 return
             }
             if (act === "pick-lines" || act === "stage-lines") {
                 // The path came in as the argument, so how many lines to
                 // pick is not something this verb can be told: two is what
                 // makes a heading say a count rather than a hunk.
+                //
+                // Both numbers go out, and `any=` is the one judged. A
+                // first hunk with a single changed line in it answers
+                // with `got=1`, which is a heading that names a hunk
+                // rather than a count — worth seeing in the log, but the
+                // fixture's doing, not the wiring's. Nothing picked at
+                // all is the wiring's, and it used to pass.
                 const want = 2
-                AppBackend.report("picked_lines "
-                                  + diffPane.chooseLines(0, want))
+                const got = diffPane.chooseLines(0, want)
+                AppBackend.report("picked_lines any=" + (got > 0)
+                                  + " got=" + got + " want=" + want)
                 if (act === "stage-lines")
                     page.stageChosenLines()
                 return
@@ -3651,7 +3703,7 @@ Item {
             const wtPath = named ? arg.substring(cut + 1) : arg
             page.toggleDiff(named ? head : "unstaged", wtPath,
                             worktreeModel.origOf(wtPath))
-            stageRowTimer.start()
+            stageRowTimer.begin()
         } else if (act === "diff-fold" || act === "diff-unfold"
                    || act === "diff-fold-by-hand"
                    || act === "diff-fold-by-rename"

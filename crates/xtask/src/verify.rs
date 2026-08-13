@@ -698,6 +698,35 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // beside it a pane that refused every step from the start — never
         // on screen, never focused — would read the same.
         "diff-step-edge" => Some("moved=true atEnd=true stopped=true focused=true"),
+        // Everything that acts on a row of a diff. The failure these
+        // share is the one no camera catches: a pane the rows never
+        // reached — because the read was still out, or because the file
+        // was not dirty in the first place — is a pane with nothing in
+        // it, and so is a file with nothing to show. The verb then names
+        // a row that is not there, picks no lines, or holds a button
+        // nobody drew, and none of it writes, so the run came back green
+        // with an empty picture (2026-08-13 実測: `pick-lines` against
+        // platitude-gg itself reported `picked_lines 0` and passed).
+        // `ready=` is the pane's own answer to "were the rows here when
+        // I acted", and it is worth spelling per verb: the wanted line
+        // names the act, so a run whose hook never reached the diff at
+        // all cannot borrow another verb's report to pass on.
+        "diff-file" => Some("diff_row act=diff-file ready=true"),
+        "line-tools" => Some("diff_row act=line-tools ready=true"),
+        "hunk-tools" => Some("diff_row act=hunk-tools ready=true"),
+        "stage-hunk" => Some("diff_row act=stage-hunk ready=true"),
+        "stage-line" => Some("diff_row act=stage-line ready=true"),
+        "keep-place" => Some("diff_row act=keep-place ready=true"),
+        "discard-hunk" => Some("diff_row act=discard-hunk ready=true"),
+        "discard-hunk-go" => Some("diff_row act=discard-hunk-go ready=true"),
+        // These two answer with a count of their own, so the count is
+        // what they are judged on rather than the line above — it says
+        // the same thing (nothing can be picked out of rows that are not
+        // there) and says it where the reader is already looking. Only
+        // "none at all" fails: a first hunk carrying a single changed
+        // line reports `got=1`, and that is the fixture choosing a
+        // heading that names a hunk, not the wiring failing to name one.
+        "pick-lines" | "stage-lines" => Some("picked_lines any=true"),
         _ => None,
     };
     let outcome = Outcome {
