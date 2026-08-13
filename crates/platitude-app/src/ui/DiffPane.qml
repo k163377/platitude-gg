@@ -318,6 +318,18 @@ Rectangle {
         return -1
     }
 
+    /// Automation: whether the read this pane was asked for is over and
+    /// came back with something to look at. `firstChangedLine` is the
+    /// answer the line-level verbs want — it is only true once the rows
+    /// exist *and* the list has built them, which is what naming a row
+    /// needs — but a verb that only opens a file has pictures and binary
+    /// files to allow for, and those have no rows at all.
+    function diffSettled() {
+        const m = diffPane.diffModel
+        return !m.loading && (diffList.count > 0 || m.isBinary
+                              || m.previewKind !== "")
+    }
+
     /// How wide a line number is: the widest one this diff carries
     /// (デザイン規約 §レイアウト初期値).
     ///
