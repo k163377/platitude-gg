@@ -2115,6 +2115,45 @@ Item {
                 diffPane.completeHold()
         }
     }
+    // A reader who scrolled before the colours landed. The rows arrive
+    // plain and the whole list is swapped again when the colours turn up
+    // (`DiffModel::lay_out_rows`), which is the one thing that swap must
+    // not cost: the place being read. Two ticks, because the state to
+    // photograph is on the far side of an event nothing else waits for.
+    Timer {
+        id: colourPlaceTimer
+        interval: 50
+        repeat: true
+        readonly property int waitMs: 8000
+        property int waited: 0
+        property bool scrolled: false
+        function begin() {
+            colourPlaceTimer.waited = 0
+            colourPlaceTimer.scrolled = false
+            colourPlaceTimer.start()
+        }
+        onTriggered: {
+            colourPlaceTimer.waited += colourPlaceTimer.interval
+            const late = colourPlaceTimer.waited >= colourPlaceTimer.waitMs
+            if (!colourPlaceTimer.scrolled) {
+                // Read down the file the moment the rows are there, which
+                // is well before the colours are.
+                if (diffPane.firstChangedLine(0) < 0 && !late)
+                    return
+                diffPane.scrollTo(400)
+                colourPlaceTimer.scrolled = true
+                return
+            }
+            if (!diffPane.diffModel.coloured && !late)
+                return
+            colourPlaceTimer.stop()
+            AppBackend.report("colour_place coloured="
+                              + diffPane.diffModel.coloured
+                              + " at=" + Math.round(diffPane.view.contentY)
+                              + " rows=" + diffPane.view.count
+                              + " waited=" + colourPlaceTimer.waited)
+        }
+    }
     // git's refusal has to come back before the row it turns into a held
     // one can be held — or photographed.
     Timer {
@@ -3704,6 +3743,12 @@ Item {
             page.toggleDiff(named ? head : "unstaged", wtPath,
                             worktreeModel.origOf(wtPath))
             stageRowTimer.begin()
+        } else if (act === "colour-place") {
+            // Scrolls into a diff while its colours are still being worked
+            // out, and reports where the view stands once they land.
+            page.showWip()
+            page.toggleDiff("unstaged", arg, "")
+            colourPlaceTimer.begin()
         } else if (act === "diff-fold" || act === "diff-unfold"
                    || act === "diff-fold-by-hand"
                    || act === "diff-fold-by-rename"

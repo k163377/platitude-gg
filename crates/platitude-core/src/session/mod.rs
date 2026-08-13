@@ -733,7 +733,9 @@ pub enum SessionEvent {
     },
     DiffLoaded {
         target: DiffTarget,
-        patches: Vec<FilePatch>,
+        /// Shared with the colouring that follows, which reads the same
+        /// lines to say what colour each run of them is.
+        patches: Arc<Vec<FilePatch>>,
         /// Image bytes / binary sizes when the text diff is not the whole
         /// story (`None` for ordinary text files).
         preview: Option<FilePreview>,
@@ -745,10 +747,24 @@ pub enum SessionEvent {
         /// with the diff rather than following it: a notice that appears
         /// after the reader has started is worse than none.
         endings: Option<crate::eol::Notice>,
-        /// Syntax colours for the same lines, addressed the same way they
-        /// are. Rides with the diff for the reason a notice does, and one
-        /// more: text that lands grey and turns colour a moment later is
-        /// a flash on every file that is opened.
+    },
+    /// Syntax colours for the lines of a diff that has already been sent.
+    ///
+    /// Behind the rows rather than with them. Colouring is the one part of
+    /// reading a diff that computes rather than waits, and it is not
+    /// small: 6,000 lines of Rust measured 951ms against 3ms for the same
+    /// text under a name nothing can be said about (2026-08-13 実測),
+    /// which is most of a second on the wrong side of the 100ms an
+    /// interaction is allowed. So the rows go out the moment git answers
+    /// and the colours follow — a large file reads black and white for a
+    /// beat and then takes its colour, where before it showed nothing at
+    /// all for as long as the colouring took.
+    ///
+    /// A diff nobody is on any more never raises this: the reader has
+    /// moved, and the cost of colouring what they left would be paid out
+    /// of the file they are on now (`RepoSession::diff_epoch`).
+    DiffColoured {
+        target: DiffTarget,
         colors: crate::highlight::DiffColors,
     },
     /// A background refresh/query failed (op is a stable identifier).
@@ -1177,6 +1193,14 @@ pub struct RepoSession {
     log_options: Mutex<LogOptions>,
     log_gen: AtomicU64,
     log_cancel: Mutex<Option<CancellationToken>>,
+    /// Which diff read is the current one. Bumped by every
+    /// [`RepoSession::load_diff`], and read again just before the colours
+    /// for that diff would be worked out: a reader going down a commit's
+    /// file list starts a read per row, and colouring costs enough (see
+    /// [`SessionEvent::DiffColoured`]) that the ones nobody is waiting for
+    /// any more are worth not doing at all. The rows are unaffected —
+    /// those are cheap, and a stale one is dropped by the pane on arrival.
+    diff_epoch: AtomicU64,
     /// Dirty working tree → the log stream prepends a synthetic WIP row.
     wip_dirty: std::sync::atomic::AtomicBool,
     /// Set by [`RepoSession::ask_merge_tool`] to have the next status read
@@ -1318,6 +1342,7 @@ impl RepoSession {
             shared: Arc::new(Mutex::new(Shared::default())),
             log_options: Mutex::new(LogOptions::default()),
             log_gen: AtomicU64::new(0),
+            diff_epoch: AtomicU64::new(0),
             log_cancel: Mutex::new(None),
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
             merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),

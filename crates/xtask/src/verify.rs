@@ -727,6 +727,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // line reports `got=1`, and that is the fixture choosing a
         // heading that names a hunk, not the wiring failing to name one.
         "pick-lines" | "stage-lines" => Some("picked_lines any=true"),
+        // The colours that land behind the rows, and the place they must
+        // not cost. Neither half is a picture: a diff whose colours never
+        // came frames as a language the set has no rules for, and a view
+        // thrown back to the top frames as one nobody had scrolled. `at=`
+        // is `scrollTo`'s own number read back after the swap — 400 or
+        // the reader lost their place (2026-08-13 実測: rebuilding the
+        // list read `at=0`).
+        "colour-place" => Some("colour_place coloured=true at=400"),
         _ => None,
     };
     let outcome = Outcome {

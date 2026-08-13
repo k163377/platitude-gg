@@ -77,12 +77,18 @@ impl RepoSession {
         });
     }
 
-    /// Loads a unified diff for one file.
+    /// Loads a unified diff for one file, and its colours behind it.
     pub fn load_diff(self: &Arc<Self>, target: DiffTarget) {
         let Some(workdir) = self.workdir() else {
             return;
         };
         let s = Arc::clone(self);
+        // Claimed before anything is read, so the colouring below can ask
+        // whether this is still the file being read (see `diff_epoch`).
+        let epoch = s
+            .diff_epoch
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
         self.runtime.spawn(async move {
             let cancel = s.root_cancel.clone();
             // What git's settings say, and the neighbours if they are the
@@ -115,42 +121,72 @@ impl RepoSession {
                             eol::settle(eol::read_one(&raw), baseline.as_ref())
                         }
                     };
-                    // Colouring is the one thing in this task that computes
-                    // rather than waits, so it goes to a blocking thread
-                    // instead of holding a runtime worker for as long as a
-                    // large diff takes. It is also somebody else's code:
-                    // if it goes down the diff must not go with it, and
-                    // the bytes are still here to be read again.
-                    let (patches, colors) = match tokio::task::spawn_blocking(move || {
-                        let colors = crate::highlight::colors(&patches, source.as_deref());
-                        (patches, colors)
-                    })
-                    .await
-                    {
-                        Ok(pair) => pair,
-                        Err(e) => {
-                            tracing::warn!(error = %e, "syntax colours failed; showing the diff plain");
-                            (
-                                crate::parse::diff::parse_patch(&raw),
-                                crate::highlight::DiffColors::default(),
-                            )
-                        }
-                    };
+                    let patches = Arc::new(patches);
                     let is_binary = patches.iter().any(|p| p.is_binary);
                     let preview =
                         preview::file_preview(&s.executor, &workdir, &target, is_binary, &cancel)
                             .await;
                     s.sink.event(SessionEvent::DiffLoaded {
-                        target,
-                        patches,
+                        target: target.clone(),
+                        patches: Arc::clone(&patches),
                         preview,
                         fingerprint,
                         endings,
-                        colors,
                     });
+                    s.paint_diff(target, patches, source, epoch);
                 }
                 Err(e) => s.fail("diff", e),
             }
         });
+    }
+
+    /// Works out the colours for a diff already on its way to the pane and
+    /// sends them after it ([`SessionEvent::DiffColoured`]).
+    ///
+    /// Two things keep this off the reader's path. It is the one part of
+    /// reading a diff that computes rather than waits, so it goes to a
+    /// blocking thread rather than holding a runtime worker for as long as
+    /// a large file takes; and it is skipped outright once the reader has
+    /// moved on, which is what stops a walk down a commit's file list from
+    /// leaving a colouring per row running behind it.
+    ///
+    /// It is also somebody else's code. If it goes down, the diff does not
+    /// go with it — the rows are already gone out, and a panic here costs
+    /// the file its colours and nothing else.
+    fn paint_diff(
+        self: &Arc<Self>,
+        target: DiffTarget,
+        patches: Arc<Vec<FilePatch>>,
+        source: Option<String>,
+        epoch: u64,
+    ) {
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            if !s.diff_is_current(epoch) {
+                return;
+            }
+            let colors = match tokio::task::spawn_blocking(move || {
+                crate::highlight::colors(&patches, source.as_deref())
+            })
+            .await
+            {
+                Ok(colors) => colors,
+                Err(e) => {
+                    tracing::warn!(error = %e, "syntax colours failed; the diff stays plain");
+                    return;
+                }
+            };
+            // Asked again: a long colouring can be overtaken while it runs,
+            // and the pane would drop the answer anyway.
+            if !s.diff_is_current(epoch) {
+                return;
+            }
+            s.sink.event(SessionEvent::DiffColoured { target, colors });
+        });
+    }
+
+    /// Whether the diff read that claimed `epoch` is still the latest one.
+    fn diff_is_current(&self, epoch: u64) -> bool {
+        self.diff_epoch.load(std::sync::atomic::Ordering::SeqCst) == epoch
     }
 }

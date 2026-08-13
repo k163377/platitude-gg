@@ -242,18 +242,36 @@ pub struct StatusMsg {
     pub eol_marks: Arc<Vec<platitude_core::session::EolMark>>,
 }
 
+/// What the diff feed carries. Two messages rather than one, because the
+/// colours come out behind the rows they belong to — see
+/// [`platitude_core::session::SessionEvent::DiffColoured`] for why.
 #[derive(Debug)]
-pub struct DiffMsg {
-    pub target: DiffTarget,
-    pub patches: Vec<FilePatch>,
-    pub preview: Option<FilePreview>,
-    /// Fingerprint of the diff's source bytes; selections carry it back
-    /// so a partial write can refuse a drifted diff.
-    pub fingerprint: u64,
-    /// What the same bytes said about line endings, if anything.
-    pub endings: Option<platitude_core::eol::Notice>,
-    /// Syntax colours for the same lines, addressed the way the rows are.
-    pub colors: platitude_core::highlight::DiffColors,
+pub enum DiffMsg {
+    Loaded {
+        target: DiffTarget,
+        patches: Arc<Vec<FilePatch>>,
+        preview: Option<FilePreview>,
+        /// Fingerprint of the diff's source bytes; selections carry it
+        /// back so a partial write can refuse a drifted diff.
+        fingerprint: u64,
+        /// What the same bytes said about line endings, if anything.
+        endings: Option<platitude_core::eol::Notice>,
+    },
+    /// Colours for the lines of the diff named by `target`, addressed the
+    /// way the rows are. Never arrives for a diff nobody is on.
+    Coloured {
+        target: DiffTarget,
+        colors: platitude_core::highlight::DiffColors,
+    },
+}
+
+impl DiffMsg {
+    /// The diff this is about, whichever half it is.
+    pub fn target(&self) -> &DiffTarget {
+        match self {
+            DiffMsg::Loaded { target, .. } | DiffMsg::Coloured { target, .. } => target,
+        }
+    }
 }
 
 /// A queue whose consumer is one QML object on the Qt main thread.
@@ -484,16 +502,28 @@ impl SessionSink for BridgeSink {
                 preview,
                 fingerprint,
                 endings,
-                colors,
             } => {
-                self.feeds.diff.push_replace(DiffMsg {
+                // Kept rather than replaced, unlike every other feed here.
+                // Two messages now belong to one diff — rows, then colours
+                // — so replacing would drop one half of a pair. It also
+                // fixes an older fault of its own: two diffs asked for a
+                // moment apart need not finish in that order, and the
+                // newest *arrival* is therefore not always what the pane
+                // is waiting for. Replacing threw the wanted one away
+                // whenever a slower earlier read landed on top of it, and
+                // the pane, with nothing left to match, stayed on the file
+                // it was on before. `drain` picks by key and drops the
+                // rest, so nothing accumulates (2026-08-13 実測).
+                self.feeds.diff.push(DiffMsg::Loaded {
                     target,
                     patches,
                     preview,
                     fingerprint,
                     endings,
-                    colors,
                 });
+            }
+            SessionEvent::DiffColoured { target, colors } => {
+                self.feeds.diff.push(DiffMsg::Coloured { target, colors });
             }
             SessionEvent::CommandStarted {
                 id,
