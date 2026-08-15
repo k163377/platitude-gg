@@ -261,6 +261,19 @@ ColumnLayout {
         detailsPane.baseBody = detailsPane.details.messageBody
         subjectArea.text = detailsPane.baseSubject
         bodyArea.text = detailsPane.baseBody
+        // A pull, and a reading position, belong to the commit they were
+        // made on — the next one opens at its own rest height and its own
+        // first line. The summary box needs the same caret treatment for
+        // the same reason (see DescriptionBox.resetForNewMessage): a
+        // subject long enough to scroll otherwise opens on its last line.
+        subjectArea.cursorPosition = 0
+        detailsPane.summaryToTop()
+        Qt.callLater(detailsPane.summaryToTop)
+        bodyArea.resetForNewMessage()
+    }
+    function summaryToTop() {
+        if (subjectView.contentItem)
+            subjectView.contentItem.contentY = 0
     }
     /// Put the commit's own message back.
     function revertMessage() {
@@ -299,9 +312,48 @@ ColumnLayout {
     readonly property color descriptionColor: bodyArea.textColor
     readonly property bool descriptionFocused: bodyArea.focused
 
+    // -- the message pair is one block of one height --
+    //
+    // The summary and the description read as a single block, and that
+    // block's height does not move with either one's text (デザイン規約
+    // §コミットメッセージの 2 つの枠): one line of summary, the gap, and
+    // five lines of description. A summary that wraps takes its extra
+    // lines out of the description rather than pushing everything below
+    // the pair down the pane.
+    //
+    // Held as one number that the layout splits, not as two heights that
+    // have to add up: the description fills what the summary leaves, so
+    // the total is exact whatever the font's line height rounds to.
+    /// What the summary box needs for its own lines, capped — nothing in
+    /// git bounds a summary, and one pasted paragraph grew this box to
+    /// 650px, which pushed the description off the pane and left the
+    /// author row over the window's own footer (measured at a 2,000-byte
+    /// subject). Ceiled, so the box is never a fraction of a pixel
+    /// shorter than the text inside it — that is the difference between
+    /// a scroll bar and no scroll bar.
+    readonly property real summaryNeed:
+        Math.min(Math.ceil(subjectArea.implicitHeight) + Theme.spaceSm,
+                 Theme.messageMaxHeight)
+    /// The description gives up its lines to a wrapping summary down to
+    /// two, and no further.
+    readonly property real descFloor: 2 * Theme.fontMdLine + Theme.spaceSm
+    /// The pair's resting height: one summary line and five description
+    /// lines, with the gap between them.
+    readonly property real pairRest:
+        Theme.fontLgLine + Theme.spaceSm + Theme.spaceXs + Theme.messageMaxHeight
+    /// What the pair is laid out at. Past the point where the description
+    /// has given its last line, the block itself grows — the summary's own
+    /// cap is what stops that.
+    readonly property real pairBase:
+        Math.max(detailsPane.pairRest,
+                 detailsPane.summaryNeed + Theme.spaceXs + detailsPane.descFloor)
+    /// What the description is allotted at rest: the rest of the block.
+    readonly property real descRest:
+        detailsPane.pairBase - detailsPane.summaryNeed - Theme.spaceXs
+
     // -- what this pane lends the description box --
     //
-    // The box carries the ceiling and the grip (`DescriptionBox`); the
+    // The box carries the pull and the grip (`DescriptionBox`); the
     // bound is the pane's, because only the pane knows what stands under
     // it (デザイン規約 §コミットメッセージの 2 つの枠). The file list is
     // the one thing here that gives, and two rows is where it stops being
@@ -502,18 +554,17 @@ ColumnLayout {
                 visible: detailsPane.details.shaHex !== ""
 
                 // -- message first, like the commit editor: a prominent summary
-                // box and a dimmer description box --
+                // box and a dimmer description box, the two of them one block
+                // of one height (デザイン規約 §コミットメッセージの 2 つの枠) --
+                ColumnLayout {
+                    id: messagePair
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: detailsPane.pairBase + bodyArea.extra
+                    spacing: Theme.spaceXs
+
                 Rectangle {
                     Layout.fillWidth: true
-                    // Capped and scrolled, the way the description box below it
-                    // already is. Nothing in git bounds a summary — it took a
-                    // megabyte in the same measurement — and one pasted paragraph
-                    // grew this box to 650px, which pushed the description off
-                    // the pane and left the author row drawn over the window's
-                    // own footer (measured at a 2,000-byte subject).
-                    Layout.preferredHeight: Math.min(subjectArea.implicitHeight
-                                                     + Theme.spaceSm,
-                                                     Theme.messageMaxHeight)
+                    Layout.preferredHeight: detailsPane.summaryNeed
                     color: Theme.bgBase
                     radius: Theme.radiusMd
                     // While the question stands, the boxes it is about carry it:
@@ -551,17 +602,20 @@ ColumnLayout {
                         }
                     }
                 }
-                // Always shown, even empty, and two lines tall from the start —
-                // the pair mirrors the commit editor's fields, and this half of
-                // the pair is the same component in both panes.
+                // Always shown, even empty, and taking whatever the summary
+                // above it left of the block — the pair mirrors the commit
+                // editor's fields, and this half of the pair is the same
+                // component in both panes.
                 DescriptionBox {
                     id: bodyArea
                     readOnly: !detailsPane.editable
                     placeholderText: detailsPane.editable ? qsTr("Description") : ""
                     border.color: detailsPane.asking ? Theme.warning : Theme.borderSubtle
+                    restHeight: detailsPane.descRest
                     room: detailsPane.descRoom
                     owed: detailsPane.descOwed
                     onWheelPastEnd: pixels => detailsPane.rollBlock(pixels)
+                }
                 }
                 // Only once something is actually changed: until then the pane
                 // keeps its resting shape and nothing invites a rewrite.

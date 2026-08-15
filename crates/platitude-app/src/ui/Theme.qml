@@ -141,5 +141,5 @@ QtObject {
     readonly property int radiusMd: 4
     readonly property int splitterWidth: 4
     readonly property int scrollBarWidth: 12
-    readonly property int messageMaxHeight: 120
+    readonly property int messageMaxHeight: 108
 }

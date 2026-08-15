@@ -282,10 +282,24 @@ ColumnLayout {
     function setMessage(subject, body) {
         wipSubject.text = subject
         wipBody.text = body
+        // A pull, and a reading position, belong to the message they were
+        // made on (see DetailsPane.syncMessage) — amend swapping in HEAD's
+        // message opens at its own rest height and its own first line.
+        wipSubject.cursorPosition = 0
+        wipPane.summaryToTop()
+        Qt.callLater(wipPane.summaryToTop)
+        wipBody.resetForNewMessage()
     }
     function clearMessage() {
         wipSubject.text = ""
         wipBody.text = ""
+        wipSubject.cursorPosition = 0
+        wipPane.summaryToTop()
+        wipBody.resetForNewMessage()
+    }
+    function summaryToTop() {
+        if (wipSubjectView.contentItem)
+            wipSubjectView.contentItem.contentY = 0
     }
     function setAmendChecked(on) {
         amendBox.checked = on
@@ -300,6 +314,24 @@ ColumnLayout {
     }
     readonly property color descriptionColor: wipBody.textColor
     readonly property bool descriptionFocused: wipBody.focused
+
+    // -- the message pair is one block of one height --
+    //
+    // The same split the details pane makes, on the same tokens
+    // (デザイン規約 §コミットメッセージの 2 つの枠): one line of summary,
+    // the gap, and five lines of description, with a wrapping summary
+    // taking its extra lines out of the description down to two.
+    readonly property real summaryNeed:
+        Math.min(Math.ceil(wipSubject.implicitHeight) + Theme.spaceSm,
+                 Theme.messageMaxHeight)
+    readonly property real descFloor: 2 * Theme.fontMdLine + Theme.spaceSm
+    readonly property real pairRest:
+        Theme.fontLgLine + Theme.spaceSm + Theme.spaceXs + Theme.messageMaxHeight
+    readonly property real pairBase:
+        Math.max(wipPane.pairRest,
+                 wipPane.summaryNeed + Theme.spaceXs + wipPane.descFloor)
+    readonly property real descRest:
+        wipPane.pairBase - wipPane.summaryNeed - Theme.spaceXs
 
     // -- what this pane lends the description box --
     //
@@ -648,15 +680,16 @@ ColumnLayout {
                 Layout.topMargin: Theme.spaceXs
                 Layout.bottomMargin: Theme.spaceXs
                 spacing: Theme.spaceXs
+                // The pair is one block of one height, exactly as in the
+                // details pane (デザイン規約 §コミットメッセージの 2 つの枠).
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: wipPane.pairBase + wipBody.extra
+                    spacing: Theme.spaceXs
+
                 Rectangle {
                     Layout.fillWidth: true
-                    // Capped and scrolled like the description box below it, and
-                    // like the details pane's pair: a summary somebody pastes a
-                    // paragraph into otherwise grows until the file list has no
-                    // pane left to be in.
-                    Layout.preferredHeight: Math.min(wipSubject.implicitHeight
-                                                     + Theme.spaceSm,
-                                                     Theme.messageMaxHeight)
+                    Layout.preferredHeight: wipPane.summaryNeed
                     color: Theme.bgBase
                     radius: Theme.radiusMd
                     border.color: Theme.borderDefault
@@ -684,15 +717,17 @@ ColumnLayout {
                         }
                     }
                 }
-                // Two lines tall from the start, and pulled open by the corner
-                // for a long one — the same component the details pane reads
-                // messages in.
+                // Taking whatever the summary above it left of the block, and
+                // pulled open by the corner for a long one — the same
+                // component the details pane reads messages in.
                 DescriptionBox {
                     id: wipBody
                     placeholderText: qsTr("Description")
+                    restHeight: wipPane.descRest
                     room: wipPane.descRoom
                     owed: wipPane.descOwed
                     onWheelPastEnd: pixels => wipPane.rollBlock(pixels)
+                }
                 }
                 // Amend replaces the newest commit instead of adding one, so it
                 // starts from that commit's message rather than an empty editor.
