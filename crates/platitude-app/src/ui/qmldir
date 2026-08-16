@@ -10,6 +10,7 @@ AppMenuItem 1.0 AppMenuItem.qml
 AppMenuSeparator 1.0 AppMenuSeparator.qml
 AskBar 1.0 AskBar.qml
 AuthorCard 1.0 AuthorCard.qml
+AutoActDriver 1.0 AutoActDriver.qml
 AutoScrollBar 1.0 AutoScrollBar.qml
 ChangeIcon 1.0 ChangeIcon.qml
 ClipboardHelper 1.0 ClipboardHelper.qml
@@ -58,5 +59,6 @@ SlimField 1.0 SlimField.qml
 SplitHandleBar 1.0 SplitHandleBar.qml
 SummaryArea 1.0 SummaryArea.qml
 TopBar 1.0 TopBar.qml
+WindowAutoActDriver 1.0 WindowAutoActDriver.qml
 WipBucketHeader 1.0 WipBucketHeader.qml
 WipPane 1.0 WipPane.qml
