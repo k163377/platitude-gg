@@ -32,6 +32,7 @@ FileRowDelegate 1.0 FileRowDelegate.qml
 FindBar 1.0 FindBar.qml
 FoldBlock 1.0 FoldBlock.qml
 FormField 1.0 FormField.qml
+GitVersionCorner 1.0 GitVersionCorner.qml
 GraphPane 1.0 GraphPane.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml
 HashPlate 1.0 HashPlate.qml

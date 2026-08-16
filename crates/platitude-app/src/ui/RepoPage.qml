@@ -2617,34 +2617,12 @@ Item {
                     SplitView.minimumWidth: page.rightMinWidth
                     color: Theme.bgSurface
 
-                    // Which git is doing all this. It sits here rather
-                    // than at the window's edge so the command log can
-                    // open without landing on top of it. A build made in
-                    // a worktree adds which one — parallel sessions'
-                    // windows are otherwise identical (デザイン規約
-                    // §アプリ名).
-                    RowLayout {
+                    GitVersionCorner {
                         id: gitCorner
-                        spacing: Theme.spaceXs
-                        /// Its own box and nothing more — no extra air
-                        /// above: a list's rows are already spaced by
-                        /// their own height (2026-08-10 ユーザー報告).
-                        readonly property real roomNeeded:
-                            gitCorner.implicitHeight + Theme.spaceXs
-                        /// What the pane under it is leaving bare. Only one
-                        /// of the two is on screen at a time, and each
-                        /// measures its own file list.
-                        readonly property real roomLeft:
-                            page.wipShown ? wipPane.bottomRoom
-                                          : detailsPane.bottomRoom
-                        // Out of the way as soon as the list reaches this
-                        // corner (2026-08-10 ユーザー報告). Hidden
-                        // outright rather than held at zero opacity: a
-                        // Label keeps its implicit height while
-                        // `visible: false`, so the answer never eats what
-                        // it read (qmltestrunner, 2026-08-10 実測).
-                        visible: AppBackend.gitVersion !== ""
-                                 && gitCorner.roomLeft >= gitCorner.roomNeeded
+                        // Only one of the two panes is on screen at a
+                        // time, and each measures its own file list.
+                        roomLeft: page.wipShown ? wipPane.bottomRoom
+                                                : detailsPane.bottomRoom
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         anchors.rightMargin: Theme.spaceSm
@@ -2652,23 +2630,6 @@ Item {
                         // Declared before the panes it hangs over, so z
                         // holds it in front of whatever they draw here.
                         z: 1
-                        Label {
-                            text: qsTr("git %1").arg(AppBackend.gitVersion)
-                            color: Theme.textMuted
-                            font.pixelSize: Theme.fontSm
-                        }
-                        // Drawn rather than typed: as a glyph the spacing
-                        // here was a full-width cell's leftover (規約 §余白).
-                        DotMark {
-                            visible: AppBackend.buildTree !== ""
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                        Label {
-                            visible: AppBackend.buildTree !== ""
-                            text: AppBackend.buildTree
-                            color: Theme.textMuted
-                            font.pixelSize: Theme.fontSm
-                        }
                     }
 
                     WipPane {
