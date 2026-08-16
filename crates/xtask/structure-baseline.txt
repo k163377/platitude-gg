@@ -11,7 +11,6 @@
 # outranks the ceiling and needs no entry here.
 #
 # <physical lines> <path from the workspace root>
-1102 crates/platitude-app/src/hub.rs
 557 crates/platitude-app/src/models/diff.rs
 759 crates/platitude-app/src/models/graph.rs
 570 crates/platitude-app/src/ui/DiffPane.qml
