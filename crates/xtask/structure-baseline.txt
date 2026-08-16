@@ -19,7 +19,6 @@
 1770 crates/platitude-app/src/models/nav.rs
 1478 crates/platitude-app/src/models/repo_tab.rs
 578 crates/platitude-app/src/ui/ActionButton.qml
-1105 crates/platitude-app/src/ui/DetailsPane.qml
 1082 crates/platitude-app/src/ui/DiffPane.qml
 1297 crates/platitude-app/src/ui/GraphPane.qml
 764 crates/platitude-app/src/ui/GraphRowDelegate.qml
@@ -27,7 +26,6 @@
 2949 crates/platitude-app/src/ui/RepoPage.qml
 736 crates/platitude-app/src/ui/SidebarPane.qml
 1328 crates/platitude-app/src/ui/TopBar.qml
-1126 crates/platitude-app/src/ui/WipPane.qml
 885 crates/platitude-app/src/winframe.rs
 647 crates/platitude-core/src/conflict.rs
 547 crates/platitude-core/src/identity.rs
