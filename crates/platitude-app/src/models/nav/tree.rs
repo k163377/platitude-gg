@@ -1,0 +1,238 @@
+use super::*;
+
+impl NavSectionModel {
+    /// Trees one group run of file rows: single-child directory chains
+    /// compact into one `a/b/c` row; fold-toggle keys are group-prefixed
+    /// so equal paths in different groups fold apart.
+    pub(super) fn wt_tree_into(
+        &self,
+        run: std::ops::Range<usize>,
+        group: &str,
+        out: &mut Vec<Arranged>,
+    ) {
+        #[derive(Default)]
+        struct DirNode {
+            dirs: std::collections::BTreeMap<String, DirNode>,
+            /// The source rows sitting in this directory, each with where
+            /// in its path the file's own name begins.
+            files: Vec<(u32, u32)>,
+        }
+        let mut root = DirNode::default();
+        for at in run {
+            let Some(of) = self.all.entry(at) else {
+                continue;
+            };
+            let mut node = &mut root;
+            let mut rest = of.full();
+            let mut from = 0;
+            while let Some((dir, tail)) = rest.split_once('/') {
+                node = node.dirs.entry(dir.to_string()).or_default();
+                from += dir.len() + 1;
+                rest = tail;
+            }
+            node.files.push((at as u32, from as u32));
+        }
+        fn emit(
+            node: &DirNode,
+            group: &str,
+            prefix: &str,
+            depth: i32,
+            overrides: &HashMap<String, bool>,
+            out: &mut Vec<Arranged>,
+        ) {
+            for (dir_name, child) in &node.dirs {
+                let mut label = dir_name.clone();
+                let mut target = child;
+                while target.files.is_empty() && target.dirs.len() == 1 {
+                    let Some((next_name, next)) = target.dirs.iter().next() else {
+                        break;
+                    };
+                    label.push('/');
+                    label.push_str(next_name);
+                    target = next;
+                }
+                let path = format!("{prefix}{label}");
+                let key = format!("{group}:{path}");
+                let expanded = overrides.get(&key).copied().unwrap_or(true);
+                out.push(Arranged::Made(Box::new(NavItem {
+                    name: label,
+                    full: key.clone(),
+                    // `full` is the fold key, not a path; the path itself
+                    // rides in the rename slot (see `NavItem::orig_path`).
+                    orig_path: path.clone(),
+                    group: group.to_string(),
+                    depth,
+                    folder: true,
+                    change: fold_state(expanded),
+                    ..Default::default()
+                })));
+                if expanded {
+                    emit(
+                        target,
+                        group,
+                        &format!("{path}/"),
+                        depth + 1,
+                        overrides,
+                        out,
+                    );
+                }
+            }
+            for (at, from) in &node.files {
+                out.push(Arranged::At {
+                    at: *at,
+                    depth,
+                    from: *from,
+                });
+            }
+        }
+        emit(&root, group, "", 0, &self.folder_overrides, out);
+    }
+
+    /// Section default: remote roots (one per remote) start collapsed —
+    /// that is the per-repository fold — everything else starts open.
+    pub(super) fn folder_expanded(&self, key: &str, depth: i32) -> bool {
+        self.folder_overrides
+            .get(key)
+            .copied()
+            .unwrap_or(!(self.section == "remotes" && depth == 0))
+    }
+
+    /// Turns the flat sorted name list into an indented tree with
+    /// collapsible folder rows for every `/` level.
+    ///
+    /// The leaves are pointed at rather than copied: what a row of the
+    /// tree adds to the name the source holds is its depth, and the
+    /// segment it shows falls out of that (`shown_name`).
+    pub(super) fn build_tree(&self) -> Vec<Arranged> {
+        let mut out = Vec::new();
+        let mut open_path: Vec<String> = Vec::new();
+        // Depth at which a collapsed folder swallows its descendants.
+        let mut collapsed_at: Option<usize> = None;
+
+        for at in 0..self.all.len() {
+            let Some(leaf) = self.all.entry(at) else {
+                continue;
+            };
+            let name = leaf.name();
+            let segments: Vec<&str> = name.split('/').collect();
+            let folder_count = segments.len() - 1;
+
+            // Longest common folder prefix with the previous entry.
+            let mut common = 0;
+            while common < open_path.len()
+                && common < folder_count
+                && open_path[common] == segments[common]
+            {
+                common += 1;
+            }
+            open_path.truncate(common);
+            if let Some(depth) = collapsed_at
+                && depth >= open_path.len()
+            {
+                collapsed_at = None;
+            }
+
+            for (depth, segment) in segments.iter().enumerate().take(folder_count).skip(common) {
+                open_path.push((*segment).to_string());
+                if collapsed_at.is_some() {
+                    continue;
+                }
+                let key = open_path.join("/");
+                let expanded = self.folder_expanded(&key, depth as i32);
+                out.push(Arranged::Made(Box::new(NavItem {
+                    name: (*segment).to_string(),
+                    full: key,
+                    depth: depth as i32,
+                    folder: true,
+                    change: fold_state(expanded),
+                    ..Default::default()
+                })));
+                if !expanded {
+                    collapsed_at = Some(depth);
+                }
+            }
+            if collapsed_at.is_none() {
+                out.push(Arranged::At {
+                    at: at as u32,
+                    depth: folder_count as i32,
+                    // One folder per `/`, so the segment on show starts
+                    // after the last of them.
+                    from: (name.len() - segments[folder_count].len()) as u32,
+                });
+            }
+        }
+        out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::testkit::*;
+    use super::*;
+
+    #[test]
+    fn the_remote_tree_points_at_rows_and_folds_over_them() {
+        let mut model = section(
+            "remotes",
+            Source::Remotes(snapshot(
+                vec![remote("origin/feature/one"), remote("origin/main")],
+                Vec::new(),
+            )),
+        );
+        // Remote roots start collapsed, so the folder row is all there is.
+        model.arrange();
+        assert_eq!(model.shown_rows(), 1);
+        assert_eq!(says(&model, 0, Role::Name), "origin");
+        assert!(flags(&model, 0, Role::Folder));
+        assert_eq!(says(&model, 0, Role::Change), FOLDED);
+
+        model.folder_overrides.insert("origin".to_string(), true);
+        model.arrange();
+        // origin / feature / one / main
+        assert_eq!(model.shown_rows(), 4);
+        assert_eq!(says(&model, 1, Role::Name), "feature");
+        assert_eq!(says(&model, 2, Role::Name), "one");
+        assert_eq!(says(&model, 2, Role::Full), "origin/feature/one");
+        assert_eq!(depth_of(&model, 2), 2);
+        assert_eq!(says(&model, 3, Role::Name), "main");
+        assert_eq!(says(&model, 3, Role::Full), "origin/main");
+        assert_eq!(depth_of(&model, 3), 1);
+        assert_eq!(says(&model, 3, Role::OidHex), oid("b").to_hex());
+
+        assert_eq!(
+            model.oid_of_name("origin/main".to_string()),
+            oid("b").to_hex()
+        );
+        assert_eq!(model.name_at(2), "one");
+    }
+    #[test]
+    fn the_file_tree_folds_each_run_of_its_own() {
+        let mut model = section("worktree", Source::files(pending()));
+        model.tree_view = true;
+        model.arrange();
+
+        // conflicts: a.txt / unstaged: src, b.txt, c.txt / staged: src,
+        // b.txt, d.txt
+        assert_eq!(model.shown_rows(), 7);
+        assert_eq!(says(&model, 0, Role::Name), "a.txt");
+        assert_eq!(says(&model, 1, Role::Name), "src");
+        assert!(flags(&model, 1, Role::Folder));
+        // The fold key is run-prefixed; the plain path rides beside it.
+        assert_eq!(says(&model, 1, Role::Full), "unstaged:src");
+        assert_eq!(says(&model, 1, Role::OrigPath), "src");
+        assert_eq!(says(&model, 2, Role::Name), "b.txt");
+        assert_eq!(says(&model, 2, Role::Full), "src/b.txt");
+        assert_eq!(depth_of(&model, 2), 1);
+        assert_eq!(says(&model, 3, Role::Name), "c.txt");
+        assert_eq!(says(&model, 4, Role::Full), "staged:src");
+
+        // Folding one run leaves the other alone.
+        model
+            .folder_overrides
+            .insert("unstaged:src".to_string(), false);
+        model.arrange();
+        assert_eq!(model.shown_rows(), 6);
+        assert_eq!(says(&model, 1, Role::Change), FOLDED);
+        assert_eq!(says(&model, 2, Role::Name), "c.txt");
+    }
+}
