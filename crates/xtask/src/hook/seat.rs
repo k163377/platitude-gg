@@ -93,6 +93,10 @@ pub(super) fn lock_seat(cwd: &str, seat_path: &str, session: &str) -> Claim {
     command
         .arg("-C")
         .arg(cwd)
+        // The "already locked" branch below reads git's message, and a
+        // translated one would fall through to OursOrMoot — the allow
+        // side. Pin the locale so the deny keeps its teeth.
+        .env("LC_ALL", "C")
         .args(["worktree", "lock", "--reason", &reason, seat_path]);
     let Ok(output) = crate::run_captured(&mut command) else {
         return Claim::OursOrMoot;
@@ -170,15 +174,19 @@ pub(super) fn reclaim(input: &str, path: &str) -> Option<String> {
         Standing::Free => match lock_seat(&root, &root, &session) {
             Claim::Held(reason) => Some(collision(&name, &reason)),
             // OursOrMoot cannot tell "claimed now" from "git could not
-            // judge" — only a claim that verifiably took is announced.
-            Claim::OursOrMoot => lock_reason(&root).map(|_| {
-                format!(
-                    "Seat {name} stood unclaimed and this edit re-claimed it \
+            // judge" — only a claim that verifiably took, *for this
+            // session*, is announced (a lock that exists but names someone
+            // else means the parse above missed a refusal).
+            Claim::OursOrMoot => lock_reason(&root)
+                .filter(|reason| reason.contains(&session))
+                .map(|_| {
+                    format!(
+                        "Seat {name} stood unclaimed and this edit re-claimed it \
                      for the session (a landed seat comes unlocked; further \
                      work claims it back at its first edit — CLAUDE.md \
                      ビルド・テスト)."
-                )
-            }),
+                    )
+                }),
         },
     }
 }
