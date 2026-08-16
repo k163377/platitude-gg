@@ -8,35 +8,22 @@ impl RepoSession {
     /// Asks how much of `range` a remote already has, so the UI can warn
     /// before rewriting published history. A read, not a write.
     pub fn check_publish(self: &Arc<Self>, range: String) {
-        let Some(workdir) = self.workdir() else {
-            return;
-        };
-        let s = Arc::clone(self);
-        self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            match publish::state_of(&s.executor, &workdir, &range, &cancel).await {
-                Ok(state) => s.sink.event(SessionEvent::PublishChecked { range, state }),
-                Err(e) => s.fail("publish", e),
-            }
+        self.spawn_read("publish", |s, workdir, cancel| async move {
+            let state = publish::state_of(&s.executor, &workdir, &range, &cancel).await?;
+            Ok(SessionEvent::PublishChecked { range, state })
         });
     }
 
     /// Asks whether HEAD can reach `oid`, so the UI can tell which commits
     /// a rewrite may start from. A read, not a write.
     pub fn check_in_history(self: &Arc<Self>, oid: Oid) {
-        let Some(workdir) = self.workdir() else {
-            return;
-        };
-        let s = Arc::clone(self);
-        self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            match commit::is_in_head_history(&s.executor, &workdir, &oid, &cancel).await {
-                Ok(in_history) => s.sink.event(SessionEvent::InHistoryChecked {
-                    oid: oid.to_hex(),
-                    in_history,
-                }),
-                Err(e) => s.fail("history", e),
-            }
+        self.spawn_read("history", move |s, workdir, cancel| async move {
+            let in_history =
+                commit::is_in_head_history(&s.executor, &workdir, &oid, &cancel).await?;
+            Ok(SessionEvent::InHistoryChecked {
+                oid: oid.to_hex(),
+                in_history,
+            })
         });
     }
 
@@ -46,34 +33,21 @@ impl RepoSession {
     /// ssh-keygen, and the details pane has a 100ms budget. The answer
     /// arrives on its own, after the commit is already on screen.
     pub fn check_signature(self: &Arc<Self>, oid: Oid) {
-        let Some(workdir) = self.workdir() else {
-            return;
-        };
-        let s = Arc::clone(self);
-        self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            match identity::verify_commit(&s.executor, &workdir, &oid.to_hex(), &cancel).await {
-                Ok(signature) => s.sink.event(SessionEvent::SignatureChecked {
-                    oid: oid.to_hex(),
-                    signature,
-                }),
-                Err(e) => s.fail("signature", e),
-            }
+        self.spawn_read("signature", move |s, workdir, cancel| async move {
+            let signature =
+                identity::verify_commit(&s.executor, &workdir, &oid.to_hex(), &cancel).await?;
+            Ok(SessionEvent::SignatureChecked {
+                oid: oid.to_hex(),
+                signature,
+            })
         });
     }
 
     /// Loads full details of one commit (metadata + changed files).
     pub fn load_details(self: &Arc<Self>, oid: Oid) {
-        let Some(workdir) = self.workdir() else {
-            return;
-        };
-        let s = Arc::clone(self);
-        self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            match details::commit_details(&s.executor, &workdir, &oid, &cancel).await {
-                Ok(details) => s.sink.event(SessionEvent::DetailsLoaded { details }),
-                Err(e) => s.fail("details", e),
-            }
+        self.spawn_read("details", move |s, workdir, cancel| async move {
+            let details = details::commit_details(&s.executor, &workdir, &oid, &cancel).await?;
+            Ok(SessionEvent::DetailsLoaded { details })
         });
     }
 

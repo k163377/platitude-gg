@@ -347,16 +347,9 @@ impl RepoSession {
 
     /// Re-reads the author identity and signing configuration.
     pub fn refresh_author(self: &Arc<Self>) {
-        let Some(workdir) = self.workdir() else {
-            return;
-        };
-        let s = Arc::clone(self);
-        self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            match identity::load(&s.executor, &workdir, &cancel).await {
-                Ok(config) => s.sink.event(SessionEvent::AuthorLoaded { config }),
-                Err(e) => s.fail("identity", e),
-            }
+        self.spawn_read("identity", |s, workdir, cancel| async move {
+            let config = identity::load(&s.executor, &workdir, &cancel).await?;
+            Ok(SessionEvent::AuthorLoaded { config })
         });
     }
 

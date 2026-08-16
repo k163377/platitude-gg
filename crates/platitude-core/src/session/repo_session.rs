@@ -283,6 +283,34 @@ impl RepoSession {
 
     // --- internals ------------------------------------------------------
 
+    /// Runs one on-demand read in the background and answers with the
+    /// event it produced, or puts `op` on the error surface.
+    ///
+    /// The shape every such read has: nothing to do before the repository
+    /// is open, one git command against the workdir under the session's
+    /// cancellation, and exactly one of an event or a failure. Reads that
+    /// answer differently — a missing HEAD that is a state rather than a
+    /// failure, a refusal that *is* the answer, a read that claims an
+    /// epoch before it starts — do not go through here, because folding
+    /// them in would change what they report.
+    pub(super) fn spawn_read<F, Fut>(self: &Arc<Self>, op: &'static str, read: F)
+    where
+        F: FnOnce(Arc<Self>, PathBuf, CancellationToken) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<SessionEvent, GitError>> + Send,
+    {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            match read(Arc::clone(&s), workdir, cancel).await {
+                Ok(event) => s.sink.event(event),
+                Err(e) => s.fail(op, e),
+            }
+        });
+    }
+
     pub(super) fn fail(&self, op: &'static str, error: GitError) {
         if error.is_cancelled() {
             return;
