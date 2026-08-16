@@ -27,8 +27,8 @@
 736 crates/platitude-app/src/ui/SidebarPane.qml
 1328 crates/platitude-app/src/ui/TopBar.qml
 885 crates/platitude-app/src/winframe.rs
-647 crates/platitude-core/src/conflict.rs
-547 crates/platitude-core/src/identity.rs
+644 crates/platitude-core/src/conflict.rs
+528 crates/platitude-core/src/identity.rs
 586 crates/platitude-core/src/integrate.rs
 758 crates/platitude-core/src/patch.rs
 736 crates/platitude-core/src/process.rs
