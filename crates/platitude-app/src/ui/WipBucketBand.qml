@@ -48,7 +48,7 @@ Item {
     // A band the list is not showing takes no room, the way each heading
     // in it does: a hidden item with a height leaves a stripe of ground
     // behind the last row.
-    height: band.visible ? emptyUnstaged.height + own.height : 0
+    height: band.visible ? own.y + own.height : 0
 
     WipBucketHeader {
         id: emptyUnstaged
@@ -62,7 +62,12 @@ Item {
     }
     WipBucketHeader {
         id: own
+        // A hairline of the list's own ground between the two
+        // (2026-08-17 ユーザー指示): both headings wear `bgElevated`, so
+        // stacked they read as one band with two lines of text in it
+        // rather than as two buckets, one of which is empty.
         y: emptyUnstaged.height
+           + (emptyUnstaged.visible ? Theme.borderWidth : 0)
         section: band.section
         listWidth: band.listWidth
         repoTab: band.repoTab
