@@ -270,32 +270,19 @@ ColumnLayout {
         return null
     }
 
-    readonly property string subjectText: wipSubject.text
-    readonly property string bodyText: wipBody.text
+    readonly property string subjectText: msgEditor.subjectText
+    readonly property string bodyText: msgEditor.bodyText
     // Whether the amend should also put the current identity on the
     // commit it replaces (git keeps the original author otherwise).
     readonly property bool resetAuthor: authorBox.checked
+    // Swapping in HEAD's message (amend) and clearing after a commit
+    // both open at the editor's own rest height and first line — the
+    // caret treatment is the editor's (MessageEditor.setMessage).
     function setMessage(subject, body) {
-        wipSubject.text = subject
-        wipBody.text = body
-        // A pull, and a reading position, belong to the message they were
-        // made on (see DetailsPane.syncMessage) — amend swapping in HEAD's
-        // message opens at its own rest height and its own first line.
-        wipSubject.cursorPosition = 0
-        wipPane.summaryToTop()
-        Qt.callLater(wipPane.summaryToTop)
-        wipBody.resetForNewMessage()
+        msgEditor.setMessage(subject, body)
     }
     function clearMessage() {
-        wipSubject.text = ""
-        wipBody.text = ""
-        wipSubject.cursorPosition = 0
-        wipPane.summaryToTop()
-        wipBody.resetForNewMessage()
-    }
-    function summaryToTop() {
-        if (wipSubjectView.contentItem)
-            wipSubjectView.contentItem.contentY = 0
+        msgEditor.setMessage("", "")
     }
     function setAmendChecked(on) {
         amendBox.checked = on
@@ -306,52 +293,19 @@ ColumnLayout {
     /// Smoke hook: the caret in the description box, the way a click in
     /// it puts it there (see DetailsPane — same box, same reason).
     function focusDescription() {
-        wipBody.takeCaret()
+        msgEditor.focusDescription()
     }
-    readonly property color descriptionColor: wipBody.textColor
-    readonly property bool descriptionFocused: wipBody.focused
+    readonly property color descriptionColor: msgEditor.descriptionColor
+    readonly property bool descriptionFocused: msgEditor.descriptionFocused
 
-    // -- the message pair is one block of one height --
+    // -- what this pane lends the message editor --
     //
-    // The same split the details pane makes, on the same tokens
-    // (デザイン規約 §コミットメッセージの 2 つの枠): one line of summary,
-    // the gap, and five lines of description, with a wrapping summary
-    // taking its extra lines out of the description down to two.
-    readonly property real summaryNeed:
-        Math.min(Math.ceil(wipSubject.implicitHeight) + Theme.spaceSm,
-                 Theme.messageMaxHeight)
-    readonly property real descFloor: 2 * Theme.fontMdLine + Theme.spaceSm
-    readonly property real pairRest:
-        Theme.fontLgLine + Theme.spaceSm + Theme.spaceXs + Theme.messageMaxHeight
-    readonly property real pairBase:
-        Math.max(wipPane.pairRest,
-                 wipPane.summaryNeed + Theme.spaceXs + wipPane.descFloor)
-    readonly property real descRest:
-        wipPane.pairBase - wipPane.summaryNeed - Theme.spaceXs
-
-    // -- what this pane lends the description box --
-    //
-    // Same bound as the details pane, read off what this pane has under
-    // the box instead: the file list is the only thing that gives, and
-    // the checkboxes, the commit button and the exit card keep their own
-    // height by construction, so two rows of list is the whole of it
-    // (デザイン規約 §コミットメッセージの 2 つの枠).
-    readonly property real descRoom:
-        Math.max(0, wipList.height - 2 * Theme.rowHeight)
-    /// What the pane needs back — the list bottoms out at zero while the
-    /// column keeps growing, and past that the block is scrolling by
-    /// exactly what it could not fit, which is the rest of the answer.
-    ///
-    /// Measured against the room the block is *allowed*, never against the
-    /// height it was laid out at: the block's own height follows what the
-    /// box does, so reading it back here would put the box and the layout
-    /// in a ring — the box grows, the height it is compared to is still
-    /// last frame's, the box is told it owes the difference, and it gives
-    /// back everything it just took (measured: the grip did nothing at
-    /// all, `cap` never left 120).
-    readonly property real descOwed:
-        Math.max(0, 2 * Theme.rowHeight - wipList.height)
-        + Math.max(0, blockCol.implicitHeight - wipPane.blockRoom)
+    // The pair's own geometry lives in `MessageEditor`; what this pane
+    // owns is what stands around it. The file list is the only thing
+    // that gives, and the checkboxes, the commit button and the exit
+    // card keep their own height by construction, so two rows of list
+    // is the whole of the bound (デザイン規約 §コミットメッセージの
+    // 2 つの枠).
     /// How much of the pane the block above the list may take: all of it
     /// but the two rows that keep a list a list — the same bound the grip
     /// stops at (デザイン規約 §コミットメッセージの 2 つの枠). Past this
@@ -373,44 +327,24 @@ ColumnLayout {
         blockScroll.contentY =
             Math.max(0, Math.min(max, blockScroll.contentY - pixels))
     }
-    /// The same two steps for the summary, which carries its own scroll
-    /// once a pasted paragraph passes the shared cap: its own text while
-    /// there is text to move, the block once there is not. Written out
-    /// here rather than in the box, because this box is three lines of
-    /// `ScrollView` in a pane rather than a component of its own.
-    function rollSummary(flick, dy) {
-        const pixels = dy / 120 * (Metrics.wheelRows * Theme.fontMdLine)
-        const max = Math.max(0, flick.contentHeight - flick.height)
-        const next = Math.max(0, Math.min(max, flick.contentY - pixels))
-        if (Math.abs(next - flick.contentY) > 0.5) {
-            flick.contentY = next
-            return
-        }
-        wipPane.rollBlock(pixels)
-    }
-    // -- smoke hooks, forwarded to the box --
-    function growDescription(dy) { wipBody.grow(dy) }
-    function pullDescriptionPast(down) { wipBody.pullPast(down) }
+    // -- smoke hooks and readouts, said under the pane's name because
+    // the automation reads the panes (MessageEditor) --
+    function growDescription(dy) { msgEditor.growDescription(dy) }
+    function pullDescriptionPast(down) { msgEditor.pullDescriptionPast(down) }
     /// Whether the grip is refusing a pull, and where — see
     /// `DetailsPane.descRefuses`.
-    readonly property alias descRefuses: wipBody.gripRefused
-    readonly property alias descPoint: wipBody.gripPoint
-    readonly property bool descGrips: wipBody.grips
-    readonly property real descHeight: wipBody.boxHeight
-    readonly property real descWants: wipBody.wants
-    readonly property real descCap: wipBody.cap
-    readonly property int descListRows:
-        Math.round(wipList.height / Theme.rowHeight)
-    /// Whether the block is taller than the room it was given, which is to
-    /// say whether anything in it is below the fold. The pane says it out
-    /// loud because a headless run cannot see a scroll bar and the shot
-    /// frames alike either way (`PG_AUTO_ACT=window-floor wip`).
-    readonly property bool blockScrolls:
-        blockCol.implicitHeight > wipPane.blockRoom + 1
-    /// Whether the box has given back everything it owes — the same
-    /// question, since what a pulled-open box pushes past the pane's edge
-    /// is what the block ends up scrolling by.
-    readonly property bool descKeeps: !wipPane.blockScrolls
+    readonly property alias descRefuses: msgEditor.descRefuses
+    readonly property alias descPoint: msgEditor.descPoint
+    readonly property bool descGrips: msgEditor.descGrips
+    readonly property real descHeight: msgEditor.descHeight
+    readonly property real descWants: msgEditor.descWants
+    readonly property real descCap: msgEditor.descCap
+    readonly property int descListRows: msgEditor.descListRows
+    /// Whether anything in the block is below the fold, and its
+    /// complement — the editor holds the numbers, this pane says them
+    /// out loud for the headless runs (`PG_AUTO_ACT=window-floor wip`).
+    readonly property bool blockScrolls: msgEditor.blockScrolls
+    readonly property bool descKeeps: msgEditor.descKeeps
     /// How much of the pane's bottom edge the list is leaving bare, for
     /// the corner text the page hangs there to step aside by. The list
     /// runs to that edge and is the only thing down there, so the answer
@@ -676,54 +610,16 @@ ColumnLayout {
                 Layout.topMargin: Theme.spaceXs
                 Layout.bottomMargin: Theme.spaceXs
                 spacing: Theme.spaceXs
-                // The pair is one block of one height, exactly as in the
-                // details pane (デザイン規約 §コミットメッセージの 2 つの枠).
-                ColumnLayout {
+                // The pair is one block of one height, in the same
+                // component the details pane reads messages in
+                // (デザイン規約 §コミットメッセージの 2 つの枠).
+                MessageEditor {
+                    id: msgEditor
                     Layout.fillWidth: true
-                    Layout.preferredHeight: wipPane.pairBase + wipBody.extra
-                    spacing: Theme.spaceXs
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: wipPane.summaryNeed
-                    color: Theme.bgBase
-                    radius: Theme.radiusMd
-                    border.color: Theme.borderDefault
-                    border.width: Theme.borderWidth
-                    ScrollView {
-                        id: wipSubjectView
-                        anchors.fill: parent
-                        anchors.margins: Theme.spaceXs
-                        // Not interactive, for the reason the description
-                        // box carries: the flickable answering the same
-                        // wheel as the handler moved the text twice.
-                        Component.onCompleted: {
-                            contentItem.boundsBehavior = Flickable.StopAtBounds
-                            contentItem.interactive = false
-                        }
-                        SummaryArea {
-                            id: wipSubject
-                            placeholderText: qsTr("Commit summary")
-                            WheelHandler {
-                                acceptedDevices: PointerDevice.Mouse
-                                                 | PointerDevice.TouchPad
-                                onWheel: event => wipPane.rollSummary(
-                                    wipSubjectView.contentItem, event.angleDelta.y)
-                            }
-                        }
-                    }
-                }
-                // Taking whatever the summary above it left of the block, and
-                // pulled open by the corner for a long one — the same
-                // component the details pane reads messages in.
-                DescriptionBox {
-                    id: wipBody
-                    placeholderText: qsTr("Description")
-                    restHeight: wipPane.descRest
-                    room: wipPane.descRoom
-                    owed: wipPane.descOwed
+                    listHeight: wipList.height
+                    blockRoom: wipPane.blockRoom
+                    blockHeight: blockCol.implicitHeight
                     onWheelPastEnd: pixels => wipPane.rollBlock(pixels)
-                }
                 }
                 // Amend replaces the newest commit instead of adding one, so it
                 // starts from that commit's message rather than an empty editor.
@@ -843,7 +739,7 @@ ColumnLayout {
                     // identity to attribute either one to.
                     enabled: wipPane.repoTab.busyCount === 0
                              && wipPane.repoTab.identityReady
-                             && wipSubject.text.trim() !== ""
+                             && msgEditor.subjectText.trim() !== ""
                              && (wipPane.amending || wipPane.workTree.stagedCount > 0)
                     // **Still one click.** Committing is a daily operation and a
                     // confirmation on a daily operation becomes something people
@@ -861,7 +757,7 @@ ColumnLayout {
                     ToolTip.delay: Metrics.tipDelayMs
                     ToolTip.text: !wipPane.repoTab.identityReady
                                   ? qsTr("No name or email set for commits")
-                                  : wipSubject.text.trim() === ""
+                                  : msgEditor.subjectText.trim() === ""
                                   ? qsTr("A commit needs a summary")
                                   : qsTr("Stage something to commit")
                     MouseArea {

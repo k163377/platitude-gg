@@ -56,7 +56,7 @@ ColumnLayout {
     property bool signaturePointedAt: false
     readonly property bool signatureTipShown: signatureMark.ToolTip.visible
     property bool summaryPointedAt: false
-    readonly property bool summaryTipShown: subjectArea.ToolTip.visible
+    readonly property bool summaryTipShown: msgEditor.summaryTipShown
     /// The same stand-in for a file row, so a cut-down paths-view row's
     /// tooltip can be photographed (path-tip). -1 points at no row.
     property int pointedTipRow: -1
@@ -235,135 +235,65 @@ ColumnLayout {
     property string baseBody: ""
     readonly property bool messageDirty:
         detailsPane.editable
-        && (subjectArea.text !== detailsPane.baseSubject
-            || bodyArea.text !== detailsPane.baseBody)
+        && (msgEditor.subjectText !== detailsPane.baseSubject
+            || msgEditor.bodyText !== detailsPane.baseBody)
 
     /// Adopt the model's message whenever it moves to another commit.
     /// Nothing else can change a message in place — a different message
     /// is a different commit — so an untouched box needs no other cue.
+    /// The pull and the reading position belong to the commit they were
+    /// made on; the caret treatment is the editor's
+    /// (MessageEditor.setMessage).
     function syncMessage() {
         if (detailsPane.details.shaHex === detailsPane.baseOid)
             return
         detailsPane.baseOid = detailsPane.details.shaHex
         detailsPane.baseSubject = detailsPane.details.messageSubject
         detailsPane.baseBody = detailsPane.details.messageBody
-        subjectArea.text = detailsPane.baseSubject
-        bodyArea.text = detailsPane.baseBody
-        // A pull, and a reading position, belong to the commit they were
-        // made on — the next one opens at its own rest height and its own
-        // first line. The summary box needs the same caret treatment for
-        // the same reason (see DescriptionBox.resetForNewMessage): a
-        // subject long enough to scroll otherwise opens on its last line.
-        subjectArea.cursorPosition = 0
-        detailsPane.summaryToTop()
-        Qt.callLater(detailsPane.summaryToTop)
-        bodyArea.resetForNewMessage()
-    }
-    function summaryToTop() {
-        if (subjectView.contentItem)
-            subjectView.contentItem.contentY = 0
+        msgEditor.setMessage(detailsPane.baseSubject, detailsPane.baseBody)
     }
     /// Put the commit's own message back.
     function revertMessage() {
-        subjectArea.text = detailsPane.baseSubject
-        bodyArea.text = detailsPane.baseBody
+        msgEditor.setTexts(detailsPane.baseSubject, detailsPane.baseBody)
     }
     /// git took the new message. What was written becomes the resting
     /// text: the commit it belonged to is gone under that hash, and the
     /// model still holds the old one until the selection follows.
     function noteMessageSaved() {
-        detailsPane.baseSubject = subjectArea.text
-        detailsPane.baseBody = bodyArea.text
+        detailsPane.baseSubject = msgEditor.subjectText
+        detailsPane.baseBody = msgEditor.bodyText
     }
     function submitMessage() {
-        if (!detailsPane.editable || subjectArea.text.trim() === "")
+        if (!detailsPane.editable || msgEditor.subjectText.trim() === "")
             return
         detailsPane.messageSubmitted(detailsPane.details.shaHex,
-                                     subjectArea.text, bodyArea.text)
+                                     msgEditor.subjectText, msgEditor.bodyText)
     }
     /// Smoke hook: type into the boxes the way a keystroke would —
     /// including not at all when they are read-only.
     function setMessageText(subject, body) {
         if (!detailsPane.editable)
             return
-        subjectArea.text = subject
-        bodyArea.text = body
+        msgEditor.setTexts(subject, body)
     }
     /// Smoke hook: put the caret in the description box, the way a click
     /// in it does. Headless has no pointer, and the colour the text
     /// takes under a caret is what the shot is of.
     function focusDescription() {
-        bodyArea.takeCaret()
+        msgEditor.focusDescription()
     }
     /// What the box paints — reporting the input side (activeFocus)
     /// would read green with the binding cut.
-    readonly property color descriptionColor: bodyArea.textColor
-    readonly property bool descriptionFocused: bodyArea.focused
+    readonly property color descriptionColor: msgEditor.descriptionColor
+    readonly property bool descriptionFocused: msgEditor.descriptionFocused
 
-    // -- the message pair is one block of one height --
+    // -- what this pane lends the message editor --
     //
-    // The summary and the description read as a single block, and that
-    // block's height does not move with either one's text (デザイン規約
-    // §コミットメッセージの 2 つの枠): one line of summary, the gap, and
-    // five lines of description. A summary that wraps takes its extra
-    // lines out of the description rather than pushing everything below
-    // the pair down the pane.
-    //
-    // Held as one number that the layout splits, not as two heights that
-    // have to add up: the description fills what the summary leaves, so
-    // the total is exact whatever the font's line height rounds to.
-    /// What the summary box needs for its own lines, capped — nothing in
-    /// git bounds a summary, and one pasted paragraph grew this box to
-    /// 650px, which pushed the description off the pane and left the
-    /// author row over the window's own footer (measured at a 2,000-byte
-    /// subject). Ceiled, so the box is never a fraction of a pixel
-    /// shorter than the text inside it — that is the difference between
-    /// a scroll bar and no scroll bar.
-    readonly property real summaryNeed:
-        Math.min(Math.ceil(subjectArea.implicitHeight) + Theme.spaceSm,
-                 Theme.messageMaxHeight)
-    /// The description gives up its lines to a wrapping summary down to
-    /// two, and no further.
-    readonly property real descFloor: 2 * Theme.fontMdLine + Theme.spaceSm
-    /// The pair's resting height: one summary line and five description
-    /// lines, with the gap between them.
-    readonly property real pairRest:
-        Theme.fontLgLine + Theme.spaceSm + Theme.spaceXs + Theme.messageMaxHeight
-    /// What the pair is laid out at. Past the point where the description
-    /// has given its last line, the block itself grows — the summary's own
-    /// cap is what stops that.
-    readonly property real pairBase:
-        Math.max(detailsPane.pairRest,
-                 detailsPane.summaryNeed + Theme.spaceXs + detailsPane.descFloor)
-    /// What the description is allotted at rest: the rest of the block.
-    readonly property real descRest:
-        detailsPane.pairBase - detailsPane.summaryNeed - Theme.spaceXs
-
-    // -- what this pane lends the description box --
-    //
-    // The box carries the pull and the grip (`DescriptionBox`); the
-    // bound is the pane's, because only the pane knows what stands under
-    // it (デザイン規約 §コミットメッセージの 2 つの枠). The file list is
-    // the one thing here that gives, and two rows is where it stops being
-    // a list — so what is left above that is the whole of the room, and
-    // everything between the boxes and it (the author, the credit line,
-    // the CHANGES band) keeps its own height by construction.
-    readonly property real descRoom:
-        Math.max(0, fileList.height - 2 * Theme.rowHeight)
-    /// The far side of the same measure: how far past the bound the pane
-    /// already is, which is what the hand has to give back. The list is
-    /// the only thing that gives, so it hits zero and stops answering
-    /// while the column keeps growing past the pane's edge — the second
-    /// term is that overflow, and without it the give-back stalls at the
-    /// last 48 pixels the list still had (measured: the command log
-    /// opening under a pulled-open box).
-    /// Measured against the room the block is allowed rather than the
-    /// height it was laid out at: the block's height follows what the box
-    /// does, so reading it back would put the two in a ring where every
-    /// pull is handed straight back (see WipPane, where that was measured).
-    readonly property real descOwed:
-        Math.max(0, 2 * Theme.rowHeight - fileList.height)
-        + Math.max(0, blockCol.implicitHeight - detailsPane.blockRoom)
+    // The pair's own geometry lives in `MessageEditor`; what this pane
+    // owns is what stands around it. The file list is the one thing here
+    // that gives, and everything between the boxes and it (the author,
+    // the credit line, the CHANGES band) keeps its own height by
+    // construction (デザイン規約 §コミットメッセージの 2 つの枠).
     /// How much of the pane the block between the two bands may take: all
     /// of it but the list's own band and the two rows that keep a list a
     /// list. Past this the block scrolls rather than running out of the
@@ -384,41 +314,25 @@ ColumnLayout {
         blockScroll.contentY =
             Math.max(0, Math.min(max, blockScroll.contentY - pixels))
     }
-    function rollSummary(flick, dy) {
-        const pixels = dy / 120 * (Metrics.wheelRows * Theme.fontMdLine)
-        const max = Math.max(0, flick.contentHeight - flick.height)
-        const next = Math.max(0, Math.min(max, flick.contentY - pixels))
-        if (Math.abs(next - flick.contentY) > 0.5) {
-            flick.contentY = next
-            return
-        }
-        detailsPane.rollBlock(pixels)
-    }
-    // -- smoke hooks, forwarded to the box --
-    function growDescription(dy) { bodyArea.grow(dy) }
-    function pullDescriptionPast(down) { bodyArea.pullPast(down) }
+    // -- smoke hooks and readouts, said under the pane's name because
+    // the automation reads the panes (MessageEditor) --
+    function growDescription(dy) { msgEditor.growDescription(dy) }
+    function pullDescriptionPast(down) { msgEditor.pullDescriptionPast(down) }
     /// Whether the grip is refusing a pull, and where the hand is while it
     /// does (scene coordinates). The page draws the badge — see `RepoPage`
     /// on why it cannot be drawn in the box.
-    readonly property alias descRefuses: bodyArea.gripRefused
-    readonly property alias descPoint: bodyArea.gripPoint
-    readonly property bool descGrips: bodyArea.grips
-    readonly property real descHeight: bodyArea.boxHeight
-    readonly property real descWants: bodyArea.wants
-    readonly property real descCap: bodyArea.cap
-    /// How many rows the file list is left with, which is the bound the
-    /// pull stops at. Rounded: the layout hands out fractions and what
-    /// this is about is rows.
-    readonly property int descListRows:
-        Math.round(fileList.height / Theme.rowHeight)
-    /// Whether the block is taller than the room it was given — anything
-    /// in it below the fold. What a pulled-open box pushes past the pane's
-    /// edge is exactly what the block ends up scrolling by, so this is
-    /// also the answer to "has the box given back what it owes". A shot
-    /// frames alike either way (see contentOverflow).
-    readonly property bool blockScrolls:
-        blockCol.implicitHeight > detailsPane.blockRoom + 1
-    readonly property bool descKeeps: !detailsPane.blockScrolls
+    readonly property alias descRefuses: msgEditor.descRefuses
+    readonly property alias descPoint: msgEditor.descPoint
+    readonly property bool descGrips: msgEditor.descGrips
+    readonly property real descHeight: msgEditor.descHeight
+    readonly property real descWants: msgEditor.descWants
+    readonly property real descCap: msgEditor.descCap
+    readonly property int descListRows: msgEditor.descListRows
+    /// Whether anything in the block is below the fold, and its
+    /// complement — the editor holds the numbers, this pane says them
+    /// out loud for the headless runs (see contentOverflow).
+    readonly property bool blockScrolls: msgEditor.blockScrolls
+    readonly property bool descKeeps: msgEditor.descKeeps
     /// The same measurement the working-tree pane makes, off this pane's
     /// own list: how much of the bottom edge is left bare for the corner
     /// text the page hangs there (see WipPane.bottomRoom).
@@ -541,69 +455,20 @@ ColumnLayout {
                 spacing: Theme.spaceXs
                 visible: detailsPane.details.shaHex !== ""
 
-                // -- message first, like the commit editor: a prominent summary
-                // box and a dimmer description box, the two of them one block
-                // of one height (デザイン規約 §コミットメッセージの 2 つの枠) --
-                ColumnLayout {
-                    id: messagePair
+                // -- message first, like the commit editor: the same pair,
+                // in the same component, one block of one height (デザイン
+                // 規約 §コミットメッセージの 2 つの枠) --
+                MessageEditor {
+                    id: msgEditor
                     Layout.fillWidth: true
-                    Layout.preferredHeight: detailsPane.pairBase + bodyArea.extra
-                    spacing: Theme.spaceXs
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: detailsPane.summaryNeed
-                    color: Theme.bgBase
-                    radius: Theme.radiusMd
-                    // While the question stands, the boxes it is about carry it:
-                    // the click that asked it happened over on the graph, and
-                    // nothing else would draw the eye back here.
-                    border.color: detailsPane.asking ? Theme.warning : Theme.borderDefault
-                    border.width: Theme.borderWidth
-                    ScrollView {
-                        id: subjectView
-                        anchors.fill: parent
-                        anchors.margins: Theme.spaceXs
-                        // ScrollView keeps its Flickable private -- reach it
-                        // once it exists. Not interactive, for the reason
-                        // the description box carries: the flickable
-                        // answering the same wheel as the handler moved the
-                        // text twice.
-                        Component.onCompleted: {
-                            contentItem.boundsBehavior = Flickable.StopAtBounds
-                            contentItem.interactive = false
-                        }
-                        SummaryArea {
-                            id: subjectArea
-                            readOnly: !detailsPane.editable
-                            placeholderText: detailsPane.editable ? qsTr("Commit summary") : ""
-                            ToolTip.visible: (hovered || detailsPane.summaryPointedAt)
-                                             && detailsPane.editBlocked !== ""
-                            ToolTip.delay: Metrics.tipDelayMs
-                            ToolTip.text: detailsPane.editBlocked
-                            WheelHandler {
-                                acceptedDevices: PointerDevice.Mouse
-                                                 | PointerDevice.TouchPad
-                                onWheel: event => detailsPane.rollSummary(
-                                    subjectView.contentItem, event.angleDelta.y)
-                            }
-                        }
-                    }
-                }
-                // Always shown, even empty, and taking whatever the summary
-                // above it left of the block — the pair mirrors the commit
-                // editor's fields, and this half of the pair is the same
-                // component in both panes.
-                DescriptionBox {
-                    id: bodyArea
                     readOnly: !detailsPane.editable
-                    placeholderText: detailsPane.editable ? qsTr("Description") : ""
-                    border.color: detailsPane.asking ? Theme.warning : Theme.borderSubtle
-                    restHeight: detailsPane.descRest
-                    room: detailsPane.descRoom
-                    owed: detailsPane.descOwed
+                    blockedTip: detailsPane.editBlocked
+                    asking: detailsPane.asking
+                    summaryPointedAt: detailsPane.summaryPointedAt
+                    listHeight: fileList.height
+                    blockRoom: detailsPane.blockRoom
+                    blockHeight: blockCol.implicitHeight
                     onWheelPastEnd: pixels => detailsPane.rollBlock(pixels)
-                }
                 }
                 // Only once something is actually changed: until then the pane
                 // keeps its resting shape and nothing invites a rewrite.
@@ -660,7 +525,7 @@ ColumnLayout {
                             frameColor: enabled ? Theme.accent : Theme.borderDefault
                             activeFocusOnTab: true
                             text: qsTr("Save message")
-                            enabled: !detailsPane.busy && subjectArea.text.trim() !== ""
+                            enabled: !detailsPane.busy && msgEditor.subjectText.trim() !== ""
                             onActivated: detailsPane.submitMessage()
                         }
                         // The two ways out of the question. Staying is the
