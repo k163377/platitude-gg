@@ -100,11 +100,11 @@ pub(crate) fn survey(cwd: &str) -> Option<Vec<Seat>> {
 /// Measures one created seat. Each figure is None when its git call
 /// fails, and the callers print those as unknowns rather than guess.
 fn seat_state(entry: &SeatEntry, now: SystemTime) -> SeatState {
-    let dir = entry.path.as_str();
+    let dir = entry.tree.path.as_str();
     SeatState {
-        branch: entry.branch.clone(),
-        locked: entry.locked,
-        lock_reason: entry.reason.clone(),
+        branch: entry.tree.branch.clone(),
+        locked: entry.tree.locked,
+        lock_reason: entry.tree.reason.clone(),
         ahead: commits_in(dir, "main..HEAD"),
         behind: commits_in(dir, "HEAD..main"),
         dirty: crate::git_query(dir, &["--no-optional-locks", "status", "--porcelain"])
@@ -132,17 +132,12 @@ pub(crate) fn commits_in(dir: &str, range: &str) -> Option<u32> {
     crate::git_query(dir, &["rev-list", "--count", range]).and_then(|count| count.parse().ok())
 }
 
-/// One roster seat as `git worktree list --porcelain` shows it.
+/// One roster seat as `git worktree list --porcelain` shows it: the
+/// listing's own block, and the roster letter its path names.
 #[derive(Debug, PartialEq)]
 pub(crate) struct SeatEntry {
     pub seat: &'static str,
-    /// The worktree's path, slashes forward, for `git -C`.
-    pub path: String,
-    /// Branch name, empty when HEAD is detached.
-    pub branch: String,
-    pub locked: bool,
-    /// The lock's reason, empty when unlocked or given none.
-    pub reason: String,
+    pub tree: WorktreeBlock,
 }
 
 /// One tree of `git worktree list --porcelain`, as the listing gives it.
@@ -199,13 +194,7 @@ pub(crate) fn seat_entries(listing: &str) -> Vec<SeatEntry> {
                 let name = root.rsplit('/').next()?.to_string();
                 SEATS.iter().find(|seat| **seat == name).copied()
             })?;
-            Some(SeatEntry {
-                seat,
-                path: block.path,
-                branch: block.branch,
-                locked: block.locked,
-                reason: block.reason,
-            })
+            Some(SeatEntry { seat, tree: block })
         })
         .collect()
 }
@@ -329,7 +318,7 @@ pub(crate) fn format_age(age: Option<Duration>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Seat, SeatEntry, SeatState, format_age, render, seat_entries};
+    use super::{Seat, SeatEntry, SeatState, WorktreeBlock, format_age, render, seat_entries};
     use std::time::Duration;
 
     #[test]
@@ -344,17 +333,21 @@ mod tests {
             vec![
                 SeatEntry {
                     seat: "a",
-                    path: "C:/x/platitude-gg/.claude/worktrees/a".to_string(),
-                    branch: "worktree-a".to_string(),
-                    locked: false,
-                    reason: String::new(),
+                    tree: WorktreeBlock {
+                        path: "C:/x/platitude-gg/.claude/worktrees/a".to_string(),
+                        branch: "worktree-a".to_string(),
+                        locked: false,
+                        reason: String::new(),
+                    },
                 },
                 SeatEntry {
                     seat: "b",
-                    path: "C:/x/platitude-gg/.claude/worktrees/b".to_string(),
-                    branch: "worktree-b".to_string(),
-                    locked: true,
-                    reason: "claude session b (pid 1)".to_string(),
+                    tree: WorktreeBlock {
+                        path: "C:/x/platitude-gg/.claude/worktrees/b".to_string(),
+                        branch: "worktree-b".to_string(),
+                        locked: true,
+                        reason: "claude session b (pid 1)".to_string(),
+                    },
                 },
             ]
         );

@@ -70,7 +70,7 @@ fn existing_seat_path(cwd: &str, name: &str) -> Option<String> {
     seats::seat_entries(&listing)
         .into_iter()
         .find(|entry| entry.seat == name)
-        .map(|entry| entry.path)
+        .map(|entry| entry.tree.path)
 }
 
 /// How an attempt to claim a seat came out.
