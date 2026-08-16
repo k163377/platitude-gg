@@ -355,24 +355,7 @@ impl RepoSession {
             .map(|list| list.into_iter().map(|s| (s.oid, s.name)).collect())
             .unwrap_or_default();
 
-        let mut cmd = GitCommand::new()
-            .cwd(workdir)
-            .args(["log", "-z", "--date-order", LOG_FORMAT_ARG])
-            .args(["HEAD", "--branches", "--remotes"])
-            .no_timeout();
-        if options.include_tags {
-            cmd = cmd.arg("--tags");
-        }
-        if let Some(limit) = options.limit {
-            cmd = cmd.arg(format!("--max-count={limit}"));
-        }
-        if !stash_refs.is_empty() {
-            // A stash may vanish between the listing and the walk.
-            cmd = cmd.arg("--ignore-missing");
-            for oid in stash_refs.keys() {
-                cmd = cmd.arg(oid.to_hex());
-            }
-        }
+        let cmd = walk_command(workdir, options, &stash_refs);
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
@@ -418,25 +401,12 @@ impl RepoSession {
             })
             .await;
 
-        match result {
-            Ok(_) => {}
-            Err(e) => {
-                // A self-inflicted cancel means the parser hit a fatal error.
-                if let Some(msg) = parse_error {
-                    return Err(GitError::UnexpectedOutput {
-                        command: "git log".to_string(),
-                        message: msg,
-                    });
-                }
-                return Err(e);
-            }
+        if let Err(e) = result {
+            return Err(map_walk_error(e, parse_error));
         }
-        if let Err(e) = parser.finish() {
-            return Err(GitError::UnexpectedOutput {
-                command: "git log".to_string(),
-                message: e.to_string(),
-            });
-        }
+        parser
+            .finish()
+            .map_err(|e| unreadable_walk(e.to_string()))?;
         if !pending.is_empty() {
             let batch = std::mem::take(&mut pending);
             totals.walked += batch.len() as u32;
@@ -485,23 +455,7 @@ impl RepoSession {
             .map(|list| list.into_iter().map(|s| (s.oid, s.name)).collect())
             .unwrap_or_default();
 
-        let mut cmd = GitCommand::new()
-            .cwd(workdir)
-            .args(["log", "-z", "--date-order", LOG_FORMAT_ARG])
-            .args(["HEAD", "--branches", "--remotes"])
-            .no_timeout();
-        if options.include_tags {
-            cmd = cmd.arg("--tags");
-        }
-        if let Some(limit) = options.limit {
-            cmd = cmd.arg(format!("--max-count={limit}"));
-        }
-        if !stash_refs.is_empty() {
-            cmd = cmd.arg("--ignore-missing");
-            for oid in stash_refs.keys() {
-                cmd = cmd.arg(oid.to_hex());
-            }
-        }
+        let cmd = walk_command(workdir, options, &stash_refs);
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
@@ -534,24 +488,12 @@ impl RepoSession {
                 }
             })
             .await;
-        match result {
-            Ok(_) => {}
-            Err(e) => {
-                if let Some(msg) = parse_error {
-                    return Err(GitError::UnexpectedOutput {
-                        command: "git log".to_string(),
-                        message: msg,
-                    });
-                }
-                return Err(e);
-            }
+        if let Err(e) = result {
+            return Err(map_walk_error(e, parse_error));
         }
-        if let Err(e) = parser.finish() {
-            return Err(GitError::UnexpectedOutput {
-                command: "git log".to_string(),
-                message: e.to_string(),
-            });
-        }
+        parser
+            .finish()
+            .map_err(|e| unreadable_walk(e.to_string()))?;
         let batch = std::mem::take(&mut pending);
         walked += batch.len() as u32;
         let mut items = Vec::with_capacity(batch.len());
@@ -695,5 +637,55 @@ impl RepoSession {
             generation: shared.generation,
             rows: changed,
         });
+    }
+}
+
+/// The walk both passes run: the same commits in the same order through
+/// the same window.
+///
+/// A stash may vanish between the listing and the walk, so the oids that
+/// join it are asked for with `--ignore-missing`.
+fn walk_command(
+    workdir: &std::path::Path,
+    options: LogOptions,
+    stash_refs: &HashMap<Oid, String>,
+) -> GitCommand {
+    let mut cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["log", "-z", "--date-order", LOG_FORMAT_ARG])
+        .args(["HEAD", "--branches", "--remotes"])
+        .no_timeout();
+    if options.include_tags {
+        cmd = cmd.arg("--tags");
+    }
+    if let Some(limit) = options.limit {
+        cmd = cmd.arg(format!("--max-count={limit}"));
+    }
+    if !stash_refs.is_empty() {
+        cmd = cmd.arg("--ignore-missing");
+        for oid in stash_refs.keys() {
+            cmd = cmd.arg(oid.to_hex());
+        }
+    }
+    cmd
+}
+
+/// What a walk that stopped means.
+///
+/// A self-inflicted cancel means the parser hit a fatal error: it cancels
+/// the run itself, so the cancellation is how that arrives here, and what
+/// could not be read is the answer worth reporting.
+fn map_walk_error(error: GitError, parse_error: Option<String>) -> GitError {
+    match parse_error {
+        Some(message) => unreadable_walk(message),
+        None => error,
+    }
+}
+
+/// git log said something the parser could not read.
+fn unreadable_walk(message: String) -> GitError {
+    GitError::UnexpectedOutput {
+        command: "git log".to_string(),
+        message,
     }
 }
