@@ -17,10 +17,11 @@
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::support::{Patience, TestRepo};
+use crate::support::TestRepo;
+use crate::support::session::CaptureSink;
 use platitude_core::process::GitExecutor;
 use platitude_core::remote;
 use platitude_core::session::{
@@ -118,70 +119,20 @@ async fn a_remote_is_read_at_the_commits_its_tags_peel_to() {
 
 // --- through the session ------------------------------------------------
 
-struct CaptureSink {
-    events: Mutex<Vec<SessionEvent>>,
-}
-
-impl SessionSink for CaptureSink {
-    fn event(&self, event: SessionEvent) {
-        self.events.lock().unwrap().push(event);
-    }
-}
-
-impl CaptureSink {
-    fn new() -> Arc<Self> {
-        Arc::new(Self {
-            events: Mutex::new(Vec::new()),
+/// The refs snapshot published after the fetch landed. Opening
+/// publishes one too, and that one predates any answer from the
+/// remote — waiting for it instead would test the empty index.
+async fn snapshot_after_the_fetch(sink: &CaptureSink) -> RefsSnapshot {
+    sink.wait_for("RefsLoaded after the fetch", |evs| {
+        let done = evs.iter().position(|e| {
+            matches!(e, SessionEvent::WriteFinished { op, error } if *op == "fetch" && error.is_none())
+        })?;
+        evs[done..].iter().find_map(|e| match e {
+            SessionEvent::RefsLoaded { snapshot } => Some((**snapshot).clone()),
+            _ => None,
         })
-    }
-
-    fn count(&self, pred: impl Fn(&SessionEvent) -> bool) -> usize {
-        self.events
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|e| pred(e))
-            .count()
-    }
-
-    /// Polls until `pred` over the event list returns `Some`, giving up
-    /// only once the session has gone quiet on it (see [`Patience`]).
-    async fn wait_for<T>(&self, what: &str, pred: impl Fn(&[SessionEvent]) -> Option<T>) -> T {
-        let mut patience = Patience::new();
-        loop {
-            {
-                let events = self.events.lock().unwrap();
-                if let Some(v) = pred(&events) {
-                    return v;
-                }
-                patience.note(events.len());
-            }
-            patience.check(what, &self.events);
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    }
-
-    /// Waits until the session has finished what it already had going
-    /// (see [`crate::support::settled`]).
-    async fn settled(&self) {
-        crate::support::settled(&self.events).await;
-    }
-
-    /// The refs snapshot published after the fetch landed. Opening
-    /// publishes one too, and that one predates any answer from the
-    /// remote — waiting for it instead would test the empty index.
-    async fn snapshot_after_the_fetch(&self) -> RefsSnapshot {
-        self.wait_for("RefsLoaded after the fetch", |evs| {
-            let done = evs.iter().position(|e| {
-                matches!(e, SessionEvent::WriteFinished { op, error } if *op == "fetch" && error.is_none())
-            })?;
-            evs[done..].iter().find_map(|e| match e {
-                SessionEvent::RefsLoaded { snapshot } => Some((**snapshot).clone()),
-                _ => None,
-            })
-        })
-        .await
-    }
+    })
+    .await
 }
 
 /// Opens the session and waits until it is open. A write queued before
@@ -255,7 +206,7 @@ async fn the_fetch_is_what_tells_a_tag_whether_a_remote_has_it_too() {
     );
 
     session.fetch(Some("origin".into()));
-    let after = sink.snapshot_after_the_fetch().await;
+    let after = snapshot_after_the_fetch(&sink).await;
 
     assert!(tag(&after, "v-both").has_remote);
     assert!(tag(&after, "v-both").here);
@@ -426,7 +377,7 @@ async fn with_the_interval_off_nothing_reaches_the_network_unasked() {
     // Asking is still asking: the fetch reads them as it always did.
     session.fetch(Some("origin".into()));
     assert!(some_tag_has_a_remote(
-        &sink.snapshot_after_the_fetch().await.tags
+        &snapshot_after_the_fetch(&sink).await.tags
     ));
 }
 
@@ -449,7 +400,7 @@ async fn a_drifted_tag_puts_its_name_on_both_rows() {
     let (_bare, work, root, head) = tag_scenario();
     let (sink, session) = opened(&work).await;
     session.fetch(Some("origin".into()));
-    sink.snapshot_after_the_fetch().await;
+    snapshot_after_the_fetch(&sink).await;
 
     // Both sides of the drift are on main, so both have a row to stand on,
     // and the name is on each of them — the whole of that signal.

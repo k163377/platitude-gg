@@ -173,6 +173,12 @@ impl CaptureSink {
         .await
     }
 
+    /// Waits until the session has finished what it already had going
+    /// (see [`crate::support::settled`]).
+    pub async fn settled(&self) {
+        crate::support::settled(&self.events).await;
+    }
+
     /// Polls until `pred` over the event list returns `Some`, giving up
     /// only once the session has gone quiet on it (see [`Patience`]).
     pub async fn wait_for<T>(&self, what: &str, pred: impl Fn(&[SessionEvent]) -> Option<T>) -> T {
