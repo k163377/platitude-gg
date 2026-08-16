@@ -6,29 +6,32 @@
 //! here rather than in whatever shell somebody typed that day: release
 //! build, a **real window** (offscreen reports neither memory nor fps
 //! honestly), warm cache, the `PG_AUTO_*` hooks, WorkingSet sampled every
-//! 100ms for its maximum, and a deadline with a kill guard — a run that
-//! meets a locked screen must end by itself.
+//! 100ms for its maximum, causal `perf_done`, and an outer kill guard.
 //!
 //! `--breakdown` adds `PG_MEM_REPORT=1` and prints the largest `mem
 //! report` line the run produced, which is what says *where* the bytes
 //! are. That needs a binary built with the `memprobe` feature; without it
 //! the line still comes, with `counted=false` and no Rust-heap total.
 
+mod sampler;
+#[cfg(test)]
+mod tests;
+
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-const SAMPLE_MS: u64 = 100;
+use sampler::{sample_memory, sample_once};
 
-/// Grace on top of `PG_AUTO_QUIT_MS` before the run is killed.
-const GRACE_MS: u64 = 25_000;
+const SAMPLE_MS: u64 = 100;
 
 struct Options {
     repo: PathBuf,
     label: String,
     runs: u32,
-    quit_ms: u64,
+    watchdog_ms: u64,
     scroll: bool,
     select: bool,
     breakdown: bool,
@@ -45,7 +48,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         repo: PathBuf::new(),
         label: String::new(),
         runs: 3,
-        quit_ms: 40_000,
+        watchdog_ms: 300_000,
         scroll: true,
         select: true,
         breakdown: false,
@@ -69,11 +72,15 @@ fn parse(args: &[String]) -> Result<Options, String> {
                     .parse()
                     .map_err(|_| "--runs takes a number".to_string())?;
             }
-            "--quit-ms" => {
-                opts.quit_ms = value()?
+            "--watchdog-ms" => {
+                opts.watchdog_ms = value()?
                     .parse()
-                    .map_err(|_| "--quit-ms takes a number".to_string())?;
+                    .map_err(|_| "--watchdog-ms takes a number".to_string())?;
             }
+            "--quit-ms" => return Err(
+                "--quit-ms is no longer a correctness clock; use --watchdog-ms as the outer hang ceiling"
+                    .into(),
+            ),
             "--no-scroll" => opts.scroll = false,
             "--no-select" => opts.select = false,
             "--no-open" => opts.open = false,
@@ -116,8 +123,8 @@ struct Reading {
     /// The `mem report` line with the largest `rust_live`, verbatim.
     breakdown: Option<String>,
     breakdown_live: u64,
+    perf_done: bool,
 }
-
 pub fn run(args: &[String]) -> Result<(), String> {
     let opts = parse(args)?;
     let root = crate::workspace_root();
@@ -153,20 +160,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
             kept.push(reading);
         }
     }
-
     report(&opts, &kept);
     Ok(())
 }
 
 /// The one command in the task runner that opens a real window.
 ///
-/// `cargo xtask hook pre-shell` cannot see this one — it names no binary,
-/// the way `verify-ui` names none — so the rule it enforces is written here
-/// instead of being quietly skipped: a window put up from a worktree covers
-/// whatever is on the screen and lands in the middle of another session's
-/// grab. A person asking for this measurement in so many words is the
-/// exception the hook already spells, and `PG_ALLOW_GUI=1` is how they say
-/// it (CLAUDE.md ビルド・テスト).
+/// `cargo xtask hook pre-shell` cannot see this one because it names no app
+/// binary. A worktree window can overlap another session's screenshot, so
+/// the explicit `PG_ALLOW_GUI=1` remains the authorization boundary.
 fn guard_the_window(root: &std::path::Path) -> Result<(), String> {
     let in_worktree = root
         .to_string_lossy()
@@ -182,11 +184,9 @@ fn guard_the_window(root: &std::path::Path) -> Result<(), String> {
             .into(),
     )
 }
-
 fn mb(bytes: u64) -> f64 {
     bytes as f64 / (1024.0 * 1024.0)
 }
-
 fn report(opts: &Options, kept: &[Reading]) {
     if kept.is_empty() {
         return;
@@ -246,26 +246,28 @@ fn spread(values: &[f64]) -> String {
         _ => "-".into(),
     }
 }
-
 fn measure(
     exe: &std::path::Path,
     path: &std::ffi::OsString,
     root: &std::path::Path,
     opts: &Options,
 ) -> Result<Reading, String> {
-    // A config directory per run, so nothing a previous run remembered
-    // (restored tabs, a window size) decides what this one does.
+    // A config directory per process, so another perf process or a previous
+    // run's restored state cannot decide what this one does.
     let config_dir = std::env::temp_dir().join(format!("pg-perf-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&config_dir);
     std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
-
     let mut cmd = Command::new(exe);
+    crate::app_env::clear_automation(&mut cmd);
     cmd.current_dir(root)
         .env("PATH", path)
         .env("QT_FORCE_STDERR_LOGGING", "1")
         .env("PG_CONFIG_DIR", &config_dir)
         .env("PG_LOG", "info")
-        .env("PG_AUTO_QUIT_MS", opts.quit_ms.to_string())
+        // The app reports completion only after every requested measurement
+        // has answered. The parent owns termination so it can take the last
+        // process-memory sample and reap exactly the child it started.
+        .env("PG_AUTO_PERF", "1")
         // A real window, deliberately: `verify-ui` runs offscreen, and
         // offscreen Qt builds no scene graph worth measuring.
         .env_remove("QT_QPA_PLATFORM")
@@ -283,14 +285,75 @@ fn measure(
     if opts.breakdown {
         cmd.env("PG_MEM_REPORT", "1");
     }
-
     let started = Instant::now();
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to start the app: {e}"))?;
     let pid = child.id();
     let stderr = child.stderr.take();
+    let (done_rx, reader) = read_app(stderr, started);
 
+    let deadline = started + Duration::from_millis(opts.watchdog_ms);
+    let sampler = sample_memory(pid, deadline);
+    // `perf_done`, not elapsed time, is the success edge. The deadline is
+    // only an outer diagnostic guard for an app that stopped answering.
+    let mut done = false;
+    let mut exited = false;
+    let mut timed_out = false;
+    let mut wait_error = None;
+    loop {
+        if done_rx.try_recv().is_ok() {
+            done = true;
+            break;
+        }
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                exited = true;
+                break;
+            }
+            Ok(None) => {}
+            Err(e) => {
+                wait_error = Some(format!("waiting on the app failed: {e}"));
+                break;
+            }
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            timed_out = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(SAMPLE_MS));
+    }
+    let final_sample = if done { sample_once(pid) } else { (0, 0) };
+    let _ = child.kill();
+    let _ = child.wait();
+    let mut reading = reader.join().unwrap_or_default();
+    let (ws, private) = sampler.join().unwrap_or_default();
+    reading.perf_done |= done;
+    reading.peak_working_set = ws.max(final_sample.0);
+    reading.peak_private = private.max(final_sample.1);
+    let _ = std::fs::remove_dir_all(&config_dir);
+    if let Some(error) = wait_error {
+        return Err(error);
+    }
+    if timed_out {
+        return Err(format!(
+            "the run did not report perf_done within {}ms and was killed — the reading is not usable",
+            opts.watchdog_ms
+        ));
+    }
+    if exited && !done {
+        return Err("the app exited before reporting perf_done — the reading is not usable".into());
+    }
+    missing(&reading, opts)?;
+    Ok(reading)
+}
+
+fn read_app(
+    stderr: Option<std::process::ChildStderr>,
+    started: Instant,
+) -> (mpsc::Receiver<()>, std::thread::JoinHandle<Reading>) {
+    let (done_tx, done_rx) = mpsc::channel();
     let reader = std::thread::spawn(move || {
         let mut found = Reading::default();
         if let Some(pipe) = stderr {
@@ -298,45 +361,15 @@ fn measure(
                 if found.startup_ms.is_none() && line.contains("graph first chunk") {
                     found.startup_ms = Some(started.elapsed().as_millis() as u64);
                 }
+                if line.contains("perf_done") {
+                    let _ = done_tx.send(());
+                }
                 absorb(&line, &mut found);
             }
         }
         found
     });
-
-    let deadline = started + Duration::from_millis(opts.quit_ms + GRACE_MS);
-    let sampler = sample_memory(pid, deadline);
-
-    // Bounded wait with a kill guard — never an unbounded one.
-    let mut killed = false;
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) => {}
-            Err(e) => return Err(format!("waiting on the app failed: {e}")),
-        }
-        if Instant::now() >= deadline {
-            let _ = child.kill();
-            killed = true;
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(SAMPLE_MS));
-    }
-    let _ = child.wait();
-
-    let mut reading = reader.join().unwrap_or_default();
-    let (ws, private) = sampler.join().unwrap_or_default();
-    reading.peak_working_set = ws;
-    reading.peak_private = private;
-    let _ = std::fs::remove_dir_all(&config_dir);
-    if killed {
-        return Err(format!(
-            "the run did not end within {}ms and was killed — the reading is not usable",
-            opts.quit_ms + GRACE_MS
-        ));
-    }
-    missing(&reading, opts)?;
-    Ok(reading)
+    (done_rx, reader)
 }
 
 /// Refuses a reading that lost a number this run was asked to take: a
@@ -344,13 +377,17 @@ fn measure(
 /// The app's log picking up colour is one way to lose every `key=value`
 /// at once (`platitude_gg::init_tracing`).
 fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
-    // The bare window (`--no-open`) has no repository, so it has no graph
-    // to walk, no row to select and nothing to scroll: it takes the memory
-    // floor and nothing else.
-    if !opts.open {
-        return Ok(());
-    }
     let mut gaps = Vec::new();
+    if !reading.perf_done {
+        gaps.push("perf completion (no `perf_done`)");
+    }
+    if !opts.open {
+        return if gaps.is_empty() {
+            Ok(())
+        } else {
+            Err(format!("the run ended without {}", gaps.join(", ")))
+        };
+    }
     if reading.startup_ms.is_none() {
         gaps.push("startup (no `graph first chunk`)");
     }
@@ -376,8 +413,10 @@ fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
         gaps.join(", ")
     ))
 }
-
 fn absorb(line: &str, found: &mut Reading) {
+    if line.contains("perf_done") {
+        found.perf_done = true;
+    }
     if let Some(v) = field(line, "first_chunk_ms=") {
         found.first_chunk_ms = v.parse().ok();
     }
@@ -407,134 +446,8 @@ fn absorb(line: &str, found: &mut Reading) {
         }
     }
 }
-
-/// The value of `key` in a `tracing` line, up to the next space.
 fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     line.split(key)
         .nth(1)
         .map(|rest| rest.split_whitespace().next().unwrap_or(rest))
-}
-
-/// Samples the process every [`SAMPLE_MS`] and returns
-/// `(peak working set, peak private)` in bytes.
-///
-/// Two implementations because there is no portable way to ask: Windows
-/// has one PowerShell loop for the whole run (spawning one per sample
-/// would cost more than the thing being measured), Linux reads `/proc`
-/// directly, and anything else reports nothing rather than a guess.
-fn sample_memory(pid: u32, deadline: Instant) -> std::thread::JoinHandle<(u64, u64)> {
-    std::thread::spawn(move || {
-        #[cfg(windows)]
-        {
-            windows_sampler(pid, deadline)
-        }
-        #[cfg(target_os = "linux")]
-        {
-            linux_sampler(pid, deadline)
-        }
-        #[cfg(not(any(windows, target_os = "linux")))]
-        {
-            let _ = (pid, deadline);
-            (0, 0)
-        }
-    })
-}
-
-#[cfg(windows)]
-fn windows_sampler(pid: u32, deadline: Instant) -> (u64, u64) {
-    let seconds = deadline.saturating_duration_since(Instant::now()).as_secs() + 5;
-    // `Refresh()` is what makes a held Process object re-read its counters;
-    // without it the loop would report the first sample forever.
-    let script = format!(
-        "$ErrorActionPreference='SilentlyContinue';\
-         $p=Get-Process -Id {pid};\
-         $ws=0;$pv=0;$end=(Get-Date).AddSeconds({seconds});\
-         while($p -ne $null -and -not $p.HasExited -and (Get-Date) -lt $end){{\
-           $p.Refresh();\
-           if($p.WorkingSet64 -gt $ws){{$ws=$p.WorkingSet64}};\
-           if($p.PrivateMemorySize64 -gt $pv){{$pv=$p.PrivateMemorySize64}};\
-           Start-Sleep -Milliseconds {SAMPLE_MS};\
-         }};\
-         Write-Output \"$ws $pv\""
-    );
-    let out = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .output();
-    let Ok(out) = out else { return (0, 0) };
-    parse_pair(&String::from_utf8_lossy(&out.stdout))
-}
-
-#[cfg(target_os = "linux")]
-fn linux_sampler(pid: u32, deadline: Instant) -> (u64, u64) {
-    let status = format!("/proc/{pid}/status");
-    let (mut ws, mut pv) = (0u64, 0u64);
-    while Instant::now() < deadline {
-        let Ok(text) = std::fs::read_to_string(&status) else {
-            break; // the process is gone
-        };
-        for line in text.lines() {
-            let kb = |l: &str| -> u64 {
-                l.split_whitespace()
-                    .nth(1)
-                    .and_then(|v| v.parse::<u64>().ok())
-                    .unwrap_or(0)
-                    * 1024
-            };
-            if let Some(rest) = line.strip_prefix("VmRSS:") {
-                ws = ws.max(kb(rest));
-            } else if let Some(rest) = line.strip_prefix("VmData:") {
-                pv = pv.max(kb(rest));
-            }
-        }
-        std::thread::sleep(Duration::from_millis(SAMPLE_MS));
-    }
-    (ws, pv)
-}
-
-/// `"123 456"` → `(123, 456)`; anything else → zeros.
-fn parse_pair(text: &str) -> (u64, u64) {
-    let mut numbers = text.split_whitespace().filter_map(|v| v.parse().ok());
-    (numbers.next().unwrap_or(0), numbers.next().unwrap_or(0))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_tracing_field_reads_up_to_the_next_space() {
-        let line = "INFO first_chunk_ms=873 graph first chunk";
-        assert_eq!(field(line, "first_chunk_ms="), Some("873"));
-        assert_eq!(field(line, "missing="), None);
-    }
-
-    #[test]
-    fn the_bench_line_gives_its_fps() {
-        let mut found = Reading::default();
-        absorb("INFO report: scroll_bench fps=178.3 rows=2000", &mut found);
-        assert_eq!(found.fps, Some(178.3));
-    }
-
-    #[test]
-    fn the_largest_heap_is_the_breakdown_that_is_kept() {
-        let mut found = Reading::default();
-        absorb("mem report rust_live=100 models=a", &mut found);
-        absorb("mem report rust_live=900 models=b", &mut found);
-        absorb("mem report rust_live=300 models=c", &mut found);
-        assert_eq!(found.breakdown_live, 900);
-        assert!(found.breakdown.is_some_and(|l| l.contains("models=b")));
-    }
-
-    #[test]
-    fn a_spread_of_one_value_is_printed_once() {
-        assert_eq!(spread(&[3.0, 3.0]), "3.0");
-        assert_eq!(spread(&[3.0, 5.0]), "3.0–5.0");
-        assert_eq!(spread(&[]), "-");
-    }
-
-    #[test]
-    fn the_sampler_pair_survives_junk() {
-        assert_eq!(parse_pair("123 456\r\n"), (123, 456));
-        assert_eq!(parse_pair(""), (0, 0));
-    }
 }

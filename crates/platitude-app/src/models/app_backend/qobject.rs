@@ -66,6 +66,7 @@ impl AppBackend {
     qproperty!("autoWatchdogMs", Member = auto_watchdog_ms, Constant);
     qproperty!("autoSelect", Member = auto_select, Constant);
     qproperty!("autoScroll", Member = auto_scroll, Constant);
+    qproperty!("autoPerf", Member = auto_perf, Constant);
     qproperty!("autoWip", Member = auto_wip, Constant);
     qproperty!("plainChrome", Member = plain_chrome, Constant);
     qproperty!("automated", Member = automated, Constant);

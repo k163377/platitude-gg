@@ -18,6 +18,7 @@ AuthorCard 1.0 AuthorCard.qml
 AutoActDriver 1.0 AutoActDriver.qml
 AutoScrollBar 1.0 AutoScrollBar.qml
 AutoShotDriver 1.0 AutoShotDriver.qml
+PagePerfDriver 1.0 PagePerfDriver.qml
 AvatarButton 1.0 AvatarButton.qml
 ChangeIcon 1.0 ChangeIcon.qml
 ClipboardHelper 1.0 ClipboardHelper.qml
@@ -107,6 +108,7 @@ TabStrip 1.0 TabStrip.qml
 TopBar 1.0 TopBar.qml
 TreeViewToggle 1.0 TreeViewToggle.qml
 WindowAutoActDriver 1.0 WindowAutoActDriver.qml
+WindowPerfDriver 1.0 WindowPerfDriver.qml
 WindowButton 1.0 WindowButton.qml
 WipBucketHeader 1.0 WipBucketHeader.qml
 WipPane 1.0 WipPane.qml

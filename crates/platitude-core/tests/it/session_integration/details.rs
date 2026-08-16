@@ -3,10 +3,10 @@
 
 use crate::support::TestRepo;
 use crate::support::session::CaptureSink;
+use platitude_core::Oid;
 use platitude_core::details::DiffTarget;
 use platitude_core::identity::SignatureStatus;
 use platitude_core::session::{RepoSession, SessionEvent};
-use platitude_core::{GitExecutor, Oid};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn details_and_diff_round_trip_through_the_session() {
@@ -18,7 +18,7 @@ async fn details_and_diff_round_trip_through_the_session() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -82,7 +82,7 @@ async fn a_diff_arrives_before_the_colours_for_it() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -140,7 +140,7 @@ async fn colours_are_skipped_for_a_diff_the_reader_has_left() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -219,7 +219,7 @@ async fn a_signature_answer_names_the_commit_it_is_about() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),

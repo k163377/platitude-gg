@@ -89,6 +89,7 @@ pub struct AppBackend {
     auto_watchdog_ms: i32,
     auto_select: bool,
     auto_scroll: bool,
+    auto_perf: bool,
     /// `PG_MEM_REPORT=1`: the window drives the memory breakdown off a
     /// timer instead of leaving it to whoever remembers to ask.
     mem_report: bool,

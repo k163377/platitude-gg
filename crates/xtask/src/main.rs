@@ -4,6 +4,7 @@
 //! plain Rust + std, with OS differences expressed as code, not as parallel
 //! script files.
 
+mod app_env;
 mod check;
 mod demo;
 mod gui;
@@ -116,7 +117,6 @@ commands:
                           Both repeat: one tab per repository, in order.
         --no-build        reuse the existing release binary
         --select          also set PG_AUTO_SELECT=1
-        --quit-ms <n>     PG_AUTO_QUIT_MS (default 10000)
         --watchdog-ms <n> maximum run time; never chooses the shot (default 120000)
         --shot-dir <dir>  screenshot directory (default: temp, kept)
         --config-dir <d>  settings.toml / state.toml directory. Fresh per
@@ -173,7 +173,7 @@ commands:
       process total is what separates the toolkit's bytes from ours.
       options:
         --runs <n>        kept runs after the discarded first (default 3)
-        --quit-ms <n>     PG_AUTO_QUIT_MS (default 40000)
+        --watchdog-ms <n> outer hang ceiling (default 300000)
         --no-scroll       leave the scroll benchmark out
         --no-select       do not select a row or open a diff
         --no-open         start with no repository at all — the window and

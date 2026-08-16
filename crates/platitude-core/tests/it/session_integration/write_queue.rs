@@ -3,7 +3,6 @@
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened, write_result};
-use platitude_core::GitExecutor;
 use platitude_core::session::{RepoSession, SessionEvent};
 
 /// Writes are serialized per session: a burst of concurrent stage requests
@@ -20,7 +19,7 @@ async fn concurrent_writes_are_serialized() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -71,7 +70,7 @@ async fn a_failed_write_reports_and_refreshes() {
     repo.commit_file("root.txt", "0\n", "root");
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -113,7 +112,7 @@ async fn stage_commit_and_branch_through_the_session() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -197,7 +196,7 @@ async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() 
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),

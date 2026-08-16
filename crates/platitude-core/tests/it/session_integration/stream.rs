@@ -2,7 +2,6 @@
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, scenario};
-use platitude_core::GitExecutor;
 use platitude_core::session::{RepoSession, SessionEvent};
 
 #[tokio::test(flavor = "multi_thread")]
@@ -10,7 +9,7 @@ async fn open_streams_the_full_pipeline() {
     let (repo, head) = scenario();
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -119,7 +118,7 @@ async fn restart_log_delivers_a_new_generation() {
     let (repo, _) = scenario();
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -172,7 +171,7 @@ async fn unborn_repository_finishes_with_zero_rows() {
     let repo = TestRepo::init();
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -207,7 +206,7 @@ async fn open_failure_is_reported() {
     let dir = tempfile::tempdir().unwrap();
     let sink = CaptureSink::new();
     let _session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         dir.path().to_path_buf(),
         sink.clone(),
@@ -256,7 +255,7 @@ async fn an_independent_history_sits_where_its_date_puts_it() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),

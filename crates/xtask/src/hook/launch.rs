@@ -8,10 +8,10 @@ use crate::seats::worktree_root;
 
 /// PreToolUse(Bash|PowerShell): starting the app from a worktree takes
 /// something from the sessions beside it — a real window covers whatever
-/// is on the screen, and a process nothing ends holds the exe against
-/// the next build's link. Offscreen QPA and PG_AUTO_QUIT_MS take
-/// neither. Only worktree sessions are held to it — a launch in the
-/// primary checkout is the user's own (CLAUDE.md ビルド・テスト).
+/// is on the screen, and an unsupervised process can hold the exe against
+/// the next build's link. Offscreen QPA alone is not a parent kill guard.
+/// Only worktree sessions are held to it — a launch in the primary checkout
+/// is the user's own (CLAUDE.md ビルド・テスト).
 pub(super) fn pre_launch(input: &str) -> Result<(), String> {
     let Some(command) = string_field(input, "command") else {
         return Ok(());
@@ -28,13 +28,12 @@ pub(super) fn pre_launch(input: &str) -> Result<(), String> {
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
          \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
          \"Starting the app this way from a worktree takes something the \
-         sessions beside it need: {}. Headless takes nothing: \
-         `cargo xtask verify-ui <verb>` sets offscreen QPA and a quit timer \
-         and kills the run if it hangs (verify-ui skill). Running the binary \
-         by hand works too, with QT_QPA_PLATFORM=offscreen and \
-         PG_AUTO_QUIT_MS set and this worktree's own target/ as the path. If \
-         the user asked for a real window in so many words, run the same \
-         command again with {}=1 in front of it.\"}}}}",
+         sessions beside it need: {}. Headless verification takes nothing: \
+         use `cargo xtask verify-ui <verb>` or `cargo xtask linux verify-ui \
+         <verb>`; those commands provide the automation and parent kill guard. \
+         Offscreen QPA alone does not supervise a raw app process. If the \
+         user asked for a real window in so many words, run the same command \
+         again with {}=1 in front of it.\"}}}}",
         objections.join("; "),
         WINDOW_ESCAPE
     );
@@ -68,13 +67,12 @@ fn launch_objections(command: &str, cwd: &str) -> Vec<String> {
                 .to_string(),
         );
     }
-    if !command.contains("PG_AUTO_QUIT_MS") {
-        objections.push(
-            "it sets no PG_AUTO_QUIT_MS, so nothing ends the process and it \
-             holds the exe against the next build"
-                .to_string(),
-        );
-    }
+    objections.push(
+        "it launches the app without a parent watchdog; offscreen QPA alone \
+         does not bound the process lifetime — use `cargo xtask verify-ui \
+         <verb>` or `cargo xtask linux verify-ui <verb>`"
+            .to_string(),
+    );
     if let Some(exe) = launch.exe {
         let resolved = resolve(cwd, exe);
         if !resolved.to_lowercase().starts_with(&root.to_lowercase()) {
@@ -181,14 +179,14 @@ mod tests {
         let window = launch_objections("./target/release/platitude-gg.exe", IN_WORKTREE);
         assert_eq!(window.len(), 2, "{window:?}");
         assert!(window[0].contains("QT_QPA_PLATFORM"));
-        assert!(window[1].contains("PG_AUTO_QUIT_MS"));
+        assert!(window[1].contains("parent watchdog"));
 
         let offscreen_only = launch_objections(
             "QT_QPA_PLATFORM=offscreen ./target/release/platitude-gg",
             IN_WORKTREE,
         );
         assert_eq!(offscreen_only.len(), 1, "{offscreen_only:?}");
-        assert!(offscreen_only[0].contains("PG_AUTO_QUIT_MS"));
+        assert!(offscreen_only[0].contains("parent watchdog"));
 
         let by_cargo = launch_objections("cargo run --release", IN_WORKTREE);
         assert_eq!(by_cargo.len(), 2, "{by_cargo:?}");
@@ -202,7 +200,7 @@ mod tests {
             // A container start is headless by construction: it has no
             // display to take and it holds this tree's exe not at all.
             "cargo xtask linux test -p platitude-core",
-            "QT_QPA_PLATFORM=offscreen PG_AUTO_QUIT_MS=3000 ./target/release/platitude-gg.exe",
+            "cargo xtask linux verify-ui commit --preset basic",
             "cargo build --release",
             "cargo run --quiet -p xtask -- hook pre-write",
             "cd C:/Users/x/IdeaProjects/platitude-gg && git status",
@@ -217,22 +215,30 @@ mod tests {
     #[test]
     fn refuses_the_binary_of_another_tree_and_leaves_this_one_alone() {
         let elsewhere = launch_objections(
-            "QT_QPA_PLATFORM=offscreen PG_AUTO_QUIT_MS=3000 \
+            "QT_QPA_PLATFORM=offscreen \
              ../../../target/release/platitude-gg.exe",
             IN_WORKTREE,
         );
-        assert_eq!(elsewhere.len(), 1, "{elsewhere:?}");
+        assert_eq!(elsewhere.len(), 2, "{elsewhere:?}");
         assert!(
-            elsewhere[0].contains("outside this worktree"),
+            elsewhere
+                .iter()
+                .any(|reason| reason.contains("parent watchdog"))
+        );
+        assert!(
+            elsewhere
+                .iter()
+                .any(|reason| reason.contains("outside this worktree")),
             "{elsewhere:?}"
         );
 
         let named_absolutely = launch_objections(
-            "QT_QPA_PLATFORM=offscreen PG_AUTO_QUIT_MS=3000 \
+            "QT_QPA_PLATFORM=offscreen \
              \"C:\\Users\\x\\IdeaProjects\\platitude-gg\\.claude\\worktrees\\launch\\target\\release\\platitude-gg.exe\"",
             IN_WORKTREE,
         );
-        assert!(named_absolutely.is_empty(), "{named_absolutely:?}");
+        assert_eq!(named_absolutely.len(), 1, "{named_absolutely:?}");
+        assert!(named_absolutely[0].contains("parent watchdog"));
     }
 
     #[test]

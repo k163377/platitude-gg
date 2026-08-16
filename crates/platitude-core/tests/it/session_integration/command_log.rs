@@ -1,7 +1,6 @@
 //! The command log holds what the user asked for, and not the background.
 
 use crate::support::session::{CaptureSink, scenario};
-use platitude_core::GitExecutor;
 use platitude_core::session::{RepoSession, SessionEvent};
 
 #[tokio::test(flavor = "multi_thread")]
@@ -9,7 +8,7 @@ async fn the_command_log_holds_what_the_user_asked_for() {
     let (repo, _head) = scenario();
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),

@@ -3,7 +3,6 @@
 use std::sync::{Arc, Mutex};
 
 use crate::support::{Patience, TestRepo};
-use platitude_core::GitExecutor;
 use platitude_core::session::{RepoSession, SessionEvent, SessionSink};
 
 /// Picks the event a [`CaptureSink`] hook fires on.
@@ -251,7 +250,7 @@ pub fn scenario() -> (TestRepo, String) {
 pub async fn opened(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),

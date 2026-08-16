@@ -255,3 +255,6 @@
 - readiness の初期値は出力ではない(2026-08-16 実測: `wip` が一覧ロード前の 0 件を clean と誤認して PASS、PNG は変更 0 なのに graph は +1/-2)。`WorkTreeModel.loaded` のような answer edge の後だけ 0 / false を判定する
 - polling より短い状態は edge を latch する(2026-08-16 実測: command/fetch の error と force-push の busy が 25ms sampler の間に立って消えた)。error 回復は「立った証拠」と最終 quiet の対、通信中の絵は実 busy/loading edge でだけ latch し、画像 callback 完了まで表示を保持する
 - verify-ui の明示リソースは排他(2026-08-16): 同じ `--repo` / `--config-dir` / `--shot-dir` の並行利用は Git 書換え・state・PNG を混線させるため、target 外の atomic lock で fail fast。既定 path は pid + time + serial の名前だけでなく `create_dir` 成功を ownership edge にする
+- cross-harness 回帰(2026-08-16): app 側の固定 quit 依存を verify-ui から外した際、`perf` / offline smoke の非因果終了経路まで失われた。offline は `PG_AUTO_ACT=band` + app watchdog + 親 `timeout`、perf は `perf_done` + 親 watchdog とし、因果撮影の完了判定へ戻さない
+- 性能測定の 12 秒窓は入力サンプルの範囲として保持するが、起動からの固定 quit は成功条件にしない。`perf_done` と親 watchdog がプロセス寿命を判定し、raw worktree app 起動は offscreen 環境変数だけでは許可しない
+- harness 間の環境汚染(2026-08-16 review): `perf` / verify-ui / offline smoke は親 shell の別 `PG_AUTO_*` を継承すると二つの完了 protocol が同居する。automation env を一度全除去して所有分だけ設定し、offline の config も `mktemp` 配下に分離する

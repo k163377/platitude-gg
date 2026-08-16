@@ -82,6 +82,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/AutoActDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AutoScrollBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AutoShotDriver.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/PagePerfDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AvatarButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ChangeIcon.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ClipboardHelper.qml", "qt/qml/platitude");
@@ -171,6 +172,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/TopBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TreeViewToggle.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowAutoActDriver.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/WindowPerfDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipBucketHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipPane.qml", "qt/qml/platitude");

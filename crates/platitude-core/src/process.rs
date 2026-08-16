@@ -20,6 +20,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::GitError;
 
+#[cfg(test)]
+mod tests;
+
 /// Default time budget for short-lived commands. The streaming log walks
 /// and `mergetool` (open-ended, user-paced) opt out via
 /// [`GitCommand::no_timeout`]; network commands set their own, longer
@@ -253,6 +256,10 @@ impl GitOutput {
 #[derive(Clone)]
 pub struct GitExecutor {
     program: Arc<OsString>,
+    /// Environment applied to every invocation from this executor. Kept on
+    /// the executor so a test harness can isolate Git without mutating the
+    /// process-global environment; command-level values override these.
+    env: Arc<Vec<(OsString, OsString)>>,
     observer: Option<Arc<dyn CommandObserver>>,
     /// Whether invocations made through this handle are ones the user
     /// asked for, as opposed to background reads. Carried here rather
@@ -265,6 +272,7 @@ impl std::fmt::Debug for GitExecutor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GitExecutor")
             .field("program", &self.program)
+            .field("env_overrides", &self.env.len())
             .field("observed", &self.observer.is_some())
             .field("user", &self.user)
             .finish()
@@ -291,9 +299,26 @@ impl GitExecutor {
     fn of(program: OsString) -> Self {
         Self {
             program: Arc::new(program),
+            env: Arc::new(Vec::new()),
             observer: None,
             user: false,
         }
+    }
+
+    /// Returns an executor with environment defaults applied to every Git
+    /// subprocess. Per-command [`GitCommand::env`] values take precedence.
+    pub fn with_env<I, K, V>(mut self, vars: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<OsString>,
+        V: Into<OsString>,
+    {
+        self.env = Arc::new(
+            vars.into_iter()
+                .map(|(key, value)| (key.into(), value.into()))
+                .collect(),
+        );
+        self
     }
 
     /// Returns a handle that reports its invocations to `observer`.
@@ -301,6 +326,7 @@ impl GitExecutor {
     pub fn observed(&self, observer: Arc<dyn CommandObserver>, user: bool) -> Self {
         Self {
             program: Arc::clone(&self.program),
+            env: Arc::clone(&self.env),
             observer: Some(observer),
             user,
         }
@@ -314,6 +340,12 @@ impl GitExecutor {
             s.push_str(k);
             s.push('=');
             s.push_str(&shell_quote(v));
+            s.push(' ');
+        }
+        for (k, v) in self.env.iter() {
+            s.push_str(&k.to_string_lossy());
+            s.push('=');
+            s.push_str(&shell_quote(&v.to_string_lossy()));
             s.push(' ');
         }
         for (k, v) in &cmd.env {
@@ -398,6 +430,9 @@ impl GitExecutor {
             command.current_dir(dir);
         }
         for (k, v) in FIXED_ENV {
+            command.env(k, v);
+        }
+        for (k, v) in self.env.iter() {
             command.env(k, v);
         }
         for (k, v) in &cmd.env {
@@ -581,154 +616,5 @@ async fn kill_and_reap(child: &mut Child) {
     }
     if let Err(e) = child.wait().await {
         tracing::debug!(error = %e, "failed to reap killed process");
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Mutex;
-
-    use super::*;
-
-    /// A cross-platform command that announces it is running, then sleeps
-    /// for ~30s, used to exercise timeout / cancellation without depending
-    /// on git behavior or a wall-clock guess about when the child started.
-    fn sleeper() -> Command {
-        #[cfg(windows)]
-        {
-            let mut c = Command::new("powershell");
-            c.args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "Write-Output ready; Start-Sleep -Seconds 30",
-            ]);
-            c
-        }
-        #[cfg(not(windows))]
-        {
-            let mut c = Command::new("sh");
-            c.args(["-c", "printf 'ready\\n'; sleep 30"]);
-            c
-        }
-    }
-
-    fn prepare(mut c: Command) -> Command {
-        c.stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        c
-    }
-
-    #[tokio::test]
-    async fn timeout_kills_the_child() {
-        let mut child = prepare(sleeper()).spawn().unwrap();
-        let cancel = CancellationToken::new();
-        let outcome = run_child(
-            &mut child,
-            Some(Duration::from_millis(300)),
-            &cancel,
-            &mut |_| {},
-        )
-        .await
-        .unwrap();
-        assert!(matches!(outcome, ChildOutcome::TimedOut));
-    }
-
-    #[tokio::test]
-    async fn cancellation_kills_the_child() {
-        let mut child = prepare(sleeper()).spawn().unwrap();
-        let cancel = CancellationToken::new();
-        let cancel_clone = cancel.clone();
-        let mut ready = false;
-        let outcome = run_child(&mut child, None, &cancel, &mut |_| {
-            ready = true;
-            cancel_clone.cancel();
-        })
-        .await
-        .unwrap();
-        assert!(ready, "the child announced that it had started");
-        assert!(matches!(outcome, ChildOutcome::Cancelled));
-    }
-
-    #[test]
-    fn describe_joins_arguments() {
-        let cmd = GitCommand::new().args(["log", "--topo-order"]);
-        assert_eq!(cmd.describe(), "git log --topo-order");
-    }
-
-    #[test]
-    fn describe_quotes_what_a_shell_would_split_or_read() {
-        let cmd = GitCommand::new().args(["stash", "push", "-m", "work in progress"]);
-        assert_eq!(cmd.describe(), "git stash push -m 'work in progress'");
-        let cmd = GitCommand::new().args(["add", "--", &literal_pathspec("a b.txt")]);
-        assert_eq!(cmd.describe(), "git add -- ':(literal)a b.txt'");
-    }
-
-    #[test]
-    fn the_full_form_spells_out_what_is_always_applied() {
-        let exec = GitExecutor::new();
-        let full = exec.describe_full(&GitCommand::new().args(["status", "--porcelain=v2"]));
-        assert!(full.starts_with("LC_ALL=C "), "{full}");
-        assert!(full.contains("GIT_TERMINAL_PROMPT=0"), "{full}");
-        assert!(
-            full.contains("git -c color.ui=false"),
-            "the fixed configuration is part of what ran: {full}"
-        );
-        assert!(full.ends_with(" status --porcelain=v2"), "{full}");
-    }
-
-    #[test]
-    fn a_per_command_environment_override_shows_up_in_the_full_form() {
-        let exec = GitExecutor::new();
-        let full = exec.describe_full(
-            &GitCommand::new()
-                .env("GIT_EDITOR", "pg-todo-editor")
-                .arg("rebase"),
-        );
-        assert!(full.contains("GIT_EDITOR=pg-todo-editor"), "{full}");
-    }
-
-    #[derive(Default)]
-    struct Recorder {
-        seen: Mutex<Vec<(u64, String, CommandEnd, String)>>,
-    }
-
-    impl CommandObserver for Recorder {
-        fn records(&self, _user: bool) -> bool {
-            true
-        }
-
-        fn started(&self, display: &str, _full: &str, _user: bool) -> u64 {
-            let mut seen = self.seen.lock().unwrap();
-            let id = seen.len() as u64;
-            seen.push((id, display.to_string(), CommandEnd::Failed, String::new()));
-            id
-        }
-
-        fn finished(&self, id: u64, end: CommandEnd, _elapsed_ms: u64, message: &str) {
-            let mut seen = self.seen.lock().unwrap();
-            if let Some(entry) = seen.get_mut(id as usize) {
-                entry.2 = end;
-                entry.3 = message.to_string();
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn the_observer_hears_about_a_command_that_never_started() {
-        let recorder = Arc::new(Recorder::default());
-        let exec = GitExecutor::with_program("pg-no-such-program")
-            .observed(Arc::clone(&recorder) as Arc<dyn CommandObserver>, true);
-        let out = exec
-            .run_unchecked(GitCommand::new().arg("status"), &CancellationToken::new())
-            .await;
-        assert!(out.is_err());
-        let seen = recorder.seen.lock().unwrap();
-        assert_eq!(seen.len(), 1);
-        assert_eq!(seen[0].1, "git status");
-        assert_eq!(seen[0].2, CommandEnd::Failed);
-        assert!(!seen[0].3.is_empty(), "the reason is reported");
     }
 }

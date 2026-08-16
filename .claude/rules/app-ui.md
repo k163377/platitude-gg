@@ -41,6 +41,8 @@ UI の色・寸法・用語の正本は [デザイン規約.md](../../internal-d
 ## UI 自動化の因果性
 
 - **固定時間を完了条件にしない** — `PG_AUTO_ACT` は、入力の受理 → 必要なら busy 開始 → busy 終了 → 対象モデルの更新 → 出力プロパティまたは描画可能状態、というその動詞固有の因果を待つ。短い反復 Timer は状態を観測する sampler としてだけ使い、回数・経過時間で成功にしない。`--watchdog-ms` は壊れた run を診断して止める外側の天井であり、撮影時点を選ばない
+- **非因果の終了境界も成功条件にしない** — 性能測定の 12 秒窓は測定入力として保持するが、起動からの固定 quit で成功扱いにしない。`perf_done` と親 watchdog の完了・kill 判定を使い、`PG_AUTO_ACT` の因果完了と混ぜない。worktree からの raw app 起動は親監督なしでは許可せず、`cargo xtask verify-ui` / `cargo xtask linux verify-ui` を使う
+- **harness は親の自動化状態を継承しない** — 起動前に全 `PG_AUTO_*` と関連する automation env を除去し、その harness が所有する値だけを設定する。repo / config / shot は run 固有にし、別 harness や並行 session の入力・状態・出力を合成しない
 - **1 run の完了 owner は 1 つ** — page が動詞を原子的に claim し、window-level 動詞は page completion を defer する。新しく開いた tab が同じ動詞を再実行してはならない。撮影は owner が `finishAutoAct()` を 1 回通知した後だけ
 - **「まだ答えが無い」と値 0 / false を分ける** — 非同期モデルは `loaded` / request generation / sequence 等の readiness を公開し、自動化は readiness の後で値を読む。初期値 0 を clean・空・完了と判定しない
 - **一瞬だけ立つ状態は signal で観測して latch する** — error / busy / loading が polling 1 周より短くても、その実 edge を見た証拠を保持し、非同期 `grabToImage` が終わるまで意図した中間表示を保つ。入力フラグを立てただけで出力状態を偽装しない

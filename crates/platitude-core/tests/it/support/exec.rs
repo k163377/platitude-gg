@@ -1,15 +1,65 @@
 //! What a test runs git with: an executor, a token, and the observer that
 //! watches what went out.
 
-use std::sync::{Arc, Mutex};
+use std::ffi::OsString;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor};
 use tokio_util::sync::CancellationToken;
 
+struct IsolatedGit {
+    _dir: tempfile::TempDir,
+    global_config: PathBuf,
+    xdg_config: PathBuf,
+}
+
+static ISOLATED_GIT: OnceLock<IsolatedGit> = OnceLock::new();
+
+fn isolated_git() -> &'static IsolatedGit {
+    ISOLATED_GIT.get_or_init(|| {
+        let dir = tempfile::tempdir().expect("create isolated git config dir");
+        let global_config = dir.path().join("global-config");
+        let xdg_config = dir.path().join("xdg-config");
+        std::fs::write(
+            &global_config,
+            b"[core]\n\tfsync = none\n[gc]\n\tauto = 0\n",
+        )
+        .expect("write isolated global config");
+        std::fs::create_dir(&xdg_config).expect("create isolated xdg config dir");
+        IsolatedGit {
+            _dir: dir,
+            global_config,
+            xdg_config,
+        }
+    })
+}
+
+fn isolated_env() -> Vec<(OsString, OsString)> {
+    let config = isolated_git();
+    vec![
+        (
+            OsString::from("GIT_CONFIG_GLOBAL"),
+            config.global_config.clone().into_os_string(),
+        ),
+        (OsString::from("GIT_CONFIG_NOSYSTEM"), OsString::from("1")),
+        (
+            OsString::from("XDG_CONFIG_HOME"),
+            config.xdg_config.clone().into_os_string(),
+        ),
+    ]
+}
+
+/// Git executor for integration tests. The raw `GitExecutor::new()` remains
+/// available for tests that intentionally exercise the host configuration.
+pub fn isolated() -> GitExecutor {
+    GitExecutor::new().with_env(isolated_env())
+}
+
 /// An executor and a token nothing ever cancels — what a test that only
 /// wants to run git needs, and the cancellation path has tests of its own.
 pub fn env() -> (GitExecutor, CancellationToken) {
-    (GitExecutor::new(), CancellationToken::new())
+    (isolated(), CancellationToken::new())
 }
 
 /// The same pair, reporting every invocation to `observer`.
@@ -24,7 +74,7 @@ pub fn observed_env(
     user: bool,
 ) -> (GitExecutor, CancellationToken) {
     (
-        GitExecutor::new().observed(observer, user),
+        isolated().observed(observer, user),
         CancellationToken::new(),
     )
 }

@@ -22,6 +22,8 @@ Item {
     /// The settings card, opened from an avatar and carrying whom it was
     /// opened on.
     signal avatarSettingsRequested(string name, string email)
+    /// PG_AUTO_PERF completion after every requested measurement output.
+    signal perfFinished()
 
     property string selectedOid: ""
 
@@ -1421,43 +1423,17 @@ Item {
         }
     }
 
-    // Scroll benchmark (PG_AUTO_SCROLL=1): after the stream finishes,
-    // animate 3000 rows over 12s and report the measured fps. Frame
-    // counting rides on the window's frameCounter property.
-    property bool benchStarted: false
-    Connections {
-        target: graphModel
-        enabled: AppBackend.autoScroll
-        function onStatsChanged() {
-            if (!page.benchStarted && !graphModel.loading && graphModel.rowTotal > 0) {
-                page.benchStarted = true
-                benchPrep.start()
-            }
-        }
-    }
-    Timer {
-        id: benchPrep
-        interval: 800
-        onTriggered: {
-            page.benchT0 = Date.now()
-            page.benchFrames0 = page.Window.window.frameCounter
-            benchAnim.start()
-        }
-    }
-    property real benchT0: 0
-    property int benchFrames0: 0
-    NumberAnimation {
-        id: benchAnim
-        target: graphPane.view
-        property: "contentY"
-        from: 0
-        to: Math.min(3000, graphModel.rowTotal - 40) * Theme.graphRowHeight
-        duration: 12000
-        onStopped: {
-            const secs = (Date.now() - page.benchT0) / 1000
-            const frames = page.Window.window.frameCounter - page.benchFrames0
-            AppBackend.report("scroll_bench fps=" + (frames / secs).toFixed(1)
-                              + " rows=" + graphModel.rowTotal)
+    Loader {
+        active: AppBackend.autoPerf && !page.blank
+        sourceComponent: PagePerfDriver {
+            page: page
+            repoTab: repoTab
+            graphModel: graphModel
+            worktreeModel: workTree
+            branchesModel: branchesModel
+            detailsModel: detailsModel
+            diffModel: diffModel
+            graphPane: graphPane
         }
     }
 

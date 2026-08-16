@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened, write_result};
-use platitude_core::GitExecutor;
 use platitude_core::details::DiffTarget;
 use platitude_core::session::{RepoSession, SessionEvent};
 
@@ -346,7 +345,7 @@ async fn publish_check_answers_through_the_session() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),

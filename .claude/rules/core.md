@@ -39,6 +39,7 @@ paths:
 - **「もう起きない」を sleep / quiet window で証明しない** — quiet は「止まった」と「遅い」を区別できず、余剰性能が落ちた時だけ偽陽性になる。無変更・exactly-once・二重起動無しは、対象操作の完了後に件数または状態を読む。完了境界を作れない時はテストを先に弱めず、実装の観測可能性を直す
 - **baseline は開始条件を列挙して待つ** — `Opened` は path を受理しただけで、その後の refs / status / log は未完了。snapshot event も reader 内から送られ、その後に graph refresh を要求し得る。測定対象に先行処理を混ぜないよう `opening_snapshots` → `wait_for_snapshot_reads` → tracked graph refresh → 着地した pass の順で閉じる(`CaptureSink::opened_graph_gen`)
 - **並行実行を既定として設計する** — `--test-threads` を下げない・serial 化で隠さない。各テストは専用の一時 repository / 設定 / socket を持ち、固定 port、共有ファイル名、process-global の可変状態を避ける。PID/時刻を名前に足すだけでなく原子的な作成成功を所有権にする。in-process の mutex は別テストバイナリ・別セッションを隔離しない。重複排除を主張する実装は single-flight にし、同時 miss と read 中の invalidation を barrier / channel で再現して呼出回数も固定する(`Derived`)
+- **外部設定は executor 単位で隔離する** — integration test の Git は一時 `GIT_CONFIG_GLOBAL` / `XDG_CONFIG_HOME` と `GIT_CONFIG_NOSYSTEM=1` を全 subprocess に渡し、利用者の identity・ignore・hook・system config を読まない。process-global env の書換えは並行 test と競合するため使わず、意図的に host config を読む test だけ raw executor を明示する
 - **待ちの上限は失敗検出の backstop** — 「開始から N 秒以内」を正しさや性能の assert にしない。通知待ちと同時に backstop を arm し(通知が止まっても永久待機しない)、進捗イベントごとに沈黙予算を更新し、livelock 用の全体上限だけ別に残す(`Patience`)。性能予算は専用 benchmark / baseline で判定し、機能テストの狭い timeout と混ぜない
 - **runner の終了コードを失わない** — pipe、ログ整形、後続の `echo` 等で test process の非ゼロ終了を成功へ上書きしない。並列起動時は全 child の終了を回収し、1 件でも非ゼロなら全体を非ゼロにする
 - **同期プリミティブ・待ち helper を追加または変更した時は並列で反復検証する** — 関連 suite を独立 process でも同時実行し、最低 10 回確認する。11 回目以降まで続いた場合は、最後の NG の後に 5 回連続 OK になるまで方針を OK にしない

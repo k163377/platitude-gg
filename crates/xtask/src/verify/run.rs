@@ -164,6 +164,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
 
     let mut cmd = Command::new(&exe);
+    crate::app_env::clear_automation(&mut cmd);
     cmd.current_dir(&root)
         .env("PATH", &child_path)
         .env("QT_QPA_PLATFORM", "offscreen")

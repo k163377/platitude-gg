@@ -3,7 +3,6 @@
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, pass_of};
-use platitude_core::GitExecutor;
 use platitude_core::session::{RepoSession, SessionEvent};
 
 #[tokio::test(flavor = "multi_thread")]
@@ -18,7 +17,7 @@ async fn tag_only_commits_follow_the_include_tags_option() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -69,7 +68,7 @@ async fn log_limit_truncates_the_window() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -112,7 +111,7 @@ async fn truncation_follows_the_walk_not_the_shown_rows() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -166,7 +165,7 @@ async fn the_wip_row_does_not_trigger_truncation() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -214,7 +213,7 @@ async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -288,7 +287,7 @@ async fn a_window_change_only_the_footer_notices_still_lands() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),

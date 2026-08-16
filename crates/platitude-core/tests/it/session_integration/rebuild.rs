@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, is_stream_event, scenario};
-use platitude_core::GitExecutor;
 use platitude_core::session::{RefreshOutcome, RepoSession, SessionEvent};
 
 /// A write rebuilds the graph exactly once. Committing turns a dirty tree
@@ -19,7 +18,7 @@ async fn a_write_rebuilds_the_graph_once() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -94,7 +93,7 @@ async fn settled_graph() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, usize
     let (repo, _) = scenario();
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -217,7 +216,7 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -312,7 +311,7 @@ async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
@@ -380,7 +379,7 @@ async fn a_poll_rebuilds_the_graph_once() {
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),

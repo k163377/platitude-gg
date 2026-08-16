@@ -11,10 +11,11 @@ const BASE_EPOCH: u64 = 1_700_000_000;
 pub struct TestRepo {
     // Kept alive for the lifetime of the repo; dropped last.
     _dir: tempfile::TempDir,
-    /// Replaces the developer's global config for TestRepo-spawned git only
-    /// (the code under test inherits the process environment instead and
-    /// reads the repo-local config below).
+    /// Replaces the developer's global config for TestRepo-spawned git only.
     global_config: PathBuf,
+    /// Keeps Git's default excludes lookup away from the developer's XDG
+    /// config directory for setup commands too.
+    xdg_config: PathBuf,
     pub path: PathBuf,
     tick: u64,
 }
@@ -68,11 +69,14 @@ impl TestRepo {
         let dir = tempfile::tempdir().expect("create tempdir");
         let path = dir.path().join("repo");
         let global_config = dir.path().join("global-config");
+        let xdg_config = dir.path().join("xdg-config");
         std::fs::write(&global_config, GLOBAL_CONFIG).expect("write global config");
+        std::fs::create_dir(&xdg_config).expect("create xdg config dir");
         std::fs::create_dir(&path).expect("create repo dir");
         let mut repo = Self {
             _dir: dir,
             global_config,
+            xdg_config,
             path,
             tick: 0,
         };
@@ -139,6 +143,7 @@ impl TestRepo {
             // Isolate from developer/global configuration.
             .env("GIT_CONFIG_GLOBAL", &self.global_config)
             .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("XDG_CONFIG_HOME", &self.xdg_config)
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("LC_ALL", "C")
             // Deterministic identities and times.

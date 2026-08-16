@@ -22,7 +22,6 @@ use std::time::Duration;
 
 use crate::support::TestRepo;
 use crate::support::session::CaptureSink;
-use platitude_core::process::GitExecutor;
 use platitude_core::remote;
 use platitude_core::session::{
     LabelKind, RefLabel, RefsSnapshot, RemoteTagRefreshOutcome, RepoSession, SessionEvent,
@@ -84,7 +83,7 @@ fn tag_scenario() -> (TestRepo, TestRepo, String, String) {
 #[tokio::test]
 async fn a_remote_is_read_at_the_commits_its_tags_peel_to() {
     let (_bare, work, root, head) = tag_scenario();
-    let exec = GitExecutor::new();
+    let exec = crate::support::exec::isolated();
     let cancel = CancellationToken::new();
 
     let tags = remote::list_tags(&exec, &work.path, "origin", NET, &cancel)
@@ -142,7 +141,7 @@ async fn snapshot_after_the_fetch(sink: &CaptureSink) -> RefsSnapshot {
 async fn opened(work: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        GitExecutor::new(),
+        crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         work.path.clone(),
         Arc::clone(&sink) as Arc<dyn SessionSink>,

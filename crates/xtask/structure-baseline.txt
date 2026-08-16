@@ -15,15 +15,14 @@
 710 crates/platitude-app/src/models/graph.rs
 570 crates/platitude-app/src/ui/DiffPane.qml
 1062 crates/platitude-app/src/ui/GraphPane.qml
-830 crates/platitude-app/src/ui/Main.qml
+822 crates/platitude-app/src/ui/Main.qml
 644 crates/platitude-core/src/conflict.rs
 528 crates/platitude-core/src/identity.rs
 586 crates/platitude-core/src/integrate.rs
 758 crates/platitude-core/src/patch.rs
-734 crates/platitude-core/src/process.rs
+620 crates/platitude-core/src/process.rs
 664 crates/platitude-core/src/sequencer.rs
 607 crates/platitude-core/src/session/build.rs
 613 crates/platitude-core/src/session/log.rs
 542 crates/platitude-core/src/status.rs
 654 crates/xtask/src/linux.rs
-540 crates/xtask/src/perf.rs
