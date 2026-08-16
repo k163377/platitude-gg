@@ -9,6 +9,11 @@ use crate::urlpath::picker_folder_url;
 
 use super::qml_register;
 
+mod drain;
+mod ops_config;
+mod ops_conflict;
+mod ops_remote;
+mod ops_stage;
 mod qobject;
 mod state;
 

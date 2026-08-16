@@ -129,7 +129,7 @@ impl RepoTab {
     );
 
     #[qsignal]
-    fn changed(&mut self);
+    pub(super) fn changed(&mut self);
 
     /// The first fetch of a run to fail. Only the first: a machine that
     /// is simply offline fails every interval, and the panel that opens
@@ -141,29 +141,14 @@ impl RepoTab {
     /// now — the hold on the toolbar button is what reaches this.
     #[qslot]
     fn resume_auto_fetch(&mut self) {
-        self.auto_fetch_suspended = false;
-        self.fetch_failures = 0;
-        self.auto_fetch_error = String::new();
-        // Only the line fetch wrote: a background read's news is not
-        // this button's to take down.
-        if self.last_error_from_fetch {
-            self.last_error = String::new();
-            self.last_error_from_fetch = false;
-        }
-        self.with_session(|s| s.resume_auto_fetch());
-        self.with_session(|s| s.fetch(None));
-        self.changed();
+        self.restart_auto_fetch()
     }
 
     /// Name of one remote (a list property would need a model of its own
     /// for three strings).
     #[qslot]
     fn remote_at(&self, index: i32) -> String {
-        usize::try_from(index)
-            .ok()
-            .and_then(|i| self.remotes.get(i))
-            .cloned()
-            .unwrap_or_default()
+        self.remote_name_at(index)
     }
 
     /// Local branch name a remote-tracking ref would take: the ref with
@@ -174,28 +159,12 @@ impl RepoTab {
     /// prefix is the right one.
     #[qslot]
     fn local_name_for(&self, remote_ref: String) -> String {
-        let mut best: Option<&str> = None;
-        for remote in &self.remotes {
-            let Some(rest) = remote_ref.strip_prefix(&format!("{remote}/")) else {
-                continue;
-            };
-            if !rest.is_empty() && best.is_none_or(|found| rest.len() < found.len()) {
-                best = Some(rest);
-            }
-        }
-        best.unwrap_or(remote_ref.as_str()).to_string()
+        self.local_name_of(remote_ref)
     }
 
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
-        self.tab_id = tab_id;
-        self.state = "loading".into();
-        self.changed();
-        if let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) {
-            let feed = Arc::clone(&feeds.tab);
-            feed.attach(self.get_qml_method_invoker());
-            self.feed = Some(feed);
-        }
+        self.attach_feed(tab_id)
     }
 
     /// Called when this page becomes the visible one. A tab restored from
@@ -210,159 +179,8 @@ impl RepoTab {
     }
 
     #[qslot]
-    #[expect(clippy::too_many_lines)]
     fn drain(&mut self) {
-        let Some(feed) = self.feed.clone() else {
-            return;
-        };
-        for msg in feed.drain() {
-            match msg {
-                TabMsg::Opened { title, path } => {
-                    self.state = "open".into();
-                    self.title = title;
-                    self.picker_folder_url = picker_folder_url(std::path::Path::new(&path));
-                    self.repo_path = path;
-                }
-                TabMsg::OpenFailed {
-                    kind,
-                    path,
-                    message,
-                } => {
-                    self.state = "error".into();
-                    self.error_kind = kind.into();
-                    self.error_path = path;
-                    self.error = message;
-                }
-                TabMsg::OpError { message } => {
-                    self.last_error = message;
-                    self.last_error_from_fetch = false;
-                }
-                TabMsg::Author {
-                    name,
-                    email,
-                    complete,
-                    sign_commits,
-                    signing_format,
-                } => {
-                    self.author_name = name;
-                    self.author_email = email;
-                    self.identity_ready = complete;
-                    self.signs_commits = sign_commits;
-                    self.signing_format = signing_format;
-                    self.compare_head_author();
-                }
-                TabMsg::Signature {
-                    oid,
-                    kind,
-                    code,
-                    signer,
-                } => {
-                    self.signature_oid = oid;
-                    self.signature_kind = kind;
-                    self.signature_code = code;
-                    self.signature_signer = signer;
-                }
-                TabMsg::Remotes { names } => {
-                    // A push with no upstream goes to `origin` when there
-                    // is one, otherwise to whichever remote comes first.
-                    self.default_remote = names
-                        .iter()
-                        .find(|r| *r == "origin")
-                        .or_else(|| names.first())
-                        .cloned()
-                        .unwrap_or_default();
-                    self.remote_count = names.len() as i32;
-                    self.remote_names = names.join("\u{1f}");
-                    self.remotes = names;
-                }
-                TabMsg::RemoteBranch {
-                    remote,
-                    branch,
-                    state,
-                    tip,
-                    theirs,
-                } => {
-                    self.remote_branch_asked = format!("{remote}\u{1f}{branch}");
-                    self.remote_branch_state = state;
-                    self.remote_branch_tip = tip;
-                    self.remote_branch_theirs = theirs;
-                }
-                TabMsg::BranchDelete { branch, merged } => {
-                    self.branch_delete_asked = branch;
-                    self.branch_delete_merged = merged;
-                }
-                TabMsg::HeadCommit {
-                    message,
-                    author_name,
-                    author_email,
-                } => {
-                    let (subject, body) = platitude_core::commit::split_message(&message);
-                    self.head_subject = subject;
-                    self.head_body = body;
-                    self.head_author_name = author_name;
-                    self.head_author_email = author_email;
-                    self.compare_head_author();
-                    self.head_commit_seq += 1;
-                }
-                TabMsg::AutoFetch { running, error } => {
-                    self.auto_fetch_running = running;
-                    if !running {
-                        self.auto_fetch_error = error.clone();
-                        self.fetch_settled(&error);
-                    }
-                }
-                TabMsg::Publish {
-                    range,
-                    total,
-                    published,
-                } => {
-                    self.publish_range = range;
-                    self.publish_total = total;
-                    self.publish_published = published;
-                }
-                TabMsg::InHistory { oid, in_history } => {
-                    self.history_oid = oid;
-                    self.history_in = in_history;
-                }
-                TabMsg::HeadReach { reached_elsewhere } => {
-                    self.head_reached_elsewhere = reached_elsewhere;
-                }
-                TabMsg::MoveNeedsAsk { local, start } => {
-                    self.move_ask_local = local;
-                    self.move_ask_start = start;
-                    self.move_ask_seq += 1;
-                }
-                TabMsg::MergeTools { names, settled } => {
-                    self.merge_tools = names.join("\u{1f}");
-                    // The fast half arrives first; the indicator keeps
-                    // turning until the slow read has had its say.
-                    if settled {
-                        self.merge_tools_loading = false;
-                    }
-                }
-                TabMsg::WriteState { op, running, error } => {
-                    if running {
-                        self.busy_count += 1;
-                        self.busy_op = op;
-                    } else {
-                        self.busy_count = (self.busy_count - 1).max(0);
-                        if self.busy_count == 0 {
-                            self.busy_op = String::new();
-                        }
-                        // A fetch the user asked for counts the same way
-                        // the timer's do: what the button says is about
-                        // fetching, not about who started it.
-                        if op == "fetch" {
-                            self.fetch_settled(&error.clone());
-                        }
-                        self.last_write_op = op;
-                        self.last_write_error = error;
-                        self.write_seq += 1;
-                    }
-                }
-            }
-        }
-        self.changed();
+        self.take_feed()
     }
 
     /// Cheap refresh: refs + status + stashes (window focus, post-op).
@@ -470,20 +288,7 @@ impl RepoTab {
     /// [`RepoTab::stage_selection`] does.
     #[qslot]
     fn stage_lines(&mut self, kind: String, path: String, orig_path: String, fingerprint: String) {
-        let lines = std::mem::take(&mut self.pending_lines);
-        let Some(target) = crate::encode::worktree_target(&kind, &path, &orig_path) else {
-            tracing::warn!(kind, "line staging asked for a non-worktree diff");
-            return;
-        };
-        let selects = crate::encode::line_selection(&lines);
-        if selects.is_empty() {
-            return;
-        }
-        let Ok(seen) = u64::from_str_radix(&fingerprint, 16) else {
-            tracing::warn!(fingerprint, "line staging without a diff fingerprint");
-            return;
-        };
-        self.with_session(|s| s.apply_partial(target.clone(), selects.clone(), seen));
+        self.stage_chosen_lines(kind, path, orig_path, fingerprint)
     }
 
     /// Throws away unstaged modifications of the gathered files
@@ -545,21 +350,7 @@ impl RepoTab {
         line: i32,
         fingerprint: String,
     ) {
-        let Some(target) = crate::encode::worktree_target(&kind, &path, &orig_path) else {
-            tracing::warn!(kind, "selection staging asked for a non-worktree diff");
-            return;
-        };
-        let selects = crate::encode::hunk_selection(hunk, line);
-        if selects.is_empty() {
-            return;
-        }
-        // The fingerprint of the diff the indices were made on (hex, from
-        // DiffModel). Without one the selection addresses nothing.
-        let Ok(seen) = u64::from_str_radix(&fingerprint, 16) else {
-            tracing::warn!(fingerprint, "selection staging without a diff fingerprint");
-            return;
-        };
-        self.with_session(|s| s.apply_partial(target.clone(), selects.clone(), seen));
+        self.stage_chosen(kind, path, orig_path, hunk, line, fingerprint)
     }
 
     /// Throws away part of one file's unstaged diff, addressed the same way
@@ -575,19 +366,7 @@ impl RepoTab {
         line: i32,
         fingerprint: String,
     ) {
-        let Some(target) = crate::encode::worktree_target(&kind, &path, &orig_path) else {
-            tracing::warn!(kind, "selection discard asked for a non-worktree diff");
-            return;
-        };
-        let selects = crate::encode::hunk_selection(hunk, line);
-        if selects.is_empty() {
-            return;
-        }
-        let Ok(seen) = u64::from_str_radix(&fingerprint, 16) else {
-            tracing::warn!(fingerprint, "selection discard without a diff fingerprint");
-            return;
-        };
-        self.with_session(|s| s.discard_partial(target.clone(), selects.clone(), seen));
+        self.discard_chosen(kind, path, orig_path, hunk, line, fingerprint)
     }
 
     /// Commits the index from the editor's two fields. Both empty is only
@@ -730,12 +509,7 @@ impl RepoTab {
         keep_index: bool,
         staged_only: bool,
     ) {
-        let options = platitude_core::stash::PushOptions {
-            include_untracked,
-            keep_index,
-            staged_only,
-        };
-        self.with_session(|s| s.stash_push(message.clone(), options, Vec::new()));
+        self.stash_push(message, include_untracked, keep_index, staged_only)
     }
 
     /// `git stash push -- <paths>`: puts the gathered files' changes away
@@ -745,16 +519,7 @@ impl RepoTab {
     /// meant to go whether or not git is tracking it yet.
     #[qslot]
     fn stash_paths(&mut self, message: String) {
-        let paths = std::mem::take(&mut self.pending_paths);
-        if paths.is_empty() {
-            return;
-        }
-        let options = platitude_core::stash::PushOptions {
-            include_untracked: true,
-            keep_index: false,
-            staged_only: false,
-        };
-        self.with_session(|s| s.stash_push(message.clone(), options, paths.clone()));
+        self.stash_chosen_paths(message)
     }
 
     /// `git stash pop` on the given selector (stash-row action).
@@ -822,12 +587,7 @@ impl RepoTab {
     /// `remoteBranchState`.
     #[qslot]
     fn check_remote_branch(&mut self, remote: String, branch: String) {
-        self.remote_branch_asked = String::new();
-        self.remote_branch_state = String::new();
-        self.remote_branch_tip = String::new();
-        self.remote_branch_theirs = 0;
-        self.changed();
-        self.with_session(|s| s.check_remote_branch(remote.clone(), branch.clone()));
+        self.look_up_remote_branch(remote, branch)
     }
 
     /// Asks whether `git branch --delete` would refuse this branch (not
@@ -837,10 +597,7 @@ impl RepoTab {
     /// where the reads fail, and the row stays on its plain form.
     #[qslot]
     fn check_branch_delete(&mut self, branch: String) {
-        self.branch_delete_asked = String::new();
-        self.branch_delete_merged = true;
-        self.changed();
-        self.with_session(|s| s.check_branch_delete(branch.clone()));
+        self.look_up_branch_delete(branch)
     }
 
     /// `git push`. `force` is `""` / `"lease"` / `"force"`; `lease_expect`
@@ -855,15 +612,14 @@ impl RepoTab {
         force: String,
         lease_expect: String,
     ) {
-        let force = Self::push_force(&force, &lease_expect);
-        let spec = platitude_core::remote::PushSpec {
+        self.branch_push(
             remote,
             local,
             remote_branch,
             set_upstream,
             force,
-        };
-        self.with_session(|s| s.push(spec.clone()));
+            lease_expect,
+        )
     }
 
     /// Renames a branch on a remote. git has none, so core pushes the new
@@ -892,14 +648,7 @@ impl RepoTab {
         remote_branch: String,
         force: bool,
     ) {
-        self.with_session(|s| {
-            s.delete_branch_everywhere(
-                branch.clone(),
-                remote.clone(),
-                remote_branch.clone(),
-                force,
-            );
-        });
+        self.branch_delete_everywhere(branch, remote, remote_branch, force)
     }
 
     /// `git merge <rev>`.
@@ -967,18 +716,7 @@ impl RepoTab {
     /// `"continue"` / `"abort"` / `"skip"` / `"quit"`.
     #[qslot]
     fn resolve_operation(&mut self, how: String) {
-        use platitude_core::integrate::Continuation;
-        let continuation = match how.as_str() {
-            "continue" => Continuation::Continue,
-            "abort" => Continuation::Abort,
-            "skip" => Continuation::Skip,
-            "quit" => Continuation::Quit,
-            other => {
-                tracing::warn!(how = other, "unknown continuation");
-                return;
-            }
-        };
-        self.with_session(|s| s.resolve_current(continuation));
+        self.settle_operation(how)
     }
 
     /// Resolves the gathered conflicted paths by taking one side
@@ -989,20 +727,7 @@ impl RepoTab {
     /// wording cannot be worked out from the flag alone.
     #[qslot]
     fn take_side_paths(&mut self, side: String) {
-        use platitude_core::conflict::Side;
-        let side = match side.as_str() {
-            "ours" => Side::Ours,
-            "theirs" => Side::Theirs,
-            other => {
-                tracing::warn!(side = other, "unknown conflict side");
-                return;
-            }
-        };
-        let paths = std::mem::take(&mut self.pending_paths);
-        if paths.is_empty() {
-            return;
-        }
-        self.with_session(|s| s.take_side(paths.clone(), side));
+        self.take_side(side)
     }
 
     /// Opens the chosen conflicted paths in the configured merge tool, the
@@ -1014,11 +739,7 @@ impl RepoTab {
     /// sessions as there are conflicts.
     #[qslot]
     fn open_mergetool(&mut self) {
-        let paths = std::mem::take(&mut self.pending_paths);
-        if paths.is_empty() {
-            return;
-        }
-        self.with_session(|s| s.mergetool(paths.clone()));
+        self.run_merge_tool()
     }
 
     /// Records which merge tool to launch; empty clears the choice.
@@ -1040,12 +761,7 @@ impl RepoTab {
     /// worth showing while it runs.
     #[qslot]
     fn ask_merge_tools(&mut self) {
-        if self.merge_tools_loading {
-            return;
-        }
-        self.merge_tools_loading = true;
-        self.with_session(|s| s.ask_merge_tools());
-        self.changed();
+        self.list_merge_tools()
     }
 
     /// Asks how much of `range` is already on a remote; the answer arrives
@@ -1059,22 +775,14 @@ impl RepoTab {
     /// there; the answer arrives as `historyOid` / `historyIn`.
     #[qslot]
     fn check_in_history(&mut self, oid_hex: String) {
-        let Ok(oid) = platitude_core::oid::Oid::from_hex_str(oid_hex.trim()) else {
-            tracing::warn!(oid_hex, "invalid oid in history check");
-            return;
-        };
-        self.with_session(|s| s.check_in_history(oid));
+        self.look_up_in_history(oid_hex)
     }
 
     /// Asks what git makes of `oid_hex`'s signature; the answer arrives as
     /// `signatureOid` / `signatureKind` / `signatureCode` / `signatureSigner`.
     #[qslot]
     fn check_signature(&mut self, oid_hex: String) {
-        let Ok(oid) = platitude_core::oid::Oid::from_hex_str(oid_hex.trim()) else {
-            tracing::warn!(oid_hex, "invalid oid in signature check");
-            return;
-        };
-        self.with_session(|s| s.check_signature(oid));
+        self.look_up_signature(oid_hex)
     }
 
     /// Records `user.name` / `user.email`. `global` writes the user's own
@@ -1082,35 +790,19 @@ impl RepoTab {
     /// the answer is about the person, not the project.
     #[qslot]
     fn set_identity(&mut self, name: String, email: String, global: bool) {
-        let scope = if global {
-            platitude_core::identity::ConfigScope::Global
-        } else {
-            platitude_core::identity::ConfigScope::Local
-        };
-        self.with_session(|s| s.set_identity(name.clone(), email.clone(), scope));
+        self.write_identity(name, email, global)
     }
 
     /// Time budget for fetch / push, in seconds. Zero is ignored.
     #[qslot]
     fn set_network_timeout(&mut self, seconds: i32) {
-        if seconds <= 0 {
-            return;
-        }
-        let timeout = std::time::Duration::from_secs(seconds as u64);
-        self.with_session(|s| s.set_network_timeout(timeout));
+        self.write_network_timeout(seconds)
     }
 
     /// Shows/hides tags in the graph walk (restarts the stream).
     #[qslot]
     fn set_tags_shown(&mut self, shown: bool) {
-        if self.tags_shown == shown {
-            return;
-        }
-        self.tags_shown = shown;
-        self.changed();
-        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
-            session.set_include_tags(shown);
-        }
+        self.write_tags_shown(shown)
     }
 }
 qml_register!(RepoTab, "RepoTab", singleton = false);
