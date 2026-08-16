@@ -122,6 +122,7 @@ TreeViewToggle 1.0 TreeViewToggle.qml
 WindowAutoActDriver 1.0 WindowAutoActDriver.qml
 WindowPerfDriver 1.0 WindowPerfDriver.qml
 WindowButton 1.0 WindowButton.qml
+WipBucketBand 1.0 WipBucketBand.qml
 WipBucketHeader 1.0 WipBucketHeader.qml
 WipPane 1.0 WipPane.qml
 WipTallyRow 1.0 WipTallyRow.qml

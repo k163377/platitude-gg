@@ -251,6 +251,39 @@ ColumnLayout {
     function rowAt(index) {
         return wipList.itemAtIndex(index)
     }
+    // ---- the bucket headings, as the scene has them ------------------
+    // Read off the list's own children rather than off the conditions
+    // that put them there: an empty bucket keeps its heading, and the
+    // whole of that claim is whether the heading is in the scene
+    // (app-ui.md §UI 自動化の因果性). The footer is a band too and is not
+    // among the children, so it is asked separately.
+    function bands() {
+        const out = []
+        const kids = wipList.contentItem.children
+        for (let i = 0; i < kids.length; i++)
+            if (kids[i] && kids[i].headsStaged !== undefined)
+                out.push(kids[i])
+        if (wipList.footerItem && wipList.footerItem.headsStaged !== undefined)
+            out.push(wipList.footerItem)
+        return out
+    }
+    /// Whether a bucket has a heading on screen at all.
+    function bucketHeaded(section) {
+        const all = wipPane.bands()
+        for (let i = 0; i < all.length; i++)
+            if (section === "staged" ? all[i].headsStaged : all[i].headsUnstaged)
+                return true
+        return false
+    }
+    /// Automation: press a bucket heading's whole-bucket button, wherever
+    /// in the list that heading turned out to be.
+    function moveBucket(section) {
+        const all = wipPane.bands()
+        for (let i = 0; i < all.length; i++)
+            if (all[i].moveAll(section))
+                return true
+        return false
+    }
     /// The row a path is on — for the automation hooks, which enter a
     /// click where the row itself enters it. App code goes through the
     /// signals.
@@ -651,25 +684,30 @@ ColumnLayout {
         // GitKraken grouping: unstaged (incl. untracked) above, staged
         // below.
         section.property: "group"
-        section.delegate: WipBucketHeader {
-            listWidth: wipList.width
-            repoTab: wipPane.repoTab
-            workTree: wipPane.workTree
-        }
-        // The staged heading stands even with nothing under it: a section
-        // with no rows has no heading, so the pane would otherwise never
-        // name the place a staged file goes, and the band would grow in
-        // under the hand at the first `+` (デザイン規約 §その他の操作). It
-        // rides in the footer because staged is the last bucket — the seat
-        // an empty one would take is exactly the end of the list.
+        // Both headings stand even with nothing under them: a section with
+        // no rows has no heading of its own, so the pane would otherwise
+        // stop naming the place its files go the moment the last one left
+        // — and the band would grow back in under the hand at the next `+`
+        // (デザイン規約 §その他の操作). An empty unstaged bucket rides
+        // above the staged heading, which is its seat in the order
+        // (`WipBucketBand`); an empty staged one rides in the footer,
+        // since staged is the last bucket and the seat an empty one would
+        // take is exactly the end of the list.
         //
         // Only while something is uncommitted: on a clean tree the whole
         // list is empty and a lone `(0)` heads nothing.
-        footer: WipBucketHeader {
+        section.delegate: WipBucketBand {
+            listWidth: wipList.width
+            repoTab: wipPane.repoTab
+            workTree: wipPane.workTree
+            total: wipPane.worktreeModel.total
+        }
+        footer: WipBucketBand {
             section: "staged"
             listWidth: wipList.width
             repoTab: wipPane.repoTab
             workTree: wipPane.workTree
+            total: wipPane.worktreeModel.total
             visible: wipPane.workTree.stagedCount === 0
                      && wipPane.worktreeModel.total > 0
         }

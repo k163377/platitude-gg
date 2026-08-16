@@ -38,6 +38,17 @@ Rectangle {
         bucketHeader.section === "conflicts"
         && bucketHeader.repoTab.busyOp === "mergetool"
 
+    /// Automation: the whole-bucket button pressed where a hand presses
+    /// it. Answers whether it went — a heading whose button is asleep
+    /// (an empty bucket) has nothing to move, and a run that counted that
+    /// as a press would wait for a write that was never asked for.
+    function moveAll() {
+        if (!moveAllButton.visible || !moveAllButton.enabled)
+            return false
+        moveAllButton.clicked()
+        return true
+    }
+
     width: bucketHeader.listWidth
     // A heading the list is not showing takes no room: the footer keeps
     // its instance alive so the bindings stay live, and a hidden item
@@ -81,6 +92,7 @@ Rectangle {
             Layout.preferredHeight: Theme.iconSm
         }
         HoverToolButton {
+            id: moveAllButton
             visible: bucketHeader.section !== "conflicts"
             // An empty bucket has nothing to move, and this heading
             // stands even then (§無効 — what cannot be pressed says so

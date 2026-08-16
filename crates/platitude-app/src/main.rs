@@ -186,6 +186,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/WindowAutoActDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowPerfDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowButton.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/WipBucketBand.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipBucketHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipTallyRow.qml", "qt/qml/platitude");
