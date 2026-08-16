@@ -234,6 +234,46 @@ pub(super) fn deep(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// Lines the file carries, and how far apart the changes in it sit. The
+/// spacing is what makes them twenty hunks rather than fewer: git carries
+/// three lines of context either side, so two changes fewer than eight
+/// lines apart come out as one hunk with a gap in it.
+const HUNK_LINES: usize = 320;
+const HUNK_STEP: usize = 16;
+
+/// The file, before and after: 320 lines with 20 of them reworded.
+fn notes(changed: bool) -> String {
+    let mut s = String::new();
+    for i in 0..HUNK_LINES {
+        if changed && i % HUNK_STEP == HUNK_STEP / 2 {
+            s.push_str(&format!("{i:03}: reworded while reading down the file\n"));
+        } else {
+            s.push_str(&format!("{i:03}: a line of notes nobody has touched\n"));
+        }
+    }
+    s
+}
+
+/// One unstaged file with twenty hunks in it, which is the only shape in
+/// which a reader can have a place in a diff at all: a place exists where
+/// there is more diff than window, and it can only be seen kept if a
+/// partial write leaves enough behind to come back to (`keep-place`).
+///
+/// Plain text on purpose. The colours land after the rows and swap the
+/// whole list a second time (`colour-place`), and that swap under this
+/// one would take the view back to the top after the restore had put it
+/// right — a different story, told by its own verb over its own fixture.
+pub(super) fn manyhunks(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nA file too long to read at one sitting.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit("notes.txt", &notes(false), "docs: write the notes down")?;
+    repo.write("notes.txt", &notes(true))?;
+    Ok(())
+}
+
 pub(super) fn longpaths(repo: &mut DemoRepo) -> Result<(), String> {
     // Demo-repo content only: the path is made up and exists in no
     // checkout of this repository.

@@ -11,7 +11,7 @@ use super::conflict::{
 };
 use super::remote::{behind, diverged, unpublished};
 use super::repo::DemoRepo;
-use super::scale::{deep, edges, long, longpaths};
+use super::scale::{deep, edges, long, longpaths, manyhunks};
 use super::signing::{errsig, signed};
 use super::tags::{manytags, tags};
 
@@ -81,6 +81,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "edges" => edges(&mut repo)?,
         "long" => long(&mut repo)?,
         "longpaths" => longpaths(&mut repo)?,
+        "manyhunks" => manyhunks(&mut repo)?,
         "empty" => {}
         other => return Err(format!("unknown preset: {other}")),
     }

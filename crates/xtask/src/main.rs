@@ -88,6 +88,9 @@ commands:
         longpaths one committed-then-changed file under a path wider than
                   any pane: both paths views elide it, and both tree
                   views elide its folder chain (path-tip [..-tree])
+        manyhunks one unstaged file with 20 hunks in it: more diff than
+                  window, which is the only shape that has a reading
+                  place to keep through a rebuild (keep-place)
         empty     `git init` and nothing else
 
   verify-ui <verb> [arg] [options]
