@@ -163,19 +163,50 @@ Item {
         property bool requested: false
         property string asked: ""
         property int beforeCount: -1
+        /// Which tab the ask is meant to bring to the front, where the
+        /// run left that to the strip. -1 when the run named a path of
+        /// its own: which tab holds a folder is the question there, and
+        /// the whole point is that the spelling does not say.
+        property int wantIndex: -1
         onTriggered: {
-            if (pageRepeater.count === 0)
-                return
             if (!openAgainTimer.requested) {
-                openAgainTimer.requested = true
-                openAgainTimer.beforeCount = pageRepeater.count
-                openAgainTimer.asked = AppBackend.autoActArg !== ""
+                if (pageRepeater.count === 0)
+                    return
+                // The spelling to ask with, when the run named none, is
+                // the strip's own — and the strip is a view: the item for
+                // a row the model has just gained arrives with the next
+                // layout. Asking with the "" it answers until then opens
+                // nothing, and nothing opened is what this verb's
+                // completion looks like — it went green having asked for
+                // nothing at all (measured 2026-08-17).
+                const path = AppBackend.autoActArg !== ""
                         ? AppBackend.autoActArg : topBar.tabPathAt(0)
-                tabsModel.openRepositoryPath(openAgainTimer.asked)
+                if (path === "")
+                    return
+                openAgainTimer.asked = path
+                openAgainTimer.wantIndex = AppBackend.autoActArg !== "" ? -1 : 0
+                openAgainTimer.beforeCount = pageRepeater.count
+                openAgainTimer.requested = true
+                tabsModel.openRepositoryPath(path)
                 return
             }
+            // Reopening the first tab from a strip standing on another one
+            // has somewhere to arrive: without that, "went to the tab it
+            // already had" and "did nothing whatever" are the same report.
             if (pageRepeater.count !== openAgainTimer.beforeCount
-                    || tabsModel.currentIndex < 0)
+                    || tabsModel.currentIndex < 0
+                    || (openAgainTimer.wantIndex >= 0
+                        && tabsModel.currentIndex !== openAgainTimer.wantIndex)
+                    // The strip is read back below (`middle-close` above).
+                    || topBar.tabItemCount() !== pageRepeater.count)
+                return
+            // And the tab it arrived at has to be showing its repository:
+            // which tab came to the front is what the picture carries
+            // here, and a page still opening looks the same whichever one
+            // it is (`middle-close` above, same baseline).
+            const front = window.curPage
+            if (front === null || front.pageTab.state !== "open"
+                    || !front.pageWt.loaded || front.pageGraph.finishCount === 0)
                 return
             stop()
             AppBackend.report("open_again tabs=" + pageRepeater.count
