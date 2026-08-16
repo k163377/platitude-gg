@@ -102,15 +102,9 @@ AppDialog {
 
         // A remote being corrected keeps its name: renaming one belongs to
         // the left menu, and doing both here would make this two dialogs.
-        ColumnLayout {
-            Layout.fillWidth: true
+        LabeledField {
             visible: remoteDialog.editing === ""
-            spacing: Theme.spaceXs
-            Label {
-                text: qsTr("Name")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
-            }
+            caption: qsTr("Name")
             FormField {
                 id: nameField
                 Layout.fillWidth: true
@@ -131,14 +125,8 @@ AppDialog {
                 font.pixelSize: Theme.fontSm
             }
         }
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spaceXs
-            Label {
-                text: qsTr("URL")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
-            }
+        LabeledField {
+            caption: qsTr("URL")
             FormField {
                 id: urlField
                 Layout.fillWidth: true

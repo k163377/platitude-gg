@@ -127,6 +127,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/IdentIcon.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/IdentityDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ImagePreviewCell.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/LabeledField.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/MessageActionsRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/MessageEditor.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NameCell.qml", "qt/qml/platitude");

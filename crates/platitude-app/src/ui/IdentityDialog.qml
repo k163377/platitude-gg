@@ -87,14 +87,8 @@ AppDialog {
             text: qsTr("git records a name and an email address on every commit you make. They are stored in your git configuration — Platitude GG keeps no copy of them.")
         }
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spaceXs
-            Label {
-                text: qsTr("Name")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
-            }
+        LabeledField {
+            caption: qsTr("Name")
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceSm
@@ -124,14 +118,8 @@ AppDialog {
                 }
             }
         }
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spaceXs
-            Label {
-                text: qsTr("Email address")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
-            }
+        LabeledField {
+            caption: qsTr("Email address")
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceSm

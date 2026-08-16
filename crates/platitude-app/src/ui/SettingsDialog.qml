@@ -165,14 +165,8 @@ AppDialog {
             font.pixelSize: Theme.fontXl
             font.weight: Font.DemiBold
         }
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spaceXs
-            Label {
-                text: qsTr("Fetch automatically")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
-            }
+        LabeledField {
+            caption: qsTr("Fetch automatically")
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceSm
@@ -206,14 +200,8 @@ AppDialog {
                       .arg(AppBackend.autoFetchMaxMinutes)
             }
         }
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spaceXs
-            Label {
-                text: qsTr("Merge editor")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
-            }
+        LabeledField {
+            caption: qsTr("Merge editor")
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceSm
@@ -253,14 +241,8 @@ AppDialog {
                 text: qsTr("Which tool opens a conflicted file. It must not need a console — this app gives git none, so vimdiff and its kind cannot run.")
             }
         }
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spaceXs
-            Label {
-                text: qsTr("Avatars")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
-            }
+        LabeledField {
+            caption: qsTr("Avatars")
             Repeater {
                 id: avatarRepeater
                 /// The one column every row's name is laid into, as wide
