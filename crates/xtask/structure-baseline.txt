@@ -17,7 +17,6 @@
 1062 crates/platitude-app/src/ui/GraphPane.qml
 892 crates/platitude-app/src/ui/Main.qml
 1908 crates/platitude-app/src/ui/RepoPage.qml
-885 crates/platitude-app/src/winframe.rs
 644 crates/platitude-core/src/conflict.rs
 528 crates/platitude-core/src/identity.rs
 586 crates/platitude-core/src/integrate.rs
