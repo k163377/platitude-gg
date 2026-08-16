@@ -285,9 +285,9 @@ Item {
     // The diff has to arrive before a row of it can be staged. Asked for
     // rather than waited out: a fixed wait photographs an empty pane the
     // same as a late one (2026-08-13 実測: `pick-lines` against this
-    // repository picked no lines and passed). When the asking runs out it
-    // acts anyway — the report carries `ready=`, which the run is failed
-    // on.
+    // repository picked no lines and passed). The asking has no ceiling:
+    // a row that never lands leaves the run without a report line at all,
+    // and the watchdog is what ends it.
     Timer {
         id: stageRowTimer
         interval: 50
