@@ -140,6 +140,39 @@ impl RepoTab {
     pub(super) fn move_head(&self, target: platitude_core::branch::CheckoutTarget) {
         self.with_session(|s| s.checkout(target.clone()));
     }
+
+    /// The commit slot's two fields, joined and optioned for core.
+    pub(super) fn commit_from_fields(
+        &mut self,
+        subject: String,
+        body: String,
+        amend: bool,
+        reset_author: bool,
+    ) {
+        let message = platitude_core::commit::join_message(&subject, &body);
+        let options = platitude_core::commit::CommitOptions {
+            amend,
+            allow_empty: false,
+            reset_author: amend && reset_author,
+        };
+        self.with_session(|s| s.commit(message.clone(), options));
+    }
+
+    /// The reset slot's mode word, turned into core's enum; an unknown
+    /// word is a caller's bug and moves nothing.
+    pub(super) fn reset_head(&mut self, rev: String, mode: String) {
+        use platitude_core::branch::ResetMode;
+        let mode = match mode.as_str() {
+            "soft" => ResetMode::Soft,
+            "mixed" => ResetMode::Mixed,
+            "hard" => ResetMode::Hard,
+            other => {
+                tracing::warn!(mode = other, "unknown reset mode");
+                return;
+            }
+        };
+        self.with_session(|s| s.reset(rev.clone(), mode));
+    }
 }
 
 #[cfg(test)]

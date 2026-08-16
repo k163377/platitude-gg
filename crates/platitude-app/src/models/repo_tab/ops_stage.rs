@@ -3,6 +3,19 @@
 use super::*;
 
 impl RepoTab {
+    /// The gathered-path writes share one shape: take the set, skip an
+    /// empty ask, hand the batch to the session.
+    pub(super) fn drain_paths(
+        &mut self,
+        send: impl FnOnce(&std::sync::Arc<platitude_core::session::RepoSession>, Vec<String>),
+    ) {
+        let paths = std::mem::take(&mut self.pending_paths);
+        if paths.is_empty() {
+            return;
+        }
+        self.with_session(move |s| send(s, paths));
+    }
+
     pub(super) fn stage_chosen_lines(
         &mut self,
         kind: String,

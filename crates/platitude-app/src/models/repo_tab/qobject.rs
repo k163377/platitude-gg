@@ -234,20 +234,12 @@ impl RepoTab {
     /// command however many rows were chosen (デザイン規約 §その他の操作).
     #[qslot]
     fn stage_paths(&mut self) {
-        let paths = std::mem::take(&mut self.pending_paths);
-        if paths.is_empty() {
-            return;
-        }
-        self.with_session(move |s| s.stage_paths(paths.clone()));
+        self.drain_paths(|s, paths| s.stage_paths(paths));
     }
 
     #[qslot]
     fn unstage_paths(&mut self) {
-        let paths = std::mem::take(&mut self.pending_paths);
-        if paths.is_empty() {
-            return;
-        }
-        self.with_session(move |s| s.unstage_paths(paths.clone()));
+        self.drain_paths(|s, paths| s.unstage_paths(paths));
     }
 
     /// Opens a set of paths for the next write, and adds to it. One call
@@ -291,11 +283,7 @@ impl RepoTab {
     /// (destructive).
     #[qslot]
     fn discard_paths(&mut self) {
-        let paths = std::mem::take(&mut self.pending_paths);
-        if paths.is_empty() {
-            return;
-        }
-        self.with_session(|s| s.discard_paths(paths.clone()));
+        self.drain_paths(|s, paths| s.discard_paths(paths));
     }
 
     /// Throws away both sides of the gathered files, back to HEAD
@@ -303,21 +291,13 @@ impl RepoTab {
     /// restoring only the new one leaves the old staged as a deletion.
     #[qslot]
     fn discard_paths_to_head(&mut self) {
-        let paths = std::mem::take(&mut self.pending_paths);
-        if paths.is_empty() {
-            return;
-        }
-        self.with_session(|s| s.discard_paths_to_head(paths.clone()));
+        self.drain_paths(|s, paths| s.discard_paths_to_head(paths));
     }
 
     /// Deletes the gathered untracked files (destructive).
     #[qslot]
     fn remove_untracked_paths(&mut self) {
-        let paths = std::mem::take(&mut self.pending_paths);
-        if paths.is_empty() {
-            return;
-        }
-        self.with_session(|s| s.remove_untracked(paths.clone()));
+        self.drain_paths(|s, paths| s.remove_untracked(paths));
     }
 
     #[qslot]
@@ -372,13 +352,7 @@ impl RepoTab {
     /// identity on a commit written under another one.
     #[qslot]
     fn commit(&mut self, subject: String, body: String, amend: bool, reset_author: bool) {
-        let message = platitude_core::commit::join_message(&subject, &body);
-        let options = platitude_core::commit::CommitOptions {
-            amend,
-            allow_empty: false,
-            reset_author: amend && reset_author,
-        };
-        self.with_session(|s| s.commit(message.clone(), options));
+        self.commit_from_fields(subject, body, amend, reset_author);
     }
 
     /// Reads HEAD's message and author (an amend starts from them).
@@ -426,17 +400,7 @@ impl RepoTab {
     /// away everything uncommitted.
     #[qslot]
     fn reset_to(&mut self, rev: String, mode: String) {
-        use platitude_core::branch::ResetMode;
-        let mode = match mode.as_str() {
-            "soft" => ResetMode::Soft,
-            "mixed" => ResetMode::Mixed,
-            "hard" => ResetMode::Hard,
-            other => {
-                tracing::warn!(mode = other, "unknown reset mode");
-                return;
-            }
-        };
-        self.with_session(|s| s.reset(rev.clone(), mode));
+        self.reset_head(rev, mode);
     }
 
     /// Creates a branch at `start_point` (HEAD when empty).
