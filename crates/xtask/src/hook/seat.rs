@@ -1,10 +1,13 @@
 //! The seat roster guard: which worktrees a session may enter, and the
 //! atomic claim that keeps two sessions out of one seat.
 
-use super::SEAT_CLAIM;
 use super::payload::string_field;
 use crate::git_query;
 use crate::seats::{self, SEATS, worktree_root};
+
+/// The mark a session's seat claim carries in `git worktree lock`'s
+/// reason, followed by the session id.
+const SEAT_CLAIM: &str = "claude-seat";
 
 /// PreToolUse(EnterWorktree): a worktree name outside the seat roster
 /// starts a cold target/ nobody will reuse (CLAUDE.md ビルド・テスト).
@@ -42,7 +45,7 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
         return Ok(());
     };
     let session = string_field(input, "session_id").unwrap_or_default();
-    if let Claim::Held(reason) = claim_seat(&cwd, &path, &session) {
+    if let Claim::Held(reason) = lock_seat(&cwd, &path, &session) {
         println!(
             "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
              \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
@@ -74,7 +77,7 @@ fn existing_seat_path(cwd: &str, name: &str) -> Option<String> {
 }
 
 /// How an attempt to claim a seat came out.
-enum Claim {
+pub(super) enum Claim {
     /// Locked by us now, or in some state git could not judge — the tool
     /// call itself will surface whatever is actually wrong.
     OursOrMoot,
@@ -83,8 +86,11 @@ enum Claim {
 }
 
 /// One atomic claim: `git worktree lock` refuses a second lock, so the
-/// loser of a race is told here and not after settling in.
-fn claim_seat(cwd: &str, seat_path: &str, session: &str) -> Claim {
+/// loser of a race is told here and not after settling in. What to make
+/// of a seat somebody already holds is the caller's — a session entering
+/// one has somewhere else to go, a session already sitting in one does
+/// not.
+pub(super) fn lock_seat(cwd: &str, seat_path: &str, session: &str) -> Claim {
     let reason = format!("{SEAT_CLAIM} {session}");
     let mut command = std::process::Command::new("git");
     command

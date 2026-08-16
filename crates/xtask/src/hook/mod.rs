@@ -28,10 +28,6 @@ const WINDOW_ESCAPE: &str = "PG_ALLOW_GUI";
 /// The same, for an instruction that asked to kill runs beyond this tree.
 const KILL_ESCAPE: &str = "PG_ALLOW_KILL";
 
-/// The mark a session's seat claim carries in `git worktree lock`'s
-/// reason, followed by the session id.
-const SEAT_CLAIM: &str = "claude-seat";
-
 pub fn run(args: &[String]) -> Result<(), String> {
     let event = args.first().map(String::as_str).unwrap_or("");
     let mut input = String::new();

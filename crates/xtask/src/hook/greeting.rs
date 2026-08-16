@@ -1,9 +1,8 @@
 //! SessionStart: where the session sits, where the seats stand, and which
 //! free letter it should take.
 
-use super::SEAT_CLAIM;
 use super::payload::string_field;
-use super::seat::lock_reason;
+use super::seat::{lock_reason, lock_seat};
 use crate::git_query;
 use crate::seats::{self, SEATS, commits_in, worktree_root};
 
@@ -57,16 +56,11 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
 fn claim_at_start(cwd: &str, session: &str) -> Option<String> {
     match lock_reason(cwd) {
         None => {
-            let reason = format!("{SEAT_CLAIM} {session}");
-            let mut command = std::process::Command::new("git");
-            command
-                .arg("-C")
-                .arg(cwd)
-                .args(["worktree", "lock", "--reason", &reason, cwd]);
-            if crate::run_captured(&mut command).is_err() {
-                // A claim that could not be written is a survey concern;
-                // the greeting still says where the seat stands.
-            }
+            // A claim that could not be written is a survey concern, and so
+            // is one lost to a race in the moment since the read above: the
+            // session is already sitting here either way, and the greeting
+            // still says where the seat stands.
+            let _claim = lock_seat(cwd, cwd, session);
             None
         }
         Some(reason) if !session.is_empty() && reason.contains(session) => None,
