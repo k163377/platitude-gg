@@ -1,6 +1,6 @@
 # PG_AUTO_ACT 動詞表(正本)
 
-[SKILL.md](SKILL.md) の参照資料。全文を読む必要はない — **一覧は動詞ごとに 1 行(仕込みが共通の近縁動詞は 1 行に束ねる。段落側だけの動詞は §索引)**。使う動詞を動詞名の Grep で引き、続く節の該当段落(読み方・仕込み)を読む。**追記も 1 動詞 1 行で**(並行セッションの追記を同じ行で衝突させないための形。段落で書く仕込みは下の節へ)。
+[SKILL.md](SKILL.md) の参照資料 — **1 動詞 1 行**(近縁動詞は束ねる・段落側だけの動詞は §索引)、使う動詞名で Grep して該当行と続く節の該当段落だけを読み(全読みしない)、追記も 1 動詞 1 行(段落で書く仕込みは下の節へ)。
 
 ## 動詞一覧
 
@@ -156,7 +156,7 @@
 
 **既に開いているリポジトリを開き直す形は `open-again`**(引数はパス、省略で先頭タブ自身の綴り。報告行 `open_again tabs= active= asked= open=`)。**2 通りを対で読む**: `--preset basic --preset stashes` に**引数なし**で「移る」側(起動直後は `active=1`、頼んだ後に `tabs=2 active=0`)、**git の綴りを引数で渡す**方が「綴りが違っても同じフォルダ」側(`--repo` にはシェルの綴り = `C:\Users\WRONGW~1\…` を渡し、引数に `git worktree list` が出す `C:/Users/wrongwrong/…` を渡す → `tabs=1`)。**後者だけが本題** — 素の文字列比較でも前者は通る。WORKTREES の行から入る形は `nav-dbl worktree:<git の綴り>` で、判定は `opened repository tab` のログが 1 本きりであること。**復元側は仕込みが要る**(`--config-dir` に重複入りの `[tabs] paths` を書いた `state.toml` を置き `state --restore`)— `restored tab dropped: already open` が落ちた件数を、`state tabs= active=` が残った形を言う。
 
-**identity の画面は `identity` / `identity-half` の対**(引数は打ち込む値 `<name>|<email>`、既定 `Ada Lovelace|ada@example.com`)。**この 2 つだけ書き込みが demo リポジトリの外 = 人の git 設定へ出る**ので、xtask が `GIT_CONFIG_GLOBAL` と**作業ディレクトリごと**隔離した上で起動する(隔離しないとこの機械の identity を読み書きする)。`identity` = 画面を埋めるだけ(全フラグが下りているのが正)/ `identity-half` = **多値の `user.email` を仕込んだ設定へ保存する** = git が `cannot overwrite multiple values` で exit 5 に落とすので **name だけ着地**(ロック競合と同じ形を決定的に作る唯一の手)。報告行 `identity state= dialog= nameSaved= emailSaved= unsaved= badge= said=` で、**両方 `must_say` を持つ** — 「save が通らずに残っているダイアログ」と「まだ誰も答えていないダイアログ」は同じ絵なので、写真では答えられない。**`dialog=` が本体**。**半端 save の印は `identity-tip`** — 同じ隔離・同じ半端 save の後にダイアログを閉じ(印は半端の間しか立たない)、`badges-hover` と同じ帯の状態カードを開く(`TopBar.statePointedAt` = 実 hover と同じ 1 つのプロパティ)。報告行 `identity_tip unsaved= badge= tip= rows=` の **`tip=` はカードの `opened`**(unsaved / badge / tip の 3 つが must_say)。カードは overlay.png の側に写る。
+**identity の画面は `identity` / `identity-half` の対**(引数は打ち込む値 `<name>|<email>`、既定 `Ada Lovelace|ada@example.com`)。**この 2 つだけ書き込みが demo リポジトリの外 = 人の git 設定へ出る**ので、xtask が `GIT_CONFIG_GLOBAL`(+ `GIT_CONFIG_NOSYSTEM=1`)と**作業ディレクトリごと**隔離した上で起動する(隔離しないとこの機械の identity を読み書きする)。`identity` = 画面を埋めるだけ(全フラグが下りているのが正)/ `identity-half` = **多値の `user.email` を仕込んだ設定へ保存する** = git が `cannot overwrite multiple values` で exit 5 に落とすので **name だけ着地**(ロック競合と同じ形を決定的に作る唯一の手)。報告行 `identity state= dialog= nameSaved= emailSaved= unsaved= badge= said=` で、**両方 `must_say` を持つ** — 「save が通らずに残っているダイアログ」と「まだ誰も答えていないダイアログ」は同じ絵なので、写真では答えられない。**`dialog=` が本体**。**半端 save の印は `identity-tip`** — 同じ隔離・同じ半端 save の後にダイアログを閉じ(印は半端の間しか立たない)、`badges-hover` と同じ帯の状態カードを開く(`TopBar.statePointedAt` = 実 hover と同じ 1 つのプロパティ)。報告行 `identity_tip unsaved= badge= tip= rows=` の **`tip=` はカードの `opened`**(unsaved / badge / tip の 3 つが must_say)。カードは overlay.png の側に写る。
 
 **2 つ目のプロセスが出す窓は `solo`** — **xtask 自身が `--config-dir` の `lock` を握ってから**アプリを起動するので、起動するのは本物の 2 つ目(状態を真似るフラグは無い)。報告行 `solo blocked= held= gate= main=` で、**`blocked=true` を言わなかった run は FAIL**(仕込みが効かないと絵は普通の窓になり、普通の窓は普通に撮れてしまう)。`--config-dir` を渡さない既定でよい。
 

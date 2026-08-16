@@ -10,9 +10,11 @@ UI の色・寸法・用語の正本は [デザイン規約.md](../../internal-d
 ## Qt Bridges の要点(罠)
 
 - 全 QObject は `Rc<RefCell<_>>`(メインスレッド専有)。**QML からの呼び出し中に再入 borrow すると panic** — 借用は短く保つ
-- バックグラウンド → UI は `QObjectHolder::get_qml_method_invoker()` で得た `QmlMethodInvoker` をスレッドへ移動し `invoke_method*`(queued 実行)する。それ以外の経路で UI を触らない
+- バックグラウンド → UI は `QObjectHolder::get_qml_method_invoker()` で得た `QmlMethodInvoker` をスレッドへ移動し `invoke_method*`(queued 実行)する。それ以外の経路で UI を触らない。invoker は Send だが Clone 不可 — 渡す先の数だけ `get_qml_method_invoker()` で取る
 - `#[derive(QModelItem)]` は非衛生的展開 — 使用側ファイルに `use std::collections::HashMap;` が必須。ロール名はフィールド名そのまま(snake_case)。`display` という名前のフィールドは Qt の display ロールに割り当てられる
 - `QListModelBase` にバッチ挿入は無い(push/insert は 1 行ずつ)。大量追記は `try_get_rust_proxy_ptr()` + `base_begin_insert_rows(first, last)` + `Vec::extend` + `base_end_insert_rows` のレンジ挿入で行う(P0 スパイク `spike/src/main.rs` の `extend_notified` 参照)
+- `QModelItem` のロール型はプリミティブと `String` のみ(`Vec` 不可)— 配列的なデータは文字列にエンコードし、QML 側で機械デコードする(グラフの形状・ラベルが前例)
+- `QModelIndex` の公開パスは `qtbridge::qtbridge_type_lib::QModelIndex`
 - `ConvertToCamelCase` はスロット/シグナルのメタ名を camel 化する — そのオブジェクトへの `invoke_method!` も camel 名で呼ぶこと(混在事故を防ぐため、invoker で呼ぶ対象には付けないのが安全)
 - QML モジュール名は既定で Cargo パッケージ名(ハイフン不可)だが、`#[qobject(NoQmlElement)]` + 手動 `impl QmlRegister`(URI 定数)で任意にできる
 - Qt Widgets 不可・C++ 混在不可。必要になった時点で CXX-Qt 移行を検討
@@ -33,7 +35,8 @@ UI の色・寸法・用語の正本は [デザイン規約.md](../../internal-d
 - **メニューは `popup()` ではなく `offer()` で開く** — 出す行が 0 なら開かない(空のカードを出さない)。**行の可否はメニューを開く関数で 1 度だけ決めて `page` のプロパティに置く**(`menuCanSwitch` / `menuFileCanWrite` 等)。生の条件を `offered:` に直接書くと、タイマの fetch が `busyCount` を動かした瞬間にポインタの下で行が出入りする
 - **区切りは `AppMenuSeparator` が自分で決める**(使う側に `visible:` を書かない)。`AppMenu` が `Component.onCompleted` で自分自身を各区切りの `inMenu` に入れるので、**AppMenu のインスタンス側で `Component.onCompleted` を書かない**(奪うと区切りが親を見失う)。**引かない時は `implicitHeight` を 0 にする**(消えても高さを持つと ListView に穴が残る — `AppMenuItem` と同じ)
 - **`ListView.highlightFollowsCurrentItem` は false にする** — 既定の true では `currentIndex` を動かすだけでビューが追いかけ、背景更新で選択行が 1 つずれただけでも履歴を読んでいる人の視界を選択位置まで飛ばす。行の入れ替えでコンテンツが N 行ずれる分は `GraphPane.shiftRows()` で contentY を戻す(**レイアウト前なので 1 拍遅らせる** — 直後は contentHeight が旧値で clamp に食われる)
+- **モデルリセット後の ListView は `currentIndex` を保ったまま `contentY` だけ 0 に戻る** — 直後の `positionViewAtIndex` は後続の relayout(polish)に上書きされ、`Qt.callLater` でも不十分。短い Timer(50ms)で遅らせる(`GraphPane` の anchorTimer)
 
 ## 配線済み操作の意匠と実装対応
 
-**個々の操作・部品の意匠決定・実装対応・罠の正本は [rules-refs/app-ui.md](../rules-refs/app-ui.md)**(1 項目 1 行。自動ロードされない。配線済み操作の一覧も同ファイル冒頭 — Grep: `配線済み`)。**書く前に、触る部品名(QML ファイル名)・操作名・動詞名・規約 §名で Grep し、該当項だけを読む(前後は `-C 2`)。ファイルを Read で全読みしない**。**配線・決定・罠を足したら該当行へ 1 行で追記**(全セッション共通の不変条件に昇格するものだけ本ファイルへ。CLAUDE.md は未配線だけを持つ)。
+**個々の操作・部品の意匠決定・実装対応・罠、および配線済み操作の一覧の正本は [rules-refs/app-ui.md](../rules-refs/app-ui.md)**(自動ロードされない)— 触る部品名・操作名・動詞名・規約 §名で Grep して該当行だけを読み(全読みしない)、配線・決定・罠は該当行へ 1 行で追記する(本ファイルへは全セッション共通の不変条件だけを昇格。CLAUDE.md は未配線だけを持つ)。

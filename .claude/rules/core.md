@@ -31,6 +31,6 @@ paths:
 - 書き込みは `RepoSession` のキュー経由で直列化され、成功・失敗いずれでも refresh する。失敗は git の文言のまま `WriteFinished{error}` → 既存のエラー表示へ流れる
 - **コマンドログは executor の observer 1 本で取る**(`process::CommandObserver`)。セッションは利用者用と背景用の 2 ハンドル(`GitExecutor::observed`)を挿し、書き込みキューだけが利用者用 = 分類はキューの分岐 1 箇所で決まる。**auto fetch はキューを通るが背景扱い**(オフラインで毎分パネルが開くのを防ぐ)。記録しない時は `records()` で早期に降り、コピー用の完全形(`-c` 群 + 環境変数)を組み立てない
 - **終了コードで答える問い合わせはコマンドログの失敗にしない**(`GitCommand::answers_by_code()`。例: `merge-base --is-ancestor` の exit 1 は答え)。**`run_unchecked` で非ゼロを分岐に使っている箇所は全部これが要る** — 付け忘れるとその exit 1 のたびにパネルが開く(対象コマンドの一覧は rules-refs/core.md の `answers_by_code` 項)
-- **統合テストは 1 バイナリ**(`tests/it/` のモジュール。`cargo test` はバイナリを 1 つずつ走らせるので、`tests/` 直下に .rs を足すと別バイナリ = 直列実行とリンク 1 本分の後退。新しい統合テストは `it/` にモジュールとして足し `main.rs` へ登録)。部分実行は `cargo test -p platitude-core --test it <モジュール名>`
+- **統合テストは 1 バイナリ** — 新しい統合テストは `tests/it/` にモジュールとして足し `main.rs` へ登録する(`tests/` 直下に .rs を置かない — 理由は違反時に pre-write hook が届ける)。部分実行は `cargo test -p platitude-core --test it <モジュール名>`
 - **「もう起きない」を sleep で確かめない** — キューに乗った書き込みは前の write の refresh まで終わってから始まるので、静かな時間の長さは「止まった」と「遅い」を区別しない(`cargo test --workspace` の負荷で落ちる)。タイマは手で進めて、進めた先が受け取ったかどうかを見る(`RepoSession::auto_fetch_ticker`)
   - **待ちの上限も同じ** — 「待ち始めてから N 秒」は遅いだけの実行を落とす。**上限は沈黙に対して数える**(`session_integration::Patience`。イベントが 1 つ来るたび更新し、`OVERALL_BUDGET` だけを全体の歯止めに残す)。数字を上げて凌ぐと**そのファイルの全テストが同じだけ検出を遅らせる**(実測: 12 件の直列書き込みが単体 4.7s / `--workspace` の負荷下では 1 件 ~2.5s = 20 秒で 8 件目。沈黙で数えた側は静かなセッションを 20.2s で捕まえる)
