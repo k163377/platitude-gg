@@ -20,4 +20,4 @@ pub mod wait;
 pub use exec::Ends;
 pub use graph::replay_graph;
 pub use repo::TestRepo;
-pub use wait::{Patience, settled};
+pub use wait::Patience;

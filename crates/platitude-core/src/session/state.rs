@@ -124,14 +124,13 @@ pub(super) struct Shared {
 /// One fact read out of the repository and kept until something that
 /// could have changed it happens.
 ///
-/// **The point is that the invalidation is one place.** These are not a
-/// cache of a keyed lookup — each is a single answer about the repository
-/// as a whole (does git normalise line endings here, what remotes are
-/// configured), and every one of them is invalidated by the same two
-/// events: a write landed, or the refs moved. Scattering an
-/// `Option<T>` and its `= None` across the modules that happen to read it
-/// is how one gets forgotten, so they are cleared together in
-/// [`RepoSession::forget_derived`].
+/// These are not a cache of a keyed lookup — each is a single answer about
+/// the repository as a whole (does git normalise line endings here, what
+/// remotes are configured). Invalidation stays in the two event boundaries
+/// that own it: before a write's refresh, and after an external ref move.
+/// The latter has already read the current remote answer, so line-ending
+/// context is dropped immediately while remotes are dropped only for the
+/// following read (see [`RepoSession::forget_derived`]).
 ///
 /// Deliberately not a cache crate. `salsa` tracks dependencies between
 /// pure synchronous queries; these are async subprocess reads that can be
@@ -228,96 +227,6 @@ impl OpGate {
     }
     pub(super) fn is_current(&self, generation: u64) -> bool {
         self.0.load(Ordering::SeqCst) == generation
-    }
-}
-
-/// One read of a snapshot at a time, with at most one repeat booked
-/// behind it.
-///
-/// Nothing coordinates the places that ask for a re-read — opening a
-/// repository asks, and so does the window becoming active a moment
-/// later, which at startup is the same moment. Granting both has
-/// [`OpGate`] throw the older answer away: two `for-each-ref` and two
-/// `status -uall` for one snapshot, which on `JetBrains/kotlin` is about
-/// a second of disk work landing exactly where the first click goes.
-///
-/// The second caller does not start its own read and does not lose its
-/// request either — it books the repeat, and the read in flight goes
-/// round again when it lands. That distinction is the whole point: a
-/// dropped request would leave a write's own refresh reading the
-/// repository as it was *before* the write, with the correction waiting
-/// on the next poll tick.
-#[derive(Default)]
-pub(super) struct ReadSlot(std::sync::atomic::AtomicU8);
-
-/// Nobody is reading.
-const SLOT_IDLE: u8 = 0;
-/// A read is in flight.
-const SLOT_RUNNING: u8 = 1;
-/// A read is in flight and somebody asked for another behind it.
-const SLOT_AGAIN: u8 = 2;
-
-impl ReadSlot {
-    /// Whether this caller is the one that runs. `false` = a read is
-    /// already in flight and has been booked to repeat.
-    pub(super) fn claim(&self) -> bool {
-        let mut seen = self.0.load(Ordering::SeqCst);
-        loop {
-            let next = if seen == SLOT_IDLE {
-                SLOT_RUNNING
-            } else {
-                SLOT_AGAIN
-            };
-            match self
-                .0
-                .compare_exchange(seen, next, Ordering::SeqCst, Ordering::SeqCst)
-            {
-                Ok(_) => return seen == SLOT_IDLE,
-                Err(actual) => seen = actual,
-            }
-        }
-    }
-
-    /// Called by the reader when its pass lands. `true` = somebody asked
-    /// while it was running, so it goes round once more.
-    pub(super) fn finish(&self) -> bool {
-        loop {
-            if self
-                .0
-                .compare_exchange(SLOT_RUNNING, SLOT_IDLE, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-            {
-                return false;
-            }
-            if self
-                .0
-                .compare_exchange(SLOT_AGAIN, SLOT_RUNNING, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-            {
-                return true;
-            }
-        }
-    }
-
-    /// Opens the slot from wherever it was left.
-    ///
-    /// For the reader that never reached [`Self::finish`] — its task was
-    /// dropped with the runtime, or it unwound. Without this, a slot left
-    /// running turns one lost pass into a section of the window that
-    /// never updates again and never says why, which is a far worse
-    /// failure than the duplicate read the slot exists to stop.
-    pub(super) fn abandon(&self) {
-        self.0.store(SLOT_IDLE, Ordering::SeqCst);
-    }
-}
-
-/// Opens a [`ReadSlot`] when the reader holding it goes away without
-/// finishing (see [`ReadSlot::abandon`]).
-pub(super) struct SlotHeld<'a>(pub(super) &'a ReadSlot);
-
-impl Drop for SlotHeld<'_> {
-    fn drop(&mut self) {
-        self.0.abandon();
     }
 }
 
@@ -430,42 +339,5 @@ mod tests {
             .get_or_try_init(|| async { Ok::<u32, ()>(99) })
             .await;
         assert_eq!(held, Ok(2), "only the current generation was cached");
-    }
-
-    #[test]
-    fn the_first_caller_reads_and_the_second_books_one_more_pass() {
-        let slot = ReadSlot::default();
-        assert!(slot.claim(), "nothing was running");
-        assert!(!slot.claim(), "a read is in flight, so this one waits");
-        assert!(!slot.claim(), "and so does the next");
-        // Two callers queued behind one read, and one repeat answers both:
-        // they asked for the same thing.
-        assert!(slot.finish(), "somebody asked while it ran");
-        assert!(!slot.finish(), "nobody asked during the repeat");
-        assert!(slot.claim(), "and the slot is free again");
-    }
-
-    #[test]
-    fn a_reader_that_never_finishes_does_not_take_the_slot_with_it() {
-        let slot = ReadSlot::default();
-        assert!(slot.claim());
-        assert!(!slot.claim(), "and somebody is waiting behind it");
-        drop(SlotHeld(&slot));
-        assert!(
-            slot.claim(),
-            "the next ask runs rather than waiting on a reader that is gone"
-        );
-    }
-
-    #[test]
-    fn a_request_that_arrives_as_a_read_lands_is_not_lost() {
-        let slot = ReadSlot::default();
-        assert!(slot.claim());
-        assert!(!slot.claim());
-        assert!(slot.finish());
-        // Mid-repeat, a third caller: still exactly one more pass.
-        assert!(!slot.claim());
-        assert!(slot.finish());
-        assert!(!slot.finish());
     }
 }

@@ -1,8 +1,6 @@
 //! The log window: what the walk covers, what of it is shown, and what
 //! moving the window lands.
 
-use std::time::Duration;
-
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, pass_of};
 use platitude_core::GitExecutor;
@@ -89,7 +87,7 @@ async fn log_limit_truncates_the_window() {
         })
     })
     .await;
-    let first_gen = sink.settled_stream_gen(3).await;
+    let first_gen = sink.opened_graph_gen(&session, 3).await;
 
     session.set_log_limit(Some(2));
     let limited = sink.pass_after("the limited window", first_gen).await;
@@ -133,7 +131,7 @@ async fn truncation_follows_the_walk_not_the_shown_rows() {
         })
     })
     .await;
-    let first_gen = sink.settled_stream_gen(4).await;
+    let first_gen = sink.opened_graph_gen(&session, 4).await;
 
     // The walk emits 4 rows (stash, its index parent, "three", "two") and
     // is cut before "one"; the sifted index parent leaves 3 shown rows.
@@ -176,7 +174,7 @@ async fn the_wip_row_does_not_trigger_truncation() {
 
     // Wait until the dirty state is reflected and the stream settles, so
     // the next pass is the reaction to the limit change.
-    let first_gen = sink.settled_stream_gen(3).await;
+    let first_gen = sink.opened_graph_gen(&session, 3).await;
 
     // One commit through a window of one: cut, and the WIP row rides on
     // top of it regardless.
@@ -221,22 +219,26 @@ async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
         repo.path.clone(),
         sink.clone(),
     );
-    sink.settled_stream_gen(2).await;
+    sink.opened_graph_gen(&session, 2).await;
 
     // Park in the swap that adds the WIP row: it sends under the graph
     // lock, so every pass asked for from here waits at that door.
-    let (arrived, at_the_window) = tokio::sync::oneshot::channel();
     let (release, held) = std::sync::mpsc::channel::<()>();
     sink.hook_once(
         |e| matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 3),
         move || {
-            let _ = arrived.send(());
-            let _ = held.recv_timeout(Duration::from_secs(20));
+            held.recv().expect("the test releases the graph swap");
         },
     );
     repo.write_file("f.txt", "wip\n");
     session.refresh_status();
-    at_the_window.await.expect("the rebuild reached the window");
+    sink.wait_for("the rebuild reached the window", |events| {
+        events
+            .iter()
+            .any(|event| matches!(event, SessionEvent::LogReplaced { rows, .. } if rows.len() == 3))
+            .then_some(())
+    })
+    .await;
     // The sink records before it runs the hook, so the graph the change
     // is measured against is already readable from where it is parked.
     let wip_gen = sink
@@ -291,7 +293,7 @@ async fn a_window_change_only_the_footer_notices_still_lands() {
         repo.path.clone(),
         sink.clone(),
     );
-    let first_gen = sink.settled_stream_gen(2).await;
+    let first_gen = sink.opened_graph_gen(&session, 2).await;
 
     // A window exactly as wide as the history: every commit is shown, and
     // the walk stopping on the limit is what makes it cut all the same.
@@ -303,18 +305,22 @@ async fn a_window_change_only_the_footer_notices_still_lands() {
 
     // Park in the swap that adds the WIP row (see the test above): from
     // here every pass waits at the graph lock.
-    let (arrived, at_the_window) = tokio::sync::oneshot::channel();
     let (release, held) = std::sync::mpsc::channel::<()>();
     sink.hook_once(
         |e| matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 3),
         move || {
-            let _ = arrived.send(());
-            let _ = held.recv_timeout(Duration::from_secs(20));
+            held.recv().expect("the test releases the graph swap");
         },
     );
     repo.write_file("f.txt", "wip\n");
     session.refresh_status();
-    at_the_window.await.expect("the rebuild reached the window");
+    sink.wait_for("the rebuild reached the window", |events| {
+        events
+            .iter()
+            .any(|event| matches!(event, SessionEvent::LogReplaced { rows, .. } if rows.len() == 3))
+            .then_some(())
+    })
+    .await;
     let wip = sink
         .wait_for("the WIP row's pass", |evs| {
             evs.iter().filter_map(pass_of).find(|p| p.total == 3)

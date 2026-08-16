@@ -107,12 +107,12 @@ impl RepoSession {
         }
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            let _held = SlotHeld(&s.refs_read);
+            let mut held = SlotHeld::new(&s.refs_read);
             loop {
-                if s.publish_refs().await {
+                if s.publish_refs(true).await {
                     s.refresh_log();
                 }
-                if !s.refs_read.finish() {
+                if !held.finish() {
                     break;
                 }
             }
@@ -128,7 +128,7 @@ impl RepoSession {
     ///
     /// Does not rebuild the graph itself: a caller that reads status in the
     /// same pass rebuilds once for both (see [`RepoSession::refresh_poll`]).
-    pub(super) async fn publish_refs(self: &Arc<Self>) -> bool {
+    pub(super) async fn publish_refs(self: &Arc<Self>, forget_remotes_on_move: bool) -> bool {
         let Some(workdir) = self.workdir() else {
             return false;
         };
@@ -209,6 +209,7 @@ impl RepoSession {
                 // and sent under the graph lock (see `apply_refs`), and
                 // nothing else may run inside it.
                 self.apply_refs(label_map);
+                let refs_moved = previous.is_some_and(|previous| previous != key);
                 // A tip that nothing else holds is a property of where the
                 // refs point, so it is re-asked when they move — and on
                 // the first read, which has nothing to compare against.
@@ -216,9 +217,15 @@ impl RepoSession {
                     self.settle_head_reach();
                     // HEAD moving swaps out the checked-out files, and with
                     // them whatever the neighbours of a path looked like.
-                    self.forget_derived();
+                    self.forget_eol_derived();
                 }
-                previous.is_some_and(|previous| previous != key)
+                // The first read already used the current remote list. An
+                // external ref move is different: it may have arrived with
+                // a config edit, so the following read has to ask again.
+                if refs_moved && forget_remotes_on_move {
+                    self.remotes.forget();
+                }
+                refs_moved
             }
             (Err(e), _) | (_, Err(e)) => {
                 self.fail("refs", e);
@@ -233,14 +240,14 @@ impl RepoSession {
         }
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            let _held = SlotHeld(&s.status_read);
+            let mut held = SlotHeld::new(&s.status_read);
             loop {
                 // An external change (another tool, the terminal) can make
                 // the tree dirty or clean, which adds or removes the WIP row.
                 if s.publish_status().await {
                     s.refresh_log();
                 }
-                if !s.status_read.finish() {
+                if !held.finish() {
                     break;
                 }
             }
@@ -431,7 +438,7 @@ impl RepoSession {
         }
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            let _held = SlotHeld(slot(&s));
+            let mut held = SlotHeld::new(slot(&s));
             loop {
                 let op_gen = gate(&s).begin();
                 let cancel = s.root_cancel.clone();
@@ -443,7 +450,7 @@ impl RepoSession {
                     }
                     Err(e) => s.fail(op, e),
                 }
-                if !slot(&s).finish() {
+                if !held.finish() {
                     break;
                 }
             }

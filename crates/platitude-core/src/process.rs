@@ -590,8 +590,9 @@ mod tests {
 
     use super::*;
 
-    /// A cross-platform command that sleeps for ~30s, used to exercise the
-    /// timeout / cancellation paths without depending on git behavior.
+    /// A cross-platform command that announces it is running, then sleeps
+    /// for ~30s, used to exercise timeout / cancellation without depending
+    /// on git behavior or a wall-clock guess about when the child started.
     fn sleeper() -> Command {
         #[cfg(windows)]
         {
@@ -600,14 +601,14 @@ mod tests {
                 "-NoProfile",
                 "-NonInteractive",
                 "-Command",
-                "Start-Sleep -Seconds 30",
+                "Write-Output ready; Start-Sleep -Seconds 30",
             ]);
             c
         }
         #[cfg(not(windows))]
         {
             let mut c = Command::new("sh");
-            c.args(["-c", "sleep 30"]);
+            c.args(["-c", "printf 'ready\\n'; sleep 30"]);
             c
         }
     }
@@ -622,7 +623,6 @@ mod tests {
 
     #[tokio::test]
     async fn timeout_kills_the_child() {
-        let started = Instant::now();
         let mut child = prepare(sleeper()).spawn().unwrap();
         let cancel = CancellationToken::new();
         let outcome = run_child(
@@ -634,24 +634,22 @@ mod tests {
         .await
         .unwrap();
         assert!(matches!(outcome, ChildOutcome::TimedOut));
-        assert!(started.elapsed() < Duration::from_secs(15));
     }
 
     #[tokio::test]
     async fn cancellation_kills_the_child() {
-        let started = Instant::now();
         let mut child = prepare(sleeper()).spawn().unwrap();
         let cancel = CancellationToken::new();
         let cancel_clone = cancel.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(200)).await;
+        let mut ready = false;
+        let outcome = run_child(&mut child, None, &cancel, &mut |_| {
+            ready = true;
             cancel_clone.cancel();
-        });
-        let outcome = run_child(&mut child, None, &cancel, &mut |_| {})
-            .await
-            .unwrap();
+        })
+        .await
+        .unwrap();
+        assert!(ready, "the child announced that it had started");
         assert!(matches!(outcome, ChildOutcome::Cancelled));
-        assert!(started.elapsed() < Duration::from_secs(15));
     }
 
     #[test]

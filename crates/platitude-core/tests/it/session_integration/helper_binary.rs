@@ -27,10 +27,14 @@ use crate::support::session::publish_helper;
 /// caller as the failure it is. (cargo and rustup carry the same loop for
 /// the same reason, around the binaries they have just written.)
 #[cfg(unix)]
-fn run_published_helper(path: &std::path::Path) -> std::io::Result<std::process::Output> {
+fn run_published_helper(
+    path: &std::path::Path,
+    on_busy: impl FnOnce(),
+) -> std::io::Result<std::process::Output> {
     // A second in all (40 × 25ms), which spans a fork→exec on a loaded
     // machine many times over, and is paid only while it really is busy.
     let mut retries = 40;
+    let mut on_busy = Some(on_busy);
     loop {
         let answer = std::process::Command::new(path).output();
         let busy = matches!(
@@ -39,6 +43,9 @@ fn run_published_helper(path: &std::path::Path) -> std::io::Result<std::process:
         );
         if !busy || retries == 0 {
             return answer;
+        }
+        if let Some(notify) = on_busy.take() {
+            notify();
         }
         retries -= 1;
         std::thread::sleep(std::time::Duration::from_millis(25));
@@ -71,7 +78,7 @@ fn the_helper_is_replaced_rather_than_written_over() {
 
     // And what landed is still the helper: `fs::copy` carries the mode, so
     // the file it publishes is one git can execute.
-    let out = run_published_helper(&again).expect("run the installed helper");
+    let out = run_published_helper(&again, || {}).expect("run the installed helper");
     assert!(
         String::from_utf8_lossy(&out.stderr).contains("usage: pg-todo-editor"),
         "the installed file is not the helper: {out:?}"
@@ -107,14 +114,19 @@ fn a_helper_held_open_for_writing_is_run_once_the_handle_goes() {
         .expect_err("a file open for writing is not executable on linux");
     assert_eq!(refused.kind(), std::io::ErrorKind::ExecutableFileBusy);
 
-    let letting_go = std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        drop(handle);
+    let (busy, saw_busy) = std::sync::mpsc::channel();
+    let helper = published.clone();
+    let runner = std::thread::spawn(move || {
+        run_published_helper(&helper, move || busy.send(()).expect("report ETXTBSY"))
     });
-    let out = run_published_helper(&published).expect("run the installed helper");
+    saw_busy.recv().expect("the first execution was refused");
+    drop(handle);
+    let out = runner
+        .join()
+        .expect("the helper runner")
+        .expect("run the installed helper");
     assert!(
         String::from_utf8_lossy(&out.stderr).contains("usage: pg-todo-editor"),
         "the installed file is not the helper: {out:?}"
     );
-    letting_go.join().expect("the holder thread");
 }

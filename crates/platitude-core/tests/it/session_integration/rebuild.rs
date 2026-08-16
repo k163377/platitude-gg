@@ -2,7 +2,6 @@
 //! alone.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, is_stream_event, scenario};
@@ -25,53 +24,65 @@ async fn a_write_rebuilds_the_graph_once() {
         repo.path.clone(),
         sink.clone(),
     );
-    // Wait until the WIP row is on screen (root + WIP = 2 rows) and the
-    // stream has settled, so the commit below is the transition that
-    // removes it and every later stream event is a reaction to a write.
-    sink.settled_stream_gen(2).await;
+    // Wait until the WIP row is on screen (root + WIP = 2 rows) behind an
+    // explicit opening boundary, so the commit below is the transition
+    // that removes it and every later stream event is a reaction to a write.
+    sink.opened_graph_gen(&session, 2).await;
 
     session.stage_all();
     session.commit(
         "add new file".into(),
         platitude_core::commit::CommitOptions::default(),
     );
+    // A no-op write behind the commit is a queue barrier. `WriteStarted`
+    // cannot be delivered until the commit's refresh has itself completed,
+    // so it cannot cancel or overlook a trailing rebuild.
+    session.stage_all();
 
-    // Counting from where each write finished ignores whatever the open
-    // sequence was still doing, which a wall-clock delay would not.
-    sink.wait_for("the commit's rebuild finished", |evs| {
-        let commit_at = position_of(evs, "commit")?;
-        evs[commit_at..]
+    let barrier_at = sink
+        .wait_for("the write behind the commit", |evs| {
+            let commit_at = position_of(evs, "commit")?;
+            evs[commit_at..]
+                .iter()
+                .position(|e| matches!(e, SessionEvent::WriteStarted { op } if *op == "stage"))
+                .map(|after| commit_at + after)
+        })
+        .await;
+
+    {
+        let events = sink.events.lock().unwrap();
+        let stage_at = position_of(&events, "stage").expect("stage finished");
+        let commit_at = position_of(&events, "commit").expect("commit finished");
+        assert_eq!(
+            log_starts(&events[stage_at..commit_at]),
+            0,
+            "staging left the tree dirty, so the graph did not change"
+        );
+        assert_eq!(
+            log_starts(&events[commit_at..barrier_at]),
+            0,
+            "the rebuild replaces atomically; it never resets and re-streams"
+        );
+        assert_eq!(
+            events[commit_at..barrier_at]
+                .iter()
+                .filter(|e| matches!(e, SessionEvent::LogReplaced { .. }))
+                .count(),
+            1,
+            "the commit replaced the rebuilt graph exactly once"
+        );
+    }
+    sink.wait_for("the barrier write to finish", |events| {
+        (events
             .iter()
-            .any(|e| matches!(e, SessionEvent::LogReplaced { .. }))
+            .filter(
+                |event| matches!(event, SessionEvent::WriteFinished { op, .. } if *op == "stage"),
+            )
+            .count()
+            == 2)
             .then_some(())
     })
     .await;
-    // Give a trailing second rebuild (the regression this guards against)
-    // time to show up before counting.
-    tokio::time::sleep(Duration::from_millis(400)).await;
-
-    let events = sink.events.lock().unwrap();
-    let stage_at = position_of(&events, "stage").expect("stage finished");
-    let commit_at = position_of(&events, "commit").expect("commit finished");
-    assert_eq!(
-        log_starts(&events[stage_at..commit_at]),
-        0,
-        "staging left the tree dirty, so the graph did not change"
-    );
-    assert_eq!(
-        log_starts(&events[commit_at..]),
-        0,
-        "the rebuild replaces atomically; it never resets and re-streams"
-    );
-    assert_eq!(
-        events[commit_at..]
-            .iter()
-            .filter(|e| matches!(e, SessionEvent::LogReplaced { .. }))
-            .count(),
-        1,
-        "the commit replaced the rebuilt graph in exactly once"
-    );
-    drop(events);
     session.close();
 }
 
@@ -88,13 +99,7 @@ async fn settled_graph() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, usize
         repo.path.clone(),
         sink.clone(),
     );
-    sink.settled_stream_gen(5).await;
-    sink.opening_snapshots().await;
-    let opening = session.refresh_log_tracked().outcome().await;
-    assert!(
-        matches!(opening, RefreshOutcome::Changed | RefreshOutcome::Unchanged),
-        "the opening graph was available: {opening:?}"
-    );
+    sink.opened_graph_gen(&session, 5).await;
     let baseline = sink.count(is_stream_event);
     (repo, sink, session, baseline)
 }
@@ -217,13 +222,12 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
         repo.path.clone(),
         sink.clone(),
     );
-    sink.settled_stream_gen(3).await;
+    sink.opened_graph_gen(&session, 3).await;
 
     // Something for the read to find, on the last row of the graph it
     // reads it from: a chip that travels as a diff instead of with a walk.
     repo.git(&["tag", "v2", &root]);
 
-    let (arrived, at_the_window) = tokio::sync::oneshot::channel();
     let (release, held) = std::sync::mpsc::channel::<()>();
     sink.hook_once(
         |e| {
@@ -231,12 +235,20 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
                 if snapshot.tags.iter().any(|t| t.short == "v2"))
         },
         move || {
-            let _ = arrived.send(());
-            let _ = held.recv_timeout(Duration::from_secs(20));
+            held.recv().expect("the test releases the refs read");
         },
     );
     session.refresh_refs();
-    at_the_window.await.expect("the read reached the window");
+    sink.wait_for("the read reached the window", |events| {
+        events
+            .iter()
+            .any(|event| {
+                matches!(event, SessionEvent::RefsLoaded { snapshot }
+                    if snapshot.tags.iter().any(|tag| tag.short == "v2"))
+            })
+            .then_some(())
+    })
+    .await;
 
     // Rebuilt from here, with the read held: dirtying the tree puts the
     // WIP row at the top, so every row number that read took moves down
@@ -251,10 +263,13 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
     .await;
     release.send(()).expect("let the read finish");
 
-    sink.settled_stream_gen(4).await;
-    // Chips travel on an event of their own: let a late one land rather
-    // than reading the graph before it could have arrived.
-    tokio::time::sleep(Duration::from_millis(400)).await;
+    sink.wait_for("the tag chips on the rebuilt graph", |evs| {
+        let rows = crate::support::replay_graph(evs);
+        rows.values()
+            .any(|row| row.oid_hex == root && row.labels.iter().any(|label| label.text == "v2"))
+            .then_some(())
+    })
+    .await;
 
     let events = sink.events.lock().unwrap();
     let rows = crate::support::replay_graph(&events[..]);
@@ -302,35 +317,34 @@ async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
         repo.path.clone(),
         sink.clone(),
     );
-    sink.settled_stream_gen(3).await;
+    sink.opened_graph_gen(&session, 3).await;
 
     // Park in the swap that adds the WIP row: it sends under the graph
     // lock, so everything else is stopped at the door with the graph
     // fully installed behind it.
-    let (arrived, at_the_window) = tokio::sync::oneshot::channel();
     let (release, held) = std::sync::mpsc::channel::<()>();
     sink.hook_once(
         |e| matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 4),
         move || {
-            let _ = arrived.send(());
-            let _ = held.recv_timeout(Duration::from_secs(20));
+            held.recv().expect("the test releases the graph swap");
         },
     );
     repo.write_file("f.txt", "dirty\n");
     session.refresh_status();
-    at_the_window.await.expect("the rebuild reached the window");
+    sink.wait_for("the rebuild reached the window", |events| {
+        events
+            .iter()
+            .any(|event| matches!(event, SessionEvent::LogReplaced { rows, .. } if rows.len() == 4))
+            .then_some(())
+    })
+    .await;
     let settled = sink.count(|_| true);
 
     // Asked for, then superseded while it waits for the lock.
     session.restart_log();
-    tokio::time::sleep(Duration::from_millis(200)).await;
-    session.refresh_log();
+    let refresh = session.refresh_log_tracked();
     release.send(()).expect("let the rebuild finish");
-
-    // Long enough for both to have run: the superseded stream (which
-    // only has to take the lock) and the rebuild behind it (a whole
-    // walk, which then finds the graph unchanged and skips its swap).
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert_eq!(refresh.outcome().await, RefreshOutcome::Unchanged);
 
     let events = sink.events.lock().unwrap();
     let after: Vec<&SessionEvent> = events[settled..]
@@ -372,13 +386,7 @@ async fn a_poll_rebuilds_the_graph_once() {
         sink.clone(),
     );
     // root + WIP row.
-    sink.settled_stream_gen(2).await;
-    sink.opening_snapshots().await;
-    let opening = session.refresh_log_tracked().outcome().await;
-    assert!(
-        matches!(opening, RefreshOutcome::Changed | RefreshOutcome::Unchanged),
-        "the opening graph was available: {opening:?}"
-    );
+    sink.opened_graph_gen(&session, 2).await;
 
     let replacements = || sink.count(|e| matches!(e, SessionEvent::LogReplaced { .. }));
     let starts = || sink.count(|e| matches!(e, SessionEvent::LogStarted { .. }));

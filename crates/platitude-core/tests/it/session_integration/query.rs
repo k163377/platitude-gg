@@ -1,7 +1,6 @@
 //! Reads that reuse what a read already landed, rather than asking git again.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened, write_result};
@@ -30,17 +29,27 @@ async fn a_request_made_while_a_read_runs_gets_a_read_of_its_own() {
     // Park a read on its way out, which is where a reader stands after it
     // has seen the repository and before it asks whether to go round
     // again. Everything below happens inside that window.
-    let (arrived, at_the_window) = tokio::sync::oneshot::channel();
     let (release, held) = std::sync::mpsc::channel::<()>();
+    let clean_reads = sink
+        .count(|e| matches!(e, SessionEvent::StatusLoaded { status, .. } if !status.is_dirty()));
     sink.hook_once(
         |e| matches!(e, SessionEvent::StatusLoaded { status, .. } if !status.is_dirty()),
         move || {
-            let _ = arrived.send(());
-            let _ = held.recv_timeout(Duration::from_secs(20));
+            held.recv().expect("the test releases the status read");
         },
     );
     session.refresh_status();
-    at_the_window.await.expect("the read reached the window");
+    sink.wait_for("the read reached the window", |events| {
+        (events
+            .iter()
+            .filter(
+                |e| matches!(e, SessionEvent::StatusLoaded { status, .. } if !status.is_dirty()),
+            )
+            .count()
+            > clean_reads)
+            .then_some(())
+    })
+    .await;
 
     // The tree turns dirty behind the parked read — so what it is holding
     // is already out of date — and somebody asks again. Dropping that ask
@@ -78,26 +87,19 @@ async fn a_refs_read_takes_head_out_of_the_listing_it_already_has() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "0\n", "root");
     let (sink, session) = opened(&repo).await;
-    // Let the opening pipeline finish first: it walks the graph, and that
-    // walk asks where HEAD is by a path of its own.
-    sink.settled_stream_gen(1).await;
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // Complete the opening work before clearing the observer; `Opened`
+    // alone only accepts the path.
+    sink.opened_graph_gen(&session, 1).await;
     session.set_record_background(true);
     sink.events.lock().unwrap().clear();
 
     session.refresh_refs();
-    sink.wait_for("the listing", |evs| {
+    sink.wait_for("the refs answer", |evs| {
         evs.iter()
-            .any(|e| {
-                matches!(e, SessionEvent::CommandStarted { display, .. }
-                              if display.contains("for-each-ref"))
-            })
+            .any(|e| matches!(e, SessionEvent::RefsLoaded { .. }))
             .then_some(())
     })
     .await;
-    // Give any stray HEAD lookup every chance to turn up.
-    tokio::time::sleep(Duration::from_millis(300)).await;
-
     let seen = commands_of(&sink);
     assert!(
         !seen.iter().any(|c| c.contains("symbolic-ref")),
@@ -212,8 +214,7 @@ async fn the_walk_reads_head_from_the_refs_read_that_already_landed() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "0\n", "root");
     let (sink, session) = opened(&repo).await;
-    sink.settled_stream_gen(1).await;
-    sink.opening_snapshots().await;
+    sink.opened_graph_gen(&session, 1).await;
     session.set_record_background(true);
     sink.events.lock().unwrap().clear();
 
@@ -242,8 +243,7 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "0\n", "root");
     let (sink, session) = opened(&repo).await;
-    sink.settled_stream_gen(1).await;
-    sink.opening_snapshots().await;
+    sink.opened_graph_gen(&session, 1).await;
     session.set_record_background(true);
     sink.events.lock().unwrap().clear();
 
@@ -268,11 +268,18 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
         .await
     };
 
-    // One read warms it — the opening listing found the refs where it had
-    // never seen them before, which counts as a move and drops what was
-    // read once.
+    // The opening boundary already warmed it. An unchanged listing reuses
+    // that answer, even though background command recording only starts now.
     session.refresh_refs();
     settle(1).await;
+    assert_eq!(reads(&sink), 0, "{:?}", commands_of(&sink));
+
+    // A write can add a remote, so it drops the answer. Its post-write refs
+    // snapshot is the causal boundary after the replacement read.
+    let before_write = snapshots(&sink);
+    session.create_branch("side".into(), None, false);
+    write_result(&sink, "branch").await;
+    settle(before_write + 1).await;
     assert_eq!(reads(&sink), 1, "{:?}", commands_of(&sink));
 
     // Now nothing moves, and the listings that follow ask git nothing.
@@ -282,19 +289,6 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
         settle(from + n).await;
     }
     assert_eq!(reads(&sink), 1, "still the one: {:?}", commands_of(&sink));
-
-    // A write can add one, so the answer is dropped and asked again.
-    session.create_branch("side".into(), None, false);
-    write_result(&sink, "branch").await;
-    sink.wait_for("the remotes read again", |evs| {
-        evs.iter()
-            .any(|e| {
-                matches!(e, SessionEvent::CommandStarted { display, .. }
-                              if display.contains("remote\\..*\\.(url|pushurl)"))
-            })
-            .then_some(())
-    })
-    .await;
     session.close();
 }
 

@@ -18,14 +18,15 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::support::TestRepo;
 use crate::support::session::CaptureSink;
 use platitude_core::process::GitExecutor;
 use platitude_core::remote;
 use platitude_core::session::{
-    LabelKind, RefLabel, RefsSnapshot, RepoSession, SessionEvent, SessionSink, TagItem,
+    LabelKind, RefLabel, RefsSnapshot, RemoteTagRefreshOutcome, RepoSession, SessionEvent,
+    SessionSink, TagItem,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -146,11 +147,10 @@ async fn opened(work: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
         work.path.clone(),
         Arc::clone(&sink) as Arc<dyn SessionSink>,
     );
-    // Here and not in the test that reads them: the reads the opening makes
-    // on its own are the ones [`CaptureSink::settled`] tells running work
-    // from an idle session by, and by the time `Opened` has been delivered
-    // the first walk is already on its way. Switched on before the wait
-    // below, this is ahead of everything the session spawns off `Opened`.
+    // Here and not in the test that reads them: graph baselines count the
+    // opening's own walks, and by the time `Opened` has been delivered the
+    // first one is already on its way. Switched on before the wait below,
+    // this is ahead of everything the session spawns off `Opened`.
     session.set_record_background(true);
     sink.wait_for("Opened", |evs| {
         evs.iter()
@@ -228,31 +228,14 @@ async fn the_fetch_is_what_tells_a_tag_whether_a_remote_has_it_too() {
     );
 }
 
-/// Waits for a refs snapshot whose tags satisfy `pred`, or reports that
-/// none did within the window. Used for a read nobody asked for: there is
-/// no event that says "and it did not happen", so the absence is timed.
-async fn tags_settle(
-    sink: &CaptureSink,
-    within: Duration,
-    pred: impl Fn(&[TagItem]) -> bool,
-) -> bool {
-    let deadline = Instant::now() + within;
-    loop {
-        {
-            let evs = sink.events.lock().unwrap();
-            let hit = evs.iter().any(|e| match e {
-                SessionEvent::RefsLoaded { snapshot } => pred(&snapshot.tags),
-                _ => false,
-            });
-            if hit {
-                return true;
-            }
-        }
-        if Instant::now() >= deadline {
-            return false;
-        }
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+/// Waits for the snapshot that causally carries the remote-tag answer.
+async fn tags_loaded(sink: &CaptureSink, pred: impl Fn(&[TagItem]) -> bool) {
+    sink.wait_for("the remote-tag snapshot", |events| {
+        events.iter().any(|event| {
+            matches!(event, SessionEvent::RefsLoaded { snapshot } if pred(&snapshot.tags))
+        }).then_some(())
+    })
+    .await;
 }
 
 fn some_tag_has_a_remote(tags: &[TagItem]) -> bool {
@@ -265,10 +248,7 @@ async fn an_interval_that_is_on_is_permission_to_look_without_being_asked() {
     let (sink, session) = opened(&work).await;
     session.set_auto_fetch(Some(Duration::from_secs(600)));
 
-    assert!(
-        tags_settle(&sink, Duration::from_secs(20), some_tag_has_a_remote).await,
-        "opening with the interval on reads the remotes' tags on its own"
-    );
+    tags_loaded(&sink, some_tag_has_a_remote).await;
     // Ten minutes out, so nothing here came from the timer firing.
     assert_eq!(
         sink.count(|e| matches!(e, SessionEvent::WriteStarted { .. })),
@@ -294,10 +274,7 @@ async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_gra
     session.set_auto_fetch(Some(Duration::from_secs(600)));
     // The first look settles the badges. Counting from before it would
     // race the interval this session opened with.
-    assert!(
-        tags_settle(&sink, Duration::from_secs(20), some_tag_has_a_remote).await,
-        "opening with the interval on reads the remotes' tags"
-    );
+    tags_loaded(&sink, some_tag_has_a_remote).await;
     let named = |tags: &[TagItem]| tags.iter().any(|t| t.short == "v-later");
     let swaps = |sink: &CaptureSink| sink.count(|e| matches!(e, SessionEvent::LogReplaced { .. }));
     let chips =
@@ -307,15 +284,14 @@ async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_gra
             |e| matches!(e, SessionEvent::CommandStarted { display, .. } if display.contains("log -z")),
         )
     };
-    // **Count from where the opening stopped walking, not from where the
-    // badges arrived.** The two are not the same moment: the tags can
-    // settle while the tag-inclusive pass has not even been spawned yet,
-    // and under the load of the whole suite that pass lands after the
-    // baseline and reads as a walk this test caused (実測: it started its
-    // `log -z` 639ms after the badges were on screen). What the baseline
-    // waits for is therefore the session going quiet, not a fixed number
-    // of looks at the walk count — 規約 §「もう起きない」を sleep で確かめない.
-    sink.settled().await;
+    // The tracked refresh is an explicit completion boundary for all graph
+    // work the test can count. A quiet interval would only guess that an
+    // opening pass was not merely delayed.
+    assert!(matches!(
+        session.refresh_log_tracked().outcome().await,
+        platitude_core::session::RefreshOutcome::Changed
+            | platitude_core::session::RefreshOutcome::Unchanged
+    ));
     let (settled_walks, settled_swaps, settled_chips) = (walks(&sink), swaps(&sink), chips(&sink));
     // Which rests on the opening's own reads being recorded (`opened`): a
     // walk nobody wrote down is one the wait reads as silence, and the
@@ -332,10 +308,7 @@ async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_gra
     let bare_path = bare.path.clone();
     bare.git_in(&bare_path, &["tag", "v-later", &root]);
     session.set_auto_fetch(Some(Duration::from_secs(600)));
-    assert!(
-        tags_settle(&sink, Duration::from_secs(20), named).await,
-        "the new name reached the sidebar"
-    );
+    tags_loaded(&sink, named).await;
     // The chips have to arrive by their own event…
     sink.wait_for("the chips", move |evs| {
         (evs.iter()
@@ -370,9 +343,13 @@ async fn with_the_interval_off_nothing_reaches_the_network_unasked() {
     session.set_auto_fetch(None);
 
     assert!(
-        !tags_settle(&sink, Duration::from_secs(3), some_tag_has_a_remote).await,
-        "a repository whose owner turned the timer off is not reached \
-         into for a badge"
+        session.auto_fetch_ticker().is_none(),
+        "with the interval off there is no autonomous source that can ask for tags"
+    );
+    assert_eq!(
+        session.refresh_remote_tags_tracked().outcome().await,
+        RemoteTagRefreshOutcome::Disabled,
+        "the catch-up path itself causally declines the unasked network read"
     );
     // Asking is still asking: the fetch reads them as it always did.
     session.fetch(Some("origin".into()));
@@ -384,14 +361,19 @@ async fn with_the_interval_off_nothing_reaches_the_network_unasked() {
 #[tokio::test(flavor = "multi_thread")]
 async fn tags_out_of_the_walk_are_not_worth_a_round_trip() {
     let (_bare, work, _root, _head) = tag_scenario();
-    let (sink, session) = opened(&work).await;
+    let (_sink, session) = opened(&work).await;
     session.set_include_tags(false);
     session.set_auto_fetch(Some(Duration::from_secs(600)));
 
     assert!(
-        !tags_settle(&sink, Duration::from_secs(3), some_tag_has_a_remote).await,
-        "with tags hidden the chips carrying this reading are not on \
-         screen, and the interval will fill it in soon enough"
+        session.auto_fetch_ticker().is_some(),
+        "the interval remains available; its later fetch, rather than an \
+         eager badge read, is what may fill hidden tags in"
+    );
+    assert_eq!(
+        session.refresh_remote_tags_tracked().outcome().await,
+        RemoteTagRefreshOutcome::Hidden,
+        "the eager catch-up explicitly declines tags that cannot be shown"
     );
 }
 

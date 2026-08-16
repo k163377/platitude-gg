@@ -105,20 +105,23 @@ impl RepoSession {
         fresh
     }
 
-    /// Drops everything read once and kept. A write or a moved ref can
-    /// bring a new `.gitattributes`, change what the neighbours look like
-    /// or add a remote, and there is no cheaper way to find out than to
-    /// ask again when next asked.
-    ///
-    /// **One place on purpose.** These expire on the same two events, and
-    /// a slot cleared where it happens to be read is a slot somebody
-    /// forgets (see [`Derived`]).
+    /// Drops everything read once and kept before a write's refresh. A write
+    /// can bring a new `.gitattributes`, change what the neighbours look like
+    /// or add a remote, and its refresh must read the post-write answers.
     pub(super) fn forget_derived(&self) {
+        self.forget_eol_derived();
+        self.remotes.forget();
+    }
+
+    /// Drops only the line-ending context after HEAD moves. The refs read
+    /// has already asked for remotes by then; write-driven reads invalidated
+    /// that answer before the command, while external moves invalidate it
+    /// separately for the next read.
+    pub(super) fn forget_eol_derived(&self) {
         if let Ok(mut cache) = self.eol_baselines.lock() {
             cache.clear();
         }
         self.eol_normalises.forget();
-        self.remotes.forget();
         self.eol_marks_stale.store(true, Ordering::SeqCst);
     }
 

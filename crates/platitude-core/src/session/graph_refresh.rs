@@ -47,7 +47,60 @@ impl RefreshTask {
     }
 }
 
+/// What one explicitly tracked remote-tag catch-up established.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteTagRefreshOutcome {
+    /// Automatic fetching is off, so an unasked network read is forbidden.
+    Disabled,
+    /// Tags are outside the graph, so their badges are not worth a read.
+    Hidden,
+    /// Another remote-tag read already owns the single-flight slot.
+    Busy,
+    /// The repository is not open any more.
+    Unavailable,
+    /// The remotes answered with the readings already held.
+    Unchanged,
+    /// The remote-tag index moved and a refs repaint was requested.
+    Changed,
+    /// The session closed before the read could answer.
+    Cancelled,
+}
+
+/// Completion boundary for one remote-tag catch-up request.
+pub struct RemoteTagRefreshTask(tokio::sync::oneshot::Receiver<RemoteTagRefreshOutcome>);
+
+impl RemoteTagRefreshTask {
+    pub(super) fn pending() -> (tokio::sync::oneshot::Sender<RemoteTagRefreshOutcome>, Self) {
+        let (send, receive) = tokio::sync::oneshot::channel();
+        (send, Self(receive))
+    }
+
+    pub(super) fn ready(outcome: RemoteTagRefreshOutcome) -> Self {
+        let (send, task) = Self::pending();
+        if send.send(outcome).is_err() {
+            tracing::trace!("remote-tag refresh completion was not observed");
+        }
+        task
+    }
+
+    /// Waits for the request itself to finish or decline to run.
+    pub async fn outcome(self) -> RemoteTagRefreshOutcome {
+        self.0.await.unwrap_or(RemoteTagRefreshOutcome::Cancelled)
+    }
+}
+
 impl RepoSession {
+    /// Waits until the refs and status readers already in flight have
+    /// returned their single-flight slots.
+    ///
+    /// A snapshot event is delivered from inside the reader, before it can
+    /// request the graph refresh that answer implies. Coordinating code uses
+    /// this boundary after observing those events when that distinction
+    /// matters.
+    pub async fn wait_for_snapshot_reads(&self) {
+        tokio::join!(self.refs_read.wait_idle(), self.status_read.wait_idle());
+    }
+
     /// Rebuilds the graph off-screen and swaps it in only when it differs
     /// from what the UI already shows (see [`RepoSession::run_swap_pass`]).
     ///
@@ -121,7 +174,7 @@ impl RepoSession {
             // Both reads can call for a rebuild, but the graph is one
             // picture: an external commit moves a ref *and* cleans the
             // tree, and walking twice would throw one pass away.
-            let (refs_moved, wip_flipped) = tokio::join!(s.publish_refs(), s.publish_status());
+            let (refs_moved, wip_flipped) = tokio::join!(s.publish_refs(true), s.publish_status());
             let outcome = if refs_moved || wip_flipped {
                 let Some(workdir) = s.workdir() else {
                     if finished.send(RefreshOutcome::Skipped).is_err() {

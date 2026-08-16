@@ -66,6 +66,7 @@ mod ops_remote;
 mod ops_tree;
 mod print;
 mod query;
+mod read_slot;
 mod refresh;
 mod remote_tags;
 mod repo_session;
@@ -76,18 +77,18 @@ mod write;
 
 pub use event::SessionEvent;
 use feed::CommandFeed;
-pub use graph_refresh::{RefreshOutcome, RefreshTask};
+pub use graph_refresh::{
+    RefreshOutcome, RefreshTask, RemoteTagRefreshOutcome, RemoteTagRefreshTask,
+};
 pub(crate) use model::LabelIndex;
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel};
 use print::RowPrint;
+use read_slot::{ReadSlot, SlotHeld};
 pub(crate) use remote_tags::RemoteTagIndex;
 pub use repo_session::RepoSession;
 pub use snapshot::{BranchItem, RefsSnapshot, TagItem};
 pub use state::AutoFetchTicker;
-use state::{
-    AutoFetch, Derived, EndingContext, Footer, HeadHold, OpGate, ReadSlot, Shared, SlotHeld,
-    WriteRequest,
-};
+use state::{AutoFetch, Derived, EndingContext, Footer, HeadHold, OpGate, Shared, WriteRequest};
 
 /// First chunk is small so the first paint happens as early as possible.
 const FIRST_CHUNK_ROWS: usize = 512;

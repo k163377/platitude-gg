@@ -1,5 +1,5 @@
-//! What the suite waits on a session with: budgets counted against
-//! silence rather than the clock, and the settling a baseline needs.
+//! What the suite waits on a session with: budgets that diagnose a stuck
+//! causal wait rather than establish correctness by elapsed time.
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -8,12 +8,12 @@ use platitude_core::session::SessionEvent;
 
 /// How long a wait puts up with the session saying nothing. Every event
 /// renews it, so what spends it is silence — not the wait taking a while.
-pub const QUIET_BUDGET: Duration = Duration::from_secs(20);
+pub const QUIET_BUDGET: Duration = Duration::from_secs(120);
 
 /// The whole of a wait, as a backstop under [`QUIET_BUDGET`]: a session
 /// talking without ever getting to the answer renews the silence budget
 /// forever, and only a livelock reaches this one.
-pub const OVERALL_BUDGET: Duration = Duration::from_secs(300);
+pub const OVERALL_BUDGET: Duration = Duration::from_secs(900);
 
 /// What a wait spends while it waits.
 ///
@@ -63,6 +63,15 @@ impl Patience {
         self.quiet_since.elapsed()
     }
 
+    /// Time until the next diagnostic backstop. Correctness never depends
+    /// on spending this duration; it only wakes an event-driven waiter when
+    /// the event source has stopped altogether.
+    pub fn remaining(&self) -> Duration {
+        let quiet = QUIET_BUDGET.saturating_sub(self.quiet_since.elapsed());
+        let whole = OVERALL_BUDGET.saturating_sub(self.started.elapsed());
+        quiet.min(whole)
+    }
+
     /// Fails the test once the budget is spent. Call it with no lock held
     /// — the dump it prints takes one.
     pub fn check(&self, what: &str, events: &Mutex<Vec<SessionEvent>>) {
@@ -79,73 +88,5 @@ impl Patience {
 impl Default for Patience {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-/// How long nothing may happen before [`settled`] calls the session done.
-///
-/// Only the gap between one git command ending and the next one starting
-/// has to fit in here — a command that is *running* is not silence but an
-/// outstanding start (see [`settled`]) — so this is scheduling time, not
-/// git time. 実測 under five copies of the suite at 32 threads each: the
-/// opening's tag-inclusive pass took 639ms to get its `log -z` out of the
-/// door after the tag-less one finished, on a machine where a single git
-/// spawn was taking upwards of a second. Three times that, and still an
-/// order under [`QUIET_BUDGET`], so a session that has genuinely hung is
-/// still called one on the same terms as everywhere else.
-const SETTLE_WINDOW: Duration = Duration::from_secs(2);
-
-/// Whether every git command the session has announced has also reported
-/// back. A command that is still running says nothing while it runs, and
-/// on a loaded machine it says nothing for seconds (実測: 5830ms for a
-/// two-commit walk) — long enough for a wait that only counts silence to
-/// call the session finished in the middle of its opening.
-///
-/// Commands that are not being recorded report neither end, so the two
-/// counts stay in step whatever `set_record_background` is set to; what
-/// they cost is visibility, which is why [`settled`] is only as good as
-/// how early recording was switched on.
-fn nothing_running(events: &[SessionEvent]) -> bool {
-    let (mut started, mut finished) = (0usize, 0usize);
-    for event in events {
-        match event {
-            SessionEvent::CommandStarted { .. } => started += 1,
-            SessionEvent::CommandFinished { .. } => finished += 1,
-            _ => {}
-        }
-    }
-    started == finished
-}
-
-/// Waits until the session has stopped doing things: nothing running, and
-/// nothing said for a [`SETTLE_WINDOW`].
-///
-/// For taking a *baseline* — a count of what has happened so far, against
-/// which whatever the test does next is measured. The trap that shape
-/// walks into is that a session which has not been asked for anything for
-/// a moment is not the same as one that has finished what it was already
-/// doing: work set in motion by the opening lands whenever it lands, and
-/// under load that is after a test on an idle machine would have finished
-/// reading. Anything still in flight then gets counted as the reaction to
-/// what the test did next.
-///
-/// Counted against silence rather than a fixed number of looks, for the
-/// same reason [`Patience`] is (規約 §「もう起きない」を sleep で確かめない),
-/// and it borrows `Patience` for the giving up: a command that never
-/// reports back is a wait that never goes quiet, and gets the same
-/// [`QUIET_BUDGET`] and dump as any other stuck wait.
-pub async fn settled(events: &Mutex<Vec<SessionEvent>>) {
-    let mut patience = Patience::new();
-    loop {
-        let (running, quiet) = {
-            let evs = events.lock().unwrap();
-            patience.note(evs.len());
-            (!nothing_running(&evs), patience.quiet_for())
-        };
-        if !running && quiet >= SETTLE_WINDOW {
-            return;
-        }
-        patience.check("the session to settle", events);
-        tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }

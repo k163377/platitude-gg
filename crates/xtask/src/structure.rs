@@ -308,6 +308,23 @@ fn write_baseline(path: &Path, entries: &BTreeMap<String, usize>) -> Result<(), 
 mod tests {
     use super::{ledger_entries, names, read_baseline, write_baseline};
     use std::collections::BTreeMap;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    fn test_dir(label: &str) -> std::io::Result<std::path::PathBuf> {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        loop {
+            let serial = NEXT.fetch_add(1, Ordering::Relaxed);
+            let dir = std::env::temp_dir().join(format!(
+                "pg-structure-{label}-{}-{serial}",
+                std::process::id()
+            ));
+            match std::fs::create_dir(&dir) {
+                Ok(()) => return Ok(dir),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error),
+            }
+        }
+    }
 
     #[test]
     fn reads_the_ledger_down_to_the_next_heading() {
@@ -352,8 +369,7 @@ mod tests {
 
     #[test]
     fn round_trips_a_baseline_through_the_file_it_writes() {
-        let dir = std::env::temp_dir().join("pg-structure-baseline-test");
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = test_dir("baseline-test").unwrap();
         let path = dir.join("baseline.txt");
         let entries = BTreeMap::from([
             ("crates/a/src/b.rs".to_string(), 501),
@@ -370,8 +386,9 @@ mod tests {
 
     #[test]
     fn reads_a_missing_baseline_as_the_first_run() {
-        let path = std::env::temp_dir().join("pg-structure-baseline-absent.txt");
-        let _ = std::fs::remove_file(&path);
+        let dir = test_dir("baseline-absent").unwrap();
+        let path = dir.join("baseline.txt");
         assert_eq!(read_baseline(&path).unwrap(), None);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

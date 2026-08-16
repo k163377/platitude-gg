@@ -128,31 +128,62 @@ impl RepoSession {
     /// is handed over), and from [`Self::set_auto_fetch`] afterwards, so
     /// granting the permission in settings is itself a reason to look.
     pub(super) fn catch_up_remote_tags(self: &Arc<Self>) {
+        drop(self.start_remote_tag_refresh());
+    }
+
+    /// Applies the same permission and visibility gates as the automatic
+    /// remote-tag catch-up, and returns its causal completion boundary.
+    ///
+    /// The app uses the fire-and-forget path. Tests and coordinating callers
+    /// use this form when "the read was declined" must be distinguished from
+    /// "the network read has not answered yet" without a quiet-time guess.
+    pub fn refresh_remote_tags_tracked(self: &Arc<Self>) -> RemoteTagRefreshTask {
+        self.start_remote_tag_refresh()
+    }
+
+    fn start_remote_tag_refresh(self: &Arc<Self>) -> RemoteTagRefreshTask {
         let interval_is_on = match self.auto_fetch.lock() {
             Ok(g) => g.is_some(),
             Err(e) => e.into_inner().is_some(),
         };
-        if !interval_is_on || !self.log_options().include_tags {
-            return;
+        if !interval_is_on {
+            return RemoteTagRefreshTask::ready(RemoteTagRefreshOutcome::Disabled);
+        }
+        if !self.log_options().include_tags {
+            return RemoteTagRefreshTask::ready(RemoteTagRefreshOutcome::Hidden);
         }
         let Ok(permit) = Arc::clone(&self.remote_tags_slot).try_acquire_owned() else {
             tracing::debug!("remote tags: the previous read has not finished");
-            return;
+            return RemoteTagRefreshTask::ready(RemoteTagRefreshOutcome::Busy);
         };
         let s = Arc::clone(self);
         let timeout = self.network_timeout();
+        let (finished, task) = RemoteTagRefreshTask::pending();
         self.runtime.spawn(async move {
             let _permit = permit;
             let Some(workdir) = s.workdir() else {
+                if finished.send(RemoteTagRefreshOutcome::Unavailable).is_err() {
+                    tracing::trace!("remote-tag refresh completion was not observed");
+                }
                 return;
             };
             let cancel = s.root_cancel.clone();
-            if s.read_remote_tags(&s.executor, &workdir, None, timeout, &cancel)
-                .await
-            {
+            let moved = s
+                .read_remote_tags(&s.executor, &workdir, None, timeout, &cancel)
+                .await;
+            let outcome = if cancel.is_cancelled() {
+                RemoteTagRefreshOutcome::Cancelled
+            } else if moved {
                 s.refresh_refs();
+                RemoteTagRefreshOutcome::Changed
+            } else {
+                RemoteTagRefreshOutcome::Unchanged
+            };
+            if finished.send(outcome).is_err() {
+                tracing::trace!("remote-tag refresh completion was not observed");
             }
         });
+        task
     }
 
     /// Handle for stepping the running timer, in place of waiting out its

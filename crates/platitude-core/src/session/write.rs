@@ -106,12 +106,16 @@ impl RepoSession {
         // the WIP row exists only while the tree is dirty and a write that
         // lands a commit moves a ref, so rebuilding first and then reacting
         // to either would walk the whole history twice for one write.
-        let (wip_flipped, refs_moved) = tokio::join!(self.publish_status(), self.publish_refs());
+        let (wip_flipped, refs_moved) =
+            tokio::join!(self.publish_status(), self.publish_refs(false));
         if rebuild_graph || wip_flipped || refs_moved {
             // Off-screen rebuild: the pane keeps showing the old graph
             // until the finished one swaps in (or nothing changed and
-            // nothing repaints — the auto-fetch common case).
-            self.refresh_log();
+            // nothing repaints — the auto-fetch common case). The write
+            // queue does not advance until this answer lands: otherwise a
+            // later write or test barrier can overtake and cancel the very
+            // refresh it is meant to follow.
+            let _ = self.refresh_log_tracked().outcome().await;
         }
         // A stash push, pop or drop moves no ref, so the refs read has no
         // reason to ask again — and it is exactly what changes whether

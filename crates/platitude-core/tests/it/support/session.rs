@@ -1,7 +1,6 @@
 //! What the `RepoSession` tests open, and what they watch it with.
 
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use crate::support::{Patience, TestRepo};
 use platitude_core::GitExecutor;
@@ -73,13 +72,16 @@ pub fn pass_of(event: &SessionEvent) -> Option<Pass> {
 pub struct CaptureSink {
     pub events: Mutex<Vec<SessionEvent>>,
     hook: Mutex<Option<(When, Then)>>,
+    changed: tokio::sync::watch::Sender<u64>,
 }
 
 impl CaptureSink {
     pub fn new() -> Arc<Self> {
+        let (changed, _) = tokio::sync::watch::channel(0);
         Arc::new(Self {
             events: Mutex::new(Vec::new()),
             hook: Mutex::new(None),
+            changed,
         })
     }
 
@@ -110,42 +112,40 @@ impl CaptureSink {
             .count()
     }
 
-    /// Waits until log streaming settles: a pass ending with `total`
-    /// rows (a `LogFinished`, or a `LogReplaced` carrying that many
-    /// rows) exists and no further stream event arrives for a beat,
-    /// then returns the newest matching generation. Acting on the
-    /// *first* matching pass instead would race the passes still in
-    /// flight (the tag swap, the dirty-flip replacement), which finish
-    /// afterwards with higher generations and would be mistaken for the
-    /// reaction to whatever the test does next.
+    /// Waits for a pass ending with `total` rows (a `LogFinished`, or a
+    /// `LogReplaced`) and returns its generation. Callers that need a
+    /// baseline must additionally await the operation that owns it; a
+    /// quiet interval cannot establish that no later opening work exists.
     pub async fn settled_stream_gen(&self, total: u32) -> u64 {
-        fn stream_events(evs: &[SessionEvent]) -> usize {
-            evs.iter().filter(|e| is_stream_event(e)).count()
-        }
-        let what = format!("the stream to settle at {total} rows");
-        let mut patience = Patience::new();
-        loop {
-            let (newest, seen) = {
-                let evs = self.events.lock().unwrap();
-                let newest = evs
-                    .iter()
-                    .filter_map(pass_of)
-                    .filter(|p| p.total == total)
-                    .map(|p| p.generation)
-                    .max();
-                patience.note(evs.len());
-                (newest, stream_events(&evs))
-            };
-            if let Some(g) = newest {
-                tokio::time::sleep(Duration::from_millis(400)).await;
-                if stream_events(&self.events.lock().unwrap()) == seen {
-                    return g;
-                }
-            } else {
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
-            patience.check(&what, &self.events);
-        }
+        self.wait_for(&format!("a {total}-row graph pass"), |evs| {
+            evs.iter()
+                .filter_map(pass_of)
+                .filter(|pass| pass.total == total)
+                .map(|pass| pass.generation)
+                .max()
+        })
+        .await
+    }
+
+    /// Establishes an opening graph baseline without a quiet window.
+    ///
+    /// The tracked poll owns current refs and status reads and includes the
+    /// graph refresh either requested. The matching pass then proves that
+    /// the expected graph is actually installed, irrespective of which
+    /// opening task won the scheduler race.
+    pub async fn opened_graph_gen(&self, session: &Arc<RepoSession>, total: u32) -> u64 {
+        self.opening_snapshots().await;
+        session.wait_for_snapshot_reads().await;
+        let outcome = session.refresh_log_tracked().outcome().await;
+        assert!(
+            matches!(
+                outcome,
+                platitude_core::session::RefreshOutcome::Changed
+                    | platitude_core::session::RefreshOutcome::Unchanged
+            ),
+            "the opening graph was available: {outcome:?}"
+        );
+        self.settled_stream_gen(total).await
     }
 
     /// Waits until the two repository snapshots started by `open` have
@@ -190,16 +190,11 @@ impl CaptureSink {
         .await
     }
 
-    /// Waits until the session has finished what it already had going
-    /// (see [`crate::support::settled`]).
-    pub async fn settled(&self) {
-        crate::support::settled(&self.events).await;
-    }
-
-    /// Polls until `pred` over the event list returns `Some`, giving up
-    /// only once the session has gone quiet on it (see [`Patience`]).
+    /// Waits for `pred` over the event list. Event delivery wakes this
+    /// waiter directly; the timeout budget remains only a failure backstop.
     pub async fn wait_for<T>(&self, what: &str, pred: impl Fn(&[SessionEvent]) -> Option<T>) -> T {
         let mut patience = Patience::new();
+        let mut changed = self.changed.subscribe();
         loop {
             {
                 let events = self.events.lock().unwrap();
@@ -209,7 +204,12 @@ impl CaptureSink {
                 patience.note(events.len());
             }
             patience.check(what, &self.events);
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            if tokio::time::timeout(patience.remaining(), changed.changed())
+                .await
+                .is_err()
+            {
+                patience.check(what, &self.events);
+            }
         }
     }
 }
@@ -222,6 +222,8 @@ impl SessionSink for CaptureSink {
             fires.then(|| slot.take().map(|(_, run)| run)).flatten()
         };
         self.events.lock().unwrap().push(event);
+        self.changed
+            .send_modify(|generation| *generation = generation.wrapping_add(1));
         // Outside both locks: a parked hook must not hold the recording
         // shut, or the events it is waiting on could never be written.
         if let Some(run) = run {
