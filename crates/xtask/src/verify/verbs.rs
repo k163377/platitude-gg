@@ -56,6 +56,17 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // visible.
         "path-tip" if arg.ends_with("-tree") => Some("tree=true tip=true"),
         "path-tip" => Some("tree=false tip=true"),
+        // The two verbs whose whole picture is the card in overlay.png,
+        // and the one line that says the card is in it: `popups=` is the
+        // window overlay's own count of what it was holding when the
+        // mirror was refreshed for the shot, so a blank overlay.png can
+        // only mean nothing was open. Any verb whose subject is a menu, a
+        // dialog or a tooltip can be judged the same way — these two are
+        // where it bit (2026-08-16: two of four concurrent `commit-menu`
+        // runs photographed a blank overlay and passed). `reset-menu`
+        // counts two because the submenu is a popup of its own.
+        "commit-menu" => Some("overlay saved=true popups=1"),
+        "reset-menu" => Some("overlay saved=true popups=2"),
         // An emptied panel with a red mark over it and an emptied panel
         // with a quiet one frame the same from the waist down: the panel
         // is the picture, and the mark is 12 pixels of it in a corner.
