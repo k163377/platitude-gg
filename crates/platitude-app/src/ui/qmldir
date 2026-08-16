@@ -94,6 +94,7 @@ SidebarPane 1.0 SidebarPane.qml
 SignatureMark 1.0 SignatureMark.qml
 SlimField 1.0 SlimField.qml
 SpinnerIcon 1.0 SpinnerIcon.qml
+SplitBarWatch 1.0 SplitBarWatch.qml
 SplitHandleBar 1.0 SplitHandleBar.qml
 SplitRefusalOverlay 1.0 SplitRefusalOverlay.qml
 StashActionsBand 1.0 StashActionsBand.qml

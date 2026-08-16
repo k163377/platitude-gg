@@ -1508,7 +1508,7 @@ Item {
             Layout.fillHeight: true
             orientation: Qt.Vertical
             handle: SplitHandleBar {
-                onHandChanged: (which, held) => page.holdSplitBar(which, held)
+                onHandChanged: (which, held) => splitWatch.holdSplitBar(which, held)
             }
 
             // ---- open failed ------------------------------------------
@@ -1532,7 +1532,7 @@ Item {
                 SplitView.minimumHeight: page.panesMinHeight
                 orientation: Qt.Horizontal
                 handle: SplitHandleBar {
-                    onHandChanged: (which, held) => page.holdSplitBar(which, held)
+                    onHandChanged: (which, held) => splitWatch.holdSplitBar(which, held)
                 }
 
                 SidebarPane {
@@ -1764,118 +1764,20 @@ Item {
         }
     }
 
-    // ---- a split bar that has run out of room ---------------------------
-    // The graph's own dividers know what the hand asked for; a
-    // `SplitView` bar cannot (measured 2026-08-11, qmltestrunner:
-    // SplitView takes the press before anything inside the delegate sees
-    // it, and no observer behind the view ever becomes active). What is
-    // knowable is where the pointer went and where the bar stopped, and
-    // past a clamp those part company — the same refusal read from the
-    // other end.
-
-    /// Every split bar in this page, and whichever one has the hand. One
-    /// pointer, so at most one at a time. The list is collected rather
-    /// than declared: one `handle:` Component builds every bar of its
-    /// SplitView, so there is nothing to hang an id on.
-    property var splitBars: []
-    property Item heldSplit: null
-    function holdSplitBar(bar, held) {
-        if (page.splitBars.indexOf(bar) < 0)
-            page.splitBars.push(bar)
-        if (held)
-            page.heldSplit = bar
-        else if (page.heldSplit === bar)
-            page.heldSplit = null
-    }
-
-    /// What the watcher settles on, given where the hand is in the scene.
-    /// The `PointHandler` and the automation hook both come through here,
-    /// so the refusal is one answer rather than two kept in step.
-    ///
-    /// Not a binding: `mapToItem` is a method, and a binding over it would
-    /// take no dependency on the geometry it reads and freeze on its first
-    /// answer (app-ui.md). A drag moves the bar every frame, so this is
-    /// pushed on each point instead.
-    function settleSplitRefusal(sceneX, sceneY) {
-        const bar = page.heldSplit
-        if (!bar) {
-            splitRefusal.refuses = false
-            return
-        }
-        const mid = bar.mapToItem(null, bar.width / 2, bar.height / 2)
-        const gap = bar.sideways ? sceneX - mid.x : sceneY - mid.y
-        // Scene coordinates, as `SplitRefusalOverlay.at` documents: the
-        // overlay maps every source into itself once, in `pointFor` —
-        // mapping here too put the badge a TopBar's height above the hand.
-        splitRefusal.at = Qt.point(sceneX, sceneY)
-        // Past the bar by more than the bar is wide, for the reason the
-        // graph's dividers use the same slack: the pointer sits somewhere
-        // inside the bar it grabbed, and SplitView carries the bar along
-        // at that offset for as long as the layout lets it.
-        splitRefusal.refuses = Math.abs(gap) > Theme.splitterWidth
-    }
-
-    /// Automation (`PG_AUTO_ACT=divider-refuse`, cases `sidebar-min` /
-    /// `details-min` / `log-min`): a press is no more injectable than
-    /// hover, so the hook puts the bar in hand the way a press does and
-    /// walks the same road the pointer walks.
-    function dragSplitPast(which) {
-        // Only bars that are drawn. A SplitView builds a handle between
-        // every pair of items including the ones standing invisible (the
-        // open-failed screen sits beside the panes), and one that is not
-        // on screen is not one a hand could have grabbed — nor one with a
-        // width and height to tell its direction from.
-        const wanted = page.splitBars.filter(b =>
-            b.visible && (which === "log-min" ? !b.sideways : b.sideways))
-        if (wanted.length === 0)
-            return false
-        // Left to right, so the sidebar's bar is the first of the two the
-        // horizontal view builds and the details pane's is the last.
-        wanted.sort((a, b) => a.mapToItem(null, 0, 0).x - b.mapToItem(null, 0, 0).x)
-        const bar = which === "details-min" ? wanted[wanted.length - 1] : wanted[0]
-        page.heldSplit = bar
-        const mid = bar.mapToItem(null, bar.width / 2, bar.height / 2)
-        const over = 4 * Theme.splitterWidth
-        // Into the pane that has no more to give: the sidebar and the log
-        // are squeezed from their own side, the details pane from the left.
-        if (which === "details-min")
-            page.settleSplitRefusal(mid.x + over, mid.y)
-        else if (which === "sidebar-min")
-            page.settleSplitRefusal(mid.x - over, mid.y)
-        else
-            page.settleSplitRefusal(mid.x, mid.y + over)
-        return true
+    // The split bars' refusal — collection, settling, overlay and the
+    // divider-refuse report all live in the watcher (SplitBarWatch); the
+    // page keeps the source chain, since only it sees all four sources.
+    SplitBarWatch {
+        id: splitWatch
+        refusalSource: page.refusalSource
+        graphPane: graphPane
     }
 
     /// Automation: the drag and its answer for every boundary in the
-    /// window (`PG_AUTO_ACT=divider-refuse`).
+    /// window (`PG_AUTO_ACT=divider-refuse`; AutoActDriver calls through
+    /// the page).
     function reportDividerRefusal(which) {
-        // The graph's own dividers know what was asked; a split bar is
-        // read from where the pointer went instead.
-        const split = which === "sidebar-min" || which === "details-min"
-                      || which === "log-min"
-        if (split)
-            page.dragSplitPast(which)
-        else
-            graphPane.dragDividerPast(which)
-        AppBackend.report("divider_refuse refuses=" + page.refusalShown
-                          // The boundary itself, still drawn and still
-                          // promising the drag the other way. For a split
-                          // bar this also catches a hook that never found
-                          // one to put in hand.
-                          + " line=" + (split
-                                        ? (page.heldSplit ? page.heldSplit.visible
-                                                          : false)
-                                        : graphPane.refusedLineShown)
-                          + " case=" + which
-                          + " labelW=" + graphPane.labelW
-                          + " graphW=" + graphPane.graphColW)
-    }
-
-    SplitRefusalOverlay {
-        id: splitRefusal
-        refusalSource: page.refusalSource
-        onPointMoved: (sceneX, sceneY) => page.settleSplitRefusal(sceneX, sceneY)
+        splitWatch.reportDividerRefusal(which)
     }
 
     /// Whichever boundary is refusing, or null. One pointer, so the order
@@ -1885,12 +1787,12 @@ Item {
         graphPane.refused ? graphPane.refusedAt
         : detailsPane.descRefuses ? detailsPane.descPoint
         : wipPane.descRefuses ? wipPane.descPoint
-        : splitRefusal.refuses ? splitRefusal.at
+        : splitWatch.refuses ? splitWatch.at
         : null
 
     /// What is drawn, not what was asked for — the one badge's own
     /// `shown` (`RefusalBadge`, on why not its `visible`).
-    readonly property alias refusalShown: splitRefusal.shown
+    readonly property bool refusalShown: splitWatch.shown
 
     function jumpToRef(oidHex) {
         page.guardEdits(oidHex, function () {
