@@ -22,7 +22,7 @@ import platitude.ui
 //
 // Owned by the band rather than by the mark: a popup parented to something
 // that can be laid out away takes the card with it (app-ui.md).
-Popup {
+AppCard {
     id: stateCard
 
     /// What the working tree is in the middle of, handed in rather than
@@ -51,13 +51,6 @@ Popup {
     /// pressable, and folding the band must not cost the way back to the
     /// setup screen after "Not now" (規約 §identity).
     signal identityRequested()
-
-    /// Whether the pointer is anywhere on this card. Two handlers OR'd,
-    /// because `background` and `contentItem` are siblings rather than
-    /// parent and child — a card carrying only one of them goes blind the
-    /// moment the hand reaches the rows (app-ui.md の 5 つの罠 (2)).
-    readonly property bool pointerInside: insideHover.hovered
-                                          || contentHover.hovered
 
     /// One width for the badge column, so the sentences beside them all
     /// start on the same line (the reset submenu's chip column, same
@@ -100,20 +93,14 @@ Popup {
     readonly property string laidOutSize:
         Math.round(width) + "x" + Math.round(height)
 
-    padding: Theme.spaceSm
     // No `CloseOnPressOutside`: the pointer leaving is what closes this
     // one (`BandStateGroup.settleStateCard`), and a press outside is already on
     // its way somewhere else.
     closePolicy: Popup.CloseOnEscape
-    background: Rectangle {
-        color: Theme.bgElevated
-        radius: Theme.radiusMd
-        border.color: Theme.borderDefault
-        border.width: Theme.borderWidth
-        HoverHandler {
-            id: insideHover
-        }
-    }
+    // The pointer leaving is what closes it, so the card has to see both
+    // halves of `AppCard.pointerInside` — the face and the rows.
+    tracksPointer: true
+    contentPointed: contentHover.hovered
 
     contentItem: ColumnLayout {
         id: rows

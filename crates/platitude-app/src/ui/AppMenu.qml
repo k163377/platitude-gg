@@ -161,10 +161,5 @@ Menu {
         offered: !subMenu || subMenu.applies !== false
     }
 
-    background: Rectangle {
-        color: Theme.bgElevated
-        radius: Theme.radiusMd
-        border.color: Theme.borderDefault
-        border.width: Theme.borderWidth
-    }
+    background: AppCardFace {}
 }

@@ -206,12 +206,7 @@ ComboBox {
         // added on — a height of just the rows leaves the last one cut.
         implicitHeight: Math.min(contentItem.implicitHeight, Theme.rowHeight * 8)
                         + topPadding + bottomPadding
-        background: Rectangle {
-            color: Theme.bgElevated
-            radius: Theme.radiusMd
-            border.color: Theme.borderDefault
-            border.width: Theme.borderWidth
-        }
+        background: AppCardFace {}
         // A card with a ring in it while the rows are still being read,
         // and the rows themselves once they land. The height is a row's
         // worth for the ring to stand in, so the card that opens on a

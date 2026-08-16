@@ -14,7 +14,7 @@ import platitude.ui
 // live there too. It is a popup rather than an item in the row for the
 // same reason a menu is: anything declared inside the list is clipped by
 // it and painted under the row below.
-Popup {
+AppCard {
     id: refList
 
     /// Chip records (kind + flags + name, see encode.rs), as shown.
@@ -44,20 +44,11 @@ Popup {
     // Nothing stands between the chip and this: the pointer has to be
     // able to walk down into it without leaving both.
     margins: 0
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-    /// Whether the pointer is over this — over the padding band the
-    /// background covers, or over the rows the content does. **Two
-    /// handlers, because the background and the content are siblings**:
-    /// "handlers are passive" holds between a parent and its children,
-    /// and the rows are children of the content, but the background is
-    /// not their parent — it is next to them. Measured: on a row, the
-    /// content's handler reads true and the background's reads false.
-    /// With only the background's, the list called itself empty of the
-    /// pointer the instant the hand reached a row — the row lit up and
-    /// the list went out from under it (2026-08-09 report).
-    readonly property bool pointerInside:
-        insideHover.hovered || contentHover.hovered
+    // The hand walks down off the chip into this and picks a row, so both
+    // halves of `AppCard.pointerInside` are wanted — this is the list the
+    // pair was measured on.
+    tracksPointer: true
+    contentPointed: contentHover.hovered
 
     /// Lays the rows out now, for an owner that is about to show this in
     /// the same turn it handed over the records. A `Column` positions in
@@ -79,25 +70,9 @@ Popup {
         rows.forceLayout()
     }
 
-    // On the background, so the padding band counts as being inside.
-    // The content ends inside that band, and the hand walking down off
-    // the chip crosses it first: with the handler on the content the
-    // list read as "nobody is on me" for the width of the padding and
-    // shut under the pointer (2026-08-09 report; CommitHoverCard has
-    // the same note).
-    background: Rectangle {
-        color: Theme.bgElevated
-        radius: Theme.radiusMd
-        border.color: Theme.borderDefault
-        border.width: Theme.borderWidth
-        HoverHandler {
-            id: insideHover
-        }
-    }
-
     contentItem: Column {
         id: rows
-        // The rows' half of the answer above; the rows are its children,
+        // The rows' half of `pointerInside`; the rows are its children,
         // so their own hover leaves this one standing.
         HoverHandler {
             id: contentHover

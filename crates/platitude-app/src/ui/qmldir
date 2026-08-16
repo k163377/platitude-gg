@@ -5,6 +5,8 @@ singleton Words 1.0 Words.qml
 ActionButton 1.0 ActionButton.qml
 ActionButtonLabel 1.0 ActionButtonLabel.qml
 ActionButtonSeat 1.0 ActionButtonSeat.qml
+AppCard 1.0 AppCard.qml
+AppCardFace 1.0 AppCardFace.qml
 AppCombo 1.0 AppCombo.qml
 AppDialog 1.0 AppDialog.qml
 AppMenu 1.0 AppMenu.qml

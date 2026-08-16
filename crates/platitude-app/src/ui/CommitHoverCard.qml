@@ -23,7 +23,7 @@ import platitude.ui
 //
 // Owned by the page, not the delegate: rows are recycled the moment they
 // scroll off, and a popup parented to one goes with it.
-Popup {
+AppCard {
     id: hoverCard
 
     property string subject: ""
@@ -45,15 +45,6 @@ Popup {
     /// in full — so the two fields stop and say so with an ellipsis.
     property real textHeight: 0
 
-    /// The pointer is over the card itself — on the padding band the
-    /// background covers, or on the content. Two handlers, because the
-    /// background and the content are siblings, not parent and child:
-    /// the moment anything in the content takes the hover, the
-    /// background's handler reads false (measured on RefListPopup's
-    /// rows, 2026-08-09).
-    readonly property bool pointerInside:
-        insideHover.hovered || contentHover.hovered
-
     /// What the credit line was actually given, and whether the names
     /// ran past it. Read by the headless runs, which cannot see an
     /// ellipsis and cannot measure a card from a PNG (0 when the commit
@@ -61,25 +52,14 @@ Popup {
     readonly property real creditWidth: mateLine.visible ? mateLine.width : 0
     readonly property bool creditCut: mateLine.visible && mateLine.clipped
 
-    padding: Theme.spaceSm
     margins: Theme.spaceXs
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-    // On the background, so the padding band counts as being inside —
-    // see CoAuthorCard for what happens when it does not.
-    background: Rectangle {
-        color: Theme.bgElevated
-        radius: Theme.radiusMd
-        border.color: Theme.borderDefault
-        border.width: Theme.borderWidth
-        HoverHandler {
-            id: insideHover
-        }
-    }
+    // The pointer walks into this one and reads it, so both halves of
+    // `AppCard.pointerInside` are wanted — the face's and the content's.
+    tracksPointer: true
+    contentPointed: contentHover.hovered
 
     contentItem: ColumnLayout {
         spacing: Theme.spaceXs
-        // The content's half of `pointerInside` — see the property.
         HoverHandler {
             id: contentHover
         }

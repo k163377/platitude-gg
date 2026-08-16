@@ -15,10 +15,5 @@ Dialog {
     padding: Theme.spaceXxl
     header: null
     footer: null
-    background: Rectangle {
-        color: Theme.bgElevated
-        radius: Theme.radiusMd
-        border.color: Theme.borderDefault
-        border.width: Theme.borderWidth
-    }
+    background: AppCardFace {}
 }

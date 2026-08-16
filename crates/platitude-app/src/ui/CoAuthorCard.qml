@@ -13,7 +13,7 @@ import platitude.ui
 // A popup rather than an item under the row for the same reason the ref
 // list is one: anything declared inside the card's column would be
 // clipped by the pane and painted under the list below it.
-Popup {
+AppCard {
     id: mateCard
 
     /// Packed co-author records (name, address, identicon — see
@@ -32,35 +32,13 @@ Popup {
     // Nothing stands between the underlined stretch and this: the pointer
     // has to be able to walk down into it without leaving both.
     margins: 0
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-    /// Whether the pointer is over this — on the padding band the
-    /// background covers, or on the content. Two handlers, because the
-    /// background and the content are siblings, not parent and child:
-    /// "handlers are passive" only holds down a subtree, so the moment
-    /// anything in the content takes the hover, the background's handler
-    /// reads false (measured on RefListPopup's rows, 2026-08-09). The
-    /// rows here accept no hover today; the pair is what keeps that an
-    /// implementation detail rather than a load-bearing fact.
-    readonly property bool pointerInside:
-        insideHover.hovered || contentHover.hovered
-
-    // On the background, not the content: the content stops at the
-    // padding, so a pointer walking in over the card's own border is
-    // over neither it nor the line that opened it, and the card closes
-    // in that 4px band (2026-08-09 report).
-    background: Rectangle {
-        color: Theme.bgElevated
-        radius: Theme.radiusMd
-        border.color: Theme.borderDefault
-        border.width: Theme.borderWidth
-        HoverHandler {
-            id: insideHover
-        }
-    }
+    // The pointer walks into this one and reads it. The rows here accept
+    // no hover today; giving `AppCard` both halves is what keeps that an
+    // implementation detail rather than a load-bearing fact.
+    tracksPointer: true
+    contentPointed: contentHover.hovered
 
     contentItem: Column {
-        // The content's half of `pointerInside` — see the property.
         HoverHandler {
             id: contentHover
         }

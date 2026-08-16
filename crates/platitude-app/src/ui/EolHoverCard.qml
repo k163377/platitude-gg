@@ -19,22 +19,13 @@ import platitude.ui
 //
 // Owned by the pane, not the row: rows are recycled the moment they
 // scroll off, and a popup parented to one goes with it (app-ui.md).
-Popup {
+AppCard {
     id: eolCard
 
     /// The file the card is about, spelled in full.
     property string path: ""
     /// The whole sentence, already worded (`Words.lineEndings`).
     property string notice: ""
-
-    padding: Theme.spaceSm
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-    background: Rectangle {
-        color: Theme.bgElevated
-        radius: Theme.radiusMd
-        border.color: Theme.borderDefault
-        border.width: Theme.borderWidth
-    }
 
     contentItem: ColumnLayout {
         spacing: Theme.spaceXs
