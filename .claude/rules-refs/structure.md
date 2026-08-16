@@ -28,6 +28,7 @@
 
 - **`ui/AutoActDriver.qml`(1773 行)は割らない** — `runAutoAct()` の分岐が同じファイルの Timer を id で名指ししており、動詞の beat と dispatch は同じコンポーネントスコープに居ないと繋がらない(割れば Timer を property で渡し直すことになり、ページから渡す 27 本がもう一段増える)。中身は 1 動詞 1 分岐 = 増えるのは分岐の本数だけで、責務は増えない
 - **`ui/WindowAutoActDriver.qml`(632 行)も同じ理由**(窓側の beat と `begin()` の dispatch)
+- **`ui/RepoPage.qml`(1828 行)は再設計まで割らない** — 出せる純移動は出し切った(9 部品 + SplitBarWatch)。残る切片は全て page 状態を子から書く形を跨ぐ(applySavedLayout は sidebarCollapsed / commandsOpen を書き、menuCan* / 自動化残りも同型)ので、§分割の各論の「page の状態を子から書かない」再設計とセットでしか動かせない — 続きはチップ『RepoPage と Main の次の 4 切片』。**再設計が終わったら台帳から基準線ラチェットへ戻す**(この行を消して pin し直す)
 - **`ui/WipPane.qml`(733 行)は残りを割らない** — 部品化済み(MessageEditor / StashOptionsCard / OpExitCard / TreeViewToggle)の外に残るのは選択・ステージ・EOL 指しの機構で、全員が `wipList.itemAtIndex` 走査とデリゲート再利用前提の鍵(`<bucket>:<path>`)を共有し、`RepoPage`(`chosenRows` = menuFileCount)と自動化(`chooseOnly` / `rowAt` / `rowFor` / `pointEol`)がその API を直接叩く — これ以上は list と鍵の渡し直し配線だけが増える
 - **`models/repo_tab/qobject.rs`(768 行)は割らない** — `#[qobject]` ブロックは QMetaInfo の一貫性で 1 型 1 ブロック 1 ファイル(規約 §分割)。中身は `qproperty!` 53 本(128 行)+ スロット 76 本の署名 + その doc 168 行で、**本体は全て素の impl へ委譲済み**(`drain` / `ops_stage`(集めたパスの 5 スロットは `drain_paths` 1 本)/ `ops_conflict` / `ops_remote` / `ops_config` / `state` の commit・reset)— 残るのは Qt に見せる面と 1〜3 行の転送だけなので、これ以上はスロットを減らすしか縮め方が無い
 - `parse/diff/parse.rs` の `parse_patch` は 196 行(上限 100)— 6 本の可変ローカルを全分岐が触るので、分解は移動と別の変更として理由を立てる。`#[expect(clippy::too_many_lines)]` を貼る
