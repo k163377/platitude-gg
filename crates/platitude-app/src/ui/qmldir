@@ -16,6 +16,7 @@ AvatarButton 1.0 AvatarButton.qml
 ChangeIcon 1.0 ChangeIcon.qml
 ClipboardHelper 1.0 ClipboardHelper.qml
 BandStateCard 1.0 BandStateCard.qml
+BandStateGroup 1.0 BandStateGroup.qml
 CoAuthorCard 1.0 CoAuthorCard.qml
 CoAuthorLine 1.0 CoAuthorLine.qml
 CodeChip 1.0 CodeChip.qml
@@ -75,6 +76,7 @@ SplitHandleBar 1.0 SplitHandleBar.qml
 SplitRefusalOverlay 1.0 SplitRefusalOverlay.qml
 StashActionsBand 1.0 StashActionsBand.qml
 StashOptionsCard 1.0 StashOptionsCard.qml
+StateBadge 1.0 StateBadge.qml
 SummaryArea 1.0 SummaryArea.qml
 TabItemDelegate 1.0 TabItemDelegate.qml
 TabStrip 1.0 TabStrip.qml

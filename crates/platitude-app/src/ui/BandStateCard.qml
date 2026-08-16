@@ -102,7 +102,7 @@ Popup {
 
     padding: Theme.spaceSm
     // No `CloseOnPressOutside`: the pointer leaving is what closes this
-    // one (`TopBar.settleStateCard`), and a press outside is already on
+    // one (`BandStateGroup.settleStateCard`), and a press outside is already on
     // its way somewhere else.
     closePolicy: Popup.CloseOnEscape
     background: Rectangle {

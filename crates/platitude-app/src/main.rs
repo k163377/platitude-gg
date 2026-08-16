@@ -80,6 +80,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/ChangeIcon.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ClipboardHelper.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/BandStateCard.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/BandStateGroup.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CoAuthorCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CoAuthorLine.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CodeChip.qml", "qt/qml/platitude");
@@ -139,6 +140,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/SplitRefusalOverlay.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/StashActionsBand.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/StashOptionsCard.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/StateBadge.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SummaryArea.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TabItemDelegate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TabStrip.qml", "qt/qml/platitude");
