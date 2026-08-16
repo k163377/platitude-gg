@@ -48,6 +48,9 @@ Item {
     property FileRowMenu fileRowMenu
     property AppMenu fileMenu
     property AppMenuItem fileDiscardItem
+    /// What the commit menu is standing on, read where a verb has to say
+    /// which row it opened on and what was offered there.
+    property CommitMenuState commitMenuState
     property AppMenu commitMenu
     property AppMenuItem dropCommitItem
     property AppMenuItem stashDeleteItem
@@ -1649,15 +1652,15 @@ Item {
             // The row menu on the first stash's row; the argument "go"
             // holds the delete row down.
             page.openRowMenu(stashesModel.oidOfName(stashesModel.nameAt(0)))
-            AppBackend.report("row_menu stash=" + page.menuStashRef)
+            AppBackend.report("row_menu stash=" + commitMenuState.menuStashRef)
             if (act === "delete-stash-row" && arg === "go")
                 stashDeleteItem.completeHold()
         } else if (act === "stash-apply-row" || act === "stash-pop-row") {
             page.openRowMenu(stashesModel.oidOfName(stashesModel.nameAt(0)))
             if (act === "stash-apply-row")
-                repoTab.applyStash(page.menuStashRef)
+                repoTab.applyStash(commitMenuState.menuStashRef)
             else
-                repoTab.popStash(page.menuStashRef)
+                repoTab.popStash(commitMenuState.menuStashRef)
         } else if (act === "branch-at-tag") {
             sidebarPane.beginBranchAt(tagsModel.nameAt(0),
                                       tagsModel.oidOfName(tagsModel.nameAt(0)))
@@ -1905,7 +1908,7 @@ Item {
             if (act === "reset-menu")
                 resetMenu.offer()
             AppBackend.report("commit_menu rows=" + commitMenu.offeredRows
-                              + " can_move=" + page.menuCanMoveBranch)
+                              + " can_move=" + commitMenuState.menuCanMoveBranch)
         } else if (act === "wip") {
             page.showWip()
         } else if (act === "wip-tally") {
@@ -1938,14 +1941,14 @@ Item {
             page.openRowMenu(driver.autoActOid(arg))
             AppBackend.report("drop_row " + dropCommitItem.code
                               + " " + dropCommitItem.text
-                              + " oid=" + page.menuOid.substring(0, 8)
+                              + " oid=" + commitMenuState.menuOid.substring(0, 8)
                               + " hold=" + (dropCommitItem.holdMs > 0)
                               + " reached=" + repoTab.headReachedElsewhere)
             if (act === "drop-commit-go") {
                 if (dropCommitItem.holdMs > 0)
                     dropCommitItem.completeHold()
                 else
-                    page.dropCommit(page.menuOid)
+                    page.dropCommit(commitMenuState.menuOid)
             }
         } else if (act === "merge-branch" || act === "rebase-onto"
                    || act === "revert-commit" || act === "integrate-menu") {

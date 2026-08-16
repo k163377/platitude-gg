@@ -30,6 +30,7 @@ CodeChip 1.0 CodeChip.qml
 ColumnDivider 1.0 ColumnDivider.qml
 CommitAuthorRow 1.0 CommitAuthorRow.qml
 CommitHoverCard 1.0 CommitHoverCard.qml
+CommitMenuState 1.0 CommitMenuState.qml
 CommitRowMenu 1.0 CommitRowMenu.qml
 EolHoverCard 1.0 EolHoverCard.qml
 CommandRowDelegate 1.0 CommandRowDelegate.qml

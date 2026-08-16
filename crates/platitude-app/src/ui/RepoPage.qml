@@ -83,9 +83,9 @@ Item {
             // this page asked about is read.
             if (repoTab.publishRange === page.headRange)
                 page.headPublished = repoTab.publishPublished > 0
-            if (page.menuOid !== ""
-                    && repoTab.publishRange === page.menuOid + "^!")
-                page.menuPublished = repoTab.publishPublished > 0
+            if (commitMenuState.menuOid !== ""
+                    && repoTab.publishRange === commitMenuState.menuOid + "^!")
+                commitMenuState.menuPublished = repoTab.publishPublished > 0
             if (page.selectedOid !== ""
                     && repoTab.publishRange === page.selectedOid + "^!")
                 page.selectedPublished = repoTab.publishPublished > 0
@@ -451,57 +451,32 @@ Item {
     }
 
     // ---- context menu on a graph row -------------------------------
-    property string menuOid: ""
-    // The stash the menu was opened on, by the selector git answers to
-    // ("" on an ordinary commit). A stash is a commit git keeps off to
-    // one side of every branch, so none of the commit menu's rows land on
-    // it and it gets its own (デザイン規約 §グラフ行の右クリック).
-    property string menuStashRef: ""
-    // Whether a remote already has the menu's commit. Rewriting it is
-    // not asked about — nothing here leaves the machine — but デザイン規約
-    // 「push 済みの範囲は尋ねずに言う」 wants it said, so the squash row
-    // carries a tag the way the amend editor does. The answer lands a
-    // frame after the menu opens.
-    property bool menuPublished: false
-    /// What these menus offer, held still for as long as they stand
-    /// (`menuCanSwitch` and the rest). `menuCanSequence` is the pair that
-    /// only add a commit, and so ask less of the repository than the rest.
-    property bool menuCanSequence: false
-    property bool menuCanIntegrate: false
-    property bool menuCanEditHistory: false
-    property bool menuCanMoveBranch: false
-    property bool menuStashCanWrite: false
+    /// The one door into that menu: the graph's rows, a chip that names
+    /// nothing to act on, and the automation all come through here.
     function openRowMenu(oidHex) {
-        page.menuOid = oidHex
-        page.menuStashRef = graphModel.stashRefOf(oidHex)
-        if (page.menuStashRef !== "") {
-            page.menuStashCanWrite = repoTab.busyCount === 0
-            commitRowMenu.offerStash()
-            return
-        }
-        page.menuPublished = false
-        page.menuCanSequence = repoTab.busyCount === 0
-                               && workTree.opText === ""
-        page.menuCanIntegrate = page.canIntegrateHere
-        page.menuCanEditHistory = page.canEditHistoryHere
-        page.menuCanMoveBranch = page.canMoveBranchHere
-        if (repoTab.state === "open")
-            repoTab.checkPublish(oidHex + "^!")
-        commitRowMenu.offerCommit()
+        commitMenuState.openRowMenu(oidHex)
+    }
+
+    CommitMenuState {
+        id: commitMenuState
+        repoTab: repoTab
+        workTree: workTree
+        graphModel: graphModel
+        menu: commitRowMenu
     }
 
     CommitRowMenu {
         id: commitRowMenu
         repoTab: repoTab
         branch: workTree.branch
-        oid: page.menuOid
-        stashRef: page.menuStashRef
-        published: page.menuPublished
-        canSequence: page.menuCanSequence
-        canIntegrate: page.menuCanIntegrate
-        canEditHistory: page.menuCanEditHistory
-        canMoveBranch: page.menuCanMoveBranch
-        stashCanWrite: page.menuStashCanWrite
+        oid: commitMenuState.menuOid
+        stashRef: commitMenuState.menuStashRef
+        published: commitMenuState.menuPublished
+        canSequence: commitMenuState.menuCanSequence
+        canIntegrate: commitMenuState.menuCanIntegrate
+        canEditHistory: commitMenuState.menuCanEditHistory
+        canMoveBranch: commitMenuState.menuCanMoveBranch
+        stashCanWrite: commitMenuState.menuStashCanWrite
         onSquashRequested: oidHex => page.squashCommit(oidHex)
         onDropRequested: oidHex => page.dropCommit(oidHex)
         onResetRequested: mode => page.moveBranchHere(mode)
@@ -559,31 +534,8 @@ Item {
     }
 
     // ---- taking the branch back to an earlier commit ----------------
-    // Not offered mid-operation: mid-merge a soft reset refuses outright
-    // and the other two abandon the merge without a word.
-    /// Rewriting this commit's place in the history. Unlike the two
-    /// above it, the newest commit is fair game — that is the one a fold
-    /// or a drop most often means.
-    readonly property bool canEditHistoryHere:
-        repoTab.state === "open" && repoTab.busyCount === 0
-        && !workTree.detached && workTree.branch !== ""
-        && workTree.opText === ""
-        && page.menuOid !== "" && page.menuStashRef === ""
-    readonly property bool canIntegrateHere:
-        repoTab.state === "open" && repoTab.busyCount === 0
-        && !workTree.detached && workTree.branch !== ""
-        && workTree.opText === ""
-        && page.menuOid !== "" && page.menuOid !== workTree.headOid
-        && page.menuStashRef === ""
-    readonly property bool canMoveBranchHere:
-        repoTab.state === "open" && repoTab.busyCount === 0
-        && !workTree.detached && workTree.branch !== ""
-        && workTree.opText === ""
-        && page.menuOid !== "" && page.menuOid !== workTree.headOid
-        && page.menuStashRef === ""
-
     function moveBranchHere(mode) {
-        repoTab.resetTo(page.menuOid, mode)
+        repoTab.resetTo(commitMenuState.menuOid, mode)
     }
 
     // ---- editing the selected commit's message ---------------------
@@ -717,6 +669,7 @@ Item {
             fileRowMenu: fileRowMenu
             fileMenu: fileRowMenu.menu
             fileDiscardItem: fileRowMenu.discardItem
+            commitMenuState: commitMenuState
             commitMenu: commitRowMenu.menu
             dropCommitItem: commitRowMenu.dropItem
             stashDeleteItem: commitRowMenu.stashDropItem
