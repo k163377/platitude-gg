@@ -195,8 +195,9 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
         let name = entry.file_name().to_string_lossy().into_owned();
         let path = entry.path();
         if path.is_dir() {
-            // Nothing a person wrote lives in either: a crate-local target/
-            // appears the moment somebody runs cargo from inside a crate.
+            // Neither holds anything a person wrote: a crate-local target/
+            // appears the moment somebody runs cargo from inside a crate,
+            // and a dot-directory belongs to tooling.
             if name != "target" && !name.starts_with('.') {
                 collect(&path, out)?;
             }
