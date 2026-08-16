@@ -1,7 +1,7 @@
 //! The streaming log -> graph pipeline: options, the direct and swap
 //! passes, background refreshes, and chunked row/label delivery.
 
-use super::build::{LogTotals, StreamItem, make_row, sift_batch, wip_row};
+use super::rows::{LogTotals, StreamItem, make_row, sift_batch, wip_row};
 use super::*;
 
 impl RepoSession {

@@ -68,6 +68,7 @@ mod query;
 mod refresh;
 mod remote_tags;
 mod repo_session;
+mod rows;
 mod snapshot;
 mod state;
 mod write;
