@@ -12,16 +12,11 @@ HoverToolButton {
     property color tone: Theme.textPrimary
     /// The state's colour taken a step down for the wait — the ring and
     /// the frame wear it while git is on the network (デザイン規約
-    /// §暗く落とした段: the hue stays, so what the button is does not
-    /// change; only what state it is in).
+    /// §暗く落とした段).
     ///
     /// The state's, not `tone`'s: where the word stays plain and only the
-    /// frame and the mark carry a warning, this follows the frame. While
-    /// the wait lasts there is no word on the button to be a step down
-    /// from — the ring is standing in for what the frame is saying.
-    ///
-    /// A plain button has no darker step of its own and takes `textMuted`,
-    /// which is where its words go when they are not to be read either.
+    /// frame and the mark carry a warning, this follows the frame.
+    /// A plain button has no darker step of its own and takes `textMuted`.
     property color toneDim: Theme.textMuted
     /// git is on the network for this button: the words step aside for a
     /// turning ring in the middle of the button, and the whole of it goes
@@ -43,26 +38,16 @@ HoverToolButton {
     /// Frame drawn around the button. Transparent leaves the button bare.
     property color frameColor: "transparent"
     /// The last go at what this button does did not work. Drawn as a mark
-    /// standing clear of the word's last letter, in the word's own colour
-    /// — the frame and the colour already say something is wrong, and this
-    /// is what says it is about this button rather than about the state
-    /// the toolbar is in.
+    /// standing clear of the word's last letter, in the word's own colour.
     property bool alert: false
-    /// The mark's colour, where it is not the word's. A button whose word
-    /// stays plain while only the mark is coloured says "read this" without
-    /// saying "this one is dangerous" — the colours a word wears here are
-    /// the ones `Remove` and a stopped fetch wear, and they mean something
-    /// stronger than a notice.
+    /// The mark's colour, where it is not the word's.
     property color alertTone: actionBtn.fg
     /// Pull the mark back to a letter's distance from the word.
     ///
-    /// It is placed at the end of the label's **advance** width, which is
-    /// right for a box the toolbar measures but leaves whatever right side
-    /// bearing the last glyph carries as clear air. A word ending in `)`
-    /// carries a lot of it: measured on `Commit changes (5 staged)`, the
-    /// mark stood 6px clear of the bracket's ink where the letters inside
-    /// the word sit 2px apart, so it read as a separate thing. One gap
-    /// back puts it where the letters are.
+    /// The mark sits at the end of the label's **advance** width, which
+    /// leaves the last glyph's right side bearing as clear air — a word
+    /// ending in `)` carries a lot of it, so the mark reads as a separate
+    /// thing. One gap back puts it where the letters are.
     property bool alertTight: false
     /// The colour the hold fills the button with — the frame's, since a
     /// framed button fills the frame it drew. A bare one names its own
@@ -72,10 +57,9 @@ HoverToolButton {
     readonly property bool framed: actionBtn.frameColor.a > 0
     /// The label is a git command said in git's own spelling, and wears
     /// the chip that says so — lowercase, mono, on a faint ground
-    /// (デザイン規約 §git 用語のコード表記). Where a menu row carries the
-    /// chip ahead of a sentence, here the command is the whole label, so
-    /// `text` itself is what the chip is drawn around — and that text is
-    /// never translated: it is the command, not a phrase about it.
+    /// (デザイン規約 §git 用語のコード表記). The command is the whole
+    /// label, so `text` itself is what the chip is drawn around — and that
+    /// text is never translated: it is the command, not a phrase about it.
     property bool code: false
     /// The icon is a mark standing next to the word, rather than an icon
     /// at the head of a band.
@@ -85,10 +69,8 @@ HoverToolButton {
     /// band starts with), and the seat comes in to the icon itself: the
     /// wider seat is there to hold the icon and the hold mark side by
     /// side, and a button that is only ever clicked pays for a pairing it
-    /// cannot have. Measured on `✓ Save` before this: the word stood 10px
-    /// off the icon's ink and 5px off the frame, so the pair read as two
-    /// things in a box rather than as one phrase (デザイン規約 §余白
-    /// 「印が自分で持っている余白は、隣の詰めに数える」).
+    /// cannot have (デザイン規約 §余白「印が自分で持っている余白は、隣の
+    /// 詰めに数える」).
     ///
     /// The toolbar keeps the wide seat: its buttons can pair, and their
     /// width is measured into a box two of them share.
@@ -105,27 +87,19 @@ HoverToolButton {
     /// difference; one told to fill a pane's width does — the icon would
     /// sit against the far edge with the word adrift from it.
     property bool centred: false
-    /// What the shared box hands this state past its own wording. The box
+    /// What the shared box hands this state past its own wording: the box
     /// is measured for the longest thing either of the pair ever says, so
-    /// every shorter wording is given air it has no use for — measured
-    /// against `Resume`, that is 25px behind `push` and 17px behind
-    /// `fetch` (29 and 22 on Ubuntu, where the mono family is narrower).
+    /// every shorter wording is given air it has no use for.
     ///
     /// Split between the button's two ends rather than left where it
-    /// falls. Packed from the left it all lands behind the word, and what
-    /// the button covers stops agreeing with what it says: the wash under
-    /// the pointer, the frame a warning draws and the fill a hold sweeps
-    /// across all reach a third of a button further right than the last
-    /// letter (measured: 10px before the icon against 29px after the word,
-    /// and 33px on Ubuntu, where the band has no window buttons after this
-    /// pair to stand in the leftover).
+    /// falls — packed from the left it all lands behind the word, and the
+    /// wash, the warning frame and the hold's fill all reach well past
+    /// the last letter.
     ///
     /// The phrase moves whole, so the step from the icon to the word is
-    /// the same in every state (デザイン規約 §余白 — the mark and the word
-    /// are one thing said). Centring the word inside the box instead would
-    /// leave the icon where it is and open that step to 18px, which is
-    /// further than the icon stands from the button beside it — the two
-    /// halves would stop reading as one phrase.
+    /// the same in every state (デザイン規約 §余白). Centring the word
+    /// inside the box instead would open that step wider than the gap to
+    /// the button beside it.
     readonly property real slack:
         Math.max(0, btnLabel.box - btnLabel.implicitWidth,
                  actionBtn.floorSlack)
@@ -134,13 +108,7 @@ HoverToolButton {
     /// the ink still comes out even at the two ends).
     ///
     /// A frame is a box put round a word, and a short word draws a box the
-    /// eye reads as a chip rather than as something to press. Measured
-    /// across the family: `fetch` / `push` 93, `Choose avatar…` 118,
-    /// `Choose again…` 126, `Open repository…` 132 — against `OK` at 31,
-    /// the gate's `Close` at 47, `Add` at 50 and `Save` at 54. The floor
-    /// is the width Fusion held the same buttons at before the face came
-    /// off, so nothing on screen grows past the weight it already had —
-    /// it only stops carrying depth (2026-08-11 報告).
+    /// eye reads as a chip rather than as something to press.
     ///
     /// Only where a frame is drawn. A bare button is a word among words —
     /// the hunk heading's two, a dialog's `Cancel` — and a floor there
@@ -151,16 +119,11 @@ HoverToolButton {
         ? Theme.buttonMinWidth - btnRow.implicitWidth - 2 * actionBtn.padding
         : 0
     /// The air each end is already holding before the slack is shared out
-    /// (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」).
-    ///
-    /// The seat is cut to hold an icon and the hold mark side by side, so
-    /// a button wearing one of them alone keeps it in the middle of that
-    /// seat with air either side of the ink; and a command's chip reaches
-    /// half a gap past its last letter, which is where the eye measures
-    /// the word's end. Taken off before the halves are cut, so what comes
-    /// out even is the **ink** at the two ends rather than the row between
-    /// them — centring the row alone leaves 22px of band before the icon
-    /// against 17px after the chip (measured on `push`).
+    /// (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」):
+    /// a lone mark sits centred in the two-mark seat, and a command's chip
+    /// reaches half a gap past its last letter. Taken off before the
+    /// halves are cut, so what comes out even is the **ink** at the two
+    /// ends rather than the row between them.
     readonly property real headInk:
         seat.visible ? (seat.implicitWidth - seat.step) / 2 : 0
     readonly property real tailInk: actionBtn.code ? Theme.spaceXs / 2 : 0
@@ -187,8 +150,6 @@ HoverToolButton {
     // toolbar stays out of the tab order: a hold is the only gesture here
     // that a pointer alone can fail to make (デザイン規約 §長押し).
     activeFocusOnTab: actionBtn.holdMs > 0
-    // The mark says it to whoever can see it, and this says it to whoever
-    // cannot: the words themselves no longer carry the gesture.
     Accessible.description: actionBtn.holdMs > 0 ? qsTr("Hold to activate") : ""
 
     onClicked: if (actionBtn.holdMs <= 0 && actionBtn.live) actionBtn.activated()
@@ -230,30 +191,23 @@ HoverToolButton {
     background: Rectangle {
         // The same wash every other tool button answers with
         // (`HoverToolButton.washColor`), read rather than left out: a
-        // background handed in replaces the one that carries it, and the
-        // frame, the hold's fill and the focus ring all have to be drawn
-        // here — so this button owes the pointer the paint as well.
+        // background handed in replaces the one that carries it, so the
+        // wash, the frame, the hold's fill and the focus ring all have to
+        // be drawn here.
         //
-        // Only while it is answering, though. A button with git out on the
-        // network is as deaf as a disabled one (`live`), and it was
-        // lighting under a pointer that had nothing to press: the hand
-        // that starts a fetch is still resting on the button while the
-        // fetch runs, so the wash stayed up for the whole of it and came
-        // back on every fetch the timer made (2026-08-10 報告). The ring
-        // is all this state has to say.
+        // Only while it is answering: a button with git out on the network
+        // is as deaf as a disabled one (`live`), and the hand that started
+        // the fetch is still resting on it — the wash must not stay up for
+        // the whole call (2026-08-10 報告).
         color: actionBtn.live ? actionBtn.washColor : "transparent"
         // The frame goes a step down with the rest of the button while git
-        // is out on the network: there is no press to be had until this
-        // comes back, but the button is still the one that overwrites a
-        // remote, and a frame that dropped to grey would take that back
-        // for as long as the wait lasted.
+        // is out on the network: the button is still the one that
+        // overwrites a remote, and a frame that dropped to grey would take
+        // that back for as long as the wait lasted.
         //
-        // A button with no frame of its own grows none. It used to borrow
-        // the plain one, on the reasoning that with the words gone there
-        // was nothing left to say the wait had started — but the ring is
-        // turning in the middle of it, which says exactly that, and a
-        // frame drawn around a button that has never worn one reads as a
-        // box laid over the band rather than as part of it
+        // A button with no frame of its own grows none: the ring already
+        // says the wait has started, and a frame drawn around a button
+        // that has never worn one reads as a box laid over the band
         // (2026-08-10 報告「ちょっと浮いて見えた」).
         border.color: actionBtn.busy && actionBtn.framed
                       ? actionBtn.toneDim : actionBtn.frameColor
@@ -285,14 +239,10 @@ HoverToolButton {
         // not be able to take that over.
         //
         // `visualFocus`, which is focus that arrived from the keyboard —
-        // not `activeFocus`, which a press gives it as well. A button
-        // takes focus when it is clicked (`focusPolicy` is StrongFocus and
-        // nothing on this band takes it back), so the ring came up on the
-        // press and then stayed, on a button whose reader had long since
-        // moved on (2026-08-10 報告「押したら色が解除されなくなった」).
-        // The ring is for whoever cannot see the pointer; it has nothing
-        // to tell the hand that is holding one. Same reading as the wash
-        // (`HoverToolButton.washColor`).
+        // not `activeFocus`, which a press gives it as well (`focusPolicy`
+        // is StrongFocus and nothing on this band takes it back, so an
+        // `activeFocus` ring would come up on a click and stay —
+        // 2026-08-10 報告「押したら色が解除されなくなった」).
         Rectangle {
             anchors.fill: parent
             anchors.margins: -Theme.spaceXs / 2
@@ -315,11 +265,9 @@ HoverToolButton {
     //
     // The trailing side is what is left rather than the other half
     // rounded: a wording measures in fractions of a pixel, and `floor`
-    // beside `ceil` would round the pair of them up to the next whole one
-    // — a button a pixel wider than the box it was measured into, for no
-    // reason anybody reading the two expressions would see. It is also the
-    // side that ends up with the odd pixel, which is the side with a mark
-    // to stand clear of (`alert`).
+    // beside `ceil` would round the pair of them up to a button a pixel
+    // wider than its box. The odd pixel also lands on the side with a
+    // mark to stand clear of (`alert`).
     // Only a button with slack to share reads the ink off its two ends —
     // one measured into a shared box (`widestText`) or one held open by
     // the frame's floor (`floorSlack`). A button sized to its own content
@@ -348,8 +296,6 @@ HoverToolButton {
             anchors.fill: parent
             spacing: Theme.spaceXs
             opacity: actionBtn.busy ? 0 : 1
-            // An invisible child is left out of the layout entirely, so
-            // these two cost nothing where they are not asked for.
             Item {
                 Layout.fillWidth: true
                 visible: actionBtn.centred
@@ -382,11 +328,7 @@ HoverToolButton {
                 /// the row's spacing on the other land on the **ink**
                 /// (デザイン規約 §余白「印が自分で持っている余白は、隣の
                 /// 詰めに数える」). The icon overflows the seat by this
-                /// much either side, which is what the tokens were going
-                /// to leave empty anyway. Measured before it: the frame
-                /// stood 7–8px off the icon's ink where the word ended
-                /// 5–6px off the other side, so a button that is one
-                /// phrase read as pushed to the right.
+                /// much either side.
                 ///
                 /// One number for the family, from the widest of these
                 /// marks: 8–10px of ink inside the 12px box.
@@ -476,18 +418,9 @@ HoverToolButton {
                 // What stands between that ink and the frame is the
                 // button's own air, shared out by one rule in every state
                 // (`slack`) — the widest included, whose slack is nothing
-                // and whose air is therefore the padding itself.
-                //
-                // The gap this used to add for a wording that is not a
-                // command has gone with it. It was there to keep the last
-                // letter off the border, which the padding now does on both
-                // sides at once; and charging it to one family and not the
-                // other made the box jump five pixels whenever the two came
-                // within one of each other. That is what happened: the UI
-                // family changed under it and `Resume` (53) passed
-                // `push -f` (52), which took the pair from 92px to 97px
-                // with nothing on screen, and nothing in either table, to
-                // say what had grown.
+                // and whose air is therefore the padding itself. No extra
+                // gap charged to one family and not the other: that makes
+                // the box jump whenever the two wordings cross in width.
                 //
                 // Measured from the font even where the flag is drawn (see
                 // below) — the box is what holds the toolbar still, and it
@@ -518,16 +451,13 @@ HoverToolButton {
                                + (btnLabel.splitFlag ? flagRow.width : 0)
                 implicitHeight: headText.implicitHeight
                 Layout.maximumWidth: 240
-                // Its own width. What the shared box asks for past this
+                // Its own width: what the shared box asks for past this
                 // wording is held by the button's padding (`slack`), so
-                // the cell no longer carries the whole of it behind the
-                // last letter — and the chip and the mark, both measured
-                // off this cell, keep sitting on the word.
+                // the chip and the mark, both measured off this cell,
+                // keep sitting on the word.
                 Layout.preferredWidth: btnLabel.implicitWidth
                 Layout.alignment: Qt.AlignVCenter
 
-                // The command, or the whole wording where there is no flag
-                // to take off it.
                 Label {
                     id: headText
                     anchors.left: parent.left
@@ -601,20 +531,12 @@ HoverToolButton {
                     radius: Theme.radiusSm
                     color: Theme.bgHover
                 }
-                // Past the word's end rather than over its shoulder: the
-                // last letter has to stay readable, and the box is
-                // measured for the longest wording so there is room after
-                // the shorter ones. Past the chip's edge where there is
-                // one — a mark crossing that edge reads as stuck to the
-                // chip rather than said after the word.
-                //
-                // Set close to it, though: the air a chip's ground keeps
-                // at its own end is already enough to tell the two apart,
-                // and further out the mark starts to read as the toolbar's
-                // rather than this button's. Closer still after a flag —
-                // that is the longest thing the button says and the one
-                // wording whose right-hand side is short of room
-                // (デザイン規約 §リモートへ送る).
+                // Past the word's end — past the chip's edge where there
+                // is one (a mark crossing that edge reads as stuck to the
+                // chip rather than said after the word). Closer still
+                // after a flag: that is the longest thing the button says
+                // and the one wording whose right-hand side is short of
+                // room (デザイン規約 §リモートへ送る).
                 NavIcon {
                     visible: actionBtn.alert
                     kind: "bang"

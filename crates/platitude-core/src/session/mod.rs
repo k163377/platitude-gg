@@ -70,11 +70,9 @@ const CHUNK_ROWS: usize = 4096;
 /// shared error surface, so both sides have to agree on the spelling.
 pub const AUTO_FETCH_OP: &str = "auto-fetch";
 
-/// Longest auto-fetch interval the UI offers, in minutes. Beyond an hour
-/// the point of an automatic fetch is gone; use the manual one.
+/// Longest auto-fetch interval the UI offers, in minutes.
 pub const AUTO_FETCH_MAX_MINUTES: u32 = 60;
 
-/// Interval auto fetch starts at when nothing says otherwise.
 pub const AUTO_FETCH_DEFAULT_MINUTES: u32 = 1;
 
 /// Default cap on the graph window (GitKraken-like initial view). Bounds
@@ -104,7 +102,6 @@ impl Default for LogOptions {
     }
 }
 
-/// Kind of a row label chip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LabelKind {
     /// Detached-HEAD marker (synthetic `HEAD` chip).
@@ -262,9 +259,9 @@ pub struct LogRow {
 /// asked of it is whether a rebuild arrived at the same picture, and a
 /// hash answers that in sixteen bytes where the row itself takes 822
 /// (measured on `JetBrains/kotlin`, 2,001 rows —
-/// ci/baseline/perf-windows-x64.md). The window is 2,000 rows today and
-/// is meant to become a setting, so this is the part of the graph's cost
-/// that grows with what somebody asks to see.
+/// ci/baseline/perf-windows-x64.md). The window defaults to 2,000 rows
+/// and can be widened (`LogOptions::limit`), so this is the part of the
+/// graph's cost that grows with what somebody asks to see.
 ///
 /// **Two halves because the chips move on their own.** A refs read that
 /// finds new badges writes them into rows already delivered rather than
@@ -431,8 +428,6 @@ impl RemoteTagIndex {
             });
         }
         entries.sort_by(|a, b| a.name.cmp(&b.name).then(a.commit.cmp(&b.commit)));
-        // Fold the duplicates the sort brought together: the same name on
-        // the same commit, carried by more than one remote.
         let mut folded: Vec<RemoteTagEntry> = Vec::with_capacity(entries.len());
         for entry in entries {
             match folded.last_mut() {
@@ -452,10 +447,10 @@ impl RemoteTagIndex {
 
     /// Every reading held, in the shape [`Self::build`] takes them back.
     ///
-    /// **This is what makes the index the only copy.** The per-remote
-    /// answers used to be kept beside it so one remote's could be replaced
-    /// on its own — a second 45,909 names, 4.3MB of the memory budget, for
-    /// data already here. Taking them out again costs one pass.
+    /// **This is what makes the index the only copy.** Keeping the
+    /// per-remote answers beside it, so one remote's could be replaced on
+    /// its own, is a second 45,909 names — 4.3MB of the memory budget —
+    /// for data already here. Taking them out again costs one pass.
     pub(super) fn readings(
         &self,
     ) -> impl Iterator<Item = (crate::Name, Oid, bool, crate::Name)> + '_ {
@@ -757,8 +752,8 @@ pub enum SessionEvent {
     /// which is most of a second on the wrong side of the 100ms an
     /// interaction is allowed. So the rows go out the moment git answers
     /// and the colours follow — a large file reads black and white for a
-    /// beat and then takes its colour, where before it showed nothing at
-    /// all for as long as the colouring took.
+    /// beat and then takes its colour, rather than showing nothing at all
+    /// for as long as the colouring takes.
     ///
     /// A diff nobody is on any more never raises this: the reader has
     /// moved, and the cost of colouring what they left would be paid out
@@ -1064,11 +1059,10 @@ impl OpGate {
 ///
 /// Nothing coordinates the places that ask for a re-read — opening a
 /// repository asks, and so does the window becoming active a moment
-/// later, which at startup is the same moment. Both used to be granted,
-/// and [`OpGate`] then threw the older answer away: two `for-each-ref`
-/// and two `status -uall` for one snapshot, which on `JetBrains/kotlin`
-/// is about a second of disk work landing exactly where the first click
-/// goes.
+/// later, which at startup is the same moment. Granting both has
+/// [`OpGate`] throw the older answer away: two `for-each-ref` and two
+/// `status -uall` for one snapshot, which on `JetBrains/kotlin` is about
+/// a second of disk work landing exactly where the first click goes.
 ///
 /// The second caller does not start its own read and does not lose its
 /// request either — it books the repeat, and the read in flight goes
@@ -1608,7 +1602,6 @@ mod tests {
         };
         let print = RowPrint::of(&base);
 
-        /// One field of a row, and a way to move it.
         type Moved = (&'static str, Box<dyn Fn(&mut LogRow)>);
         let moved: Vec<Moved> = vec![
             ("row", Box::new(|r: &mut LogRow| r.row = 4)),
@@ -1667,11 +1660,6 @@ mod tests {
         assert!(slot.claim(), "and the slot is free again");
     }
 
-    /// A reader that goes away without finishing leaves the slot open.
-    ///
-    /// Otherwise one lost pass is a section of the window that never
-    /// updates again and never says why — which is a worse failure than
-    /// the duplicate read the slot is here to stop.
     #[test]
     fn a_reader_that_never_finishes_does_not_take_the_slot_with_it() {
         let slot = ReadSlot::default();
@@ -1686,8 +1674,6 @@ mod tests {
 
     #[test]
     fn a_request_that_arrives_as_a_read_lands_is_not_lost() {
-        // The window where a write's own refresh would otherwise read the
-        // repository as it stood before the write.
         let slot = ReadSlot::default();
         assert!(slot.claim());
         assert!(!slot.claim());
@@ -1778,7 +1764,6 @@ mod tests {
             "what is left is the lightweight reading, and says so"
         );
 
-        // The other way round, from the same index.
         let without_mirror = RemoteTagIndex::build(
             both.readings()
                 .filter(|(_, _, _, remote)| remote.as_str() != "mirror"),
@@ -1832,7 +1817,6 @@ mod tests {
         assert!(!theirs[0].here);
         assert_eq!(theirs[0].remote, "origin");
 
-        // One name is one row in the sidebar, wherever the two point.
         let snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
         assert_eq!(snapshot.tags.len(), 1);
         assert!(snapshot.tags[0].here);

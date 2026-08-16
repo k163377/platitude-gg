@@ -441,12 +441,12 @@ pub(super) fn make_row(
 /// The per-listing lookups the two ref joins share, built once so neither
 /// of them scans the listing from inside a loop.
 ///
-/// Both joins run on every refs read — which is every poll tick — and both
-/// used to answer "is there a remote for this branch", "is this remote
-/// already spoken for" and "does this repository hold this tag" by walking
-/// the whole listing again. On `JetBrains/kotlin` (53,614 refs, 45,782 of
-/// them tags) that made one read cost seconds; through these it is
-/// milliseconds.
+/// Both joins run on every refs read — which is every poll tick — asking
+/// "is there a remote for this branch", "is this remote already spoken
+/// for" and "does this repository hold this tag". Answering those by
+/// walking the whole listing again makes one read cost seconds on
+/// `JetBrains/kotlin` (53,614 refs, 45,782 of them tags); through these
+/// it is milliseconds.
 pub(super) struct RefJoins<'a> {
     remotes: refs::RemoteBranches<'a>,
     /// Remote branches whose chip a local branch already carries.
@@ -521,8 +521,6 @@ pub(super) fn build_label_map(
     for (name, readings) in remote_tags.names() {
         let local = joins.tag_commit.get(name).copied();
         for reading in readings {
-            // Where the two agree there is one tag to speak of, and the
-            // local label is already carrying its cloud.
             if local == Some(reading.commit) {
                 continue;
             }

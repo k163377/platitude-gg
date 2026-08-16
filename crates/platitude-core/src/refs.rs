@@ -26,7 +26,6 @@ pub enum RefKind {
     Tag,
 }
 
-/// One entry of the refs listing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RefEntry {
     /// Full refname (`refs/heads/main`).
@@ -44,7 +43,7 @@ pub struct RefEntry {
     /// True for the branch HEAD is on (never true when detached).
     pub is_head: bool,
     /// Creator date (unix seconds); tag date for annotated tags, commit
-    /// date otherwise. Used for sidebar sorting.
+    /// date otherwise.
     pub created_unix: i64,
 }
 
@@ -64,8 +63,7 @@ pub struct RefsParseError(pub String);
 /// Parses `for-each-ref` output produced with [`REFS_FORMAT_ARG`].
 ///
 /// Skips `refs/remotes/<remote>/HEAD` symrefs (UI noise) and refs outside
-/// the three queried namespaces. Malformed lines are skipped with a
-/// warning rather than failing the whole listing.
+/// the three queried namespaces.
 pub fn parse_refs(bytes: &[u8]) -> Vec<RefEntry> {
     let mut out = Vec::new();
     for line in bytes.split(|b| *b == b'\n') {
@@ -92,7 +90,6 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
     let (kind, short) = if let Some(rest) = name.strip_prefix("refs/heads/") {
         (RefKind::LocalBranch, crate::Name::from(rest))
     } else if let Some(rest) = name.strip_prefix("refs/remotes/") {
-        // `origin/HEAD` is a symref to the remote's default branch; hide it.
         if rest.ends_with("/HEAD") {
             return Ok(None);
         }
@@ -153,7 +150,6 @@ impl<'a> RemoteBranches<'a> {
         let mut by_branch_name: HashMap<&str, Option<&RefEntry>> = HashMap::new();
         for r in refs.iter().filter(|r| r.kind == RefKind::RemoteBranch) {
             by_refname.insert(r.name.as_str(), r);
-            // `origin/feature/x` → `feature/x` (strip the remote component).
             if let Some((_, rest)) = r.short.split_once('/') {
                 by_branch_name
                     .entry(rest)
@@ -169,8 +165,7 @@ impl<'a> RemoteBranches<'a> {
 
     /// The remote branch a local one speaks for, wherever the two stand:
     /// its configured upstream, or, with none configured, the only
-    /// same-named remote. This is what the cloud badge is about, and so
-    /// what a rename of the branch offers to carry over.
+    /// same-named remote.
     ///
     /// Ambiguity answers nothing: with no upstream and two same-named
     /// remotes there is no single branch meant, and this says so.
@@ -187,8 +182,7 @@ impl<'a> RemoteBranches<'a> {
 
     /// Whether this local branch verifiably has a remote counterpart
     /// **right now**: either the configured upstream still exists, or some
-    /// remote has a same-named branch. Everything else is "local only"
-    /// (the 3-state badge's PR dimension is wired up in Phase 4).
+    /// remote has a same-named branch. Everything else is "local only".
     ///
     /// Wider than [`Self::spoken_for`]: two same-named remotes are an
     /// ambiguity about *which* one the badge is about, not about whether
@@ -207,8 +201,7 @@ impl<'a> RemoteBranches<'a> {
     ///
     /// Co-location is half the condition: a branch that has drifted from
     /// its upstream leaves the remote on a row of its own, and that row
-    /// keeps its chip — folding never hides a divergence. Ambiguity is not
-    /// folded either (see [`Self::spoken_for`]).
+    /// keeps its chip — folding never hides a divergence.
     pub fn folded_into_local(&self, refs: &'a [RefEntry]) -> HashSet<&'a str> {
         let mut folded = HashSet::new();
         for local in refs.iter().filter(|r| r.kind == RefKind::LocalBranch) {
@@ -243,7 +236,6 @@ pub fn remotes_folded_into_local(refs: &[RefEntry]) -> HashSet<String> {
         .collect()
 }
 
-/// Where HEAD points right now.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeadState {
     /// Current branch short name; `None` when detached or unborn.
@@ -253,11 +245,8 @@ pub struct HeadState {
     pub detached: bool,
 }
 
-/// Reads HEAD out of a listing that already has it.
-///
-/// `%(HEAD)` marks the branch HEAD is on, so a caller holding a listing
-/// has the answer in hand and [`head_state`]'s two processes are two
-/// processes spent asking again. `None` means the listing cannot say —
+/// Reads HEAD out of a listing that already has it, sparing
+/// [`head_state`]'s two processes. `None` means the listing cannot say —
 /// HEAD is detached, or on a branch with no commits yet, and neither has
 /// a marked ref to be found — so ask git.
 pub fn head_in(refs: &[RefEntry]) -> Option<HeadState> {
@@ -269,7 +258,6 @@ pub fn head_in(refs: &[RefEntry]) -> Option<HeadState> {
     })
 }
 
-/// Loads the refs listing.
 pub async fn load(
     executor: &GitExecutor,
     workdir: &Path,
@@ -286,7 +274,6 @@ pub async fn load(
     Ok(parse_refs(&out.stdout))
 }
 
-/// Resolves the current HEAD state (branch / detached / unborn).
 pub async fn head_state(
     executor: &GitExecutor,
     workdir: &Path,

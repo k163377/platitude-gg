@@ -106,7 +106,6 @@ impl CaptureSink {
         *self.hook.lock().unwrap() = Some((Box::new(when), Box::new(run)));
     }
 
-    /// Number of recorded events matching `pred`.
     fn count(&self, pred: impl Fn(&SessionEvent) -> bool) -> usize {
         self.events
             .lock()
@@ -511,8 +510,8 @@ async fn a_diff_arrives_before_the_colours_for_it() {
 ///
 /// Walking down a commit's file list starts a read per row. The rows of
 /// each are cheap and the pane throws away the ones it did not ask for,
-/// but colouring is not cheap, and a colouring per abandoned row is what
-/// used to be left running behind the reader.
+/// but colouring is not cheap: without the epoch check, a colouring per
+/// abandoned row is left running behind the reader.
 #[tokio::test(flavor = "multi_thread")]
 async fn colours_are_skipped_for_a_diff_the_reader_has_left() {
     let mut repo = TestRepo::init();
@@ -548,8 +547,9 @@ async fn colours_are_skipped_for_a_diff_the_reader_has_left() {
     // they are stale — so waiting for them is what says the first read
     // ran to the point where it would have coloured, rather than that
     // enough time has gone by (see the note on `Patience`: under
-    // `--workspace` load this arrived after the second read's colours,
-    // and a test that assumed otherwise failed for the wrong reason).
+    // `--workspace` load this can arrive after the second read's
+    // colours, and a wait that assumes an order fails for the wrong
+    // reason).
     sink.wait_for("DiffLoaded for a", |evs| {
         evs.iter()
             .any(|e| match e {
@@ -1169,7 +1169,6 @@ async fn stage_commit_and_branch_through_the_session() {
     session.close();
 }
 
-/// Opens a session and waits until the repository is loaded.
 async fn opened(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
     let sink = CaptureSink::new();
     let session = RepoSession::open(
@@ -1188,9 +1187,9 @@ async fn opened(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
 }
 
 /// Opening a repository asks for a read, and so does the window becoming
-/// active a moment later; on a large repository that pair was two
+/// active a moment later; on a large repository that pair would be two
 /// `for-each-ref` and two `status -uall` for one answer. The second
-/// caller now books a repeat instead of starting its own — and the point
+/// caller books a repeat instead of starting its own — and the point
 /// of booking rather than dropping is that the repeat still sees what
 /// happened in between.
 #[tokio::test(flavor = "multi_thread")]
@@ -1237,7 +1236,6 @@ async fn a_request_made_while_a_read_runs_gets_a_read_of_its_own() {
     session.close();
 }
 
-/// Every command the session recorded, in order.
 fn commands_of(sink: &CaptureSink) -> Vec<String> {
     sink.events
         .lock()
@@ -1274,7 +1272,7 @@ async fn a_refs_read_takes_head_out_of_the_listing_it_already_has() {
             .then_some(())
     })
     .await;
-    // Give the two it used to spawn every chance to turn up.
+    // Give any stray HEAD lookup every chance to turn up.
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     let seen = commands_of(&sink);
@@ -1316,10 +1314,10 @@ async fn a_detached_head_is_still_read_correctly() {
 /// A read that finds nothing moved publishes the snapshot it published
 /// last — the same one, by pointer — instead of building an equal one.
 ///
-/// It used to sort every ref into a snapshot and a label map on every
-/// tick and then compare the result with the last to be told nothing had
-/// changed: 39ms of a core against `JetBrains/kotlin`, ten seconds apart,
-/// for an answer the key already had.
+/// Sorting every ref into a snapshot and a label map on every tick just
+/// to compare the result equal costs 39ms of a core against
+/// `JetBrains/kotlin`, ten seconds apart, for an answer the key already
+/// had.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_unmoved_repository_republishes_the_snapshot_it_already_built() {
     let mut repo = TestRepo::init();
@@ -1383,7 +1381,7 @@ async fn an_unmoved_repository_republishes_the_snapshot_it_already_built() {
 
 /// Once a refs read has said where HEAD is, the walk stops asking.
 ///
-/// It used to spawn `symbolic-ref` and `rev-parse` before every rebuild —
+/// Spawning `symbolic-ref` and `rev-parse` before every rebuild would put
 /// two processes in front of the first chunk, on the path a commit or a
 /// fetch takes to reach the screen.
 #[tokio::test(flavor = "multi_thread")]
@@ -2060,7 +2058,6 @@ fn rewrite_route(sink: &CaptureSink) -> Vec<&'static str> {
     out
 }
 
-/// Whether git is part-way through something.
 fn stopped_part_way(repo: &TestRepo) -> bool {
     repo.path.join(".git").join("rebase-merge").exists()
 }
@@ -2119,7 +2116,7 @@ async fn a_squash_over_a_dirty_tree_carries_the_work_across() {
 }
 
 /// What a `rebase <current> onto it` fires with: the flags the two menu
-/// rows pass, which no longer include an autostash knob to pass.
+/// rows pass — no autostash knob among them.
 fn rebase_onto() -> platitude_core::integrate::RebaseOptions {
     platitude_core::integrate::RebaseOptions {
         update_refs: true,
@@ -2129,10 +2126,10 @@ fn rebase_onto() -> platitude_core::integrate::RebaseOptions {
 
 /// A whole branch moved onto a new base goes round the very same way, so
 /// the answer to "does my staging survive a history rewrite" does not
-/// depend on which menu row was clicked. This is the operation that used
-/// to be handed to `--autostash`, which restores with a plain apply and
-/// brings **everything back unstaged** — the split below is exactly what
-/// that flag cannot keep (実測 2.55).
+/// depend on which menu row was clicked. Handing this to `--autostash`
+/// instead would restore with a plain apply and bring **everything back
+/// unstaged** — the split below is exactly what that flag cannot keep
+/// (実測 2.55).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_rebase_onto_over_a_dirty_tree_carries_the_work_across() {
     let mut repo = TestRepo::init();
@@ -3030,10 +3027,10 @@ async fn a_poll_rebuilds_the_graph_once() {
     // What has to be over before the commit below is this tick, and the
     // tick says so itself: it publishes both of its reads whatever it
     // finds, so one more of each is it landing (規約 §「もう起きない」を
-    // sleep で確かめない). A fixed wait here failed the assertion two
-    // paragraphs down the moment the machine was busy enough for the tick
-    // to outlast it — the poll's two reads then straddled the commit,
-    // reported different worlds, and the graph rebuilt once for each.
+    // sleep で確かめない). A fixed wait fails the assertion two
+    // paragraphs down the moment the machine is busy enough for the tick
+    // to outlast it — the poll's two reads then straddle the commit,
+    // report different worlds, and the graph rebuilds once for each.
     sink.wait_for("the idle poll's two reads", |evs| {
         let refs = evs
             .iter()
@@ -3164,7 +3161,6 @@ async fn the_command_log_holds_what_the_user_asked_for() {
     session.close();
 }
 
-/// Index of the `WriteFinished` for one operation.
 fn position_of(events: &[SessionEvent], op: &str) -> Option<usize> {
     events
         .iter()

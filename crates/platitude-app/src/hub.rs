@@ -1,6 +1,6 @@
 //! Main-thread hub: tab registry, per-tab event feeds and the session sink.
 //!
-//! Threading model (spike-proven): background tasks push messages into
+//! Threading model: background tasks push messages into
 //! `Feed` queues and wake the owning QML object with a queued `drain`
 //! invocation; the object pulls its messages on the Qt main thread. The
 //! only method ever invoked through a `QmlMethodInvoker` is `drain` — a
@@ -29,22 +29,16 @@ use qtbridge::QmlMethodInvoker;
 #[derive(Debug)]
 pub enum PickMsg {
     /// It opens. The path is the one that was picked, not the root git
-    /// resolved it to: the tab is opened exactly the way every other
-    /// road opens one.
+    /// resolved it to.
     Accepted { path: PathBuf },
-    /// It does not. `kind` is `plain` / `bare` / `other` — the same three
-    /// the tab's own failure screen names, so the two say the same
-    /// things in the same words. Nothing that lands here becomes a tab:
-    /// a folder somebody is in the middle of choosing goes back to the
-    /// choosing, whichever of the three it turned out to be.
+    /// It does not, and never becomes a tab. `kind` is `plain` / `bare` /
+    /// `other` — the same three the tab's own failure screen names.
     Rejected {
         path: PathBuf,
-        /// The folder to reopen the picker at — the one this sits in,
-        /// where the repository the person was after usually is.
+        /// The folder to reopen the picker at — the one this sits in.
         near: String,
         kind: &'static str,
-        /// git's own words, for `other` alone. The other two are named
-        /// by the heading, which would only be repeated here.
+        /// git's own words, for `other` alone.
         message: String,
     },
 }
@@ -57,10 +51,8 @@ pub enum TabMsg {
         path: String,
     },
     /// The repository behind this tab would not open. `kind` is the same
-    /// three the picker's dialog knows (`plain` / `bare` / `other`), so
-    /// the two screens say the same thing in the same words; `path` fills
-    /// the line under the heading, and `message` is git's own — shown
-    /// only for `other`, the one case nothing better can be said about.
+    /// three the picker's dialog knows (`plain` / `bare` / `other`);
+    /// `message` is git's own, shown only for `other`.
     OpenFailed {
         kind: &'static str,
         path: String,
@@ -266,7 +258,6 @@ pub enum DiffMsg {
 }
 
 impl DiffMsg {
-    /// The diff this is about, whichever half it is.
     pub fn target(&self) -> &DiffTarget {
         match self {
             DiffMsg::Loaded { target, .. } | DiffMsg::Coloured { target, .. } => target,
@@ -349,8 +340,7 @@ impl<T> Feed<T> {
     }
 
     /// Messages waiting for their consumer. Only the memory report reads
-    /// it: a feed nobody drains keeps whole snapshots alive, and the
-    /// breakdown would otherwise show that as heap belonging to nothing.
+    /// it: a feed nobody drains keeps whole snapshots alive.
     pub fn depth(&self) -> usize {
         self.lock().queue.len()
     }
@@ -364,9 +354,8 @@ pub struct Feeds {
     pub tab: Arc<Feed<TabMsg>>,
     pub graph: Arc<Feed<GraphMsg>>,
     /// Refs fan out to one feed per sidebar section (one consumer each).
-    /// Shared, not copied: each section reads its own part of the same
-    /// snapshot, and a deep copy per section duplicates tens of thousands
-    /// of strings for nobody.
+    /// Shared, not copied: a deep copy per section duplicates tens of
+    /// thousands of strings.
     pub refs_branches: Arc<Feed<Arc<RefsSnapshot>>>,
     pub refs_remotes: Arc<Feed<Arc<RefsSnapshot>>>,
     pub refs_tags: Arc<Feed<Arc<RefsSnapshot>>>,
@@ -406,9 +395,6 @@ impl SessionSink for BridgeSink {
                 let kind = match &error {
                     platitude_core::GitError::NotARepository { bare: true, .. } => "bare",
                     platitude_core::GitError::NotARepository { .. } => "plain",
-                    // git had trouble of its own, and only it can say
-                    // what — the screen quotes it rather than putting a
-                    // sentence of ours in git's mouth.
                     _ => "other",
                 };
                 self.feeds.tab.push(TabMsg::OpenFailed {
@@ -503,17 +489,12 @@ impl SessionSink for BridgeSink {
                 fingerprint,
                 endings,
             } => {
-                // Kept rather than replaced, unlike every other feed here.
-                // Two messages now belong to one diff — rows, then colours
-                // — so replacing would drop one half of a pair. It also
-                // fixes an older fault of its own: two diffs asked for a
-                // moment apart need not finish in that order, and the
-                // newest *arrival* is therefore not always what the pane
-                // is waiting for. Replacing threw the wanted one away
-                // whenever a slower earlier read landed on top of it, and
-                // the pane, with nothing left to match, stayed on the file
-                // it was on before. `drain` picks by key and drops the
-                // rest, so nothing accumulates (2026-08-13 実測).
+                // Kept rather than replaced, unlike every other feed here:
+                // rows and colours are two messages of one diff, and two
+                // diffs asked for a moment apart need not finish in that
+                // order — the newest arrival is not always the wanted one.
+                // The consumer's `drain` picks by key and drops the rest,
+                // so nothing accumulates.
                 self.feeds.diff.push(DiffMsg::Loaded {
                     target,
                     patches,
@@ -554,8 +535,6 @@ impl SessionSink for BridgeSink {
                     id,
                     code,
                     note,
-                    // An answer by exit code is not a failure, whatever
-                    // the code says.
                     answered: matches!(end, CommandEnd::Answered(_)),
                     elapsed_ms: elapsed_ms as i64,
                     message,
@@ -676,8 +655,7 @@ struct Tab {
     /// repositories nobody has asked to see yet.
     session: Option<Arc<RepoSession>>,
     /// Kept after opening too: it is the name a per-repository setting is
-    /// filed under, so a change to the defaults can be re-resolved against
-    /// every tab without asking the UI where they point.
+    /// filed under (`reapply_settings`).
     path: PathBuf,
     feeds: Arc<Feeds>,
 }
@@ -697,9 +675,8 @@ pub struct Hub {
     state: State,
     saved_state: State,
     /// Empty unless another process is already using the files this one
-    /// would have used; then it names their directory. The window has
-    /// nothing else to say which of two builds is in the way, and the
-    /// store this hub holds is an empty one by then.
+    /// would have used; then it names their directory (and the store this
+    /// hub holds is an empty one).
     held_elsewhere: String,
 }
 
@@ -717,14 +694,13 @@ pub struct AvatarUrls {
 
 impl AvatarUrls {
     /// The current assignments. Empty where there is nowhere to keep
-    /// pictures, which is the same answer as nobody having one.
+    /// pictures.
     pub fn current() -> Self {
         Hub::with(|hub| hub.avatar_urls()).unwrap_or_default()
     }
 
     /// The URL for an address, or empty. The address is expected to have
-    /// come through `avatar::key` already — the log parser does that on
-    /// the way in, which is the only way rows reach here.
+    /// come through `avatar::key` already.
     pub fn url_of(&self, email: &str) -> String {
         self.by_email.get(email).cloned().unwrap_or_default()
     }
@@ -733,10 +709,8 @@ impl AvatarUrls {
 impl Hub {
     /// Installs the hub into the main thread. Call once before `QApp::run`.
     ///
-    /// The store comes from `main`, which is where the question "may this
-    /// process use these files at all" is answered — a run that was turned
-    /// away is handed an empty store here and `held_elsewhere` names the
-    /// directory it did not get.
+    /// A run that was turned away from the settings files is handed an
+    /// empty store and `held_elsewhere` names the directory it did not get.
     pub fn install(runtime: tokio::runtime::Runtime, store: Store, held_elsewhere: String) {
         let settings = store.load_settings();
         let state = store.load_state();
@@ -758,9 +732,6 @@ impl Hub {
                 held_elsewhere,
             });
         });
-        // Once, at the start: a person who emptied the avatars directory
-        // by hand has said what they meant, and an assignment pointing at
-        // nothing would draw a row in the settings list that never fills.
         Hub::with(Hub::forget_missing_avatars);
     }
 
@@ -783,8 +754,6 @@ impl Hub {
     pub fn shutdown() {
         let hub = HUB.with(|h| h.borrow_mut().take());
         if let Some(mut hub) = hub {
-            // The window is already gone, so this is the last chance to
-            // keep whatever the timer had not reached yet.
             hub.flush_state();
             for (_, tab) in hub.tabs.drain() {
                 if let Some(session) = tab.session {
@@ -807,13 +776,11 @@ impl Hub {
 
     /// Asks whether `path` can be opened, without opening anything.
     ///
-    /// The picker's answer goes through here first so a folder that is no
-    /// repository never becomes a tab: there would be nothing in it to
-    /// read, and the path would go on being remembered across restarts.
-    /// Every other way in (a restored tab, a worktree row, `PG_AUTO_OPEN`)
-    /// still opens straight away — those are not somebody choosing a
-    /// folder, and the page's own failure screen is the right place for
-    /// them (デザイン規約 §可否・警告の出し場所).
+    /// Only the picker goes through here — a folder that is no repository
+    /// must never become a (remembered) tab. Every other way in (a
+    /// restored tab, a worktree row, `PG_AUTO_OPEN`) opens straight away
+    /// and fails on the page's own failure screen
+    /// (デザイン規約 §可否・警告の出し場所).
     pub fn probe_repo(&self, path: PathBuf, feed: Arc<Feed<PickMsg>>) -> bool {
         let Some(handle) = self.runtime_handle() else {
             return false;
@@ -824,12 +791,6 @@ impl Hub {
             let msg = match platitude_core::repo::open(&executor, &path, &cancel).await {
                 Ok(_) => PickMsg::Accepted { path },
                 Err(e) => {
-                    // git having trouble of its own — a timeout on a
-                    // share that stopped answering, output from
-                    // `rev-parse` nothing can read — is not an answer
-                    // about the folder, and only git can say what it
-                    // was. It still never becomes a tab: the person is
-                    // standing at the picker either way.
                     let (kind, message) = match &e {
                         platitude_core::GitError::NotARepository { bare, .. } => {
                             (if *bare { "bare" } else { "plain" }, String::new())
@@ -904,8 +865,7 @@ impl Hub {
     }
 
     /// Puts the settings in force on every open tab. A repository with a
-    /// setting of its own keeps it: the defaults moving is not an
-    /// instruction about the ones that were singled out.
+    /// setting of its own keeps it.
     fn reapply_settings(&self) {
         for tab in self.tabs.values() {
             let Some(session) = &tab.session else {
@@ -949,8 +909,7 @@ impl Hub {
     }
 
     /// How many messages are waiting in each tab's feeds, as
-    /// `<name>:<depth>` for the ones holding anything. Empty when every
-    /// consumer is keeping up, which is the normal reading.
+    /// `<name>#<tab>:<depth>` for the ones holding anything.
     pub fn feed_depths(&self) -> String {
         let mut waiting: Vec<String> = Vec::new();
         for (id, tab) in &self.tabs {
@@ -1007,9 +966,8 @@ impl Hub {
         &self.held_elsewhere
     }
 
-    /// Records the auto-fetch interval and puts it in force. Written out at
-    /// once rather than on the state timer: this is a decision somebody
-    /// made in a dialog, not a size that is still moving.
+    /// Records the auto-fetch interval and puts it in force. Written out
+    /// at once rather than on the state timer.
     pub fn set_auto_fetch_minutes(&mut self, minutes: u32) {
         self.settings.defaults.auto_fetch_minutes = minutes;
         self.reapply_settings();
@@ -1020,12 +978,9 @@ impl Hub {
 
     // -- avatars ------------------------------------------------------------
 
-    /// A `file:` URL for the picture assigned to an address, or empty.
-    ///
-    /// Empty is the ordinary answer — most authors have no picture, and the
-    /// generated identicon is what draws then. Empty is also the answer
-    /// wherever there is nowhere to keep pictures (a screenshot run), so
-    /// nothing downstream has to know that case exists.
+    /// A `file:` URL for the picture assigned to an address, or empty —
+    /// no picture (the identicon draws then), or nowhere to keep pictures
+    /// (a screenshot run).
     pub fn avatar_url(&self, email: &str) -> String {
         let (Some(dir), Some(file)) = (
             self.store.avatars_dir(),
@@ -1041,8 +996,7 @@ impl Hub {
     }
 
     /// Every assignment resolved to a URL in one go, so a pass over the
-    /// graph asks the hub once instead of once per row. Cheap to build —
-    /// this is a handful of entries, not one per commit.
+    /// graph asks the hub once instead of once per row.
     pub fn avatar_urls(&self) -> AvatarUrls {
         let Some(dir) = self.store.avatars_dir() else {
             return AvatarUrls::default();
@@ -1086,10 +1040,8 @@ impl Hub {
         }
     }
 
-    /// Drops assignments whose image is no longer there, so a directory
-    /// emptied by hand is believed rather than argued with. Runs once at
-    /// startup; nothing else deletes those files behind the application's
-    /// back often enough to be worth watching for.
+    /// Drops assignments whose image is no longer there. Runs once at
+    /// startup.
     pub fn forget_missing_avatars(&mut self) {
         let Some(dir) = self.store.avatars_dir() else {
             return;

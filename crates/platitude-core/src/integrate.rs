@@ -17,7 +17,6 @@ use crate::error::GitError;
 use crate::opstate::{self, OpState};
 use crate::process::{GitCommand, GitExecutor};
 
-/// Knobs of `git merge`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MergeOptions {
     /// Always record a merge commit (`--no-ff`).
@@ -54,7 +53,6 @@ pub async fn merge(
     executor.run(cmd.args(["--", rev]), cancel).await.map(drop)
 }
 
-/// Knobs of `git rebase`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RebaseOptions {
     /// `--onto <newbase>`: transplant onto something other than `upstream`.
@@ -102,10 +100,7 @@ pub async fn rebase(
     options: &RebaseOptions,
     cancel: &CancellationToken,
 ) -> Result<RebaseOutcome, GitError> {
-    // Exit 1 is this command answering rather than failing, and both
-    // answers have a landing of their own on screen: "your work is in the
-    // way" sends the caller round through a stash, and a rebase that
-    // stopped part-way raises the badge and the exit card. Only 0 and 1
+    // Exit 1 is this command answering rather than failing. Only 0 and 1
     // are answers, so the 128 a name git does not know exits with still
     // reads as the failure it is (規約 §終了コードで答える問い合わせ).
     let cmd = rebase_command(workdir, upstream, options, None).answers_by_code();
@@ -260,7 +255,7 @@ pub async fn revert(
 /// drops such commits by itself, and the `--empty=drop` that would say
 /// so in one word only reached these two commands in git 2.45, past the
 /// minimum this app supports
-/// ([git最低バージョン整合.md](../../internal-docs/git最低バージョン整合.md)).
+/// (internal-docs/git最低バージョン整合.md).
 ///
 /// The number of commits bounds the loop: each `--skip` moves the
 /// sequence on by one, so no more skips can be wanted than there were
@@ -323,12 +318,9 @@ async fn still_stepping(
 /// Whether git stopped because the commit it just replayed records
 /// nothing — the branch has those changes already.
 ///
-/// Classifying human-facing output is off limits here as a rule; this
-/// earns the same exception [`work_is_in_the_way`] does, for the same
-/// reason: git offers no machine-readable answer, and the answer decides
-/// whether the stop is one to report or one to walk past. Every
-/// invocation runs under `LC_ALL=C`, so the C-locale wording arrives,
-/// and it names the command that stopped (実測 2.55, both wordings in
+/// Classifies human-facing output under the same exception
+/// [`work_is_in_the_way`] takes. `LC_ALL=C` pins the C-locale wording,
+/// which names the command that stopped (実測 2.55, both wordings in
 /// `integrate_integration`).
 ///
 /// Anything unrecognised is `false` and travels on as the failure it
@@ -377,7 +369,6 @@ impl Continuation {
     }
 }
 
-/// Which operation a continuation applies to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InProgress {
     Rebase,
@@ -444,7 +435,6 @@ pub async fn resolve_current(
     Ok(true)
 }
 
-/// Continues, aborts or skips a named operation.
 pub async fn resolve(
     executor: &GitExecutor,
     workdir: &Path,

@@ -110,7 +110,6 @@ impl GraphBuilder {
         self.next_row
     }
 
-    /// Widest row emitted so far.
     #[cfg(test)]
     pub fn max_width(&self) -> u16 {
         self.max_width

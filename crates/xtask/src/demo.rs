@@ -1,9 +1,7 @@
 //! `cargo xtask demo-repo` — throwaway repositories in known states.
 //!
-//! Every invocation builds a fresh repository under the system temp dir
-//! (or `--at <dir>`), isolated from the developer's git configuration, and
-//! prints its path. Nothing is ever reused: a sandbox whose state has
-//! drifted is worse than none, so the sandbox is always newly made.
+//! Every invocation builds a fresh repository, isolated from the
+//! developer's git configuration; nothing is ever reused.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -28,17 +26,12 @@ pub fn run(args: &[String]) -> Result<PathBuf, String> {
     create(preset, at)
 }
 
-/// Builds `preset` and returns the work-tree path.
 pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
     create_named(preset, at, "repo")
 }
 
-/// Builds `preset` with the work tree called `name` rather than `repo`.
-///
-/// A tab is titled after its work-tree folder (`models::tabs::title_of`),
-/// and every demo repository being called the same thing is fine until
-/// the subject is the strip itself — a row of identical names cannot show
-/// which tabs gave way and which were left alone.
+/// Builds `preset` with the work tree called `name` rather than `repo` —
+/// a tab is titled after its work-tree folder (`models::tabs::title_of`).
 pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<PathBuf, String> {
     let root = match at {
         Some(dir) => dir,
@@ -96,9 +89,7 @@ struct DemoRepo {
     tick: u64,
 }
 
-/// Spacing between commit timestamps.
 const TICK_SECS: u64 = 30 * 60;
-/// How far in the past the history starts.
 const HISTORY_SECS: u64 = 40 * 60 * 60;
 
 impl DemoRepo {
@@ -210,10 +201,9 @@ impl DemoRepo {
         Ok(())
     }
 
-    /// Runs git with `input` on its standard input and returns what it
-    /// printed. One process for a batch of refs: a repository of
-    /// thousands of tags built a `git tag` at a time is minutes of
-    /// process spawning on Windows.
+    /// One process for a batch of refs: a repository of thousands of
+    /// tags built a `git tag` at a time is minutes of process spawning
+    /// on Windows.
     fn git_stdin(&mut self, args: &[&str], input: &str) -> Result<String, String> {
         let dir = self.work.clone();
         let mut child = self
@@ -240,7 +230,6 @@ impl DemoRepo {
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
 
-    /// Creates `<root>/origin.git` (bare), wires it as `origin`.
     fn add_origin(&mut self) -> Result<(), String> {
         let bare = self.root.join("origin.git");
         std::fs::create_dir_all(&bare).map_err(|e| e.to_string())?;
@@ -341,9 +330,7 @@ fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["config", "user.signingkey", &config_path(&trusted_key)])?;
 
     // A signature that no longer matches what it signed: sign properly,
-    // then swap the tree underneath. Nothing an ordinary repository does
-    // produces this, and it is the one state the pane spends words on,
-    // so it has to be reachable from a preset.
+    // then swap the tree underneath.
     repo.commit(
         "src/tampered.txt",
         "before\n",
@@ -370,11 +357,6 @@ fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
 /// arrived (a squash merge on a forge), one the same hand committed
 /// later than it wrote it (an amend, a rebase), and two ordinary
 /// commits, where the two are one person at one moment.
-///
-/// Measured shares of the divergent shapes, so the card is not being
-/// built for a corner (2026-08-09, `author != committer` / `author date
-/// != commit date`): kotlinx.coroutines 47.5% / 34.3%, JetBrains/kotlin
-/// 47.5% / 89.9%, jackson-module-kotlin 16.8% / 9.2%.
 fn authorship(repo: &mut DemoRepo) -> Result<(), String> {
     const MAILED: &str = "Yuki Tanaka <yuki.tanaka@example.com>";
     const DAY: u64 = 24 * 60 * 60;
@@ -469,10 +451,6 @@ fn to_the_byte(head: &str, bytes: usize) -> String {
 /// git puts no wall in front of a subject, a body, an author name or a URL
 /// — it took a megabyte of each in the same measurement — so what stands in
 /// for "the limit" here is the worst thing a person plausibly does.
-///
-/// At least, not at most: asking for less than one sentence used to return
-/// the two characters of the terminator, and a co-author whose name is
-/// `終端` tests nothing.
 pub(crate) fn pasted(bytes: usize) -> String {
     let unit = "この行は長い日本語の文章で、折り返しと省略の両方を試すために置いてある。 \
                 And an English clause rides along so the run of Latin text is measured too. ";
@@ -572,7 +550,6 @@ fn long(repo: &mut DemoRepo) -> Result<(), String> {
     repo.add_origin()?;
     repo.git(&["push", "--set-upstream", "origin", "main"])?;
 
-    // The wall: one commit that touches every file in the sprawl.
     for (dir, count, ext) in SPRAWL {
         for i in 0..count {
             repo.write(
@@ -584,10 +561,6 @@ fn long(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["add", "--all"])?;
     repo.git(&["commit", "-m", LONG_MESSAGE])?;
 
-    // And a work tree in the same state: most of the sprawl edited, a
-    // few files nobody has added yet, one gone, one renamed. The mix is
-    // what makes the list worth scrolling — every row is a different
-    // icon — but the point of this preset is the length.
     for (dir, count, ext) in SPRAWL {
         for i in (0..count).step_by(4).flat_map(|s| [s, s + 1, s + 2]) {
             if i >= count {
@@ -644,20 +617,17 @@ fn edges(repo: &mut DemoRepo) -> Result<(), String> {
     let wall_file = to_the_byte("f", PATH_ROOM);
     let long_author = format!("{} <{}@example.com>", pasted(200), to_the_byte("m", 60));
 
-    // A履歴 that is ordinary enough to read, so the extremes stand out.
     repo.commit(
         "README.md",
         "# 端\n\nちょうど端の値だけを集めたリポジトリ。\n",
         "docs: 端の値を集める",
     )?;
 
-    // The short end: one character of everything.
     repo.commit("q", "x\n", "日")?;
     // git takes a commit with no message at all and reads it back empty.
     repo.git(&["commit", "--allow-empty", "--allow-empty-message", "-m", ""])?;
     repo.git(&["commit", "--allow-empty", "--author=日 <あ>", "-m", "一"])?;
 
-    // The long end: a subject nobody meant to write, and a body under it.
     // The body is longer than any pane is tall on purpose: the details
     // pane's description box can be pulled open by its corner, and a body
     // that runs out before the room does never reaches the bound that
@@ -674,7 +644,6 @@ fn edges(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["add", "--", &wall_file])?;
     repo.git(&["commit", "-m", &long_subject, "-m", &long_body])?;
 
-    // A deep path, a name with a space, and one that is only Japanese.
     repo.commit(
         "第一階層/第二階層/第三階層/第四階層/深い場所のファイル.txt",
         "deep\n",
@@ -682,7 +651,6 @@ fn edges(repo: &mut DemoRepo) -> Result<(), String> {
     )?;
     repo.commit("名前に 空白 が入る.txt", "space\n", "feat: 空白入りの名前")?;
 
-    // An author whose name is a paragraph, on its own commit.
     repo.git(&[
         "commit",
         "--allow-empty",
@@ -691,23 +659,18 @@ fn edges(repo: &mut DemoRepo) -> Result<(), String> {
         "chore: 著者名が段落のコミット",
     ])?;
 
-    // Refs at both ends. The one-character branch is non-ASCII on purpose.
+    // The one-character branch is non-ASCII on purpose.
     repo.git(&["branch", "あ"])?;
     repo.git(&["branch", &wall_branch])?;
     repo.git(&["tag", "x"])?;
     repo.git(&["tag", "-a", &wall_tag, "-m", &pasted(300)])?;
 
-    // Remotes: an ordinary one, one whose *name* is absurd and which
-    // really answers, and one whose *URL* is absurd and is never asked.
     repo.add_origin()?;
     repo.git(&["push", "--set-upstream", "origin", "main"])?;
     repo.git(&["push", "origin", "あ", "x"])?;
 
     // The wall-length tag drifts away from the long-named remote's copy:
-    // push it, then move the local one. A drift is what puts the same
-    // name on two chips, and the second chip is the only place in the UI
-    // that says *which* remote a reading came from — the last string
-    // anywhere that carries a repository's own name for something.
+    // push it, then move the local one.
     //
     // Drift rather than remote-only, because a tag a fetch can reach is
     // one auto-follow brings down: only a tag on a commit nobody here
@@ -717,11 +680,8 @@ fn edges(repo: &mut DemoRepo) -> Result<(), String> {
     // And no unreachable remote lives here: `fetch --prune --all` walks
     // every one of them, so a single absurd URL would turn every fetch
     // in this repository into a failure and every fetch verb into a
-    // FAIL. A URL has no pane to be too long in anyway.
-    // At the wall, like the tag it will qualify: a remote's name is a ref
-    // component too, and the two together are what the chip list has to
-    // divide a row between. At 90 bytes the pair merely reached the
-    // window's edge and proved nothing.
+    // FAIL. The remote's name sits at the wall because a remote's name
+    // is a ref component too.
     let long_remote = to_the_byte("r", REF_WALL);
     let bare = repo.root.join("long.git");
     std::fs::create_dir_all(&bare).map_err(|e| e.to_string())?;
@@ -737,13 +697,11 @@ fn edges(repo: &mut DemoRepo) -> Result<(), String> {
     ])?;
     repo.git(&["tag", "--force", &wall_tag])?;
 
-    // Stashes at both ends.
     repo.write("q", "x\nstashed\n")?;
     repo.git(&["stash", "push", "-m", "日"])?;
     repo.write("q", "x\nstashed again\n")?;
     repo.git(&["stash", "push", "-m", &pasted(400)])?;
 
-    // A dirty tree whose file rows carry the same extremes.
     repo.write(&wall_file, "端の名前のファイル\n編集した行\n")?;
     repo.git(&["add", "--", &wall_file])?;
     repo.write("名前に 空白 が入る.txt", "space\n編集\n")?;
@@ -807,10 +765,9 @@ fn basic(repo: &mut DemoRepo) -> Result<(), String> {
     // A tag only this clone has.
     repo.git(&["tag", "v0.3-local"])?;
 
-    // One stash…
     repo.write("src/lib.txt", "lib v2\nstashed experiment\n")?;
     repo.git(&["stash", "push", "-m", "experiment on the library"])?;
-    // …and a dirty working tree: staged, unstaged, untracked. The
+    // A dirty working tree: staged, unstaged, untracked. The
     // unstaged edit REPLACES the first line, so the diff's body line 0 is
     // a change — the stage-line / discard-line hooks pick line 0, and a
     // context line there would select nothing.
@@ -1416,10 +1373,8 @@ fn tags(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// How many tags `manytags` puts on. Enough that TAGS cannot fit in the
-/// pane at any window height anybody works at — which is the whole point
-/// of the preset, and the shape a release-tagging repository really has
-/// (the reference repository carries 45,000).
+/// How many tags `manytags` puts on: enough that TAGS cannot fit in the
+/// pane at any window height anybody works at.
 const MANY_TAGS: usize = 2000;
 
 /// `basic`, buried in tags. What the folded rail does when a section has

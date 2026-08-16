@@ -43,30 +43,19 @@ pub fn keep_system_gestures() {
     win32::keep_system_gestures();
 }
 
-// The window's edge is not asked of the platform any more, and there is
-// nothing left here to ask. A frameless window has no non-client area for
-// `DWMWA_BORDER_COLOR` or `DWMWA_CAPTION_COLOR` to reach — measured on a
-// small one, the pixel outside the window is simply what was behind it —
-// so the line the design wants is drawn in the scene, at the client's own
-// edge (`Main`). What that replaced, and why none of it survived, is
-// written up there: the colours only ever reached the invisible resize
-// border, that border is outside the screen whenever the window fills it,
-// and the one pixel of it that showed came out white and answered to
-// nothing but painting the frame ourselves.
+// A frameless window has no non-client area for `DWMWA_BORDER_COLOR` or
+// `DWMWA_CAPTION_COLOR` to reach — measured on a small one, the pixel
+// outside the window is simply what was behind it — so the line the
+// design wants is drawn in the scene, at the client's own edge (`Main`).
 
 /// Maximises the window, or puts it back, through the platform's own
 /// command — the same one the band's double-click sends.
 ///
-/// The scene has `visibility` for this, and for a framed window it was
-/// enough. It is not enough here: Qt maximises a frameless window by
+/// Not the scene's `visibility`: Qt maximises a frameless window by
 /// resizing it, which leaves Windows holding no maximised state at all
 /// (measured: the window covers the work area with `IsZoomed` false), and
-/// putting it back then has nothing to put back — the button left the
-/// window large while a double-click on the band, which goes through the
-/// platform, restored it (reported 2026-08-09). Sending the command
-/// instead keeps one answer for both gestures, which is the same reason
-/// the drag, the snap and the window menu are the platform's
-/// (`take_frame_hit_test`).
+/// putting it back then has nothing to put back. Sending the command
+/// keeps one answer for both gestures (`take_frame_hit_test`).
 pub fn set_maximized(maximized: bool) {
     #[cfg(windows)]
     win32::set_maximized(maximized);
@@ -78,13 +67,11 @@ pub fn set_maximized(maximized: bool) {
 /// on, and answers whether it had to. Windowed windows only — a maximised
 /// one is the platform's own arrangement.
 ///
-/// What a remembered shape needs before it is trusted. The scene cannot
-/// do this itself: it knows neither the work area (QML reports no
-/// screen's) nor the frame, which is wider than the window says it is —
-/// and it is the *frame* that has to fit. Measured on the live window: a
+/// The scene cannot do this itself: it knows neither the work area (QML
+/// reports no screen's) nor the frame, which is wider than the window
+/// says it is — and it is the *frame* that has to fit (measured: a
 /// remembered 1920 came back as a 1936-wide frame at x=-5 on a 1920
-/// monitor, so the right-hand pane's scroll bar was off the screen and
-/// the left edge was on the neighbour.
+/// monitor).
 ///
 /// Shrinks only as far as it must, and moves rather than shrinks
 /// wherever moving is enough.
@@ -100,21 +87,15 @@ pub fn fit_to_work_area() -> bool {
     false
 }
 
-// Taking the frame over — answering `WM_NCCALCSIZE` with "the client is
-// the whole window" — does remove the one strip of system-coloured frame
-// that no attribute reaches, and the resize edges can be answered from a
-// subclass in its place (both measured, and both worked).
-//
-// It is not here because Qt cannot be told. The subclass sits in front of
-// Qt's own window procedure, so Qt never sees the message and keeps the
-// frame margins it cached at creation: the client grew and the scene did
-// not, leaving the strip it gained unpainted (measured: frame and client
-// both 1450x908 with the scene still drawing 1434x900, black down the
-// right-hand edge and along the bottom). Nudging the size, asking for the
-// frame to be recalculated and letting the message through first were all
-// tried; none of them make Qt re-measure. What would is a way to set the
-// window's custom margins, which the bridge does not expose (app-ui.md —
-// the line between messages Qt builds state from and pure queries).
+// Do not answer `WM_NCCALCSIZE` ("the client is the whole window") from a
+// subclass: Qt never sees the message and keeps the frame margins it
+// cached at creation, so the client grows and the scene does not
+// (measured: frame and client both 1450x908 with the scene still drawing
+// 1434x900, black down the right-hand edge and along the bottom).
+// Nudging the size, forcing a frame recalculation and letting the message
+// through first were all tried; none make Qt re-measure. What would is a
+// way to set the window's custom margins, which the bridge does not
+// expose.
 
 /// Takes `WM_NCHITTEST` away from Qt for the windows that are up, and
 /// answers it from the strip `set_caption_strip` describes.
@@ -152,11 +133,8 @@ pub fn take_frame_hit_test() {
 }
 
 // The scene is never told the resize border's width. `hit_test` measures
-// the edges by it, in device pixels, and is the only reader — and only
-// windowed: a maximised window is pinned to the work area
-// (`clamp_maximized`), so nothing the app paints is ever out there. The
-// measurement, and the shifted window that came of guessing at it, are
-// written up on `Main.mainUi`.
+// the edges by it, in device pixels, and is the only reader (written up
+// on `Main.mainUi`).
 
 /// Where the band's empty run sits, in logical scene pixels: from `x0`
 /// to `x1`, reaching down from the window's top edge to `bottom`. The
@@ -461,9 +439,6 @@ mod win32 {
             return 1;
         }
         let work = info.work;
-        // Shrink only as far as the work area, then move rather than
-        // shrink: a window that merely sits too far right needs its
-        // corner back, not a smaller size.
         let width = (rect.right - rect.left).min(work.right - work.left);
         let height = (rect.bottom - rect.top).min(work.bottom - work.top);
         let x = rect.left.min(work.right - width).max(work.left);
@@ -541,8 +516,7 @@ mod win32 {
     const WM_NCHITTEST: u32 = 0x0084;
     const WM_NCRBUTTONUP: u32 = 0x00A5;
     /// The hit-test answers this window hands out (winuser.h). Client,
-    /// caption, and the eight resize edges; nothing else exists here —
-    /// no drawn system buttons, no icon box.
+    /// caption, and the eight resize edges; nothing else exists here.
     const HTCLIENT: isize = 1;
     const HTCAPTION: isize = 2;
     const HTLEFT: isize = 10;
@@ -651,29 +625,13 @@ mod win32 {
             open_system_menu(window, x, y);
             return 0;
         }
-        // The frame is not the system's to draw here. `DefWindowProc`
-        // paints the sizing border it still thinks this window wears, and
-        // the innermost pixel of it comes out white — measured on the
-        // window: `#FFFFFF` at the column just outside the client, with
-        // the app's own hairline one pixel further out, and no DWM
-        // attribute moves it (P5-確認事項 §10 had it as unsolved). Against
-        // a dark theme that one pixel is the brightest thing on the
-        // window's edge, so what the person sees hugging the window is a
-        // white line rather than the edge the app painted.
-        //
-        // Declining the paint is safe in the way `WM_NCHITTEST` is: it
-        // asks for pixels, not for frame metrics Qt has cached, so
-        // nothing is left holding a stale answer. What remains around the
-        // window is DWM's own composition — the shadow, and the border
-        // colour `set_border_color` hands it.
-        // Where a maximised window is allowed to reach. Windows would
-        // put it on the monitor's own rectangle, inflated by the resize
-        // border on every side; this pins it to the work area instead, so
-        // no part of it lands on the monitor next door (measured: the
-        // frame was -8..1928 across a 0..1920 screen, and those 8 columns
-        // hid the neighbour's window — reported twice). Asked after
-        // whoever ran before us has filled the rest in, so only the two
-        // fields this is about are touched.
+        // Windows would maximise onto the monitor's own rectangle,
+        // inflated by the resize border on every side; `clamp_maximized`
+        // pins it to the work area instead (measured: the frame was
+        // -8..1928 across a 0..1920 screen, and those 8 columns hid the
+        // neighbour's window). Asked after whoever ran before us has
+        // filled the rest in, so only the two fields this is about are
+        // touched.
         if message == WM_GETMINMAXINFO {
             // SAFETY: passing the message on is what a subclass does.
             let passed = unsafe { DefSubclassProc(window, message, wparam, lparam) };
@@ -787,9 +745,8 @@ mod win32 {
     }
 
     /// The window menu — move, size, minimise, maximise, close — where
-    /// the pointer is. What a title bar answers a right-click with, and
-    /// the strip is one now. Not left to `DefWindowProc`, so showing it
-    /// does not depend on the caption behaviour of a window that has no
+    /// the pointer is. Not left to `DefWindowProc`, so showing it does
+    /// not depend on the caption behaviour of a window that has no
     /// `WS_CAPTION`.
     fn open_system_menu(window: *mut c_void, x: i32, y: i32) {
         // SAFETY: each call takes plain integers or a handle Windows just
@@ -826,8 +783,7 @@ mod win32 {
     }
 
     /// Runs for every top-level window the thread owns. Windows that
-    /// already carry the bits are left alone, so the frame is not told to
-    /// change for nothing.
+    /// already carry the bits are left alone.
     extern "system" fn allow_one(window: *mut c_void, _param: isize) -> i32 {
         // Not `WS_CAPTION`, though the window menu's Move and Size want
         // it: with the non-client area still there, saying the window has
@@ -905,7 +861,6 @@ mod win32 {
         if hr != 0 {
             tracing::debug!(hresult = hr, "a window kept its rounded corners");
         }
-        // Keep walking: the window people look at is not always the first.
         1
     }
 

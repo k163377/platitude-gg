@@ -44,7 +44,6 @@ pub fn helper_path() -> std::io::Result<PathBuf> {
     helper_in(dir)
 }
 
-/// Looks for the helper in one directory.
 pub fn helper_in(dir: &Path) -> std::io::Result<PathBuf> {
     let helper = dir.join(format!("{HELPER_NAME}{}", std::env::consts::EXE_SUFFIX));
     if !helper.is_file() {
@@ -56,7 +55,6 @@ pub fn helper_in(dir: &Path) -> std::io::Result<PathBuf> {
     Ok(helper)
 }
 
-/// What to do with one commit of the range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TodoAction {
     Pick,
@@ -118,7 +116,6 @@ impl RebaseStep {
     }
 }
 
-/// One line of a todo file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TodoLine {
     Command {
@@ -130,7 +127,6 @@ pub enum TodoLine {
     Exec { command: String },
 }
 
-/// Renders a todo file git will consume.
 pub fn render_todo(lines: &[TodoLine]) -> String {
     let mut out = String::new();
     for line in lines {
@@ -202,7 +198,6 @@ pub fn parse_todo(text: &str) -> Vec<TodoLine> {
     out
 }
 
-/// A plan plus the range it rewrites.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditPlan {
     /// Revision the rebase treats as upstream; empty when `root` is set.
@@ -343,7 +338,6 @@ async fn resolve(
     Ok((!text.is_empty()).then_some(text))
 }
 
-/// Whether the range holds any commit with more than one parent.
 async fn has_merges(
     executor: &GitExecutor,
     workdir: &Path,
@@ -369,7 +363,6 @@ pub async fn plan_for(
     plan_for_range(executor, workdir, upstream, false, cancel).await
 }
 
-/// `<upstream>..HEAD`, or all of `HEAD` when the range starts at the root.
 fn range_arg(upstream: &str, root: bool) -> String {
     if root {
         "HEAD".to_string()
@@ -508,7 +501,6 @@ fn shell_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
-/// Single-quotes a word for `sh`.
 fn sh_quote(word: &str) -> String {
     format!("'{}'", word.replace('\'', r"'\''"))
 }

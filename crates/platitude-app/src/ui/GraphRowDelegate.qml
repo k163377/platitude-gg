@@ -7,11 +7,7 @@ import platitude
 import platitude.ui
 
 // Commit-graph row: [branch/tag chips][lanes + identicon node][subject]
-// — fixed-width label and graph columns keep subjects aligned. Column
-// geometry arrives through properties on the owning ListView
-// (labelWidth / graphColWidth / graphFullWidth / graphXOffset, and the
-// uncommitted row's tallies), and clicks go back up through its
-// rowSelected / rowMenuRequested signals.
+// — fixed-width label and graph columns keep subjects aligned.
 Item {
     id: rowItem
     required property int index
@@ -58,11 +54,7 @@ Item {
     /// decides; the model marks it). Only ever true while a search is on.
     required property bool matched
     // Dimmed because the search passed this row over — not because it is
-    // in any way unavailable (デザイン規約 §暗く落とした段: a row falls
-    // this way only when many fall together, which is what makes it read
-    // as "not the ones" rather than "not allowed"). A query nothing
-    // answers takes every row down, which is the same sentence with
-    // nothing left over.
+    // in any way unavailable (デザイン規約 §暗く落とした段).
     readonly property bool dimmed:
         rowItem.ListView.view ? rowItem.ListView.view.findOn && !rowItem.matched
                               : false
@@ -80,10 +72,8 @@ Item {
     // The all-zero id marks the synthetic uncommitted-changes row.
     readonly property bool isWip: oid_hex !== "" && !/[^0]/.test(oid_hex)
     // One kind of change and how many rows of it the file list holds. The
-    // mark is the same ChangeIcon those rows carry, so the tally reads as
-    // "these, that many" rather than as a legend of its own — and a kind
-    // with nothing in it takes no seat (デザイン規約 §無効: what is not
-    // there does not stand).
+    // mark is the same ChangeIcon those rows carry, and a kind with
+    // nothing in it takes no seat (デザイン規約 §無効).
     component Tally: RowLayout {
         id: tally
         required property string code
@@ -91,9 +81,7 @@ Item {
         visible: tally.count > 0
         // Nothing between the mark and its number: the seat below is the
         // ink's width, so what the eye measures is already the mark's own
-        // air (デザイン規約 §余白). A step here would put it back, and the
-        // pair has to read as one thing from across the room — the gap to
-        // the next kind is the only one that should be visible.
+        // air (デザイン規約 §余白).
         spacing: 0
         // The seat is the ink, not the box. Drawn to the box, `!` would
         // stand five pixels from its own number while `+` stood two, and
@@ -208,15 +196,12 @@ Item {
         laneCanvas.requestPaint()
     }
 
-    // Column widths come from the ListView (owner scope).
     readonly property real labelsW: ListView.view ? ListView.view.labelWidth : Metrics.labelColW
 
     RowLayout {
         anchors.fill: parent
         spacing: 0
 
-        // The row's chip, right-aligned against the graph — or, on a
-        // row with no branch to move to, the box that names one here.
         Item {
             id: labelColumn
             Layout.preferredWidth: rowItem.labelsW
@@ -232,8 +217,8 @@ Item {
                 anchors.rightMargin: Theme.spaceXs
                 anchors.verticalCenter: parent.verticalCenter
                 records: rowItem.labelRecords
-                // One chip now has the column to itself; the names it
-                // cannot fit are read in the card, not squeezed here.
+                // The names the chip cannot fit are read in the card, not
+                // squeezed here.
                 maxWidth: rowItem.labelsW - Theme.spaceSm
             }
             // A row with nothing to move to answers the double-click with
@@ -351,8 +336,7 @@ Item {
                         // with it while the lanes above stay lit. A lane
                         // is one line drawn across many rows: dimming it
                         // per row would break each line into a
-                        // bright-and-dark ladder that says nothing about
-                        // what was searched for.
+                        // bright-and-dark ladder.
                         ctx.globalAlpha = rowItem.dimmed ? Metrics.dimFade : 1
                         // The WIP row has no commit and no author: a
                         // dashed, empty node instead of a face. A lane
@@ -520,8 +504,6 @@ Item {
             spacing: Theme.spaceXs
             // The tick goes with the message, not with the lanes: it
             // stands in the subject column and belongs to this row alone.
-            // Left bright it would be the loudest thing on a row the
-            // search passed over.
             opacity: rowItem.dimmed ? Metrics.dimFade : 1
             // Short colored tick before the message: separates rows
             // visually (deliberately not a continuous line) and echoes
@@ -553,10 +535,6 @@ Item {
                 color: rowItem.isWip ? Theme.textSecondary : Theme.textPrimary
                 rightPadding: rowItem.isWip ? 0 : Theme.spaceSm
             }
-            // What the working tree does to HEAD, in lines. One reading
-            // rather than the two the panes take: the same line touched in
-            // the index and again in the tree is counted by both of those,
-            // and their sum is not what this row stands for.
             // What is in the working tree, by kind. Conflicts lead: what is
             // stopped is the thing to see first, and the rest is the order
             // the file list would put them in.
@@ -595,7 +573,6 @@ Item {
                            ? rowItem.ListView.view.wipCopied : 0
                 }
             }
-            // The rest of the row, on the one row that does not fill it.
             Item {
                 visible: rowItem.isWip
                 Layout.fillWidth: true
@@ -626,12 +603,10 @@ Item {
     /// This row's chip is the one with the list open under it.
     property bool chipHeld: false
     // A chip is `fontSmLine` tall — sixteen pixels in a row of
-    // twenty-eight — and a hand that has just arrived is still settling. Landing takes
-    // the chip itself, but once the list is out the whole chip column
-    // holds it: drifting a dozen pixels inside the column the chips live
-    // in is not leaving them (2026-08-09 trace — the hand landed at row
-    // y 17 and was at y 2 eight milliseconds later, and the list went
-    // with it).
+    // twenty-eight — and a hand that has just arrived is still settling.
+    // Landing takes the chip itself, but once the list is out the whole
+    // chip column holds it: drifting a dozen pixels inside the column the
+    // chips live in is not leaving them (2026-08-09 trace).
     function chipUnder(px, py) {
         if (!rowChip.visible || rowChip.records.length < 2)
             return null
@@ -646,17 +621,14 @@ Item {
     // Opens on a rest, the way the row's own card does, and closes with
     // the pointer. Not on landing: a pointer crossing the chip column on
     // its way somewhere passes over every stacked chip on the way, and
-    // each one it touched used to put its list out and take it back a
-    // breath later — the flashing reported on 2026-08-09. Nothing else
-    // in the column answers a hover, so the wait costs the hand that
-    // means it nothing but the wait.
+    // opening on landing flashes each one's list out and back
+    // (2026-08-09 報告).
     //
     // The row's own card gives way to it: the two open off the same
     // pointer and land in the same place, and the chip is the more
     // particular thing to be standing on (デザイン規約 §hover のツール
     // チップ). Stepping off the chip onto the rest of the row offers the
-    // card again from the beginning — the same as walking in from
-    // outside, because that is what the hand just did.
+    // card again from the beginning.
     function noteChipHover(px, py) {
         const chip = rowItem.naming ? null : rowItem.chipUnder(px, py)
         if (chip === rowItem.hoveredChip || !rowItem.ListView.view)
@@ -752,15 +724,12 @@ Item {
     /// pane, and its left edge is nowhere near the pointer.
     readonly property real pointerX: rowMouse.mouseX
 
-    // Hover details: what the row no longer shows as columns — who wrote
-    // it, when, and whoever they credited. The row reports; the page
-    // decides, because the card outlives this delegate (it is recycled
-    // the moment the row scrolls off).
+    // Hover details: who wrote it, when, and whoever they credited. The
+    // row reports; the page decides, because the card outlives this
+    // delegate (it is recycled the moment the row scrolls off).
     //
-    // The WIP row opens nothing. It has no commit behind it and so none
-    // of those facts, and its count is already in its own label — the
-    // same answer its double-click and its right-click give
-    // (規約 §hover のツールチップ).
+    // The WIP row opens nothing: it has no commit behind it, and its
+    // count is already in its own label (規約 §hover のツールチップ).
     Timer {
         id: hoverDelay
         interval: Metrics.tipDelayMs

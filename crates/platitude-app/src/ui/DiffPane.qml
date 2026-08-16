@@ -8,8 +8,7 @@ import platitude.ui
 
 // Center pane, diff mode: one file's unified diff with per-file,
 // per-hunk and per-line staging affordances, plus image / binary
-// previews. Which file is shown and what staging means is the owner's
-// business — this pane reports intents.
+// previews.
 Rectangle {
     id: diffPane
 
@@ -391,9 +390,7 @@ Rectangle {
                         color: Theme.textSecondary
                     }
                     DotMark {
-                        // Nothing open, nothing to separate: as a glyph
-                        // this sat unread inside its cell, drawn it is a
-                        // dot with nothing after it.
+                        // Nothing open, nothing to separate.
                         visible: diffPane.diffModel.title !== ""
                         tint: Theme.textSecondary
                     }
@@ -722,10 +719,9 @@ Rectangle {
                        : kind === "del" ? Theme.diffRemovedBg
                        : kind === "hunk" ? Theme.diffHunkHeaderBg
                        : "transparent"
-                // Nothing marks a row any more: what a hunk's discard
-                // takes is the hunk its heading sits on, and the button is
-                // in that heading. Reached from outside for the smoke run,
-                // which holds it the way a hand does.
+                // The hunk's discard lives in its heading. Reached from
+                // outside for the smoke run, which holds it the way a
+                // hand does.
                 readonly property alias discardButton: discardHunkButton
                 /// Picked by hand — this line goes with the next write.
                 readonly property bool picked:

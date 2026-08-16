@@ -10,20 +10,16 @@ use super::qml_register;
 
 // ---------------------------------------------------------------------------
 // NavSectionModel: one section list (branches / remotes / worktree /
-// worktrees / stashes / tags). Six QML instances share this type; each
-// attaches to its section's feed and owns its inner scrolling list, so
-// section headers can stay fixed while contents scroll. All render in the
-// sidebar except `worktree` (the changed files), which the right pane's
-// WIP view shows.
+// worktrees / stashes / tags). All render in the sidebar except
+// `worktree` (the changed files), which the right pane's WIP view shows.
 // ---------------------------------------------------------------------------
 
-// What a row of the sidebar can say, and the one row that is held rather
-// than read: **a folder row**, which no section's data arrives as, so
-// there is nothing to project it from. Every other row is answered field
-// by field out of what arrived (`Source`), and the fields below are then
-// only the declaration — `#[derive(QModelItem)]` turns them into the role
-// names the delegate resolves by, and `Role` answers under those names
-// (held to this list by the test at the foot of the file).
+// A folder row is the only row held whole — no section's data arrives as
+// one. Every other row is answered field by field out of `Source`; the
+// fields below are then only the declaration — `#[derive(QModelItem)]`
+// turns them into the role names the delegate resolves by, and `Role`
+// answers under those names (held to this list by the test at the foot of
+// the file).
 #[derive(QModelItem, Default)]
 pub struct NavItem {
     /// Display text: the last path segment in tree mode, the full name in
@@ -34,12 +30,11 @@ pub struct NavItem {
     full: String,
     oid_hex: String,
     /// git's change code for a file row (`M`, `?`, `UU`). **A folder row
-    /// has no change to report and carries its fold state here instead**
-    /// (`FOLDED`, empty when open) — a row is one of five kinds and
-    /// qtbridge's `QModelItem` allows fifteen fields, so a slot that
-    /// structurally cannot be used twice at once is shared. Reading it is
-    /// guarded by `folder` everywhere, as the other shared fields are
-    /// (`bucket` carries a branch on a worktree row, `full` a folder key).
+    /// carries its fold state here instead** (`FOLDED`, empty when open) —
+    /// qtbridge's `QModelItem` allows fifteen fields, so the slot is
+    /// shared. Reads are guarded by `folder`, as the other shared fields
+    /// are (`bucket` carries a branch on a worktree row, `full` a folder
+    /// key).
     change: String,
     bucket: String,
     /// Display grouping of worktree rows (GitKraken-style): untracked
@@ -49,8 +44,7 @@ pub struct NavItem {
     /// The old path of a renamed working-tree file. **A folder row in
     /// the working tree's list carries its clean path here** — its
     /// `full` is the group-prefixed fold key, and the hover of an
-    /// elided chain needs the path itself (a folder never uses the
-    /// rename slot, the way `change` carries the fold state).
+    /// elided chain needs the path itself.
     orig_path: String,
     /// The same source written the way the row writes names — what a
     /// delegate shows (`encode::rename_source`). A made row never carries
@@ -60,19 +54,17 @@ pub struct NavItem {
     orig_name: String,
     is_head: bool,
     has_remote: bool,
-    /// This repository does not hold the ref, so the name greys. Only tags
-    /// are ever listed that way: a tag a remote has and this one does not
-    /// reaches no graph row, and the sidebar is where it can be read at
-    /// all. Written as the negative of core's `here` so every other kind
-    /// of row keeps it off by default.
+    /// This repository does not hold the ref, so the name greys. Only
+    /// tags are ever listed that way. Written as the negative of core's
+    /// `here` so every other kind of row keeps it off by default.
     only_remote: bool,
     /// PR-state badge. Real data arrives in Phase 4 (ls-remote refs/pull
     /// matching); until then PG_FAKE_PR previews the look.
     has_pr: bool,
     /// This file's pending change has something to say about its line
     /// endings. A flag, not the sentence — a `QModelItem` holds fifteen
-    /// fields and this one is the fifteenth, so the words for the row the
-    /// pointer is on are kept once on the model instead (`pointEol`).
+    /// fields and this struct uses all fifteen, so the words for the row
+    /// the pointer is on are kept once on the model instead (`pointEol`).
     eol_mark: bool,
     depth: i32,
     folder: bool,
@@ -104,24 +96,16 @@ fn fold_state(expanded: bool) -> String {
 
 /// Where a section's rows come from.
 ///
-/// A row that is only ever drawn does not have to be built: every section
-/// keeps what arrived, in the shape it arrived in, and answers for a row
-/// as the view asks. The two a large repository fills read out of the
-/// refs snapshot the session already holds and this model already points
-/// at, so their whole lists cost one `Arc` and, where the shaping has
-/// anything to say, an index per visible row. Measured on
-/// `JetBrains/kotlin`: holding those two as rows was 13.9MB of the
-/// process's Rust heap, all of it a second copy of what the snapshot says.
+/// Every section keeps what arrived, in the shape it arrived in, and
+/// answers for a row as the view asks. Measured on `JetBrains/kotlin`:
+/// holding the refs sections as built rows was 13.9MB of the process's
+/// Rust heap, all of it a second copy of what the snapshot says.
 #[derive(Default)]
 enum Source {
-    /// Nothing has arrived yet.
     #[default]
     Waiting,
-    /// `snapshot.locals`.
     Locals(Arc<platitude_core::session::RefsSnapshot>),
-    /// `snapshot.remotes`.
     Remotes(Arc<platitude_core::session::RefsSnapshot>),
-    /// `snapshot.tags`.
     Tags(Arc<platitude_core::session::RefsSnapshot>),
     Stashes(Vec<platitude_core::stash::StashEntry>),
     /// The working copies, and which of them this window is showing —
@@ -144,9 +128,8 @@ impl platitude_core::mem::Footprint for Source {
     fn heap_bytes(&self) -> usize {
         match self {
             Self::Waiting => 0,
-            // Nothing of its own: the snapshot belongs to the session,
-            // which is where the report counts it. A shared `Arc` added up
-            // at every pointer into it is a number that means nothing.
+            // The snapshot belongs to the session, which is where the
+            // memory report counts it.
             Self::Locals(_) | Self::Remotes(_) | Self::Tags(_) => 0,
             Self::Stashes(list) => list.heap_bytes(),
             Self::Worktrees { list, current } => list.heap_bytes() + current.heap_bytes(),
@@ -189,8 +172,6 @@ impl Source {
         }
     }
 
-    /// The working copies that arrived, with the pane's order worked out
-    /// once rather than per row.
     fn files(status: platitude_core::status::WorkTreeStatus) -> Self {
         let mut order = Vec::new();
         for bucket in Bucket::SHOWN {
@@ -234,8 +215,8 @@ impl Bucket {
     ];
 
     /// Whether an entry belongs in this bucket — the same test
-    /// `WorkTreeStatus` makes for its four iterators, asked one entry at a
-    /// time because a row has to know which of them it came out of.
+    /// `WorkTreeStatus` makes for its four iterators (a test at the foot
+    /// of the file holds the two together).
     fn holds(self, item: &platitude_core::status::StatusItem) -> bool {
         use platitude_core::status::StatusItem;
         match (self, item) {
@@ -268,7 +249,6 @@ impl Bucket {
     }
 }
 
-/// One entry of a source, whichever kind the section has.
 #[derive(Clone, Copy)]
 enum Entry<'a> {
     Local(&'a platitude_core::session::BranchItem),
@@ -302,8 +282,7 @@ impl<'a> Entry<'a> {
     }
 
     /// What git knows the row by, where that is not what it shows. A ref
-    /// has none until the tree writes one (`field`), because a name is
-    /// all git needs to be given.
+    /// has none until the tree writes one (`field`).
     fn full(self) -> &'a str {
         match self {
             Self::Local(_) | Self::Remote(_) | Self::Tag(_) => "",
@@ -314,9 +293,8 @@ impl<'a> Entry<'a> {
     }
 }
 
-/// The last segment of a path, however it is spelled. A worktree row
-/// shows the folder it lives in, and git prints the path the platform's
-/// way.
+/// The last segment of a path — git prints worktree paths the platform's
+/// way, so either separator splits.
 fn leaf_of(path: &str) -> &str {
     path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
@@ -350,8 +328,6 @@ impl platitude_core::mem::Footprint for Arranged {
 /// One row as the view reads it.
 #[derive(Clone, Copy)]
 enum Row<'a> {
-    /// A folder row — the one kind of row no source holds, so the one
-    /// kind this section had to build.
     Made(&'a NavItem),
     /// A row of the source, shown at this depth and from this point in
     /// its name.
@@ -362,16 +338,11 @@ enum Row<'a> {
     },
 }
 
-/// What a row answers for one role, before Qt is handed it.
-///
-/// A step between the row and `QVariant` so that Rust can read the same
-/// answer the delegate is given: automation asks for a row's name, the
-/// arranging asks which row is the current entry, and none of them should
-/// be reading a second opinion.
+/// What a row answers for one role, before Qt is handed it — a step
+/// between the row and `QVariant` so Rust callers (automation, the
+/// arranging) read the same answer the delegate is given.
 enum Value<'a> {
-    /// Text the row already holds.
     Said(&'a str),
-    /// Text the row has to spell out.
     Spelled(String),
     Flag(bool),
     Number(i32),
@@ -429,14 +400,12 @@ enum Role {
 
 impl Role {
     /// Every role the view is handed, in the order their numbers run —
-    /// which is the order `NavItem` declares its fields in, one for one
-    /// (the test at the foot of this file holds them together).
+    /// the order `NavItem` declares its fields in, one for one (the test
+    /// at the foot of this file holds them together).
     ///
     /// **`Upstream` is not among them.** A `QModelItem` holds fifteen
-    /// fields at most, no delegate has ever asked for that one, and the
-    /// row that a rename's source has to reach is a delegate. It is still
-    /// answered — `upstream_of` reads it straight out of `field`, which
-    /// works it out from the entry rather than from a table.
+    /// fields at most and no delegate asks for that one. It is still
+    /// answered — `upstream_of` reads it straight out of `field`.
     const ALL: [Self; 15] = [
         Self::Name,
         Self::Full,
@@ -488,7 +457,6 @@ impl Role {
 #[derive(Default)]
 pub struct NavSectionModel {
     section: String,
-    /// What the rows are read out of.
     all: Source,
     /// The rows as shown — indented, folded, filtered — or `None` when
     /// they are the source's rows in its own order.
@@ -498,13 +466,10 @@ pub struct NavSectionModel {
     /// source exactly, and an index per row would say only that the rows
     /// are where they already are.
     arranged: Option<Vec<Arranged>>,
-    /// Whether a tree placed these rows, which is the one thing that
-    /// gives a **ref** row a full name: a branch arrives knowing only
-    /// what it is called, and the tree is what decides that `main` shown
-    /// under `origin` is `origin/main` to git. Every other kind of row
-    /// arrived with both, so this does not concern them — and a filtered
-    /// list stands in no tree, which is why its refs have no full name
-    /// (as they did not when the filter built them by hand).
+    /// Whether a tree placed these rows — the one thing that gives a
+    /// **ref** row a full name (a branch arrives knowing only what it is
+    /// called; every other kind of row arrived with both). A filtered
+    /// list stands in no tree, so its refs have no full name.
     tree_named: bool,
     filter: String,
     total: i32,
@@ -523,14 +488,10 @@ pub struct NavSectionModel {
     refs_loaded: bool,
     /// Worktree section only: tree (default) vs flat-path display.
     tree_view: bool,
-    /// Which row the pointer is on, so the other marked rows do not all
-    /// answer with the sentence belonging to this one.
-    ///
-    /// The notice itself follows, taken apart into the pieces its sentence
-    /// needs. Kept once here rather than on every row: only one row is
-    /// under the pointer, and a `QModelItem` has no fields left (see
-    /// `NavItem::eol_mark`). Flat because `qproperty!` names one member,
-    /// not a path through one.
+    /// Which row the pointer is on; the notice follows, taken apart into
+    /// the pieces its sentence needs. Kept once here rather than on every
+    /// row — a `QModelItem` has no fields left (see `NavItem::eol_mark`).
+    /// Flat because `qproperty!` names one member, not a path through one.
     pointed_eol_path: String,
     pointed_eol_kind: String,
     pointed_eol_from: String,
@@ -574,7 +535,6 @@ impl QAbstractItemModel for NavSectionModel {
         self.create_index(row, column, 0)
     }
 
-    /// Every row is a child of the root.
     fn parent(&self, _child: &QModelIndex) -> QModelIndex {
         QModelIndex::default()
     }
@@ -605,8 +565,7 @@ impl QAbstractItemModel for NavSectionModel {
 
     /// The names QML resolves a role by. Spelled where the answers are
     /// (`Role`), and held to the item's own derived table by the test at
-    /// the foot of this file — a role the delegate cannot name draws
-    /// nothing at all, and says nothing about it.
+    /// the foot of this file.
     fn role_names(&self) -> QHash<i32, QByteArray> {
         let mut names = QHash::default();
         for (number, role) in Role::ALL.iter().enumerate() {
@@ -621,8 +580,6 @@ impl NavSectionModel {
     /// filtered — and finds the current entry among them.
     fn arrange(&mut self) {
         let needle = self.filter.to_lowercase();
-        // A tree is what gives a ref row a full name to be known by, and
-        // it is the shaping a filter replaces.
         self.tree_named =
             needle.is_empty() && matches!(self.section.as_str(), "branches" | "remotes");
         self.arranged = if needle.is_empty() {
@@ -644,8 +601,6 @@ impl NavSectionModel {
                     }
                     Some(out)
                 }
-                // Nothing to indent, fold or leave out: these rows are the
-                // ones that arrived.
                 _ => None,
             }
         } else {
@@ -675,18 +630,14 @@ impl NavSectionModel {
     }
 
     /// Shapes the rows again and tells the view its whole list changed.
-    ///
-    /// The begin/end pair is written out here because the shaping is ours
-    /// now: `QListModel` had a `reset` that wrapped it, and answering by
-    /// value means there is no such wrapper to inherit.
+    /// The begin/end pair is written out — `QAbstractItemModel` has no
+    /// `reset` wrapper to inherit.
     fn reshape(&mut self) {
         self.begin_reset_model();
         self.arrange();
         self.end_reset_model();
     }
 
-    /// How many rows are on screen: the shaped list where there is one,
-    /// and the source itself where the shaping had nothing to say.
     fn shown_rows(&self) -> usize {
         match &self.arranged {
             Some(arranged) => arranged.len(),
@@ -694,7 +645,6 @@ impl NavSectionModel {
         }
     }
 
-    /// The row at one position on screen.
     fn row_at(&self, at: usize) -> Option<Row<'_>> {
         match &self.arranged {
             Some(arranged) => match arranged.get(at)? {
@@ -713,8 +663,6 @@ impl NavSectionModel {
         }
     }
 
-    /// What the row is called on screen: what the tree left of its whole
-    /// name, which is the whole of it wherever no tree placed the row.
     fn shown_name(of: Entry<'_>, from: usize) -> &str {
         let whole = of.name();
         whole.get(from..).unwrap_or(whole)
@@ -727,8 +675,6 @@ impl NavSectionModel {
     /// can show the delegate one thing and tell automation another.
     fn field<'a>(&self, row: Row<'a>, role: Role) -> Value<'a> {
         let (of, depth, from) = match row {
-            // A folder row is the one kind nothing arrived as, so it is
-            // the one kind held whole — and it holds what it shows.
             Row::Made(item) => {
                 return match role {
                     Role::Name => Value::Said(&item.name),
@@ -738,15 +684,12 @@ impl NavSectionModel {
                     Role::Bucket => Value::Said(&item.bucket),
                     Role::Group => Value::Said(&item.group),
                     Role::OrigPath => Value::Said(&item.orig_path),
-                    // A folder row has no rename to write down; the slot
-                    // beside this one is carrying its own path instead.
+                    // A folder's rename slot carries its own path, never
+                    // a rename source.
                     Role::OrigName => Value::Said(""),
                     Role::IsHead => Value::Flag(item.is_head),
                     Role::HasRemote => Value::Flag(item.has_remote),
                     Role::OnlyRemote => Value::Flag(item.only_remote),
-                    // Nothing made here speaks for a remote branch: the
-                    // rows that do arrive from the source, where this is
-                    // read off the entry.
                     Role::Upstream => Value::Said(""),
                     Role::HasPr => Value::Flag(item.has_pr),
                     Role::EolMark => Value::Flag(item.eol_mark),
@@ -758,15 +701,12 @@ impl NavSectionModel {
         };
         match role {
             Role::Name => Value::Said(Self::shown_name(of, from)),
-            // A tree is what writes a full name down for a ref; every
-            // other row arrived knowing what git calls it.
             Role::Full => Value::Said(if self.tree_named && of.full().is_empty() {
                 of.name()
             } else {
                 of.full()
             }),
             Role::Depth => Value::Number(depth),
-            // A row of the source is a row of the list, never a folder.
             Role::Folder => Value::Flag(false),
             Role::OidHex => match of {
                 Entry::Local(branch) | Entry::Remote(branch) => Value::Spelled(branch.oid.to_hex()),
@@ -793,8 +733,6 @@ impl NavSectionModel {
                 Entry::Tag(tag) => tag.has_remote,
                 Entry::Stash(_) | Entry::Worktree { .. } | Entry::File { .. } => false,
             }),
-            // Written as the negative of core's `here`, so every other
-            // kind of row keeps it off by default.
             Role::OnlyRemote => Value::Flag(matches!(of, Entry::Tag(tag) if !tag.here)),
             Role::Upstream => Value::Said(match of {
                 Entry::Local(branch) | Entry::Remote(branch) => &branch.upstream,
@@ -813,8 +751,6 @@ impl NavSectionModel {
                     .is_some_and(|branch| crate::encode::fake_pr_set().contains(branch)),
                 Entry::Tag(_) | Entry::Stash(_) | Entry::File { .. } => false,
             }),
-            // The letters git reports for the file, which for a conflict
-            // is what each side did to it.
             Role::Change => match of {
                 Entry::File { item, bucket } => Value::Spelled(letters_of(item, bucket)),
                 _ => Value::Said(""),
@@ -854,9 +790,6 @@ impl NavSectionModel {
                 ),
                 _ => "",
             }),
-            // Kept once on the model rather than on every row: the marks
-            // are few, and the row only has to say that it has one (the
-            // sentence is `pointEol`).
             Role::EolMark => Value::Flag(matches!(of, Entry::File { item, .. }
                 if self.eol_marks.iter().any(|mark| mark.path == item.path()))),
         }
@@ -951,9 +884,8 @@ impl NavSectionModel {
                 out.push(Arranged::Made(Box::new(NavItem {
                     name: label,
                     full: key.clone(),
-                    // The path itself, for the hover of a row the pane
-                    // elided: `full` is the fold key, not a path. It rides
-                    // in the rename slot, which a folder never uses.
+                    // `full` is the fold key, not a path; the path itself
+                    // rides in the rename slot (see `NavItem::orig_path`).
                     orig_path: path.clone(),
                     group: group.to_string(),
                     depth,
@@ -1216,18 +1148,11 @@ impl NavSectionModel {
     /// Points the section at what just arrived, and answers whether the
     /// rows it shows moved.
     ///
-    /// A poll tick republishes refs and status whether or not they moved,
-    /// so most arrivals carry exactly what the section already shows.
-    /// Swapping those in would still reset the Qt model — every delegate
-    /// rebuilt, the inner list scrolled back — for an identical picture.
-    /// The question is asked of the entries themselves, which is what a
-    /// section that builds no rows has left to compare: a poll that found
-    /// one branch moved is not a reason for the tag section to rebuild
-    /// forty-five thousand delegates.
-    ///
-    /// What arrived is taken either way. It holds what the old one did,
-    /// and the session has moved on to it, so keeping the old one would be
-    /// a second copy on the heap saying the same thing.
+    /// A poll tick republishes refs and status whether or not they moved;
+    /// swapping identical data in would still reset the Qt model — every
+    /// delegate rebuilt, the inner list scrolled back. The entries
+    /// themselves are compared: one moved branch is not a reason for the
+    /// tag section to rebuild forty-five thousand delegates.
     fn take(&mut self, arrived: Source) -> bool {
         let moved = match (&self.all, &arrived) {
             (Source::Locals(held), Source::Locals(fresh)) => held.locals != fresh.locals,
@@ -1253,12 +1178,9 @@ impl NavSectionModel {
         moved
     }
 
-    /// The arrived rows, and the shaped ones where they are a second list.
-    ///
-    /// Filed apart on purpose: `arranged` being nothing is what says the
-    /// view is reading the source directly, and a single number would hide
-    /// the day that stops being true. A projected section reports no bytes
-    /// of its own — the snapshot it reads is the session's, counted there.
+    /// Filed as two lines on purpose: `arranged` being nothing is what
+    /// says the view is reading the source directly, and a single number
+    /// would hide the day that stops being true.
     fn note_footprint(&self) {
         crate::memprobe::note_bytes(
             &format!("nav-{}-all", self.section),
@@ -1294,8 +1216,6 @@ impl NavSectionModel {
             // legitimately empty would otherwise never say so.
             arrived |= !self.refs_loaded;
             self.refs_loaded = true;
-            // Not the same snapshot means it has to be read; the same one
-            // means these rows were built from it already.
             let fresh = !self
                 .last_refs
                 .as_ref()
@@ -1333,9 +1253,6 @@ impl NavSectionModel {
         if let Some(feed) = self.worktrees_feed.clone()
             && let Some(list) = feed.drain().pop()
         {
-            // Which working copy this window is showing is the one thing
-            // about a worktree row that git's list does not say, so it is
-            // asked for once and kept beside the list.
             let current = Hub::with(|hub| hub.session(self.tab_id).and_then(|s| s.workdir()))
                 .flatten()
                 .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
@@ -1347,10 +1264,6 @@ impl NavSectionModel {
         if let Some(feed) = self.stash_feed.clone()
             && let Some(stashes) = feed.drain().pop()
         {
-            // The message is the whole of what a stash shows: the reflog
-            // selector (stash@{0}) stays out of sight by request, but it
-            // is what names the entry to git — renaming one takes the
-            // selector, not the message — so `full` answers with it.
             arrived |= self.take(Source::Stashes(stashes));
         }
         if arrived {
@@ -1397,17 +1310,14 @@ impl NavSectionModel {
         self.changed();
     }
 
-    /// Filtered row count (`total` counts all rows; this counts what the
-    /// filter lets through).
+    /// Rows on screen (`total` counts the source's rows; this counts what
+    /// filtering and folding leave shown).
     #[qslot]
     fn shown(&self) -> i32 {
         self.shown_rows() as i32
     }
 
     /// Commit id of the ref with this name; empty when there is none.
-    ///
-    /// Looks in the section's whole list rather than the visible rows, so
-    /// an active filter or a collapsed folder does not hide the answer.
     #[qslot]
     fn oid_of_name(&self, name: String) -> String {
         self.told(Role::Name, &name, Role::OidHex)
@@ -1449,10 +1359,9 @@ impl NavSectionModel {
     /// Where a renamed file came from, by path — whole, the way a diff
     /// wants it (a rename's diff is read by naming both of its sides).
     ///
-    /// A hand never needs this: it reaches a diff through the row, which
-    /// is holding the source already. A headless run has only the path,
-    /// and without this it opens the destination alone — which git reads
-    /// as a file appearing out of nowhere.
+    /// A headless run has only the path, and without this it opens the
+    /// destination alone — which git reads as a file appearing out of
+    /// nowhere.
     ///
     /// The first row of that path that names a source, not the first row
     /// of that path: a file renamed and then edited again has a row on
@@ -1538,8 +1447,6 @@ mod tests {
         })
     }
 
-    /// One section, wired to nothing: the shaping and the answers are
-    /// plain Rust, so a test needs no Qt side at all.
     fn section(kind: &str, all: Source) -> NavSectionModel {
         let mut model = NavSectionModel::default();
         model.section = kind.to_string();
@@ -1567,8 +1474,6 @@ mod tests {
         }
     }
 
-    /// A tag is drawn out of the snapshot, badges and all — the rows it
-    /// used to be held as were only ever a copy of this.
     #[test]
     fn a_tag_row_reads_out_of_the_snapshot() {
         let mut model = section(
@@ -1588,15 +1493,11 @@ mod tests {
         assert_eq!(says(&model, 0, Role::OidHex), oid("a").to_hex());
         assert!(flags(&model, 0, Role::HasRemote));
         assert!(!flags(&model, 0, Role::OnlyRemote));
-        // `here` is false: the name greys, which is the whole reason a tag
-        // no local ref reaches is listed at all.
         assert!(flags(&model, 1, Role::OnlyRemote));
         assert!(!flags(&model, 1, Role::Folder));
         assert_eq!(depth_of(&model, 1), 0);
     }
 
-    /// The remote tree indents rows it points at, and the segment each
-    /// one shows falls out of its depth.
     #[test]
     fn the_remote_tree_points_at_rows_and_folds_over_them() {
         let mut model = section(
@@ -1626,8 +1527,6 @@ mod tests {
         assert_eq!(depth_of(&model, 3), 1);
         assert_eq!(says(&model, 3, Role::OidHex), oid("b").to_hex());
 
-        // A name from outside is the whole one git knows, whatever the
-        // tree is showing.
         assert_eq!(
             model.oid_of_name("origin/main".to_string()),
             oid("b").to_hex()
@@ -1635,7 +1534,6 @@ mod tests {
         assert_eq!(model.name_at(2), "one");
     }
 
-    /// Filtering shows whole names and stands in no tree.
     #[test]
     fn a_filtered_remote_row_shows_its_whole_name() {
         let mut model = section(
@@ -1711,8 +1609,6 @@ mod tests {
         }
     }
 
-    /// The pane's own order, and the letters and buckets that go with it.
-    /// An entry with both halves changed is two rows.
     #[test]
     fn a_file_row_reads_out_of_the_status() {
         let mut model = section("worktree", Source::files(pending()));
@@ -1729,7 +1625,6 @@ mod tests {
                 says(&model, at, Role::Group),
             )
         };
-        // A conflict says what each side did to the file.
         assert_eq!(
             row(0),
             (
@@ -1778,12 +1673,9 @@ mod tests {
         assert_eq!(model.change_of("a.txt".to_string()), "UU");
     }
 
-    /// The working tree's own tree: one run at a time, folders compacted,
-    /// and a file showing only its last segment.
     #[test]
     fn the_file_tree_folds_each_run_of_its_own() {
         let mut model = section("worktree", Source::files(pending()));
-        // What `attach_section` starts the working tree's list on.
         model.tree_view = true;
         model.arrange();
 
@@ -1793,9 +1685,7 @@ mod tests {
         assert_eq!(says(&model, 0, Role::Name), "a.txt");
         assert_eq!(says(&model, 1, Role::Name), "src");
         assert!(flags(&model, 1, Role::Folder));
-        // A folder's fold key is prefixed with its run, so the same folder
-        // under two of them folds apart; the path itself rides along for
-        // the hover of an elided row.
+        // The fold key is run-prefixed; the plain path rides beside it.
         assert_eq!(says(&model, 1, Role::Full), "unstaged:src");
         assert_eq!(says(&model, 1, Role::OrigPath), "src");
         assert_eq!(says(&model, 2, Role::Name), "b.txt");
@@ -1814,9 +1704,6 @@ mod tests {
         assert_eq!(says(&model, 2, Role::Name), "c.txt");
     }
 
-    /// A stash shows its message and answers with the selector git knows
-    /// it by; a worktree row shows its folder and marks the one this
-    /// window has open.
     #[test]
     fn the_short_sections_read_out_of_what_arrived() {
         let mut model = section(

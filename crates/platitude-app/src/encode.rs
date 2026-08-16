@@ -1,6 +1,5 @@
 //! Pure encoding helpers: core DTOs → compact strings the QML layer decodes
-//! mechanically (draw tokens / chip records). All *semantic* work already
-//! happened in platitude-core; QML only draws what these strings say.
+//! mechanically (draw tokens / chip records).
 
 use base64::Engine as _;
 use platitude_core::details::DiffTarget;
@@ -48,7 +47,6 @@ pub fn encode_geometry(segments: &[Segment]) -> String {
     out
 }
 
-/// A comma-separated env var as a name set (empty when unset).
 fn env_name_set(var: &str) -> std::collections::HashSet<String> {
     std::env::var(var)
         .map(|v| v.split(',').map(str::to_string).collect())
@@ -104,9 +102,6 @@ pub fn encode_labels(labels: &[RefLabel]) -> String {
 
 /// The refnames in a chip record string, in order — the inverse of the
 /// name half of [`encode_labels`].
-///
-/// Written beside the encoder so the two cannot drift: a reader that
-/// guessed the layout would break the first time a flag is added.
 pub fn label_names(encoded: &str) -> impl Iterator<Item = &str> {
     encoded.split(RECORD_SEP).filter_map(|record| {
         // Kind letter plus four flag digits, then the name, then — only
@@ -119,10 +114,8 @@ pub fn label_names(encoded: &str) -> impl Iterator<Item = &str> {
 /// Co-authors → `\u{1f}`-joined records of name, address and identicon
 /// code, in that order, separated by [`FIELD_SEP`].
 ///
-/// The identicon is computed here rather than in QML for the same reason
-/// the graph's is: [`avatar_code`] is what decides a person's face, and
-/// one decider is the whole point. A trailer with no address still gets
-/// its two separators, so the reader can index without counting.
+/// A trailer with no address still gets its two separators, so the reader
+/// can index without counting.
 pub fn encode_co_authors(mates: &[platitude_core::details::CoAuthor]) -> String {
     let mut out = String::new();
     for (i, m) in mates.iter().enumerate() {
@@ -141,9 +134,8 @@ pub fn encode_co_authors(mates: &[platitude_core::details::CoAuthor]) -> String 
 /// The (name, address) of each credited person in a packed record
 /// string — the inverse of the first two fields of [`encode_co_authors`].
 ///
-/// Beside the encoder for the same reason [`label_names`] is: the third
-/// field is a number, and a reader that searched the packed string whole
-/// would answer a typed `12345` with somebody's identicon code.
+/// The third field is a number: a reader that searched the packed string
+/// whole would answer a typed `12345` with somebody's identicon code.
 pub fn co_author_pairs(encoded: &str) -> impl Iterator<Item = (&str, &str)> {
     encoded.split(RECORD_SEP).filter_map(|record| {
         let mut fields = record.split(FIELD_SEP);
@@ -182,22 +174,12 @@ pub fn avatar_code(author: &str) -> i32 {
 /// The palette indices a conflict's two sides are drawn with, given what
 /// the graph could lend (`-1` = nothing) and what each side is called.
 ///
-/// The two must never come out the same — that is the whole job of the
-/// colour, and a conflicted file is the worst place to be told "these are
-/// different" by two identical marks. So:
-///
-/// - the graph's answer is kept wherever it has one;
-/// - a side it has none for takes a colour off its own name, which is
-///   arbitrary the way a colour with no meaning should be, and **stable**
-///   the way a random one would not: the same conflict reopens in the same
-///   colours, and a screenshot of it is reproducible;
-/// - if the two still land together, **ours keeps its colour and theirs
-///   moves on by one**. The side already in place is the one worth leaving
-///   alone (during a rebase that is the upstream — `conflict::sides()` has
-///   already sorted out which is which).
-///
-/// An unnamed side still gets a colour: the bar says *which of the two*,
-/// and the legend beside it is where the naming happens.
+/// The two must never come out the same. The graph's answer is kept
+/// wherever it has one; a side it has none for takes a stable colour off
+/// its own name, so the same conflict reopens in the same colours. If the
+/// two still land together, ours keeps its colour and theirs moves on by
+/// one (during a rebase ours is the upstream — `conflict::sides()` has
+/// already sorted out which is which).
 pub fn conflict_side_colors(ours: (i32, &str), theirs: (i32, &str)) -> (i32, i32) {
     let size = i32::try_from(platitude_core::graph::GRAPH_PALETTE_SIZE).unwrap_or(8);
     let borrowed_or_named = |(color, name): (i32, &str)| -> i32 {
@@ -218,11 +200,10 @@ pub fn conflict_side_colors(ours: (i32, &str), theirs: (i32, &str)) -> (i32, i32
 /// Lanes that touch the bottom edge of a row (from its geometry tokens):
 /// `t` segments plus `o` targets. Used by the truncation footer to draw
 /// the lanes running off the end of the window. Output keeps the row
-/// tokens' shape — `t<lane>.<color>`, uppercase for a dashed leash — so
-/// one rule reads the same on both sides of the cut. A leash does reach
-/// here: with many starting refs the walk can emit thousands of commits
-/// before it gets to HEAD, and the WIP row waits on that lane the whole
-/// way (measured on JetBrains/kotlin).
+/// tokens' shape — `t<lane>.<color>`, uppercase for a dashed leash. A
+/// leash does reach here: with many starting refs the walk can emit
+/// thousands of commits before it gets to HEAD, and the WIP row waits on
+/// that lane the whole way (measured on JetBrains/kotlin).
 pub fn tail_lanes(geometry: &str) -> String {
     let mut seen = std::collections::HashSet::new();
     let mut out = String::new();
@@ -247,12 +228,8 @@ pub fn tail_lanes(geometry: &str) -> String {
     out
 }
 
-/// One hunk or one line of it, as the diff pane addresses them.
-///
-/// The indices come straight off the row the user clicked, so nothing is
-/// parsed and nothing can drift: a wrong index would stage a different
-/// line than the one under the cursor. A negative line means the whole
-/// hunk.
+/// One hunk or one line of it, as the diff pane addresses them. A
+/// negative line means the whole hunk.
 pub fn hunk_selection(hunk: i32, line: i32) -> Vec<HunkSelect> {
     let Ok(hunk) = usize::try_from(hunk) else {
         return Vec::new();
@@ -322,13 +299,8 @@ pub fn image_data_url(mime: &str, bytes: &[u8]) -> String {
     out
 }
 
-/// A line-ending notice taken apart into the pieces its sentence needs.
-///
-/// Two places say the same sentence — the diff pane's line and the hover of
-/// the pending file that carries the mark — so they take the notice apart
-/// the same way. The sentence itself is `Words.lineEndings`; working out
-/// which of the four it is, and how far the sample behind it reached, is
-/// not QML's job.
+/// A line-ending notice taken apart into the pieces its sentence
+/// (`Words.lineEndings`) needs.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct EndingWords {
     /// `""` (nothing to say) / `flipped` / `mixed` / `new` / `first`.
@@ -383,9 +355,6 @@ pub fn ending_words(notice: Option<&platitude_core::eol::Notice>) -> EndingWords
 /// from somewhere else keeps the path that says where. `cut` is how many
 /// bytes of the new path its row does not have to spell — the folders
 /// above it already do (a flat list passes 0, and both names stay whole).
-///
-/// Nothing is guessed from the paths themselves: a prefix the new name
-/// dropped is a prefix the old one can drop only if it had the same one.
 pub fn rename_source<'a>(orig_path: &'a str, path: &str, cut: usize) -> &'a str {
     if cut == 0 || orig_path.is_empty() {
         return orig_path;
@@ -397,7 +366,7 @@ pub fn rename_source<'a>(orig_path: &'a str, path: &str, cut: usize) -> &'a str 
 }
 
 /// Human-readable byte size ("67 B", "1.5 KB", "234 KB", "1.2 MB").
-/// 1024-based; one decimal below ten so small differences stay visible.
+/// 1024-based; one decimal below ten.
 pub fn human_size(bytes: u64) -> String {
     const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
     if bytes < 1024 {
@@ -429,17 +398,14 @@ pub struct DiffRow {
     pub new_no: i32,
     /// What the row draws — plain text, or the same line marked up for
     /// `Text.StyledText` when [`DiffRow::rich`]. Only one of the two is
-    /// ever held: keeping the plain copy beside the marked-up one doubles
-    /// what a long diff costs and nothing reads it.
+    /// ever held: keeping both doubles what a long diff costs.
     pub text: String,
     /// Whether [`DiffRow::text`] is markup. False wherever the theme had
     /// nothing to say — a language the set has never heard of, a hunk
     /// heading, git's own `\ No newline` note, a conflict marker.
     pub rich: bool,
     /// One of git's conflict fences (`<<<<<<<` / `|||||||` / `=======` /
-    /// `>>>>>>>`). It is a line of the working tree like any other and
-    /// carries the same background, but it is git talking rather than the
-    /// file, and the pane says so by dropping its voice
+    /// `>>>>>>>`); the pane drops its voice for these
     /// (デザイン規約 §シンタックスハイライト).
     pub fence: bool,
     /// Which hunk of the file this row belongs to, and which line of that
@@ -458,11 +424,10 @@ pub struct DiffRow {
 /// Whether the patch has a new side and no old one — a file the repository
 /// is seeing for the first time (untracked, or newly added to the index).
 ///
-/// Such a diff is every line an addition under a single heading, so there
-/// is nothing in it smaller than the file itself: the pane reads this to
-/// drop the pieces it would otherwise offer (デザイン規約 §diff の中の
-/// ステージ). A deleted file is not one of these — its lines still exist
-/// on the old side, and a part of them can still be staged.
+/// The pane reads this to drop the piecemeal staging it would otherwise
+/// offer (デザイン規約 §diff の中のステージ). A deleted file is not one
+/// of these — its lines still exist on the old side, and a part of them
+/// can still be staged.
 ///
 /// The new side has to be named, not merely inferred from a missing old
 /// one: a patch that carries no `diff --git` header at all parses with
@@ -472,12 +437,10 @@ pub struct DiffRow {
 pub fn is_new_file(patches: &[FilePatch]) -> bool {
     !patches.is_empty()
         && patches.iter().all(|p| {
-            // A conflicted path is never one of these, however its sides
-            // read. `AA` — both branches invented the file — has no old
-            // side by construction, and an unmerged entry has neither
-            // side because git printed no patch at all; taking either for
-            // a new file would withhold the pane's pieces for a reason
-            // that is not this one.
+            // A conflicted path is never one of these: `AA` — both
+            // branches invented the file — has no old side by
+            // construction, and an unmerged entry has neither side
+            // because git printed no patch at all.
             !p.is_combined && !p.unmerged && p.old_path.is_none() && p.new_path.is_some()
         })
 }
@@ -507,14 +470,10 @@ pub fn flatten_patches(
     colors: &DiffColors,
 ) -> Vec<DiffRow> {
     let mut rows = Vec::new();
-    // The colours are addressed by the same three indices this walk is
-    // already counting out, so the two are read together rather than
-    // matched up afterwards (`platitude_core::highlight::DiffColors`).
     for (patch_index, patch) in patches.iter().enumerate() {
         if patch.unmerged {
-            // No patch, and no words for one here: what the two sides did
-            // is a sentence the pane builds from the stage letters, in the
-            // one place that wording lives (`Words.conflict`).
+            // No rows: the pane builds the unmerged sentence from the
+            // stage letters (`Words.conflict`).
             continue;
         }
         if patch.is_binary {
@@ -580,33 +539,18 @@ pub fn flatten_patches(
 
 /// Lays the theme's runs over one line and writes what `Text.StyledText`
 /// reads. Empty when there are no runs — the row then draws its own text
-/// in the colour its kind gives it, which is what every row did before
-/// there was any of this.
-///
-/// Built here rather than in QML because it is data, not drawing: the
-/// pane is handed a string and shows it (規約 §QML にビジネスロジックを
-/// 書かない).
+/// in the colour its kind gives it.
 fn styled(text: &str, spans: &[Span]) -> String {
     if spans.is_empty() {
         return String::new();
     }
-    // An opening tag with six hex digits in it and a closing one, per
-    // run: twice the line is close enough to save the regrowth.
     let mut out = String::with_capacity(text.len() * 2);
-    // `StyledText` reads the line as HTML does, and HTML throws leading
-    // whitespace away and folds the rest into single spaces — which on
-    // source code means every line starts at the left margin (2026-08-12
-    // 実測: a 0-space `pub fn` and a 4-space `let` landed on the same
-    // pixel). `<pre>` is the one thing in the subset that turns that off,
-    // and it costs nothing else: the row is one line either way.
     let mut at = 0;
     let mut col = 0usize;
     for span in spans {
         let end = (at + span.len).min(text.len());
-        // The runs are byte offsets into this same string, so they cut
-        // where characters do. `None` would mean they did not, and the
-        // rest of the line goes out plain rather than half a character
-        // going out at all.
+        // The runs are byte offsets into this same string; one that cuts
+        // inside a character sends the rest of the line out plain.
         let Some(piece) = text.get(at..end) else {
             break;
         };
@@ -627,22 +571,17 @@ fn styled(text: &str, spans: &[Span]) -> String {
     out
 }
 
-/// Columns a tab stands for. Spelled out because the markup below has to
-/// put real spaces where the tab was, and something has to say how many
-/// (デザイン規約 §シンタックスハイライト).
+/// Columns a tab stands for (デザイン規約 §シンタックスハイライト).
 const TAB_WIDTH: usize = 4;
 
 /// What `Text.StyledText` would otherwise read as markup, plus the
 /// whitespace it would otherwise fold away.
 ///
-/// Source lines are full of the first three: `&&`, `->`, `<T>`. The
-/// whitespace is the second half of the same problem — rich text folds
-/// runs of it exactly as HTML does, and code that starts at the left
-/// margin is code nobody can read. `<pre>` turns the folding off in one
-/// tag and was the first thing tried, but Qt renders what is inside it in
-/// a substituted font: thinner strokes, and every colour in the pane
-/// looked washed out next to the window's own words (2026-08-13 ユーザー
-/// 報告 → A/B で確認).
+/// Rich text folds whitespace runs exactly as HTML does, so escaped
+/// spaces are what keep indentation. `<pre>` would turn the folding off,
+/// but Qt renders what is inside it in a substituted font: thinner
+/// strokes, washed-out colours next to the window's own words
+/// (measured 2026-08-13).
 fn push_escaped(out: &mut String, text: &str, col: &mut usize) {
     for ch in text.chars() {
         match ch {
@@ -705,8 +644,6 @@ mod tests {
 
     #[test]
     fn runs_become_markup_and_source_characters_are_escaped() {
-        // The second run is the three characters `StyledText` would
-        // otherwise read as markup, which is what source code is full of.
         let out = styled(
             "fn a<&b>",
             &[run(3, 0x11, 0x22, 0x33), run(5, 0xaa, 0xbb, 0xcc)],
@@ -720,8 +657,6 @@ mod tests {
 
     #[test]
     fn a_tab_becomes_the_columns_it_stands_for() {
-        // A tab at the margin reaches column 4; two characters later the
-        // next one has only two columns left to give, not another four.
         let out = styled("\tab\tc", &[run(5, 0, 0, 0)]);
         let spaces = out.matches("&nbsp;").count();
         assert_eq!(spaces, 6, "4 to the first stop, 2 to the second: {out}");
@@ -756,14 +691,11 @@ diff --git a/src/a.rs b/src/a.rs
                 .all(|r| r.rich && r.text.starts_with("<font")),
             "every line of a language the set knows is marked up: {rows:?}"
         );
-        // The heading is the pane's own words, not the file's.
         assert!(rows.first().is_some_and(|r| r.kind == "hunk" && !r.rich));
     }
 
     #[test]
     fn a_rename_inside_one_directory_drops_the_prefix_both_names_share() {
-        // The tree row already sits under `docs/a`, so neither name has
-        // to spell it.
         let path = "docs/a/new.txt";
         let cut = path.len() - "new.txt".len();
         assert_eq!(rename_source("docs/a/old.txt", path, cut), "old.txt");
@@ -895,8 +827,6 @@ diff --git a/src/a.rs b/src/a.rs
             "the face comes off the name, the way the graph rows' do"
         );
 
-        // An address-less trailer still leaves three fields, so the
-        // reader indexes rather than counts.
         let second: Vec<&str> = records[1].split(FIELD_SEP).collect();
         assert_eq!(second.len(), 3);
         assert_eq!(second[1], "");
@@ -960,14 +890,11 @@ diff --git a/src/a.rs b/src/a.rs
             "the remotes a record was read from are not part of its name"
         );
         assert_eq!(label_names("").count(), 0);
-        // A record too short to hold the fixed prefix is not a name.
         assert_eq!(label_names("L11").count(), 0);
     }
 
     #[test]
     fn a_record_with_no_remote_carries_no_field_separator() {
-        // The name runs to the end of the record, which is what every
-        // reader assumes when the separator is absent.
         let labels = [RefLabel {
             text: "v9.9".into(),
             kind: LabelKind::Tag,
@@ -1016,9 +943,6 @@ diff --git a/src/a.rs b/src/a.rs
 
     #[test]
     fn picked_lines_gather_into_one_selection_per_hunk() {
-        // Clicked in whatever order the hand went, twice on one line, and
-        // across two hunks: what comes out is one selection per hunk, in
-        // hunk order, with each hunk's lines in theirs.
         let picked = [(1, 5), (0, 3), (1, 2), (0, 1), (1, 5)];
         assert_eq!(
             line_selection(&picked),
@@ -1049,9 +973,6 @@ diff --git a/src/a.rs b/src/a.rs
  tail
 ";
         let rows = flatten_patches(&parse_patch(patch.as_bytes()), true, &DiffColors::default());
-        // The header carries its hunk but no line; the lines that follow
-        // are numbered from zero within that hunk — exactly what
-        // `HunkSelect` addresses.
         assert_eq!((rows[0].kind, rows[0].hunk, rows[0].line), ("hunk", 0, -1));
         assert_eq!((rows[1].kind, rows[1].hunk, rows[1].line), ("ctx", 0, 0));
         assert_eq!((rows[2].kind, rows[2].hunk, rows[2].line), ("add", 0, 1));
@@ -1126,16 +1047,11 @@ index bd43ee2..0000000
     #[test]
     fn a_file_that_existed_before_is_not_a_new_one() {
         assert!(!is_new_file(&parse_patch(EDITED.as_bytes())));
-        // A removal is the other way round: its lines all still exist on
-        // the old side, so a part of them can still be taken.
         assert!(!is_new_file(&parse_patch(DELETED.as_bytes())));
     }
 
     #[test]
     fn a_diff_of_unknown_shape_is_not_read_as_new() {
-        // Nothing parsed at all, and a patch with no `diff --git` header —
-        // which parses with both sides empty. Neither is known to be a new
-        // file, and reading them as one would take the pane's pieces away.
         assert!(!is_new_file(&[]));
         let headerless = "\
 @@ -1,1 +1,1 @@
@@ -1154,7 +1070,6 @@ Binary files a/x.png and b/x.png differ
         let rows = flatten_patches(&parse_patch(patch.as_bytes()), true, &DiffColors::default());
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].kind, "meta");
-        // With a preview covering the file, the note is dropped entirely.
         assert!(
             flatten_patches(
                 &parse_patch(patch.as_bytes()),
@@ -1188,10 +1103,7 @@ index 804ce7b,ba44bb1..0000000
 
     #[test]
     fn conflict_sides_that_landed_together_move_theirs_on() {
-        // The palette cycles, so two chains far enough apart share one
-        // colour. Ours is the side already in place and keeps it.
         assert_eq!(conflict_side_colors((3, "main"), (3, "topic")), (3, 4));
-        // And the move wraps rather than running off the end.
         let size = i32::try_from(platitude_core::graph::GRAPH_PALETTE_SIZE).unwrap();
         assert_eq!(
             conflict_side_colors((size - 1, "main"), (size - 1, "topic")),
@@ -1208,8 +1120,6 @@ index 804ce7b,ba44bb1..0000000
         assert_ne!(ours, theirs);
         let size = i32::try_from(platitude_core::graph::GRAPH_PALETTE_SIZE).unwrap();
         assert!((0..size).contains(&ours));
-        // Same name, same colour, every time — a reopened conflict must
-        // not repaint itself, and a screenshot of one has to be repeatable.
         assert_eq!(
             conflict_side_colors((-1, "main~3"), (5, "topic")),
             (ours, 5)
@@ -1220,11 +1130,8 @@ index 804ce7b,ba44bb1..0000000
     fn two_colourless_sides_still_come_out_apart() {
         let (a, b) = conflict_side_colors((-1, "main"), (-1, "topic"));
         assert_ne!(a, b);
-        // Including when git could not name either of them, which hashes
-        // both to the same place before the move.
         let (a, b) = conflict_side_colors((-1, ""), (-1, ""));
         assert_ne!(a, b);
-        // And when the colour handed in is nonsense rather than -1.
         let (a, b) = conflict_side_colors((99, "main"), (-7, "main"));
         assert_ne!(a, b);
     }
@@ -1236,9 +1143,6 @@ index 804ce7b,ba44bb1..0000000
             true,
             &DiffColors::default(),
         );
-        // The heading counts its sides on both ends, so the row reads the
-        // way git printed it rather than as a unified one that lost a
-        // range.
         assert_eq!(rows[0].kind, "hunk");
         assert_eq!(rows[0].text, "@@@ -1,3 -1,3 +1,7 @@@ heading");
         assert_eq!(rows[0].markers, "", "a heading has no side of its own");
@@ -1271,10 +1175,6 @@ index 804ce7b,ba44bb1..0000000
 
     #[test]
     fn a_conflict_both_sides_added_is_not_read_as_a_new_file() {
-        // No old side at all — the shape `is_new_file` was written for —
-        // and yet it is a conflict, which has no pieces to offer for a
-        // different reason. Reading it as new would take them away with
-        // the wrong words attached.
         let patch = "\
 diff --cc added.txt
 index 5b79a82,34a1fdf..0000000
@@ -1294,9 +1194,6 @@ index 5b79a82,34a1fdf..0000000
 
     #[test]
     fn an_unmerged_path_contributes_no_rows() {
-        // git printed no patch, so there is nothing to flatten; the pane
-        // says what the two sides did instead, in the words the file row's
-        // icon already uses.
         let patches = parse_patch(b"* Unmerged path ours-del.txt\n");
         assert!(is_unmerged_only(&patches));
         assert!(!is_combined(&patches));

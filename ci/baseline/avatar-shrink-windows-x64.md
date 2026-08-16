@@ -1,7 +1,7 @@
 # アバターの取り込み縮小: 実測(Windows x64)
 
 仕様は [デザイン規約.md](../../internal-docs/デザイン規約.md) §アバターを与える と
-[.claude/rules/core.md](../../.claude/rules/core.md) の picture 項が正本。
+[.claude/rules-refs/core.md](../../.claude/rules-refs/core.md) の picture 項が正本。
 **ここはその値を選んだ根拠だけ**を持つ。
 
 **測ったのは製品ではなく使い捨ての probe**(木の外・コミットしない。Rust から同じ
@@ -11,7 +11,7 @@
 
 ## 1. ファイルサイズのキャップは画素を 1 つも縛らない
 
-保管庫が見るのは**ファイルサイズだけ**(`avatar::MAX_BYTES`)。実測:
+ファイルサイズのキャップ(`avatar::MAX_BYTES`)だけでは画素を 1 つも縛れない。実測:
 
 | 与えるもの | ファイル | 画素 | デコード後(RGBA 4B/px) |
 |---|---|---|---|

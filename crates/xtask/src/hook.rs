@@ -2,8 +2,7 @@
 //!
 //! Wired from .claude/settings.json. Each handler reads the hook's JSON
 //! payload from stdin and answers on stdout; printing nothing means "no
-//! objection". These exist to make the rules that keep being forgotten
-//! mechanical instead of attentional (CLAUDE.md 規約の置き場所).
+//! objection".
 
 use std::io::Read;
 
@@ -52,7 +51,7 @@ fn pre_shell(input: &str) -> Result<(), String> {
 
 /// PreToolUse(Write): a new .rs directly under crates/platitude-core/tests/
 /// would become a second, serialized test binary — integration tests are one
-/// binary by rule (tests/it/). Deny with the rule spelled out.
+/// binary by rule (tests/it/).
 fn pre_write(input: &str) -> Result<(), String> {
     let Some(path) = string_field(input, "file_path") else {
         return Ok(());
@@ -130,10 +129,7 @@ fn post_write(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The font rules of デザイン規約 §QML 実装ルール, checked line by line:
-/// pointSize drifts with each OS's logical DPI, and a family named
-/// outside Theme skips the per-OS fallback chain Theme resolves — both
-/// look right on the machine they were written on and break on another.
+/// The font rules of デザイン規約 §QML 実装ルール, checked line by line.
 fn qml_font_notes(content: &str) -> Vec<String> {
     let mut notes = Vec::new();
     for (number, line) in content.lines().enumerate() {
@@ -184,11 +180,7 @@ fn pre_git(input: &str) -> Result<bool, String> {
 }
 
 /// Putting a branch onto main and rewriting the branch under the session
-/// are both the user's call. Which worktree branches have landed is only
-/// answerable if every landing was asked for, so a session that merges on
-/// its own way out is the thing to stop; and a rebase nobody asked for
-/// spends the session on conflicts and a wide rebuild, to catch up a branch
-/// that was fine behind main (CLAUDE.md Git 運用). Prints the refusal and
+/// are both the user's call (CLAUDE.md Git 運用). Prints the refusal and
 /// says so.
 fn guarded_git_denied(command: &str, cwd: &str) -> bool {
     let Some(reflection) = reflection(command) else {
@@ -259,7 +251,6 @@ impl Offence {
         )
     }
 
-    /// Why the command is held, said to the session that ran it.
     fn reason(&self, what: &str) -> String {
         match self {
             Offence::LandsOnMain { .. } => format!(
@@ -381,10 +372,9 @@ fn unquote(token: &str) -> &str {
 
 /// The primary checkout may commit documents directly, except the files
 /// every session loads: .claude/skills and .claude/rules ride worktree
-/// branches, because parallel sessions keep reaching for the same files
-/// and direct commits to main collide (CLAUDE.md Git 運用). A commit is
-/// held only when it demonstrably carries them — named on the line,
-/// already staged, or swept in by broad staging while they sit changed.
+/// branches (CLAUDE.md Git 運用). A commit is held only when it
+/// demonstrably carries them — named on the line, already staged, or
+/// swept in by broad staging while they sit changed.
 fn shared_rules_denied(command: &str, cwd: &str) -> bool {
     let Some(commit) = commit(command) else {
         return false;
@@ -607,16 +597,12 @@ fn common_git_dir(dir: &str) -> Option<String> {
     )
 }
 
-/// PreToolUse(Bash|PowerShell): a worktree session exists so that it takes
-/// nothing from the sessions beside it, and there are two ways starting the
-/// app takes something anyway — a real window puts itself over whatever is
-/// on the screen (and over the window another session is trying to grab),
-/// and a process nothing ends keeps holding the exe it runs, so the build
-/// after it cannot link. Both have a form that takes neither: offscreen QPA
-/// wants no screen, PG_AUTO_QUIT_MS makes the process let go on its own.
-/// Only worktree sessions are held to it — a launch asked for in the primary
-/// checkout is the user's own, and two of those may collide (CLAUDE.md
-/// ビルド・テスト).
+/// PreToolUse(Bash|PowerShell): starting the app from a worktree takes
+/// something from the sessions beside it — a real window covers whatever
+/// is on the screen, and a process nothing ends holds the exe against
+/// the next build's link. Offscreen QPA and PG_AUTO_QUIT_MS take
+/// neither. Only worktree sessions are held to it — a launch in the
+/// primary checkout is the user's own (CLAUDE.md ビルド・テスト).
 fn pre_launch(input: &str) -> Result<(), String> {
     let Some(command) = string_field(input, "command") else {
         return Ok(());
@@ -908,11 +894,10 @@ struct SeatBuckets {
 }
 
 /// Sorts a survey into the greeting's buckets. A lock is a session's own
-/// claim, and uncommitted changes are a session's work in progress — the
-/// greeting used to skip that signal, and called a seat free while 13
-/// changed files sat in it (measured 2026-08-11). Commits ahead of main
-/// are a merge waiting to happen. Only a seat with none of those is
-/// takeable. Pure so the tests can hand it surveys git never produced.
+/// claim, uncommitted changes are a session's work in progress, and
+/// commits ahead of main are a merge waiting to happen. Only a seat with
+/// none of those is takeable. Pure so the tests can hand it surveys git
+/// never produced.
 fn seat_buckets(survey: &[seats::Seat]) -> SeatBuckets {
     let mut buckets = SeatBuckets {
         free: Vec::new(),
@@ -977,8 +962,7 @@ fn seat_buckets(survey: &[seats::Seat]) -> SeatBuckets {
 
 /// One takeable seat, chosen off the clock's nanoseconds. Sessions started
 /// in one burst all read the same inventory, and a deterministic "first
-/// free letter" sent every one of them to the same seat (measured
-/// 2026-08-11: a burst of new sessions all fought for seat a). A spread
+/// free letter" would send every one of them to the same seat. A spread
 /// recommendation lets a burst self-assign; the losers of any remaining
 /// race are told above to move on rather than retry.
 fn spread_pick(takeable: &[&'static str]) -> Option<&'static str> {
@@ -1291,8 +1275,6 @@ mod tests {
         assert!(worktree_objection(None, Some("C:/x/platitude-gg/.claude/worktrees/a")).is_none());
     }
 
-    /// A surveyed seat with every count answered, the way git answers
-    /// for a healthy worktree.
     fn surveyed(branch: &str, locked: bool, ahead: u32, behind: u32, dirty: usize) -> SeatState {
         SeatState {
             branch: branch.to_string(),
@@ -1306,8 +1288,6 @@ mod tests {
 
     #[test]
     fn a_dirty_seat_is_in_use_not_free() {
-        // The 2026-08-11 miss: 13 uncommitted files sat in a seat the
-        // greeting called free, because dirt was never measured.
         let survey = vec![Seat {
             name: "a",
             state: Some(surveyed("worktree-a", false, 0, 0, 13)),

@@ -1,11 +1,10 @@
 //! `cargo xtask verify-ui` — one command from source to a judged
 //! headless run.
 //!
-//! Wraps what the verify-ui skill prescribes for write-path verification:
-//! release build (QML is embedded in the exe), offscreen QPA with an
-//! explicit font dir, the PG_AUTO_* hooks, a bounded wait with a kill
-//! guard (never an unbounded one — the lessons of the locked-screen
-//! hangs), and the `screenshot saved=true` stderr line as the verdict.
+//! Wraps what the verify-ui skill prescribes: release build (QML is
+//! embedded in the exe), offscreen QPA with an explicit font dir, the
+//! PG_AUTO_* hooks, a bounded wait with a kill guard, and the
+//! `screenshot saved=true` stderr line as the verdict.
 
 use std::ffi::OsString;
 use std::io::BufRead;
@@ -27,13 +26,8 @@ const SHIM_REAL: &str = "PG_SHIM_REAL_GIT";
 /// git's name (`--old-git`), and returns `None` in every other process —
 /// including the xtask that set it up, which never has these two set.
 ///
-/// One command is answered here and the rest are handed to the real git, so
-/// what the app sees is an installation that works and is old. Faking the
-/// answer to `--version` is the whole of it: the app's own reading of that
-/// line is what the badge hangs on, and every other command it runs is
-/// answered by a real git — which is what makes the picture proof of the
-/// path from `git --version` to the band, rather than of a flag imitating
-/// the state (`solo` holds a real lock for the same reason).
+/// Only `--version` is answered here; the rest is handed to the real git,
+/// so what the app sees is an installation that works and is old.
 ///
 /// Not a script: CLAUDE.md rules out `.bat`/`.ps1` dev tooling, and a
 /// second binary would have to be built before it could be copied. This one
@@ -160,10 +154,9 @@ struct Options {
 /// What the run is judged on.
 ///
 /// A refused write counts against it: the verb asked for one, and a
-/// picture of the state it never reached proves nothing — a `commit` that
-/// sent an empty message read as PASS for as long as this was only
-/// printed. Verbs that exist to walk a refusal (`fetch-fail`,
-/// `delete-branch-refused`) say so with `--allow-write-failure`.
+/// picture of the state it never reached proves nothing. Verbs that
+/// exist to walk a refusal (`fetch-fail`, `delete-branch-refused`) say
+/// so with `--allow-write-failure`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Outcome {
     exit_ok: bool,
@@ -705,10 +698,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // it, and so is a file with nothing to show. The verb then names
         // a row that is not there, picks no lines, or holds a button
         // nobody drew, and none of it writes, so the run came back green
-        // with an empty picture (2026-08-13 実測: `pick-lines` against
-        // platitude-gg itself reported `picked_lines 0` and passed).
-        // `ready=` is the pane's own answer to "were the rows here when
-        // I acted", and it is worth spelling per verb: the wanted line
+        // with an empty picture. `ready=` is the pane's own answer to
+        // "were the rows here when I acted", and it is worth spelling
+        // per verb: the wanted line
         // names the act, so a run whose hook never reached the diff at
         // all cannot borrow another verb's report to pass on.
         "diff-file" => Some("diff_row act=diff-file ready=true"),
@@ -732,8 +724,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // came frames as a language the set has no rules for, and a view
         // thrown back to the top frames as one nobody had scrolled. `at=`
         // is `scrollTo`'s own number read back after the swap — 400 or
-        // the reader lost their place (2026-08-13 実測: rebuilding the
-        // list read `at=0`).
+        // the reader lost their place.
         "colour-place" => Some("colour_place coloured=true at=400"),
         _ => None,
     };
@@ -977,9 +968,6 @@ mod tests {
     #[test]
     fn a_refused_write_sinks_the_run_however_good_the_picture() {
         assert!(WELL.passed());
-        // The shape `verify-ui commit` came up in: the app started, quit
-        // by itself and saved a screenshot, and git had refused the one
-        // write the verb exists to make.
         let refused = Outcome {
             write_failures: 1,
             ..WELL

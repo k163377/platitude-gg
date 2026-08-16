@@ -19,7 +19,6 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-/// How often the process is asked how big it is.
 const SAMPLE_MS: u64 = 100;
 
 /// Grace on top of `PG_AUTO_QUIT_MS` before the run is killed.
@@ -364,14 +363,10 @@ fn measure(
     Ok(reading)
 }
 
-/// Refuses a reading that lost a number this run was asked to take.
-///
-/// A gap used to print as `-` and the report simply left the row out, so
-/// a run that measured nothing looked like a run that measured well. That
-/// is how the app's log picking up colour went unnoticed until the
-/// interaction budget needed re-measuring: every `key=value` in it stopped
-/// being findable, and three of the five numbers quietly became `-`
-/// (`platitude_gg::init_tracing`).
+/// Refuses a reading that lost a number this run was asked to take: a
+/// run that measured nothing must not read as one that measured well.
+/// The app's log picking up colour is one way to lose every `key=value`
+/// at once (`platitude_gg::init_tracing`).
 fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     // The bare window (`--no-open`) has no repository, so it has no graph
     // to walk, no row to select and nothing to scroll: it takes the memory
@@ -406,7 +401,6 @@ fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     ))
 }
 
-/// Picks the numbers this measurement is about out of one stderr line.
 fn absorb(line: &str, found: &mut Reading) {
     if let Some(v) = field(line, "first_chunk_ms=") {
         found.first_chunk_ms = v.parse().ok();

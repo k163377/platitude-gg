@@ -10,9 +10,7 @@
 //!
 //! A conflicted path has no single old side, so `git diff` compares the
 //! working tree against **every** stage at once and prints one marker
-//! column per parent (`diff --cc` / `@@@ -1,5 -1,5 +1,9 @@@`). Reading it
-//! is what keeps the pane from being empty on exactly the files someone
-//! opened it to look at.
+//! column per parent (`diff --cc` / `@@@ -1,5 -1,5 +1,9 @@@`).
 //!
 //! Measured against git 2.55 (the shapes below are all in the tests):
 //!
@@ -164,9 +162,6 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
             continue;
         }
 
-        // One of the two sides is missing, so git has nothing to compare
-        // and prints this instead of a patch. It stands on its own — no
-        // header, no hunks — and says only which path it is about.
         if let Some(path) = line.strip_prefix("* Unmerged path ") {
             flush_hunk(&mut current, &mut hunk);
             flush_file(&mut files, &mut current);
@@ -307,12 +302,7 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
 }
 
 /// One content line of a combined hunk: `parent_no.len()` marker columns
-/// followed by the text.
-///
-/// A column says `-` where that parent has the line and the result does
-/// not, `+` where the result has it and that parent does not, and a space
-/// otherwise — so a line is in the result unless some column says `-`, and
-/// which parents it came from is read the opposite way round on each side.
+/// followed by the text (column semantics: the module note).
 fn read_combined_line(h: &mut DiffHunk, line: &str, parent_no: &mut [u32], new_no: &mut u32) {
     // git never prints the no-newline note in this form (measured), but
     // reading one costs nothing and losing the line would cost a row.

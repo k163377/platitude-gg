@@ -19,7 +19,6 @@ use std::path::{Path, PathBuf};
 
 use toml::{Table, Value};
 
-/// Directory the two files live in, under whichever base the platform uses.
 pub const DIR_NAME: &str = "platitude-gg";
 
 pub const SETTINGS_FILE: &str = "settings.toml";
@@ -36,7 +35,6 @@ pub const STATE_FILE: &str = "state.toml";
 /// the same way there.
 pub const LOCK_FILE: &str = "lock";
 
-/// What a development build's directory is called, under [`DIR_NAME`].
 const DEV_DIR: &str = "dev";
 
 /// Written at the top of both files. Every reader is per-key tolerant, so
@@ -84,7 +82,6 @@ pub enum Platform {
 }
 
 impl Platform {
-    /// The platform this build runs on.
     pub const HOST: Platform = if cfg!(windows) {
         Platform::Windows
     } else if cfg!(target_os = "macos") {
@@ -131,9 +128,7 @@ impl Env {
         self.get(key).filter(|v| !v.is_empty())
     }
 
-    /// True when anything is driving this process. Every `PG_*` knob exists
-    /// for automation only, so one of them being set is enough to know a
-    /// person is not the one at the window.
+    /// True when anything is driving this process.
     pub fn automated(&self) -> bool {
         self.vars
             .iter()
@@ -161,13 +156,11 @@ pub struct Build<'a> {
 }
 
 impl Build<'_> {
-    /// What ships: a plain checkout, optimised.
     pub const SHIPPED: Build<'static> = Build {
         tree: "",
         debug: false,
     };
 
-    /// True for a build that keeps its own copy.
     pub fn is_dev(&self) -> bool {
         !self.tree.is_empty() || self.debug
     }
@@ -241,7 +234,6 @@ impl Store {
         Self::platform_paths(platform, env, build)
     }
 
-    /// Both files in one directory.
     pub fn at(dir: &Path) -> Self {
         Self {
             settings_path: Some(dir.join(SETTINGS_FILE)),
@@ -315,7 +307,6 @@ impl Store {
             .map(|dir| dir.join(crate::avatar::DIR_NAME))
     }
 
-    /// True when this store is not backed by any file.
     #[cfg(test)]
     pub fn is_ephemeral(&self) -> bool {
         self.settings_path.is_none() && self.state_path.is_none()
@@ -1203,8 +1194,6 @@ mod tests {
 
     #[test]
     fn an_extended_length_path_keeps_its_backslashes() {
-        // The `\\?\` prefix is addressed to Windows, not to a reader: it
-        // turns path parsing off, and rewriting it points somewhere else.
         let raw = r"\\?\C:\Users\me\proj";
         assert_eq!(repo_key(raw), raw);
     }
@@ -1265,7 +1254,6 @@ graph_lanes_width = 3
             "a column too narrow to hold a lane falls back like a wrong type"
         );
 
-        // And the pair a person can actually leave behind comes back.
         let mut moved = state;
         moved.layout.graph_labels_width = 190;
         moved.layout.graph_lanes_width = 300;
@@ -1376,10 +1364,6 @@ graph_lanes_width = 3
 
     #[test]
     fn asking_for_a_window_does_not_cost_you_your_tabs() {
-        // The pre-shell guard is told "the user asked for a window" by a
-        // variable in front of the launch (CLAUDE.md ビルド・テスト), and
-        // that launch is the one that most needs the person's own tabs to
-        // come back — so it must not read as a driven run.
         let env = Env::from_pairs(&[
             ("APPDATA", "C:/Roaming"),
             ("LOCALAPPDATA", "C:/Local"),
@@ -1519,9 +1503,6 @@ graph_lanes_width = 3
 
     #[test]
     fn a_named_directory_is_the_same_one_for_every_build() {
-        // Two runs sharing one `--config-dir` are how the saved layout is
-        // tested; a build that went somewhere else of its own accord would
-        // quietly answer a different question.
         let env = Env::from_pairs(&[(CONFIG_DIR_ENV, "/tmp/run-7"), ("APPDATA", "C:/Roaming")]);
         assert_eq!(
             Store::locate(
@@ -1563,8 +1544,6 @@ graph_lanes_width = 3
             "an index whose pictures stayed behind draws rows that never fill"
         );
 
-        // From here the two are strangers: a second seeding must not undo
-        // what the development build has done since.
         let mut moved = dev.load_settings();
         moved.defaults.auto_fetch_minutes = 1;
         dev.save_settings(&moved).expect("save");
@@ -1574,9 +1553,6 @@ graph_lanes_width = 3
 
     #[test]
     fn the_first_run_of_a_development_build_lands_beside_the_real_one() {
-        // The whole path a launch takes, with the two base directories
-        // pointed at a temporary one: which files a build is given, and
-        // the copying that happens on the way.
         let home = tempfile::tempdir().expect("tempdir");
         let base = home.path().to_string_lossy().replace('\\', "/");
         let env = Env::from_pairs(&[("APPDATA", &base), ("LOCALAPPDATA", &base)]);
@@ -1602,7 +1578,6 @@ graph_lanes_width = 3
             "and takes nothing away from the build that shipped"
         );
 
-        // Both are up at the same time, which is the point of the split.
         let held = real.claim();
         assert!(matches!(held, Claim::Ours(_)));
         assert!(matches!(dev.claim(), Claim::Ours(_)));
@@ -1620,8 +1595,6 @@ graph_lanes_width = 3
             "a second asker is turned away"
         );
 
-        // Dropping the handle is the whole release mechanism — which is
-        // also what happens when a process is killed.
         drop(first);
         assert!(matches!(store.claim(), Claim::Ours(_)));
     }
@@ -1638,8 +1611,6 @@ graph_lanes_width = 3
 
     #[test]
     fn the_lock_is_not_one_of_the_two_files() {
-        // Both are replaced by rename on every write, and a lock on a
-        // replaced file guards an orphan (measured — see `LOCK_FILE`).
         let dir = tempfile::tempdir().expect("tempdir");
         let store = dir_store(dir.path());
         let held = store.claim();

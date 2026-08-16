@@ -13,7 +13,7 @@
 //   PG_SPIKE_TOPO=0                            -> use default order instead of --topo-order
 
 // HashMap must be in scope: the QModelItem derive expands to unhygienic code
-// that names `HashMap` directly (finding for the go/no-go report).
+// that names `HashMap` directly.
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
@@ -440,7 +440,7 @@ impl LogModel {
 impl LogModel {
     /// Batch append with a single begin/endInsertRows pair. qtbridge's
     /// QListModelBase only exposes single-row push/insert, so this mirrors its
-    /// implementation using the public proxy API (a finding for the report).
+    /// implementation using the public proxy API.
     fn extend_notified(&mut self, batch: Vec<LogRow>) {
         let Some(proxy) = self.try_get_rust_proxy_ptr() else {
             self.rows.extend(batch);

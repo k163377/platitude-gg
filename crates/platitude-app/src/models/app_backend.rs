@@ -14,9 +14,8 @@ use super::qml_register;
 enum AppMsg {
     GitOk {
         version: String,
-        /// Whether that version is at or above the supported minimum. Old
-        /// git is a badge, not a closed door — the app runs on it and says
-        /// so (規約 §リポジトリが今どうなっているか).
+        /// Whether that version is at or above the supported minimum
+        /// (see `AppBackend::git_unsupported`).
         supported: bool,
     },
     GitMissing {
@@ -83,9 +82,7 @@ pub struct AppBackend {
     mem_report: bool,
     auto_wip: bool,
     /// Verification hook: take the shape the platforms that cannot merge
-    /// the band into the title bar get. Nobody here can run those two, so
-    /// without a way to ask for their layout from this side it is only
-    /// ever exercised by the people who cannot report back.
+    /// the band into the title bar get — the two that cannot be run here.
     plain_chrome: bool,
     /// Whether something rather than somebody is driving this run
     /// (`Env::automated` — any `PG_*` knob but the three that say nothing
@@ -714,9 +711,6 @@ impl AppBackend {
             handle.spawn(async move {
                 let cancel = tokio_util::sync::CancellationToken::new();
                 let msg = match version::detect(&executor, &cancel).await {
-                    // An answer is what this gate is for; how old the
-                    // answer is decides a badge, not whether the window
-                    // becomes an application.
                     Ok(v) => AppMsg::GitOk {
                         supported: v.supported(),
                         version: v.raw,

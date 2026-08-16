@@ -15,7 +15,6 @@
 
 use std::borrow::Cow;
 
-/// Which side a rebuilt patch will be applied to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PatchSide {
     /// Applied as-is, onto the patch's old side (staging).
@@ -24,7 +23,6 @@ pub enum PatchSide {
     Reverse,
 }
 
-/// One selected hunk of a patch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HunkSelect {
     /// Hunk index within the whole patch, counted in output order (the
@@ -36,12 +34,10 @@ pub struct HunkSelect {
 }
 
 impl HunkSelect {
-    /// Selects a whole hunk.
     pub fn whole(hunk: usize) -> Self {
         Self { hunk, lines: None }
     }
 
-    /// Selects individual changed lines of a hunk.
     pub fn lines(hunk: usize, lines: impl IntoIterator<Item = usize>) -> Self {
         Self {
             hunk,
@@ -284,7 +280,6 @@ fn source_lines<'a>(hunk: &RawHunk<'a>, select: &HunkSelect) -> Vec<SourceLine<'
     out
 }
 
-/// Writes a line exactly as the source has it.
 fn keep_line<'a>(src: &SourceLine<'a>) -> Emitted<'a> {
     Emitted {
         bytes: Cow::Borrowed(src.bytes),
@@ -460,7 +455,6 @@ fn render_hunk(
     Some(out)
 }
 
-/// Replaces the marker byte with a space (deletion/addition → context).
 fn to_context(line: &[u8]) -> Vec<u8> {
     let mut v = line.to_vec();
     if let Some(first) = v.first_mut() {

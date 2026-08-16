@@ -5,13 +5,11 @@
 //! whether signing is in play — it does not reimplement either.
 //!
 //! **The application never handles a signing passphrase.** git delegates to
-//! gpg-agent / ssh-agent, which prompt through their own pinentry. That is
-//! the same delegation the credential helper gets, and it is the reason a
-//! passphrase never passes through this process, never reaches a log, and
-//! never needs storing. A pinentry configured for a terminal (`pinentry-tty`,
-//! `pinentry-curses`) cannot work here — the subprocess has no console — so
-//! a graphical pinentry is required; that is a configuration matter, not
-//! something to work around by asking the user ourselves.
+//! gpg-agent / ssh-agent, which prompt through their own pinentry. A pinentry
+//! configured for a terminal (`pinentry-tty`, `pinentry-curses`) cannot work
+//! here — the subprocess has no console — so a graphical pinentry is
+//! required; that is a configuration matter, not something to work around by
+//! asking the user ourselves.
 
 use std::path::Path;
 
@@ -20,7 +18,6 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-/// Author identity recorded on new commits.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Identity {
     pub name: Option<String>,
@@ -34,7 +31,6 @@ impl Identity {
     }
 }
 
-/// How commits are signed, if at all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignatureFormat {
     /// `gpg.format` unset or `openpgp` — gpg-agent handles the key.
@@ -63,7 +59,6 @@ impl SignatureFormat {
     }
 }
 
-/// Signing configuration in force for this repository.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SigningConfig {
     /// `commit.gpgsign`: every commit is signed.
@@ -104,7 +99,6 @@ pub struct AuthorConfig {
 const CONFIG_PATTERN: &str =
     r"^(user\.(name|email|signingkey)|commit\.gpgsign|tag\.gpgsign|gpg\.format)$";
 
-/// Loads the author identity and signing configuration.
 pub async fn load(
     executor: &GitExecutor,
     workdir: &Path,
@@ -199,9 +193,7 @@ impl SignatureStatus {
         }
     }
 
-    /// git's own letter for this verdict, as `%G?` spells it. The UI
-    /// shows one of three outcomes, so the letter is what carries the
-    /// exact reason to a tooltip.
+    /// git's own letter for this verdict, as `%G?` spells it.
     pub fn code(self) -> &'static str {
         match self {
             SignatureStatus::Good => "G",
@@ -227,7 +219,6 @@ impl SignatureStatus {
     }
 }
 
-/// One commit's signature as git reports it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Signature {
     pub status: SignatureStatus,
@@ -252,7 +243,7 @@ pub struct Signature {
 /// header is what says whether a signature exists at all, and asking for
 /// it first means a commit that carries none costs one process rather than
 /// two — and never starts gpg or ssh-keygen to be told there was nothing
-/// to check. Most commits in most repositories are that commit.
+/// to check.
 ///
 /// With a header present, `N` no longer reads as "unsigned": it means git
 /// could not judge what is there, which is its own answer.
@@ -287,7 +278,6 @@ pub async fn verify_commit(
     Ok(signature)
 }
 
-/// Whether the commit object carries a signature header at all.
 async fn has_signature_header(
     executor: &GitExecutor,
     workdir: &Path,
@@ -316,7 +306,6 @@ fn header_has_signature(object: &[u8]) -> bool {
     false
 }
 
-/// Which configuration file a write lands in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigScope {
     /// This repository only.

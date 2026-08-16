@@ -11,9 +11,8 @@ use super::qml_register;
 // RepoTab: per-tab lifecycle + error surface + refresh entry points
 // ---------------------------------------------------------------------------
 
-/// Failed fetches in a row before the timer is stopped. Two is a lid
-/// closed on a train; three is a network that is not coming back by
-/// itself, and going on asking every interval only fills the log.
+/// Failed fetches in a row before the timer is stopped — more than one,
+/// so a brief offline blip (a lid closed on a train) does not stop it.
 const FETCH_FAILURES_BEFORE_STOP: i32 = 3;
 
 pub struct RepoTab {
@@ -22,10 +21,8 @@ pub struct RepoTab {
     title: String,
     repo_path: String,
     /// Where the picker opens: the folder this repository sits in, as a
-    /// URL. Repositories are kept side by side far more often than inside
-    /// one another, so the way to the next one starts here rather than in
-    /// the folder the dialog last left off in — which is the repository
-    /// itself, the one place with nothing to open.
+    /// URL — repositories are kept side by side far more often than
+    /// inside one another, so the dialog's own "last folder" is not used.
     picker_folder_url: String,
     /// Why the repository would not open: git's own words. Read only on
     /// the `other` kind — for the two the application can name itself,
@@ -161,10 +158,8 @@ pub struct RepoTab {
     /// asked for them. Any fetch that comes back clean puts it to zero.
     fetch_failures: i32,
     /// The timer was stopped because of those. Nothing but the button
-    /// that says so starts it again: a repository that has been offline
-    /// all morning would otherwise quietly resume behind the reader's
-    /// back, and the state they were told about would be gone with no
-    /// one having answered it.
+    /// that says so starts it again — an automatic resume would happen
+    /// behind the reader's back.
     auto_fetch_suspended: bool,
     feed: Option<Arc<Feed<TabMsg>>>,
 }
@@ -719,9 +714,7 @@ impl RepoTab {
     //
     // Every one of these is fire-and-forget: the session serializes them,
     // reports progress through `busyCount` and routes git's own error text
-    // into `lastError`. Paths arrive one per call — a git path may contain
-    // anything except NUL, so there is no separator safe enough to pack a
-    // list into one string.
+    // into `lastError`. Paths arrive one per call (see `pending_paths`).
 
     #[qslot]
     fn stage_path(&mut self, path: String) {

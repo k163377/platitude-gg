@@ -5,10 +5,9 @@
 //! is git's (`GIT_TERMINAL_PROMPT=0` keeps a missing credential helper from
 //! hanging the process instead of failing).
 //!
-//! Network commands take a timeout rather than running unbounded: a wedged
-//! connection must not leave a subprocess running forever. Cancellation is
-//! the normal way to stop one early; the timeout is the backstop for a
-//! connection that neither finishes nor fails.
+//! Network commands take a timeout rather than running unbounded.
+//! Cancellation is the normal way to stop one early; the timeout is the
+//! backstop for a connection that neither finishes nor fails.
 
 use std::path::Path;
 use std::time::Duration;
@@ -305,9 +304,6 @@ pub async fn plan_current_push(
 /// Where the branch that is checked out should go when the user has just
 /// said so, rather than when configuration already knows.
 ///
-/// This is the first push of a branch: nothing local records a target, so
-/// both halves come from the question the UI asked, and the answer is
-/// recorded as the upstream so the next push needs no question.
 /// `expect` is the commit the question showed as being over there. Empty
 /// sends the push fast-forward only; a commit turns it into the same
 /// leased overwrite the toolbar offers a diverged branch — and the lease
@@ -412,17 +408,12 @@ pub async fn branch_tip(
 }
 
 /// What a first push under a given name would meet on the far side.
-///
-/// The three answers a question about a destination can take, and the one
-/// thing each of them settles: whether git will take the push, refuse it,
-/// or whether this end simply cannot say.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteBranchState {
     /// Nothing is there under that name: the push makes the branch.
     Free,
     /// It is there and this history contains it, so the push lands and
-    /// moves it on. Nothing of theirs is lost — the surprise, if there is
-    /// one, is that the branch was somebody else's to begin with.
+    /// moves it on.
     FastForward,
     /// It is there with commits this history does not have. **git refuses
     /// this push** (実測), so nothing can happen by pressing.
@@ -606,7 +597,7 @@ pub async fn delete_remote_branch(
 /// This is not the rename a forge offers: the far side sees a branch
 /// created and a branch deleted, so whatever hung off the old name — an
 /// open pull request, a protected-branch rule — does not follow it. The UI
-/// says so before this runs, and holds the answer down to mean it.
+/// warns about this before it runs.
 pub async fn rename_remote_branch(
     executor: &GitExecutor,
     workdir: &Path,

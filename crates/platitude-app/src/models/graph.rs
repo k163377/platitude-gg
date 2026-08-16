@@ -23,8 +23,7 @@ use super::{impl_extend_notified, qml_register};
 // **Fifteen fields is the ceiling** — `#[derive(QModelItem)]` refuses a
 // sixteenth. Anything the rows need that QML never reads belongs on the
 // way in rather than here: the lane count each row needs is taken off
-// the `LogRow` while the item is built (`max_lanes`), which is what made
-// room for `matched`.
+// the `LogRow` while the item is built (`max_lanes`).
 #[derive(QModelItem, Default, Clone, PartialEq)]
 pub struct GraphRowItem {
     oid_hex: String,
@@ -318,8 +317,7 @@ impl GraphModel {
     }
 
     /// Re-reads whether the newest row answers the query. Called wherever
-    /// the rows or their marks move — it is one row, so it costs nothing
-    /// to keep honest.
+    /// the rows or their marks move.
     fn settle_first(&mut self) {
         self.first_matched = self.rows.first().is_some_and(|r| r.matched);
     }
@@ -677,10 +675,7 @@ impl GraphModel {
 
     /// Row of the first match at or after `from`, wrapping to the first
     /// match of all when there is none below; -1 when nothing matches.
-    ///
-    /// Where an incremental search lands. Counting from where the reader
-    /// is rather than from the top is what every find box does, and at
-    /// the top — where the graph opens — the two are the same thing.
+    /// Where an incremental search lands.
     #[qslot]
     fn match_from(&self, from: i32) -> i32 {
         self.match_rows()

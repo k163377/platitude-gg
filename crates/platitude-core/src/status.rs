@@ -45,7 +45,6 @@ impl StatusItem {
     }
 }
 
-/// Parsed status snapshot (entries + branch headers).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WorkTreeStatus {
     /// HEAD commit; `None` on an unborn branch.
@@ -64,14 +63,12 @@ pub struct WorkTreeStatus {
 }
 
 impl WorkTreeStatus {
-    /// Entries with something in the index.
     pub fn staged(&self) -> impl Iterator<Item = &StatusItem> {
         self.items
             .iter()
             .filter(|i| matches!(i, StatusItem::Tracked { staged, .. } if *staged != '.'))
     }
 
-    /// Entries with unstaged working-tree modifications.
     pub fn unstaged(&self) -> impl Iterator<Item = &StatusItem> {
         self.items
             .iter()
@@ -108,7 +105,6 @@ impl WorkTreeStatus {
         self.conflicted().next().is_some()
     }
 
-    /// True when anything is staged, modified, untracked or conflicted.
     pub fn is_dirty(&self) -> bool {
         !self.items.is_empty()
     }
@@ -116,10 +112,9 @@ impl WorkTreeStatus {
 
 /// How many entries fall into each bucket, counted in one pass.
 ///
-/// The headline shows all five at once, and `-uall` (which hunk and line
-/// staging need) lists every untracked file individually — so the list is
-/// as long as the working tree is dirty, and walking it once per number
-/// is five walks for one answer.
+/// The headline shows all five at once, and `-uall` lists every untracked
+/// file individually — so the list is as long as the working tree is
+/// dirty, and walking it once per number is five walks for one answer.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Counts {
     pub staged: usize,
@@ -333,7 +328,6 @@ fn parse_header(header: &str, status: &mut WorkTreeStatus) {
     }
 }
 
-/// Runs `git status` and parses the snapshot.
 pub async fn load(
     executor: &GitExecutor,
     workdir: &Path,
@@ -373,11 +367,6 @@ mod tests {
     const H1: &str = "1111111111111111111111111111111111111111";
     const H2: &str = "2222222222222222222222222222222222222222";
 
-    /// The graph row's tally counts **rows**, and a file changed on both
-    /// sides is two of them — one under the index and one under the
-    /// working tree, which is exactly what the pane lists. Counting files
-    /// instead would put a number on the row that the list below it
-    /// contradicts.
     #[test]
     fn a_file_changed_on_both_sides_is_two_rows() {
         let bytes = z(&[
@@ -398,7 +387,6 @@ mod tests {
             &format!("# branch.oid {SHA}"),
             &format!("1 A. N... 000000 100644 100644 {H1} {H2} added.txt"),
             &format!("1 .D N... 100644 100644 000000 {H1} {H1} gone.txt"),
-            // A type change is still the same path holding something else.
             &format!("1 .T N... 120000 120000 100644 {H1} {H1} was-a-link.txt"),
             &format!("2 R. N... 100644 100644 100644 {H1} {H1} R100 new-name.txt"),
             "old-name.txt",
@@ -411,8 +399,7 @@ mod tests {
         assert_eq!(
             kinds,
             Kinds {
-                // The staged `A`, and the untracked file — nothing of it is
-                // in the index yet, so the whole file is what it adds.
+                // The staged `A`, and the untracked file.
                 added: 2,
                 modified: 1,
                 deleted: 1,
@@ -424,8 +411,6 @@ mod tests {
         assert_eq!(kinds.total(), 7);
     }
 
-    /// However the two stage letters read, a conflict is one row: the pane
-    /// lists it in its own bucket rather than under either side.
     #[test]
     fn a_conflict_is_one_row_whatever_its_letters_say() {
         let bytes = z(&[
@@ -477,9 +462,7 @@ mod tests {
     }
 
     /// A branch can name an upstream that has no remote-tracking ref: git
-    /// then leaves out `branch.ab` entirely. Zero ahead and zero behind
-    /// would read as "the remote already has this", which is the opposite
-    /// of the truth — nothing has ever been sent there.
+    /// then leaves out `branch.ab` entirely.
     #[test]
     fn upstream_without_a_tracking_ref_reports_no_counts() {
         let bytes = z(&[

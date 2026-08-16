@@ -6,10 +6,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// Center pane: the commit graph. Owns its column geometry (label /
-// lane widths, horizontal pan) and every in-pane interaction (wheel,
-// middle-click autoscroll, draggable dividers); row clicks go up as
-// signals and the owner decides what selection means.
+// Center pane: the commit graph.
 Rectangle {
     id: graphArea
 
@@ -21,10 +18,7 @@ Rectangle {
     // No repository behind this pane: the empty-window call to action.
     property bool blank: false
 
-    /// A row was clicked (or programmatically activated).
     signal rowActivated(string oidHex)
-    /// Right-click on a row. What the row is decides which menu opens,
-    /// and that is the page's call.
     signal rowMenuOpenRequested(string oidHex)
     /// Right-click on the chip itself: the menu is the named ref's
     /// rather than the row's — and the page still falls back to the
@@ -48,14 +42,10 @@ Rectangle {
     /// The pointer left that chip — put it back, unless it went into the
     /// list itself (only the owner can tell).
     signal chipCollapseRequested()
-    /// A name was typed into a row that had no branch on it.
     signal createBranchRequested(string oidHex, string name)
-    /// The blank pane's "Open repository…" button.
     signal openRepositoryRequested()
 
     // ---- naming a branch on a row that has none --------------------
-    // In-pane state, like the column widths: the page says where to
-    // start and hears back only when there is a name to act on.
     /// Puts the chip column of one row into a branch-name box.
     function startNaming(oidHex) {
         graphList.askOid = ""
@@ -94,8 +84,6 @@ Rectangle {
     /// never matches, so a dirty tree answers false here by itself.
     readonly property bool findClears:
         findBar.open && graphArea.graphModel.firstMatched
-    /// Where the row this search is on has landed. The page owns what
-    /// selection means, so it hears about the row and decides.
     signal findLanded(string oidHex)
 
     /// Brings the find bar down over this list. Refused while a question
@@ -122,9 +110,6 @@ Rectangle {
     /// no git runs for any of it.
     function runFind() {
         graphArea.graphModel.setFind(findBar.open ? findBar.query : "")
-        // From where the reader is, wrapping. At the top of the graph —
-        // where it opens, and where most searches start — that is the
-        // first match there is.
         graphArea.goToMatch(graphArea.graphModel.matchFrom(graphArea.firstVisibleRow()))
     }
     /// Topmost row with any of itself on screen; 0 while the view is in
@@ -223,9 +208,7 @@ Rectangle {
     function completeHold() {
         askBar.completeHold()
     }
-    /// The bar's accept was clicked; the page runs what it guarded.
     signal askConfirmed()
-    /// The question was walked away from.
     signal askCancelled()
 
     /// The list itself — for automation hooks (bench / scroll-to /
@@ -362,7 +345,6 @@ Rectangle {
             graphArea.landStep()
         }
     }
-    /// Moves the selection and centers the viewport on it.
     function jumpToRow(row) {
         graphList.currentIndex = row
         graphList.positionViewAtIndex(row, ListView.Center)
@@ -583,9 +565,6 @@ Rectangle {
         // ディングはプロパティにしか反応しない), and the count has to be
         // the rows' count rather than the last keystroke's.
         matches: graphArea.graphModel.matchCount
-        // Reads two properties and asks the model where the current row
-        // sits among the matches — so it settles again whenever either
-        // the marks or the selection move.
         atMatch: graphArea.graphModel.matchCount > 0
                  ? graphArea.graphModel.matchOrdinal(graphList.currentIndex) : 0
         // "There is a query" is the model's answer, not a second reading
@@ -711,7 +690,6 @@ Rectangle {
         signal chipExpandRequested(var records, var anchor)
         signal chipCollapseRequested()
         signal rowHoverRequested(var row, bool inside)
-        // Mirrored for the delegates, which can only see the view.
         readonly property var chipListAnchor: graphArea.chipListAnchor
         signal namingSubmitted(string oidHex, string name)
         signal namingCancelled()
@@ -911,8 +889,6 @@ Rectangle {
                 const delta = (graphArea.autoCurrentY - graphArea.autoAnchorY)
                             * Metrics.middleScrollGain
                 graphList.contentY = graphList.clampY(graphList.contentY + delta)
-                // Sideways drift pans the lanes — for a gesture that
-                // started on them.
                 if (graphArea.autoPanning && graphArea.graphXMax > 0) {
                     const dx = (graphArea.autoCurrentX - graphArea.autoAnchorX)
                              * Metrics.middleScrollGain
@@ -921,7 +897,6 @@ Rectangle {
                 }
             }
         }
-        // Anchor marker
         Rectangle {
             x: graphArea.autoAnchorX - Theme.iconMd / 2
             y: graphArea.autoAnchorY - Theme.iconMd / 2

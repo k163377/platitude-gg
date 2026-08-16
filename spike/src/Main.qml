@@ -591,7 +591,6 @@ ApplicationWindow {
                 LanePath { lane: 5 }
                 LanePath { lane: 6 }
                 LanePath { lane: 7 }
-                // diagonal connector
                 ShapePath {
                     strokeWidth: 3
                     fillColor: "transparent"
@@ -604,7 +603,6 @@ ApplicationWindow {
                         y: root.rowH / 2
                     }
                 }
-                // node
                 ShapePath {
                     strokeColor: "transparent"
                     fillColor: root.laneColors[rowShape.color_idx]

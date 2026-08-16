@@ -26,7 +26,6 @@ async fn info(repo: &TestRepo) -> RepoInfo {
         .expect("open repo")
 }
 
-/// The helper Cargo built for this test run.
 fn helper() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_pg-todo-editor"))
 }
@@ -705,7 +704,7 @@ async fn an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip() {
     // Two flags are set at once here — the stopped pick leaves
     // CHERRY_PICK_HEAD behind — and only one of them is the operation.
     // Anything naming what is in progress has to ask `from_state`, not
-    // list the flags: the badge did the latter and said
+    // list the flags: a badge that lists them reads
     // `REBASING · CHERRY-PICKING` for one rebase.
     let (exec2, cancel2) = env();
     let state = opstate::detect(&exec2, &repo.path, &cancel2)
@@ -1508,8 +1507,8 @@ async fn a_range_holding_a_merge_is_refused_rather_than_flattened() {
 
 /// A merge *below* the commit is not in the way: the replay stands on it
 /// rather than repeating it, so it keeps both its parents. Dropping the
-/// newest commit is the case that used to reach one commit too far and
-/// refuse over a merge it was never going to touch.
+/// newest commit is the edge here: a plan that reaches one commit too
+/// far refuses over a merge it was never going to touch.
 #[tokio::test]
 async fn a_merge_under_the_dropped_commit_is_left_alone() {
     let mut repo = TestRepo::init();

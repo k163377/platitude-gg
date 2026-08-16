@@ -168,8 +168,8 @@ impl DiffColors {
             .unwrap_or(&NOTHING)
     }
 
-    /// Whether nothing in this diff was read — the pane then draws
-    /// exactly what it drew before there was any of this.
+    /// Whether nothing in this diff was read — the pane then draws its
+    /// rows uncoloured.
     pub fn is_empty(&self) -> bool {
         self.patches
             .iter()
@@ -186,11 +186,8 @@ impl DiffColors {
 /// This is CPU work with no waiting in it. Callers on an async runtime
 /// should hand it to a blocking thread rather than hold a worker.
 /// `source` is the whole of the side the diff's line numbers count in
-/// ([`crate::preview::source_text`]), and what makes the first line of a
-/// hunk read like the rest of its file: a lexer reaching line 400 from
-/// line 1 knows it is inside an object, a class, a comment. Without it
-/// every hunk starts at the top-of-file rules, which paints its first
-/// line under rules the file itself never applies there.
+/// ([`crate::preview::source_text`]); without it every hunk starts cold
+/// (see the module note).
 pub fn colors(patches: &[FilePatch], source: Option<&str>) -> DiffColors {
     let assets = assets();
     DiffColors {
@@ -264,9 +261,7 @@ fn palette() -> Theme {
     }
 }
 
-/// The language for a path, or `None` — which is the answer for every
-/// file the set has never heard of, and the reason a plain-text diff
-/// looks exactly as it did.
+/// The language for a path, or `None` for a file the set does not know.
 fn syntax_for<'a>(syntaxes: &'a SyntaxSet, path: &str) -> Option<&'a SyntaxReference> {
     let name = path.rsplit('/').next().unwrap_or(path);
     // Extension first, then the whole name: Sublime's definitions list
@@ -324,9 +319,7 @@ fn patch_colors(assets: &Assets, patch: &FilePatch, source: Option<&str>) -> Pat
             }
         }
         // Nothing to start from — no file, or one that does not say what
-        // this hunk says it does. A clean start reads the first line of
-        // the hunk under whatever rules apply at the top of a file, which
-        // is wrong in a different way than it is useful.
+        // this hunk says it does.
         let mut rows =
             rows.unwrap_or_else(|| Walk::new(assets, &highlighter, syntax, patch.is_combined));
         out.push(hunk.lines.iter().map(|line| rows.read(line)).collect());
@@ -450,8 +443,6 @@ impl<'a> Walk<'a> {
             && let Some(marker) = conflict_marker(&line.text)
         {
             self.cross(marker);
-            // No runs: the fence is not the file talking, and the pane
-            // draws it as the scaffolding it is.
             return LineColors {
                 spans: Vec::new(),
                 fence: true,

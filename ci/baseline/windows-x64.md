@@ -30,11 +30,11 @@ VCRUNTIME140.dll  api-ms-win-crt-{runtime,heap,math,stdio,locale}-l1-1-0.dll
 | Qt6Core.dll | **WS2_32.dll**（OS の socket API） |
 | Qt6Gui.dll | なし（d3d11/dxgi/d3d12 等の描画系のみ) |
 
-### 帰結（§11.2 の invariant 修正が必要）
+### 帰結
 
 計画の「**Qt6Network を同梱しない**」は Qt Quick 構成では**成立しない**
 （Qt6Qml/Qt6Quick がロード時に要求するため、DLL を除くと起動不能になる）。
-主張は以下の形に修正する:
+主張は以下の形で立てる（実装計画 §11.2）:
 
 1. アプリ**自身**のバイナリはネットワーク系 DLL をインポートしない（§1 を baseline に pin）
 2. Qt6Network.dll は Qt6Qml/Qt6Quick のロード時依存としてのみ同梱される。
@@ -71,4 +71,3 @@ qml\**\*plugin.dll（QtQuick/QtQml の QML モジュール群 12個）
 ## 4. 補足
 
 - mac / Linux の baseline は CI 初回ビルドで取得する（初回実行は配布準備期 = 計画 §11.2）
-- 本ファイルの数値・一覧を更新する場合は、必ず実測（上記コマンド）とセットで行うこと

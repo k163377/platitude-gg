@@ -3,7 +3,7 @@
 //!
 //! Below that minimum is a fact reported, not a door closed: what the app
 //! does about it is the app's to decide, and it keeps working while saying
-//! so (規約 §リポジトリが今どうなっているか の 4 つ目のバッジ).
+//! so (規約 §ウィンドウの縁 の 4 つ目のバッジ).
 
 use std::time::Duration;
 

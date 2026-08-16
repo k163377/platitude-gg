@@ -2,10 +2,13 @@
 
 `Metrics.pollIntervalMs` を決めるための実測。計測日: 2026-08-05。
 
-1 tick で走るのは refs 側 3 本(`for-each-ref` / `symbolic-ref` / `config --get-regexp`)と
-status 側 2 本(`status --porcelain=v2 -z --branch -uall` / 進行中操作の検出)。
-両側は `tokio::join!` で並走するため、体感コストは**遅い方の側**で決まる。
-ウォームキャッシュ、3 回の最小値。
+1 tick で走るのは refs 側の `for-each-ref` 1 本(HEAD は listing の `%(HEAD)` から
+読み、リモート一覧はキャッシュ — rules-refs/core.md「同じ答えを 2 度 git に
+訊かない」項)と status 側 2 本(`status --porcelain=v2 -z --branch -uall` /
+進行中操作の検出)。両側は `tokio::join!` で並走するため、体感コストは
+**遅い方の側**で決まる。ウォームキャッシュ、3 回の最小値。下表の refs 側は
+`symbolic-ref` / `config --get-regexp` も 1 tick ごとに撃っていた時の値 =
+現在は上限。
 
 | リポジトリ | commits | refs | 1 tick の実時間 |
 |---|---|---|---|

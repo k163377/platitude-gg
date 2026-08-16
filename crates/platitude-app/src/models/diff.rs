@@ -61,8 +61,7 @@ pub struct DiffModel {
     title: String,
     is_binary: bool,
     /// The file has no old side: everything in the diff was added by it
-    /// being there at all. What the pane does with that is its business
-    /// (see `encode::is_new_file`).
+    /// being there at all (see `encode::is_new_file`).
     is_new_file: bool,
     /// The diff is the combined form git prints for a conflicted path: it
     /// compares the working tree against both stages at once, its rows

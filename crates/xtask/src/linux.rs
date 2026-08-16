@@ -29,14 +29,11 @@
 //! reason, and the tests build their repositories under the container's own
 //! /tmp, so the only thing crossing the host filesystem is reading source.
 //!
-//! Docker says that much is slow, and it is: over the 162 source files,
-//! stat costs 331ms against 3ms on the container's own filesystem and
-//! reading them 438ms against 6ms (`cargo metadata` 151 against 56). A
-//! hundred times, and a third of a second — cargo pays it once per build to
-//! check fingerprints, against a compile measured in seconds. Keeping a
-//! second copy of the tree inside a volume would buy that back and cost a
-//! second answer to "which tree is the real one", so the source stays where
-//! it is edited.
+//! Reading source across the host boundary is measurably slow, but cargo
+//! pays it once per build to check fingerprints, against a compile
+//! measured in seconds. Keeping a second copy of the tree inside a volume
+//! would buy that back and cost a second answer to "which tree is the
+//! real one", so the source stays where it is edited.
 //!
 //! One thing does not survive the boundary: a worktree's `.git` is a file
 //! naming an absolute Windows path, which git inside reads as relative and
@@ -127,7 +124,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
     in_container(&root, &tag, &command, shell)
 }
 
-/// The tag for `stage`, built if it is not on disk (or if asked again).
 fn ensure_image(root: &Path, stage: &str, rebuild: bool) -> Result<String, String> {
     let tag = image_tag(root, stage)?;
     if rebuild || !image_exists(&tag)? {
@@ -362,7 +358,6 @@ fn bare(root: &Path, discover: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// How long a bare run gets before it quits itself.
 const QUIT_MS: u32 = 4000;
 
 /// Every library this has ever been stopped on, and the Ubuntu package
@@ -386,12 +381,8 @@ const SONAME_PACKAGES: [(&str, &str); 12] = [
 
 /// Works the runtime dependencies out again from a stock Ubuntu: start the
 /// binary, read the one library the loader names, install only that, go
-/// round again.
-///
-/// The first attempt at this by hand installed a package per round whatever
-/// the error said, which hid every library that was needed but not the
-/// current blocker — libGL among them, and the pinned check caught it in
-/// seconds. Only the named one goes in now.
+/// round again. Installing more than the named library per round hides
+/// libraries that are needed but are not the current blocker.
 fn discover_deps(root: &Path) -> Result<(), String> {
     let bare_tag = ensure_image(root, "bare", false)?;
     let out = keepsake_dir("discover")?;
@@ -523,8 +514,6 @@ fn keepsakes(command: &[String]) -> Result<Option<PathBuf>, String> {
     keepsake_dir("shots").map(Some)
 }
 
-/// A fresh host directory for a run to leave things in, named for what
-/// kind of run it was.
 fn keepsake_dir(kind: &str) -> Result<PathBuf, String> {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)

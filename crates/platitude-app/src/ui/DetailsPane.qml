@@ -8,8 +8,7 @@ import platitude.ui
 // Right pane, commit-details mode: message, author card, stash
 // actions when the selected row is a stash, and the changed-file list.
 // The message boxes are the editor for that commit's message — the
-// same pair the working-tree pane commits with, so a message is
-// written and rewritten in the same place.
+// same pair the working-tree pane commits with.
 ColumnLayout {
     id: detailsPane
 
@@ -45,10 +44,7 @@ ColumnLayout {
     property string signatureCode: ""
     property string signatureSigner: ""
     /// The badge was pressed: the settings card opens already knowing whom
-    /// it is about. There is no menu in between and no second place
-    /// pictures are managed from — assigning, replacing and removing all
-    /// live in the one list, and this is the way in that saves naming the
-    /// person.
+    /// it is about.
     signal avatarEditRequested(string name, string email)
     /// Stands in for the pointer where headless cannot put one, so the
     /// badge can be photographed (PG_AUTO_ACT=avatar-hover).
@@ -189,19 +185,11 @@ ColumnLayout {
         if (detailsPane.details.authorName === "")
             return
         const at = authorLabel.mapToItem(detailsPane, 0, authorLabel.height)
-        // Measured from where it opens, not from the pane: the card
-        // starts partway across, so the pane's width is not what is left
-        // for it.
         authorCard.maxRowWidth = detailsPane.width - at.x - 2 * Theme.spaceSm
         authorCard.x = at.x
-        // Flush against the name: a gap is a band the pointer crosses
-        // while touching neither, and the card closes under it.
         authorCard.y = at.y
         authorCard.open()
     }
-    // A beat, not a turn of the event loop: the name's hover and the
-    // card's change in different frames when the pointer walks from one
-    // into the other, and `Qt.callLater` lands between them.
     Timer {
         id: authorSettle
         interval: Metrics.hoverKeepMs
@@ -865,7 +853,7 @@ ColumnLayout {
                         }
                         // Date, and beside it whoever the message credits along
                         // with the author. A commit with no trailer shows only
-                        // the date, the way it always did.
+                        // the date.
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: Theme.spaceSm

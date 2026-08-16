@@ -94,7 +94,6 @@ fn shell_quote(arg: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
-/// How a git invocation ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandEnd {
     /// The process ran and returned this code (`-1` = killed by a signal).
@@ -129,7 +128,6 @@ pub trait CommandObserver: Send + Sync + 'static {
     fn finished(&self, id: u64, end: CommandEnd, elapsed_ms: u64, message: &str);
 }
 
-/// One git invocation: arguments, working directory and time budget.
 #[derive(Debug, Clone)]
 pub struct GitCommand {
     args: Vec<OsString>,
@@ -175,14 +173,11 @@ impl GitCommand {
         self
     }
 
-    /// Directory the command runs in (normally the repository work tree).
     pub fn cwd(mut self, dir: impl Into<PathBuf>) -> Self {
         self.cwd = Some(dir.into());
         self
     }
 
-    /// Sets one environment variable for this invocation only, overriding
-    /// the fixed defaults.
     pub fn env(mut self, key: impl Into<OsString>, value: impl Into<OsString>) -> Self {
         self.env.push((key.into(), value.into()));
         self
@@ -220,7 +215,6 @@ impl Default for GitCommand {
     }
 }
 
-/// Captured result of a finished invocation.
 #[derive(Debug, Default)]
 pub struct GitOutput {
     /// Exit code; `-1` when the process was terminated by a signal.

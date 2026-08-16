@@ -4,8 +4,9 @@ import QtQuick.Layouts
 import platitude.ui
 
 // Navigation sidebar: fixed section headers, each section scrolls
-// inside its own list. Owns its filter text and fold state; what a
-// click means (jump, menu, open a tab) is reported upward.
+// inside its own list. Owns its filter text and per-section fold
+// state; what a click means (jump, menu, open a tab) is reported
+// upward.
 Rectangle {
     id: sidebar
 
@@ -37,7 +38,6 @@ Rectangle {
     /// A row was renamed. `kind` is the section ("branch" / "tag" /
     /// "stash"), `id` what git knows the row by.
     signal renameSubmitted(string kind, string id, string name)
-    /// Fold the list to its icons, or put it back.
     signal foldRequested(bool collapse)
 
     // ---- the row gestures ------------------------------------------
@@ -81,12 +81,11 @@ Rectangle {
               : qsTr("git will not take this as a name")
 
     function startEdit(kind, key, mode, id, oid, text) {
-        // A name is typed in the list, not in a peek at it. The box wants
-        // the keyboard, and a hovered list that has taken the keyboard is
-        // one the pointer no longer owns — walking away from it would take
-        // the half-typed name with it. So the list comes back first, and
-        // the box opens on the same row in it (the key is the row's, not
-        // the list's).
+        // A name is typed in the list, not in a peek at it: walking away
+        // from a hovered list that has taken the keyboard would take the
+        // half-typed name with it. So the list comes back first, and the
+        // box opens on the same row in it (the key is the row's, not the
+        // list's).
         if (sidebar.collapsed)
             sidebar.foldRequested(false)
         sidebar.editKind = kind
@@ -149,8 +148,7 @@ Rectangle {
 
     /// Smoke hook (PG_AUTO_ACT=nav-filter): type into the filter band.
     /// Written into the field itself, so what the sections are asked is
-    /// what a typist asks them, and how many rows each keeps is its own
-    /// answer.
+    /// what a typist asks them.
     function typeFilter(text) {
         refFilter.text = text
         return refFilter.text
@@ -158,9 +156,8 @@ Rectangle {
 
     /// Smoke hook (PG_AUTO_ACT=nav-peek): rest on one section's cell.
     /// Named rather than hovered — hover cannot be injected (verify-ui
-    /// スキル). Whether that opens anything is the cell's answer, not this
-    /// one's: an empty section is asked here the same way it is asked by a
-    /// pointer, and answers no.
+    /// スキル). Whether that opens anything is the cell's answer: an
+    /// empty section answers no.
     function peekAt(kind) {
         rail.enterAt(kind, rail.topOf(kind))
     }
@@ -189,10 +186,9 @@ Rectangle {
         sidebar.peekEntered = false
     }
 
-    /// Smoke hook (PG_AUTO_ACT=nav-close): close one section, by raising
-    /// the signal its header band raises under a click — what closing
-    /// means is the header's to say and this pane's to hold, and a hook
-    /// that set `expTags` itself would be a second answer.
+    /// Smoke hook (PG_AUTO_ACT=nav-close): close one section by raising
+    /// the signal its header band raises under a click — a hook that set
+    /// `expTags` itself would be a second answer.
     function closeSection(kind) {
         const head = kind === "branch" ? branchHead
             : kind === "remote" ? remoteHead
@@ -203,10 +199,8 @@ Rectangle {
             head.toggled()
     }
     /// Where a section's header band has come to rest, and where the
-    /// ground under the last section begins. Read together they say the
-    /// sections are packed against the top: a closed section whose header
-    /// has been pushed to the foot of the pane is what this is watching
-    /// for (PG_AUTO_ACT=nav-close).
+    /// ground under the last section begins — what PG_AUTO_ACT=nav-close
+    /// reads to see the sections packed against the top.
     function headerTopOf(kind) {
         const head = kind === "branch" ? branchHead
             : kind === "remote" ? remoteHead
@@ -280,14 +274,11 @@ Rectangle {
 
     // How the height nobody needs is handed out. Every section takes
     // what its own rows want and no more; the ground at the foot of the
-    // column takes the rest. It is not the last open section's to hold —
-    // spare height inside a section pushes everything under it down,
-    // and a closed section, being nothing but its header, would be
-    // pushed all the way to the bottom edge (which is what closing TAGS
-    // used to do). Both ends have to name a pull: Qt reads an unset one
-    // as a zero and hands it nothing at all. At this distance the ground
-    // keeps none of the height while any section still has rows it
-    // cannot show, on a pane of any height (measured).
+    // column takes the rest — spare height inside a section would push
+    // everything under it down. Both ends have to name a pull: Qt reads
+    // an unset one as a zero and hands it nothing at all. At this
+    // distance the ground keeps none of the height while any section
+    // still has rows it cannot show, on a pane of any height (measured).
     readonly property int sectionPull: 10000
     readonly property int groundPull: 1
 
@@ -296,12 +287,10 @@ Rectangle {
         spacing: 0
         visible: !sidebar.collapsed
         // This pane's header band: a frameless filter that takes all the
-        // width left over, and the fold control at the end of it. The
-        // control stands beside the input rather than inside its frame —
-        // in it, it reads as part of what is being typed. It is the band
-        // the other panes' headers line up with, so it takes the header
-        // height, and the hairline that closes it is the band's rather
-        // than the input's (it runs on under the button).
+        // width left over, and the fold control at the end of it. It is
+        // the band the other panes' headers line up with, so it takes the
+        // header height, and the hairline that closes it is the band's
+        // rather than the input's (it runs on under the button).
         Item {
             Layout.fillWidth: true
             implicitHeight: Theme.headerHeight
@@ -327,9 +316,6 @@ Rectangle {
                         sidebar.tagsModel.setFilter(text)
                     }
                 }
-                // The fold control has nothing to do with what is being
-                // typed, so it gets a block of its own at the end of the
-                // band — the header's ground, divided off by a hairline.
                 // The whole block is the button: the reach is the band's
                 // full height, not a mark's worth of it. The rail's band
                 // is the same block with the mark pointing back.
@@ -485,9 +471,8 @@ Rectangle {
                 sidebar.refMenuRequested(kind, name, full, oidHex)
         }
 
-        // git worktrees (checkouts), GitKraken-style; the changed-file
-        // lists live in the right pane's WIP view. Clicking one opens
-        // it as a new tab.
+        // git worktrees (checkouts); the changed-file lists live in the
+        // right pane's WIP view. Clicking one opens it as a new tab.
         NavHeader {
             id: worktreeHead
             caption: qsTr("WORKTREES")
@@ -679,11 +664,9 @@ Rectangle {
         // to fall through, and starting level with the cell that opened
         // it. It only ever grows downwards from there: a section with more
         // rows than the pane can hold would otherwise be laid out from the
-        // top edge of the pane, and a list that opens nowhere near the
-        // mark it came out of is one the pointer has to go and look for
+        // top edge of the pane, nowhere near the cell it came out of
         // (a repository with 45,000 tags puts every peek up there —
-        // reported 2026-08-08). What it costs is height: the cells further
-        // down get less of it, and the rows that do not fit scroll.
+        // reported 2026-08-08). The rows that do not fit scroll.
         x: sidebar.width
         y: sidebar.peekTop
         width: sidebar.openWidth

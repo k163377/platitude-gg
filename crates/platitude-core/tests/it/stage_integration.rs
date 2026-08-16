@@ -314,7 +314,6 @@ async fn discard_a_single_hunk() {
     );
 }
 
-/// One line of a hunk, thrown away on its own.
 #[tokio::test]
 async fn discard_a_single_line() {
     let mut repo = TestRepo::init();

@@ -1,13 +1,10 @@
-//! Line endings: what git already did, made visible.
+//! Line-ending notices, read from the bytes git printed.
 //!
-//! Nothing in this module converts anything, and nothing writes git config.
-//! What lands in the index is git's decision (`core.autocrlf`, `core.eol`,
-//! `.gitattributes`); all that happens here is reading the bytes git printed
-//! and naming what is in them. Every line-ending accident the other GUIs are
-//! known for comes from a "fix it for me" button that rewrites a global
-//! setting, so there is no such button and no such code path.
+//! Nothing in this module converts anything or writes git config: what lands
+//! in the index is git's decision (`core.autocrlf`, `core.eol`,
+//! `.gitattributes`).
 //!
-//! Four cases are worth saying out loud (デザイン規約 §改行コードの警告):
+//! Four cases produce a notice (デザイン規約 §改行コードの警告):
 //!
 //! | | case | decided by |
 //! |---|---|---|
@@ -65,8 +62,8 @@ pub enum Eol {
 }
 
 impl Eol {
-    /// The spelling a person reads. **Not a code chip** — the chip shape is
-    /// lowercase monospace and an all-caps abbreviation does not sit in it
+    /// Display spelling. **Not a code chip** — chips are lowercase
+    /// monospace, which an all-caps abbreviation does not fit
     /// (デザイン規約 §git 用語のコード表記).
     pub fn as_str(self) -> &'static str {
         match self {
@@ -103,8 +100,8 @@ impl Reading {
     }
 }
 
-/// Where the files a baseline was drawn from sat, so the notice can name
-/// the range it is actually speaking for instead of implying a wider one.
+/// Where the baseline's sample files came from, so the notice names only
+/// the range it actually speaks for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Scope {
     /// Every sample shares this extension and sits in the same directory.
@@ -115,8 +112,7 @@ pub enum Scope {
     Repo,
 }
 
-/// What the files around a path look like. An estimate, and only ever
-/// consulted for the two cases that have nothing exact to go on.
+/// What the files around a path look like. An estimate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Baseline {
     pub eol: Eol,
@@ -124,10 +120,6 @@ pub struct Baseline {
 }
 
 /// A settled statement about one file, ready to be worded.
-///
-/// The two estimates carry the baseline they were measured against, because
-/// the sentence has to name the range the sample actually covered rather
-/// than imply the whole repository agrees.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Notice {
     /// (a) `Line endings change · CRLF → LF`
@@ -140,13 +132,9 @@ pub enum Notice {
     FirstEnding { eol: Eol, baseline: Baseline },
 }
 
-/// Pairs a reading with a baseline. `None` is silence, and every way of not
-/// knowing ends up here: git ruling the path out, no baseline to compare
-/// against, or a file that agrees with its neighbours after all.
-///
-/// A history diff simply arrives with no baseline, which is what keeps the
-/// two estimates out of it: the files around a changed one, as they stood at
-/// that commit, are not the files on disk.
+/// Pairs a reading with a baseline. `None` means nothing is shown, and
+/// every unknown collapses to it: git ruling the path out, no baseline to
+/// compare against, or a file that agrees with its neighbours after all.
 pub fn settle(reading: Reading, baseline: Option<&Baseline>) -> Option<Notice> {
     match reading {
         Reading::Quiet => None,
@@ -172,9 +160,9 @@ pub fn settle(reading: Reading, baseline: Option<&Baseline>) -> Option<Notice> {
 /// What git's own settings decide about a path before anything is sampled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ruling {
-    /// `.gitattributes` says the path is not text. The only exclusion there
-    /// is: build output, test data and the rest are `.gitattributes`'
-    /// business, not a list this app keeps.
+    /// `.gitattributes` says the path is not text. This is the only
+    /// exclusion mechanism — the app keeps no path list of its own; build
+    /// output, test data and the rest are `.gitattributes`' business.
     NotText,
     /// git decides the stored endings itself, so a new file cannot disagree
     /// with its neighbours and there is nothing to compare.
@@ -189,10 +177,10 @@ pub struct Sighting {
     /// The path as the patch header spelled it, prefix stripped.
     ///
     /// Not unquoted: git C-quotes headers for paths holding quotes, control
-    /// characters or backslashes, and the patch parser next door leaves
-    /// those alone too. A caller matching these against a known set of paths
-    /// simply misses such a file, which costs a mark rather than putting one
-    /// on the wrong row.
+    /// characters or backslashes, and `parse::diff` leaves those alone too.
+    /// A caller matching these against a known set of paths simply misses
+    /// such a file, which costs a mark rather than putting one on the wrong
+    /// row.
     pub path: String,
     pub reading: Reading,
 }
@@ -200,8 +188,7 @@ pub struct Sighting {
 /// Reads every file in a patch. Empty when there is nothing to say.
 ///
 /// Accepts the multi-file output of a whole-tree `git diff` as readily as
-/// one file's, so the pane that opened a single diff and the pass that marks
-/// every pending file run the same code over the same shape of bytes.
+/// one file's.
 pub fn read(raw: &[u8]) -> Vec<Sighting> {
     let mut out = Vec::new();
     let mut scan: Option<Scan> = None;
@@ -275,19 +262,14 @@ const SAMPLES: usize = 3;
 /// How many files may be read looking for them. Neighbours that turn out to
 /// be unusable are replaced, but not forever.
 const READS: usize = 9;
-/// A file this size is not opened for a vote. `ls-files --eol` reads the
-/// whole worktree file to fill its `w/` column — 213ms for one 120MB file,
-/// measured — and one neighbour's opinion is not worth that.
+/// Files above this size are not sampled: `ls-files --eol` reads the whole
+/// worktree file to fill its `w/` column (measured: 213ms for one 120MB
+/// file).
 const SAMPLE_MAX_BYTES: u64 = 1 << 20;
 /// How many paths one `check-attr` is asked about at a time.
 const ATTR_BATCH: usize = 200;
 
 /// What git's settings say about one path.
-///
-/// Two spawns, both cheap, and the answer is what lets the sampling below
-/// be skipped entirely: with `core.autocrlf` converting or `text` set in
-/// `.gitattributes`, git normalises what it stores, so a new file's endings
-/// cannot disagree with anything and no neighbour needs reading.
 pub async fn ruling(
     executor: &GitExecutor,
     workdir: &Path,
@@ -331,9 +313,9 @@ pub async fn rulings_given(
         return Ok(Vec::new());
     }
     let mut out = Vec::with_capacity(paths.len());
-    // 200 paths answer in 71ms against the reference repository, measured;
-    // one at a time is 42ms each. The chunk is also what keeps a very long
-    // list off a command line with a length limit on it.
+    // Measured against the reference repository: a 200-path batch answers
+    // in 71ms vs 42ms per one-path spawn. Chunking also keeps a long list
+    // under the command-line length limit.
     for batch in paths.chunks(ATTR_BATCH) {
         for attrs in attributes(executor, workdir, batch, cancel).await? {
             out.push(match attrs {
@@ -348,11 +330,9 @@ pub async fn rulings_given(
 
 /// Every untracked, non-ignored file and what its bytes look like.
 ///
-/// A file the repository has never seen has no patch to read until one is
-/// asked for, and asking per file is a spawn per file. This is one spawn for
-/// the lot, and for a new file "what endings does it have" is the whole
-/// question — except when the answer is [`Shape::Mixed`], which has a count
-/// in it that only the patch can give.
+/// One spawn for the whole set, where asking for a patch per file would be
+/// a spawn per file. For a new file the shape is the whole answer, except
+/// [`Shape::Mixed`], whose line count only the patch can give.
 pub async fn untracked_shapes(
     executor: &GitExecutor,
     workdir: &Path,
@@ -369,13 +349,13 @@ pub async fn untracked_shapes(
     Ok(worktree_shapes(&out.stdout))
 }
 
-/// What the files around `path` look like, or `None` when the answer is
-/// "unknown" and the right thing to do is say nothing.
+/// What the files around `path` look like, or `None` for "unknown" — in
+/// which case nothing is shown.
 ///
-/// Unknown covers more ground than it sounds like: git already deciding the
-/// endings, too few neighbours worth reading, and a sample that does not
-/// agree with itself all come back the same way, because they all mean the
-/// app has no business naming a house style.
+/// Unknown deliberately covers several cases: git already deciding the
+/// endings, too few readable neighbours, and a sample with no majority all
+/// come back the same way, because in each the app has no basis for naming
+/// a house style.
 pub async fn baseline(
     executor: &GitExecutor,
     workdir: &Path,
@@ -494,7 +474,7 @@ pub async fn normalises(
     Ok(effective)
 }
 
-/// Three neighbours' worth of opinion, or `None`.
+/// A majority ending sampled from neighbouring files, or `None`.
 async fn sample(
     executor: &GitExecutor,
     workdir: &Path,
@@ -516,8 +496,6 @@ async fn sample(
         take_spread(&neighbours, READS, Group::Here, &mut picked);
     }
 
-    // Then the same extension anywhere, then anything at all. A file with no
-    // extension has no first two groups and goes straight to the last.
     if picked.len() < READS {
         let all = list(executor, workdir, None, cancel).await?;
         if !ext.is_empty() {
@@ -680,8 +658,6 @@ async fn worktree_endings(
     Ok(found)
 }
 
-/// Whether a candidate is worth opening: present, a file, and small enough
-/// that reading it is not the most expensive thing the app does today.
 fn readable(workdir: &Path, path: &str) -> bool {
     let Ok(meta) = std::fs::metadata(workdir.join(path)) else {
         return false;
@@ -690,9 +666,8 @@ fn readable(workdir: &Path, path: &str) -> bool {
 }
 
 /// Takes up to `want` entries spread across the list rather than the first
-/// `want`. Index order is alphabetical, so the head of a repository is all
-/// one corner of it; a spread is still deterministic but is a sample of the
-/// repository instead of a sample of its first directory.
+/// `want`: index order is alphabetical, so the head is all one directory.
+/// The stride keeps the pick deterministic.
 fn take_spread(from: &[String], want: usize, group: Group, into: &mut Vec<(String, Group)>) {
     if want == 0 || from.is_empty() {
         return;
@@ -977,9 +952,9 @@ impl Scan {
             };
         }
 
-        // (a) — no line survived untouched and each side speaks with one
-        // voice. A one-line file whose only line changed its ending lands
-        // here too, which is the same statement about a smaller file.
+        // (a) — no context lines and each side is uniform. A one-line file
+        // whose only line changed its ending lands here too, deliberately:
+        // it is the same statement about a smaller file.
         if self.context.is_empty()
             && let (Some(from), Some(to)) = (self.minus.sole(), self.plus.sole())
             && from != to
@@ -1037,7 +1012,6 @@ fn hunk_counts(line: &[u8]) -> Option<(u32, u32)> {
     Some((old?, new?))
 }
 
-/// The text of a line after a fixed prefix, when it starts with one.
 fn text_after(line: &[u8], prefix: &[u8]) -> Option<String> {
     let rest = line.strip_prefix(prefix)?;
     Some(String::from_utf8_lossy(rest).trim_end().to_string())

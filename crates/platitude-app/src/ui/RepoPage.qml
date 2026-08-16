@@ -6,18 +6,10 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// One repository page: owns the tab's models and every piece of page
-// state (selection, WIP mode, pending diff, context menus), and
-// composes the three panes. Panes report intents through signals; this
-// page decides what they mean. Anything that crosses the page (the
-// irreversible-action confirmation, opening another repository as a
-// tab) goes up to the window as a signal.
 Item {
     id: page
     required property int index
     required property int tab_id
-    // No repository behind this page (tab_id -1): the chrome renders
-    // with empty models and the graph column offers the way in.
     readonly property bool blank: tab_id < 0
 
     /// The blank page's "Open repository…" button (folder picker).
@@ -33,17 +25,9 @@ Item {
 
     property string selectedOid: ""
 
-    // Left pane folded down to its icons. Held here rather than in the
-    // sidebar because two things decide it: the control on its own band,
-    // and a diff opening in the middle — reading a file wants every
-    // column and every line the window can give it, and the list of refs
-    // is the one thing on screen that has nothing to say about the file.
     property bool sidebarCollapsed: false
-    /// The fold the diff put on. Closing the diff takes back exactly
-    /// that and nothing anybody did by hand: somebody who folded the list
-    /// themselves has said they want it folded afterwards too. There is
-    /// no "opened it while reading" to remember — that is the one move
-    /// that closes the file (`foldByHand`).
+    /// The fold the diff put on: closing the diff takes back only that,
+    /// never a fold made by hand.
     property bool foldedByDiff: false
     function foldForDiff(open) {
         if (open) {
@@ -58,24 +42,17 @@ Item {
     }
     function foldByHand(collapse) {
         page.sidebarCollapsed = collapse
-        // A hand on it takes it over from the diff, whichever way it
-        // moved it.
         page.foldedByDiff = false
-        // The list and a file never hold the window at once: asking for
-        // the list back is how somebody says they are done reading, so
-        // the centre goes back to the graph the list speaks about. Every
-        // way the list comes back arrives here — the block on the band,
-        // a cell on the rail, and the rename box that needs the keyboard
-        // (SidebarPane.startEdit) — so the rule has no exceptions to
-        // remember.
+        // Every way the list comes back arrives here — the band's block,
+        // a rail cell, the rename box (SidebarPane.startEdit) — so
+        // "unfolding closes the diff" has no exceptions elsewhere.
         if (!collapse && page.diffShown)
             page.closeDiff()
     }
 
-    // Right pane switches to the working-tree (WIP) view.
     property bool wipShown: false
-    // Leaving the file list takes its question with it: the bar goes off
-    // screen with the pane, and nothing off screen may be answered.
+    // The ask bar goes off screen with the pane, and nothing off screen
+    // may be answered.
     onWipShownChanged: if (!page.wipShown) page.stopRowAsk()
     // Selected stash row's reflog selector ("" = not a stash).
     property string selectedStashRef: ""
@@ -90,11 +67,7 @@ Item {
     }
 
     // ---- commit editor -------------------------------------------
-    // `amending` mirrors the checkbox so the page can act on it
-    // without reaching into the pane.
     property bool amending: false
-    // Whether HEAD is already on a remote. Amending it rewrites
-    // something other people may have, so the editor says so.
     property bool headPublished: false
     readonly property string headRange: "HEAD^!"
     function refreshHeadPublished() {
@@ -122,29 +95,21 @@ Item {
             page.absorbWriteResult()
             page.runFetchFailures()
         }
-        // The first fetch of a run to fail opens the log, the way a
-        // refusal the user asked for does. Only the first: the ones after
-        // it are the same news, and a machine that is offline would put
-        // the panel back up every interval (デザイン規約 §git が言ったことを
-        // 読む場所).
+        // Only the first failure of a run: an offline machine would
+        // otherwise re-raise the panel every interval (デザイン規約
+        // §git が言ったことを読む場所).
         function onFetchFirstFailed() {
             page.commandsOpen = true
             commandsPane.showLatest()
         }
     }
 
-    // A tab whose repository would not open. The screen for it sits where
-    // the panes do rather than over the whole page, so the log is still
-    // reachable under it — pressing `>_` on one of these used to do
-    // nothing at all, the panel being inside the half that was hidden.
-    //
-    // It is not raised on its own: the command that failed is a
-    // background read, so the panel would come up empty (実測), and the
-    // line it would have carried is already on the screen above it.
+    // A tab whose repository would not open. The screen sits where the
+    // panes do, not over the whole page, so the log stays reachable under
+    // it. The log is not raised on its own: the failed command is a
+    // background read, so the panel would come up empty (実測).
     readonly property bool openFailed: !page.blank && repoTab.state === "error"
 
-    // Turning amend on starts the editor from HEAD's message; turning
-    // it off empties it again, since the text belonged to that commit.
     property int seenHeadCommitSeq: 0
     property bool wantHeadMessage: false
     function amendToggled(on) {
@@ -181,17 +146,14 @@ Item {
     // Terminology is deliberate: git runs `switch` / `restore`, and
     // the UI says "Switch to" (デザイン規約 §用語).
     //
-    // Uncommitted changes come along and nothing is asked about them: the
-    // move goes ahead carrying them, and where git refuses — changing
-    // nothing — core goes round the same way a person would, through a
-    // stash (デザイン規約 §未コミット変更がある状態での移動). What lands
-    // is whatever that sequence lands: a settled tree, or a conflict to
-    // work through, which the file list shows like any other.
+    // Uncommitted changes come along unasked; where git refuses, core
+    // goes round through a stash (デザイン規約 §未コミット変更がある
+    // 状態での移動).
     //
-    // What the pending move is: kind is "branch" / "remote" / "force"
-    // (a local branch moved to `moveStart` before landing on it). Every
-    // one of them lands on a branch — nothing here moves onto a bare
-    // commit (デザイン規約 §ブランチ・コミットへの移動).
+    // kind is "branch" / "remote" / "force" (a local branch moved to
+    // `moveStart` before landing on it). Every one lands on a branch —
+    // nothing here moves onto a bare commit (デザイン規約
+    // §ブランチ・コミットへの移動).
     property string moveKind: ""
     property string moveTarget: ""
     property string moveLabel: ""
@@ -215,10 +177,8 @@ Item {
     }
 
     // ---- what a chip leads to --------------------------------------
-    // One dispatcher for every way of asking to move to a named ref: the
-    // graph's chips, the list the stacked ones open into, and the
-    // sidebar's menu. `record` is the chip as it is drawn — kind letter,
-    // four flags, then the name (see encode.rs).
+    // `record` is the chip as it is drawn — kind letter, four flags,
+    // then the name (see encode.rs).
     function activateRecord(record) {
         if (record !== "")
             page.switchToRef(record[0], record.substring(5).split("\u001E")[0])
@@ -227,37 +187,27 @@ Item {
         if (repoTab.state !== "open" || repoTab.busyCount > 0)
             return
         if (kind === "L") {
-            // Already standing there.
             if (name !== workTree.branch)
                 page.switchTo("branch", name, name, "")
             return
         }
-        // The detached-HEAD marker names no branch, and a tag is a
-        // standing mark rather than somewhere to carry on from — moving
-        // onto one can only leave HEAD on no branch, which nothing here
-        // does. A tag's row offers a branch at that commit instead
-        // (`startNaming`), which is what the move was after.
+        // The detached-HEAD marker names no branch, and moving onto a
+        // tag could only detach HEAD — a tag's row offers a branch at
+        // that commit instead (`startNaming`).
         if (kind !== "R")
             return
         const local = repoTab.localNameFor(name)
-        // With no local branch of that name, landing on the remote one
-        // means making it: one branch, tracking, nothing to lose, so
-        // nothing to ask about.
         if (branchesModel.oidOfName(local) === "")
             page.switchTo("remote", name, local, "")
         else
-            // Whether this is worth asking about is git's to answer: a
-            // branch that has only fallen behind loses nothing by moving,
-            // and the question's own words ("commits only X has") would be
-            // describing something that does not exist. It comes back as
-            // `moveAskSeq` when there really is something to lose.
+            // Whether to ask is git's to answer — a branch that only
+            // fell behind loses nothing by moving. The question comes
+            // back as `moveAskSeq` when something would be lost.
             repoTab.checkoutMovingBranch(local, name)
     }
 
-    // A local branch of that name exists, and it is not here — its own
-    // row is elsewhere in the graph. Landing on the remote branch means
-    // moving the local one onto it, which is the one thing here that can
-    // leave work with nothing pointing at it.
+    // Landing on the remote branch moves the existing local one onto it
+    // — the one move here that can leave commits unreachable.
     function askMoveBranchOnto(local, remoteRef) {
         page.startRowAsk(
             remotesModel.oidOfName(remoteRef),
@@ -267,25 +217,17 @@ Item {
             qsTr("Move"),
             function () { page.switchTo("force", local, local, remoteRef) },
             true)
-        // Say it in words too: a smoke run asserts on the report line
-        // without having to look at the shot.
         if (AppBackend.autoAct !== "")
             AppBackend.report("move_branch_asked local=" + local)
     }
 
     // ---- the standing question --------------------------------------
-    // One bar, over the graph, with the row it is about marked (デザイン規約
-    // §可否・警告の出し場所). The run waits here; Escape, another ask or a
-    // click anywhere else walks away from it. A row outside the loaded
-    // window simply goes unmarked, so nothing needs a dialog to fall back
-    // to.
-    //
-    // Only questions about a ref reach it now. Everything that takes one
-    // named thing away — a file's changes, a hunk, a stash, a branch on a
-    // remote, `reset --hard` — is held down where the hand already is, on
-    // the row or button that names it (デザイン規約 §長押し).
-    /// Ctrl+F. The bar belongs to the graph — that is the list being
-    /// searched — so the window only has to know which page to ask.
+    // One bar over the graph (デザイン規約 §可否・警告の出し場所);
+    // Escape, another ask or a click anywhere else walks away from it.
+    // Only questions about a ref reach it: everything that takes one
+    // named thing away is held down on the row or button that names it
+    // (デザイン規約 §長押し).
+    /// Ctrl+F: the find bar belongs to the graph.
     function startFind() {
         graphPane.startFind()
     }
@@ -309,9 +251,8 @@ Item {
             run()
     }
 
-    // The branch move git says is worth asking about arrives on its own
-    // counter, because the same move can be asked about twice in a row and
-    // only a fresh one may raise the question.
+    // On its own counter: the same move can be asked about twice in a
+    // row, and only a fresh answer may raise the question.
     property int seenMoveAskSeq: 0
     function absorbMoveAsk() {
         if (repoTab.moveAskSeq === page.seenMoveAskSeq)
@@ -348,8 +289,6 @@ Item {
     readonly property bool canPush: (pushState === "publish"
                                      || pushState === "ready")
                                     && repoTab.busyCount === 0
-    /// Whether there is anything of ours to put on the remote by force.
-    /// Nothing to add means nothing to overwrite with.
     readonly property bool canForcePush: (pushState === "ready"
                                           || pushState === "diverged")
                                          && repoTab.busyCount === 0
@@ -367,11 +306,6 @@ Item {
     property string pushFailReason: ""
     readonly property bool pushFailed:
         page.pushFailBranch !== "" && page.pushFailBranch === workTree.branch
-    /// The button's press. A branch that has been somewhere before goes
-    /// back there without a word; one that has not raises the question of
-    /// where it should go (デザイン規約 §はじめてリモートへ送る) — and the
-    /// send that question ends in marks the branch itself, so a refusal
-    /// coming back finds the same seat waiting for it.
     function pushNow() {
         if (page.pushState === "publish") {
             page.startPublishAsk()
@@ -380,8 +314,6 @@ Item {
         page.pushSentBranch = workTree.branch
         repoTab.pushCurrent("", "")
     }
-    /// Replace what the remote holds with this branch.
-    ///
     /// The lease is pinned to the commit this window has on screen rather
     /// than left to compare against the tracking ref: a background fetch
     /// must not turn this into a plain force. A remote that moved since is
@@ -397,11 +329,8 @@ Item {
     }
 
     // ---- the first push: where does this branch go? -----------------
-    // Nothing here records a target yet, so this is a question for
-    // information rather than for consent (デザイン規約 §はじめてリモートへ送る).
-    // It stands in the same bar every question stands in, because three
-    // things raise it — this button, a graph row, a REMOTES row — and a
-    // question that moves house by who asked it cannot be read.
+    // (デザイン規約 §はじめてリモートへ送る). Three things raise it —
+    // this button, a graph row, a REMOTES row — all through the one bar.
     property bool publishAsking: false
     /// The remote the answer picks.
     property string publishRemote: ""
@@ -413,10 +342,8 @@ Item {
         const packed = repoTab.remoteNames
         return packed === "" ? [] : packed.split(String.fromCharCode(31))
     }
-    /// The last row of the chooser: not a remote, but the way to one this
-    /// repository does not have yet. It opens the dialog that writes a
-    /// remote down — the question stays standing behind it and picks the
-    /// new remote up when it lands.
+    /// The chooser's last row: opens the add-remote dialog. The question
+    /// stays standing behind it and picks the new remote up when it lands.
     readonly property string publishAddChoice: qsTr("Add remote…")
     readonly property var publishChoices:
         page.publishRemotes.concat([page.publishAddChoice])
@@ -431,7 +358,6 @@ Item {
 
     readonly property string publishTarget:
         page.publishRemote + "/" + page.publishBranch
-    /// Enough of an answer to send anything at all.
     readonly property bool publishFilled:
         page.publishBranch !== "" && page.publishRemote !== ""
     /// The remote has answered for exactly what is typed now.
@@ -443,21 +369,16 @@ Item {
     /// answer for exactly this name is in.
     readonly property string publishState:
         page.publishChecked ? repoTab.remoteBranchState : ""
-    /// Nothing about the far side can be settled from this end: the name
-    /// is over there but the commit it holds is not in this repository, or
-    /// the remote never answered at all (a URL typed wrong, credentials
-    /// that are not there, no network). Sending is still allowed and stays
-    /// a click — a plain push can only fast-forward, so nothing over there
+    /// The far side cannot be settled from this end. Sending stays a
+    /// click — a plain push can only fast-forward, so nothing over there
     /// can be lost by pressing — but the bar wears the frame and the mark
-    /// the toolbar wears when a remote did not answer it
-    /// (デザイン規約 §リモートへ送る「送れなかったことはボタンが憶えている」).
+    /// (デザイン規約 §リモートへ送る).
     readonly property bool publishUnsure:
         page.publishState === "unknown" || page.publishState === "unreachable"
-    /// The name is taken by commits this history does not have, so a plain
-    /// push cannot land at all (実測) and only an overwrite can. The pill
-    /// becomes the one the toolbar offers a diverged branch — `push -f`,
-    /// warning-coloured, held rather than clicked — because the same state
-    /// must not wear two meanings (デザイン規約 §リモートへ送る).
+    /// The name is taken by commits this history does not have: a plain
+    /// push cannot land at all (実測), only an overwrite can, so the pill
+    /// becomes the diverged branch's `push -f` — held, warning-coloured
+    /// (デザイン規約 §リモートへ送る).
     readonly property bool publishRefused: page.publishState === "refused"
     /// The commit the question showed on the far side, which is what an
     /// overwrite leases against: a remote that moved since is refused by
@@ -465,9 +386,8 @@ Item {
     readonly property string publishLease:
         page.publishRefused ? repoTab.remoteBranchTip : ""
 
-    /// The remote is asked once the typing settles, not per keystroke: it
-    /// is a round trip to the network, and the person pressed a button
-    /// that reaches it, not one that reaches it per letter.
+    /// Asked once the typing settles, not per keystroke: the check is a
+    /// network round trip.
     Timer {
         id: publishCheckTimer
         interval: 350
@@ -490,9 +410,6 @@ Item {
         value: page.publishFilled && page.publishChecked
         when: page.publishAsking
     }
-    // Held only where holding is what the gesture is for: the overwrite.
-    // "Could not tell" is still a fast-forward-only push, so it keeps the
-    // click and says its doubt with the frame and the mark instead.
     Binding {
         target: graphPane
         property: "askHold"
@@ -505,17 +422,12 @@ Item {
         value: !page.publishRefused
         when: page.publishAsking
     }
-    // The word the pill answers with, which is the command that would run:
-    // a push that can land, or the overwrite that is the only thing that
-    // can (デザイン規約 §はじめてリモートへ送る).
     Binding {
         target: graphPane
         property: "askCode"
         value: page.publishRefused ? "push -f" : "push"
         when: page.publishAsking
     }
-    // Warning without taking the word: the remote could not be read, and
-    // that is the same news the toolbar carries as a frame and a `!`.
     Binding {
         target: graphPane
         property: "askAlert"
@@ -544,10 +456,6 @@ Item {
                            .arg(page.publishTarget)
         when: page.publishAsking
     }
-    // What the line under the question had no room for: how the overwrite
-    // is pressed and how much it takes, and — where the remote could not be
-    // read — that pressing is still safe to try. Nothing for the two the
-    // line already settles (デザイン規約 §hover のツールチップ).
     Binding {
         target: graphPane
         property: "askTip"
@@ -567,23 +475,18 @@ Item {
     function startPublishAsk() {
         page.publishRemote = repoTab.defaultRemote
         page.publishBranch = workTree.branch
-        // The command opens the question and answers it, the same word the
-        // button that raised the bar wears: the first push is not a
-        // different act, only one whose destination nobody has written down
-        // (デザイン規約 §はじめてリモートへ送る). `push` goes untranslated
-        // — it is the command's spelling, not a word for it.
+        // `push` goes untranslated — it is the command's spelling, not a
+        // word for it.
         page.startRowAsk("", qsTr("%1 where?").arg(workTree.branch), "",
                          false, "", page.answerPublish, false, "",
                          publishForm, "push")
-        // After the bar is up, never before: raising it resets the three
-        // things the bindings below own, and a binding whose value has not
-        // changed does not push back.
+        // After the bar is up, never before: raising it resets the
+        // properties the `publishAsking` bindings above own, and a binding
+        // whose value has not changed does not push back.
         page.publishAsking = true
         page.refreshPublishCheck()
         // No remote at all: the chooser holds nothing but its last row,
-        // so the dialog that row opens comes up unasked — the question
-        // keeps standing behind it and picks the new remote up when it
-        // lands, the same as when the row is clicked
+        // so the dialog that row opens comes up unasked
         // (デザイン規約 §はじめてリモートへ送る).
         if (page.publishRemotes.length === 0)
             page.choosePublishRemote(page.publishRemotes.length)
@@ -618,9 +521,7 @@ Item {
             form.remotePick.popup.open()
     }
     /// Automation: what the far side turned out to hold, once the remote
-    /// has had time to answer. The picture cannot say which of the three
-    /// the pill became — held, clicked, or dead — so this is where the
-    /// question's own answer is read (デザイン規約 §はじめてリモートへ送る).
+    /// has had time to answer.
     Timer {
         id: publishSettleTimer
         interval: 1200
@@ -653,17 +554,13 @@ Item {
     }
 
     function answerPublish() {
-        // The same slot a plain push fills: a first push git turns down is
-        // still this button's news, and the mark it wears afterwards is
-        // the same one (デザイン規約 §リモートへ送る).
+        // The same slot a plain push fills: a refused first push is still
+        // this button's news (デザイン規約 §リモートへ送る).
         page.pushSentBranch = workTree.branch
         repoTab.publishCurrent(page.publishRemote, page.publishBranch,
                                page.publishLease)
     }
 
-    // Writing a remote down, and correcting one. The question that sent us
-    // here keeps standing: the new remote lands in the chooser and is
-    // picked, so the answer carries on where it left off.
     RemoteDialog {
         id: remoteDialog
         onSubmitted: (name, url) => {
@@ -678,9 +575,6 @@ Item {
         }
     }
 
-    /// The controls the question needs: which remote, and what the branch
-    /// is called over there. One row — the words above it say what is
-    /// being asked, so the boxes need no labels of their own.
     Component {
         id: publishForm
         ColumnLayout {
@@ -690,16 +584,7 @@ Item {
             property alias remotePick: remotePick
         RowLayout {
             Layout.fillWidth: true
-            // The two boxes are one path, so they are packed the way a
-            // row packs its own contents rather than spaced the way
-            // separate controls are (デザイン規約 §余白 spaceXs).
             spacing: Theme.spaceXs
-            // Every remote this repository has, with the way to one it
-            // does not on the end of the same list. A list rather than a
-            // row of chips: a fork-and-upstream working copy has several,
-            // and chips grow sideways until they push the name out of the
-            // pane, while a list stays one control wide however many there
-            // are (デザイン規約 §はじめてリモートへ送る).
             AppCombo {
                 id: remotePick
                 pickOnly: true
@@ -712,19 +597,14 @@ Item {
                 wanted: page.publishRemote
                 onActivated: index => page.choosePublishRemote(index)
             }
-            // What the two boxes add up to. The line below already reads
-            // `<remote>/<name>`, and without the slash between them the
-            // pair is two boxes of one width with one chevron to tell
-            // them apart (デザイン規約 §選ぶ欄と打つ欄).
             Label {
                 Layout.alignment: Qt.AlignVCenter
                 text: "/"
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontMd
             }
-            // Never a placeholder: the branch's own name is the answer
-            // unless somebody changes it, and an empty box would read as
-            // though there were nothing to send.
+            // Never a placeholder: an empty box would read as though
+            // there were nothing to send.
             SlimField {
                 id: publishBranchField
                 Layout.preferredWidth: 160
@@ -735,8 +615,6 @@ Item {
                 }
                 Component.onCompleted: publishBranchField.forceActiveFocus()
             }
-            // The controls sit together at the left; the slack belongs to
-            // the row, not between the chips and the name.
             Item {
                 Layout.fillWidth: true
             }
@@ -751,16 +629,13 @@ Item {
     property string menuRefName: ""
     property string menuRefId: ""
     property string menuRefOid: ""
-    /// The branch git has just refused to delete, if the menu that asked
-    /// is still standing. Set only while its row is on screen to carry the
-    /// answer; a fresh menu starts with nothing refused.
+    /// The branch git has just refused to delete, while the menu that
+    /// asked is still standing.
     property string forceDeleteBranch: ""
-    /// What this menu offers, worked out as it opens and left alone while
-    /// it stands — the same way the discard row's plan is (`discardPlan`).
-    /// The conditions behind them are live: a fetch on the timer alone
-    /// moves `busyCount`, and a refresh can land while the card is up. A
-    /// row that appears or vanishes under the pointer is a row clicked by
-    /// accident (デザイン規約 §メニュー).
+    /// What this menu offers, decided as it opens and held while it
+    /// stands: the conditions are live (a timer fetch alone moves
+    /// `busyCount`), and a row that appears or vanishes under the pointer
+    /// is a row clicked by accident (デザイン規約 §メニュー).
     property bool menuCanSwitch: false
     property bool menuCanIntegrateFrom: false
     property bool menuCanDelete: false
@@ -768,15 +643,10 @@ Item {
     /// empty where it has none. What the remote-side delete rows name.
     property string menuRemoteCounterpart: ""
     property bool menuCanDeleteRemote: false
-    /// Why the delete table's rows are out, when they are — decided as
-    /// the menu opens, like everything else it shows. The rows wear it
-    /// as their `blockedReason`, which is what a greyed row says when
-    /// the pointer rests on it (デザイン規約 §無効).
+    /// Why the delete table's rows are out — decided as the menu opens,
+    /// worn as the rows' `blockedReason` (デザイン規約 §無効).
     property bool menuOnCurrentBranch: false
     property bool menuWriteRunning: false
-    /// One line each, conclusion first (規約 §hover のツールチップ). The
-    /// branch one names no branch: the row it sits on is already showing
-    /// which, and the tooltip adds the one thing the row cannot say.
     readonly property string deleteBlockedOnCurrent:
         qsTr("Switch away first — this is the branch you are on")
     readonly property string deleteBlockedWhileBusy:
@@ -791,9 +661,8 @@ Item {
         page.menuCanSwitch = (kind === "branch" || kind === "remote")
                              && full !== workTree.branch
         page.menuCanIntegrateFrom = page.canIntegrateFrom
-        // The branch the working tree is on cannot be deleted at all, and
-        // git says so rather than doing something else. Its remote
-        // reading can be, which is the one row its menu keeps.
+        // git refuses to delete the branch the working tree is on; its
+        // remote reading can still be deleted.
         page.menuCanDelete = repoTab.busyCount === 0
                              && !(kind === "branch" && full === workTree.branch)
         page.menuRemoteCounterpart =
@@ -814,15 +683,11 @@ Item {
         return refMenu.offer()
     }
 
-    /// Where a chip's right-click lands: the ref menu for the name the
-    /// chip shows, through the same door the sidebar's rows use. A chip
-    /// that names nothing to act on — the detached-HEAD marker, a stash,
-    /// or the current branch (whose ref menu has no rows) — falls back
-    /// to the menu the rest of the row opens: the row is still a commit,
-    /// and a right-click that finds nothing is an unanswered hand. The
-    /// stacked list's rows pass no `oidHex` and have no row to fall back
-    /// to; they close over nothing the way the sidebar's current branch
-    /// does (デザイン規約 §メニュー).
+    /// A chip's right-click: the ref menu for the name the chip shows. A
+    /// chip that names nothing to act on — the detached-HEAD marker, a
+    /// stash, the current branch (whose ref menu has no rows) — falls
+    /// back to the row's commit menu. The stacked list's rows pass no
+    /// `oidHex` and have no row to fall back to (デザイン規約 §メニュー).
     function openRecordMenu(record, oidHex) {
         const kind = record === "" ? ""
                    : record[0] === "L" ? "branch"
@@ -842,17 +707,13 @@ Item {
     }
 
     // ---- bringing two lines of history together --------------------
-    /// Whether the current branch can take a merge or a rebase from the
-    /// row the menu is on: a branch to land on, nothing already stepping,
-    /// and somewhere other than itself to come from.
     readonly property bool canIntegrateFrom:
         repoTab.state === "open" && repoTab.busyCount === 0
         && !workTree.detached && workTree.branch !== ""
         && workTree.opText === ""
         && page.menuRefId !== "" && page.menuRefId !== workTree.branch
-    /// The commits a rebase onto this row would rewrite. Asked about as
-    /// the menu opens, because the answer is a whole git call away and
-    /// the row wants to say it the moment it is read.
+    /// The commits a rebase onto this row would rewrite. Asked as the
+    /// menu opens — the answer is a whole git call away.
     readonly property string rebaseRange:
         (page.menuRefKind === "branch" || page.menuRefKind === "remote")
         && page.menuRefId !== "" ? page.menuRefId + "..HEAD" : ""
@@ -868,28 +729,13 @@ Item {
             page.settleRefList()
         }
         AppMenuItem {
-            // The command alone: this menu was opened on the row it means,
-            // and the row is already showing that name (デザイン規約
-            // §メニュー). The word was git's own to begin with, so the chip
-            // changes no wording — it says that this is the command, and
-            // seats the row in the column the ones below it read as
-            // commands (§git 用語のコード表記).
             code: "switch"
             offered: page.menuCanSwitch
-            // Through the same dispatcher the graph's chips use: a remote
-            // branch whose local one already exists cannot simply be
-            // created, and that answer belongs in one place.
+            // Through the chips' dispatcher: a remote branch whose local
+            // one already exists cannot simply be created.
             onTriggered: page.switchToRef(page.menuRefKind === "remote" ? "R" : "L",
                                           page.menuRefId)
         }
-        // Bringing this row's line of history together with the one the
-        // working tree is on. The current branch is the subject of both
-        // sentences — it is what changes — and the row is where the
-        // commits come from or land on (デザイン規約 §履歴を合流させる).
-        //
-        // `merge` and `rebase` are git's own words taken as they are, so
-        // they are said in git's spelling on a chip, the way `cherry-pick`
-        // and the reset flags are (§git 用語のコード表記).
         AppMenuItem {
             code: "merge"
             //: Follows the `merge` chip: "merge into main".
@@ -904,49 +750,30 @@ Item {
             code: "rebase"
             //: Follows the `rebase` chip: "rebase main onto it".
             text: qsTr("%1 onto it").arg(workTree.branch)
-            // Onto a tag as well would be a rebase onto a fixed point,
-            // which is a thing to do — but the row that says it belongs
-            // with the tag's own gestures, not squeezed in here.
+            // Deliberately not offered on a tag — that row belongs with
+            // the tag's own gestures.
             offered: (page.menuRefKind === "branch"
                       || page.menuRefKind === "remote")
                      && page.menuCanIntegrateFrom
             // Said, not asked (要望: rewriting a pushed commit shows a
-            // warning): the rebase goes ahead, and this tag is the
-            // warning. The count is the answer to this row's own range —
-            // published means reachable from a remote-tracking ref, which
-            // is only ever as fresh as the last fetch.
+            // warning). Published = reachable from a remote-tracking ref,
+            // only as fresh as the last fetch.
             note: page.rebasePublished ? qsTr("rewrites pushed commits") : ""
             onTriggered: repoTab.rebase(page.menuRefId, "", true)
         }
         AppMenuSeparator {}
-        // Nothing here repeats a gesture or a button: renaming and
-        // creating a branch on a tag are a click away on the row itself,
-        // and the commit's hash is on the pane the same click fills in.
-        // Every row this menu keeps costs the ones that have nowhere else
-        // to go (デザイン規約 §メニュー).
         AppMenuItem {
             id: refDeleteItem
-            // A stash is held down here instead of raising a bar over the
-            // graph: it is one row, kept nowhere else, and the question
-            // has nothing to add that the words on the row do not already
-            // say (デザイン規約 §長押し).
-            //
-            // Every delete leads with the command it runs, spelt as git
-            // spells it, and — alone in this menu — re-states its target:
-            // the menu opens off a chip, a stacked list or a sidebar row,
-            // and during the hold the name of what is about to go has to
-            // be readable on the row itself (デザイン規約 §メニュー
-            // 言い直さない、の例外). The stash is the one target whose
-            // identity is its message, which its own row is showing.
+            // Alone in this menu the delete re-states its target: during
+            // the hold the name of what is about to go has to be readable
+            // on the row itself (デザイン規約 §メニュー 言い直さない、の例外).
             readonly property bool stashRow: page.menuRefKind === "stash"
             readonly property bool remoteRow: page.menuRefKind === "remote"
             readonly property bool tagRow: page.menuRefKind === "tag"
             readonly property bool branchRow: page.menuRefKind === "branch"
             // git already refused `--delete` while this menu stood — or
-            // the check that ran as it opened came back unmerged, which
-            // is the same answer a click ahead of time. Either way the
-            // row wears the spelling git's own hint suggests, and the
-            // hold the everyday delete does not need (§左メニューの所作).
+            // the check run at open came back unmerged, the same answer a
+            // click ahead of time (§左メニューの所作).
             readonly property bool refusedRow:
                 branchRow
                 && (page.forceDeleteBranch === page.menuRefId
@@ -971,8 +798,6 @@ Item {
             // saying why nothing here answers. The other kinds keep the
             // assembled rule.
             offered: branchRow || (heldRow && page.menuCanDelete)
-            // Greyed rather than gone, and it says why on the hover
-            // (デザイン規約 §メニュー の削除の表).
             blockedReason: !branchRow || page.menuCanDelete ? ""
                          : page.menuOnCurrentBranch ? page.deleteBlockedOnCurrent
                                                     : page.deleteBlockedWhileBusy
@@ -997,10 +822,9 @@ Item {
                     repoTab.deleteBranch(page.menuRefId, true)
             }
         }
-        // The other half a branch can shed: its remote reading, deleted
-        // without touching the local one — and on the current branch the
-        // one delete on offer at all, since the local half is ground git
-        // refuses (デザイン規約 §左メニューの所作).
+        // The branch's remote reading, deleted without touching the local
+        // one — on the current branch the one delete on offer at all
+        // (デザイン規約 §左メニューの所作).
         AppMenuItem {
             id: refRemoteDeleteItem
             code: "push --delete"
@@ -1012,8 +836,6 @@ Item {
             // not for "no such thing".
             offered: page.menuRefKind === "branch"
                      && page.menuRemoteCounterpart !== ""
-            // The seat is only here because a reading exists, so the one
-            // thing left that can hold this row up is a write in flight.
             blockedReason: page.menuCanDeleteRemote
                            ? "" : page.deleteBlockedWhileBusy
             holdMs: Metrics.holdMs
@@ -1023,10 +845,8 @@ Item {
                 page.deleteRemoteNow(page.menuRemoteCounterpart)
             }
         }
-        // Both halves at once. A composite of two commands is no one
-        // command, so the row is words rather than a chip (§git 用語の
-        // コード表記 の 1:1 規則); the two rows above have already named
-        // the halves, and this one takes them together. The local half
+        // A composite of two commands is no one command, so words rather
+        // than a chip (§git 用語のコード表記 の 1:1 規則). The local half
         // runs first and a refusal stops the pair with nothing touched.
         AppMenuItem {
             id: refBothDeleteItem
@@ -1034,7 +854,6 @@ Item {
             note: refDeleteItem.refusedRow ? qsTr("not merged") : ""
             offered: page.menuRefKind === "branch"
                      && page.menuRemoteCounterpart !== ""
-            // Both halves, so the local half's refusal speaks for it.
             blockedReason: page.menuCanDelete && page.menuCanDeleteRemote ? ""
                          : page.menuOnCurrentBranch ? page.deleteBlockedOnCurrent
                                                     : page.deleteBlockedWhileBusy
@@ -1055,10 +874,8 @@ Item {
     }
 
     // ---- what the sidebar's rows ask for ---------------------------
-    /// A row was renamed in place. Nothing is confirmed: a name is not
-    /// history, and the one it replaces is a switch away (a tag and a
-    /// stash are re-made under the new name by core, which is the only
-    /// rename git has for them).
+    /// Unconfirmed: a name is not history. A tag and a stash are re-made
+    /// under the new name by core — the only rename git has for them.
     function renameRow(kind, id, name) {
         if (kind === "branch") {
             // Which remote this branch speaks for has to be read before
@@ -1110,15 +927,11 @@ Item {
             AppBackend.report("rename_remote_asked from=" + remoteRef + " to=" + name)
     }
 
-    /// Deleting a row from the left menu.
-    ///
-    /// A branch goes the way git deletes one — `-d`, which refuses while
-    /// the branch holds commits nothing else does. That refusal is the
-    /// question worth asking, so it is asked when it arrives rather than
-    /// guessed at beforehand (デザイン規約 §左メニューの所作). A tag and a stash have no
-    /// such refusal in git, and both can take something with them, so they
-    /// are asked about up front. A branch on a remote never arrives here:
-    /// its row is held down instead (`deleteRemoteNow`).
+    /// A branch is deleted with `-d`, and git's refusal is the question —
+    /// asked when it arrives rather than guessed at beforehand
+    /// (デザイン規約 §左メニューの所作). A tag and a stash have no such
+    /// refusal in git, so they are asked about up front. A branch on a
+    /// remote never arrives here (`deleteRemoteNow`).
     property string pendingDeleteBranch: ""
     /// Refusals this page already has an answer for. The question bar
     /// explains them, so the command log stays where it was rather than
@@ -1138,11 +951,9 @@ Item {
         page.expectedRefusals++
         repoTab.deleteBranch(id, false)
     }
-    /// A branch on a remote, deleted with no question in front of it: the
-    /// menu row that reaches this was held down, which is the whole of the
-    /// asking (デザイン規約 §リモートブランチを消す). git refuses nothing
-    /// here — the branch is on the far side, so no `-d` can weigh what it
-    /// holds — and the hold is what stands in for that refusal.
+    /// Held, not asked: git refuses nothing here — the branch is on the
+    /// far side, so no `-d` can weigh what it holds — and the hold stands
+    /// in for that refusal (デザイン規約 §リモートブランチを消す).
     function deleteRemoteNow(remoteRef) {
         const cut = remoteRef.indexOf("/")
         if (cut < 0)
@@ -1150,23 +961,18 @@ Item {
         repoTab.deleteRemoteBranch(remoteRef.substring(0, cut),
                                    remoteRef.substring(cut + 1))
     }
-    /// A stash dropped with no question in front of it: the menu row that
-    /// reaches this was held down, which is the whole of the asking
-    /// (デザイン規約 §長押し).
+    /// Held, not asked (デザイン規約 §長押し).
     function dropStashNow(ref) {
         repoTab.dropStash(ref)
         if (page.selectedStashRef === ref)
             page.selectedStashRef = ""
     }
-    /// git refused the plain delete. The row that asked is still standing
-    /// — the click that ran it left the menu up for exactly this — so the
-    /// answer lands there, on the row the hand is already on, and turns it
-    /// into a held one (デザイン規約 §左メニューの所作).
-    ///
-    /// The row says what git said and no more. A refusal does not mean the
-    /// commits stop being reachable: git measures the branch against its
-    /// upstream when it has one, so a branch merged into HEAD but not yet
-    /// pushed is refused while nothing at all would be lost (実測).
+    /// git refused the plain delete: the answer lands on the menu row that
+    /// asked, turning it into a held one (デザイン規約 §左メニューの所作).
+    /// A refusal does not mean the commits stop being reachable: git
+    /// measures the branch against its upstream when it has one, so a
+    /// branch merged into HEAD but not yet pushed is refused while nothing
+    /// at all would be lost (実測).
     function noteForceDelete(name) {
         page.forceDeleteBranch = name
         if (AppBackend.autoAct !== "")
@@ -1198,34 +1004,22 @@ Item {
         page.discardPlan = page.planDiscard()
         page.menuFileCount = wipPane.chosenRows().length
         fileMenu.offer()
-        // Which rows the menu offers follows from the bucket, and an
-        // absent row is not something a screenshot can be trusted on —
-        // least of all now that a row nobody can choose leaves no trace
-        // at all.
         if (AppBackend.autoAct !== "")
             AppBackend.report("file_menu bucket=" + bucket
                               + " rows=" + fileMenu.offeredRows)
     }
-    /// Undoing what happened to one file: what the chosen rows would cost
-    /// and which git command each of them goes to.
-    ///
-    /// One way in, because the reader's intent is the same whatever git
-    /// knows about the file; the words apart, because what it costs is not
-    /// (デザイン規約 §その他の操作). Which row it was opened on is the
-    /// whole of the difference:
+    /// What the chosen rows' discard costs, by the bucket the row was
+    /// opened on (デザイン規約 §その他の操作):
     ///
     /// - unstaged — the edits on disk go, and what is staged stays
     /// - untracked — the file goes; there the file *is* the change
     /// - staged — both sides go, back to HEAD, and a rename takes the
     ///   name it came from with it or leaves half of itself staged
     ///
-    /// A conflicted path gets here from nowhere: git refuses to restore
-    /// one until it has been told how it was resolved, so a conflicted
-    /// row rides along with none of it and is not counted either.
+    /// git refuses to restore a conflicted path until told how it was
+    /// resolved, so a conflicted row rides along untouched and uncounted.
     property var discardPlan: null
     function planDiscard() {
-        // Whatever is highlighted, in list order. A right-click outside
-        // the choice has already made its row the whole of it.
         const rows = wipPane.chosenRows()
         const plan = { count: 0, unstaged: [], untracked: [], staged: [] }
         for (let i = 0; i < rows.length; i++) {
@@ -1242,16 +1036,9 @@ Item {
         }
         return plan
     }
-    /// What the row does, said the way every held row says it: the verb
-    /// and nothing else, with the gesture left to the mark ahead of it
-    /// (デザイン規約 §長押し). Nothing to take is nothing to say.
     function discardWords(plan) {
         return !plan || plan.count === 0 ? "" : qsTr("Discard")
     }
-    /// What that costs, when it is more than the verb implies: one wording
-    /// for every bucket and the difference on the tag, since the reader's
-    /// intent is the same whatever git knows about the file
-    /// (デザイン規約 §その他の操作).
     function discardNote(plan) {
         if (!plan || plan.count === 0)
             return ""
@@ -1263,9 +1050,7 @@ Item {
             return qsTr("both sides")
         return ""
     }
-    /// Thrown away with no question in front of it: the menu row that
-    /// reaches this was held down, which is the whole of the asking
-    /// (デザイン規約 §長押し).
+    /// Held, not asked (デザイン規約 §長押し).
     function discardChosenNow(plan) {
         if (!plan || plan.count === 0)
             return
@@ -1292,8 +1077,7 @@ Item {
             repoTab.addPath(paths[i])
     }
     /// The conflicted rows among those chosen — the only ones a side can
-    /// be taken on. A right-click on a conflicted row has already made it
-    /// the whole of the choice unless several were picked on purpose.
+    /// be taken on.
     function chosenConflicts() {
         const rows = wipPane.chosenRows()
         const paths = []
@@ -1311,9 +1095,6 @@ Item {
         page.sendPaths(paths)
         repoTab.takeSidePaths(side)
     }
-    /// Opens the highlighted conflicted rows in the configured tool, or
-    /// goes to settings when there is no tool to open them with.
-    ///
     /// The paths are always named: git walks a bare `mergetool` one file
     /// at a time and holds the write queue for the whole walk.
     function openInMergeTool() {
@@ -1329,13 +1110,10 @@ Item {
     }
     AppMenu {
         id: fileMenu
-        // Which side to keep, named by the branch each side is rather
-        // than by `--ours` / `--theirs` — during a rebase those two swap
-        // over, and a name that is simply what the side *is* does not ask
-        // anyone to hold that in their head (デザイン規約 §conflict の
-        // ours / theirs). Plain clicks: the file is conflicted, so there
-        // is no settled version of it to lose, and the other side is one
-        // click away until the operation is continued.
+        // Named by branch rather than `--ours` / `--theirs` — during a
+        // rebase those two swap over (デザイン規約 §conflict の ours /
+        // theirs). Plain clicks: a conflicted file has no settled version
+        // to lose.
         AppMenuItem {
             text: wipPane.workTree.sideOurs !== ""
                   ? qsTr("Keep %1's version").arg(wipPane.workTree.sideOurs)
@@ -1352,23 +1130,8 @@ Item {
                      && page.menuFileCanWrite
             onTriggered: page.takeSideNow("theirs")
         }
-        // `Edit in`, not `Open in`: the two rows above say what the file
-        // ends up as, so this one keeps the same mood rather than
-        // switching to what a window does — and `Open` is already this
-        // app's word for bringing in a repository or a tab.
-        //
-        // The external tool shares its seat with the way to pick one:
-        // with nothing configured there is nothing to open, so the row
-        // becomes the door to the setting instead (`…` = a question
-        // stands). Changing the tool afterwards lives in settings rather
-        // than in a second row here — the menu is the one surface where
-        // an extra row costs every reader
+        // With nothing configured the row becomes the door to the setting
         // (規約 §conflict を外部ツールへ渡す).
-        //
-        // The name is left in plain type. A code chip would be the second
-        // in this menu, and `stash` two rows below wears one to say "this
-        // is a git command" — a tool name is a config value, and one mark
-        // cannot carry both (規約 §git 用語のコード表記).
         AppMenuItem {
             text: wipPane.workTree.mergeTool !== ""
                   ? qsTr("Edit in %1").arg(wipPane.workTree.mergeTool)
@@ -1380,10 +1143,6 @@ Item {
         AppMenuSeparator {}
         AppMenuItem {
             code: "stash"
-            // The rows this menu was opened on are the ones lit in the
-            // list, so how many there are is the only thing left to say —
-            // and `Discard` below already says it on the tag rather than
-            // in the words (デザイン規約 §メニュー).
             note: page.menuFileCount > 1
                   ? qsTr("%n files", "", page.menuFileCount) : ""
             // git will not stash a tree with unresolved conflicts in it.
@@ -1398,11 +1157,9 @@ Item {
                 repoTab.stashPaths("")
             }
         }
-        // One row on every kind of file, and the row says what it takes
-        // away — held rather than asked about, the way the stash and the
-        // remote branch above it are (デザイン規約 §長押し). On a file
-        // changed on both sides the two rows are the choice itself: the
-        // unstaged one keeps what is staged, the staged one takes the lot.
+        // Held, not asked (デザイン規約 §長押し). On a file changed on
+        // both sides the two rows are the choice itself: the unstaged one
+        // keeps what is staged, the staged one takes the lot.
         AppMenuItem {
             id: fileDiscardItem
             text: page.discardWords(page.discardPlan)
@@ -1417,8 +1174,6 @@ Item {
         }
         AppMenuSeparator {}
         AppMenuItem {
-            // Plural by what will land on the clipboard, not by how many
-            // rows are lit (`menuFileCount`).
             text: page.menuFileCount > 1 ? qsTr("Copy paths") : qsTr("Copy path")
             onTriggered: {
                 const rows = wipPane.chosenRows()
@@ -1440,8 +1195,8 @@ Item {
     // Whether a remote already has the menu's commit. Rewriting it is
     // not asked about — nothing here leaves the machine — but デザイン規約
     // 「push 済みの範囲は尋ねずに言う」 wants it said, so the squash row
-    // carries a tag the way the amend
-    // editor does. The answer lands a frame after the menu opens.
+    // carries a tag the way the amend editor does. The answer lands a
+    // frame after the menu opens.
     property bool menuPublished: false
     /// What these menus offer, held still for as long as they stand
     /// (`menuCanSwitch` and the rest). `menuCanSequence` is the pair that
@@ -1470,15 +1225,8 @@ Item {
         commitMenu.offer()
     }
 
-    // The one thing a stash row has nowhere else: the click that opens
-    // this menu also selects the row, and the details pane it fills in
-    // carries Apply and Pop (デザイン規約 §メニュー).
     AppMenu {
         id: stashMenu
-        // The word git gives each of them, without the `stash` it is
-        // already standing on: this menu belongs to one stash row, so the
-        // subcommand alone is the whole of what tells the two apart
-        // (デザイン規約 §グラフ行の右クリック).
         AppMenuItem {
             code: "apply"
             offered: page.menuStashCanWrite
@@ -1493,15 +1241,9 @@ Item {
             }
         }
         AppMenuSeparator {}
-        // Held, not asked about: a bar coming down over the graph to ask
-        // about one row of it is more machinery than one stash is worth,
-        // and the hold says the same thing in the place the hand already
-        // is (デザイン規約 §長押し).
+        // Held, not asked (デザイン規約 §長押し).
         AppMenuItem {
             id: stashDeleteItem
-            // The word git gives it, with the `stash` dropped the way
-            // apply and pop drop it — this menu is standing on the stash
-            // (デザイン規約 §グラフ行の右クリック).
             code: "drop"
             offered: page.menuStashCanWrite
             holdMs: Metrics.holdMs
@@ -1519,19 +1261,14 @@ Item {
             offered: page.menuCanSequence
             onTriggered: repoTab.cherryPick(page.menuOid)
         }
-        // The other half of the same pair: one copies the commit here,
-        // the other undoes it here. Both add a commit rather than
-        // rewriting one, so neither is asked about or held.
+        // Both cherry-pick and revert only add a commit, so neither is
+        // asked about or held.
         AppMenuItem {
             code: "revert"
             offered: page.menuCanSequence
             onTriggered: repoTab.revert(page.menuOid)
         }
         AppMenuSeparator {}
-        // The same two the sidebar's rows carry, reaching a commit that
-        // may have no name at all (デザイン規約 §履歴を合流させる). The
-        // words say "here" rather than naming the row, the way the reset
-        // submenu does — the row is what was clicked.
         AppMenuItem {
             code: "merge"
             //: Follows the `merge` chip: "merge into main".
@@ -1547,23 +1284,14 @@ Item {
             offered: page.menuCanIntegrate
             onTriggered: repoTab.rebase(page.menuOid, "", true)
         }
-        // No row for landing on the commit itself: doing so leaves HEAD
-        // on no branch, which is a state to be got out of rather than one
-        // to offer (デザイン規約 §ブランチ・コミットへの移動). What that
-        // row was reached for is a branch at this commit, which the
-        // double-click already opens the box for.
+        // No row for landing on the commit itself: that leaves HEAD on no
+        // branch (デザイン規約 §ブランチ・コミットへの移動) — the
+        // double-click already offers a branch at this commit.
         AppMenuSeparator {}
         // No entry for editing the message: the click that opens this
-        // menu selects the row, which puts the message in the details
-        // pane's own editable boxes. A second way in would say the same
-        // thing twice, and every row here costs the ones still to come.
+        // menu already puts the message in the details pane's boxes.
         AppMenuItem {
             code: "squash"
-            // Which commit is folded is not said, the way the reset
-            // submenu says "here": the row this menu was opened on is
-            // the one that was pointed at. What has to be named is the
-            // other end, and the details pane the same click fills in
-            // already calls it the parent (its `←` link).
             //: Follows the `squash` chip: "squash into parent".
             text: qsTr("into parent")
             // Said, not asked (要望: rewriting a pushed commit shows a
@@ -1572,19 +1300,12 @@ Item {
             offered: page.menuCanEditHistory
             onTriggered: page.squashCommit(page.menuOid)
         }
-        // The commit stops being part of the history, and what came after
-        // it is replayed over the gap. Every other row here either adds a
-        // commit or moves one; this is the only one that takes a commit
-        // away, so it is the only one that can leave the old chain with
-        // nothing but the reflog reaching it — and the mark follows that
-        // rather than the row (デザイン規約 §長押し). Held while this
-        // branch is the only thing holding its tip; a plain click once
-        // something else does, because then the replaced commits stay
-        // drawn and a cherry-pick brings any of them back.
-        //
-        // The answer is a property of the branch, not of the row, so it
-        // is already in hand when the menu opens: a mark that appeared a
-        // moment later would re-indent every row in the menu
+        // Held while this branch is the only thing holding its tip; a
+        // plain click once something else does — then the replaced
+        // commits stay drawn and a cherry-pick brings any of them back
+        // (デザイン規約 §長押し). The answer is a property of the branch,
+        // not of the row, so it is already in hand when the menu opens: a
+        // mark appearing later would re-indent every row
         // (`AppMenu.holdIndent`) with the hand already on its way.
         AppMenuItem {
             id: dropCommitItem
@@ -1598,22 +1319,9 @@ Item {
                 page.dropCommit(page.menuOid)
             }
         }
-        // Three ways to take the branch back to this commit, told apart
-        // by what becomes of the work they skip over. The command is
-        // said once, as the title row's own verb (`reset` main here, the
-        // way `stash` this file reads), and each row leads with just its
-        // flag as a code chip (デザイン規約 §git 用語のコード表記) — the
-        // hand that knows `reset --soft` finds its row at a glance and
-        // the eye that does not reads the sentence alone. A submenu
-        // keeps the choice out of the way until it is asked for; where
-        // there is no branch to move, the whole submenu goes and takes
-        // the row that opens it with it (`AppMenu.applies`).
         AppMenu {
             id: resetMenu
             titleCode: "reset"
-            // "here" rather than "to this commit": the commit it means
-            // is the row this menu was opened on, and the row already
-            // says which one that is.
             //: Follows the `reset` chip: "reset main here".
             title: workTree.branch !== ""
                    ? qsTr("%1 here").arg(workTree.branch)
@@ -1629,10 +1337,7 @@ Item {
                 text: qsTr("Keep everything, unstaged")
                 onTriggered: page.moveBranchHere("mixed")
             }
-            // Held, not asked about — the stash delete's judgement: a
-            // bar coming down over the whole graph is too much machinery
-            // for one row of it, and the hold says the same thing in the
-            // place the hand already is (デザイン規約 §長押し).
+            // Held, not asked (デザイン規約 §長押し).
             AppMenuItem {
                 id: hardResetItem
                 code: "--hard"
@@ -1652,8 +1357,7 @@ Item {
     }
 
     // ---- double-click on a graph row -------------------------------
-    // The row leads where its chip says, and a row with no chip is
-    // offered one instead of doing nothing: the gesture always answers.
+    // A row with no chip is offered one instead of doing nothing.
     function rowDoubleClicked(oidHex, record) {
         if (repoTab.state !== "open")
             return
@@ -1694,11 +1398,9 @@ Item {
         onPointerInsideChanged: page.settleRowCard()
     }
     property bool rowCardWanted: false
-    /// The chip's list is up, or is about to be. Both open off the same
-    /// pointer and land in the same place, so only one of them is ever
-    /// out: the chip's, because it is the more particular of the two —
-    /// the row's card says what every row says (デザイン規約 §hover の
-    /// ツールチップ).
+    /// The chip's list is up, or is about to be. Only one of the two is
+    /// ever out, and the chip's is the more particular
+    /// (デザイン規約 §hover のツールチップ).
     readonly property bool refListUp: page.refListWanted || refList.opened
     function openRowCard(row) {
         if (!row || page.refListUp)
@@ -1809,13 +1511,8 @@ Item {
     }
 
     // ---- taking the branch back to an earlier commit ----------------
-    // git calls this a reset; the menu says what it does, which is move
-    // the branch. Offered only where there is a branch to move and
-    // somewhere to move it to: detached HEAD has none, a stash sits on
-    // no branch's history, an operation in progress is left through
-    // Continue / Abort instead (mid-merge a soft reset refuses outright
-    // and the other two abandon the merge without a word), and the
-    // commit the branch already stands on is not a move at all.
+    // Not offered mid-operation: mid-merge a soft reset refuses outright
+    // and the other two abandon the merge without a word.
     /// Rewriting this commit's place in the history. Unlike the two
     /// above it, the newest commit is fair game — that is the one a fold
     /// or a drop most often means.
@@ -1824,9 +1521,6 @@ Item {
         && !workTree.detached && workTree.branch !== ""
         && workTree.opText === ""
         && page.menuOid !== "" && page.menuStashRef === ""
-    /// The commit-menu twin of `canIntegrateFrom`: a branch to land on,
-    /// nothing already stepping, and a commit other than the one the
-    /// working tree is already sitting on.
     readonly property bool canIntegrateHere:
         repoTab.state === "open" && repoTab.busyCount === 0
         && !workTree.detached && workTree.branch !== ""
@@ -1840,11 +1534,6 @@ Item {
         && page.menuOid !== "" && page.menuOid !== workTree.headOid
         && page.menuStashRef === ""
 
-    // Only the discarding one is held, and it is held on its own row —
-    // no bar. Keeping the work staged or unstaged leaves every byte
-    // where it is — the branch moves, and a commit puts back what it
-    // skipped — while discarding is the one that leaves nothing to put
-    // back.
     function moveBranchHere(mode) {
         repoTab.resetTo(page.menuOid, mode)
     }
@@ -1989,18 +1678,12 @@ Item {
                               + " text=" + wipPane.pointedEolText)
         }
     }
-    // The diff has to arrive before a row of it can be staged — or
-    // thrown away, which stops at the question the pill answers.
-    //
-    // Asked for rather than waited out. How long a read takes is the
-    // repository's business, and a wait that suits a demo repo is one a
-    // real one walks past — but the worse half is that nothing noticed:
-    // every verb below acted on the empty pane, and a pane with nothing
-    // in it photographs the same whether the rows were late or the file
-    // was never dirty at all (2026-08-13 実測: `pick-lines` against this
-    // repository picked no lines and passed). So the tick asks, and when
-    // the asking runs out it acts anyway — the report goes out either
-    // way carrying `ready=`, which is what the run is failed on.
+    // The diff has to arrive before a row of it can be staged. Asked for
+    // rather than waited out: a fixed wait photographs an empty pane the
+    // same as a late one (2026-08-13 実測: `pick-lines` against this
+    // repository picked no lines and passed). When the asking runs out it
+    // acts anyway — the report carries `ready=`, which the run is failed
+    // on.
     Timer {
         id: stageRowTimer
         interval: 50
@@ -2037,18 +1720,14 @@ Item {
             // not part of the change (see `firstChangedLine`).
             const line = diffPane.firstChangedLine(0)
             // Said before the acting, so a verb that goes on to fail its
-            // write says both. `waited=` is how long the asking went on
-            // (ticks, not a clock) — near enough to say which side of a
-            // fixed wait the read would have fallen on.
+            // write says both. `waited=` is ticks, not a clock.
             AppBackend.report("diff_row act=" + act + " ready=" + arrived
                               + " rows=" + diffPane.view.count
                               + " line=" + line
                               + " waited=" + stageRowTimer.waited)
-            // Nothing to do but be looked at: the diff is the shot. The
-            // line endings get a line of their own — the sentence is in
-            // the picture, but a picture cannot say which of the four the
-            // pane decided on, and the two estimated ones differ from the
-            // exact ones only in what the sample was allowed to claim.
+            // The diff is the shot; the line endings get a report line of
+            // their own (a picture cannot say which of the four kinds the
+            // pane decided on).
             if (act === "diff-file") {
                 const d = diffPane.diffModel
                 AppBackend.report("line_endings kind=" + d.endingKind
@@ -2065,37 +1744,24 @@ Item {
                 diffPane.showLineTools(0, line)
                 return
             }
-            // The hunk heading with the pointer on it: its two words carry
-            // their own colours only there (デザイン規約 §diff の中の
-            // ステージ), and hover cannot be injected, so the row is named
+            // The heading's two words carry their colours only under the
+            // pointer, and hover cannot be injected, so the row is named
             // instead. A heading's own row is line -1 (`flatten_patches`).
             if (act === "hunk-tools") {
                 diffPane.showLineTools(0, -1)
                 return
             }
-            // Lines picked by hand, and the write that takes the lot. The
-            // argument says how many to pick (two by default), which is
-            // what makes the heading name a count.
             // Reading part way down a long diff and then writing: the
-            // rebuild has to come back to the same place, or a file with
-            // any length to it throws the reader to the top on every
-            // partial stage. `diff_place` is reported by the restore.
+            // rebuild has to come back to the same place. `diff_place` is
+            // reported by the restore.
             if (act === "keep-place") {
                 diffPane.scrollTo(400)
                 page.stageSelection(0, line)
                 return
             }
             if (act === "pick-lines" || act === "stage-lines") {
-                // The path came in as the argument, so how many lines to
-                // pick is not something this verb can be told: two is what
-                // makes a heading say a count rather than a hunk.
-                //
-                // Both numbers go out, and `any=` is the one judged. A
-                // first hunk with a single changed line in it answers
-                // with `got=1`, which is a heading that names a hunk
-                // rather than a count — worth seeing in the log, but the
-                // fixture's doing, not the wiring's. Nothing picked at
-                // all is the wiring's, and it used to pass.
+                // Two lines, so the heading names a count rather than a
+                // hunk. `any=` is the one judged.
                 const want = 2
                 const got = diffPane.chooseLines(0, want)
                 AppBackend.report("picked_lines any=" + (got > 0)
@@ -2108,18 +1774,15 @@ Item {
                 page.stageSelection(0, act === "stage-line" ? line : -1)
                 return
             }
-            // "discard-hunk" leaves the held button on screen for the shot;
-            // "-go" holds it to its end. There is no line-level discard to
-            // enter — a hunk is the smallest piece that can be thrown away.
+            // No line-level discard exists — a hunk is the smallest piece
+            // that can be thrown away.
             if (act === "discard-hunk-go")
                 diffPane.completeHold()
         }
     }
-    // A reader who scrolled before the colours landed. The rows arrive
-    // plain and the whole list is swapped again when the colours turn up
-    // (`DiffModel::lay_out_rows`), which is the one thing that swap must
-    // not cost: the place being read. Two ticks, because the state to
-    // photograph is on the far side of an event nothing else waits for.
+    // A reader who scrolled before the colours landed: the whole list is
+    // swapped again when the colours turn up (`DiffModel::lay_out_rows`),
+    // and that swap must not cost the place being read.
     Timer {
         id: colourPlaceTimer
         interval: 50
@@ -2177,8 +1840,8 @@ Item {
             // Where the open section stands. `cell` is the top edge of the
             // mark that opened it and `top` where the panel begins — they
             // are the same number or the list has walked away from its own
-            // cell, which is what a section too tall for the pane used to
-            // do. `end` against `pane` is the other half: it grows down
+            // cell — the failure a section too tall for the pane invites.
+            // `end` against `pane` is the other half: it grows down
             // into the pane and stops at the foot of it.
             + " top=" + Math.round(sidebarPane.peekY)
             + " cell=" + Math.round(sidebarPane.peekTop)
@@ -2874,11 +2537,8 @@ Item {
             page.amendToggled(true)
             resetAuthorTimer.start()
         } else if (act === "stash" || act === "stash-staged") {
-            // Through the pane's card, like the button: it is what
-            // decides which options the stash is made with.
-            // "stash-staged" clicks the staged-only box the way a
-            // person would, so the run proves the ticks it clears
-            // really clear.
+            // Through the pane's card, like the button: it decides which
+            // options the stash is made with.
             page.showWip()
             wipPane.openStashPanel()
             if (act === "stash-staged")
@@ -2890,10 +2550,6 @@ Item {
             page.sendPaths([arg])
             repoTab.stashPaths("")
         } else if (act === "stage-many" || act === "stage-many-go") {
-            // The same two rows the discard verbs choose, and then the
-            // pointer put on the first one's own mark: the marks of every
-            // row that would move with it come out together. "-go" presses
-            // it, so the shot after is what one press moved.
             page.showWip()
             const head = wipPane.rowAt(0)
             if (head)
@@ -2911,9 +2567,6 @@ Item {
                 }
             }
         } else if (act === "discard-many" || act === "discard-many-go") {
-            // Two rows chosen the way clicks choose them — the first row
-            // plainly, the argument's row with Ctrl — and then the menu's
-            // one row over both.
             page.showWip()
             const first = wipPane.rowAt(0)
             if (first)
@@ -2927,20 +2580,12 @@ Item {
             if (act.endsWith("-go"))
                 fileDiscardItem.completeHold()
         } else if (act === "stash-dialog") {
-            // Opened and left standing, for a look at it. With the
-            // argument "staged-only" the staged-only box is clicked
-            // first, so the shot shows what that click clears.
             page.showWip()
             wipPane.openStashPanel()
             if (arg === "staged-only")
                 wipPane.stashClickStagedOnly()
         } else if (act === "file-menu" || act === "file-menu-untracked"
                    || act === "file-menu-staged" || act === "file-menu-conflict") {
-            // Which rows a file row offers follows from its bucket, so
-            // each bucket has its own way in here. The row is chosen
-            // first, the way a right-click on an unchosen row chooses it
-            // — the menu acts on what is highlighted, and its discard row
-            // says what that choice costs.
             const menuBucket = act === "file-menu" ? "unstaged"
                              : act === "file-menu-staged" ? "staged"
                              : act === "file-menu-conflict" ? "conflicts"
@@ -2949,27 +2594,20 @@ Item {
             wipPane.chooseOnly(menuBucket, arg)
             page.openFileMenu(menuBucket, arg, "")
             if (menuBucket === "conflicts") {
-                // The two sides are named after branches that swap over
-                // during a rebase, so a shot has to be able to say which
-                // words the rows actually got.
                 const row = wipPane.rowFor(arg)
                 AppBackend.report("conflict_kind " + (row ? row.conflictWords() : "-"))
             } else {
                 AppBackend.report("discard_row " + fileDiscardItem.text)
             }
         } else if (act === "take-side-ours" || act === "take-side-theirs") {
-            // Through the same menu a right-click opens, on the row that
-            // is highlighted — the write goes to every conflicted row in
-            // the choice, not just the one named here.
             page.showWip()
             wipPane.chooseOnly("conflicts", arg)
             page.openFileMenu("conflicts", arg, "")
             fileMenu.close()
             page.takeSideNow(act === "take-side-ours" ? "ours" : "theirs")
         } else if (act === "open-mergetool") {
-            // Same route as the row above. With a tool configured this
-            // holds the write queue until it exits, so a demo tool that
-            // blocks is what leaves the pane's wait on screen.
+            // With a tool configured this holds the write queue until it
+            // exits, so a demo tool that blocks leaves the wait on screen.
             page.showWip()
             wipPane.chooseOnly("conflicts", arg)
             page.openFileMenu("conflicts", arg, "")
@@ -2979,28 +2617,20 @@ Item {
         } else if (act === "discard-file" || act === "discard-file-go"
                    || act === "delete-file" || act === "delete-file-go"
                    || act === "discard-staged" || act === "discard-staged-go") {
-            // Through the file menu, where a right-click enters it. The
-            // one row says what it takes, which follows the row it was
-            // opened on: "delete-file" an untracked one, "discard-staged"
-            // the staged side, otherwise the unstaged one. That row is
-            // held rather than asked about, so there is no question to
-            // stop at: the plain verb leaves the menu standing for the
-            // shot, and "-go" runs the hold to its end. What the row says
-            // goes into words as well — the wording is the whole of the
-            // difference between the three, and a shot alone proves little.
+            // Which row follows the verb: "delete-file" an untracked one,
+            // "discard-staged" the staged side, otherwise the unstaged
+            // one. The plain verb leaves the menu standing for the shot;
+            // "-go" runs the hold to its end.
             page.showWip()
             const bucket = act.startsWith("delete-file") ? "untracked"
                          : act.startsWith("discard-staged") ? "staged"
                          : "unstaged"
-            // The right-click makes the named row the whole choice, and
-            // the menu reads everything else off the chosen rows.
             wipPane.chooseOnly(bucket, arg)
             page.openFileMenu(bucket, arg)
             AppBackend.report("discard_row " + fileDiscardItem.text)
             if (act.endsWith("-go"))
                 fileDiscardItem.completeHold()
         } else if (act === "amend-author") {
-            // The amend editor with authorship on offer, left standing.
             wipPane.setAmendChecked(true)
             page.amendToggled(true)
         } else if (act === "switch") {
@@ -3021,23 +2651,13 @@ Item {
                    || act === "nav-unfold" || act === "nav-peek-rename"
                    || act === "nav-peek-away" || act === "nav-peek-into"
                    || act === "nav-peek-out" || act === "nav-peek-shut") {
-            // The left menu folded to its icons, and one of them rested
-            // on. The resting cannot be injected (hover never can), so
-            // the section is named the way the diff's line tools are.
-            // "nav-unfold" walks the whole way back, which is the one
-            // thing folding has to be able to do.
-            // "nav-fold no-tags" takes the tags off the graph first, so
-            // the mark the rail wears for that can be photographed.
-            // "-away" walks the pointer off the cell, "-into" walks it off
-            // the cell down into the list it opened, "-out" carries on out
-            // of the list the other way (the exit no cell can see) and
-            // "-shut" clicks the cell. Only "-into" leaves the section
-            // standing; the other three close it, and the click has to
-            // leave the list folded (`collapsed=`). "nav-peek" on a
-            // section with nothing in it must not open at all — the same
-            // verb answers both, because the cell decides
-            // (NavRail.enterAt), so point it at an empty section
-            // (`--preset empty`) to read that side.
+            // Hover cannot be injected, so the rail cell is named.
+            // "-away" walks the pointer off the cell, "-into" down into
+            // the opened list, "-out" on out the far side (the exit no
+            // cell can see), "-shut" clicks the cell; only "-into" leaves
+            // the section standing. "nav-peek" on an empty section must
+            // not open at all (NavRail.enterAt decides — `--preset empty`
+            // reads that side).
             if (arg === "no-tags")
                 repoTab.setTagsShown(false)
             page.foldByHand(true)
@@ -3066,25 +2686,18 @@ Item {
             }
             navRailTimer.start()
         } else if (act === "nav-close") {
-            // One section closed from its header band. The pane keeps
-            // the sections packed against the top whichever of them are
-            // closed, so what is read afterwards is where the header of
-            // the closed one came to rest — at the foot of the pane is
-            // the failure this watches for.
+            // The pane keeps sections packed against the top; what is
+            // read is where the closed header came to rest — at the foot
+            // of the pane is the failure this watches for.
             sidebarPane.closeSection(arg)
             navSectionTimer.start()
         } else if (act === "nav-filter") {
-            // Typed into the filter band, which every section answers for
-            // itself: the rows it keeps are flat and whole-named, where
-            // the tree it replaced showed segments under folders.
             sidebarPane.typeFilter(arg)
             navFilterTimer.start()
         } else if (act === "nav-rename" || act === "rename-branch"
                    || act === "rename-tag" || act === "rename-stash") {
-            // The box the second click opens, entered at the same place.
-            // "nav-rename" leaves it standing for the shot; the others
-            // type the argument into it and accept. Which row: the
-            // current branch, the first tag, the first stash.
+            // Which row: the current branch, the first tag, the first
+            // stash. "nav-rename" leaves the box standing for the shot.
             const kind = act === "rename-tag" ? "tag"
                        : act === "rename-stash" ? "stash" : "branch"
             const id = kind === "branch" ? workTree.branch
@@ -3095,12 +2708,10 @@ Item {
                 sidebarPane.submitEdit(arg)
         } else if (act === "rename-remote" || act === "rename-remote-box"
                    || act === "rename-remote-go") {
-            // A remote branch renamed from its own row, named outright
-            // (`origin/billing:billing-v2`) because the remote's rows are
-            // behind a fold. The box carries the branch without the
-            // remote it is on; "-box" leaves it standing for the shot,
-            // the plain act stops at the question, and "-go" holds the
-            // pill down to the end.
+            // Named outright (`origin/billing:billing-v2`) because the
+            // remote's rows are behind a fold. "-box" leaves the box
+            // standing, the plain act stops at the question, "-go" holds
+            // the pill to the end.
             const parts = arg.split(":")
             const ref = parts[0]
             const was = ref.substring(ref.indexOf("/") + 1)
@@ -3118,48 +2729,31 @@ Item {
             if (act === "rename-remote-go")
                 graphPane.completeHold()
         } else if (act === "rename-local-upstream") {
-            // The whole of the local flow: the branch takes the new name
-            // here, and the question about carrying it over comes back
-            // when git says that landed (so the shot is taken later).
+            // The question about carrying the name over comes back only
+            // when git says the local rename landed (so the shot is late).
             const local = workTree.branch
             sidebarPane.beginRename("branch", local, local)
             sidebarPane.submitEdit(arg)
         } else if (act === "delete-branch" || act === "delete-branch-go") {
-            // Through the menu's own row, which stays standing over the
-            // plain `-d` so git's answer has somewhere to land. On a merged
-            // branch it lands and the menu closes; on one git refuses, the
-            // row turns into the held `Delete anyway`, which "-go"
-            // then runs to its end. What the row says goes into words too,
-            // since that is the whole of the difference.
+            // On a branch git refuses, the row turns into the held
+            // force-delete, which "-go" then runs to its end.
             page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
             page.deleteRow("branch", arg, arg, branchesModel.oidOfName(arg))
             if (act === "delete-branch-go")
                 forceDeleteTimer.start()
         } else if (act === "delete-tag" || act === "delete-tag-go") {
-            // The tag's row is held rather than asked about: git refuses
-            // nothing here, so the hold is the whole of the asking.
             page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
             if (act === "delete-tag-go")
                 refDeleteItem.completeHold()
         } else if (act === "delete-stash" || act === "delete-stash-go") {
-            // The left menu's row for the first stash. That row is held
-            // rather than asked about, so there is no question to stop at:
-            // the plain verb leaves the menu standing for the shot, and
-            // "-go" runs the hold to its end.
             page.openRefMenu("stash", stashesModel.nameAt(0),
                              stashesModel.fullAt(0),
                              stashesModel.oidOfName(stashesModel.nameAt(0)))
             if (act === "delete-stash-go")
                 refDeleteItem.completeHold()
         } else if (act === "delete-remote" || act === "delete-remote-go") {
-            // The left menu's row for a branch on a remote, named outright
-            // (`origin/feature/x`) because those rows sit behind a fold —
-            // which is opened here so the row is under the menu it raises.
-            // That row is held rather than asked about, so there is no
-            // question to stop at: the plain verb leaves the menu standing
-            // for the shot, and "-go" runs the hold to its end. Which rows
-            // it offers is said in words too, since a row that cannot be
-            // chosen leaves no trace in the picture at all.
+            // Named outright (`origin/feature/x`) because those rows sit
+            // behind a fold — opened here so the row is under the menu.
             remotesModel.toggleFolder(arg.substring(0, arg.indexOf("/")))
             page.openRefMenu("remote", arg, arg, remotesModel.oidOfName(arg))
             AppBackend.report("ref_menu kind=remote delete=" + refDeleteItem.code
@@ -3169,102 +2763,73 @@ Item {
         } else if (act === "delete-force") {
             repoTab.deleteBranch(arg, true)
         } else if (act === "delete-branch-refused") {
-            // The refused branch's row, left standing for the shot: the
-            // plain delete runs and the refusal turns the row into a held
-            // one. Same entry as delete-branch; this one just waits for
-            // git's answer rather than acting on it.
+            // Same entry as delete-branch; this one waits for git's
+            // answer rather than acting on it.
             page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
             page.deleteRow("branch", arg, arg, branchesModel.oidOfName(arg))
             refusedRowTimer.start()
         } else if (act === "chip-menu") {
-            // The chip's right-click, through the one door the page keeps
-            // for it: the argument names a local branch, and the menu that
-            // opens is the sidebar's ref menu. Only the kind letter and
-            // the name of the record are read.
+            // Only the kind letter and the name of the record are read.
             page.openRecordMenu("L0000" + arg, branchesModel.oidOfName(arg))
             chipMenuTimer.start()
         } else if (act === "chip-menu-current") {
-            // The current branch's chip: its ref menu offers nothing, and
-            // the right-click falls back to the commit menu of the row.
             page.openRecordMenu("L1001" + workTree.branch,
                                 branchesModel.oidOfName(workTree.branch))
             chipMenuTimer.start()
         } else if (act === "delete-blocked-tip") {
-            // The current branch's own menu, with the row that cannot be
-            // chosen wearing its line. Forced rather than hovered: the
-            // pointer cannot be put on a row from here, and this writes
-            // to the property the real hover writes to.
+            // Forced rather than hovered: the pointer cannot be put on a
+            // row from here, and this writes to the property the real
+            // hover writes to.
             page.openRecordMenu("L1001" + workTree.branch,
                                 branchesModel.oidOfName(workTree.branch))
             refDeleteItem.tipForced = true
             blockedTipTimer.start()
         } else if (act === "menu-highlight") {
-            // The pointer's row, reached by the keyboard's road: the two
-            // land on the same `highlighted`, and only this one can be
-            // driven from here. The argument picks the row.
+            // The keyboard's road to `highlighted` — the only one that
+            // can be driven from here.
             page.openRecordMenu("L0000" + (arg === "" ? workTree.branch : arg),
                                 branchesModel.oidOfName(
                                     arg === "" ? workTree.branch : arg))
             refMenu.currentIndex = 1
             AppBackend.report("menu_highlight index=" + refMenu.currentIndex)
         } else if (act === "delete-branch-early") {
-            // The menu opened over a branch and left alone: the early
-            // answer dresses the delete row before any click — `-D` and
-            // the note where git would refuse, the plain spelling where
-            // it would not. The argument picks which half is on show.
+            // The early answer dresses the delete row before any click;
+            // the argument picks which half is on show.
             page.openRecordMenu("L0000" + arg, branchesModel.oidOfName(arg))
             earlyDeleteTimer.start()
         } else if (act === "stash-menu" || act === "delete-stash-row") {
-            // The graph's way to the same three rows, entered where a
-            // right-click enters it: the row menu on the first stash's
-            // row. Which menu opened is said in words too — the difference
-            // is the whole point, and a shot alone proves little. The
-            // argument "go" holds the delete row down.
+            // The row menu on the first stash's row; the argument "go"
+            // holds the delete row down.
             page.openRowMenu(stashesModel.oidOfName(stashesModel.nameAt(0)))
             AppBackend.report("row_menu stash=" + page.menuStashRef)
             if (act === "delete-stash-row" && arg === "go")
                 stashDeleteItem.completeHold()
         } else if (act === "stash-apply-row" || act === "stash-pop-row") {
-            // Apply and Pop from the graph's own stash row.
             page.openRowMenu(stashesModel.oidOfName(stashesModel.nameAt(0)))
             if (act === "stash-apply-row")
                 repoTab.applyStash(page.menuStashRef)
             else
                 repoTab.popStash(page.menuStashRef)
         } else if (act === "branch-at-tag") {
-            // The box a double-click puts on a tag row, accepted with the
-            // argument as the new branch's name.
             sidebarPane.beginBranchAt(tagsModel.nameAt(0),
                                       tagsModel.oidOfName(tagsModel.nameAt(0)))
             sidebarPane.submitEdit(arg)
         } else if (act === "dbl-local" || act === "dbl-remote") {
-            // What a double-click on a chip does, entered where the
-            // delegate enters it: the record is the chip as it is drawn
-            // (kind letter, four flags, name — see encode.rs). The last
-            // flag is where the ref is, and it is the one thing the two
-            // differ on here.
+            // The record is the chip as drawn (kind letter, four flags,
+            // name — see encode.rs).
             page.activateRecord(
                 (act === "dbl-local" ? "L0001" : "R0000") + arg)
         } else if (act === "move-branch") {
-            // Past the question, for the write it guards: the local
-            // branch of that name is moved onto the remote one.
+            // Past the question, for the write it guards.
             page.switchTo("force", repoTab.localNameFor(arg),
                           repoTab.localNameFor(arg), arg)
         } else if (act === "name-branch") {
-            // From the box's own accept onward — the page never sees the
-            // typing, only a name and the row it belongs to.
             graphPane.view.namingSubmitted(graphModel.oidAt(0), arg)
         } else if (act === "ref-list" || act === "ref-list-card") {
-            // The unstacked chips, left standing. Hover cannot be
-            // injected on Windows, so this enters where the hover timer
-            // would; the argument is the row whose chip is stacked.
-            // `-card` walks the gesture the report came from: the hand
-            // rests on the row until its card is out, moves onto the
-            // chip, and the row asks once more from under the list. Both
-            // halves have to hold — the card that was already out is put
-            // away, and the one asked for afterwards is refused — and
-            // either failing leaves `open=true`. Read it against
-            // `row-card` on the same row, which is where it does open.
+            // Hover cannot be injected, so this enters where the hover
+            // timer would. `-card` walks row → card → chip → asked again
+            // from under the list: both card closes have to hold, and
+            // either failing leaves `open=true`.
             const stacked = graphPane.view.itemAtIndex(Number(arg))
             if (stacked) {
                 if (act === "ref-list-card")
@@ -3277,32 +2842,22 @@ Item {
                 }
             }
         } else if (act === "signature") {
-            // Selecting a row is all the operating there is; the mark
-            // appears when the verify comes back, so the report waits
-            // for it. The argument is the row.
+            // The mark appears when the verify comes back, so the report
+            // waits for it.
             page.activateRow(graphModel.oidAt(Number(arg)))
             signatureTimer.start()
         } else if (act === "signature-tip") {
-            // The verdict's reason, worn where the pointer cannot go:
-            // the row is selected as `signature` does, and once the
-            // verify is back the mark is asked to say why. The argument
-            // is the row.
+            // Once the verify is back the mark is asked to say why.
             page.activateRow(graphModel.oidAt(Number(arg)))
             signatureTipTimer.start()
         } else if (act === "stash-tip") {
-            // The read-only summary's reason. Selecting the stash row
-            // fills the pane; the box is then asked why it refuses the
-            // caret. The argument is the row.
+            // The box is asked why it refuses the caret.
             page.activateRow(graphModel.oidAt(Number(arg)))
             stashTipTimer.start()
         } else if (act === "path-tip") {
-            // The whole name an elided row keeps for its hover: row 0 is
-            // the elided leaf in the flattened view, and the folder chain
-            // the same pane elides in the tree (`-tree`). Either way it
-            // is pointed at the way a pointer would be, and the shared
-            // tip answers. The argument picks the pane the way `corner`
-            // does — "wip" for the working tree, a row for the commit's
-            // file list.
+            // Row 0 is the elided leaf in the flattened view, the folder
+            // chain in the tree (`-tree`). The argument picks the pane
+            // the way `corner` does.
             const wantsTree = ("" + arg).endsWith("-tree")
             const pane = wantsTree ? ("" + arg).slice(0, -5) : arg
             pathTipTimer.wipSide = pane === "" || pane === "wip"
@@ -3316,45 +2871,33 @@ Item {
             pathTipTimer.start()
         } else if (act === "row-card") {
             // Hover cannot be injected, so this enters where the row's
-            // delay timer would. The argument is the row.
+            // delay timer would.
             const hovered = graphPane.view.itemAtIndex(Number(arg))
             if (hovered)
                 graphPane.view.rowHoverRequested(hovered, true)
             rowCardTimer.start()
         } else if (act === "author-card" || act === "author-card-open") {
-            // The author's name at rest, and the card the pointer opens
-            // under it. Hover cannot be injected, so `-open` writes the
-            // same property the handler writes; read the two as a pair,
-            // because "the card stayed shut" only means something next
-            // to a run where it opened. The argument is the row.
+            // Hover cannot be injected, so `-open` writes the same
+            // property the handler writes; read the two as a pair —
+            // "stayed shut" only means something next to a run where it
+            // opened.
             page.activateRow(graphModel.oidAt(Number(arg)))
             authorCardTimer.start()
         } else if (act === "co-authors" || act === "co-authors-open") {
-            // The credit line on the date row, and the card the pointer
-            // opens under it. Hover cannot be injected, so `-open` writes
-            // the same property the handler writes; the two are read as a
-            // pair, because "the card stayed shut" only means something
-            // next to a run where it opened. The argument is the row.
+            // Same pairing as author-card.
             page.activateRow(graphModel.oidAt(Number(arg)))
             coAuthorTimer.start()
         } else if (act === "details-grow" || act === "details-grow-squeeze") {
-            // The grip in the description box's corner, pulled past what
-            // the pane can spare. The argument is the row, because the
-            // corner is only offered where the message is longer than the
-            // resting cap — and the two answers are read as a pair, since
-            // "the grip stayed away" only means something next to a run
-            // where it appeared. `-squeeze` then takes the room back, for
-            // the other half of the same bound: what the hand was given
-            // has to be returned when the pane no longer has it to lend.
+            // The corner grip pulled past what the pane can spare;
+            // `-squeeze` then takes the pane's room back with the log.
             page.activateRow(graphModel.oidAt(Number(arg)))
             descGrowTimer.pane = detailsPane
             descGrowTimer.paneName = "details"
             descGrowTimer.squeeze = act === "details-grow-squeeze"
             descGrowTimer.start()
         } else if (act === "wip-grow" || act === "wip-grow-squeeze") {
-            // The same pull in the commit editor, where the argument is
-            // the description itself: the box starts empty, so a run that
-            // types nothing has nothing to open it for.
+            // The argument is the description itself: the box starts
+            // empty, so a run that types nothing has nothing to open.
             page.showWip()
             wipPane.setMessage("feat: write the summary", arg)
             descGrowTimer.pane = wipPane
@@ -3362,24 +2905,15 @@ Item {
             descGrowTimer.squeeze = act === "wip-grow-squeeze"
             descGrowTimer.start()
         } else if (act === "details-fit") {
-            // Whether the pane's own column fits the pane. Nothing here
-            // elides on its own: a row that will not give lays the whole
-            // column out at its width, and the picture of that is glyphs
-            // cut in half at the window's edge — which headless cannot
-            // see, so the pane reports the number. The argument is the
-            // row, and `--preset edges` holds the wall.
+            // Overflow shows as glyphs cut at the window's edge, which
+            // headless cannot see, so the pane reports the number.
+            // `--preset edges` holds the wall.
             page.activateRow(graphModel.oidAt(Number(arg)))
             detailsFitTimer.start()
         } else if (act === "corner") {
-            // The git version in the pane's bottom corner, from both sides
-            // of the one rule it lives by: there while the list under it
-            // leaves that corner bare, gone the moment rows reach it. The
-            // argument picks the pane — "wip" for the working tree, a row
-            // for the commit whose changes fill the other one — and the
-            // preset is the other axis, since `basic` ends its lists well
-            // above the corner and `long` runs them past the pane. Read
-            // as a pair: one half alone frames like a label that is simply
-            // always on, or always off.
+            // Both sides of the corner's one rule: preset `basic` leaves
+            // the corner bare, `long` runs rows into it. Read as a pair —
+            // one half alone frames like a label always on, or always off.
             if (arg === "" || arg === "wip")
                 page.showWip()
             else
@@ -3388,27 +2922,17 @@ Item {
         } else if (act === "graph-step" || act === "graph-step-edge"
                    || act === "graph-step-far" || act === "graph-step-named"
                    || act === "graph-step-dirty" || act === "graph-step-diff") {
-            // Walking the history with the arrow keys. Keystrokes cannot
-            // be injected, so the run enters at the same `stepRow` the
-            // key handler enters — and takes the keyboard first through
-            // the same call a row click makes, since a graph nobody has
-            // pressed hears no arrows at all (規約 §矢印で履歴を辿る).
-            // The argument is the signed number of rows; every run but the
-            // plain one sets its own, because each is about one particular
-            // step. `-dirty` takes two: the first raises the question
-            // about the half-written message and is put back by it, and
-            // the second is the one that must not tug against it. `-edge`
-            // walks off the bottom of a window seeded at its floor, where
-            // the history is taller than the pane; `-far` sends the view
-            // to the end first, so the row it steps off has nowhere on
-            // screen to be — the two answer the second paragraph of
-            // §矢印で履歴を辿る, which a picture cannot (an edge reached
-            // one row at a time frames like an edge jumped to). `-diff`
-            // opens a file over the graph the way CHANGES does and takes
-            // its argument as the path: the pane swapped off the screen
-            // has to let the keyboard go, or the arrows walk the
-            // selection behind the diff — and moving the selection closes
-            // the diff, so the screen is pulled back to the graph.
+            // Keystrokes cannot be injected, so the run enters at the
+            // same `stepRow` the key handler enters — and takes the
+            // keyboard first through the same call a row click makes,
+            // since a graph nobody has pressed hears no arrows at all
+            // (規約 §矢印で履歴を辿る). `-dirty` takes two steps: the
+            // first raises the half-written-message question, the second
+            // must not tug against it. `-edge` walks off the bottom;
+            // `-far` sends the view away first so the stepped-off row is
+            // off screen. `-diff` opens a file over the graph: the pane
+            // swapped off screen has to let the keyboard go, or the
+            // arrows walk the selection behind the diff.
             page.activateRow(branchesModel.headOid !== ""
                              ? branchesModel.headOid : graphModel.oidAt(0))
             graphStepTimer.named = act === "graph-step-named"
@@ -3423,74 +2947,43 @@ Item {
                                  : arg === "" ? 1 : Number(arg)
             graphStepTimer.start()
         } else if (act === "diff-step" || act === "diff-step-edge") {
-            // Sending the diff itself, which moves the view and not a
-            // selection (規約 §diff を上下に送る). The argument is the
-            // path, opened the way CHANGES opens one; the step count is
-            // the verb's own, since each is about one particular end of
-            // the walk. The plain one takes a single row — which is the
-            // whole of "1 打 = 1 行", and it has to land short of the
-            // bottom (`atEnd=false`); `-edge` walks well past it, so the
-            // last presses are refused and the view stops rather than
-            // wrapping.
-            //
-            // Both ride the 320x240 seed the graph's stepping verbs use:
-            // no demo file's diff is longer than a default window, and a
-            // pane with nothing to scroll has no rule to answer. Even
-            // there the room below the fold is two rows (実測), which is
-            // why the plain walk is one and not more.
+            // Moves the view, not a selection (規約 §diff を上下に送る).
+            // Rides the 320x240 seed: no demo file's diff is longer than
+            // a default window, and even there the room below the fold is
+            // two rows (実測) — which is why the plain walk is one row.
             page.showWip()
             page.toggleDiff("untracked", arg, "")
             diffStepTimer.steps = act === "diff-step-edge" ? 20 : 1
             diffStepTimer.start()
         } else if (act === "name-box") {
-            // Opened and left standing, for a look at it. The argument is
-            // the row, since the box only belongs on one with no chips.
             graphPane.startNaming(graphModel.oidAt(Number(arg)))
         } else if (act === "graph-bar" || act === "graph-bar-away"
                    || act === "middle-scroll") {
             // Both want lanes that do not fit their column, and no demo
-            // repository has that many (the column starts wide enough for
-            // `graphDefaultLanes`). Pulling the divider in is what a
-            // person does, so the state these read is a real one.
+            // repository has that many — the divider is pulled in the way
+            // a person would.
             page.setGraphColumns(graphPane.labelWManual,
                                  Metrics.laneInset + 2 * Metrics.laneW)
             graphPanTimer.start()
         } else if (act === "graph-min") {
-            // The column pulled in past its floor, so the clamp answers.
-            // Where the floor is — lane 0's co-author badge kept whole —
-            // is the pane's own rule; this proves a drag cannot land
-            // below it, and the picture shows the badge uncut.
+            // Pulled past the floor so the clamp answers (the floor is
+            // lane 0's co-author badge kept whole).
             page.setGraphColumns(graphPane.labelWManual, 0)
             AppBackend.report("graph_min w=" + graphPane.graphColW
                               + " min=" + graphPane.graphColWMin)
         } else if (act === "divider-refuse") {
-            // A drag carried past one of the bounds a divider has, named
-            // by the argument. The line stays where the boundary stopped
-            // and the badge goes on with the pointer, so the picture
-            // holds both halves: a divider that still promises the drag
-            // the other way, and an answer out where the hand got to.
-            // Which road it takes is which road a hand would take: the
-            // graph's own dividers know what was asked, a split bar is
-            // read from where the pointer went instead.
-            // The log is shut until it is asked for, and a bar between a
-            // pane and something that is not on screen is not on screen
-            // either — there would be nothing for a hand to grab. Open it
-            // and let it lay out before measuring against a bar that has
-            // no geometry yet (the beat `graphPanTimer` waits for too).
+            // A drag carried past one of a divider's bounds, named by the
+            // argument. The log's bar is not on screen while the log is
+            // shut — open it and let it lay out before measuring against
+            // a bar that has no geometry yet.
             if (arg === "log-min" && !page.commandsOpen) {
                 page.commandsOpen = true
                 splitRefuseTimer.start()
             } else if (arg === "desc-max" || arg === "desc-min") {
-                // The corner grip. Same wait as `details-grow`, for the
-                // same reason: the message has to be in the box, and the
-                // box laid out with it, before there is a bound to carry
-                // anything past.
-                //
                 // Row 1, not row 0: row 0 of every preset is the
                 // uncommitted row, and landing on it puts the working
-                // tree in the right-hand pane — leaving the box this
-                // pulls on correct but off screen, which is a picture
-                // that cannot show the badge it was taken for.
+                // tree in the right-hand pane — the box this pulls on
+                // would be off screen.
                 page.activateRow(graphModel.oidAt(1))
                 descGrowTimer.pane = detailsPane
                 descGrowTimer.paneName = "details"
@@ -3501,10 +2994,8 @@ Item {
                 page.reportDividerRefusal(arg)
             }
         } else if (act === "graph-divider") {
-            // What the divider answers with the pointer on it. Read
-            // against two repositories: a line withheld on a linear
-            // history is only an answer next to a run where the same
-            // verb draws it.
+            // Read against two repositories: a line withheld on a linear
+            // history is only an answer next to a run where it is drawn.
             graphPane.restDividerPointer(true)
             AppBackend.report("graph_divider shown=" + graphPane.graphDividerShown
                               + " line=" + graphPane.graphDividerLineShown
@@ -3519,18 +3010,12 @@ Item {
                    || act === "edit-message-leave"
                    || act === "edit-message-discard"
                    || act === "edit-message-focus") {
-            // Through the pane, like typing: selecting the commit puts
-            // its message in the boxes, and the boxes are what saves.
-            // "edit-message" leaves it unsaved, for the editing state.
-            // Detached there is no branch tip to name, so the newest
-            // row stands in — which is a commit other than HEAD.
+            // Detached there is no branch tip to name, so the newest row
+            // stands in — a commit other than HEAD.
             page.jumpToRef(branchesModel.headOid !== ""
                            ? branchesModel.headOid : graphModel.oidAt(0))
             rewordTimer.start()
         } else if (act === "cherry-pick") {
-            // Scrolled to and clicked, the way the row it copies is
-            // reached; "row:<n>" names one the way the other graph verbs
-            // do, and a ref name reaches the commit it points at.
             const pickOid = page.autoActOid(arg)
             const pickRow = graphModel.rowOf(pickOid)
             if (pickRow >= 0) {
@@ -3540,23 +3025,17 @@ Item {
             tipLandedTimer.start()
             repoTab.cherryPick(pickOid)
         } else if (act === "reset-soft" || act === "reset-mixed") {
-            // Through the menu, like clicking it: the row the menu was
-            // opened on is where the branch lands. "row:<n>" or a full
-            // oid names that row; with nothing given, the row under
-            // HEAD's — a reset to where the branch already stands would
-            // move nothing worth photographing, and an empty name would
-            // reach git as `reset ''`.
+            // With nothing given, the row under HEAD's: a reset to where
+            // the branch already stands moves nothing, and an empty name
+            // would reach git as `reset ''`.
             page.openRowMenu(arg === ""
                              ? graphModel.oidAt(
                                    graphModel.rowOf(workTree.headOid) + 1)
                              : page.autoActOid(arg))
             page.moveBranchHere(act === "reset-soft" ? "soft" : "mixed")
         } else if (act === "reset-hard" || act === "reset-hard-confirm") {
-            // Both stand where the click path stands: menu open, submenu
-            // up, the held row on screen. "-confirm" stops there —
-            // nothing has moved until the hold runs — and "reset-hard"
-            // runs the hold to its end for the discarding write itself.
-            // The row resolves the way reset-soft's does.
+            // "-confirm" stops with the held row on screen; "reset-hard"
+            // runs the hold to its end. The row resolves as reset-soft's.
             page.openRowMenu(arg === ""
                              ? graphModel.oidAt(
                                    graphModel.rowOf(workTree.headOid) + 1)
@@ -3565,16 +3044,10 @@ Item {
             if (act === "reset-hard")
                 hardResetItem.completeHold()
         } else if (act === "commit-menu" || act === "reset-menu") {
-            // Nothing written: the menu is left standing for the overlay
-            // shot. Which rows are offered is said in words as well — a
-            // row that cannot be chosen is not in the picture at all.
-            //
             // With no row named, the row under HEAD's: most of this menu
             // is about a commit the branch is *not* already standing on,
-            // so HEAD's own row would leave half of it out. Counted from
-            // where HEAD actually sits rather than from the top — the
-            // rows above it belong to whatever else the graph is showing
-            // (in the demo repository, a remote that is ahead).
+            // and it is counted from where HEAD actually sits — the rows
+            // above belong to whatever else the graph is showing.
             let menuOid = arg
             if (menuOid === "")
                 menuOid = graphModel.oidAt(
@@ -3585,17 +3058,11 @@ Item {
             AppBackend.report("commit_menu rows=" + commitMenu.offeredRows
                               + " can_move=" + page.menuCanMoveBranch)
         } else if (act === "wip") {
-            // The working tree, as the row above the newest commit opens
-            // it: the file list this pane's every other verb starts from.
             page.showWip()
         } else if (act === "wip-tally") {
-            // The graph row's tally, opened beside the list it counts.
-            // **Read the two together**: `rows` is what the pane lists and
-            // the kinds are what the row says, and `status::Kinds` counts
-            // rows — so the kinds have to add up to it. A drift means one
-            // of the two stopped reading the same status, which is the one
-            // thing the picture cannot answer (four numbers against six
-            // rows is not something the eye adds up).
+            // Read the two together: `status::Kinds` counts rows, so the
+            // kinds have to add up to `rows` — a drift means one of the
+            // two stopped reading the same status.
             page.showWip()
             AppBackend.report("wip_tally added=" + graphPane.view.wipAdded
                               + " modified=" + graphPane.view.wipModified
@@ -3605,12 +3072,9 @@ Item {
                               + " conflicted=" + graphPane.view.wipConflicted
                               + " rows=" + worktreeModel.total)
         } else if (act === "wip-message" || act === "wip-message-focus") {
-            // The same box in the pane that writes a new commit. A body
-            // is typed in first because this editor starts empty, and an
-            // empty box has no text to take a colour. The two verbs are
-            // read as a pair: the caret is the only difference between
-            // them, so the dim side is what says the lit one means
-            // anything.
+            // A body is typed first because this editor starts empty, and
+            // an empty box has no text to take a colour. Read as a pair:
+            // the caret is the only difference between the two verbs.
             page.showWip()
             wipPane.setMessage("feat: write the summary",
                                arg === "" ? "And the description under it." : arg)
@@ -3620,14 +3084,8 @@ Item {
                               + wipPane.descriptionFocused
                               + " color=" + wipPane.descriptionColor)
         } else if (act === "drop-commit" || act === "drop-commit-go") {
-            // Through the graph row's menu, where the row is held or
-            // clicked depending on what still holds the branch tip: the
-            // plain verb leaves the menu standing for the shot and "-go"
-            // takes whichever of the two the row is offering. The plan is
-            // built by object name, the way a graph row hands one over,
-            // so a symbolic name is not what this takes — "row:<n>" names
-            // one the way the other graph verbs do, for the commits a
-            // headless run has no other way to spell.
+            // The plan is built by object name, the way a graph row hands
+            // one over — a symbolic name is not what this takes.
             page.openRowMenu(page.autoActOid(arg))
             AppBackend.report("drop_row " + dropCommitItem.code
                               + " " + dropCommitItem.text
@@ -3643,22 +3101,12 @@ Item {
         } else if (act === "merge-branch" || act === "rebase-onto"
                    || act === "revert-commit" || act === "integrate-menu") {
             // Through the menus a right-click opens, so the rows' own
-            // gating decides whether anything runs. "integrate-menu"
-            // leaves the ref menu standing for a shot instead.
+            // gating decides whether anything runs.
             if (act === "revert-commit") {
                 // The click that opens this menu selects the row too
-                // (GraphRowDelegate), and where the selection stood before
-                // the write is half of what this verb is about — so the
-                // hook takes both steps a right-click takes. "row:<n>"
-                // names a commit the way the other graph verbs do, since a
-                // throwaway repository's hashes cannot be spelled from
-                // outside.
+                // (GraphRowDelegate), so the hook takes both steps a
+                // right-click takes.
                 const oidHex = page.autoActOid(arg)
-                // Scrolled to, then clicked: in a history taller than the
-                // pane the row being undone is nowhere near the tip, and
-                // that is the whole of where the viewport has to end up.
-                // A short one clamps back to the top and the run reads the
-                // selection half only.
                 graphPane.jumpToRow(graphModel.rowOf(oidHex))
                 page.activateRow(oidHex)
                 page.openRowMenu(oidHex)
@@ -3668,10 +3116,6 @@ Item {
                 page.openRefMenu("branch", arg, arg,
                                  branchesModel.oidOfName(arg))
                 if (act === "merge-branch") {
-                    // Where the reader was before the merge is half of
-                    // what this reads, and the sidebar's row is not the
-                    // graph: the selection sits on whatever the page
-                    // opened with, which is the tip about to be replaced.
                     tipLandedTimer.start()
                     repoTab.merge(arg, false, false, "")
                 } else if (act === "rebase-onto") {
@@ -3679,17 +3123,13 @@ Item {
                 }
             }
         } else if (act === "op-exit" || act === "op-exit-go") {
-            // The ways out of a stopped operation, which stand in the pane
-            // under the commit button rather than dropping from a click.
             // "-go" runs the held row the argument names to its end.
             page.showWip()
             if (act === "op-exit-go")
                 AppBackend.report("op_exit_held " + wipPane.completeOpExit(arg))
         } else if (act === "eol-commit") {
-            // The commit button with something staged that changes its
-            // line endings: the frame, the mark, and the tip that says
-            // what it is about. Nothing is committed — the shot is the
-            // state before anyone decides.
+            // Nothing is committed — the shot is the state before anyone
+            // decides.
             page.showWip()
             repoTab.stageAll()
             // `amend` asks for the other wording rather than for a
@@ -3703,10 +3143,8 @@ Item {
                                ? "feat: something" : arg, "")
             eolCommitTimer.start()
         } else if (act === "eol-hover") {
-            // The sentence a pending file's row carries, put out by naming
-            // the row rather than by hovering it — hover cannot be
-            // injected, and this writes the one property a real pointer
-            // writes. The tip lands in overlay.png.
+            // Hover cannot be injected; this writes the one property a
+            // real pointer writes. The tip lands in overlay.png.
             page.showWip()
             wipPane.pointEol(arg)
             eolHoverTimer.start()
@@ -3715,21 +3153,12 @@ Item {
                    || act === "diff-file" || act === "line-tools"
                    || act === "hunk-tools" || act === "pick-lines"
                    || act === "stage-lines" || act === "keep-place") {
-            // All of them enter through the diff of one file and act on
-            // its first hunk: "diff-file" only opens it, "line-tools" puts
-            // out the square a line shows under the pointer, and
-            // "hunk-tools" wakes the heading's two words. "discard-hunk"
-            // leaves the held button standing for the shot and "-go" holds
-            // it to its end. The working tree comes up first, since its
-            // file list is where a diff is reached from.
-            //
-            // The bucket rides in front of the path (`<bucket>:<path>`, the
-            // form `nav-dbl` uses) when it is not the usual unstaged one: a
-            // file the repository has never seen has no unstaged diff at
-            // all — it is read from `untracked`, and a file git stopped on
-            // from `conflicts` (which is where its words differ). Only the
-            // bucket names count as one, so a path carrying a colon still
-            // opens.
+            // All enter through one file's diff and act on its first
+            // hunk. The bucket rides in front of the path
+            // (`<bucket>:<path>`) when it is not the usual unstaged one:
+            // an untracked file has no unstaged diff at all, a conflicted
+            // one is read from `conflicts`. Only the bucket names count
+            // as one, so a path carrying a colon still opens.
             const cut = arg.indexOf(":")
             const head = cut > 0 ? arg.substring(0, cut) : ""
             const named = head === "staged" || head === "unstaged"
@@ -3744,8 +3173,6 @@ Item {
                             worktreeModel.origOf(wtPath))
             stageRowTimer.begin()
         } else if (act === "colour-place") {
-            // Scrolls into a diff while its colours are still being worked
-            // out, and reports where the view stands once they land.
             page.showWip()
             page.toggleDiff("unstaged", arg, "")
             colourPlaceTimer.begin()
@@ -3753,13 +3180,9 @@ Item {
                    || act === "diff-fold-by-hand"
                    || act === "diff-fold-by-rename"
                    || act === "diff-keep-folded") {
-            // What opening a file does to the left menu on its own, and
-            // what each way back does to the file. "-by-hand" asks for
-            // the list back with the block on the band; "-by-rename" gets
-            // it back as the side effect of typing a name into a peeked
-            // row — both take the diff down with them. "-keep-folded" had
-            // it folded before the diff arrived, so closing the diff
-            // leaves it folded.
+            // "-by-hand" and "-by-rename" both bring the list back and so
+            // take the diff down; "-keep-folded" had it folded before the
+            // diff arrived, so closing the diff leaves it folded.
             page.showWip()
             if (act === "diff-keep-folded")
                 page.foldByHand(true)
@@ -3778,20 +3201,17 @@ Item {
         } else if (act === "force-push") {
             page.forcePush()
         } else if (act === "push-retry") {
-            // One that cannot land, then one that can. What the picture
-            // cannot hold is the second half — a mark coming off is the
-            // absence of a thing — so the timer reports the state the
-            // refusal left before sending the go that clears it.
+            // A mark coming off is the absence of a thing, so the timer
+            // reports the refused state before sending the go that
+            // clears it.
             page.pushNow()
             pushRetryTimer.start()
         } else if (act === "fetch") {
             repoTab.fetch("")
         } else if (act === "fetch-ref-list") {
             // What a tag says about the remote only exists after a fetch
-            // (`ls-remote --tags` is what carries it), and the names it
-            // changes are inside the stacked chips — so the two steps are
-            // one verb. The wait is the fetch's; a `file://` remote in a
-            // demo repository answers in a fraction of it.
+            // (`ls-remote --tags` carries it), so the two steps are one
+            // verb.
             repoTab.fetch("")
             fetchedRefListTimer.start()
         } else if (act === "preview") {
@@ -3801,8 +3221,6 @@ Item {
         } else if (act === "preview-staged") {
             page.toggleDiff("staged", arg, "")
         } else if (act === "open-picker") {
-            // The window owns the dialog, so this asks for it the way the
-            // toolbar row does; the folder it opens at is reported there.
             page.openRepositoryPicker()
         } else if (act === "settings" || act === "settings-tools") {
             // `-tools` goes on to open the candidate list from inside the
@@ -3812,9 +3230,7 @@ Item {
                 AppBackend.setAutoFetchMinutes(Number(arg))
         } else if (act === "avatar-rest" || act === "avatar-hover"
                    || act === "avatar-assign" || act === "avatar-badge") {
-            // Select the first ordinary commit (row 0 is WIP), then work
-            // its author card. `PG_AUTO_ACT_ARG` is the picture to file
-            // where one is being filed.
+            // The first ordinary commit — row 0 is WIP.
             page.activateRow(graphModel.oidAt(1))
             if (act === "avatar-hover" || act === "avatar-assign")
                 detailsPane.avatarPointedAt = true
@@ -3824,19 +3240,16 @@ Item {
                 avatarBadgeTimer.start()
         } else if (act === "avatar-settings" || act === "avatar-combo"
                    || act === "avatar-row-lit" || act === "avatar-remove") {
-            // The card on its own, rather than reached from a face. Each
-            // run starts with an empty store, so a picture to look at has
-            // to be filed first — the argument is the one to file.
+            // Each run starts with an empty store, so a picture to look
+            // at has to be filed first — the argument is the one to file.
             page.activateRow(graphModel.oidAt(1))
             if (arg !== "")
                 avatarSeedTimer.start()
             else
                 page.settingsDialogRequested()
         } else if (act === "find" || act === "find-next" || act === "find-prev") {
-            // The key cannot be pressed from here, so the page opens the
-            // bar the way the key would, and the argument goes into the
-            // box the way typing would — assigning the text runs the same
-            // search a keystroke runs.
+            // The key cannot be pressed from here; assigning the text
+            // runs the same search a keystroke runs.
             page.startFind()
             if (arg !== "")
                 graphPane.findQuery = arg
@@ -3858,34 +3271,28 @@ Item {
                               + " clears=" + graphPane.findClears)
             findSettled.restart()
         } else if (act === "commands") {
-            // Stage and unstage so the log has something in it, then
-            // open it the way the toolbar does.
+            // Stage and unstage so the log has something in it.
             repoTab.stageAll()
             repoTab.unstageAll()
             page.toggleCommands()
         } else if (act === "commands-fail" || act === "commands-clear") {
-            // A move to a branch that is not there: a real refusal, in
-            // git's own words, that raises the panel by itself. The
-            // clearing verb starts from the same failure — `Main` waits
-            // for it to land, presses Clear, and reads the band.
+            // A real refusal in git's own words, raising the panel by
+            // itself. The clearing verb starts from the same failure
+            // (`Main` waits for it, presses Clear, and reads the band).
             repoTab.checkoutBranch("pg-no-such-branch")
         } else if (act === "fetch-recover") {
-            // One fetch that cannot land — the remote name it asks for
-            // is not there — so a failure is standing: the header takes
-            // the line, the band's `>_` goes red. `Main` then fires the
-            // fetch that can land (the demo origin answers) and reads
-            // what the success takes down by itself.
+            // A fetch that cannot land leaves a failure standing; `Main`
+            // then fires one that can and reads what the success takes
+            // down by itself.
             repoTab.fetch("pg-no-such-remote")
         } else if (act === "fetch-fail") {
-            // Against a remote that is not there, every fetch comes back
-            // non-zero. The argument is how many to run, so one verb
+            // The argument is how many failed fetches to run, so one verb
             // reaches the warning shape and the stopped one alike.
             page.fetchFailRuns = Math.max(1, Number(arg))
             AppBackend.setAutoFetchMinutes(0)
             AppBackend.setAutoFetchMinutes(5)
             repoTab.fetch("")
         } else if (act === "fetch-resume") {
-            // Stopped, then the hold that starts it again.
             page.fetchFailRuns = 3
             page.fetchResumeAfter = true
             AppBackend.setAutoFetchMinutes(0)
@@ -4696,22 +4103,13 @@ Item {
             }
 
             // ---- open failed ------------------------------------------
-            // In the panes' place rather than over the whole page, so the
-            // command log stays reachable under it.
-            //
             // The same three lines the picker's dialog says, out of the
-            // same place (`Words.openFailure`): which of the three it
-            // was is core's answer (`errorKind`), not something read off
-            // git's wording. git's own line shows on `other` alone — the
-            // two the application can name itself are named by the
-            // heading, and repeating it in lower case underneath (which
-            // is what this screen used to do, in red, as though git had
-            // said it) says nothing twice.
-            //
-            // Which of the two screens a failure lands on is decided by
-            // the road, not by the kind: the picker's answers all go to
-            // the dialog, and everything else — a tab put back from the
-            // last session, a worktree row, PG_AUTO_OPEN — comes here.
+            // same place (`Words.openFailure`): which of the three it was
+            // is core's answer (`errorKind`), not something read off
+            // git's wording. Which of the two screens a failure lands on
+            // is decided by the road, not the kind: the picker's answers
+            // go to the dialog, everything else — a restored tab, a
+            // worktree row, PG_AUTO_OPEN — comes here.
             Item {
                 visible: page.openFailed
                 SplitView.fillHeight: true
@@ -4726,9 +4124,6 @@ Item {
                         font.weight: Font.DemiBold
                         anchors.horizontalCenter: parent.horizontalCenter
                     }
-                    // In the same place on all three, above git's line
-                    // rather than under it: which folder this is about
-                    // is the same question every time.
                     Label {
                         text: repoTab.errorPath
                         color: Theme.textSecondary
@@ -4747,11 +4142,7 @@ Item {
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                     }
-                    // A plain frame, the same as the empty page's lone
-                    // button and the gate's: the accent belongs to the
-                    // button somebody came to press, and what this screen
-                    // offers is the way out of a folder that would not
-                    // open (規約 §肯定側のボタン).
+                    // A plain frame (規約 §肯定側のボタン).
                     ActionButton {
                         implicitHeight: Theme.controlHeight
                         text: qsTr("Close tab")
@@ -4824,13 +4215,9 @@ Item {
                         // fight (規約 §矢印で履歴を辿る).
                         selectionHeld: page.pendingMove !== null
                         onRowActivated: oidHex => page.activateRow(oidHex)
-                        // A search that lands somewhere lands the way a
-                        // click does: the row is selected and the panes
-                        // to the right follow it. The bar moves between
-                        // matches, not between commits — landing on the
-                        // same row twice changes nothing and costs no
-                        // git (`selectRow` is the only spender here, and
-                        // the row only changes when the match does).
+                        // The bar moves between matches, not between
+                        // commits — landing on the same row twice changes
+                        // nothing and costs no git.
                         onFindLanded: oidHex => {
                             if (oidHex !== "" && oidHex !== page.selectedOid)
                                 page.activateRow(oidHex)
@@ -4894,25 +4281,18 @@ Item {
                     SplitView.minimumWidth: page.rightMinWidth
                     color: Theme.bgSurface
 
-                    // Which git is doing all this, as faint bare text in
-                    // the corner of the pane that has room to spare. It
-                    // sits here rather than at the window's edge so the
-                    // command log can open without landing on top of it.
-                    //
-                    // A build made in a worktree adds which one: parallel
-                    // sessions each build their own exe and the windows are
-                    // otherwise identical. Empty for every other build, so
-                    // what ships reads plainly (デザイン規約 §アプリ名).
+                    // Which git is doing all this. It sits here rather
+                    // than at the window's edge so the command log can
+                    // open without landing on top of it. A build made in
+                    // a worktree adds which one — parallel sessions'
+                    // windows are otherwise identical (デザイン規約
+                    // §アプリ名).
                     RowLayout {
                         id: gitCorner
                         spacing: Theme.spaceXs
-                        /// The band it needs: its own line and the margin
-                        /// it hangs by — its own box and nothing more, so
-                        /// it stays until a row would land on it. Air of
-                        /// its own above it is not wanted: what sits over
-                        /// this corner is a list, and a list's rows are
-                        /// already spaced by their own height
-                        /// (2026-08-10 ユーザー報告).
+                        /// Its own box and nothing more — no extra air
+                        /// above: a list's rows are already spaced by
+                        /// their own height (2026-08-10 ユーザー報告).
                         readonly property real roomNeeded:
                             gitCorner.implicitHeight + Theme.spaceXs
                         /// What the pane under it is leaving bare. Only one
@@ -4922,39 +4302,27 @@ Item {
                             page.wipShown ? wipPane.bottomRoom
                                           : detailsPane.bottomRoom
                         // Out of the way as soon as the list reaches this
-                        // corner (2026-08-10 ユーザー報告). This is the
-                        // faintest thing on the pane and the rows are what
-                        // somebody is reading, so the two never share a
-                        // band — which of them gives way is not a question.
-                        //
-                        // Hidden outright rather than held at zero opacity,
-                        // even though its own height is half of what decides
-                        // this: a Label keeps its implicit height while
-                        // `visible: false`, text arriving in the meantime
-                        // included, so the answer never eats what it read
-                        // (qmltestrunner, 2026-08-10 実測).
+                        // corner (2026-08-10 ユーザー報告). Hidden
+                        // outright rather than held at zero opacity: a
+                        // Label keeps its implicit height while
+                        // `visible: false`, so the answer never eats what
+                        // it read (qmltestrunner, 2026-08-10 実測).
                         visible: AppBackend.gitVersion !== ""
                                  && gitCorner.roomLeft >= gitCorner.roomNeeded
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         anchors.rightMargin: Theme.spaceSm
                         anchors.bottomMargin: Theme.spaceXs
-                        // In front of the panes it hangs over: declared
-                        // before them, anything they draw in this corner
-                        // lands on top of it. Nothing does while it is
-                        // shown — the room above is what keeps rows from
-                        // reaching here — so this holds the order for
-                        // whatever else the panes come to put here.
+                        // Declared before the panes it hangs over, so z
+                        // holds it in front of whatever they draw here.
                         z: 1
                         Label {
                             text: qsTr("git %1").arg(AppBackend.gitVersion)
                             color: Theme.textMuted
                             font.pixelSize: Theme.fontSm
                         }
-                        // Only a build made in a worktree has a second
-                        // half, so the dot comes and goes with it. Drawn
-                        // rather than typed: as a glyph the spacing here
-                        // was a full-width cell's leftover (規約 §余白).
+                        // Drawn rather than typed: as a glyph the spacing
+                        // here was a full-width cell's leftover (規約 §余白).
                         DotMark {
                             visible: AppBackend.buildTree !== ""
                             Layout.alignment: Qt.AlignVCenter
@@ -5067,15 +4435,13 @@ Item {
     }
 
     // ---- a split bar that has run out of room ---------------------------
-    // The graph's own dividers can answer a refused drag themselves: their
-    // MouseAreas know what the hand asked for, so they compare the ask
-    // against the clamp (`GraphPane`). A `SplitView` bar cannot. Measured
-    // 2026-08-11 with throwaway qmltestrunner scenes: SplitView takes the
-    // press before anything inside the delegate sees it, and no observer
-    // behind the view ever becomes active — so the ask is not knowable
-    // there. What *is* knowable is where the pointer went and where the
-    // bar stopped, and past a clamp those part company. That is the same
-    // refusal read from the other end.
+    // The graph's own dividers know what the hand asked for; a
+    // `SplitView` bar cannot (measured 2026-08-11, qmltestrunner:
+    // SplitView takes the press before anything inside the delegate sees
+    // it, and no observer behind the view ever becomes active). What is
+    // knowable is where the pointer went and where the bar stopped, and
+    // past a clamp those part company — the same refusal read from the
+    // other end.
 
     /// Every split bar in this page, and whichever one has the hand. One
     /// pointer, so at most one at a time. The list is collected rather
@@ -5116,11 +4482,10 @@ Item {
         splitRefusal.refuses = Math.abs(gap) > Theme.splitterWidth
     }
 
-    /// Automation: a drag on one of the split bars carried past where the
-    /// layout stops it (`PG_AUTO_ACT=divider-refuse`, cases `sidebar-min`
-    /// / `details-min` / `log-min`). A press is no more injectable than
-    /// hover is, so the hook puts the bar in hand the way a press does and
-    /// then walks the same road the pointer walks.
+    /// Automation (`PG_AUTO_ACT=divider-refuse`, cases `sidebar-min` /
+    /// `details-min` / `log-min`): a press is no more injectable than
+    /// hover, so the hook puts the bar in hand the way a press does and
+    /// walks the same road the pointer walks.
     function dragSplitPast(which) {
         // Only bars that are drawn. A SplitView builds a handle between
         // every pair of items including the ones standing invisible (the
@@ -5150,22 +4515,16 @@ Item {
     }
 
     /// Automation: the drag and its answer for every boundary in the
-    /// window (`PG_AUTO_ACT=divider-refuse`). One place, so the run that
-    /// has to wait for the log to lay out reports exactly what the
-    /// immediate one does.
+    /// window (`PG_AUTO_ACT=divider-refuse`).
     function reportDividerRefusal(which) {
-        // Which road it takes is which road a hand would take: the
-        // graph's own dividers know what was asked, a split bar is read
-        // from where the pointer went instead.
+        // The graph's own dividers know what was asked; a split bar is
+        // read from where the pointer went instead.
         const split = which === "sidebar-min" || which === "details-min"
                       || which === "log-min"
         if (split)
             page.dragSplitPast(which)
         else
             graphPane.dragDividerPast(which)
-        // The one badge, whichever boundary raised it — there is one
-        // pointer, so a run that lit the wrong one would have to have lit
-        // this one too.
         AppBackend.report("divider_refuse refuses=" + page.refusalShown
                           // The boundary itself, still drawn and still
                           // promising the drag the other way. For a split
@@ -5211,20 +4570,13 @@ Item {
         }
 
         // ---- the one badge in the window ----------------------------
-        // Drawn here and nowhere else. A refused drag has the hand
-        // *outside* the thing it was dragging — that is what refused
-        // means — so a badge parented to the divider's own pane or to the
-        // description box lands outside its parent, where it is
-        // composited among the page's panes instead of over them: under
-        // the author card, under the file list (2026-08-11 ユーザー報告).
-        // Over the whole page it is above all of them, and there is one
-        // of it because there is one pointer.
-        //
-        // Every source hands its point over in scene coordinates, so this
-        // is the only place a frame has to be converted. `mapFromItem` is
-        // a method and would not re-run on its own, but the point it
-        // reads changes on every move of the drag that raised it, which
-        // is the only time this is up (app-ui.md).
+        // A refused drag has the hand *outside* the thing it was
+        // dragging, so a badge parented to the divider's own pane lands
+        // outside its parent and is composited under the page's panes
+        // (2026-08-11 ユーザー報告); over the whole page it is above them
+        // all. `mapFromItem` is a method and would not re-run on its own,
+        // but the point it reads changes on every move of the drag that
+        // raised it, which is the only time this is up (app-ui.md).
         RefusalBadge {
             id: refusalBadge
             at: page.refusalAt(page.refusalSource)

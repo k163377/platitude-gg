@@ -8,9 +8,6 @@ import platitude.ui
 
 // Right pane, working-tree (WIP) mode: the commit editor pinned on top
 // of the grouped changed-file list, with stage/unstage affordances.
-// The editor's text is owned here; the page drives it through
-// setMessage / clearMessage (amend prefill, post-commit reset) and
-// decides what a commit click means.
 ColumnLayout {
     id: wipPane
 
@@ -50,8 +47,7 @@ ColumnLayout {
     }
 
     // ---- which rows are chosen -------------------------------------
-    // Several files at once, the way a file list is used to being asked:
-    // a plain click takes one, Ctrl adds or removes, Shift reaches from
+    // A plain click takes one, Ctrl adds or removes, Shift reaches from
     // the last one clicked. Held here, keyed `<bucket>:<path>`, because a
     // delegate is recycled the moment its row scrolls off.
     property var chosenKeys: ({})
@@ -876,8 +872,8 @@ ColumnLayout {
                         onContainsMouseChanged: wipPane.settleCommitCard()
                     }
                 }
-                // ==== 案 C: the way out of a stopped operation, built into ====
-                // ==== the pane under the button that finishes things.     ====
+                // The way out of a stopped operation, built into the pane
+                // under the button that finishes things.
                 //
                 // The commit button's seat is already "conclude this": during a
                 // merge `--continue` is literally the commit. Standing rather
@@ -894,15 +890,14 @@ ColumnLayout {
                     radius: Theme.radiusMd
                     border.color: Theme.warning
                     border.width: Theme.borderWidth
-                    // The chip column and the mark's seat, shared by every row so
-                    // the sentences start on one x and the card reads down its
-                    // first letters — what `AppMenu` does for a menu's rows.
-                    // The mark's own seat, left on every row whether or not that
-                    // row is a held one — the words start on one x either way,
-                    // and the seat is the menu's exactly: narrower than the mark,
-                    // which overhangs it into the row padding on one side and the
-                    // word gap on the other (デザイン規約 §長押し — 語が払う
-                    // 字下げは印 1 個分より小さい).
+                    // The chip column and the mark's seat, kept on every row
+                    // whether or not that row is a held one, so the sentences
+                    // start on one x and the card reads down its first letters
+                    // — what `AppMenu` does for a menu's rows. The seat is the
+                    // menu's exactly: narrower than the mark, which overhangs
+                    // it into the row padding on one side and the word gap on
+                    // the other (デザイン規約 §長押し — 語が払う字下げは印
+                    // 1 個分より小さい).
                     readonly property real holdIndent: Theme.iconMd - 2 * Theme.spaceXs
                     /// Whether leaving the stopped commit out costs nothing.
                     ///
@@ -940,7 +935,6 @@ ColumnLayout {
                             Layout.leftMargin: Theme.spaceXs
                             Layout.bottomMargin: Theme.spaceXs
                             spacing: Theme.spaceXs
-                            // What is stopped.
                             Label {
                                 text: wipPane.workTree.opText
                                 font.pixelSize: Theme.fontSm

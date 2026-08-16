@@ -57,7 +57,6 @@ impl ConflictKind {
     }
 }
 
-/// One conflicted path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConflictedFile {
     pub path: String,
@@ -257,7 +256,6 @@ async fn name_of(
     }
 }
 
-/// `refs/heads/topic` → `topic`.
 fn short_ref(full: &str) -> String {
     full.strip_prefix("refs/heads/").unwrap_or(full).to_string()
 }
@@ -283,9 +281,9 @@ const MERGETOOL_ARGS: [&str; 2] = ["-c", "mergetool.writeToTemp=true"];
 /// guessed tool makes it prompt on a stdin that is closed.
 ///
 /// `paths` is never allowed to be empty. Bare `git mergetool` walks every
-/// conflicted file in turn, and since the whole run holds the write queue
-/// (below), that turns one launch into a queue blocked for as many tool
-/// sessions as there are conflicts.
+/// conflicted file in turn, and since the whole run holds the session's
+/// write queue, that turns one launch into a queue blocked for as many
+/// tool sessions as there are conflicts.
 ///
 /// No time limit: the tool runs for as long as the person takes, and
 /// cancelling the session is what stops it.
@@ -446,7 +444,6 @@ pub async fn user_defined_tools(
         .answers_by_code()
         .args(["config", "-z", "--get-regexp", r"^mergetool\..*\.cmd$"]);
     let out = executor.run_unchecked(cmd, cancel).await?;
-    // Exit 1 only means nothing matched, which is a valid empty answer.
     if out.code == 1 {
         return Ok(Vec::new());
     }

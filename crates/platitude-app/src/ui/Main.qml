@@ -1,9 +1,3 @@
-// platitude-gg main window: application chrome (tabs, toolbar, app
-// dialogs) around one RepoPage per open repository. Presentation only —
-// every model row arrives precomputed from Rust.
-//
-// All colors / fonts / dimensions come from the Theme and Metrics
-// singletons (internal-docs/デザイン規約.md is the source of truth).
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -24,48 +18,27 @@ ApplicationWindow {
     /// Named by platform rather than worked out from what the hints did:
     /// they are read when the window is created, and a window that came up
     /// without a way to close it cannot be taken back. Windows is the one
-    /// that has been seen to work. Everywhere else keeps the platform's
-    /// own title bar above an ordinary tab row — the layout this app
-    /// already had, so the fallback is not new code (P3-確認事項
-    /// §ウィンドウ chrome).
-    ///
-    /// `PG_PLAIN_CHROME=1` asks for the other shape from here: the two
-    /// platforms that keep it cannot be run on this machine, so without a
-    /// way to see their layout it is only ever exercised by the people who
-    /// cannot report back.
+    /// that has been seen to work; everywhere else keeps the platform's
+    /// own title bar above an ordinary tab row (P3-確認事項 §ウィンドウ
+    /// chrome). `PG_PLAIN_CHROME=1` asks for the other shape from here.
     readonly property bool captionMerged: Qt.platform.os === "windows"
                                           && !AppBackend.plainChrome
 
-    // No frame at all, rather than a frame asked to behave.
-    //
-    // The band was made the title bar by expanding the client area over
-    // the caption and asking the platform not to paint it. That left a
-    // real non-client frame around the window, and everything it holds
-    // turned out to be a problem the app could not reach: it is inflated
-    // past the screen on every side whenever the window fills the screen,
-    // so the app's window covered eight columns of the *next monitor* and
-    // hid what was under them (measured, and reported twice); the one
-    // pixel of it that showed came out white against this theme and moved
-    // for no DWM attribute; and the width of it made a remembered size
-    // that fits the screen come back as a window that does not.
-    //
-    // `FramelessWindowHint` deletes the whole area. Measured after: the
-    // window, its client and the work area are the same 0,0..1920,1032
-    // rectangle, and the pixel outside the window belongs to whatever is
-    // behind it. What used to live in that frame moves inward — the edge
-    // is drawn in the scene now (below), and the resize edges and the
-    // grab run were already the subclass's answers rather than Qt's
-    // (`winframe::take_frame_hit_test`, which stays: Qt 6.10's own answer
-    // for a custom-chrome window synthesises input from a poll and loses
-    // track of it — the dead first click and the frozen hover).
-    //
-    // Two things the platform still owes the window, and one it does not:
-    // `keepWindowGestures` puts back the style bits that let the system
-    // minimise, maximise and offer its taskbar menu, and the subclass
-    // pins a maximise to the work area (`clamp_maximized`) because
-    // Windows would otherwise put a frameless window's maximised
-    // rectangle on the whole monitor. What it does not owe is a shadow:
-    // a frameless window has none, and the drawn edge stands in for it.
+    // No frame at all, rather than a frame asked to behave: an expanded
+    // client area over the caption still leaves a real non-client frame,
+    // which is inflated past the screen when maximised (measured: it
+    // covered eight columns of the next monitor), shows a white pixel no
+    // DWM attribute moves, and makes a remembered size come back too
+    // wide. `FramelessWindowHint` deletes the whole area — the edge is
+    // drawn in the scene (below), and the resize edges and grab run are
+    // the subclass's (`winframe::take_frame_hit_test`, which stays: Qt
+    // 6.10's own custom-chrome answer synthesises input from a poll and
+    // loses track of it — the dead first click and the frozen hover).
+    // `keepWindowGestures` puts back the system's minimise/maximise/menu
+    // style bits, and the subclass pins a maximise to the work area
+    // (`clamp_maximized`) because Windows would otherwise maximise a
+    // frameless window over the whole monitor. No shadow is owed: the
+    // drawn edge stands in for it.
     flags: root.captionMerged
            ? (Qt.Window | Qt.FramelessWindowHint)
            : Qt.Window
@@ -73,39 +46,24 @@ ApplicationWindow {
     color: Theme.bgBase
 
     // ---- the floor the window may not be dragged under --------------------
-    // Qt Quick hands nothing up: a widget window takes its children's
-    // minimum size for its own, but `SplitView` and the layouts here stop
-    // shrinking their items at the minimum and lay the rest out past their
-    // own edge — and nothing in this window scrolls sideways to reach what
-    // went over. Measured 2026-08-09: at 640px wide the right pane had 32
-    // of its 300 on screen and the other 268 were unreachable; at 320 the
-    // window's own close button was outside the window.
+    // `SplitView` and the layouts here stop shrinking their items at the
+    // minimum and lay the rest out past their own edge, and nothing in
+    // this window scrolls sideways to reach what went over (measured
+    // 2026-08-09: at 640px the right pane had 32 of its 300 on screen).
     //
-    // The number is read off what is on screen rather than written down,
-    // because two things move it: the list folding (the rail costs less
-    // than the list) and the command log opening (a second row with a
-    // floor of its own). Qt grows a window when a floor rises under it, so
-    // putting the list back in a window too narrow for it widens the
-    // window instead of cutting the pane off — which is the way back from
+    // The number is read off what is on screen because two things move
+    // it: the list folding and the command log opening. Qt grows a window
+    // when a floor rises under it, which is the way back from
     // fold → shrink → unfold.
     //
-    // No exemption for automated runs, unlike `insideScreen` below: the
-    // offscreen platform's screen is 800x800 and every floor here is
-    // under that, so the headless runs stand where they always did — and
-    // that is also what lets one of them prove the floor holds.
-    //
-    // `minimumWidth` alone is only half of it. It is what the platform
-    // asks about while a person drags an edge — and that is the only path
-    // it covers: `QWindow::resize` hands the size straight to the platform
-    // without looking at the hints (measured: asked for 200x150 against
-    // the floor, the window took it). So every size this application
-    // sets itself goes through `holdFloor` below, which is what the
-    // remembered shape and the two floors that move are put through.
+    // `minimumWidth` alone only covers a person dragging an edge:
+    // `QWindow::resize` hands the size straight to the platform without
+    // looking at the hints (measured: asked for 200x150 against the
+    // floor, the window took it). So every size this application sets
+    // itself goes through `holdFloor` below.
     /// The page the floor is read off. Not `curPage`: with no tab open
-    /// that is null, and the window is not empty — it is showing the blank
-    /// page, which has the same three panes with the same minimums, and
-    /// would have gone on being squeezable while every other window was
-    /// held (the floor would have fallen to the band's own, smaller one).
+    /// that is null while the window is showing the blank page, which has
+    /// the same three panes with the same minimums.
     readonly property var floorPage:
         root.curPage !== null ? root.curPage : blankPage.item
     readonly property real floorWidth:
@@ -119,20 +77,14 @@ ApplicationWindow {
         + (root.floorPage !== null ? root.floorPage.floorHeight : 0)
     minimumWidth: Math.ceil(root.floorWidth)
     minimumHeight: Math.ceil(root.floorHeight)
-    /// Puts a window that is standing under its floor back on it. The two
-    /// ways under one are a floor that rose (the list being put back, the
-    /// log opening) and a size this application set from somewhere else
-    /// (a shape remembered from a session whose floor was lower, or from
-    /// before there was one).
-    ///
-    /// Only a window in its own shape: maximised and minimised ones are
-    /// the platform's to size, and the state written down for the next
-    /// launch comes from the windowed one anyway.
-    /// A size this puts up is a size this asked for, so the frame slop
-    /// keeps measuring the difference between the two — without this the
-    /// growth itself reads as slop, and every launch after writes the
-    /// window down that much smaller (measured: a window lifted from a
-    /// 320-wide file stood at 704 and 510 went into the file).
+    /// Puts a window standing under its floor back on it. Only a window
+    /// in its own shape: maximised and minimised ones are the platform's
+    /// to size. A size this puts up is a size this asked for, so the
+    /// frame slop keeps measuring the difference between the two —
+    /// without that the growth itself reads as slop, and every launch
+    /// after writes the window down that much smaller (measured: a window
+    /// lifted from a 320-wide file stood at 704 and 510 went into the
+    /// file).
     function holdFloor() {
         if (root.visibility !== Window.Windowed)
             return
@@ -209,11 +161,6 @@ ApplicationWindow {
     font.family: Theme.uiFamily
     font.pixelSize: Theme.fontMd
 
-    // Every control asks its palette for a role (`text`, `buttonText`,
-    // …) and is handed the group that matches its own state, so this one
-    // block is what tells menus, buttons and check boxes alike how being
-    // switched off looks.
-    //
     // A color written here without a group lands in *all three* groups —
     // and, being a binding, it settles after the groups' own bindings and
     // overwrites them (measured: with `windowText` set both group-less
@@ -265,10 +212,9 @@ ApplicationWindow {
     property int focusEpoch: 0
     onActiveChanged: if (active) focusEpoch++
 
-    // Being on screen — not being focused — is what drives the periodic
-    // re-read. This window is usually the one sitting beside the editor,
-    // terminal or agent that moves the repository, and a window that only
-    // catches up when clicked hides exactly what it is kept open to show.
+    // Being on screen — not being focused — drives the periodic re-read:
+    // a window that only catches up when clicked hides exactly what it is
+    // kept open to show.
     readonly property bool onScreen: root.visible
                                      && root.visibility !== Window.Minimized
                                      && root.visibility !== Window.Hidden
@@ -315,8 +261,7 @@ ApplicationWindow {
 
     // Identity dialog: opens on startup when git has no name and email to
     // put on a commit, and on demand from the app menu or the toolbar
-    // badge. "Not now" leaves the app fully usable — reading a repository
-    // needs no identity.
+    // badge.
     property bool identityDismissed: false
     property bool identityEditing: false
     // A save that only half landed leaves an identity that *is* set, so
@@ -345,19 +290,12 @@ ApplicationWindow {
         }
     }
 
-    // Re-read the open repository from disk. The page keeps itself
-    // current on a tick, so this is the way out of the cases a tick
-    // cannot cover rather than a thing to reach for — a key and a menu
-    // row, not a button holding down toolbar room.
     Shortcut {
         sequence: "F5"
         enabled: root.curPage !== null
         onActivated: root.curPage.pageTab.refreshAll()
     }
 
-    // Search comes down over the graph on the key rather than standing in
-    // the toolbar: a box that is only wanted now and then does not earn a
-    // permanent place in the band.
     Shortcut {
         // The plural: the platform's "find" is more than one key on some
         // of them, and `sequence` would take only the first and say so.
@@ -390,28 +328,19 @@ ApplicationWindow {
             openFailedDialog.show(path, kind, message, near)
     }
 
-    // Only the picker's own answers come here, and all three of them: a
-    // folder somebody just chose is still in the middle of choosing one,
-    // so the way on is the picker again — including when the check could
-    // not say what was wrong, where the folder is no more openable for
-    // not knowing why. Every other way a repository fails to open (a
-    // restored tab, a worktree row, PG_AUTO_OPEN) keeps its tab and its
-    // page-sized failure screen — nobody is standing at the picker for
-    // those, and a modal on startup is answered before it can be read.
+    // Only the picker's own answers come here: somebody there is still
+    // choosing a folder, so the way on is the picker again. Every other
+    // way a repository fails to open (a restored tab, a worktree row,
+    // PG_AUTO_OPEN) keeps its tab and its page-sized failure screen — a
+    // modal on startup is answered before it can be read.
     OpenFailedDialog {
         id: openFailedDialog
-        // Taking it back means what it says: no tab was opened and none
-        // was closed, so the window is exactly where it started — with
-        // the empty page's own way in, if there was nothing else open.
         onChooseAnother: near => root.openRepositoryPicker(near)
     }
 
     // Smoke hooks (PG_AUTO_ACT=open-not-a-repo / open-bare and the two
-    // ways back out). The picker is the platform's own window, so the
-    // run enters where its answer lands — the path it accepted — and
-    // that is also the one place a folder gets checked, so nothing is
-    // proved by a shorter cut. The argument is the folder; xtask makes
-    // one when the verb needs it.
+    // ways back out). The picker is the platform's own window, so the run
+    // enters where its answer lands — the path it accepted.
     readonly property bool pickAct: AppBackend.autoAct === "open-not-a-repo"
                                     || AppBackend.autoAct === "open-bare"
                                     || AppBackend.autoAct === "open-not-a-repo-retry"
@@ -450,13 +379,11 @@ ApplicationWindow {
         onTriggered: root.reportPick()
     }
 
-    // Smoke hooks (PG_AUTO_ACT=open-fail-tab / -bare / -log): the other
-    // road, the one that keeps its tab — a tab put back from the last
-    // session, a worktree row, a path named on the command line. Nothing
-    // checks the folder first there, so the page itself is what says so,
-    // in the same words the dialog would have used (`kind=` reports
-    // which). The `-log` half goes on to open the command log the way
-    // the toolbar's `>_` does, which on this screen used to do nothing.
+    // Smoke hooks (PG_AUTO_ACT=open-fail-tab / -bare / -log): the road
+    // that keeps its tab. Nothing checks the folder first there, so the
+    // page itself is what says so (`kind=` reports which). The `-log`
+    // half goes on to open the command log the way the toolbar's `>_`
+    // does.
     Timer {
         interval: 1200
         running: AppBackend.autoAct === "open-fail-tab"
@@ -531,11 +458,7 @@ ApplicationWindow {
     function applySavedWindow() {
         // Over the floor on the way in, not after: what is assigned here
         // is what `settleTimer` measures the frame slop from, and what a
-        // maximise would come back to. A file written by a session whose
-        // floor was lower — or by a build that had none — is the one case
-        // where the remembered shape is not a shape this window can take,
-        // and it puts itself right on the next launch (`holdFloor` is the
-        // same rule for the floors that move while the window is up).
+        // maximise would come back to.
         const wantWidth = Math.max(
             root.insideScreen(AppBackend.startWindowWidth(), Screen.width),
             Math.ceil(root.floorWidth))
@@ -552,36 +475,26 @@ ApplicationWindow {
             root.x = x
             root.y = y
         }
-        // The part this side cannot do: the *frame* has to fit, and it is
-        // wider than the window says it is. A remembered 1920 came back
-        // as a 1936-wide frame at x=-5 on a 1920 screen — enough to put
-        // the right-hand pane's scroll bar off the screen and the left
-        // edge on the next monitor (measured 2026-08-09, and reported as
-        // both). `insideScreen` above cannot see either number, so it
-        // lets that through; the platform side moves the window back and
-        // says whether it had to.
-        //
-        // Before the maximise, not after: the shape standing when a
-        // window is maximised is the shape a restore comes back to, so
-        // this is the last chance to make that shape a good one.
+        // The *frame* has to fit, and it is wider than the window says it
+        // is (measured 2026-08-09: a remembered 1920 came back as a
+        // 1936-wide frame at x=-5 on a 1920 screen). `insideScreen`
+        // cannot see either number; the platform side moves the window
+        // back and says whether it had to. Before the maximise, not
+        // after: the shape standing when a window is maximised is the
+        // shape a restore comes back to.
         const moved = AppBackend.fitWindowToScreen()
         if (AppBackend.startWindowMaximized()) {
-            // Let the platform do it, so the platform is the one holding
-            // the shape to come back to. Qt's own maximise just resizes
-            // the window, which leaves nothing behind to restore — the
-            // whole of `toggleMaximized`'s story. Where there is no
-            // platform command (plain chrome, and the offscreen runs that
-            // have no window at all), `visibility` still carries it.
+            // Let the platform do it, so the platform holds the shape to
+            // come back to (`toggleMaximized`'s story). Where there is no
+            // platform command, `visibility` still carries it.
             if (root.captionMerged)
                 AppBackend.setWindowMaximized(true)
             else
                 root.visibility = Window.Maximized
         } else if (!moved) {
-            // Nothing is measured on a run that was moved: `settleTimer`
-            // reads the frame slop off the difference between what the
-            // window was handed and what it says it is, and a window that
-            // was repositioned in between is not that difference. Nor on
-            // one that came up maximised, which is not that shape either.
+            // Nothing is measured on a run that was moved or maximised:
+            // the frame slop is the difference between what the window
+            // was handed and what it says it is, and neither is that.
             settleTimer.restart()
         }
     }
@@ -589,39 +502,22 @@ ApplicationWindow {
     readonly property int unplaced: -2147483648
 
     /// A remembered length, kept inside the screen the window comes up on.
-    ///
-    /// A shape saved on a display that is not there any more comes back to
-    /// a smaller one, and so does anything that once got written down too
-    /// wide — neither should open a window whose corners nobody can reach.
-    /// The screen is `Screen.width`, the one this window is on, and *not*
-    /// `Screen.desktopAvailableWidth`, which is the whole virtual desktop
-    /// (measured on a three-monitor machine: 5760, so nothing is ever
-    /// wider than it).
-    ///
-    /// Only a window somebody is at is fitted to a screen. A run that is
-    /// being driven takes the size it was configured with — nobody is
-    /// looking at it, and the offscreen platform the headless runs use
-    /// reports an 800x800 screen that would cut every screenshot to fit.
+    /// `Screen.width`, *not* `Screen.desktopAvailableWidth` — that is the
+    /// whole virtual desktop (measured on a three-monitor machine: 5760,
+    /// so nothing is ever wider than it). Automated runs are exempt: the
+    /// offscreen platform reports an 800x800 screen that would cut every
+    /// screenshot to fit.
     function insideScreen(saved, screen) {
         return AppBackend.automated ? saved : Math.min(saved, screen)
     }
 
-    /// What this window adds to a size on the way in.
-    ///
-    /// It does not read back the way it is written. Measured on the merged
-    /// chrome: asked for 1200 it comes up 1200 wide (client 1200, frame
-    /// 1216) and then calls itself 1206 — so writing down what it says
-    /// grew the window 6px on every launch (measured: 1200 → 1206 → 1212
-    /// → 1218 → 1224 over four). What the two sides disagree about is the
-    /// frame margins, which Qt takes from one place when it sets the
-    /// geometry and another when it reads it back, and this window has no
-    /// ordinary frame for them to agree on.
-    ///
-    /// So the difference is read off the window itself — like
-    /// `maximizedInset`, whatever this window turns out to add is what
-    /// comes back off — and taken away again on the way out, which keeps
-    /// the *frame* where it was: the file loses the 6px that the frame
-    /// gains.
+    /// What this window adds to a size on the way in. It does not read
+    /// back the way it is written (measured on the merged chrome: asked
+    /// for 1200 it calls itself 1206, so writing down what it says grew
+    /// the window 6px on every launch). Qt takes the frame margins from
+    /// one place when it sets the geometry and another when it reads it
+    /// back, so the difference is read off the window itself and taken
+    /// away again on the way out.
     property int widthSlop: 0
     property int heightSlop: 0
     /// The size the window was asked for, which the slop is measured from.
@@ -635,15 +531,10 @@ ApplicationWindow {
         // assignment.
         interval: Metrics.anchorDelayMs
         onTriggered: {
-            // Only ever measured against a size this window was just
-            // handed, and only while nothing else has had a chance to
-            // resize it. A window that came up maximised is not measured
-            // at all — it reports the screen — and nor is one that is put
-            // down later, because what puts it down (a snap to half the
-            // screen, say) is free to resize it on the way, and a
-            // difference read off that is not a frame margin. That leaves
-            // the size such a run ends at 6px wide in the file, once; the
-            // next launch starts windowed, measures, and stops it there.
+            // Only measured against a size this window was just handed,
+            // and only while nothing else has had a chance to resize it —
+            // a maximise or a snap resizes on the way, and a difference
+            // read off that is not a frame margin.
             if (root.askedWidth <= 0 || root.visibility !== Window.Windowed)
                 return
             root.widthSlop = root.width - root.askedWidth
@@ -651,20 +542,14 @@ ApplicationWindow {
         }
     }
 
-    /// Everything the next launch should come back to. One place, because
-    /// what is worth writing is the shape the window settled into, not
-    /// every value it passed through on the way
+    /// Everything the next launch should come back to
     /// (rules-refs/core.md — settings.toml / state.toml).
     function reportState() {
-        // A minimised window has nothing to say about the shape it will
-        // come back as, so it says nothing and the file keeps what the
-        // window last looked like. Measured on Windows: while it is down
-        // the window reports neither its windowed nor its maximised
-        // numbers (one maximised on a 1920x1032 work area calls itself
-        // 1926x1032 at -3,3) and its visibility is no longer Maximized —
-        // so a report from here wrote a window wider than the screen into
-        // the file and cleared the flag that would have brought the
-        // maximised one back.
+        // A minimised window says nothing. Measured on Windows: while it
+        // is down the window reports neither its windowed nor its
+        // maximised numbers and its visibility is no longer Maximized —
+        // a report from here wrote a window wider than the screen and
+        // cleared the flag that would have restored the maximised one.
         if (root.visibility !== Window.Minimized)
             AppBackend.saveWindow(root.x, root.y,
                                   root.width - root.widthSlop,
@@ -685,13 +570,10 @@ ApplicationWindow {
         onTriggered: root.reportState()
     }
 
-    // PG_AUTO_ACT=identity / identity-half: what a save left standing.
-    // The marks and the badge are in the picture, but "which half landed"
-    // is a pair of booleans, and a dialog that stayed open because the
-    // save did not take looks exactly like one nobody has answered yet.
-    // Read the two verbs as a pair: the resting one has to come back with
-    // every flag down, or the half one is only showing that some flag can
-    // be raised.
+    // PG_AUTO_ACT=identity / identity-half: "which half landed" is a pair
+    // of booleans, and a dialog that stayed open because the save did not
+    // take looks exactly like one nobody has answered yet. Read the two
+    // verbs as a pair.
     Timer {
         interval: 1200
         running: AppBackend.autoAct === "identity"
@@ -707,14 +589,8 @@ ApplicationWindow {
     }
 
     // PG_AUTO_ACT=identity-tip: the mark's reason, read where the pointer
-    // cannot go. The half-landed save comes first (the identity-half seed
-    // and machinery), "Not now" then hands the state to the band, and the
-    // band is asked to say why its mark is out.
-    //
-    // The reason moved from an attached ToolTip to the group's card, so
-    // `tip=` is the card's own `opened` — the output side either way.
-    // `badge=` is the group in whichever shape the width left it: at this
-    // verb's window the words stand, and reading the mark alone would
+    // cannot go. `tip=` is the card's own `opened`; `badge=` is the group
+    // in whichever shape the width left it — reading the mark alone would
     // fail a band that is saying exactly what it should.
     Timer {
         interval: 1600
@@ -743,23 +619,11 @@ ApplicationWindow {
             + " rows=" + topBar.stateCardRows)
     }
 
-    // PG_AUTO_ACT=commands-clear: `Clear` empties the panel, mark and
-    // all. The page has already asked for a move to a branch that is not
-    // there (the commands-fail path), so what this waits on is git's
-    // refusal landing: the panel raises itself, the header carries the
-    // line, and the band's `>_` goes red for it. Then the header's own
-    // Clear is pressed.
-    //
-    // The band is where the answer is — the rows and the line both feed
-    // one mark, and clearing only the rows left it red over an empty
-    // panel (2026-08-10 報告). Read off that mark rather than off the
-    // page's own state, which is why this verb lives up here.
-    //
-    // The same mark is read on both sides of the press: a run whose
-    // refusal never landed has nothing to clear, and its `wrong=false`
-    // would be the resting state passing itself off as the fix. `was=`
-    // is that half, and the picture cannot hold it — by the time the
-    // shot is taken the mark is whatever this verb left it.
+    // PG_AUTO_ACT=commands-clear. The band is where the answer is — the
+    // rows and the line both feed one mark, and clearing only the rows
+    // left it red over an empty panel (2026-08-10 報告), which is why
+    // this verb lives up here. The same mark is read on both sides of the
+    // press: `was=` is the half the picture cannot hold.
     Timer {
         id: commandsClearActTimer
         interval: 2400
@@ -776,16 +640,10 @@ ApplicationWindow {
         }
     }
 
-    // PG_AUTO_ACT=fetch-recover: a fetch that failed put one line in the
-    // panel's header and turned the band's `>_` red; the next fetch that
-    // lands takes both down on its own. Nothing is pressed — recovery,
-    // not the reader, is what retires fetch news, while the rows below
-    // stay whatever they were (history is the reader's to clear). The
-    // page has already fired the fetch that cannot land; this waits for
-    // its refusal, reads the mark, fires the fetch that can, and reads
-    // the same mark again. Judged off the band for the commands-clear
-    // reason: the proof is that the page's news reached the mark and
-    // then left it, and the picture can only hold the quiet half.
+    // PG_AUTO_ACT=fetch-recover: recovery, not the reader, is what
+    // retires fetch news. This waits for the refusal, reads the mark,
+    // fires the fetch that can land, and reads the same mark again — the
+    // picture can only hold the quiet half.
     Timer {
         id: fetchRecoverActTimer
         interval: 3000
@@ -815,10 +673,10 @@ ApplicationWindow {
                           && root.curPage.commandsShown))
     }
 
-    // PG_AUTO_ACT=band: the shape the title-bar band settled into. The
-    // numbers rather than a screenshot, because the headless platform
-    // draws no window buttons of its own — a band that lost the grab run
-    // or pushed its buttons off the end looks fine in the picture.
+    // PG_AUTO_ACT=band: numbers rather than a screenshot — the headless
+    // platform draws no window buttons of its own, so a band that lost
+    // the grab run or pushed its buttons off the end looks fine in the
+    // picture.
     Timer {
         id: bandActTimer
         interval: 1200
@@ -832,12 +690,9 @@ ApplicationWindow {
             + " rightMargin=" + topBar.bandRightMargin)
     }
 
-    // PG_AUTO_ACT=tab-widths: what the tabs made of the run they share.
-    // Numbers again, and for the same reason as the band's — a strip that
-    // narrowed the wrong tabs, or narrowed them all when only the long
-    // ones had to give, comes out looking like a strip that got it right.
-    // `widths=` is the answer: the tabs left alone are the ones still at
-    // their own length, and the ones that gave way all read alike.
+    // PG_AUTO_ACT=tab-widths: numbers for the band's reason — a strip
+    // that narrowed the wrong tabs comes out looking like one that got it
+    // right. `widths=` is the answer.
     Timer {
         id: tabWidthActTimer
         interval: 1200
@@ -853,10 +708,9 @@ ApplicationWindow {
             + " widths=" + topBar.tabWidths())
     }
 
-    // PG_AUTO_ACT=tab-mark: the `✕` is out on the tab in front and on the
-    // tab under the hand. The argument is which tab the hand is on — one
-    // that is not in front, or the run says nothing the picture of any
-    // other verb does not already say.
+    // PG_AUTO_ACT=tab-mark: the argument is which tab the hand is on —
+    // one that is not in front, or the run says nothing the picture of
+    // any other verb does not already say.
     Timer {
         id: tabMarkActTimer
         interval: 1200
@@ -871,16 +725,9 @@ ApplicationWindow {
     }
 
     // PG_AUTO_ACT=window-fill: whether the window's contents reach all
-    // four edges of it while it is maximised.
-    //
-    // Numbers rather than a picture. A maximised window is the one shape
-    // where an edge that falls short cannot be photographed: the app is
-    // the whole screen, so there is no desktop left beside it to show
-    // the gap against, and the frame's own strip out past the screen
-    // looks the same either way. The offscreen platform is enough to run
-    // it on (it maximises to 796x796 of its own 800x800 screen): what
-    // this reads is the contents against the window, and neither of those
-    // two numbers is the screen's.
+    // four edges while maximised. Numbers rather than a picture: the app
+    // is the whole screen, so there is no desktop left beside it to show
+    // a gap against.
     Timer {
         id: fillActTimer
         interval: 1200
@@ -894,11 +741,9 @@ ApplicationWindow {
     Timer {
         id: fillReportTimer
         interval: 400
-        // `fills=` is what the harness reads, and both platforms answer it
-        // the same way — the client area is all there is to fill on either
-        // (see `mainUi`). Measured in scene coordinates rather than from
-        // the margins that were asked for, because a margin that misses is
-        // exactly what this is looking for.
+        // Measured in scene coordinates rather than from the margins that
+        // were asked for, because a margin that misses is exactly what
+        // this is looking for.
         onTriggered: {
             const at = mainUi.mapToItem(null, 0, 0)
             AppBackend.report(
@@ -916,10 +761,9 @@ ApplicationWindow {
         }
     }
 
-    // PG_AUTO_ACT=solo: the window a run that was turned away puts up.
-    // The harness has to be part of this one — it holds the real lock on
-    // the config directory before it starts this process, so the picture
-    // is of the mechanism and not of a flag that imitates it.
+    // PG_AUTO_ACT=solo: the harness holds the real lock on the config
+    // directory before starting this process, so the picture is of the
+    // mechanism and not of a flag that imitates it.
     Timer {
         id: soloActTimer
         interval: 1200
@@ -930,12 +774,7 @@ ApplicationWindow {
             + " main=" + mainUi.visible)
     }
 
-    // PG_AUTO_ACT=window-floor: what the window does when it is asked to
-    // be smaller than what it is holding. Nothing else can answer it — a
-    // window standing at its floor frames exactly like one that was let
-    // past it, and what the floor *is* moves with the fold and with the
-    // log, so the numbers are the whole of the answer.
-    //
+    // PG_AUTO_ACT=window-floor:
     //   (no argument)  the shape remembered in the configuration
     //                  directory, which xtask writes at 320x240 — under
     //                  every floor there is, so what comes up says
@@ -943,9 +782,8 @@ ApplicationWindow {
     //   fold           folded, put down exactly on that floor, then the
     //                  list put back: the floor rises under a window
     //                  already standing on it
-    //   log            the same rise in the other direction — the window
-    //                  put down on the floor it has without the log, and
-    //                  then the log opened under it
+    //   log            the same rise the other way — put down on the
+    //                  floor without the log, then the log opened
     Timer {
         id: floorActTimer
         interval: 1200
@@ -962,10 +800,8 @@ ApplicationWindow {
             floorShrinkTimer.start()
         }
     }
-    // Put down on the floor as it stands — a size this application sets,
-    // so it goes through the same door the remembered shape does. A beat
-    // apart from the fold above, which has to have reached the layout
-    // before the floor it leaves can be read off.
+    // A beat apart from the fold above, which has to have reached the
+    // layout before the floor it leaves can be read off.
     Timer {
         id: floorShrinkTimer
         interval: Metrics.anchorDelayMs
@@ -977,12 +813,9 @@ ApplicationWindow {
         }
     }
     /// Automation: where the window was standing before the floor moved
-    /// under it. Without it the run cannot tell a window that came back up
-    /// from one that was never let down (`fold` ends at the width it
-    /// started at either way).
+    /// under it — a window that came back up cannot otherwise be told
+    /// from one that was never let down.
     property string floorStoodAt: ""
-    // …and now the half this verb is really about: something that moves
-    // the floor, under a window with nothing left to give.
     Timer {
         id: floorRaiseTimer
         interval: Metrics.anchorDelayMs
@@ -999,16 +832,14 @@ ApplicationWindow {
         interval: Metrics.anchorDelayMs
         onTriggered: root.reportFloor()
     }
-    /// What the floor came to and where the window came to rest. `fits=`
-    /// is the whole verdict: reporting the floor alone would pass with the
-    /// window nowhere near it.
+    /// `fits=` is the whole verdict: reporting the floor alone would pass
+    /// with the window nowhere near it.
     function reportFloor() {
         const floorW = Math.ceil(root.floorWidth)
         const floorH = Math.ceil(root.floorHeight)
         AppBackend.report(
-            // The verdict leads, the way `details_fit` does: what has to
-            // be caught in one substring is the pair "this verb" and "it
-            // held", and only neighbours can be caught in one.
+            // The verdict leads: the pair "this verb" and "it held" has
+            // to be caught in one substring, and only neighbours can be.
             "window_floor fits="
             + (root.width >= floorW && root.height >= floorH)
             + " floorW=" + floorW + " floorH=" + floorH
@@ -1030,15 +861,10 @@ ApplicationWindow {
     }
 
     // PG_AUTO_ACT=badges: all three of the band's state badges at once —
-    // a stopped operation, the conflict it stopped on, and a machine that
-    // has never been told who is committing. Each of them is a fixed box
-    // in the band's row, so three of them is the widest the band ever
-    // asks for, and the floor is the only thing standing between that and
-    // a `>_` pushed off the end (デザイン規約 §ウィンドウの縁).
-    //
-    // The argument is the window rather than a name: `floor` puts it down
-    // on the floor the three badges leave, which is the half a picture of
-    // a wide window cannot answer.
+    // the widest the band ever asks for, and the floor is the only thing
+    // between that and a `>_` pushed off the end (デザイン規約
+    // §ウィンドウの縁). The argument is the window width; `floor` puts it
+    // down on the floor the three badges leave.
     Timer {
         id: badgesActTimer
         interval: 1200
@@ -1057,17 +883,12 @@ ApplicationWindow {
                 root.width = Math.ceil(root.floorWidth)
                 root.height = Math.ceil(root.floorHeight)
             } else if (!isNaN(wantedW) && wantedW > 0) {
-                // A plain width, so each of the three shapes the state
-                // group takes can be photographed: whole words, words
-                // narrowed together, the mark. Which width brings on which
+                // Which width brings on which of the group's three shapes
                 // is a question about the installed fonts, so the run
-                // names the number and the report says the shape.
-                //
-                // Not held at the floor. The third shape sits below what
-                // this window lets a hand drag it to today, and a shape
-                // nothing can photograph is a shape nobody can check —
-                // the same reason `window-floor` seeds a 320-wide state
-                // file for a window that would never write one.
+                // names the number and the report says the shape. Not
+                // held at the floor: the third shape sits below what a
+                // hand can drag to today, and a shape nothing can
+                // photograph is a shape nobody can check.
                 root.width = wantedW
             }
             // A beat later if anything was moved or opened; straight away
@@ -1087,20 +908,15 @@ ApplicationWindow {
         interval: Metrics.anchorDelayMs
         onTriggered: root.reportBadges()
     }
-    /// Which of the two rules painted the folded group's mark, named
-    /// rather than spelled in hex: what the runs check is that the rule
-    /// reached the paint (規約 §状態: 色は最も重い状態が決める), and a
-    /// verdict written as a token's value would be a second copy of that
-    /// token. Read off the band's own colour, not off the conditions —
-    /// recomputing the rule here would agree with itself whatever the
-    /// band did.
+    /// Which rule painted the folded group's mark (規約 §状態: 色は最も
+    /// 重い状態が決める). Read off the band's own colour, not off the
+    /// conditions — recomputing the rule here would agree with itself
+    /// whatever the band did.
     readonly property string stateTint:
         Qt.colorEqual(topBar.stateMarkColor, Theme.danger)
         ? "danger" : "warning"
-    /// What the band came to with every badge it can wear. `fits=` leads,
-    /// and the three badges are judged with it: a run where one of them
-    /// never stood photographs a band that was never crowded, and that
-    /// picture is indistinguishable from a band that took the crowd well.
+    /// `fits=` leads, and the three badges are judged with it: a run
+    /// where one never stood photographs a band that was never crowded.
     function reportBadges() {
         const floorW = Math.ceil(root.floorWidth)
         AppBackend.report(
@@ -1109,48 +925,32 @@ ApplicationWindow {
             + " conflicts=" + topBar.conflictBadgeShown
             + " identity=" + topBar.identityBadgeShown
             + " oldGit=" + topBar.oldGitBadgeShown
-            // What the band drew and what came up, past what was asked
-            // for: the three above are conditions, and a condition that
-            // reached no badge is not a picture anybody can read. Which of
-            // the group's three shapes landed is `words=` / `mark=`, and
-            // `cap=` is the width the badges were narrowed to (-1 = none
-            // of them was).
+            // Which of the group's three shapes landed is `words=` /
+            // `mark=`; `cap=` is the width the badges were narrowed to
+            // (-1 = none was).
             + " words=" + topBar.stateWordsShown
             + " mark=" + topBar.stateMarkShown
-            // Which rule painted the mark, named rather than in hex. The
-            // fold takes away the words that would otherwise say which
-            // state is the heaviest, so this is the only thing left
-            // carrying it (規約 §状態).
             + " tint=" + root.stateTint
             + " cap=" + topBar.stateCapW
             + " groupW=" + topBar.stateGroupW
-            // The two floors the fold is decided against — the badge's own
-            // (three characters and an ellipsis) and the tabs' cap, which
-            // takes the group's width when it has nothing left to give.
             + " badgeMin=" + topBar.stateBadgeMinW
             + " tabCap=" + Math.round(topBar.tabTitleCap)
             + " tabMin=" + topBar.tabTitleMinW
             + " card=" + topBar.stateCardOpen
             + " rows=" + topBar.stateCardRows
             + " cardSize=" + topBar.stateCardSize
-            // The band's own floor beside the window's: the band is what
-            // the badges widen, and reading only the window's would not
-            // say whether it was this row that set it.
+            // The band's own floor beside the window's: reading only the
+            // window's would not say whether it was this row that set it.
             + " bandW=" + Math.ceil(topBar.floorWidth)
             + " floorW=" + floorW + " w=" + root.width
             + " tabsW=" + Math.round(topBar.bandTabsWidth)
             + " grabRun=" + Math.round(topBar.bandGrabRun))
     }
 
-    // PG_AUTO_ACT=old-git / old-git-card / old-git-fold: the band's fourth
-    // badge, the card it opens, and the mark a narrowed window comes down
-    // to with only this one standing.
-    //
-    // Nothing here stages the state — the run is handed a
-    // git that answers `--version` with an older number
-    // (`verify-ui --old-git`), so the badge is answering a real reading of
-    // a real program, the way `solo` is photographed against a lock that is
-    // really held.
+    // PG_AUTO_ACT=old-git / old-git-card / old-git-fold. Nothing here
+    // stages the state — the run is handed a git that answers
+    // `--version` with an older number (`verify-ui --old-git`), so the
+    // badge is answering a real reading of a real program.
     Timer {
         id: oldGitActTimer
         interval: 1200
@@ -1162,13 +962,9 @@ ApplicationWindow {
             // property the real hover writes (app-ui.md).
             if (AppBackend.autoAct === "old-git-card")
                 topBar.statePointedAt = true
-            // The same argument `badges` takes, for the same reason: the
-            // group's three shapes are what a narrowing window walks
-            // through. `-fold` brings its own width instead of taking one,
-            // because the shape it is for is the one this badge can reach
-            // alone — a folded group with nothing red in it, which is the
-            // only place the mark's colour is the mark's whole meaning
-            // (規約 §状態).
+            // `-fold` brings its own width: the shape it is for is a
+            // folded group with nothing red in it — the only place the
+            // mark's colour is the mark's whole meaning (規約 §状態).
             const arg = AppBackend.autoAct === "old-git-fold"
                         ? "floor" : AppBackend.autoActArg
             const wantedW = parseInt(arg)
@@ -1181,24 +977,16 @@ ApplicationWindow {
             oldGitReportTimer.start()
         }
     }
-    // A beat later, for the reason the badges report waits: what is read is
-    // where the layout came to rest.
     Timer {
         id: oldGitReportTimer
         interval: Metrics.anchorDelayMs
         onTriggered: AppBackend.report(
-            // `badge=` is the band's own reading rather than the condition
-            // behind it, and `version=` says which git answered — a run
-            // whose shim never got onto PATH photographs an ordinary
-            // window, and an ordinary window photographs well.
+            // `version=` says which git answered — a run whose shim never
+            // got onto PATH photographs an ordinary window, and an
+            // ordinary window photographs well.
             "old-git badge=" + topBar.oldGitBadgeShown
             + " card=" + topBar.stateCardOpen
             + " rows=" + topBar.stateCardRows
-            // Which of the group's shapes this width landed on, and what
-            // the mark was painted with — the fold is where a lone warning
-            // could have borrowed the conflict's red without anyone
-            // noticing, since the words that would have said otherwise are
-            // exactly what the fold takes away.
             + " words=" + topBar.stateWordsShown
             + " mark=" + topBar.stateMarkShown
             + " tint=" + root.stateTint
@@ -1208,10 +996,8 @@ ApplicationWindow {
             + " w=" + root.width)
     }
 
-    // PG_AUTO_ACT=state: what a launch came back to, and (with the
-    // argument "change") something for the next one to come back to.
-    // Two runs sharing one --config-dir are what actually tests this —
-    // a single run can only ever agree with itself.
+    // PG_AUTO_ACT=state: two runs sharing one --config-dir are what
+    // actually tests this — a single run can only ever agree with itself.
     Timer {
         id: stateActTimer
         interval: 1200
@@ -1290,12 +1076,8 @@ ApplicationWindow {
     /// shadow. Reaching it is the only way to dress it, and dressing it
     /// once reaches every `ToolTip.text` in the tree.
     readonly property var sharedTip: mainUi.ToolTip.toolTip
-    /// Puts the app's own card on it: the same ground, frame, radius and
-    /// padding every other card stands on (`RefListPopup` / `EolHoverCard`
-    /// / `CommitHoverCard` — デザイン規約 §背景 names `bgElevated` as the
-    /// tooltip's ground). The word keeps the window's font: this is an
-    /// ordinary UI sentence, and `fontMd` is what the table calls that.
-    /// The shadow goes with the rest — no other card casts one.
+    /// Puts the app's own card on it (デザイン規約 §背景 names
+    /// `bgElevated` as the tooltip's ground).
     function dressToolTip() {
         root.sharedTip.background = tipGround.createObject(root.sharedTip)
         root.sharedTip.contentItem = tipWord.createObject(root.sharedTip)
@@ -1324,15 +1106,12 @@ ApplicationWindow {
         root.dressToolTip()
         root.decorateWindow()
         // A window that is only here to say another process has the files
-        // does none of the rest: no git to ask about, no tabs to open, no
-        // shape to take back — the window whose files these are is
-        // already wearing it.
+        // does none of the rest.
         if (!AppBackend.alreadyRunning) {
             AppBackend.initialize()
             root.applySavedWindow()
             if (AppBackend.autoOpen !== "") {
-                // Multiple repositories separated by ';' open as tabs in
-                // order.
+                // ';'-separated repositories open as tabs in order.
                 const paths = AppBackend.autoOpen.split(";")
                 for (let i = 0; i < paths.length; i++) {
                     if (paths[i] !== "")
@@ -1394,9 +1173,8 @@ ApplicationWindow {
                     const saved = res.saveToFile(AppBackend.shotDir + "/overlay.png")
                     console.warn("overlay saved=" + saved)
                 })
-            // Whatever the window is actually showing. The gate is a
-            // sibling of `mainUi`, not a child, so a run that ends on it
-            // used to photograph the application it never became.
+            // The gate is a sibling of `mainUi`, not a child — grab
+            // whichever the window is actually showing.
             const shown = gate.visible ? gate : mainUi
             const ok = shown.grabToImage(function (res) {
                 const saved = res.saveToFile(path)
@@ -1410,14 +1188,10 @@ ApplicationWindow {
     }
 
     // ---- the two ways the window has nothing to show ---------------------
-    // There is no git to ask, or another process already has the files this
-    // one would have used. Both are "this window is not going to be an
-    // application", and both wear the same shape.
-    //
-    // A git older than the supported minimum is not one of them: it answers,
-    // and most of what this app asks for it answers correctly, so it runs
-    // and wears the band's `OLD GIT` badge instead (規約 §リポジトリが今
-    // どうなっているか).
+    // No git to ask, or another process already has the files. A git
+    // older than the supported minimum is not one of them: it answers, so
+    // the app runs and wears the band's `OLD GIT` badge instead
+    // (規約 §ウィンドウの縁).
     Item {
         id: gate
         anchors.fill: parent
@@ -1459,12 +1233,8 @@ ApplicationWindow {
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
             }
-            // The way out. There is no title bar of its own to close this
-            // window by when the band is the title bar, and the band is
-            // inside the part that stays hidden.
-            // A plain frame, not the accent: the accent is for the button
-            // somebody came to press (規約 §アクセント), and nobody came
-            // here. The empty page's lone button is the same shape.
+            // The way out: the band is the title bar and it is inside the
+            // part that stays hidden. A plain frame (規約 §アクセント).
             ActionButton {
                 visible: AppBackend.alreadyRunning
                 implicitHeight: Theme.controlHeight
@@ -1474,8 +1244,7 @@ ApplicationWindow {
                 anchors.horizontalCenter: parent.horizontalCenter
                 onActivated: root.close()
             }
-            // The drawn ring, not Fusion's BusyIndicator — the same
-            // turning mark as everywhere else in the window
+            // The drawn ring, not Fusion's BusyIndicator
             // (規約 §進行中・長押しの定数).
             NavIcon {
                 visible: AppBackend.gitState === "checking" && !AppBackend.alreadyRunning
@@ -1541,24 +1310,13 @@ ApplicationWindow {
         curPage: root.curPage
     }
 
-    // The window's own edge, drawn rather than asked for.
-    //
-    // A frameless window has no non-client area, so there is no frame for
-    // the platform to put a line around: measured on a small one, the
-    // pixel outside the window is simply whatever was behind it. The line
-    // the design asks for (規約 §ウィンドウの縁) is therefore the app's to
-    // draw, and the client is the only place left to draw it.
-    //
-    // Not while the window fills the screen: there the window's edges are
-    // the screen's, and a line there would spend a row of the work area
-    // separating the app from nothing. A plain Rectangle accepts no mouse
-    // events, so the row it covers keeps working.
-    //
-    // The bottom side is the exception, and it is not this rectangle's to
-    // keep: the floor at the end of the column below holds that row in the
-    // same colour and the same width, maximised as well as windowed. Both
-    // end at the same parent's last row, so windowed the two coincide and
-    // the four sides read as one outline.
+    // The window's own edge: a frameless window has no non-client area
+    // for the platform to put a line around, so the line the design asks
+    // for (規約 §ウィンドウの縁) is drawn in the client. Not while the
+    // window fills the screen — a line there would separate the app from
+    // nothing. The bottom side is the floor rectangle's at the end of the
+    // column below; windowed, the two coincide and the four sides read as
+    // one outline.
     Rectangle {
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
@@ -1573,28 +1331,15 @@ ApplicationWindow {
     ColumnLayout {
         id: mainUi
         // ApplicationWindow keeps its content item inside the window's
-        // safe area, and with the client area expanded that area starts
-        // below the title bar (measured on Windows: y = 31, the band's own
-        // height). The chrome reaches back up over that inset with a
-        // negative top margin — the content item does not clip, so both
-        // painting and input carry.
-        //
-        // Not by reparenting onto the window's root item, though that
-        // also lands the band at 0: content outside the content item
-        // never wakes the render loop, so every change waited for the
-        // next input event to be painted — the whole window ran one
-        // frame behind the model, which reads as "the first click did
-        // nothing" (measured: notify delivered synchronously, strip
-        // painted one state late, and a lone mouse-move caught it up).
+        // safe area, which with the client area expanded starts below the
+        // title bar (measured on Windows: y = 31). The chrome reaches
+        // back up over that inset with a negative top margin — the
+        // content item does not clip, so both painting and input carry.
+        // Not by reparenting onto the window's root item: content outside
+        // the content item never wakes the render loop, so every change
+        // waited for the next input event to be painted — "the first
+        // click did nothing" (measured).
         anchors.fill: parent
-        // Out to every edge of the window, which is now the same thing as
-        // every edge of the client: the frameless window has no
-        // non-client area at all (measured: window, client and work area
-        // all 0,0..1920,1032 while maximised). Nothing of this app is
-        // ever outside the screen, and nothing needs pulling in — an
-        // inset here shows up as the contents shifted off the left and
-        // short of the right, which is what it did when it was tried
-        // (reported 2026-08-09).
         anchors.topMargin: -root.contentItem.y
         spacing: 0
         visible: AppBackend.gitState === "ok"
@@ -1619,11 +1364,9 @@ ApplicationWindow {
             onCloseRequested: root.close()
             onCaptionStripMoved: root.reportCaptionStrip()
         }
-        // Smoke hook (PG_AUTO_ACT=middle-close): the gesture is on the tab
-        // strip, which lives up here rather than on the page where most of
-        // the verbs sit. The argument names the tab to aim at (the first
-        // one by default); what is still open afterwards is the report,
-        // since a closed tab leaves nothing of itself in the picture.
+        // Smoke hook (PG_AUTO_ACT=middle-close): what is still open
+        // afterwards is the report, since a closed tab leaves nothing of
+        // itself in the picture.
         Timer {
             interval: 1200
             running: AppBackend.autoAct === "middle-close"
@@ -1635,14 +1378,10 @@ ApplicationWindow {
             }
         }
 
-        // Smoke hook (PG_AUTO_ACT=open-again): asking for a repository the
-        // strip already holds. The argument is the path to ask for; with
-        // none it is the first tab's own, spelled the way that tab was
-        // opened — passing git's spelling of the same folder instead is
-        // how the other half of the answer gets read. Enters through the
-        // same slot every way in uses, and reports the strip afterwards:
-        // no new tab may appear, and `active` has to have moved to the one
-        // already holding it (デザイン規約 §タブの所作).
+        // Smoke hook (PG_AUTO_ACT=open-again): asking for a repository
+        // the strip already holds. No new tab may appear, and `active`
+        // has to have moved to the one already holding it (デザイン規約
+        // §タブの所作).
         Timer {
             interval: 1200
             running: AppBackend.autoAct === "open-again"
@@ -1657,9 +1396,7 @@ ApplicationWindow {
             }
         }
 
-        // Smoke hook (PG_AUTO_ACT=force-push-hold): the overwrite is only
-        // reachable by holding the toolbar's button, which is here rather
-        // than on the page where the other verbs live. Waits out the page's
+        // Smoke hook (PG_AUTO_ACT=force-push-hold): waits out the page's
         // own auto-act beat so the branch's standing is settled first —
         // the hold is armed only where the two histories have parted.
         Timer {
@@ -1675,10 +1412,8 @@ ApplicationWindow {
             color: Theme.borderSubtle
         }
 
-        // Nothing open: the window keeps its usual three-pane shape with
-        // every pane empty, and the way in sits where the graph goes.
-        // Built only while it is needed, so an app that starts with tabs
-        // never pays for it.
+        // Nothing open: the blank page. Built only while it is needed, so
+        // an app that starts with tabs never pays for it.
         Loader {
             id: blankPage
             Layout.fillWidth: true
@@ -1712,9 +1447,7 @@ ApplicationWindow {
                     onOpenRepositoryPathRequested: path => tabsModel.openRepositoryPath(path)
                     onSettingsDialogRequested: settingsDialog.open()
                     // The same card, told whom it was opened on before it
-                    // opens — pictures are managed in one list, and an
-                    // avatar's badge is the way in that saves naming the
-                    // person (デザイン規約 §アバターを与える).
+                    // opens (デザイン規約 §アバターを与える).
                     onAvatarSettingsRequested: (name, email) => {
                         settingsDialog.prefillName = name
                         settingsDialog.prefillEmail = email
@@ -1726,21 +1459,9 @@ ApplicationWindow {
         }
 
         // The window's floor, and — while the edge above is drawn — the
-        // bottom side of it as well: one line in borderDefault doing both,
-        // because both are the last row of the same parent.
-        //
-        // It was a splitter-style 4px band in borderSubtle, and the edge
-        // painting over its last row made the bottom of a windowed window
-        // read four times the other three sides (reported 2026-08-09). The
-        // band was the half to drop: splitterWidth is the width of a drag
-        // handle, and there is nothing to split at the end of the window.
-        //
-        // Drawn while the window fills the screen too, unlike the edge:
-        // there the other three sides face the screen's own, but this one
-        // still has the taskbar under it, and content running straight into
-        // it is what asked for something here in the first place. The git
-        // version used to float here; it moved into the page's right pane,
-        // where the command log cannot open underneath it.
+        // bottom side of it as well: one line in borderDefault doing
+        // both. Drawn while the window fills the screen too, unlike the
+        // edge: this side still has the taskbar under it.
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: Theme.borderWidth

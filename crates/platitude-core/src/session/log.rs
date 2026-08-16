@@ -624,11 +624,6 @@ impl RepoSession {
     /// save the same work, but a consumer that attached after the last one
     /// went out would then sit empty until something moved, and "nothing
     /// changed" is the state that lasts longest.
-    /// The snapshot already on screen, when there is one.
-    ///
-    /// What a read publishes when the key says nothing it is built from
-    /// has moved — the alternative being to build an equal one and throw
-    /// it away (`publish_refs`).
     pub(super) fn published_snapshot(&self) -> Option<Arc<RefsSnapshot>> {
         match self.last_snapshot.lock() {
             Ok(slot) => slot.as_ref().map(Arc::clone),
