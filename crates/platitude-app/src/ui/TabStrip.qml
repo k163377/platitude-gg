@@ -77,11 +77,41 @@ Item {
     }
 
     /// Automation: the middle click, landed on the tab at `index`
-    /// (`PG_AUTO_ACT=middle-close`).
+    /// (`PG_AUTO_ACT=middle-close`). Answers whether there was an item
+    /// under it to press: the strip is a view, and the item for a row
+    /// the model has only just gained arrives with the next layout. A
+    /// caller that read the asking as a press would go on waiting for a
+    /// tab nobody touched.
     function middleClickTab(index) {
         const tab = tabs.itemAtIndex(index)
-        if (tab)
-            tabStrip.pressTab(index, tab.tab_id, Qt.MiddleButton)
+        if (!tab)
+            return false
+        tabStrip.pressTab(index, tab.tab_id, Qt.MiddleButton)
+        return true
+    }
+
+    /// Automation: how many of the strip's rows have an item standing for
+    /// them. `tabPaths` and `hasTabPath` walk those items, so this is what
+    /// says whether their answer is the whole strip or only the part of it
+    /// the layout has caught up with.
+    function tabItemCount() {
+        let n = 0
+        for (let i = 0; i < tabs.count; i++)
+            if (tabs.itemAtIndex(i))
+                n++
+        return n
+    }
+
+    /// Automation: whether any tab in the strip was opened on `path`. The
+    /// closed tab's title cannot say it went — every demo working tree is
+    /// called the same thing — and the path is the only thing that can.
+    function hasTabPath(path) {
+        for (let i = 0; i < tabs.count; i++) {
+            const tab = tabs.itemAtIndex(i)
+            if (tab && tab.repo_path === path)
+                return true
+        }
+        return false
     }
 
     /// Automation: the paths rather than the titles — every demo

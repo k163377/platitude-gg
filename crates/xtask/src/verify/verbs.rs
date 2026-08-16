@@ -119,6 +119,14 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // argument is for.
         "middle-scroll" if arg == "message" => Some("middle_scroll lanes=false x=0"),
         "middle-scroll" => Some("middle_scroll lanes=true"),
+        // Which tab went is the whole question, and every demo working
+        // tree is called `repo`, so the strip photographs the same either
+        // way. `gone=` is the pressed tab's own path, asked of the strip
+        // after it caught up with the model — a run that closed the
+        // neighbour, or one that reported before a tab had ever opened,
+        // is caught by nothing else. How many are left is not judged: the
+        // verb takes as many repositories as it is given.
+        "middle-close" => Some("middle_close gone=true"),
         // The three states themselves. A run where one of them never stood
         // photographs a band that was never crowded, and that picture
         // cannot be told from a band that gave the crowd room — so the

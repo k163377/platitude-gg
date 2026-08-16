@@ -121,8 +121,10 @@ Rectangle {
     /// Automation: the strip's own hooks, handed on. What `Main` and
     /// `WindowAutoActDriver` hold is the band, so the way in stays here
     /// after the tabs themselves have gone (`TabStrip`).
-    function middleClickTab(index) { tabStrip.middleClickTab(index) }
+    function middleClickTab(index) { return tabStrip.middleClickTab(index) }
     function tabPaths() { return tabStrip.tabPaths() }
+    function tabItemCount() { return tabStrip.tabItemCount() }
+    function hasTabPath(path) { return tabStrip.hasTabPath(path) }
     function tabPathAt(index) { return tabStrip.tabPathAt(index) }
     function tabWidths() { return tabStrip.tabWidths() }
     function pointAtTab(index) { tabStrip.pointAtTab(index) }

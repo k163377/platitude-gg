@@ -101,7 +101,9 @@ Item {
 
     // What remains after a middle-click is the output under test. Wait
     // for the tab-model count edge rather than allowing a fixed delay to
-    // stand in for it.
+    // stand in for it. The two tabs this verb needs are a precondition of
+    // the press and nothing else: read again after it, they turn the
+    // verb's own answer — one tab fewer — into a wait nothing can end.
     Timer {
         id: middleCloseTimer
         interval: 25
@@ -109,19 +111,43 @@ Item {
         running: AppBackend.autoAct === "middle-close"
         property bool requested: false
         property int beforeCount: -1
+        property string closedPath: ""
         onTriggered: {
-            if (pageRepeater.count < 2)
-                return
             if (!middleCloseTimer.requested) {
-                middleCloseTimer.requested = true
+                if (pageRepeater.count < 2)
+                    return
                 middleCloseTimer.beforeCount = pageRepeater.count
-                topBar.middleClickTab(Number(AppBackend.autoActArg))
+                const at = Number(AppBackend.autoActArg)
+                middleCloseTimer.closedPath = topBar.tabPathAt(at)
+                // Latched on the strip's answer rather than on the
+                // asking: the press has to land on an item, and the row
+                // the model has just gained gets one with the layout.
+                middleCloseTimer.requested = topBar.middleClickTab(at)
                 return
             }
-            if (pageRepeater.count >= middleCloseTimer.beforeCount)
+            // The strip is read back below, so it has to have caught up
+            // with the model before there is anything true to say about
+            // which repository went and which is still standing.
+            if (pageRepeater.count >= middleCloseTimer.beforeCount
+                    || topBar.tabItemCount() !== pageRepeater.count)
+                return
+            // And the tab that stayed has to be showing its repository:
+            // "the neighbour is still there" is the half of this verb the
+            // picture carries, and a page still opening photographs the
+            // same whether it survived the close or was never opened at
+            // all. The page driver's own baseline (AutoActDriver), asked
+            // of whichever page the close left in front.
+            const kept = window.curPage
+            if (kept === null || kept.pageTab.state !== "open"
+                    || !kept.pageWt.loaded || kept.pageGraph.finishCount === 0)
                 return
             stop()
-            AppBackend.report("middle_close tabs=" + pageRepeater.count
+            // The verdict leads, and it is about the tab the press landed
+            // on: a count that merely fell would pass with the wrong tab
+            // closed, and the titles cannot tell them apart.
+            AppBackend.report("middle_close gone="
+                              + !topBar.hasTabPath(middleCloseTimer.closedPath)
+                              + " tabs=" + pageRepeater.count
                               + " active=" + tabsModel.currentIndex
                               + " open=" + topBar.tabPaths())
             window.finishAutoAct()

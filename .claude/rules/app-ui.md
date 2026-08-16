@@ -44,6 +44,7 @@ UI の色・寸法・用語の正本は [デザイン規約.md](../../internal-d
 - **非因果の終了境界も成功条件にしない** — 性能測定の 12 秒窓は測定入力として保持するが、起動からの固定 quit で成功扱いにしない。`perf_done` と親 watchdog の完了・kill 判定を使い、`PG_AUTO_ACT` の因果完了と混ぜない。worktree からの raw app 起動は親監督なしでは許可せず、`cargo xtask verify-ui` / `cargo xtask linux verify-ui` を使う
 - **harness は親の自動化状態を継承しない** — 起動前に全 `PG_AUTO_*` と関連する automation env を除去し、その harness が所有する値だけを設定する。repo / config / shot は run 固有にし、別 harness や並行 session の入力・状態・出力を合成しない
 - **1 run の完了 owner は 1 つ** — page が動詞を原子的に claim し、window-level 動詞は page completion を defer する。新しく開いた tab が同じ動詞を再実行してはならない。撮影は owner が `finishAutoAct()` を 1 回通知した後だけ
+- **前提条件を完了判定に混ぜない** — 動詞が動く前に要る状態(タブが 2 本ある・行が選べる)は**入力を出す枝の中だけ**で読む。毎 tick 読み直すと、その動詞自身の答え(1 本減った)が前提を割って完了へ進めなくなり、watchdog まで無言で待つ。**入力が届いたことも確かめてから latch する** — ビュー(ListView 等)の item はモデルが行を得た次のレイアウトで生まれるので、`itemAtIndex` は空振りしうる。空振りを押下として latch すると同じ無限待ちになる(入力経路の関数に「押せたか」を答えさせる)
 - **「まだ答えが無い」と値 0 / false を分ける** — 非同期モデルは `loaded` / request generation / sequence 等の readiness を公開し、自動化は readiness の後で値を読む。初期値 0 を clean・空・完了と判定しない
 - **一瞬だけ立つ状態は signal で観測して latch する** — error / busy / loading が polling 1 周より短くても、その実 edge を見た証拠を保持し、非同期 `grabToImage` が終わるまで意図した中間表示を保つ。入力フラグを立てただけで出力状態を偽装しない
 - **描画境界は画像 callback が答える** — completion 後に `requestUpdate()` と event-loop turn を通し、app / overlay 両方の `grabToImage` callback が返ってから終了する。静止した offscreen scene は `frameSwapped` を出さないことがあるため、それ単独を完了条件にしない
