@@ -10,7 +10,7 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{
     DiffRow, diff_key, flatten_patches, human_size, image_data_url, is_combined, is_new_file,
-    is_unmerged_only,
+    is_unmerged_only, widest_columns,
 };
 use crate::hub::{DiffMsg, Feed};
 
@@ -58,6 +58,10 @@ pub struct DiffModel {
     /// is as wide as the widest number it will hold, so counting it is a
     /// fact about the rows rather than something QML works out.
     widest_no: i32,
+    /// How many columns of the mono font the longest line needs
+    /// (`encode::widest_columns`). The pane turns it into how far sideways
+    /// the code may be sent; 0 is a diff with nowhere to go.
+    widest_columns: i32,
     title: String,
     is_binary: bool,
     /// The file has no old side: everything in the diff was added by it
@@ -136,6 +140,7 @@ impl_notify_runs!(DiffModel);
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
 impl DiffModel {
     qproperty!("widestNo", Member = widest_no, Notify = changed);
+    qproperty!("widestColumns", Member = widest_columns, Notify = changed);
     qproperty!("title", Member = title, Notify = changed);
     qproperty!("isBinary", Member = is_binary, Notify = changed);
     qproperty!("isNewFile", Member = is_new_file, Notify = changed);
@@ -216,6 +221,7 @@ impl DiffModel {
     fn clear(&mut self) {
         self.current_key = String::new();
         self.widest_no = 0;
+        self.widest_columns = 0;
         self.title = String::new();
         self.is_binary = false;
         self.is_new_file = false;
@@ -351,6 +357,10 @@ impl DiffModel {
             .map(|r| r.old_no.max(r.new_no))
             .max()
             .unwrap_or(0);
+        // Read off the patches rather than the rows: a coloured row holds
+        // markup, and the length of `<font color="#…">` is not the length
+        // of anything on screen.
+        self.widest_columns = widest_columns(&patches);
         self.extend_notified(rows);
         if crate::memprobe::enabled() {
             crate::memprobe::note("diff-lines", self.tab_id, &self.lines);
@@ -387,6 +397,7 @@ impl DiffModel {
             self.is_combined = false;
             self.unmerged = false;
             self.widest_no = 0;
+            self.widest_columns = 0;
             self.apply_preview(None);
             self.reset();
         }

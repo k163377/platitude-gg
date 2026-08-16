@@ -261,6 +261,22 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // is `scrollTo`'s own number read back after the swap — 400 or
         // the reader lost their place.
         "colour-place" => Some("colour_place coloured=true at=400"),
+        // The picture cannot tell a diff sent to its end from one that had
+        // nowhere to go: both frame as a pane of text with its left edge
+        // showing. So the two things that only happen when there is
+        // somewhere to go are what it is judged on — the bar came out, and
+        // the hand is still carrying the rows. A fixture whose lines fit
+        // the pane fails here rather than passing on a blank
+        // (`--preset widelines` is the one that does not fit).
+        "code-send" => Some("code_send bar=true hand=true"),
+        // A bucket emptied from its own heading keeps that heading, both
+        // ways round — which is the whole claim, so both headings are
+        // read back whichever direction was pressed. The picture cannot
+        // be trusted with it: a list with one heading missing frames as a
+        // list, and the missing one is only missing next to the other
+        // direction's picture.
+        "stage-all" => Some("wip_heads from=unstaged unstaged=true staged=true"),
+        "unstage-all" => Some("wip_heads from=staged unstaged=true staged=true"),
         _ => None,
     }
 }

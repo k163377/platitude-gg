@@ -1,6 +1,7 @@
 //! Pure encoding helpers: core DTOs → compact strings the QML layer decodes
 //! mechanically (draw tokens / chip records).
 
+mod columns;
 mod graph;
 mod labels;
 mod markup;
@@ -8,6 +9,7 @@ mod rows;
 mod select;
 mod words;
 
+pub use columns::widest_columns;
 pub use graph::{avatar_code, conflict_side_colors, encode_geometry, tail_lanes};
 pub(crate) use labels::fake_pr_set;
 pub use labels::{co_author_pairs, encode_co_authors, encode_labels, label_names};

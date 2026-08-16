@@ -33,6 +33,14 @@ Rectangle {
     required property string side
 
     required property real rowWidth
+    /// How far the file's own text has been sent sideways
+    /// (`DiffCodeScroll.offset`). The gutter and the hunk headings do not
+    /// travel with it: the numbers, the mark and the pane's own words are
+    /// about the row rather than in it (デザイン規約 §diff を横へ送る).
+    required property real codeX
+    /// The room held between the two numbers for the mark, as the pane
+    /// works it out once for every row (`DiffPane.seatW`).
+    required property int seatW
     /// This diff has pieces worth naming (`DiffPane.partial`).
     required property bool partial
     /// Which way a write on this diff goes, and whether one is running.
@@ -54,10 +62,19 @@ Rectangle {
     required property bool picked
     /// How many of this hunk's lines are picked (heading rows).
     required property int pickedInHunk
+    /// How many lines of the whole diff are picked — what this row's mark
+    /// would carry with it, and so what its tooltip has to name.
+    required property int pickedCount
 
     /// The pointer arrived on this hunk's heading, or left it.
     signal hunkPointedAt(bool inside, int hunk)
-    signal lineToggleRequested(int hunk, int line)
+    /// A press on the line itself, with whatever was held down: it is the
+    /// choice this moves, never the index (デザイン規約 §diff の中の
+    /// ステージ).
+    signal lineChoiceRequested(int hunk, int line, int modifiers)
+    /// A press on the line's own mark: this line goes over to the other
+    /// side now, and so does every other line picked out with it.
+    signal lineStageRequested(int hunk, int line)
     /// Anywhere in the diff that is not a changed line or a heading puts
     /// the whole choice down.
     signal choiceCleared()
@@ -95,11 +112,12 @@ Rectangle {
     /// to the plain gap — a diff with no pieces in it never
     /// puts a mark out, and holding the room open would leave
     /// a hole nothing ever stands in.
-    readonly property int stageSeatW:
-        diffRow.kind === "hunk" ? 0
-        : diffRow.partial
-          ? Theme.iconMd + 2 * Theme.borderWidth
-          : Theme.spaceXs
+    readonly property int stageSeatW: diffRow.kind === "hunk" ? 0 : diffRow.seatW
+    /// How much of the row's right edge the hunk heading has to give up to
+    /// the two words that act on the hunk. git's `@@` line is as long as
+    /// the enclosing signature and would otherwise run under them.
+    readonly property real toolsRoom:
+        hunkTools.visible ? hunkTools.width + Theme.spaceSm * 2 : 0
     // The hunk under the pointer, and every line picked by
     // hand, wear the wash a row anywhere else in the app wears
     // under the pointer. A picked line also carries the mark
@@ -131,8 +149,13 @@ Rectangle {
         color: diffRow.side === "ours" ? diffRow.oursColor
                                        : diffRow.theirsColor
     }
+    // The gutter: two numbers with the mark's seat between them. It stays
+    // where it is however far the code is sent sideways — a number belongs
+    // to the row rather than to the line, and a `+` that scrolled out of
+    // reach would take partial staging with it.
     Row {
-        anchors.fill: parent
+        id: gutter
+        height: parent.height
         spacing: 0
         Label {
             id: oldNoCol
@@ -178,14 +201,27 @@ Rectangle {
             font.family: Theme.monoFamily
             font.pixelSize: Theme.fontSm
         }
+    }
+    // The room the file's own text is read in. It is cut to what is left
+    // of the row, and the line inside it is not: the text is as wide as it
+    // is and travels under this window, so a long line is read by sending
+    // it rather than by having its end replaced with three dots
+    // (デザイン規約 §diff を横へ送る).
+    Item {
+        id: codeRoom
+        x: gutter.width
+        width: Math.max(0, diffRow.rowWidth - gutter.width - diffRow.toolsRoom)
+        height: parent.height
+        clip: true
         Label {
-            // A hunk heading shares its row with the two words
-            // that act on the hunk, and git's `@@` line is as
-            // long as the enclosing signature: without giving
-            // that space up the heading runs under them.
-            width: parent.width - oldNoCol.width - newNoCol.width
-                   - (hunkTools.visible
-                      ? hunkTools.width + Theme.spaceSm * 2 : 0)
+            // A hunk heading does not travel: it is the pane's own words
+            // about the rows below, and words that slid off the left while
+            // the code was read would take with them the only thing saying
+            // which hunk this is. It gives up the right of the row to the
+            // two buttons and elides into what is left.
+            x: diffRow.kind === "hunk" ? 0 : -diffRow.codeX
+            width: diffRow.kind === "hunk" ? codeRoom.width : implicitWidth
+            elide: diffRow.kind === "hunk" ? Text.ElideRight : Text.ElideNone
             height: parent.height
             verticalAlignment: Text.AlignVCenter
             // A hunk heading starts at the row's own left edge
@@ -204,7 +240,6 @@ Rectangle {
             // and drop it (規約 §シンタックスハイライト).
             textFormat: diffRow.rich ? Text.StyledText
                                      : Text.PlainText
-            elide: Text.ElideRight
             font.family: Theme.monoFamily
             // The size an editor puts source at rather than a
             // step in the UI's scale — `fontCode`, matched to
@@ -253,14 +288,19 @@ Rectangle {
                 return
             diffRow.hunkPointedAt(lineHover.containsMouse, diffRow.hunk)
         }
-        // One click, one line: a changed line joins what the
-        // next write takes, or leaves it. Anywhere else in the
-        // diff puts the whole choice down — the rows carrying
-        // it are on screen, so there is nothing to lose track
-        // of (デザイン規約 §diff の中のステージ).
-        onClicked: {
+        // A press on a changed line picks it: on its own, added to
+        // what is picked (Ctrl), or reaching from the last one
+        // (Shift) — the three the file rows already answer to.
+        // **It writes nothing.** What moves a line over to the
+        // other side is its own mark, and the choice is what that
+        // mark carries with it (デザイン規約 §diff の中のステージ).
+        // Anywhere else in the diff puts the whole choice down —
+        // the rows carrying it are on screen, so there is nothing
+        // to lose track of.
+        onClicked: mouse => {
             if (diffRow.kind === "add" || diffRow.kind === "del")
-                diffRow.lineToggleRequested(diffRow.hunk, diffRow.line)
+                diffRow.lineChoiceRequested(diffRow.hunk, diffRow.line,
+                                            mouse.modifiers)
             else if (diffRow.kind !== "hunk")
                 diffRow.choiceCleared()
         }
@@ -363,7 +403,7 @@ Rectangle {
         }
     }
     // The mark a changed line puts out for the hand: `+` where
-    // a click takes the line into the staging area and `−`
+    // a press takes the line into the staging area and `−`
     // where it takes it back out, in the pair of colours that
     // gesture wears everywhere else (デザイン規約 §diff の中の
     // ステージ). It names the *direction* of the write, not
@@ -372,6 +412,11 @@ Rectangle {
     // this size reads as a control that came loose from the
     // toolbar, and the ground it needs is the one the pointer
     // brings with it.
+    //
+    // **It writes, there and then.** One press, one line over to
+    // the other side — and every line picked out with this one
+    // goes with it, which is the file rows' own rule read down a
+    // level (デザイン規約 §その他の操作).
     //
     // It stands in the seat the row holds between the two
     // numbers (`stageSeatW`), and stays out here rather than
@@ -392,8 +437,19 @@ Rectangle {
                                             : "transparent"
         ToolTip.visible: stageLineHover.containsMouse
         ToolTip.delay: Metrics.tipDelayMs
-        ToolTip.text: diffRow.staged ? qsTr("Unstage this line")
-                                     : qsTr("Stage this line")
+        // What this press is about to move, which is not always this one
+        // line: a mark on a picked row carries the whole choice
+        // (デザイン規約 §diff の中のステージ). Spelled out rather than
+        // left to `%n` — with no translation loaded Qt keeps the source
+        // string, and `2 line(s)` in a tooltip is a placeholder that
+        // shipped.
+        ToolTip.text:
+            !(diffRow.picked && diffRow.pickedCount > 1)
+            ? (diffRow.staged ? qsTr("Unstage this line")
+                              : qsTr("Stage this line"))
+            : diffRow.staged
+              ? qsTr("Unstage the %1 picked lines").arg(diffRow.pickedCount)
+              : qsTr("Stage the %1 picked lines").arg(diffRow.pickedCount)
         NavIcon {
             anchors.centerIn: parent
             width: Theme.iconSm
@@ -406,8 +462,9 @@ Rectangle {
             id: stageLineHover
             anchors.fill: parent
             hoverEnabled: true
-            onClicked: diffRow.lineToggleRequested(diffRow.hunk,
-                                                   diffRow.line)
+            enabled: !diffRow.busy
+            onClicked: diffRow.lineStageRequested(diffRow.hunk,
+                                                  diffRow.line)
         }
     }
     // No square for throwing one line away. A line can be

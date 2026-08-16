@@ -274,6 +274,57 @@ pub(super) fn manyhunks(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// How wide the lines of the `widelines` fixture run. Past any pane on any
+/// screen this app is built for: the point of the preset is that the end of
+/// the line cannot be brought on screen by making the window bigger.
+const WIDE_COLUMNS: usize = 400;
+
+/// One unstaged file whose lines run far past the pane they are shown in —
+/// the only shape in which the diff has anywhere sideways to go, and so
+/// the only one where the bar along its bottom edge and the hand that
+/// moves it can be seen at all (`code-send`).
+///
+/// Both sides are wide: a change with a short old side would let the
+/// reader send the new one out of the frame and leave the row half empty,
+/// which says nothing about how far the diff reaches.
+pub(super) fn widelines(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nLines nobody meant to be read at one sitting.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit("wide.txt", &wide("kept"), "docs: write the wide lines down")?;
+    repo.write("wide.txt", &wide("torn"))?;
+    Ok(())
+}
+
+/// `HUNK_LINES` of `WIDE_COLUMNS`, one in every `HUNK_STEP` of them
+/// changed. The word that changes sits at the front, so the diff says what
+/// it is about without being sent anywhere — what is out past the edge is
+/// the rest of the line. ASCII throughout, so a column is a character.
+///
+/// As long as it is wide: the hand that sends the code sideways carries
+/// the rows up and down at the same time, and a file that fits its pane
+/// has no up or down to be carried through.
+fn wide(word: &str) -> String {
+    let mut out = String::new();
+    for i in 0..HUNK_LINES {
+        let said = if i % HUNK_STEP == HUNK_STEP / 2 {
+            word
+        } else {
+            "kept"
+        };
+        let mut line = format!("{i:03}: {said} ");
+        while line.len() < WIDE_COLUMNS {
+            line.push_str("the line goes on ");
+        }
+        line.truncate(WIDE_COLUMNS);
+        out.push_str(&line);
+        out.push('\n');
+    }
+    out
+}
+
 pub(super) fn longpaths(repo: &mut DemoRepo) -> Result<(), String> {
     // Demo-repo content only: the path is made up and exists in no
     // checkout of this repository.

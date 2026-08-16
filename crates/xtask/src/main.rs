@@ -91,6 +91,9 @@ commands:
         manyhunks one unstaged file with 20 hunks in it: more diff than
                   window, which is the only shape that has a reading
                   place to keep through a rebuild (keep-place)
+        widelines one unstaged file whose lines run far past the pane:
+                  the only shape with anywhere sideways to go, so the
+                  only one the diff's own bar comes out on (code-send)
         empty     `git init` and nothing else
 
   verify-ui <verb> [arg] [options]

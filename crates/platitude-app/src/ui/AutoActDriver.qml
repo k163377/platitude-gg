@@ -95,6 +95,7 @@ Item {
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
                 "rebase-onto", "revert-commit", "op-exit-go", "stage-hunk",
                 "stage-line", "stage-lines", "keep-place", "discard-hunk-go",
+                "stage-all", "unstage-all",
                 "push", "force-push", "push-retry", "fetch", "fetch-ref-list",
                 "commands", "commands-fail", "commands-clear", "fetch-recover",
                 "fetch-fail", "fetch-resume"].indexOf(act) >= 0
@@ -106,6 +107,7 @@ Item {
                 "eol-commit", "eol-hover",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "line-tools", "hunk-tools", "pick-lines", "stage-lines",
+                "code-send", "stage-all", "unstage-all",
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
@@ -369,20 +371,33 @@ Item {
                 if (act === "stage-lines") {
                     driver.writeSeqBefore = repoTab.writeSeq
                     driver.writeStarted = repoTab.busyCount > 0
-                }
-                if (act === "stage-lines")
-                    page.stageChosenLines()
-                if (act === "stage-lines")
+                    // Through the mark of a picked line, which is what a
+                    // hand presses: a picked line's mark carries the whole
+                    // choice (デザイン規約 §diff の中のステージ).
+                    diffPane.stageLine(0, line)
                     writeBarrier.start()
-                else
+                } else {
                     renderedBarrier.begin()
+                }
                 return
             }
             if (act === "stage-hunk" || act === "stage-line") {
                 driver.writeSeqBefore = repoTab.writeSeq
                 driver.writeStarted = repoTab.busyCount > 0
-                page.stageSelection(0, act === "stage-line" ? line : -1)
+                // One line goes through its own mark — the press writes,
+                // there and then — and a hunk through its heading's word.
+                if (act === "stage-line")
+                    diffPane.stageLine(0, line)
+                else
+                    page.stageSelection(0, -1)
                 writeBarrier.start()
+                return
+            }
+            // Sending the code sideways, and the hand that sends it and
+            // the rows at once. Both read what moved rather than what was
+            // asked for: a bar bound to nothing still takes a press.
+            if (act === "code-send") {
+                codeSendTimer.begin()
                 return
             }
             // No line-level discard exists — a hunk is the smallest piece
@@ -395,6 +410,129 @@ Item {
             } else {
                 renderedBarrier.begin()
             }
+        }
+    }
+    // Emptying one whole bucket from its own heading, and reading back
+    // which headings the list is left with. The two directions are one
+    // verb because the claim is that they are symmetrical: a bucket that
+    // has just been emptied keeps its heading, whichever bucket it was
+    // (デザイン規約 §その他の操作).
+    //
+    // The heading is pressed rather than the slot behind it called, and
+    // what is read back is the list's own children — a band bound to
+    // nothing would still be counted by the condition that asks for it.
+    Timer {
+        id: bucketAllTimer
+        interval: 25
+        repeat: true
+        /// Which bucket is being emptied, and whether the press went in.
+        property string from: ""
+        property bool pressed: false
+        function begin(bucket) {
+            bucketAllTimer.from = bucket
+            bucketAllTimer.pressed = false
+            bucketAllTimer.start()
+        }
+        onTriggered: {
+            if (!bucketAllTimer.pressed) {
+                // The heading exists once the list has laid its sections
+                // out, which is a frame after the rows arrive.
+                if (wipPane.rowAt(0) === null
+                        || !wipPane.moveBucket(bucketAllTimer.from))
+                    return
+                driver.writeSeqBefore = repoTab.writeSeq
+                driver.writeStarted = repoTab.busyCount > 0
+                bucketAllTimer.pressed = true
+                return
+            }
+            if (!driver.writeStarted && repoTab.busyCount > 0)
+                driver.writeStarted = true
+            if (!driver.writeStarted || repoTab.busyCount !== 0
+                    || repoTab.writeSeq <= driver.writeSeqBefore)
+                return
+            // The bucket that was emptied has to be empty before its
+            // heading means anything: the counts are the model's answer
+            // and the headings are the list's, and reading the second
+            // before the first would report the state that was.
+            const emptied = bucketAllTimer.from === "staged"
+                          ? workTree.stagedCount
+                          : workTree.unstagedCount + workTree.untrackedCount
+            if (emptied !== 0)
+                return
+            bucketAllTimer.stop()
+            AppBackend.report("wip_heads from=" + bucketAllTimer.from
+                              + " unstaged=" + wipPane.bucketHeaded("unstaged")
+                              + " staged=" + wipPane.bucketHeaded("staged")
+                              + " unstaged_count="
+                              + (workTree.unstagedCount + workTree.untrackedCount)
+                              + " staged_count=" + workTree.stagedCount)
+            renderedBarrier.begin()
+        }
+    }
+    // Sending the diff's code sideways, by the bar's own path and then by
+    // the hand that carries the rows with it. What is read back is where
+    // the code and the rows ended up, never what was asked for: a bar
+    // bound to nothing still takes a press, and a hand wired to nothing
+    // still starts.
+    //
+    // The wait is for the view (`keep-place` learned the same lesson):
+    // rows that have arrived are not rows the list has laid out, and until
+    // it has, `codeMax` is measured against a width of nothing. A diff
+    // with nowhere sideways to go says so and stops there rather than at
+    // the watchdog — a run over one photographs a pane that proves
+    // nothing (app-ui.md §UI 自動化の因果性).
+    Timer {
+        id: codeSendTimer
+        interval: 25
+        repeat: true
+        property bool sent: false
+        function begin() {
+            codeSendTimer.sent = false
+            codeSendTimer.start()
+        }
+        function laidOut() {
+            return diffPane.view.count > 0 && diffPane.view.width > 0
+                    && diffPane.view.contentHeight > 0
+        }
+        function report() {
+            AppBackend.report("code_send bar=" + diffPane.codeBarShown
+                              + " hand=" + diffPane.codeHandOn
+                              + " at=" + Math.round(diffPane.codeAt)
+                              + " max=" + Math.round(diffPane.codeMax)
+                              + " down=" + Math.round(diffPane.view.contentY))
+        }
+        onTriggered: {
+            if (!codeSendTimer.sent) {
+                if (!codeSendTimer.laidOut())
+                    return
+                if (diffPane.codeMax <= 0) {
+                    codeSendTimer.stop()
+                    codeSendTimer.report()
+                    renderedBarrier.begin()
+                    return
+                }
+                // Half the way by the bar's own path, and the rest — with
+                // the rows — by the hand, started from the middle of the
+                // view and drifted down and to the right. The anchor's
+                // ring is part of the picture, so the hand is left running
+                // for the shot.
+                diffPane.sendCode(diffPane.codeMax / 2)
+                diffPane.startCodeHand(diffPane.view.width / 2,
+                                       diffPane.view.height / 2)
+                diffPane.driftCodeHand(diffPane.view.width / 2 + 120,
+                                       diffPane.view.height / 2 + 120)
+                codeSendTimer.sent = true
+                return
+            }
+            // The hand ticks on its own clock, and both of its axes have
+            // to be seen moving: the rows have come down, and the code has
+            // gone further than the bar's half left it.
+            if (diffPane.view.contentY <= 0
+                    || diffPane.codeAt <= diffPane.codeMax / 2)
+                return
+            codeSendTimer.stop()
+            codeSendTimer.report()
+            renderedBarrier.begin()
         }
     }
     // Reading part way down a long diff and then writing: the rebuild has
@@ -1543,6 +1681,9 @@ Item {
             page.openFileMenu("unstaged", arg, "")
             fileRowMenu.sendPaths([arg])
             repoTab.stashPaths("")
+        } else if (act === "stage-all" || act === "unstage-all") {
+            page.showWip()
+            bucketAllTimer.begin(act === "stage-all" ? "unstaged" : "staged")
         } else if (act === "stage-many" || act === "stage-many-go") {
             page.showWip()
             const head = wipPane.rowAt(0)
@@ -2151,7 +2292,8 @@ Item {
                    || act === "discard-hunk" || act === "discard-hunk-go"
                    || act === "diff-file" || act === "line-tools"
                    || act === "hunk-tools" || act === "pick-lines"
-                   || act === "stage-lines" || act === "keep-place") {
+                   || act === "stage-lines" || act === "keep-place"
+                   || act === "code-send") {
             // All enter through one file's diff and act on its first
             // hunk. The bucket rides in front of the path
             // (`<bucket>:<path>`) when it is not the usual unstaged one:

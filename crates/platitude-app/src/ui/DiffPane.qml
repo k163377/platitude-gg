@@ -104,6 +104,16 @@ Rectangle {
     }
     function clearLines() { lineChoice.clear() }
     function chosenPairs() { return lineChoice.pairs() }
+    /// A press on one line's mark. The line goes over now — and if it is
+    /// one of a picked set, the whole set goes with it, in the one write
+    /// that set was picked for (デザイン規約 §diff の中のステージ).
+    function stageLine(hunk, line) {
+        if (lineChoice.chosen(hunk, line) && lineChoice.count > 1) {
+            diffPane.stageChosenRequested()
+            return
+        }
+        diffPane.stageSelectionRequested(hunk, line)
+    }
     // ---- the keyboard -----------------------------------------------
     /// Where the keyboard goes when this pane comes on screen. Unlike the
     /// graph, which waits to be clicked because a window has several
@@ -184,6 +194,16 @@ Rectangle {
     /// Automation: pick the first `count` changed lines of a hunk, the way
     /// a click on each of them would.
     function chooseLines(hunk, count) { return lineChoice.choose(hunk, count) }
+    /// Automation: how far sideways the code stands and how far it may go,
+    /// whether the bar is out, and the two ways of moving it — a middle
+    /// button cannot be injected any more than a hover can (verify-ui).
+    readonly property alias codeAt: codeScroll.offset
+    readonly property alias codeMax: codeScroll.maxOffset
+    readonly property alias codeBarShown: codeScroll.barShown
+    readonly property alias codeHandOn: codeScroll.handScrolling
+    function sendCode(dx) { codeScroll.shift(dx) }
+    function startCodeHand(x, y) { codeScroll.startHand(x, y) }
+    function driftCodeHand(x, y) { codeScroll.driftHand(x, y) }
 
     // ---- the view's place in a diff that is about to be rebuilt -------
     DiffScrollPlace {
@@ -271,6 +291,36 @@ Rectangle {
         font.pixelSize: Theme.fontSm
     }
 
+    // ---- how far sideways the code goes ------------------------------
+    /// The room between the two numbers where a changed line puts its mark
+    /// out, and the whole gutter that room sits in. Worked out once here
+    /// rather than per row: the rows lay themselves out from it, and the
+    /// pane subtracts it to know how much of a line is on screen.
+    readonly property int seatW: diffPane.partial
+                                 ? Theme.iconMd + 2 * Theme.borderWidth
+                                 : Theme.spaceXs
+    readonly property int gutterW: 2 * (Theme.spaceXs + diffPane.numberW)
+                                   + diffPane.seatW
+    /// How wide the longest line of this diff is drawn. The model counts
+    /// the columns (`encode::widest_columns`); one measured character is
+    /// what turns them into pixels, and the font is mono so the one
+    /// character speaks for all of them. Measured with a Label that is
+    /// never drawn, the way the numbers above are — a metric read off a
+    /// method would be taken once, before this Label's own font arrived
+    /// (app-ui.md).
+    readonly property real codeW:
+        diffPane.diffModel.widestColumns * charMeasure.implicitWidth / 10
+        + Theme.spaceSm
+    Label {
+        id: charMeasure
+        visible: false
+        // Ten of them, so the fraction a single advance rounds to does not
+        // multiply up over a line of two hundred columns.
+        text: "0000000000"
+        font.family: Theme.monoFamily
+        font.pixelSize: Theme.fontCode
+    }
+
     color: Theme.bgSurface
     ColumnLayout {
         anchors.fill: parent
@@ -288,120 +338,21 @@ Rectangle {
         // No question bar here: the only thing this pane throws away is a
         // hunk, and that is held down on the hunk's own heading
         // (デザイン規約 §その他の操作).
-        // -- a conflict with only one side left: git has two versions of
-        //    the path but not the third to compare them against, so it
-        //    prints no patch at all (`* Unmerged path`). The one thing
-        //    worth saying is what the two sides each did — and this pane
-        //    is the one place that sentence is shown (デザイン規約
-        //    §conflict の種別). Which way out to take is still the file
-        //    row's right-click, unchanged.
-        Label {
-            visible: diffPane.diffModel.unmerged
-            Layout.margins: Theme.spaceSm
+        // What this pane has to say about the file rather than about any
+        // line in it — and the picture that stands in for one no rows can
+        // show.
+        DiffFileNotices {
             Layout.fillWidth: true
-            elide: Text.ElideRight
-            text: Words.conflict(diffPane.conflictChange, diffPane.sideOurs,
-                                 diffPane.sideTheirs)
-            color: Theme.textMuted
-        }
-        // -- which branch each of the two colours is. The colours are the
-        //    ones the graph already gives those branches, so this line is
-        //    the whole of what has to be learned; it is only here when
-        //    there are two colours to bind names to (`sidesTold`), since
-        //    otherwise it would explain a distinction the rows are not
-        //    making. The names swap over during a rebase and the model has
-        //    already sorted that out (デザイン規約 §conflict の ours /
-        //    theirs), so this says whatever it is handed.
-        ConflictSideLegend {
-            visible: diffPane.sidesTold
-            Layout.leftMargin: Theme.spaceSm
-            Layout.rightMargin: Theme.spaceSm
-            Layout.topMargin: Theme.spaceXs
-            Layout.bottomMargin: Theme.spaceXs
-            Layout.fillWidth: true
-            oursName: Words.ourSide(diffPane.sideOurs)
-            theirsName: Words.theirSide(diffPane.sideTheirs)
+            Layout.fillHeight: diffPane.diffModel.previewKind === "image"
+            diffModel: diffPane.diffModel
+            rowCount: diffList.count
+            conflictChange: diffPane.conflictChange
+            sideOurs: diffPane.sideOurs
+            sideTheirs: diffPane.sideTheirs
+            sidesTold: diffPane.sidesTold
             oursColor: diffPane.sideColor("ours")
             theirsColor: diffPane.sideColor("theirs")
             nameCap: diffPane.width / 3
-        }
-        // -- line endings: one line for the file, never a mark per row.
-        //    A CR is invisible and has nowhere inside a line to sit, and
-        //    the mixed case is already saying how many lines it is about.
-        //    It does not ask anything and does not hold anything up —
-        //    `warning` because it is a change that carries past this
-        //    machine, not because something is wrong here
-        //    (デザイン規約 §状態の 3 段).
-        Label {
-            visible: diffPane.diffModel.endingKind !== ""
-            // The binary notice's seat, down to the margins: both are one
-            // line about the file rather than about anything in it.
-            Layout.margins: Theme.spaceSm
-            Layout.fillWidth: true
-            elide: Text.ElideRight
-            text: Words.lineEndings(diffPane.diffModel.endingKind,
-                                    diffPane.diffModel.endingFrom,
-                                    diffPane.diffModel.endingTo,
-                                    diffPane.diffModel.endingLines,
-                                    diffPane.diffModel.endingScope,
-                                    diffPane.diffModel.endingExt)
-            font.pixelSize: Theme.fontSm
-            color: Theme.warning
-        }
-        // -- content preview: binaries summarized by size, images
-        //    rendered (added = After only, deleted = Before only,
-        //    modified = both).
-        BinarySizeLine {
-            visible: diffPane.diffModel.previewKind === "binary"
-                     || (diffPane.diffModel.isBinary
-                         && diffPane.diffModel.previewKind === "")
-            Layout.margins: Theme.spaceSm
-            Layout.fillWidth: true
-            oldSize: diffPane.diffModel.previewOldSize
-            newSize: diffPane.diffModel.previewNewSize
-        }
-        // -- a diff whose body is empty. git prints headers and no hunks
-        //    for a rename that changed nothing, for a mode-only change and
-        //    for an empty file added, and a pane that answers all three
-        //    with a blank frame reads as one that failed to load. The
-        //    binary notice's seat and voice: one line about the file
-        //    rather than about anything in it.
-        //
-        //    Said the same way for all three rather than naming the
-        //    rename: what the pane knows is that there is nothing to
-        //    show, and git is not asked a second question to find out why.
-        Label {
-            visible: diffList.count === 0 && !diffPane.diffModel.loading
-                     && !diffPane.diffModel.isBinary
-                     && !diffPane.diffModel.unmerged
-                     && diffPane.diffModel.previewKind === ""
-                     && diffPane.diffModel.title !== ""
-            Layout.margins: Theme.spaceSm
-            Layout.fillWidth: true
-            elide: Text.ElideRight
-            text: qsTr("No changes to show")
-            color: Theme.textMuted
-        }
-        RowLayout {
-            visible: diffPane.diffModel.previewKind === "image"
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.margins: Theme.spaceSm
-            spacing: Theme.spaceSm
-            ImagePreviewCell {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                caption: qsTr("Before")
-                url: diffPane.diffModel.previewOldUrl
-                sizeText: diffPane.diffModel.previewOldSize
-            }
-            ImagePreviewCell {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                caption: qsTr("After")
-                url: diffPane.diffModel.previewNewUrl
-                sizeText: diffPane.diffModel.previewNewSize
-            }
         }
         AppListView {
             id: diffList
@@ -444,15 +395,35 @@ Rectangle {
                 acceptedDevices: PointerDevice.Mouse
                 onWheel: event => {
                     diffList.cancelFlick()
+                    // The wheel's own sideways component — a tilt wheel, a
+                    // touchpad — says where it wants to go in the input
+                    // itself, so it is answered wherever the pointer is
+                    // (デザイン規約 §グラフを横へ送る, same rule).
+                    if (event.angleDelta.x !== 0)
+                        codeScroll.shift(-event.angleDelta.x / 2)
                     const step = (event.angleDelta.y / 120)
                                * Metrics.wheelRows * Theme.rowHeight
                     diffList.contentY = diffList.clampY(
                         diffList.contentY - step)
                 }
             }
+            // Pinned to the view's frame rather than adopted by its
+            // content (app-ui.md): this is the bar and the hand, and both
+            // belong to the window the rows pass through.
+            DiffCodeScroll {
+                id: codeScroll
+                parent: diffList
+                anchors.fill: parent
+                view: diffList
+                file: diffPane.diffModel.title
+                codeWidth: diffPane.codeW
+                roomWidth: Math.max(0, diffList.width - diffPane.gutterW)
+            }
             delegate: DiffRowDelegate {
                 id: diffRow
                 rowWidth: diffList.width
+                codeX: codeScroll.offset
+                seatW: diffPane.seatW
                 side: diffPane.sideOf(diffRow.markers)
                 partial: diffPane.partial
                 staged: diffPane.staged
@@ -468,6 +439,7 @@ Rectangle {
                         && (diffRow.kind === "add" || diffRow.kind === "del")
                 pickedInHunk: diffPane.partial && diffRow.kind === "hunk"
                               ? lineChoice.countIn(diffRow.hunk) : 0
+                pickedCount: lineChoice.count
                 onHunkPointedAt: (inside, hunk) => {
                     if (inside) {
                         diffPane.hoverHunk = hunk
@@ -476,7 +448,10 @@ Rectangle {
                         diffPane.hoverHunk = -1
                     }
                 }
-                onLineToggleRequested: (hunk, line) => lineChoice.toggle(hunk, line)
+                onLineChoiceRequested: (hunk, line, modifiers) =>
+                    lineChoice.apply(hunk, line, modifiers)
+                onLineStageRequested: (hunk, line) =>
+                    diffPane.stageLine(hunk, line)
                 onChoiceCleared: lineChoice.clear()
                 onDiscardRequested: hunk => diffPane.discardHunkRequested(hunk)
                 onStageHunkRequested: hunk =>
