@@ -751,8 +751,14 @@ Item {
             page.pendingHeadSelect = true
             page.pendingHeadAsked = true
         }
+        // Everything that moves what the two sides hold. A commit empties
+        // the index and a stash empties both, so a diff left open on
+        // either is a picture of a file as it was — the same staleness the
+        // file list's own `+` used to leave behind.
         if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage"
-                || repoTab.lastWriteOp === "discard")
+                || repoTab.lastWriteOp === "discard"
+                || repoTab.lastWriteOp === "commit"
+                || repoTab.lastWriteOp === "stash")
             page.reloadDiff()
         // The message landed: the editor stops offering to save it, and
         // keeps what was written until the selection catches up with
@@ -833,27 +839,8 @@ Item {
     function stageSelection(hunk, line) {
         // The shown diff's fingerprint rides along: the write refuses to
         // apply the indices to bytes that drifted since this was read.
-        diffPane.holdScroll()
         repoTab.stageSelection(page.diffKind, page.diffPath, page.diffOrigPath,
                                hunk, line, diffModel.fingerprint)
-        page.pendingDiffReload = true
-    }
-    /// The lines picked by hand, all of them in one write: the diff is
-    /// read once and rebuilt once, however many were chosen
-    /// (デザイン規約 §diff の中のステージ). The indices belong to the diff
-    /// on screen, so the choice goes down with the rebuild that follows.
-    function stageChosenLines() {
-        const pairs = diffPane.chosenPairs()
-        if (pairs.length === 0)
-            return
-        diffPane.holdScroll()
-        repoTab.beginLines()
-        for (let i = 0; i < pairs.length; i++)
-            repoTab.addLine(pairs[i][0], pairs[i][1])
-        repoTab.stageLines(page.diffKind, page.diffPath, page.diffOrigPath,
-                           diffModel.fingerprint)
-        diffPane.clearLines()
-        page.pendingDiffReload = true
     }
     /// Throwing one hunk of the shown diff away, with no question in front
     /// of it: the button in that hunk's own heading was held down, which is
@@ -861,19 +848,27 @@ Item {
     /// be thrown away on its own — the hunk is the smallest piece — though
     /// it can still be staged on its own, which loses nothing.
     function discardHunkNow(hunk) {
-        diffPane.holdScroll()
         repoTab.discardSelection(page.diffKind, page.diffPath,
                                  page.diffOrigPath, hunk, -1,
                                  diffModel.fingerprint)
-        page.pendingDiffReload = true
     }
-    property bool pendingDiffReload: false
+    /// A write on the working tree has landed, so the open diff is a
+    /// picture of what the file used to be.
+    ///
+    /// **Whoever wrote it.** This was once asked for by the writes made
+    /// inside the diff itself, and the file list's own `+` and `−` moved
+    /// the same file out from under the pane without a word: a line staged
+    /// here and then unstaged there left the line missing from both sides
+    /// on screen (2026-08-17 ユーザー報告). The caller already knows the
+    /// write was one that moves the tree (`absorbWriteResult`), so being
+    /// open is the whole of the condition.
     function reloadDiff() {
-        if (!page.pendingDiffReload || !page.diffShown)
+        if (!page.diffShown || page.diffKind === "commit")
             return
-        page.pendingDiffReload = false
-        // Whatever was picked addressed the diff that is being replaced.
-        diffPane.clearLines()
+        // Held here rather than beside each write: the rows on screen do
+        // not move until the answer lands, so this is still the place the
+        // reader was at (`DiffScrollPlace`).
+        diffPane.holdScroll()
         // If this write took the last of what was on this side, the pane
         // has nothing left to stand on and closes (デザイン規約 §diff の
         // 中のステージ).
@@ -1488,7 +1483,6 @@ Item {
                                 repoTab.stagePath(page.diffPath)
                         }
                         onStageSelectionRequested: (hunk, line) => page.stageSelection(hunk, line)
-                        onStageChosenRequested: page.stageChosenLines()
                     }
                 }
 

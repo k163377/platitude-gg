@@ -119,11 +119,6 @@ pub struct RepoTab {
     /// (デザイン規約 §その他の操作). Emptied by whichever write consumes it, so a set
     /// left behind by an abandoned question cannot be spent later.
     pending_paths: Vec<String>,
-    /// Lines of the shown diff picked by hand, as `(hunk, line)` indices
-    /// into the diff they were read from. Gathered the same way and for
-    /// the same reason as `pending_paths`: the write takes the whole set
-    /// at once.
-    pending_lines: Vec<(i32, i32)>,
     /// Configured remote names — where a branch with no upstream can go.
     remotes: Vec<String>,
     /// Derived from `remotes` on arrival rather than computed on demand:

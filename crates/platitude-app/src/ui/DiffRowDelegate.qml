@@ -5,14 +5,23 @@ import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
-// One line of a unified diff: its two numbers, the seat between them
-// where a changed line puts its mark out, the line itself, and — on a
-// hunk heading — the two words that act on the whole hunk.
+// One line of a unified diff: its two numbers, the seat between them where
+// a changed line puts its mark out, the line itself, and — on a hunk
+// heading — the two words that act on the whole hunk.
 //
-// Everything the pane knows arrives as a property; everything the pane
-// has to do about a press leaves as a signal. The set of lines picked by
-// hand lives on the pane, because a row is recycled the moment it
-// scrolls off (DiffPane).
+// **The mark is the only thing in a row that takes a press**
+// (デザイン規約 §diff の中のステージ). The row itself answers the pointer
+// and nothing else, so the text under it stays free for the hand that
+// wants to read or copy it.
+//
+// The pointer is read with a `HoverHandler` rather than a `MouseArea`: a
+// `MouseArea` loses `containsMouse` the moment the pointer crosses onto
+// the hoverEnabled one inside the mark, so the mark flickered out from
+// under the hand reaching for it (2026-08-17 実測, qmltestrunner —
+// handlers are passive and keep the row hovered).
+//
+// Everything the pane knows arrives as a property; everything the pane has
+// to do about a press leaves as a signal.
 Rectangle {
     id: diffRow
 
@@ -54,33 +63,19 @@ Rectangle {
     required property bool sidesTold
     required property var oursColor
     required property var theirsColor
-    /// Which hunk and line the pointer is on, as the pane holds it — the
-    /// heading's own hover writes it, and so does the automation hook.
+    /// Which hunk and line the pane has been told the pointer is on. Only
+    /// the automation writes it — hover cannot be injected — and it stands
+    /// in for the real pointer wherever one is read (verify-ui).
     required property int hoverHunk
     required property int hoverLine
-    /// Picked by hand — this line goes with the next write.
-    required property bool picked
-    /// How many of this hunk's lines are picked (heading rows).
-    required property int pickedInHunk
-    /// How many lines of the whole diff are picked — what this row's mark
-    /// would carry with it, and so what its tooltip has to name.
-    required property int pickedCount
 
     /// The pointer arrived on this hunk's heading, or left it.
     signal hunkPointedAt(bool inside, int hunk)
-    /// A press on the line itself, with whatever was held down: it is the
-    /// choice this moves, never the index (デザイン規約 §diff の中の
-    /// ステージ).
-    signal lineChoiceRequested(int hunk, int line, int modifiers)
     /// A press on the line's own mark: this line goes over to the other
-    /// side now, and so does every other line picked out with it.
+    /// side now.
     signal lineStageRequested(int hunk, int line)
-    /// Anywhere in the diff that is not a changed line or a heading puts
-    /// the whole choice down.
-    signal choiceCleared()
     signal discardRequested(int hunk)
     signal stageHunkRequested(int hunk)
-    signal stageChosenRequested()
 
     // The hunk's discard lives in its heading. Reached from
     // outside for the smoke run, which holds it the way a
@@ -93,6 +88,12 @@ Rectangle {
            : kind === "del" ? Theme.diffRemovedBg
            : kind === "hunk" ? Theme.diffHunkHeaderBg
            : "transparent"
+    /// Under the pointer, or named as if it were. A heading's own row is
+    /// line -1, so a hunk named without a line means the heading.
+    readonly property bool underPointer:
+        rowHover.hovered
+        || (diffRow.hoverHunk === diffRow.hunk
+            && diffRow.hoverLine === diffRow.line)
     /// The pointer is on this hunk's heading, so the whole
     /// hunk lights: the heading's two words act on exactly
     /// these rows, and this is what says so
@@ -118,30 +119,30 @@ Rectangle {
     /// the enclosing signature and would otherwise run under them.
     readonly property real toolsRoom:
         hunkTools.visible ? hunkTools.width + Theme.spaceSm * 2 : 0
-    // The hunk under the pointer, and every line picked by
-    // hand, wear the wash a row anywhere else in the app wears
-    // under the pointer. A picked line also carries the mark
-    // at its head — the diff's own colours own the row's
-    // ground, so the choice cannot be shown by filling it.
+
+    // The whole row answers the pointer, and only the heading's does
+    // anything with the answer. Passive, so the mark inside keeps it
+    // (see the note at the top).
+    HoverHandler {
+        id: rowHover
+        enabled: diffRow.partial
+        onHoveredChanged: {
+            if (diffRow.kind === "hunk")
+                diffRow.hunkPointedAt(rowHover.hovered, diffRow.hunk)
+        }
+    }
+    // The hunk under the pointer wears the wash a row anywhere else in the
+    // app wears under one.
     Rectangle {
         anchors.fill: parent
         color: Theme.bgHover
-        visible: diffRow.picked || diffRow.inAimedHunk
-    }
-    Rectangle {
-        width: Theme.spaceXs
-        height: parent.height
-        color: Theme.accent
-        visible: diffRow.picked
+        visible: diffRow.inAimedHunk
     }
     // Which side this line came from, in the colour that
     // branch wears in the graph. The diff's own green cannot
     // say it — git paints our side and theirs the same,
     // because each is in the file and in neither of the
-    // other's — so the head of the row says it instead. It
-    // stands where the picked-line mark stands, which a
-    // conflicted file never has: nothing in one can be staged
-    // a piece at a time.
+    // other's — so the head of the row says it instead.
     Rectangle {
         visible: diffRow.sidesTold && diffRow.side !== ""
         width: Theme.spaceXs
@@ -270,46 +271,6 @@ Rectangle {
                    : Theme.textPrimary
         }
     }
-    MouseArea {
-        id: lineHover
-        anchors.fill: parent
-        hoverEnabled: true
-        acceptedButtons: Qt.LeftButton
-        // Off entirely on a diff with no pieces in it: with
-        // nothing to aim at, a row lighting up under the
-        // pointer would be an offer that is not there.
-        enabled: diffRow.partial
-        // A heading under the pointer lights its own hunk, and
-        // says so through the same pair the automation hook
-        // writes — one answer to "which hunk is being aimed
-        // at", whichever way the pointer got there.
-        onContainsMouseChanged: {
-            if (diffRow.kind !== "hunk")
-                return
-            diffRow.hunkPointedAt(lineHover.containsMouse, diffRow.hunk)
-        }
-        // A press on a changed line picks it: on its own, added to
-        // what is picked (Ctrl), or reaching from the last one
-        // (Shift) — the three the file rows already answer to.
-        // **It writes nothing.** What moves a line over to the
-        // other side is its own mark, and the choice is what that
-        // mark carries with it (デザイン規約 §diff の中のステージ).
-        // Anywhere else in the diff puts the whole choice down —
-        // the rows carrying it are on screen, so there is nothing
-        // to lose track of.
-        onClicked: mouse => {
-            if (diffRow.kind === "add" || diffRow.kind === "del")
-                diffRow.lineChoiceRequested(diffRow.hunk, diffRow.line,
-                                            mouse.modifiers)
-            else if (diffRow.kind !== "hunk")
-                diffRow.choiceCleared()
-        }
-    }
-    // Under the pointer, or named as if it were (see above).
-    readonly property bool underPointer:
-        lineHover.containsMouse
-        || (diffRow.hoverHunk === diffRow.hunk
-            && diffRow.hoverLine === diffRow.line)
     // Hunk-level staging. The row carries the hunk index the
     // patch builder needs, so what is staged is exactly what
     // is shown — and so is what is thrown away. Absent on a
@@ -369,37 +330,15 @@ Rectangle {
         // them all lit puts 2 to 4 coloured words on screen
         // against the header's one.
         ActionButton {
-            // With lines picked out of this hunk the word
-            // names them instead: what is about to be written
-            // is the choice, not the hunk. A choice is a
-            // standing state, so the word is lit for as long
-            // as it stands — the pointer is what wakes the
-            // heading, but a choice keeps it awake.
-            // Spelled out rather than left to `%n`: with no
-            // translation loaded Qt keeps the source string as
-            // it stands, and `2 line(s)` on a button is a
-            // placeholder that shipped.
-            text: diffRow.pickedInHunk === 0
-                  ? (diffRow.staged ? qsTr("Unstage hunk")
-                                    : qsTr("Stage hunk"))
-                  : diffRow.pickedInHunk === 1
-                    ? (diffRow.staged ? qsTr("Unstage 1 line")
-                                      : qsTr("Stage 1 line"))
-                    : (diffRow.staged
-                       ? qsTr("Unstage %1 lines").arg(diffRow.pickedInHunk)
-                       : qsTr("Stage %1 lines").arg(diffRow.pickedInHunk))
+            text: diffRow.staged ? qsTr("Unstage hunk")
+                                 : qsTr("Stage hunk")
             font.pixelSize: Theme.fontSm
-            tone: !diffRow.underPointer && diffRow.pickedInHunk === 0
+            tone: !diffRow.underPointer
                   ? Theme.textSecondary
                   : diffRow.staged ? Theme.diffRemovedFg
                                    : Theme.diffAddedFg
             enabled: !diffRow.busy
-            onActivated: {
-                if (diffRow.pickedInHunk > 0)
-                    diffRow.stageChosenRequested()
-                else
-                    diffRow.stageHunkRequested(diffRow.hunk)
-            }
+            onActivated: diffRow.stageHunkRequested(diffRow.hunk)
         }
     }
     // The mark a changed line puts out for the hand: `+` where
@@ -413,21 +352,14 @@ Rectangle {
     // toolbar, and the ground it needs is the one the pointer
     // brings with it.
     //
-    // **It writes, there and then.** One press, one line over to
-    // the other side — and every line picked out with this one
-    // goes with it, which is the file rows' own rule read down a
-    // level (デザイン規約 §その他の操作).
+    // **It writes, there and then**, and it is the only thing
+    // in the row that takes a press at all.
     //
     // It stands in the seat the row holds between the two
-    // numbers (`stageSeatW`), and stays out here rather than
-    // in it: the row-wide hover area below the columns is
-    // declared before this, so a mark laid out inside the
-    // gutter would have its clicks taken by that instead.
+    // numbers (`stageSeatW`).
     Rectangle {
-        visible: diffRow.partial
-                 && (diffRow.underPointer || diffRow.picked)
-                 && (diffRow.kind === "add"
-                     || diffRow.kind === "del")
+        visible: diffRow.partial && diffRow.underPointer
+                 && (diffRow.kind === "add" || diffRow.kind === "del")
         x: oldNoCol.width + Theme.borderWidth
         anchors.verticalCenter: parent.verticalCenter
         width: Theme.iconMd
@@ -437,19 +369,8 @@ Rectangle {
                                             : "transparent"
         ToolTip.visible: stageLineHover.containsMouse
         ToolTip.delay: Metrics.tipDelayMs
-        // What this press is about to move, which is not always this one
-        // line: a mark on a picked row carries the whole choice
-        // (デザイン規約 §diff の中のステージ). Spelled out rather than
-        // left to `%n` — with no translation loaded Qt keeps the source
-        // string, and `2 line(s)` in a tooltip is a placeholder that
-        // shipped.
-        ToolTip.text:
-            !(diffRow.picked && diffRow.pickedCount > 1)
-            ? (diffRow.staged ? qsTr("Unstage this line")
-                              : qsTr("Stage this line"))
-            : diffRow.staged
-              ? qsTr("Unstage the %1 picked lines").arg(diffRow.pickedCount)
-              : qsTr("Stage the %1 picked lines").arg(diffRow.pickedCount)
+        ToolTip.text: diffRow.staged ? qsTr("Unstage this line")
+                                     : qsTr("Stage this line")
         NavIcon {
             anchors.centerIn: parent
             width: Theme.iconSm

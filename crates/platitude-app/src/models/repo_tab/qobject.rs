@@ -255,30 +255,6 @@ impl RepoTab {
         self.pending_paths.push(path);
     }
 
-    /// The same shape for the lines picked out of one diff: opened, added
-    /// to one pair at a time, and taken whole by the write that follows
-    /// (see [`RepoTab::pending_lines`]). Lines chosen by hand go over in
-    /// one write so the diff is read once and rebuilt once — clicking them
-    /// through one at a time would rebuild it under the pointer every
-    /// time.
-    #[qslot]
-    fn begin_lines(&mut self) {
-        self.pending_lines.clear();
-    }
-
-    #[qslot]
-    fn add_line(&mut self, hunk: i32, line: i32) {
-        self.pending_lines.push((hunk, line));
-    }
-
-    /// Stages (or unstages) the gathered lines of the shown diff. The
-    /// direction follows the side being looked at, the way
-    /// [`RepoTab::stage_selection`] does.
-    #[qslot]
-    fn stage_lines(&mut self, kind: String, path: String, orig_path: String, fingerprint: String) {
-        self.stage_chosen_lines(kind, path, orig_path, fingerprint)
-    }
-
     /// Throws away unstaged modifications of the gathered files
     /// (destructive).
     #[qslot]

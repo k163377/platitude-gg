@@ -93,26 +93,21 @@ Rectangle {
     signal stageFileRequested()
     /// Stage or unstage one hunk (line < 0) or one line of it.
     signal stageSelectionRequested(int hunk, int line)
-    /// Stage or unstage the lines picked by hand — all of them, in one
-    /// write. The owner reads them back with `chosenPairs()`.
-    signal stageChosenRequested()
 
-    // ---- the lines picked by hand ----------------------------------
-    DiffLineChoice {
-        id: lineChoice
-        view: diffList
-    }
-    function clearLines() { lineChoice.clear() }
-    function chosenPairs() { return lineChoice.pairs() }
-    /// A press on one line's mark. The line goes over now — and if it is
-    /// one of a picked set, the whole set goes with it, in the one write
-    /// that set was picked for (デザイン規約 §diff の中のステージ).
+    /// A press on one line's mark, which is the only thing in a row that
+    /// takes one (デザイン規約 §diff の中のステージ). Named so the
+    /// automation can enter where the mark enters — a press on a square
+    /// that only exists under a pointer cannot be injected (verify-ui).
     function stageLine(hunk, line) {
-        if (lineChoice.chosen(hunk, line) && lineChoice.count > 1) {
-            diffPane.stageChosenRequested()
-            return
-        }
         diffPane.stageSelectionRequested(hunk, line)
+    }
+    /// Whether the pointer is anywhere in this pane. Read by the sideways
+    /// bar, which lies over the last row and so only comes out while there
+    /// is a hand here. **On the pane, not on an overlay** — a handler laid
+    /// over the rows takes their own hover away, and the `+` a line puts
+    /// out under the pointer never appears (2026-08-17 実測).
+    HoverHandler {
+        id: panePointer
     }
     // ---- the keyboard -----------------------------------------------
     /// Where the keyboard goes when this pane comes on screen. Unlike the
@@ -191,9 +186,6 @@ Rectangle {
         diffPane.hoverHunk = hunk
         diffPane.hoverLine = line
     }
-    /// Automation: pick the first `count` changed lines of a hunk, the way
-    /// a click on each of them would.
-    function chooseLines(hunk, count) { return lineChoice.choose(hunk, count) }
     /// Automation: how far sideways the code stands and how far it may go,
     /// whether the bar is out, and the two ways of moving it — a middle
     /// button cannot be injected any more than a hover can (verify-ui).
@@ -407,18 +399,6 @@ Rectangle {
                         diffList.contentY - step)
                 }
             }
-            // Pinned to the view's frame rather than adopted by its
-            // content (app-ui.md): this is the bar and the hand, and both
-            // belong to the window the rows pass through.
-            DiffCodeScroll {
-                id: codeScroll
-                parent: diffList
-                anchors.fill: parent
-                view: diffList
-                file: diffPane.diffModel.title
-                codeWidth: diffPane.codeW
-                roomWidth: Math.max(0, diffList.width - diffPane.gutterW)
-            }
             delegate: DiffRowDelegate {
                 id: diffRow
                 rowWidth: diffList.width
@@ -434,12 +414,6 @@ Rectangle {
                 theirsColor: diffPane.sideColor("theirs")
                 hoverHunk: diffPane.hoverHunk
                 hoverLine: diffPane.hoverLine
-                picked: diffPane.partial
-                        && lineChoice.chosen(diffRow.hunk, diffRow.line)
-                        && (diffRow.kind === "add" || diffRow.kind === "del")
-                pickedInHunk: diffPane.partial && diffRow.kind === "hunk"
-                              ? lineChoice.countIn(diffRow.hunk) : 0
-                pickedCount: lineChoice.count
                 onHunkPointedAt: (inside, hunk) => {
                     if (inside) {
                         diffPane.hoverHunk = hunk
@@ -448,16 +422,25 @@ Rectangle {
                         diffPane.hoverHunk = -1
                     }
                 }
-                onLineChoiceRequested: (hunk, line, modifiers) =>
-                    lineChoice.apply(hunk, line, modifiers)
                 onLineStageRequested: (hunk, line) =>
                     diffPane.stageLine(hunk, line)
-                onChoiceCleared: lineChoice.clear()
                 onDiscardRequested: hunk => diffPane.discardHunkRequested(hunk)
                 onStageHunkRequested: hunk =>
                     diffPane.stageSelectionRequested(hunk, -1)
-                onStageChosenRequested: diffPane.stageChosenRequested()
             }
         }
+    }
+    // The hand that sends the rows sideways and up and down, and the bar
+    // that says how far there is to go. Declared after the body, so it
+    // stands over the rows — and beside the list rather than inside it,
+    // for the two measured reasons in `DiffCodeScroll`.
+    DiffCodeScroll {
+        id: codeScroll
+        anchors.fill: parent
+        view: diffList
+        paneHovered: panePointer.hovered
+        file: diffPane.diffModel.title
+        codeWidth: diffPane.codeW
+        roomWidth: Math.max(0, diffList.width - diffPane.gutterW)
     }
 }

@@ -246,14 +246,6 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "keep-place" => Some("diff_place at=400 want=400"),
         "discard-hunk" => Some("diff_row act=discard-hunk ready=true"),
         "discard-hunk-go" => Some("diff_row act=discard-hunk-go ready=true"),
-        // These two answer with a count of their own, so the count is
-        // what they are judged on rather than the line above — it says
-        // the same thing (nothing can be picked out of rows that are not
-        // there) and says it where the reader is already looking. Only
-        // "none at all" fails: a first hunk carrying a single changed
-        // line reports `got=1`, and that is the fixture choosing a
-        // heading that names a hunk, not the wiring failing to name one.
-        "pick-lines" | "stage-lines" => Some("picked_lines any=true"),
         // The colours that land behind the rows, and the place they must
         // not cost. Neither half is a picture: a diff whose colours never
         // came frames as a language the set has no rules for, and a view
@@ -269,6 +261,12 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // the pane fails here rather than passing on a blank
         // (`--preset widelines` is the one that does not fit).
         "code-send" => Some("code_send bar=true hand=true"),
+        // A line staged from the diff, the file then moved from the list,
+        // and the diff following both. The picture is the last frame of
+        // three and cannot show the two before it, so all three answers
+        // are read: the rows shrank, the rows came back, the pane closed
+        // when the side ran out.
+        "line-back" => Some("line_back back=true shrank=true closed=true"),
         // A bucket emptied from its own heading keeps that heading, both
         // ways round — which is the whole claim, so both headings are
         // read back whichever direction was pressed. The picture cannot

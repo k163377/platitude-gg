@@ -94,7 +94,7 @@ Item {
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
                 "rebase-onto", "revert-commit", "op-exit-go", "stage-hunk",
-                "stage-line", "stage-lines", "keep-place", "discard-hunk-go",
+                "stage-line", "keep-place", "discard-hunk-go", "line-back",
                 "stage-all", "unstage-all",
                 "push", "force-push", "push-retry", "fetch", "fetch-ref-list",
                 "commands", "commands-fail", "commands-clear", "fetch-recover",
@@ -106,8 +106,8 @@ Item {
                 "publish-go", "publish-new-go", "amend-reset-author",
                 "eol-commit", "eol-hover",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
-                "diff-file", "line-tools", "hunk-tools", "pick-lines", "stage-lines",
-                "code-send", "stage-all", "unstage-all",
+                "diff-file", "line-tools", "hunk-tools",
+                "code-send", "line-back", "stage-all", "unstage-all",
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
@@ -286,8 +286,8 @@ Item {
     }
     // The diff has to arrive before a row of it can be staged. Asked for
     // rather than waited out: a fixed wait photographs an empty pane the
-    // same as a late one (2026-08-13 実測: `pick-lines` against this
-    // repository picked no lines and passed). The asking has no ceiling:
+    // same as a late one (2026-08-13 実測: a verb fired against this
+    // repository named no row and passed). The asking has no ceiling:
     // a row that never lands leaves the run without a report line at all,
     // and the watchdog is what ends it.
     Timer {
@@ -361,26 +361,6 @@ Item {
                 keepPlaceTimer.begin(line)
                 return
             }
-            if (act === "pick-lines" || act === "stage-lines") {
-                // Two lines, so the heading names a count rather than a
-                // hunk. `any=` is the one judged.
-                const want = 2
-                const got = diffPane.chooseLines(0, want)
-                AppBackend.report("picked_lines any=" + (got > 0)
-                                  + " got=" + got + " want=" + want)
-                if (act === "stage-lines") {
-                    driver.writeSeqBefore = repoTab.writeSeq
-                    driver.writeStarted = repoTab.busyCount > 0
-                    // Through the mark of a picked line, which is what a
-                    // hand presses: a picked line's mark carries the whole
-                    // choice (デザイン規約 §diff の中のステージ).
-                    diffPane.stageLine(0, line)
-                    writeBarrier.start()
-                } else {
-                    renderedBarrier.begin()
-                }
-                return
-            }
             if (act === "stage-hunk" || act === "stage-line") {
                 driver.writeSeqBefore = repoTab.writeSeq
                 driver.writeStarted = repoTab.busyCount > 0
@@ -400,6 +380,10 @@ Item {
                 codeSendTimer.begin()
                 return
             }
+            if (act === "line-back") {
+                lineBackTimer.begin()
+                return
+            }
             // No line-level discard exists — a hunk is the smallest piece
             // that can be thrown away.
             if (act === "discard-hunk-go") {
@@ -410,6 +394,84 @@ Item {
             } else {
                 renderedBarrier.begin()
             }
+        }
+    }
+    // One line staged from the diff, then the same file moved from the
+    // file list — the diff has to follow both, and it used to follow only
+    // the first (2026-08-17 ユーザー報告: the line was gone from the
+    // unstaged side and never came back when the file was unstaged).
+    //
+    // Three answers in one run, because they are one story: the line goes
+    // (the rows shrink), the line comes back (the rows are as they were),
+    // and staging the rest leaves the side with nothing to stand on (the
+    // pane closes). Each step waits for its own write to land *and* for
+    // the rows to say so — the model's count is the output, the write is
+    // only the cause.
+    Timer {
+        id: lineBackTimer
+        interval: 25
+        repeat: true
+        property int step: 0
+        property int rows0: 0
+        property int rows1: 0
+        property bool shrank: false
+        property bool back: false
+        function begin() {
+            lineBackTimer.step = 0
+            lineBackTimer.shrank = false
+            lineBackTimer.back = false
+            lineBackTimer.start()
+        }
+        function wroteAndSettled() {
+            return driver.writeStarted && repoTab.busyCount === 0
+                    && repoTab.writeSeq > driver.writeSeqBefore
+        }
+        function expect() {
+            driver.writeSeqBefore = repoTab.writeSeq
+            driver.writeStarted = repoTab.busyCount > 0
+        }
+        onTriggered: {
+            const rows = diffPane.view.count
+            if (lineBackTimer.step === 0) {
+                const line = diffPane.firstChangedLine(0)
+                if (line < 0)
+                    return
+                lineBackTimer.rows0 = rows
+                lineBackTimer.expect()
+                diffPane.stageLine(0, line)
+                lineBackTimer.step = 1
+                return
+            }
+            if (lineBackTimer.step === 1) {
+                if (!lineBackTimer.wroteAndSettled() || rows >= lineBackTimer.rows0)
+                    return
+                lineBackTimer.rows1 = rows
+                lineBackTimer.shrank = true
+                lineBackTimer.expect()
+                // The file list's own `−`, which is the half that was
+                // never reaching the pane.
+                repoTab.unstagePath(page.diffPath)
+                lineBackTimer.step = 2
+                return
+            }
+            if (lineBackTimer.step === 2) {
+                if (!lineBackTimer.wroteAndSettled() || rows !== lineBackTimer.rows0)
+                    return
+                lineBackTimer.back = true
+                lineBackTimer.expect()
+                repoTab.stagePath(page.diffPath)
+                lineBackTimer.step = 3
+                return
+            }
+            if (!lineBackTimer.wroteAndSettled() || page.diffShown)
+                return
+            lineBackTimer.stop()
+            AppBackend.report("line_back back=" + lineBackTimer.back
+                              + " shrank=" + lineBackTimer.shrank
+                              + " closed=" + !page.diffShown
+                              + " rows0=" + lineBackTimer.rows0
+                              + " rows1=" + lineBackTimer.rows1)
+            renderedBarrier.begin()
         }
     }
     // Emptying one whole bucket from its own heading, and reading back
@@ -2291,9 +2353,8 @@ Item {
         } else if (act === "stage-hunk" || act === "stage-line"
                    || act === "discard-hunk" || act === "discard-hunk-go"
                    || act === "diff-file" || act === "line-tools"
-                   || act === "hunk-tools" || act === "pick-lines"
-                   || act === "stage-lines" || act === "keep-place"
-                   || act === "code-send") {
+                   || act === "hunk-tools" || act === "keep-place"
+                   || act === "code-send" || act === "line-back") {
             // All enter through one file's diff and act on its first
             // hunk. The bucket rides in front of the path
             // (`<bucket>:<path>`) when it is not the usual unstaged one:
