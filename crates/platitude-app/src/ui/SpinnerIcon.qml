@@ -1,4 +1,5 @@
 import QtQuick
+import platitude
 import platitude.ui
 
 // The one turning mark the window has: the drawn ring, never Fusion's
