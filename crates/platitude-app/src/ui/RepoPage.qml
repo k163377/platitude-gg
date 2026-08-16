@@ -1111,6 +1111,9 @@ Item {
     }
 
     Component.onCompleted: {
+        // The bars that announced themselves before the watcher existed.
+        page.earlyBars.forEach(b => splitWatch.holdSplitBar(b, false))
+        page.earlyBars = []
         page.applySavedLayout()
         if (page.blank)
             return // no session to attach to; every model stays empty
@@ -1508,7 +1511,7 @@ Item {
             Layout.fillHeight: true
             orientation: Qt.Vertical
             handle: SplitHandleBar {
-                onHandChanged: (which, held) => splitWatch.holdSplitBar(which, held)
+                onHandChanged: (which, held) => page.holdSplitBar(which, held)
             }
 
             // ---- open failed ------------------------------------------
@@ -1532,7 +1535,7 @@ Item {
                 SplitView.minimumHeight: page.panesMinHeight
                 orientation: Qt.Horizontal
                 handle: SplitHandleBar {
-                    onHandChanged: (which, held) => splitWatch.holdSplitBar(which, held)
+                    onHandChanged: (which, held) => page.holdSplitBar(which, held)
                 }
 
                 SidebarPane {
@@ -1771,6 +1774,19 @@ Item {
         id: splitWatch
         refusalSource: page.refusalSource
         graphPane: graphPane
+    }
+
+    /// Bars announce themselves once, at their own creation
+    /// (`SplitHandleBar.Component.onCompleted`) — which is before the
+    /// watcher above exists, so the page relays and holds the early
+    /// ones; the page's `Component.onCompleted` hands them over.
+    property var earlyBars: []
+    function holdSplitBar(bar, held) {
+        if (!splitWatch) {
+            page.earlyBars.push(bar)
+            return
+        }
+        splitWatch.holdSplitBar(bar, held)
     }
 
     /// Automation: the drag and its answer for every boundary in the
