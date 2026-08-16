@@ -9,7 +9,7 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 use crate::encode::{co_author_pairs, encode_geometry, encode_labels, label_names};
 use crate::hub::{Feed, GraphMsg};
 
-use super::{impl_extend_notified, qml_register};
+use super::{impl_extend_notified, impl_notify_runs, push_run, qml_register};
 
 // ---------------------------------------------------------------------------
 // GraphModel: the commit graph rows
@@ -143,6 +143,7 @@ impl QListModel for GraphModel {
 }
 
 impl_extend_notified!(GraphModel, rows, GraphRowItem);
+impl_notify_runs!(GraphModel);
 
 impl GraphModel {
     /// Replaces the whole list in place: unchanged rows stay untouched,
@@ -163,10 +164,7 @@ impl GraphModel {
         for (i, item) in head.into_iter().enumerate() {
             if self.rows[i] != item {
                 self.rows[i] = item;
-                match ranges.last_mut() {
-                    Some((_, last)) if *last + 1 == i => *last = i,
-                    _ => ranges.push((i, i)),
-                }
+                push_run(&mut ranges, i);
             }
         }
 
@@ -189,26 +187,7 @@ impl GraphModel {
             }
         }
 
-        if let Some(proxy) = self.try_get_rust_proxy_ptr() {
-            for (first, last) in ranges {
-                // SAFETY: see above; base_index only builds an index.
-                let top_left = unsafe { &*proxy }.base_index(
-                    &*self,
-                    first as i32,
-                    0,
-                    &qtbridge::qtbridge_type_lib::QModelIndex::default(),
-                );
-                // SAFETY: see above; base_index only builds an index.
-                let bottom_right = unsafe { &*proxy }.base_index(
-                    &*self,
-                    last as i32,
-                    0,
-                    &qtbridge::qtbridge_type_lib::QModelIndex::default(),
-                );
-                // SAFETY: see above.
-                unsafe { &mut *proxy }.base_data_changed(&mut *self, &top_left, &bottom_right);
-            }
-        }
+        self.notify_runs(ranges);
 
         if !extra.is_empty() {
             self.extend_notified(extra);
@@ -252,7 +231,6 @@ impl GraphModel {
     /// that one takes a whole new `Vec`, and cloning every row's strings
     /// on every keystroke is exactly the work this search exists to
     /// avoid. Only the runs that actually changed are notified.
-    #[expect(unsafe_code)]
     fn remark_notified(&mut self) {
         let mut ranges: Vec<(usize, usize)> = Vec::new();
         let mut count = 0;
@@ -266,39 +244,12 @@ impl GraphModel {
             }
             if self.rows[i].matched != now {
                 self.rows[i].matched = now;
-                match ranges.last_mut() {
-                    Some((_, last)) if *last + 1 == i => *last = i,
-                    _ => ranges.push((i, i)),
-                }
+                push_run(&mut ranges, i);
             }
         }
         self.match_count = count;
         self.settle_first();
-        if ranges.is_empty() {
-            return;
-        }
-        if let Some(proxy) = self.try_get_rust_proxy_ptr() {
-            for (first, last) in ranges {
-                // SAFETY: same pattern as splice_notified above — the
-                // proxy stays valid while the QObject side is attached,
-                // and we are on the Qt main thread inside a slot.
-                let top_left = unsafe { &*proxy }.base_index(
-                    &*self,
-                    first as i32,
-                    0,
-                    &qtbridge::qtbridge_type_lib::QModelIndex::default(),
-                );
-                // SAFETY: see above; base_index only builds an index.
-                let bottom_right = unsafe { &*proxy }.base_index(
-                    &*self,
-                    last as i32,
-                    0,
-                    &qtbridge::qtbridge_type_lib::QModelIndex::default(),
-                );
-                // SAFETY: see above.
-                unsafe { &mut *proxy }.base_data_changed(&mut *self, &top_left, &bottom_right);
-            }
-        }
+        self.notify_runs(ranges);
     }
 
     /// Marks rows on their way in, before anyone sees them.

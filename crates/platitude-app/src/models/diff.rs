@@ -14,7 +14,7 @@ use crate::encode::{
 };
 use crate::hub::{DiffMsg, Feed, Hub};
 
-use super::{impl_extend_notified, qml_register};
+use super::{impl_extend_notified, impl_notify_runs, qml_register};
 
 // ---------------------------------------------------------------------------
 // DiffModel: unified diff lines for one file
@@ -131,6 +131,7 @@ impl QListModel for DiffModel {
 }
 
 impl_extend_notified!(DiffModel, lines, DiffLineItem);
+impl_notify_runs!(DiffModel);
 
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
 impl DiffModel {
@@ -314,25 +315,12 @@ impl DiffModel {
     /// Tells the view that every row's contents have been rewritten in
     /// place. Nothing was added or removed, so the view keeps its place,
     /// and QML's own bindings on the rows re-read themselves.
-    #[expect(unsafe_code)]
     fn rows_changed(&mut self) {
-        let Some(proxy) = self.try_get_rust_proxy_ptr() else {
-            return;
-        };
-        let Ok(last) = i32::try_from(self.lines.len()) else {
-            return;
-        };
-        if last == 0 {
+        let rows = self.lines.len();
+        if rows == 0 {
             return;
         }
-        let root = qtbridge::qtbridge_type_lib::QModelIndex::default();
-        // SAFETY: the same pattern as `extend_notified` — the proxy
-        // pointer stays valid while the QObject side is attached, and we
-        // are on the Qt main thread inside a slot.
-        let proxy = unsafe { &mut *proxy };
-        let top = proxy.base_index(&*self, 0, 0, &root);
-        let bottom = proxy.base_index(&*self, last - 1, 0, &root);
-        proxy.base_data_changed(&mut *self, &top, &bottom);
+        self.notify_runs([(0, rows - 1)]);
     }
 
     /// Builds the row list from the diff on screen and the colours given.
