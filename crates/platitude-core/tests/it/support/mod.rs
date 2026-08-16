@@ -15,6 +15,8 @@ use std::time::{Duration, Instant};
 use platitude_core::process::{CommandEnd, CommandObserver};
 use platitude_core::session::{LogRow, RefLabel, SessionEvent};
 
+pub mod session;
+
 /// Base timestamp for deterministic commits (arbitrary fixed epoch).
 const BASE_EPOCH: u64 = 1_700_000_000;
 
