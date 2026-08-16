@@ -1,0 +1,202 @@
+//! The seat roster guard: which worktrees a session may enter, and the
+//! atomic claim that keeps two sessions out of one seat.
+
+use super::SEAT_CLAIM;
+use super::payload::string_field;
+use crate::git_query;
+use crate::seats::{self, SEATS, worktree_root};
+
+/// PreToolUse(EnterWorktree): a worktree name outside the seat roster
+/// starts a cold target/ nobody will reuse (CLAUDE.md ビルド・テスト).
+/// Entering an existing seat by path claims it here, atomically, with
+/// `git worktree lock` — the survey a session read is a snapshot, and
+/// two sessions told "a is free" would otherwise both settle in
+/// (observed). Creating a missing seat needs no claim: the second
+/// `git worktree add` of one letter fails by itself.
+pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
+    let name = string_field(input, "name");
+    let path = string_field(input, "path");
+    if let Some(objection) = worktree_objection(name.as_deref(), path.as_deref()) {
+        println!(
+            "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
+             \"permissionDecision\":\"ask\",\"permissionDecisionReason\":\
+             \"{objection} Worktrees are six reusable seats, a-f: enter a \
+             free one with path (the session greeting lists them), or create \
+             a missing seat by passing its letter as name (CLAUDE.md \
+             ビルド・テスト). A worktree outside the roster needs the user's \
+             say-so.\"}}}}"
+        );
+        return Ok(());
+    }
+    let Some(cwd) = string_field(input, "cwd") else {
+        return Ok(());
+    };
+    // Entering by name lands in the seat's existing tree just as surely as
+    // entering by path — resolve it, or there is a door around the claim.
+    let target = match (path, name) {
+        (Some(path), _) => roster_seat(&path).is_some().then_some(path),
+        (None, Some(name)) => existing_seat_path(&cwd, &name),
+        (None, None) => None,
+    };
+    let Some(path) = target else {
+        return Ok(());
+    };
+    let session = string_field(input, "session_id").unwrap_or_default();
+    if let Claim::Held(reason) = claim_seat(&cwd, &path, &session) {
+        println!(
+            "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
+             \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
+             \"This seat is already claimed (locked: {}). Seats are first \
+             come, first served — run `cargo xtask seats` and take a free \
+             letter instead of retrying this one (CLAUDE.md \
+             ビルド・テスト).\"}}}}",
+            printable(&reason)
+        );
+    }
+    Ok(())
+}
+
+/// The roster letter `path` points into, if it is a seat's tree at all.
+fn roster_seat(path: &str) -> Option<&'static str> {
+    let root = worktree_root(path)?;
+    let name = root.rsplit('/').next()?;
+    SEATS.iter().find(|seat| **seat == name).copied()
+}
+
+/// The tree a roster letter already stands on, if it was ever created —
+/// a name for a missing seat creates it fresh, and needs no claim here.
+fn existing_seat_path(cwd: &str, name: &str) -> Option<String> {
+    let listing = git_query(cwd, &["worktree", "list", "--porcelain"])?;
+    seats::seat_entries(&listing)
+        .into_iter()
+        .find(|entry| entry.seat == name)
+        .map(|entry| entry.path)
+}
+
+/// How an attempt to claim a seat came out.
+enum Claim {
+    /// Locked by us now, or in some state git could not judge — the tool
+    /// call itself will surface whatever is actually wrong.
+    OursOrMoot,
+    /// Somebody holds it: the lock's reason, possibly empty.
+    Held(String),
+}
+
+/// One atomic claim: `git worktree lock` refuses a second lock, so the
+/// loser of a race is told here and not after settling in.
+fn claim_seat(cwd: &str, seat_path: &str, session: &str) -> Claim {
+    let reason = format!("{SEAT_CLAIM} {session}");
+    let mut command = std::process::Command::new("git");
+    command
+        .arg("-C")
+        .arg(cwd)
+        .args(["worktree", "lock", "--reason", &reason, seat_path]);
+    let Ok(output) = crate::run_captured(&mut command) else {
+        return Claim::OursOrMoot;
+    };
+    if output.status.success() {
+        return Claim::OursOrMoot;
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if let Some(rest) = stderr.split("already locked").nth(1) {
+        let reason = rest
+            .split_once("reason:")
+            .map(|(_, reason)| reason.trim().to_string())
+            .unwrap_or_default();
+        return Claim::Held(reason);
+    }
+    Claim::OursOrMoot
+}
+
+/// A string sanitized for splicing into the hook's hand-built JSON:
+/// everything that could end the string or the payload early is dropped.
+fn printable(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            '"' | '\\' => '\'',
+            '\n' | '\r' | '\t' => ' ',
+            other => other,
+        })
+        .collect()
+}
+
+/// The reason on this worktree's own lock, if it is locked at all.
+pub(super) fn lock_reason(cwd: &str) -> Option<String> {
+    let git_dir = git_query(cwd, &["rev-parse", "--path-format=absolute", "--git-dir"])?;
+    let reason = std::fs::read_to_string(format!("{git_dir}/locked")).ok()?;
+    Some(reason.trim().to_string())
+}
+
+/// SessionEnd: a seat claimed by this session is handed back. A lock
+/// somebody else wrote stays — ending inside a seat that was never ours
+/// is the collision case, not a reason to free it.
+pub(super) fn session_end(input: &str) -> Result<(), String> {
+    let cwd = string_field(input, "cwd").unwrap_or_default();
+    if roster_seat(&cwd).is_none() {
+        return Ok(());
+    }
+    let session = string_field(input, "session_id").unwrap_or_default();
+    if session.is_empty() {
+        return Ok(());
+    }
+    if lock_reason(&cwd).is_some_and(|reason| reason.contains(&session))
+        && git_query(&cwd, &["worktree", "unlock", &cwd]).is_none()
+    {
+        // Nobody is left to tell; the stale mark in `cargo xtask seats`
+        // is the fallback.
+    }
+    Ok(())
+}
+
+/// Why an EnterWorktree call is held, if it is. Pure so the tests can ask.
+fn worktree_objection(name: Option<&str>, path: Option<&str>) -> Option<&'static str> {
+    if path.is_some() || name.is_some_and(|name| SEATS.contains(&name)) {
+        return None;
+    }
+    Some(match name {
+        Some(_) => {
+            "A worktree under a topical name is never reused, so its cold target/ build and its gigabytes are paid for one session."
+        }
+        None => {
+            "A worktree under a generated name is never reused, so its cold target/ build and its gigabytes are paid for one session."
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{printable, roster_seat, worktree_objection};
+
+    #[test]
+    fn knows_a_seat_path_from_the_rest() {
+        assert_eq!(
+            roster_seat("C:\\x\\platitude-gg\\.claude\\worktrees\\a"),
+            Some("a")
+        );
+        assert_eq!(
+            roster_seat("C:/x/platitude-gg/.claude/worktrees/b/crates"),
+            Some("b")
+        );
+        assert_eq!(
+            roster_seat("C:/x/platitude-gg/.claude/worktrees/tooltip"),
+            None
+        );
+        assert_eq!(roster_seat("C:/x/platitude-gg"), None);
+    }
+
+    #[test]
+    fn sanitizes_a_lock_reason_for_the_json_it_rides_in() {
+        assert_eq!(
+            printable("claude-seat abc\"def\\x\ny"),
+            "claude-seat abc'def'x y"
+        );
+    }
+
+    #[test]
+    fn holds_worktree_names_outside_the_seat_roster() {
+        assert!(worktree_objection(Some("feature-x"), None).is_some());
+        assert!(worktree_objection(None, None).is_some());
+        assert!(worktree_objection(Some("c"), None).is_none());
+        assert!(worktree_objection(None, Some("C:/x/platitude-gg/.claude/worktrees/a")).is_none());
+    }
+}
