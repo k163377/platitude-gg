@@ -916,37 +916,9 @@ ColumnLayout {
                 color: Theme.textSecondary
             }
             Item { Layout.fillWidth: true }
-            HoverToolButton {
-                padding: 0
-                implicitWidth: Theme.iconLg
-                implicitHeight: Theme.iconLg
-                ToolTip.visible: hovered
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: qsTr("Tree view")
-                onClicked: detailsPane.details.setTreeView(true)
-                contentItem: NavIcon {
-                    kind: "hier"
-                    // The one not in use is still the way to switch, so it
-                    // keeps the hue and drops a step rather than falling to
-                    // the muted colour, which would read as unavailable
-                    // (§暗く落とした段 / §無効).
-                    tint: detailsPane.details.treeView ? Theme.accent
-                                                       : Theme.accentDim
-                }
-            }
-            HoverToolButton {
-                padding: 0
-                implicitWidth: Theme.iconLg
-                implicitHeight: Theme.iconLg
-                ToolTip.visible: hovered
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: qsTr("Paths view")
-                onClicked: detailsPane.details.setTreeView(false)
-                contentItem: NavIcon {
-                    kind: "list"
-                    tint: detailsPane.details.treeView ? Theme.accentDim
-                                                       : Theme.accent
-                }
+            TreeViewToggle {
+                treeView: detailsPane.details.treeView
+                onChosen: tree => detailsPane.details.setTreeView(tree)
             }
         }
     }

@@ -437,35 +437,9 @@ ColumnLayout {
                         wipPane.openStashPanel()
                 }
             }
-            HoverToolButton {
-                padding: 0
-                implicitWidth: Theme.iconLg
-                implicitHeight: Theme.iconLg
-                ToolTip.visible: hovered
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: qsTr("Tree view")
-                onClicked: wipPane.worktreeModel.setTreeView(true)
-                contentItem: NavIcon {
-                    kind: "hier"
-                    // See the same pair in DetailsPane: the unchosen half
-                    // is what switches, so it dims rather than mutes.
-                    tint: wipPane.worktreeModel.treeView ? Theme.accent
-                                                         : Theme.accentDim
-                }
-            }
-            HoverToolButton {
-                padding: 0
-                implicitWidth: Theme.iconLg
-                implicitHeight: Theme.iconLg
-                ToolTip.visible: hovered
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: qsTr("Paths view")
-                onClicked: wipPane.worktreeModel.setTreeView(false)
-                contentItem: NavIcon {
-                    kind: "list"
-                    tint: wipPane.worktreeModel.treeView ? Theme.accentDim
-                                                         : Theme.accent
-                }
+            TreeViewToggle {
+                treeView: wipPane.worktreeModel.treeView
+                onChosen: tree => wipPane.worktreeModel.setTreeView(tree)
             }
         }
     }

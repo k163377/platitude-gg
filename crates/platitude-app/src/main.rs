@@ -124,6 +124,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/SplitHandleBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SummaryArea.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TopBar.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/TreeViewToggle.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowAutoActDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipBucketHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipPane.qml", "qt/qml/platitude");
