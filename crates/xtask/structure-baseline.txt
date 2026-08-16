@@ -13,7 +13,6 @@
 # <physical lines> <path from the workspace root>
 540 crates/platitude-app/src/models/diff.rs
 710 crates/platitude-app/src/models/graph.rs
-570 crates/platitude-app/src/ui/DiffPane.qml
 554 crates/platitude-app/src/ui/GraphPane.qml
 747 crates/platitude-app/src/ui/Main.qml
 644 crates/platitude-core/src/conflict.rs

@@ -103,9 +103,11 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/DetailsPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/BinarySizeLine.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ConflictSideLegend.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/DiffLineChoice.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffPaneHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffRowDelegate.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/DiffScrollPlace.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DialogActions.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DotMark.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FileRowDelegate.qml", "qt/qml/platitude");

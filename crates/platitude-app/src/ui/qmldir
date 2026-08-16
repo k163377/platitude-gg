@@ -39,9 +39,11 @@ DescriptionBox 1.0 DescriptionBox.qml
 DetailsPane 1.0 DetailsPane.qml
 BinarySizeLine 1.0 BinarySizeLine.qml
 ConflictSideLegend 1.0 ConflictSideLegend.qml
+DiffLineChoice 1.0 DiffLineChoice.qml
 DiffPane 1.0 DiffPane.qml
 DiffPaneHeader 1.0 DiffPaneHeader.qml
 DiffRowDelegate 1.0 DiffRowDelegate.qml
+DiffScrollPlace 1.0 DiffScrollPlace.qml
 DialogActions 1.0 DialogActions.qml
 DotMark 1.0 DotMark.qml
 FileRowDelegate 1.0 FileRowDelegate.qml

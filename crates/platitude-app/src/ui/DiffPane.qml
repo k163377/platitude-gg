@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
-import platitude
 import platitude.ui
 
 // Center pane, diff mode: one file's unified diff with per-file,
@@ -99,56 +98,12 @@ Rectangle {
     signal stageChosenRequested()
 
     // ---- the lines picked by hand ----------------------------------
-    // A click on a changed line takes it or puts it back; the heading of
-    // the hunk it belongs to then names the count instead of the hunk
-    // (デザイン規約 §diff の中のステージ). Held here rather than on the
-    // rows because a delegate is recycled the moment its line scrolls off,
-    // and keyed `<hunk>:<line>` because that pair is what a patch is
-    // addressed by.
-    property var chosenLines: ({})
-    property int chosenCount: 0
-    function lineChosen(hunk, line) {
-        return diffPane.chosenLines[hunk + ":" + line] === true
+    DiffLineChoice {
+        id: lineChoice
+        view: diffList
     }
-    /// How many lines of one hunk are picked — what its heading says.
-    function chosenIn(hunk) {
-        const head = hunk + ":"
-        let n = 0
-        for (const key in diffPane.chosenLines)
-            if (key.indexOf(head) === 0)
-                n++
-        return n
-    }
-    function toggleLine(hunk, line) {
-        // A fresh object every time: the rows follow this property, and
-        // assigning the same one back changes nothing to follow.
-        const key = hunk + ":" + line
-        const next = ({})
-        for (const k in diffPane.chosenLines)
-            next[k] = true
-        if (next[key] === true)
-            delete next[key]
-        else
-            next[key] = true
-        diffPane.chosenLines = next
-        diffPane.chosenCount = Object.keys(next).length
-    }
-    function clearLines() {
-        diffPane.chosenLines = ({})
-        diffPane.chosenCount = 0
-    }
-    /// The picked lines as `[hunk, line]` pairs, in the order a patch
-    /// wants them — for the owner to hand to the bridge.
-    function chosenPairs() {
-        const out = []
-        for (const key in diffPane.chosenLines) {
-            const cut = key.indexOf(":")
-            out.push([parseInt(key.substring(0, cut)),
-                      parseInt(key.substring(cut + 1))])
-        }
-        out.sort((a, b) => a[0] === b[0] ? a[1] - b[1] : a[0] - b[0])
-        return out
-    }
+    function clearLines() { lineChoice.clear() }
+    function chosenPairs() { return lineChoice.pairs() }
     // ---- the keyboard -----------------------------------------------
     /// Where the keyboard goes when this pane comes on screen. Unlike the
     /// graph, which waits to be clicked because a window has several
@@ -228,57 +183,18 @@ Rectangle {
     }
     /// Automation: pick the first `count` changed lines of a hunk, the way
     /// a click on each of them would.
-    function chooseLines(hunk, count) {
-        diffPane.clearLines()
-        let taken = 0
-        for (let i = 0; i < diffList.count && taken < count; i++) {
-            const row = diffList.itemAtIndex(i)
-            if (row && row.hunk === hunk
-                    && (row.kind === "add" || row.kind === "del")) {
-                diffPane.toggleLine(hunk, row.line)
-                taken++
-            }
-        }
-        return taken
-    }
+    function chooseLines(hunk, count) { return lineChoice.choose(hunk, count) }
 
     // ---- the view's place in a diff that is about to be rebuilt -------
-    // A partial write ends by reading the file again, and the answer
-    // arrives as a whole new list. Without this the view would come back
-    // at the top, which on a long diff loses the place being worked
-    // through — the same restore `GraphPane.shiftRows` does after a graph
-    // swap, and delayed for the same reason (`contentHeight` is still the
-    // old one on the frame the rows land).
-    property real heldY: -1
-    function holdScroll() {
-        diffPane.heldY = diffList.contentY
+    DiffScrollPlace {
+        id: scrollPlace
+        view: diffList
     }
-    function restoreScroll() {
-        if (diffPane.heldY >= 0)
-            placeTimer.restart()
-    }
-    // The wait is the graph's (`Metrics.anchorDelayMs`, and `shiftRows`
-    // learned it the same way): on the frame the rows land the list has
-    // not laid them out yet, so `contentHeight` is still the old one and
-    // the clamp below would take the view to the top instead of back to
-    // its place.
-    Timer {
-        id: placeTimer
-        interval: Metrics.anchorDelayMs
-        onTriggered: {
-            const want = diffPane.heldY
-            diffPane.heldY = -1
-            diffList.contentY = Math.max(0, Math.min(want, diffList.contentHeight
-                                                     - diffList.height))
-            if (AppBackend.autoAct !== "")
-                AppBackend.report("diff_place " + Math.round(diffList.contentY))
-        }
-    }
+    function holdScroll() { scrollPlace.hold() }
+    function restoreScroll() { scrollPlace.restore() }
     /// Automation: read the view away from the top, so that a rebuild can
     /// be seen to put it back where it was.
-    function scrollTo(y) {
-        diffList.contentY = y
-    }
+    function scrollTo(y) { scrollPlace.scrollTo(y) }
 
     // ---- the side that ran out --------------------------------------
     // A write empties the diff it was made in as soon as the last of it
@@ -545,10 +461,10 @@ Rectangle {
                 hoverHunk: diffPane.hoverHunk
                 hoverLine: diffPane.hoverLine
                 picked: diffPane.partial
-                        && diffPane.lineChosen(diffRow.hunk, diffRow.line)
+                        && lineChoice.chosen(diffRow.hunk, diffRow.line)
                         && (diffRow.kind === "add" || diffRow.kind === "del")
                 pickedInHunk: diffPane.partial && diffRow.kind === "hunk"
-                              ? diffPane.chosenIn(diffRow.hunk) : 0
+                              ? lineChoice.countIn(diffRow.hunk) : 0
                 onHunkPointedAt: (inside, hunk) => {
                     if (inside) {
                         diffPane.hoverHunk = hunk
@@ -557,9 +473,8 @@ Rectangle {
                         diffPane.hoverHunk = -1
                     }
                 }
-                onLineToggleRequested: (hunk, line) =>
-                    diffPane.toggleLine(hunk, line)
-                onChoiceCleared: diffPane.clearLines()
+                onLineToggleRequested: (hunk, line) => lineChoice.toggle(hunk, line)
+                onChoiceCleared: lineChoice.clear()
                 onDiscardRequested: hunk => diffPane.discardHunkRequested(hunk)
                 onStageHunkRequested: hunk =>
                     diffPane.stageSelectionRequested(hunk, -1)
