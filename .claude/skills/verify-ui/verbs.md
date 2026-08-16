@@ -62,7 +62,7 @@
 - `discard-hunk-go`(そのボタンを完走させる)
 - `discard-many`
 - `discard-many-go`(先頭行 + 引数のパスを Ctrl クリックで選んでから同じ 1 行)
-- `stage-many`
+- `stage-many`(**この 4 つは一覧の先頭行を `rowAt(0)` で掴む = フォルダ行も掴む** — `chosenRows` / `rowIndexOf` / `chooseRange` が持つ `!row.folder` の番人が `rowAt` には無い。**`--preset basic` は先頭が `docs` フォルダ行**なので `git add -- ':(literal)unstaged:docs'` が拒まれて FAIL する(実測 2026-08-16)。**先頭がファイル行になる木で撃つ** — 1 つのファイルを名指しで動かすだけなら `discard-file-go <パス>` 系が当たる)
 - `stage-many-go`(同じ 2 行を選んでから**先頭行の `+` にポインタを置く** — 一緒に動く行の印も出る。`-go` が押す。hover は注入できないので `showStageTools` で名指しする)
 - `wip`(作業ツリーの一覧)
 - `wip-tally`(同じ一覧を開き、**グラフの未コミット行の集計**を報告する。報告行 `wip_tally added= modified= deleted= renamed= copied= conflicted= rows=` の **`rows=` は一覧の行数**で、**種別の和がそれと一致するのが答え**(`status::Kinds` は行を数えるため)。数字自体は PNG に写るので `must_say` は無い。**4 種類が同時に出る木はどの preset にも無い**ので、撮る時は `demo-repo basic --at <path>` で建ててから `git rm` / `git mv` / `git add` を撃ち `--repo` で渡す。conflict の側は `--preset conflict`)
