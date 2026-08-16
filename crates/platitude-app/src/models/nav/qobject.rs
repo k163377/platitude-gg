@@ -99,36 +99,12 @@ impl NavSectionModel {
         };
         let invoker = self.get_qml_method_invoker();
         match self.section.as_str() {
-            "branches" => {
-                let feed = Arc::clone(&feeds.refs_branches);
-                feed.attach(invoker);
-                self.refs_feed = Some(feed);
-            }
-            "remotes" => {
-                let feed = Arc::clone(&feeds.refs_remotes);
-                feed.attach(invoker);
-                self.refs_feed = Some(feed);
-            }
-            "tags" => {
-                let feed = Arc::clone(&feeds.refs_tags);
-                feed.attach(invoker);
-                self.refs_feed = Some(feed);
-            }
-            "worktree" => {
-                let feed = Arc::clone(&feeds.status_nav);
-                feed.attach(invoker);
-                self.status_feed = Some(feed);
-            }
-            "stashes" => {
-                let feed = Arc::clone(&feeds.stash);
-                feed.attach(invoker);
-                self.stash_feed = Some(feed);
-            }
-            "worktrees" => {
-                let feed = Arc::clone(&feeds.worktrees);
-                feed.attach(invoker);
-                self.worktrees_feed = Some(feed);
-            }
+            "branches" => self.refs_feed = Some(attached(&feeds.refs_branches, invoker)),
+            "remotes" => self.refs_feed = Some(attached(&feeds.refs_remotes, invoker)),
+            "tags" => self.refs_feed = Some(attached(&feeds.refs_tags, invoker)),
+            "worktree" => self.status_feed = Some(attached(&feeds.status_nav, invoker)),
+            "stashes" => self.stash_feed = Some(attached(&feeds.stash, invoker)),
+            "worktrees" => self.worktrees_feed = Some(attached(&feeds.worktrees, invoker)),
             other => tracing::warn!(section = other, "unknown sidebar section"),
         }
     }

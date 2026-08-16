@@ -107,3 +107,27 @@ pub struct Feeds {
     pub diff: Arc<Feed<DiffMsg>>,
     pub commands: Arc<Feed<CommandMsg>>,
 }
+
+/// Hands `invoker` to `feed` and gives the caller its own handle on it.
+///
+/// The invoker is passed by value because it has to be: `QmlMethodInvoker`
+/// is `Send` but not `Clone`, so a consumer takes its own from
+/// `get_qml_method_invoker()` rather than sharing one
+/// (.claude/rules/app-ui.md "Qt Bridges の要点").
+pub fn attached<T>(feed: &Arc<Feed<T>>, invoker: QmlMethodInvoker) -> Arc<Feed<T>> {
+    let feed = Arc::clone(feed);
+    feed.attach(invoker);
+    feed
+}
+
+/// The same for one feed of a tab, picked out of its [`Feeds`]. `None`
+/// when the tab is gone — a slot that arrives for one has nothing to
+/// attach to.
+pub fn attach_feed<T>(
+    tab_id: i32,
+    pick: impl FnOnce(&Feeds) -> &Arc<Feed<T>>,
+    invoker: QmlMethodInvoker,
+) -> Option<Arc<Feed<T>>> {
+    let feeds = Hub::with(|hub| hub.feeds(tab_id))??;
+    Some(attached(pick(&feeds), invoker))
+}

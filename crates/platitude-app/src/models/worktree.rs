@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use qtbridge::{QObjectHolder, qobject};
 
-use crate::hub::{Feed, Hub, StatusMsg};
+use crate::hub::{Feed, StatusMsg};
 
 use super::qml_register;
 
@@ -129,11 +129,8 @@ impl WorkTreeModel {
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
-        if let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) {
-            let feed = Arc::clone(&feeds.status);
-            feed.attach(self.get_qml_method_invoker());
-            self.feed = Some(feed);
-        }
+        let invoker = self.get_qml_method_invoker();
+        self.feed = crate::hub::attach_feed(tab_id, |f| &f.status, invoker);
     }
 
     #[qslot]

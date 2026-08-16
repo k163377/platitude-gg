@@ -7,7 +7,7 @@ use platitude_core::session::LogRow;
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{co_author_pairs, encode_geometry, encode_labels, label_names};
-use crate::hub::{Feed, GraphMsg, Hub};
+use crate::hub::{Feed, GraphMsg};
 
 use super::{impl_extend_notified, qml_register};
 
@@ -375,11 +375,8 @@ impl GraphModel {
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
-        if let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) {
-            let feed = Arc::clone(&feeds.graph);
-            feed.attach(self.get_qml_method_invoker());
-            self.feed = Some(feed);
-        }
+        let invoker = self.get_qml_method_invoker();
+        self.feed = crate::hub::attach_feed(tab_id, |f| &f.graph, invoker);
     }
 
     #[qslot]

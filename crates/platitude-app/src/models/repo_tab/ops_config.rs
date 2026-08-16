@@ -43,11 +43,8 @@ impl RepoTab {
         self.tab_id = tab_id;
         self.state = "loading".into();
         self.changed();
-        if let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) {
-            let feed = Arc::clone(&feeds.tab);
-            feed.attach(self.get_qml_method_invoker());
-            self.feed = Some(feed);
-        }
+        let invoker = self.get_qml_method_invoker();
+        self.feed = crate::hub::attach_feed(tab_id, |f| &f.tab, invoker);
     }
 
     pub(super) fn write_identity(&mut self, name: String, email: String, global: bool) {

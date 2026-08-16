@@ -275,11 +275,8 @@ impl DetailsModel {
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
-        if let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) {
-            let feed = Arc::clone(&feeds.details);
-            feed.attach(self.get_qml_method_invoker());
-            self.feed = Some(feed);
-        }
+        let invoker = self.get_qml_method_invoker();
+        self.feed = crate::hub::attach_feed(tab_id, |f| &f.details, invoker);
     }
 
     /// Requests details of `oid_hex` (graph row selection).

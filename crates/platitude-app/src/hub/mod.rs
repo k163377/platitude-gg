@@ -31,7 +31,7 @@ mod prefs;
 mod sink;
 mod tabs;
 
-pub use feed::{Feed, Feeds};
+pub use feed::{Feed, Feeds, attach_feed, attached};
 pub use msg::{CommandMsg, DiffMsg, GraphMsg, PickMsg, StatusMsg, TabMsg};
 pub use prefs::AvatarUrls;
 

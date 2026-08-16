@@ -8,7 +8,7 @@ use std::sync::Arc;
 use qtbridge::qtbridge_type_lib::{QByteArray, QHash, QModelIndex, QVariant};
 use qtbridge::{QAbstractItemModel, QAbstractItemModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::hub::{Feed, Hub, StatusMsg};
+use crate::hub::{Feed, Hub, StatusMsg, attached};
 
 use super::qml_register;
 

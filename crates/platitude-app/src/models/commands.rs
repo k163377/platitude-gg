@@ -120,11 +120,8 @@ impl CommandsModel {
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
-        if let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) {
-            let feed = Arc::clone(&feeds.commands);
-            feed.attach(self.get_qml_method_invoker());
-            self.feed = Some(feed);
-        }
+        let invoker = self.get_qml_method_invoker();
+        self.feed = crate::hub::attach_feed(tab_id, |f| &f.commands, invoker);
     }
 
     /// Empties the log. Only the record goes; nothing about the
