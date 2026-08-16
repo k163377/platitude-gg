@@ -13,6 +13,7 @@
 - **1 段深くした項の `pub(super)` は届く先が 1 段狭まる** — 元の親から呼ばれていたなら `pub(crate)` へ広げ、間に挟まった mod.rs が `pub(super) use` で元の広さへ戻す(再輸出は元より広くできない = `pub(super)` のままだと E0364/E0365)。`#[cfg(windows)] mod win32` 配下のような private な入れ子では、`pub(crate)` にしても外から辿れる道は増えない
 - **本体を移した fn からは `#[expect(unsafe_code)]` を剥がす** — `unsafe` をマクロや別 fn へ出した側は expectation が不発になり `-D warnings` で赤くなる(貼り忘れ側はエラーになるので、危ないのは剥がし忘れの方)
 - **generic な木・容器に `#[derive(Default)]` を貼らない** — `T: Default` の境界が付き、葉に Default の無い型(借用ポインタのタプル等)を入れられなくなる。`impl<T> Default` を手で書く
+- **`#![allow(dead_code)]` の下から実装を出したら、誰も呼んでいない名前まで `pub use` で再輸出しない** — allow が覆っていたのは `dead_code` で、再輸出は別 lint(`unused_imports`)なので `-D warnings` で赤くなる。呼ばれていない名前は module 越し(`support::wait::QUIET_BUDGET`)で届くから消してよく、残す口は「実際に外から呼ばれている名前」だけ(tests/it/support が実例)
 - **`hook/mod.rs` だけは実装(`run` のディスパッチと `pre_shell` の連鎖)を持つ意図した例外** — 拒否は pre_git → pre_kill → pre_launch の順で最初の拒否が答え。この順序が安全性そのもので、1 ファイルに見えていることが mod.rs 純度に勝つ
 
 - **QML の「描かないホスト」は `anchors.fill: parent` を書く** — メニュー・ポップアップ・ダイアログは宣言された親アイテム越しに窓を測る(`AppMenu.ownerItem.Window.window` / `AppDialog` の `anchors.centerIn: parent` / `Popup.x` は親座標)。page 直下から寸法ゼロの Item の下へ移すと、行幅の上限もダイアログの中央も 0 になる。行カード・チップ一覧のように**シーン座標を受け取って置く**ものも同じ(`row.mapToItem(host, …)` が page 相当になるのは埋めた時だけ)
