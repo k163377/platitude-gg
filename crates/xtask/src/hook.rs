@@ -435,22 +435,31 @@ fn pre_kill(input: &str) -> Result<bool, String> {
 }
 
 /// Whether a shell line kills the app without pinning the kill to one
-/// tree's processes. `$_.Path`-filtered PowerShell pipelines are the one
-/// hand-written shape that is scoped; taskkill and the name-keyed forms
-/// cannot filter by path at all.
+/// tree's processes. A verb counts only as a bare token — quoted, it is
+/// somebody's search pattern, not an invocation (a kill smuggled whole
+/// into `powershell -Command "..."` slips this net; the guard teaches,
+/// it does not contain adversaries). `$_.Path`-filtered pipelines are
+/// the one hand-written shape that is scoped; taskkill cannot filter by
+/// path at all, so it is held regardless.
 fn broad_kill(command: &str) -> bool {
     let line = command.to_lowercase();
     if !line.contains("platitude") {
         return false;
     }
+    let invoked = |verb: &str| {
+        line.split_whitespace()
+            .any(|token| !token.starts_with(['"', '\'']) && token.trim_matches(['"', '\'']) == verb)
+    };
+    if invoked("taskkill") {
+        return true;
+    }
     let path_scoped = line.contains("$_.path") || line.contains("path -like");
-    (line.contains("taskkill") && line.contains("platitude"))
-        || (!path_scoped
-            && (line.contains("stop-process")
-                || line.contains(".kill(")
-                || line.contains("pkill")
-                || line.contains("killall")
-                || (line.contains("wmic") && line.contains("delete"))))
+    !path_scoped
+        && (invoked("stop-process")
+            || invoked("pkill")
+            || invoked("killall")
+            || (invoked("wmic") && line.contains("delete"))
+            || line.contains("$_.kill("))
 }
 
 /// The primary checkout may commit documents directly, except the files
@@ -1489,6 +1498,10 @@ mod tests {
             "cargo xtask kill",
             "kill -9 4321",
             "pkill -f some-other-tool",
+            // A search that names the verbs as quoted data is not a kill
+            // (a live false positive: this guard once held this grep).
+            "grep -n \"Kill()\\|Stop-Process\\|taskkill\" .claude/skills/verify-ui/SKILL.md",
+            "rg 'taskkill' C:/x/platitude-gg",
         ] {
             assert!(!broad_kill(command), "{command}");
         }
