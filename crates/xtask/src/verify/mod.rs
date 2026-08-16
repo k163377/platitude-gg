@@ -11,6 +11,7 @@ mod outcome;
 mod repos;
 mod run;
 mod shim;
+mod verbs;
 
 pub use run::run;
 pub use shim::git_shim;
