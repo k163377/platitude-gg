@@ -475,6 +475,7 @@ ColumnLayout {
                 MessageEditor {
                     id: msgEditor
                     Layout.fillWidth: true
+                    Layout.preferredHeight: msgEditor.pairHeight
                     listHeight: wipList.height
                     blockRoom: wipPane.blockRoom
                     blockHeight: blockCol.implicitHeight

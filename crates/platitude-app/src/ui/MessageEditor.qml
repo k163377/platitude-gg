@@ -147,6 +147,13 @@ ColumnLayout {
     readonly property bool blockScrolls:
         editor.blockHeight > editor.blockRoom + 1
     readonly property bool descKeeps: !editor.blockScrolls
+    /// What the pane lays the pair out at: the block, plus whatever the
+    /// grip has pulled. The pane binds this to `Layout.preferredHeight`
+    /// on the instance — a layout's own implicitHeight is the engine's
+    /// to write, so a binding there loses to the next recompute and the
+    /// description box collapses to its 0 implicit height (measured
+    /// 2026-08-16).
+    readonly property real pairHeight: editor.pairBase + descBox.extra
 
     /// A wheel neither box could use, in pixels. The boxes cover most of
     /// the block they stand on, so whoever owns that block moves it by
@@ -204,11 +211,6 @@ ColumnLayout {
     function pullDescriptionPast(down) { descBox.pullPast(down) }
 
     spacing: Theme.spaceXs
-    // The pair is laid out at `pairBase` plus whatever the grip has
-    // pulled; the boxes' own heights are then simply what the layout
-    // hands them, so no arithmetic here has to agree with any arithmetic
-    // in the panes.
-    implicitHeight: editor.pairBase + descBox.extra
 
     Rectangle {
         Layout.fillWidth: true

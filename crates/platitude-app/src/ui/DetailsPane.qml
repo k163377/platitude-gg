@@ -461,6 +461,7 @@ ColumnLayout {
                 MessageEditor {
                     id: msgEditor
                     Layout.fillWidth: true
+                    Layout.preferredHeight: msgEditor.pairHeight
                     readOnly: !detailsPane.editable
                     blockedTip: detailsPane.editBlocked
                     asking: detailsPane.asking
