@@ -255,6 +255,13 @@ impl NavSectionModel {
         self.shows(row, Role::Full)
     }
 
+    /// Local branch name a remote-tracking ref would take. The remotes
+    /// snapshot owns both the visible row and its configured prefixes.
+    #[qslot]
+    fn local_name_for(&self, remote_ref: String) -> String {
+        self.local_name_of(&remote_ref)
+    }
+
     /// The two stage letters git reports for a working-tree path (`UU`,
     /// `DU`, …); empty for any path that is not in this section.
     ///

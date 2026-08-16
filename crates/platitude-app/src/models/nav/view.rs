@@ -151,6 +151,30 @@ impl NavSectionModel {
         whole.get(from..).unwrap_or(whole)
     }
 
+    /// The local name a remote-tracking ref would take, read from the
+    /// snapshot that made the remote row visible. Keeping this answer with
+    /// that snapshot avoids a separate tab-level feed racing the first
+    /// double-click on a remote row.
+    pub(super) fn local_name_of(&self, remote_ref: &str) -> String {
+        let Source::Remotes(snapshot) = &self.all else {
+            return remote_ref.to_string();
+        };
+        snapshot
+            .remote_names
+            .iter()
+            .filter_map(|remote| {
+                remote_ref
+                    .strip_prefix(remote.as_str())
+                    .and_then(|rest| rest.strip_prefix('/'))
+                    .filter(|rest| !rest.is_empty())
+            })
+            // A remote may itself contain `/`; the shortest remainder is
+            // the longest configured remote prefix.
+            .min_by_key(|rest| rest.len())
+            .unwrap_or(remote_ref)
+            .to_string()
+    }
+
     /// What the row identified by one field answers for another.
     ///
     /// Asks the section's whole source rather than the visible rows, so
@@ -263,6 +287,20 @@ mod tests {
         assert_eq!(model.shown_rows(), 1);
         assert_eq!(says(&model, 0, Role::Name), "origin/feature/one");
         assert_eq!(says(&model, 0, Role::Full), "");
+    }
+
+    #[test]
+    fn a_remote_row_derives_its_local_name_from_its_own_snapshot() {
+        let model = section(
+            "remotes",
+            Source::Remotes(Arc::new(platitude_core::session::RefsSnapshot {
+                remote_names: vec!["my".into(), "my/fork".into()],
+                ..Default::default()
+            })),
+        );
+
+        assert_eq!(model.local_name_of("my/fork/feature/one"), "feature/one");
+        assert_eq!(model.local_name_of("unknown/feature"), "unknown/feature");
     }
     /// A snapshot that carries the same tags is not a reason to rebuild
     /// tens of thousands of delegates.

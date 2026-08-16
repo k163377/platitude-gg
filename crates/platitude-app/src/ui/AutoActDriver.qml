@@ -1630,7 +1630,7 @@ Item {
         } else if (act === "switch") {
             page.switchTo("branch", arg, arg)
         } else if (act === "switch-remote") {
-            page.switchTo("remote", arg, arg, "")
+            page.switchToRef("R", arg)
         } else if (act === "nav-dbl") {
             // A double-click in the left menu, entered where the row
             // enters it. The argument is `<section>:<name>`.

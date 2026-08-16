@@ -239,6 +239,7 @@
 - その隅の文字はファイル一覧が届いたら退く(判定は `bottomRoom` と `roomNeeded` の比較 1 つ)。上に自前の空気を足さない(ユーザー判断 — 行は自分の高さで既に空いている)。ここは `visible` でよい — 隠れた `Label` も implicitHeight を保つ(隠れている間に届いた text も込み。qmltestrunner 実測 2026-08-10)。`z: 1` は退いた後の並び順を次の住人へ保つため。ヘッドレスは `corner`(使い方は verbs.md)
 - アプリメニュー(ハンバーガー)は `offer()` でなく `open()` で開く — 固定行で空になり得ず、`offer()` の引数なし `popup()` はポインタ位置に出して `y` の座席が失われる(右クリック系は `offer()` のまま)
 - サイドバーの行は持たずに射影する(`NavSectionModel` = `QAbstractItemModel`。`QListModel` は `get` が実体への参照を返すので `Vec<NavItem>` の実体化が必須だった)。実測(`JetBrains/kotlin`): `nav-tags-all` 12,315,139 B / `nav-remotes-all` 2,263,852 B → どちらも 0。罠 3 つ: ① ロール名を 1 つ間違えるとデリゲートは黙って空を描く(警告なし)— `Role` の綴りと番号はテストで突き合わせる ② `Arranged::At` の `from` は refs と worktree のツリーで答えが違う(置いた側が書く) ③ WIP の `MM` は 2 行(バケツ + エントリ)なので並び順は到着時に 1 度だけ作る(`Source::files`)
+- REMOTES のダブルクリックで作るローカル名は `NavSectionModel` の同一 snapshot から取る— `RepoTab` の別 feed を待つと、行が表示された直後だけ prefix が空で `origin/branch` をローカル名として渡す race になる。`/` を含む remote 名は最長 prefix を落とす
 - 同じ内容の再公開では行を建て直さない(`NavSectionModel::take` がエントリ同士を比較 — poll は動かなくても再公開する)。比較は届いた側の型で(行を建ててから比べると捨てるためだけに 12MB 確保)。新しいハンドルは動いていなくても受け取る — 古い `Arc` を握ると同内容のスナップショットが 2 つ生きる
 - モデルのメモリは `crate::memprobe::note()` を drain の末尾に(`PG_MEM_REPORT=1` の時だけ O(行数))。1 行にまとめるのは `AppBackend.noteMemory()` — そこでしか同時に読めない(Hub は thread_local・モデルは QML 所有)。内訳の読み方は rules-refs/core.md の同項
 - qmlcachegen はメモリ対策にならない — 測って見送り(2026-08-11): qrc の QML はディスクキャッシュに載らない(タイムスタンプ無し = 60 ファイル毎起動コンパイル)が、AOT で動かせるコンパイル単位は計 1.34MB = 予算の 0.4%。窓の 32MB は実体化したオブジェクト木。起動 883–1,171ms / 予算 3s で build.rs 導入の理由にならない

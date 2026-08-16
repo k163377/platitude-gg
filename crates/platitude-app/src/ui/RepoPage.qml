@@ -159,13 +159,13 @@ Item {
     // §ブランチ・コミットへの移動).
     property string moveKind: ""
     property string moveTarget: ""
-    property string moveLabel: ""
+    property string moveLocal: ""
     property string moveStart: ""
 
-    function switchTo(kind, target, label, start) {
+    function switchTo(kind, target, local, start) {
         page.moveKind = kind
         page.moveTarget = target
-        page.moveLabel = label
+        page.moveLocal = local
         page.moveStart = start === undefined ? "" : start
         page.runSwitch()
     }
@@ -173,8 +173,7 @@ Item {
         if (page.moveKind === "branch")
             repoTab.checkoutBranch(page.moveTarget)
         else if (page.moveKind === "remote")
-            repoTab.checkoutRemote(page.moveTarget,
-                                   repoTab.localNameFor(page.moveTarget))
+            repoTab.checkoutRemote(page.moveTarget, page.moveLocal)
         else if (page.moveKind === "force")
             repoTab.checkoutForceCreate(page.moveTarget, page.moveStart)
     }
@@ -199,7 +198,7 @@ Item {
         // that commit instead (`startNaming`).
         if (kind !== "R")
             return
-        const local = repoTab.localNameFor(name)
+        const local = remotesModel.localNameFor(name)
         if (branchesModel.oidOfName(local) === "")
             page.switchTo("remote", name, local, "")
         else
