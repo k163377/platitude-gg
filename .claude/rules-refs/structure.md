@@ -13,6 +13,9 @@
 - **QML の「描かないホスト」は `anchors.fill: parent` を書く** — メニュー・ポップアップ・ダイアログは宣言された親アイテム越しに窓を測る(`AppMenu.ownerItem.Window.window` / `AppDialog` の `anchors.centerIn: parent` / `Popup.x` は親座標)。page 直下から寸法ゼロの Item の下へ移すと、行幅の上限もダイアログの中央も 0 になる。行カード・チップ一覧のように**シーン座標を受け取って置く**ものも同じ(`row.mapToItem(host, …)` が page 相当になるのは埋めた時だけ)
 - **`page.` を名乗る名前を子へ移したら、外から呼ぶ口だけは page に残す** — 窓の帯は `curPage.<名前>` で能動タブを読む(`TopBar` の push 8 本)ので、alias 再輸出か 1 行の転送を残さないとボタンが黙って死ぬ。自動化(`AutoActDriver`)側は逆に**新しい持ち主を property で渡して呼ぶ**(page を経由しない)
 - **`ui/RepoPage.qml` の残り(9 部品を出した後)は 1 タブ分の状態機械** — 選択の追従・diff の開閉・レイアウトの床・書き込み結果の後始末・モデル群の所有が `selectedOid` / `repoTab` で噛み合っている。次に割るならこの単位だが、**先に「page の状態を子から書かない」形へ寄せる必要がある**(免除ではない — 行数は baseline のラチェットが持つ)
+- **性能敏感な QML(行デリゲート)は「切り出す部品の root を、置き換える当のアイテムにする」** — `Layout.*` / `anchors` / `visible` は使用側に残るので、アイテム木は分割前と同じ本数のまま(包み Item が増えない)。`GraphRowDelegate` → `GraphLaneCell` / `GraphRowChips` / `WipTallyRow` と `DiffPane` の行がこの形。基準リポジトリ(kotlin 227k commits)で分割前後とも 99.7–99.8fps = 差無し(2026-08-16 実測、vsync 100Hz 上限)
+- **`ListView.view` 直読を in-property 化しても、`ListView.onReused` だけはデリゲート root から動かせない** — attached `ListView` は root にしか生えない。切り出した子の再描画はデリゲートから子のメソッドを呼ぶ(`GraphLaneCell.loadFace` / `repaintLanes`)
+- **`ListView` の `delegate:` を独立ファイルへ出す時、モデルのロールに依存する「使用側の式」は使用側に書ける** — `picked: … lineChosen(diffRow.hunk, diffRow.line)` のように、宣言した id 経由でその行自身の required property を読める。行が持つ状態(選択集合)をペイン側に残したまま行を純表示に保てる(`DiffRowDelegate`)
 
 ## 分割しない判断(超過理由の台帳 — 行が消えたら分割済み)
 
