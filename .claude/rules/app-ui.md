@@ -22,6 +22,7 @@ UI の色・寸法・用語の正本は [デザイン規約.md](../../internal-d
 - **QML にビジネスロジックを書かない**(表示とインタラクションのみ。JS でのデータ加工禁止)— ブリッジ差し替え(Qt Bridges → CXX-Qt)を可能に保つための条件でもある
 - `include_bytes_qml!("dir/file", "prefix")` は **prefix にファイルの相対パス全体を連結**する(qrc:/prefix/dir/file)。ソースのディレクトリ構造 = qrc 構造として設計する。qmldir も埋め込めるので QML singleton(`platitude.ui` の `Theme` / `Metrics`)はこの方式で成立する
 - QML は `ui/` 直下フラットに 1 ファイル 1 コンポーネント(`platitude.ui` モジュール)。**新規 QML は qmldir と main.rs の `include_bytes_qml!` の両方へ登録**(qmldir があるディレクトリでは列挙された型しか見えない)
+- **意匠の土台は既存の部品から選ぶ**(一覧は rules-refs/app-ui.md の台座の行): カード = `AppCard` / `AppCardFace`、hover の閉じ待ち = `HoverCardHost`、回るリング = `SpinnerIcon`、ダイアログの足 = `DialogActions`、欄の見出し = `LabeledField`、ツールボタンの一言 = `HoverToolButton.tip`、スクロールする一覧 = `AppListView`。素の `Popup` / `ListView` / `RotationAnimator` を新しく書かない — 台座に積んだ罠避け(hover の 2 handler・撮影中の停止・追いかけない一覧)がまるごと落ちる
 - コンポーネント配線規約: データは親→子へ property、操作・状態変更は子→親へ signal。タブのモデル群は `RepoPage` が所有しペインへ渡す(ペインはモデルのスロットを呼んでよいが、ページ状態は signal で上げて page が変更する)。ウィンドウ横断(タブを開く・settings・identity)は Main まで signal で上げる。`GraphPane.view` は自動化フック専用の露出
 - QML の font 値型に `families`(配列)は無い — フォールバックは `Qt.fontFamilies()` と照合して Theme 側で 1 家族に解決する
 - `grabToImage` は `Window.contentItem` には使えない("no QML engine")— QML 宣言したアイテムを対象にする
@@ -34,7 +35,7 @@ UI の色・寸法・用語の正本は [デザイン規約.md](../../internal-d
 - **右クリックのメニューで行の可否を書くのは `AppMenuItem.offered`(`enabled:` ではない)**(規約 §メニュー = 選べない行は消す)。**`visible` を判定に使わない** — 閉じているメニューの ListView は行を release して visible を落とすので、**開く前に読むと全行が非表示に見える**(`offer()` が「1 行も無い」と判断して永久に開かない)。`offered` は誰も触らないので閉じていても正しい。幅・チップ列・長押しの字下げも `offered` で数える。サブメニューは `AppMenu.applies`(Menu の `visible` は「カードが画面に出ている」の意味なので使えない)
 - **メニューは `popup()` ではなく `offer()` で開く** — 出す行が 0 なら開かない(空のカードを出さない)。**行の可否はメニューを開く関数で 1 度だけ決めて、そのメニュー(`RefRowMenu` / `FileRowMenu` / `CommitRowMenu`)の `can*` プロパティに置く**。生の条件を `offered:` に直接書くと、タイマの fetch が `busyCount` を動かした瞬間にポインタの下で行が出入りする
 - **区切りは `AppMenuSeparator` が自分で決める**(使う側に `visible:` を書かない)。`AppMenu` が `Component.onCompleted` で自分自身を各区切りの `inMenu` に入れるので、**AppMenu のインスタンス側で `Component.onCompleted` を書かない**(奪うと区切りが親を見失う)。**引かない時は `implicitHeight` を 0 にする**(消えても高さを持つと ListView に穴が残る — `AppMenuItem` と同じ)
-- **`ListView.highlightFollowsCurrentItem` は false にする** — 既定の true では `currentIndex` を動かすだけでビューが追いかけ、背景更新で選択行が 1 つずれただけでも履歴を読んでいる人の視界を選択位置まで飛ばす。行の入れ替えでコンテンツが N 行ずれる分は `GraphPane.shiftRows()` で contentY を戻す(**レイアウト前なので 1 拍遅らせる** — 直後は contentHeight が旧値で clamp に食われる)
+- **`ListView.highlightFollowsCurrentItem` は false にする**(`AppListView` が持つ — スクロールする一覧はこれを使う)— 既定の true では `currentIndex` を動かすだけでビューが追いかけ、背景更新で選択行が 1 つずれただけでも履歴を読んでいる人の視界を選択位置まで飛ばす。行の入れ替えでコンテンツが N 行ずれる分は `GraphPane.shiftRows()` で contentY を戻す(**レイアウト前なので 1 拍遅らせる** — 直後は contentHeight が旧値で clamp に食われる)
 - **モデルリセット後の ListView は `currentIndex` を保ったまま `contentY` だけ 0 に戻る** — 直後の `positionViewAtIndex` は後続の relayout(polish)に上書きされ、`Qt.callLater` でも不十分。短い Timer(50ms)で遅らせる(`GraphPane` の anchorTimer)
 
 ## 配線済み操作の意匠と実装対応
