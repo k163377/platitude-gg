@@ -113,7 +113,7 @@ pub const SOURCE_BYTE_CAP: u64 = 4 * 1024 * 1024;
 /// UTF-8, or is over [`SOURCE_BYTE_CAP`] — the colours then start each
 /// hunk clean, which is what they did before there was any of this.
 ///
-/// One process, not two: unlike a preview this has no use for the size on
+/// One read, not two: unlike a preview this has no use for the size on
 /// its own, and the diff it rides beside has already read the same file.
 pub async fn source_text(
     executor: &GitExecutor,
@@ -143,6 +143,9 @@ async fn read_source(
 ) -> Option<Vec<u8>> {
     match source {
         SideSource::Blob(spec) => {
+            if !blob_is_there(executor, workdir, spec, cancel).await {
+                return None;
+            }
             let cmd = GitCommand::new()
                 .cwd(workdir)
                 .args(["cat-file", "blob"])
@@ -200,6 +203,35 @@ fn side_sources(workdir: &Path, target: &DiffTarget) -> (SideSource, SideSource)
     }
 }
 
+/// Whether the object database holds this side at all.
+///
+/// Asking is not optional. The specs [`side_sources`] builds name a side
+/// that is routinely not there — the parent side of a file the commit
+/// added, `HEAD:` before there is a HEAD, `:0:` for a staged deletion —
+/// and `cat-file` answers by failing (`fatal: Not a valid object name`,
+/// exit 128). 128 is outside the 0/1 a [`GitCommand::answers_by_code`]
+/// command may answer with, and must stay so: a `cat-file` exiting 128
+/// because the repository is gone has failed. `rev-parse --verify -q`
+/// asks the same question and says no with exit 1, which the command log
+/// keeps as an answer instead of raising itself over
+/// (規約 core.md §終了コードで答える問い合わせはコマンドログの失敗にしない).
+///
+/// A read that never ran and a spec that resolved to nothing are the same
+/// answer here: both mean this side has no content to show.
+async fn blob_is_there(
+    executor: &GitExecutor,
+    workdir: &Path,
+    spec: &str,
+    cancel: &CancellationToken,
+) -> bool {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .answers_by_code()
+        .args(["rev-parse", "--verify", "-q"])
+        .arg(spec);
+    matches!(executor.run_unchecked(cmd, cancel).await, Ok(out) if out.code == 0)
+}
+
 async fn load_side(
     executor: &GitExecutor,
     workdir: &Path,
@@ -214,9 +246,9 @@ async fn load_side(
     }
 }
 
-/// Reads one side out of the object database. A failing `cat-file` means
-/// the side does not exist there (added / deleted / unborn HEAD) — that
-/// is data, not an error.
+/// Reads one side out of the object database, once [`blob_is_there`] has
+/// said there is one to read. Having no side is data, not an error — it
+/// is what added, deleted and unborn HEAD all look like from here.
 async fn blob_side(
     executor: &GitExecutor,
     workdir: &Path,
@@ -224,6 +256,9 @@ async fn blob_side(
     want_bytes: bool,
     cancel: &CancellationToken,
 ) -> Option<PreviewSide> {
+    if !blob_is_there(executor, workdir, spec, cancel).await {
+        return None;
+    }
     let size_cmd = GitCommand::new()
         .cwd(workdir)
         .args(["cat-file", "-s"])

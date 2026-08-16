@@ -56,9 +56,10 @@ async fn untracked_image_previews_the_new_side_only() {
     assert_eq!(new.bytes.as_deref(), Some(TINY_PNG));
 }
 
-/// Also the unborn-HEAD shape: `HEAD:<path>` failing to resolve means "no
-/// old side" whether the path is missing from HEAD or HEAD does not exist
-/// yet — one cat-file, one answer (`preview::blob_side`).
+/// Also the unborn-HEAD shape: `HEAD:<path>` not resolving means "no old
+/// side" whether the path is missing from HEAD or HEAD does not exist yet
+/// — the probe answers and no cat-file runs (`preview::blob_is_there`;
+/// what the log then holds is pinned in `answer_reads.rs`).
 #[tokio::test]
 async fn staged_new_image_reads_the_index_blob() {
     let mut repo = TestRepo::init();
@@ -144,6 +145,35 @@ async fn committed_image_previews_parent_and_commit_blobs() {
         .unwrap();
     assert_eq!(p.old.unwrap().bytes.as_deref(), Some(TINY_PNG));
     assert_eq!(p.new.unwrap().bytes.as_deref(), Some(v2.as_slice()));
+}
+
+/// The colours are read against the side the commit has, and the probe in
+/// front of that read has to say yes to it. Nothing announces a probe that
+/// wrongly says no — the rows arrive uncoloured and no error is raised —
+/// so the side that is there is pinned as tightly as the side that is not
+/// (`preview::source_text`, and `answer_reads.rs` for the missing side).
+#[tokio::test]
+async fn source_text_reads_the_side_the_commit_has() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.rs", "fn main() {}\n", "add");
+    repo.commit_file("a.rs", "fn main() {\n    work();\n}\n", "change");
+    let head = repo.git(&["rev-parse", "HEAD"]);
+    let parent = repo.git(&["rev-parse", "HEAD^"]);
+
+    let (executor, cancel) = env();
+    let source = preview::source_text(
+        &executor,
+        &repo.path,
+        &DiffTarget::Commit {
+            oid: Oid::from_hex_str(&head).unwrap(),
+            parent: Some(Oid::from_hex_str(&parent).unwrap()),
+            path: "a.rs".to_string(),
+            orig_path: None,
+        },
+        &cancel,
+    )
+    .await;
+    assert_eq!(source.as_deref(), Some("fn main() {\n    work();\n}\n"));
 }
 
 #[tokio::test]
