@@ -54,7 +54,7 @@ ColumnLayout {
     /// stash-tip). Reported through the ToolTip's own visible — the
     /// output side, so a cut binding cannot read as green.
     property bool signaturePointedAt: false
-    readonly property bool signatureTipShown: signatureMark.ToolTip.visible
+    readonly property bool signatureTipShown: authorRow.signatureTipShown
     property bool summaryPointedAt: false
     readonly property bool summaryTipShown: msgEditor.summaryTipShown
     /// The same stand-in for a file row, so a cut-down paths-view row's
@@ -65,72 +65,41 @@ ColumnLayout {
             detailsPane.avatarEditRequested(detailsPane.details.authorName,
                                             detailsPane.details.authorEmail)
     }
-    /// Conclusion first, one line (デザイン規約 §hover のツールチップ).
-    readonly property string signatureTip:
-        detailsPane.signatureCode === "G"
-        ? (detailsPane.signatureSigner !== ""
-           ? qsTr("Signed by %1").arg(detailsPane.signatureSigner)
-           : qsTr("Signed by a key you trust"))
-        : detailsPane.signatureCode === "B"
-          ? qsTr("The content changed after it was signed")
-        : detailsPane.signatureCode === "U"
-          // git names no signer for this one: the key it read is not one
-          // it can put a name to.
-          ? qsTr("The key is not one you have vouched for")
-        : detailsPane.signatureCode === "X"
-          ? qsTr("The signature has expired")
-        : detailsPane.signatureCode === "Y"
-          ? qsTr("The signing key has expired")
-        : detailsPane.signatureCode === "R"
-          ? qsTr("The signing key was revoked")
-        : qsTr("Cannot be checked — the key is not here")
-
-    // ---- co-authors -------------------------------------------------
-    // Packed by encode::encode_co_authors; unpacked here the way the
-    // graph rows unpack their chips. A commit object holds one author,
-    // so everyone else arrives as a `Co-authored-by` trailer and is
-    // shown as what it is: a line the message credits, under the author
-    // rather than beside them (デザイン規約 §co-author).
-    readonly property var coAuthorRecords: coBlock.records
+    // ---- the author row's two cards ---------------------------------
+    // The row itself (`CommitAuthorRow`) owns the hover state, the
+    // credit line and the smoke hooks, and raises anchor points when a
+    // card should open. The cards stay here: they open in pane
+    // coordinates and must not scroll away with the block the row sits
+    // on. The pane forwards the hooks under their old names — the
+    // automation reads the pane.
+    readonly property var coAuthorRecords: authorRow.coAuthorRecords
     function coAuthorName(i) {
-        return coBlock.nameAt(i)
+        return authorRow.coAuthorName(i)
     }
-    /// Whether the pointer is on the underlined stretch. The real hover
-    /// and the automation hook write this same one, so a run cannot go
-    /// green with the hover unwired.
-    property bool matesPointed: false
-    /// ...or on the card it opened: walking down into the card takes the
-    /// pointer off the stretch, and the two must not fight over it.
-    readonly property bool matesLit:
-        detailsPane.matesPointed || mateCard.pointerInside
-    /// Smoke hook and hover handler both land here.
+    /// Smoke hook and hover handler both land here (`CommitAuthorRow`).
     function showCoAuthors(on) {
-        detailsPane.matesPointed = on
+        authorRow.showCoAuthors(on)
     }
     /// Whether the card is on screen — what automation reports, since
     /// the input side would read true with the binding cut.
     readonly property bool matesCardOpen: mateCard.opened
-    onMatesLitChanged: {
-        if (detailsPane.matesLit)
-            detailsPane.openMateCard()
-        else
-            detailsPane.settleMateCard()
-    }
-    function openMateCard() {
+    /// The row raised an anchor, in its own coordinates: map it here
+    /// and open. Set on open rather than bound — the answer only
+    /// matters at the moment it is asked.
+    function openMateCard(at) {
         if (detailsPane.coAuthorRecords.length === 0)
             return
-        const at = coBlock.mapToItem(detailsPane, 0, coBlock.height)
+        const p = authorRow.mapToItem(detailsPane, at.x, at.y)
         mateCard.records = detailsPane.coAuthorRecords
         // Measured from where it opens, not from the pane: the card
         // starts partway across, so the pane's width is not what is
-        // left for it. Set on open rather than bound — the answer only
-        // matters at the moment it is asked.
-        mateCard.maxRowWidth = detailsPane.width - at.x - 2 * Theme.spaceSm
-        mateCard.x = at.x
+        // left for it.
+        mateCard.maxRowWidth = detailsPane.width - p.x - 2 * Theme.spaceSm
+        mateCard.x = p.x
         // Flush against the underline: a gap is a band the pointer
         // crosses while touching neither, and the card closes under it
         // (2026-08-09 report). Same rule the ref list follows.
-        mateCard.y = at.y
+        mateCard.y = p.y
         mateCard.open()
     }
     // The card opens flush under the stretch, so walking into it takes
@@ -147,7 +116,7 @@ ColumnLayout {
         id: mateSettle
         interval: Metrics.hoverKeepMs
         onTriggered: {
-            if (!mateCard.pointerInside && !detailsPane.matesPointed)
+            if (!mateCard.pointerInside && !authorRow.matesPointed)
                 mateCard.close()
         }
     }
@@ -156,45 +125,27 @@ ColumnLayout {
         onPointerInsideChanged: detailsPane.settleMateCard()
     }
 
-    // ---- the author's own card --------------------------------------
-    // The name says who; the card under it says which address that is,
-    // and — only when they are two — who put the commit here and when
-    // (デザイン規約 §author の hover). Everything here is the shape the
-    // co-author card already established, including how it is opened,
-    // so the pane has one way of naming a person rather than two.
-    /// Whether the pointer is on the name. The real hover and the
-    /// automation hook write this same one, so a run cannot go green
-    /// with the hover unwired.
-    property bool authorPointed: false
-    readonly property bool authorLit:
-        detailsPane.authorPointed || authorCard.pointerInside
-    /// Smoke hook and hover handler both land here.
+    /// Smoke hook and hover handler both land here (`CommitAuthorRow`).
     function showAuthor(on) {
-        detailsPane.authorPointed = on
+        authorRow.showAuthor(on)
     }
     /// Whether the card is on screen — what automation reports, since
     /// the input side would read true with the binding cut.
     readonly property bool authorCardOpen: authorCard.opened
-    onAuthorLitChanged: {
-        if (detailsPane.authorLit)
-            detailsPane.openAuthorCard()
-        else
-            authorSettle.restart()
-    }
-    function openAuthorCard() {
+    function openAuthorCard(at) {
         if (detailsPane.details.authorName === "")
             return
-        const at = authorLabel.mapToItem(detailsPane, 0, authorLabel.height)
-        authorCard.maxRowWidth = detailsPane.width - at.x - 2 * Theme.spaceSm
-        authorCard.x = at.x
-        authorCard.y = at.y
+        const p = authorRow.mapToItem(detailsPane, at.x, at.y)
+        authorCard.maxRowWidth = detailsPane.width - p.x - 2 * Theme.spaceSm
+        authorCard.x = p.x
+        authorCard.y = p.y
         authorCard.open()
     }
     Timer {
         id: authorSettle
         interval: Metrics.hoverKeepMs
         onTriggered: {
-            if (!authorCard.pointerInside && !detailsPane.authorPointed)
+            if (!authorCard.pointerInside && !authorRow.authorPointed)
                 authorCard.close()
         }
     }
@@ -515,347 +466,24 @@ ColumnLayout {
                 }
                 // -- author card: avatar + name/date on the left, own hash over
                 // parent hash on the right (rows aligned) --
-                RowLayout {
+                CommitAuthorRow {
                     id: authorRow
-                    spacing: Theme.spaceSm
-                    // The one place a picture is reached from. A pointer resting on
-                    // the face raises a badge saying so; pressing it opens the
-                    // settings card with this author already named.
-                    Item {
-                        id: avatarBox
-                        width: Metrics.detailsAvatar
-                        height: Metrics.detailsAvatar
-                        Layout.preferredWidth: Metrics.detailsAvatar
-                        Layout.preferredHeight: Metrics.detailsAvatar
-                        /// Nothing to assign a picture to on a row with no author:
-                        /// the working tree's own row, and a commit not read yet.
-                        readonly property bool editable:
-                            detailsPane.details.authorEmail !== ""
-                        readonly property bool showBadge:
-                            avatarBox.editable
-                            && (avatarArea.containsMouse || detailsPane.avatarPointedAt)
-                        IdentIcon {
-                            anchors.fill: parent
-                            code: detailsPane.details.avatar
-                            imageUrl: detailsPane.details.avatarUrl
-                        }
-                        // Pushed as far into the lower-right as the icon's own
-                        // square allows — flush with its right and bottom edges,
-                        // so the least of the face is covered and the layout
-                        // beside it never moves (デザイン規約 §アバターを与える).
-                        Rectangle {
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            width: Theme.iconSm + 2 * Theme.borderWidth
-                            height: width
-                            radius: width / 2
-                            color: Theme.bgElevated
-                            border.color: Theme.borderStrong
-                            border.width: Theme.borderWidth
-                            visible: avatarBox.showBadge
-                            NavIcon {
-                                anchors.centerIn: parent
-                                kind: "pen"
-                                tint: Theme.textPrimary
-                                width: Theme.iconSm
-                                height: Theme.iconSm
-                            }
-                        }
-                        MouseArea {
-                            id: avatarArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            enabled: avatarBox.editable
-                            onClicked: detailsPane.avatarClicked()
-                        }
-                        ToolTip.visible: avatarBox.showBadge
-                        ToolTip.delay: Metrics.tipDelayMs
-                        // The one word the whole feature goes by (デザイン規約
-                        // §アバターを与える). The article is what splits the
-                        // two states, not a second noun: the one being
-                        // changed is the face under the pointer, the one
-                        // being chosen does not exist yet (§長さ).
-                        ToolTip.text: detailsPane.details.avatarUrl !== ""
-                                      ? qsTr("Change the avatar for %1")
-                                        .arg(detailsPane.details.authorEmail)
-                                      : qsTr("Choose avatar for %1")
-                                        .arg(detailsPane.details.authorEmail)
-                    }
-                    ColumnLayout {
-                        spacing: 0
-                        Layout.fillWidth: true
-                        // Name, and beside it what git makes of the signature.
-                        // An unsigned commit gets nothing: the ordinary case
-                        // carries no mark, the same rule the graph's state
-                        // badges follow. The verdict rides up here rather than
-                        // sitting with the date because the date's row is where
-                        // the co-authors go, and a signed commit with one would
-                        // have had three things in ~230px (デザイン規約 §co-author).
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.spaceXs
-                            Label {
-                                id: authorLabel
-                                text: detailsPane.details.authorName
-                                elide: Text.ElideRight
-                                // Grows no further than the name itself, so the
-                                // mark sits against the name rather than being
-                                // pushed across to the hash — and shrinks, with
-                                // the name eliding, when a long one would
-                                // otherwise crowd the mark out.
-                                Layout.fillWidth: true
-                                Layout.maximumWidth: authorLabel.implicitWidth
-                                color: Theme.textPrimary
-                                font.pixelSize: Theme.fontMd
-                                font.weight: Font.DemiBold
-                                // Drawn at rest one step down from the name it
-                                // underlines, and up to the name's own value
-                                // under the pointer — the same rule the credit
-                                // line carries, because it says the same thing:
-                                // there is more here, and hovering opens it
-                                // (規約 §co-author の表示).
-                                Rectangle {
-                                    visible: authorLabel.text !== ""
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.bottom: parent.bottom
-                                    height: Theme.borderWidth
-                                    color: detailsPane.authorLit ? Theme.textPrimary
-                                                                 : Theme.borderStrong
-                                }
-                                // A handler, not a `MouseArea`: handlers are
-                                // passive, so the card it opens keeps its own
-                                // hover (規約 §hover のツールチップ).
-                                HoverHandler {
-                                    id: authorHover
-                                    onHoveredChanged:
-                                        detailsPane.showAuthor(authorHover.hovered)
-                                }
-                            }
-                            // A signature that holds is a tick and nothing more;
-                            // only one that contradicts the content spends words
-                            // (規約 §署名の表示). The broken case reads as the
-                            // error message it is, and being the one wide thing
-                            // on the row is how an error should read.
-                            //
-                            // Green stays with the signatures git actually
-                            // vouched for. One it could read but not judge gets
-                            // the same tick in textSecondary: the shape says a
-                            // signature is there, the colour says nobody here
-                            // checked it.
-                            RowLayout {
-                                id: signatureMark
-                                visible: detailsPane.signatureKind !== ""
-                                spacing: Theme.spaceXs
-                                Layout.alignment: Qt.AlignVCenter
-                                readonly property bool broken:
-                                    detailsPane.signatureKind === "bad"
-                                readonly property color tone:
-                                    detailsPane.signatureKind === "verified" ? Theme.success
-                                    : signatureMark.broken ? Theme.danger
-                                    : Theme.textSecondary
-                                NavIcon {
-                                    kind: signatureMark.broken ? "bang" : "check"
-                                    tint: signatureMark.tone
-                                    width: Theme.iconSm
-                                    height: Theme.iconSm
-                                    Layout.alignment: Qt.AlignVCenter
-                                }
-                                Label {
-                                    visible: signatureMark.broken
-                                    text: qsTr("Bad signature")
-                                    color: signatureMark.tone
-                                    font.pixelSize: Theme.fontSm
-                                    Layout.alignment: Qt.AlignVCenter
-                                }
-                                ToolTip.visible: signatureHover.hovered
-                                                 || detailsPane.signaturePointedAt
-                                ToolTip.delay: Metrics.tipDelayMs
-                                ToolTip.text: detailsPane.signatureTip
-                                // A handler, not a MouseArea: an item inside a
-                                // layout is sized by the layout, and anchoring
-                                // one to fill its parent is undefined behaviour.
-                                HoverHandler { id: signatureHover }
-                            }
-                            // The slack lives here, past both of them, so the
-                            // mark stays against the name.
-                            Item { Layout.fillWidth: true }
-                        }
-                        // Date, and beside it whoever the message credits along
-                        // with the author. A commit with no trailer shows only
-                        // the date.
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.spaceSm
-                            Label {
-                                id: detailsDate
-                                text: Qt.formatDateTime(new Date(detailsPane.details.authorTime * 1000),
-                                                        "yyyy-MM-dd HH:mm")
-                                color: Theme.textSecondary
-                                font.pixelSize: Theme.fontSm
-                            }
-                            // The face and name of the first co-author, then a
-                            // count of the rest — the same "+N" the graph chips
-                            // use, so the row's width never moves. One rule runs
-                            // under the lot, the way the hash and its copy icon
-                            // share one: the two are one target.
-                            CoAuthorLine {
-                                id: coBlock
-                                packed: detailsPane.details.coAuthors
-                                lit: detailsPane.matesLit
-                                // Half the pane, the share the hover card gives
-                                // the same line out of the graph pane. The date
-                                // holds the left of this row; this is the rest.
-                                nameWidth: detailsPane.width / 2
-                                // Grows no further than the names themselves, and
-                                // gives way when the row cannot hold them -- the
-                                // rule the author's name above already follows.
-                                // Without the pair this line is Fixed, and a
-                                // Fixed item is a floor the layout cannot go
-                                // under: the row then lays out at its own width
-                                // and every box in the pane, sized to fill it,
-                                // paints past the window's edge (measured at 483
-                                // against a 384px pane).
-                                Layout.fillWidth: true
-                                Layout.maximumWidth: coBlock.implicitWidth
-                                Layout.alignment: Qt.AlignVCenter
-                                onPointerChanged: inside => detailsPane.showCoAuthors(inside)
-                            }
-                            Item { Layout.fillWidth: true }
-                        }
-                    }
-                    ColumnLayout {
-                        spacing: 0
-                        Layout.alignment: Qt.AlignRight
-                        // The hash is the button, not just the icon beside it —
-                        // a 16px glyph was too small to aim at. Hovering
-                        // underlines the hash and lights the icon so the whole
-                        // plate reads as one control.
-                        // Not a HoverToolButton: the style's panel would make
-                        // the plate taller than one line and drop this hash out
-                        // of step with the author name beside it, so it draws
-                        // the same wash over its own flat face.
-                        ToolButton {
-                            id: hashCopy
-                            Layout.alignment: Qt.AlignRight
-                            hoverEnabled: true
-                            text: detailsPane.details.sha8
-                            leftPadding: Theme.spaceXs
-                            rightPadding: Theme.spaceXs
-                            topPadding: 0
-                            bottomPadding: 0
-                            readonly property bool lit: hovered || visualFocus
-                            ToolTip.visible: hovered
-                            ToolTip.delay: Metrics.tipDelayMs
-                            ToolTip.text: qsTr("Copy full hash")
-                            onClicked: detailsPane.copyRequested(detailsPane.details.shaHex)
-                            background: Rectangle {
-                                radius: Theme.radiusSm
-                                color: hashCopy.down ? Theme.bgPressed
-                                     : hashCopy.lit ? Theme.bgHover
-                                     : "transparent"
-                                MouseArea {
-                                    anchors.fill: parent
-                                    acceptedButtons: Qt.NoButton
-                                    cursorShape: Qt.PointingHandCursor
-                                }
-                                // Drawn here rather than as the label's font
-                                // underline so the rule runs under the icon too —
-                                // the hash and the icon are one target, so they
-                                // get one line.
-                                Rectangle {
-                                    visible: hashCopy.lit
-                                    color: Theme.textPrimary
-                                    height: Theme.borderWidth
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.bottom: parent.bottom
-                                    anchors.leftMargin: hashCopy.leftPadding
-                                    anchors.rightMargin: hashCopy.rightPadding
-                                }
-                            }
-                            contentItem: RowLayout {
-                                spacing: Theme.spaceXs
-                                Label {
-                                    text: hashCopy.text
-                                    font.family: Theme.monoFamily
-                                    font.pixelSize: Theme.fontMd
-                                    color: Theme.textPrimary
-                                    Layout.alignment: Qt.AlignVCenter
-                                }
-                                NavIcon {
-                                    kind: "copyicon"
-                                    tint: hashCopy.lit ? Theme.textPrimary
-                                                       : Theme.textSecondary
-                                    Layout.alignment: Qt.AlignVCenter
-                                }
-                            }
-                        }
-                        Label {
-                            id: parentLink
-                            visible: detailsPane.details.parentHex !== ""
-                            Layout.alignment: Qt.AlignRight
-                            text: detailsPane.details.parentHex.substring(0, 8)
-                            font.family: Theme.monoFamily
-                            color: Theme.textLink
-                            font.pixelSize: Theme.fontSm
-                            // The mark is drawn, not typed. The fonts disagree
-                            // about `←`: Cascadia Mono holds it in one cell
-                            // (7px of ink) where Noto Sans Mono CJK JP gives it
-                            // a full-width one (12px), so Ubuntu grew a tail
-                            // nobody chose — the same way `⚑` came out a
-                            // different shape on each of the three.
-                            //
-                            // The seat is the mark's ink, not its box, so the
-                            // `spaceXs` lands where the eye measures it — the
-                            // same gap the plate above spends between its hash
-                            // and copy icon (規約 §余白「印が自分で持っている
-                            // 余白は、隣の詰めに数える」).
-                            leftPadding: parentBack.inkWidth + Theme.spaceXs
-                            ToolTip.visible: parentHover.containsMouse
-                            ToolTip.delay: Metrics.tipDelayMs
-                            ToolTip.text: qsTr("Go to parent commit")
-                            NavIcon {
-                                id: parentBack
-                                kind: "arrow"
-                                // The family draws it leaving; this one points
-                                // back, and turning the mark is how `FoldBlock`
-                                // faces its chevrons too.
-                                rotation: 180
-                                tint: Theme.textLink
-                                width: Theme.iconSm
-                                height: Theme.iconSm
-                                // The grid shrinks and the line shrinks with it,
-                                // or the mark carries more weight than the
-                                // digits beside it (§語の隣に立つ印).
-                                stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
-                                // Hung off the left by the air it keeps inside
-                                // its box, so the ink starts where the link does
-                                // and the line under the pair starts with it.
-                                x: -(parentBack.width - parentBack.inkWidth) / 2
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            // One line under the mark and the hash: they are one
-                            // target, the way the hash and its copy icon share
-                            // theirs. `font.underline` cannot reach the mark
-                            // now that the mark is not a letter.
-                            Rectangle {
-                                visible: parentHover.containsMouse
-                                color: Theme.textLink
-                                height: Theme.borderWidth
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.bottom: parent.bottom
-                            }
-                            MouseArea {
-                                id: parentHover
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: detailsPane.parentClicked(detailsPane.details.parentHex)
-                            }
-                        }
-                    }
+                    details: detailsPane.details
+                    signatureKind: detailsPane.signatureKind
+                    signatureCode: detailsPane.signatureCode
+                    signatureSigner: detailsPane.signatureSigner
+                    avatarPointedAt: detailsPane.avatarPointedAt
+                    signaturePointedAt: detailsPane.signaturePointedAt
+                    paneWidth: detailsPane.width
+                    mateCardInside: mateCard.pointerInside
+                    authorCardInside: authorCard.pointerInside
+                    onAvatarClicked: detailsPane.avatarClicked()
+                    onCopyRequested: text => detailsPane.copyRequested(text)
+                    onParentClicked: oidHex => detailsPane.parentClicked(oidHex)
+                    onOpenMateRequested: at => detailsPane.openMateCard(at)
+                    onSettleMateRequested: detailsPane.settleMateCard()
+                    onOpenAuthorRequested: at => detailsPane.openAuthorCard(at)
+                    onSettleAuthorRequested: authorSettle.restart()
                 }
             }
         }

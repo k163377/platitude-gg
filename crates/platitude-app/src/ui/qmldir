@@ -12,12 +12,14 @@ AskBar 1.0 AskBar.qml
 AuthorCard 1.0 AuthorCard.qml
 AutoActDriver 1.0 AutoActDriver.qml
 AutoScrollBar 1.0 AutoScrollBar.qml
+AvatarButton 1.0 AvatarButton.qml
 ChangeIcon 1.0 ChangeIcon.qml
 ClipboardHelper 1.0 ClipboardHelper.qml
 BandStateCard 1.0 BandStateCard.qml
 CoAuthorCard 1.0 CoAuthorCard.qml
 CoAuthorLine 1.0 CoAuthorLine.qml
 CodeChip 1.0 CodeChip.qml
+CommitAuthorRow 1.0 CommitAuthorRow.qml
 CommitHoverCard 1.0 CommitHoverCard.qml
 EolHoverCard 1.0 EolHoverCard.qml
 CommandRowDelegate 1.0 CommandRowDelegate.qml
@@ -32,6 +34,7 @@ FoldBlock 1.0 FoldBlock.qml
 FormField 1.0 FormField.qml
 GraphPane 1.0 GraphPane.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml
+HashPlate 1.0 HashPlate.qml
 HeadTrack 1.0 HeadTrack.qml
 HoldDriver 1.0 HoldDriver.qml
 HoldIcon 1.0 HoldIcon.qml
@@ -57,6 +60,7 @@ RemoteDialog 1.0 RemoteDialog.qml
 RepoPage 1.0 RepoPage.qml
 SettingsDialog 1.0 SettingsDialog.qml
 SidebarPane 1.0 SidebarPane.qml
+SignatureMark 1.0 SignatureMark.qml
 SlimField 1.0 SlimField.qml
 SplitHandleBar 1.0 SplitHandleBar.qml
 StashActionsBand 1.0 StashActionsBand.qml

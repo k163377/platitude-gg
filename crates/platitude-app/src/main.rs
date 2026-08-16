@@ -76,12 +76,14 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/AuthorCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AutoActDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AutoScrollBar.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/AvatarButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ChangeIcon.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ClipboardHelper.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/BandStateCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CoAuthorCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CoAuthorLine.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CodeChip.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/CommitAuthorRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CommitHoverCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/EolHoverCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CommandRowDelegate.qml", "qt/qml/platitude");
@@ -96,6 +98,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/FormField.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphRowDelegate.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/HashPlate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HeadTrack.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HoldDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HoldIcon.qml", "qt/qml/platitude");
@@ -121,6 +124,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/RepoPage.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SidebarPane.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SignatureMark.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SlimField.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SplitHandleBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/StashActionsBand.qml", "qt/qml/platitude");
