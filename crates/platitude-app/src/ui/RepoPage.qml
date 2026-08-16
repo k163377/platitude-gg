@@ -686,7 +686,7 @@ Item {
         // now is the pointer's to answer again.
         onClosed: {
             page.forceDeleteBranch = ""
-            page.settleRefList()
+            rowHost.settleRefList()
         }
         AppMenuItem {
             code: "switch"
@@ -1329,129 +1329,16 @@ Item {
             graphPane.startNaming(oidHex)
     }
 
-    // The refs one chip had to stack, unstacked under it. It opens and
-    // closes with the pointer, and the pointer is over exactly one of the
-    // two things that keep it up: the chip, or the list itself.
-    RefListPopup {
-        id: refList
+    // What a resting pointer opens on a graph row: the row's own card, and
+    // the refs one chip had to stack. Owned here because rows are recycled
+    // out from under both of them.
+    RowHoverHost {
+        id: rowHost
+        graphPane: graphPane
         currentBranch: workTree.branch
-        onPicked: record => page.activateRecord(record)
-        // The stacked rows answer the same right-click the chip does,
-        // with no row of the graph to fall back to.
-        onMenuAsked: record => page.openRecordMenu(record, "")
-        onClosed: {
-            page.refListWanted = false
-            page.refListAnchor = null
-        }
-        onPointerInsideChanged: page.settleRefList()
-    }
-    // ---- the row's own card -----------------------------------------
-    // Opened by a row once the pointer has rested on it, closed when the
-    // pointer leaves both it and the row. Owned here because rows are
-    // recycled out from under it, the same reason the ref list is.
-    CommitHoverCard {
-        id: rowCard
-        textWidth: graphPane.width / 2
-        // A quarter each to the subject and the body, so the card can
-        // never pass half the pane however long a message is.
-        textHeight: graphPane.height / 4
-        onPointerInsideChanged: page.settleRowCard()
-    }
-    property bool rowCardWanted: false
-    /// The chip's list is up, or is about to be. Only one of the two is
-    /// ever out, and the chip's is the more particular
-    /// (デザイン規約 §hover のツールチップ).
-    readonly property bool refListUp: page.refListWanted || refList.opened
-    function openRowCard(row) {
-        if (!row || page.refListUp)
-            return
-        rowCard.subject = row.subject
-        rowCard.body = row.body
-        rowCard.author = row.author
-        rowCard.atime = row.atime
-        rowCard.mates = row.co_authors
-        // Under the pointer, not under the row: a row is as wide as the
-        // pane, so its left edge is nowhere near the hand.
-        const at = row.mapToItem(page, row.pointerX, row.height)
-        rowCard.x = at.x
-        rowCard.y = at.y
-        page.rowCardWanted = true
-        rowCard.open()
-    }
-    function settleRowCard() {
-        rowCardSettle.restart()
-    }
-    /// Down now, not in a beat's time: what makes way for the chip's
-    /// list has to be gone before it is drawn, or the two overlap for
-    /// as long as the wait.
-    function closeRowCard() {
-        rowCard.close()
-    }
-    // Closing waits a beat rather than a turn of the event loop. Walking
-    // from the row into the card it opened crosses a boundary where the
-    // two hovers change in different frames, and `Qt.callLater` runs
-    // between them — the card closed under the hand (2026-08-09 report).
-    Timer {
-        id: rowCardSettle
-        interval: Metrics.hoverKeepMs
-        onTriggered: {
-            if (!rowCard.pointerInside && !page.rowCardWanted)
-                rowCard.close()
-        }
-    }
-
-    property bool refListWanted: false
-    /// The chip the open list hangs off (null when none). The graph's
-    /// rows read it back through `GraphPane.chipListAnchor`, so a hand
-    /// that walked down into the list and comes back to that chip
-    /// re-holds it instead of sitting out the opening rest again.
-    property var refListAnchor: null
-    function openRefList(records, anchor) {
-        const at = anchor.mapToItem(page, 0, anchor.height)
-        // The row's card opens under the pointer, which is on the chip
-        // — it would be drawn over the list the chip is opening.
-        page.closeRowCard()
-        refList.records = records
-        // Sized before it is shown, so it does not grow under the hand
-        // that is walking into it — see the function.
-        refList.layOutRows()
-        refList.x = at.x
-        refList.y = at.y
-        page.refListWanted = true
-        page.refListAnchor = anchor
-        refList.open()
-    }
-    function closeRefListUnlessEntered() {
-        page.refListWanted = false
-        page.settleRefList()
-    }
-    // The list opens flush under the chip, so walking into it takes the
-    // pointer off the chip on the way, and walking back out puts it on
-    // again. The two hovers change in different frames and in no fixed
-    // order, and `Qt.callLater` runs between them — the list shut under
-    // the hand on the way in (2026-08-09 report). So the answer waits a
-    // beat, the way the row's card does.
-    function settleRefList() {
-        refListSettle.restart()
-    }
-    Timer {
-        id: refListSettle
-        interval: Metrics.hoverKeepMs
-        onTriggered: {
-            // A ref menu standing on one of the list's rows keeps the
-            // list up under it: the hand went into the menu, not away,
-            // and closing the list would pull the ground out from what
-            // it right-clicked. The menu's own close settles this again.
-            if (!refList.pointerInside && !page.refListWanted
-                    && !refMenu.opened)
-                refList.close()
-        }
-    }
-    Connections {
-        // The row it hangs off is a delegate, and delegates travel: once
-        // the graph moves under it the list is pointing at nothing.
-        target: graphPane.view
-        function onContentYChanged() { refList.close() }
+        menuStanding: refMenu.opened
+        onRecordActivated: record => page.activateRecord(record)
+        onRecordMenuAsked: record => page.openRecordMenu(record, "")
     }
 
     // ---- rewriting one commit --------------------------------------
@@ -1634,8 +1521,8 @@ Item {
             resetMenu: resetMenu
             hardResetItem: hardResetItem
             remoteDialog: remoteDialog
-            refList: refList
-            rowCard: rowCard
+            refList: rowHost.listPopup
+            rowCard: rowHost.hoverCard
         }
     }
 
@@ -2503,7 +2390,7 @@ Item {
                         graphModel: graphModel
                         workTree: workTree
                         blank: page.blank
-                        chipListAnchor: page.refListAnchor
+                        chipListAnchor: rowHost.refListAnchor
                         // A half-written message has put the move back
                         // and a question up: until it is answered the
                         // arrows stay still, or every press would be
@@ -2524,14 +2411,14 @@ Item {
                         onRowSwitchRequested: (oidHex, record) =>
                             page.rowDoubleClicked(oidHex, record)
                         onChipExpandRequested: (records, anchor) =>
-                            page.openRefList(records, anchor)
-                        onChipCollapseRequested: page.closeRefListUnlessEntered()
+                            rowHost.openRefList(records, anchor)
+                        onChipCollapseRequested: rowHost.closeRefListUnlessEntered()
                         onRowHoverRequested: (row, inside) => {
-                            page.rowCardWanted = inside
+                            rowHost.rowCardWanted = inside
                             if (inside)
-                                page.openRowCard(row)
+                                rowHost.openRowCard(row)
                             else
-                                page.settleRowCard()
+                                rowHost.settleRowCard()
                         }
                         onCreateBranchRequested: (oidHex, name) =>
                             repoTab.createBranch(name, oidHex, true)

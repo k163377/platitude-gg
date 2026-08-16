@@ -61,6 +61,7 @@ RefListPopup 1.0 RefListPopup.qml
 RefusalBadge 1.0 RefusalBadge.qml
 RemoteDialog 1.0 RemoteDialog.qml
 RepoPage 1.0 RepoPage.qml
+RowHoverHost 1.0 RowHoverHost.qml
 SettingsDialog 1.0 SettingsDialog.qml
 SidebarPane 1.0 SidebarPane.qml
 SignatureMark 1.0 SignatureMark.qml
