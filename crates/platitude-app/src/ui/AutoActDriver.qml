@@ -94,7 +94,7 @@ Item {
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
                 "rebase-onto", "revert-commit", "op-exit-go", "stage-hunk",
-                "stage-line", "keep-place", "discard-hunk-go", "line-back",
+                "stage-line", "keep-place", "discard-hunk-go", "line-back", "diff-follow",
                 "stage-all", "unstage-all",
                 "push", "force-push", "push-retry", "fetch", "fetch-ref-list",
                 "commands", "commands-fail", "commands-clear", "fetch-recover",
@@ -107,7 +107,7 @@ Item {
                 "eol-commit", "eol-hover",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "line-tools", "hunk-tools",
-                "code-send", "line-back", "stage-all", "unstage-all",
+                "code-send", "line-back", "diff-follow", "stage-all", "unstage-all",
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
@@ -380,6 +380,10 @@ Item {
                 codeSendTimer.begin()
                 return
             }
+            if (act === "diff-follow") {
+                followTimer.begin()
+                return
+            }
             if (act === "line-back") {
                 lineBackTimer.begin()
                 return
@@ -403,10 +407,11 @@ Item {
     //
     // Three answers in one run, because they are one story: the line goes
     // (the rows shrink), the line comes back (the rows are as they were),
-    // and staging the rest leaves the side with nothing to stand on (the
-    // pane closes). Each step waits for its own write to land *and* for
-    // the rows to say so — the model's count is the output, the write is
-    // only the cause.
+    // and staging the rest empties the side being read — where the pane
+    // follows the file to the side it went to rather than closing on the
+    // reader (`RepoPage.followEmptySide`). Each step waits for its own
+    // write to land *and* for the pane to say so — the rows and the key
+    // are the output, the write is only the cause.
     Timer {
         id: lineBackTimer
         interval: 25
@@ -422,13 +427,18 @@ Item {
             lineBackTimer.back = false
             lineBackTimer.start()
         }
+        /// Whether the write this step asked for has landed. The sequence
+        /// is read immediately before asking, so its moving is the whole
+        /// of the evidence — waiting to *see* `busyCount` rise as well
+        /// wedges on a write that begins and ends inside one tick, which
+        /// is what the container did while the host did not (2026-08-17
+        /// 実測: `line-back` PASS on Windows, watchdog on Linux).
         function wroteAndSettled() {
-            return driver.writeStarted && repoTab.busyCount === 0
+            return repoTab.busyCount === 0
                     && repoTab.writeSeq > driver.writeSeqBefore
         }
         function expect() {
             driver.writeSeqBefore = repoTab.writeSeq
-            driver.writeStarted = repoTab.busyCount > 0
         }
         onTriggered: {
             const rows = diffPane.view.count
@@ -463,14 +473,75 @@ Item {
                 lineBackTimer.step = 3
                 return
             }
-            if (!lineBackTimer.wroteAndSettled() || page.diffShown)
+            if (!lineBackTimer.wroteAndSettled()
+                    || page.diffKind !== "staged" || rows === 0)
                 return
             lineBackTimer.stop()
             AppBackend.report("line_back back=" + lineBackTimer.back
                               + " shrank=" + lineBackTimer.shrank
-                              + " closed=" + !page.diffShown
+                              + " followed=" + (page.diffKind + ":" + page.diffPath)
                               + " rows0=" + lineBackTimer.rows0
                               + " rows1=" + lineBackTimer.rows1)
+            renderedBarrier.begin()
+        }
+    }
+    // Where the reader lands when the file under the open diff is moved
+    // whole from the file list. Two answers, and which one is right
+    // depends on what is left behind (デザイン規約 §diff の中のステージ):
+    // with other files still on that side the pane takes the next of them,
+    // and with none left it stays on the same file and reads it from the
+    // side it went to.
+    //
+    // The argument names the file to open; the verb decides its own second
+    // step from what the tree holds afterwards, and reports both.
+    Timer {
+        id: followTimer
+        interval: 25
+        repeat: true
+        property int step: 0
+        property string was: ""
+        property string landed: ""
+        property bool alone: false
+        function begin() {
+            followTimer.step = 0
+            followTimer.landed = ""
+            followTimer.start()
+        }
+        onTriggered: {
+            if (followTimer.step === 0) {
+                if (diffPane.view.count === 0)
+                    return
+                followTimer.was = page.diffKind + ":" + page.diffPath
+                // Whether this side has anything else on it, read before
+                // the write takes the file off it.
+                followTimer.alone =
+                    worktreeModel.besidePath(page.diffKind, page.diffPath) === ""
+                // The sequence read here is the whole test below: seeing
+                // `busyCount` rise as well wedges on a write that begins
+                // and ends inside one tick (see `lineBackTimer`).
+                driver.writeSeqBefore = repoTab.writeSeq
+                // The file list's own `+` / `−`, whole file at a time.
+                if (page.diffKind === "staged")
+                    repoTab.unstagePath(page.diffPath)
+                else
+                    repoTab.stagePath(page.diffPath)
+                followTimer.step = 1
+                return
+            }
+            // The landing is the output: the pane has to have moved off
+            // the key it was on and settled somewhere with rows.
+            const now = page.diffShown ? page.diffKind + ":" + page.diffPath : ""
+            if (repoTab.busyCount !== 0
+                    || repoTab.writeSeq <= driver.writeSeqBefore
+                    || now === followTimer.was
+                    || (page.diffShown && diffPane.view.count === 0))
+                return
+            followTimer.stop()
+            followTimer.landed = now
+            AppBackend.report("diff_follow shown=" + page.diffShown
+                              + " alone=" + followTimer.alone
+                              + " was=" + followTimer.was
+                              + " landed=" + followTimer.landed)
             renderedBarrier.begin()
         }
     }
@@ -2354,7 +2425,8 @@ Item {
                    || act === "discard-hunk" || act === "discard-hunk-go"
                    || act === "diff-file" || act === "line-tools"
                    || act === "hunk-tools" || act === "keep-place"
-                   || act === "code-send" || act === "line-back") {
+                   || act === "code-send" || act === "line-back"
+                   || act === "diff-follow") {
             // All enter through one file's diff and act on its first
             // hunk. The bucket rides in front of the path
             // (`<bucket>:<path>`) when it is not the usual unstaged one:

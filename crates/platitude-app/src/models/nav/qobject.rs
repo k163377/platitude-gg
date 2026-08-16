@@ -274,6 +274,27 @@ impl NavSectionModel {
         self.told(Role::Full, &path, Role::Change)
     }
 
+    /// Which bucket holds a path now. Asked after a write has moved it,
+    /// when it sits in exactly one of them.
+    #[qslot]
+    fn bucket_of(&self, path: String) -> String {
+        self.told(Role::Full, &path, Role::Bucket)
+    }
+
+    /// Whether `bucket` still holds `path` (see [`Self::holds`]).
+    #[qslot]
+    fn holds_path(&self, bucket: String, path: String) -> bool {
+        self.holds(&bucket, &path)
+    }
+
+    /// The row beside `path` under the same heading, as `<bucket>:<path>`
+    /// (see [`Self::beside`]). What the diff pane reads next when the file
+    /// it is on leaves the side being read.
+    #[qslot]
+    fn beside_path(&self, bucket: String, path: String) -> String {
+        self.beside(&bucket, &path)
+    }
+
     /// Where a renamed file came from, by path — whole, the way a diff
     /// wants it (a rename's diff is read by naming both of its sides).
     ///

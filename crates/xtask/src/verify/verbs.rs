@@ -264,9 +264,16 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // A line staged from the diff, the file then moved from the list,
         // and the diff following both. The picture is the last frame of
         // three and cannot show the two before it, so all three answers
-        // are read: the rows shrank, the rows came back, the pane closed
-        // when the side ran out.
-        "line-back" => Some("line_back back=true shrank=true closed=true"),
+        // are read: the rows shrank, the rows came back, and the pane
+        // followed the file over to the staged side when the unstaged one
+        // ran out (`--preset manyhunks` has the one file, so that is where
+        // it has to land).
+        "line-back" => Some("line_back back=true shrank=true followed=staged:notes.txt"),
+        // Where the pane lands when the file under it is moved whole. The
+        // picture shows a diff either way and cannot say which file it is
+        // of, so the landing is read: `shown=true` is the half that fails
+        // when the pane closes on the reader instead of following.
+        "diff-follow" => Some("diff_follow shown=true"),
         // A bucket emptied from its own heading keeps that heading, both
         // ways round — which is the whole claim, so both headings are
         // read back whichever direction was pressed. The picture cannot

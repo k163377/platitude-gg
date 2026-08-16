@@ -755,11 +755,19 @@ Item {
         // the index and a stash empties both, so a diff left open on
         // either is a picture of a file as it was — the same staleness the
         // file list's own `+` used to leave behind.
+        //
+        // **Marked, not read.** This lands before the status the write
+        // moved (`session::write` finishes the write and then publishes
+        // status), so reading the file here would read it against a tree
+        // the app has not caught up with — and then read it a second time
+        // when it does. Saying the tally is unknown makes the one read
+        // happen where the tree has settled, which is also where a change
+        // nobody in this window made arrives.
         if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage"
                 || repoTab.lastWriteOp === "discard"
                 || repoTab.lastWriteOp === "commit"
                 || repoTab.lastWriteOp === "stash")
-            page.reloadDiff()
+            page.seenTreeTally = ""
         // The message landed: the editor stops offering to save it, and
         // keeps what was written until the selection catches up with
         // the commit that now carries it.
@@ -815,12 +823,16 @@ Item {
         ? graphModel.conflictColorTheirs(workTree.sideOurs, workTree.sideTheirs)
         : -1
     function toggleDiff(kind, path, origPath) {
-        const key = kind + ":" + path
-        if (page.diffShown && page.diffKey === key) {
+        if (page.diffShown && page.diffKey === kind + ":" + path) {
             page.closeDiff()
             return
         }
-        page.diffKey = key
+        page.openDiff(kind, path, origPath)
+    }
+    /// Reads one file, whoever asked — a row that was clicked, or the pane
+    /// moving itself off a side that ran out (`followEmptySide`).
+    function openDiff(kind, path, origPath) {
+        page.diffKey = kind + ":" + path
         page.diffKind = kind
         page.diffPath = path
         page.diffOrigPath = origPath
@@ -832,6 +844,8 @@ Item {
         else
             diffModel.requestWorkTree(kind, path, origPath)
         page.diffShown = true
+        page.diffNeighbour = ""
+        page.noteDiffNeighbour()
     }
     // Stages (or unstages) one hunk, or one line of it. The indices
     // address the diff currently on screen, so the pane is reloaded
@@ -851,6 +865,46 @@ Item {
         repoTab.discardSelection(page.diffKind, page.diffPath,
                                  page.diffOrigPath, hunk, -1,
                                  diffModel.fingerprint)
+    }
+    // ---- what the reader lands on when a side runs out ---------------
+    /// The row beside the open diff's file under the same heading, as
+    /// `<bucket>:<path>` — the file after it, or the one before it where
+    /// it is the last (`NavSectionModel.besidePath`).
+    ///
+    /// Noted while the file is still there, because by the time the side
+    /// has run out the file has already moved to the other one and the
+    /// place it left is not in the list to be read.
+    property string diffNeighbour: ""
+    function noteDiffNeighbour() {
+        if (!page.diffShown || page.diffKind === "commit"
+                || !worktreeModel.holdsPath(page.diffKind, page.diffPath))
+            return
+        page.diffNeighbour = worktreeModel.besidePath(page.diffKind, page.diffPath)
+    }
+    /// Everything that was on this side has gone over to the other one.
+    /// The reader is left standing on an empty frame, so the pane moves
+    /// rather than closing (デザイン規約 §diff の中のステージ):
+    ///
+    ///  - the next file of the side that ran out, if it still has one;
+    ///  - otherwise the same file, read from wherever it went — the whole
+    ///    of it is on the other side now, which is the thing to look at;
+    ///  - and only with nothing uncommitted left does the pane close.
+    function followEmptySide() {
+        const cut = page.diffNeighbour.indexOf(":")
+        if (cut > 0) {
+            const bucket = page.diffNeighbour.substring(0, cut)
+            const path = page.diffNeighbour.substring(cut + 1)
+            if (worktreeModel.holdsPath(bucket, path)) {
+                page.openDiff(bucket, path, worktreeModel.origOf(path))
+                return
+            }
+        }
+        const moved = worktreeModel.bucketOf(page.diffPath)
+        if (moved !== "") {
+            page.openDiff(moved, page.diffPath, worktreeModel.origOf(page.diffPath))
+            return
+        }
+        page.closeDiff()
     }
     /// A write on the working tree has landed, so the open diff is a
     /// picture of what the file used to be.
@@ -1234,9 +1288,38 @@ Item {
             page.tryPendingHeadSelect()
         }
     }
+    /// What the working tree looked like the last time the open diff was
+    /// read against it. Not a diff of the file — the counts of the four
+    /// buckets, which is what a stage or an unstage moves whoever made it
+    /// (another window, a terminal, this pane's own `+`).
+    property string seenTreeTally: ""
+    function treeTally() {
+        return workTree.stagedCount + "/" + workTree.unstagedCount + "/"
+             + workTree.untrackedCount + "/" + workTree.conflictCount + "/"
+             + worktreeModel.total
+    }
     Connections {
         target: worktreeModel
         function onChanged() {
+            // The file the diff is on is still where it was, so this is
+            // the last moment its neighbour can be read (see
+            // `noteDiffNeighbour`).
+            page.noteDiffNeighbour()
+            // The one place the open diff is read again, whatever moved
+            // the tree — this pane's own `+`, the file list's, another
+            // window, a terminal. Left to the writes it could see, the
+            // rows on screen and the fingerprint the next `+` is written
+            // against stayed a picture of the file as it was, and pressing
+            // one came back with git's refusal (2026-08-17 ユーザー報告).
+            //
+            // Read against the tally rather than every tick: a refresh
+            // that found the same tree has nothing to catch up with, and
+            // a write says so by putting the tally beyond reach.
+            const tally = page.treeTally()
+            if (tally !== page.seenTreeTally) {
+                page.seenTreeTally = tally
+                page.reloadDiff()
+            }
             // The working tree emptied. After a commit of our own that is
             // the end of the editor's job; when someone else committed
             // these changes it happens with no warning, so a message being
@@ -1474,7 +1557,7 @@ Item {
                         sideColorTheirs: page.sideColorTheirs
                         busy: repoTab.busyCount > 0
                         onCloseRequested: page.closeDiff()
-                        onNothingLeft: page.closeDiff()
+                        onNothingLeft: page.followEmptySide()
                         onDiscardHunkRequested: hunk => page.discardHunkNow(hunk)
                         onStageFileRequested: {
                             if (page.diffStaged)

@@ -194,6 +194,59 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
+    /// Whether this section holds `path` in `bucket`. Both halves are
+    /// needed: a file changed on both sides at once has a row under each,
+    /// and asking by path alone always answers with the first.
+    pub(super) fn holds(&self, bucket: &str, path: &str) -> bool {
+        self.rows().any(|row| self.is(row, bucket, path))
+    }
+
+    /// Where the reader lands when `path` leaves `bucket`: the file under
+    /// the same heading after it, or the one before it where it was the
+    /// last. Empty when that heading holds nothing else, and empty when
+    /// the path is not in it at all — the caller asks while it still is
+    /// (`RepoPage.noteDiffNeighbour`).
+    ///
+    /// The answer carries its bucket, because the heading a file sits
+    /// under is not the bucket it belongs to: untracked files are shown
+    /// among the unstaged ones (`NavItem.group`).
+    pub(super) fn beside(&self, bucket: &str, path: &str) -> String {
+        let rows: Vec<Row> = self.rows().collect();
+        let Some(at) = rows.iter().position(|row| self.is(*row, bucket, path)) else {
+            return String::new();
+        };
+        let group = self.field(rows[at], Role::Group).as_str().to_string();
+        let under = |row: &&Row| self.field(**row, Role::Group).as_str() == group;
+        rows[at + 1..]
+            .iter()
+            .find(under)
+            .or_else(|| rows[..at].iter().rev().find(under))
+            .map(|row| {
+                format!(
+                    "{}:{}",
+                    self.field(*row, Role::Bucket).as_str(),
+                    self.field(*row, Role::Full).as_str()
+                )
+            })
+            .unwrap_or_default()
+    }
+
+    /// Every source row of this section, in the order the list shows them.
+    fn rows(&self) -> impl Iterator<Item = Row<'_>> + '_ {
+        (0..self.all.len())
+            .filter_map(|at| self.all.entry(at))
+            .map(|of| Row::Shown {
+                of,
+                depth: 0,
+                from: 0,
+            })
+    }
+
+    fn is(&self, row: Row, bucket: &str, path: &str) -> bool {
+        self.field(row, Role::Bucket).as_str() == bucket
+            && self.field(row, Role::Full).as_str() == path
+    }
+
     /// What one row on screen shows for one role (empty out of range).
     pub(super) fn shows(&self, row: i32, role: Role) -> String {
         usize::try_from(row)
