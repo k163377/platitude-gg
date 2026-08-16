@@ -79,6 +79,7 @@ OpExitCard 1.0 OpExitCard.qml
 OpExitRow 1.0 OpExitRow.qml
 OpenFailedDialog 1.0 OpenFailedDialog.qml
 OpenFailedScreen 1.0 OpenFailedScreen.qml
+PageLayout 1.0 PageLayout.qml
 PaneHeader 1.0 PaneHeader.qml
 PublishFlow 1.0 PublishFlow.qml
 PublishForm 1.0 PublishForm.qml

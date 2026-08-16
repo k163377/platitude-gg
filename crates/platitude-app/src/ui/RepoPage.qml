@@ -995,131 +995,47 @@ Item {
             repoTab.activate()
     }
 
-    /// The layout this page starts with: what the window is set to now,
-    /// which after a restart is what the last session left. Read once
-    /// rather than bound — from here on the splitters own these, and a
-    /// binding would fight the drag (規約 §左メニューを畳む).
-    function applySavedLayout() {
-        // The width first: while the list has never been folded, the
-        // splitter still reads it through a binding, so this is what puts
-        // an unfolded list at the width it was left. Folding after is what
-        // pins the rail (`applyFold`, through the sidebar's own binding on
-        // this property — calling it here as well would only run it twice).
-        sidebarPane.openWidth = AppBackend.startSidebarWidth()
-        page.sidebarCollapsed = AppBackend.startSidebarCollapsed()
-        page.commandsOpen = AppBackend.startCommandsShown()
-        rightPane.SplitView.preferredWidth = AppBackend.startDetailsWidth()
-        commandsPane.SplitView.preferredHeight = AppBackend.startCommandsHeight()
-        // -1 travels through unchanged: the pane reads it as "follow the
-        // default lane count", which is what a divider nobody has dragged
-        // has always done.
-        graphPane.labelWManual = AppBackend.startGraphLabelsWidth()
-        graphPane.graphColWManual = AppBackend.startGraphLanesWidth()
-        sidebarPane.expBranches = AppBackend.startSection("branches")
-        sidebarPane.expRemotes = AppBackend.startSection("remotes")
-        sidebarPane.expWorktree = AppBackend.startSection("worktree")
-        sidebarPane.expStashes = AppBackend.startSection("stashes")
-        sidebarPane.expTags = AppBackend.startSection("tags")
-        if (page.blank)
-            return
-        repoTab.setTagsShown(AppBackend.startTagsShown())
-        worktreeModel.setTreeView(AppBackend.startWipTree())
-        detailsModel.setTreeView(AppBackend.startDetailsTree())
+    // ---- what this page is laid out at ------------------------------
+    // The saved sizes, the sections, and the floor the window is held to.
+    PageLayout {
+        id: pageLayout
+        page: page
+        sidebarPane: sidebarPane
+        rightPane: rightPane
+        commandsPane: commandsPane
+        graphPane: graphPane
+        wipPane: wipPane
+        detailsPane: detailsPane
+        repoTab: repoTab
+        worktreeModel: worktreeModel
+        detailsModel: detailsModel
     }
 
-    // ---- how narrow and how short this page may be laid out ------------
-    // Under these the panes stop giving: `SplitView` does not shrink an
-    // item past its minimum, it lays the rest out beyond its own edge, and
-    // nothing in this window scrolls to reach what went over (measured
-    // 2026-08-09: a 640px window left 32px of the right pane on screen and
-    // no way to the other 268). So the window is held to them instead
-    // (`Main.floorWidth` / `floorHeight`).
-    //
-    // Every number here is one §レイアウト初期値 already carries; naming
-    // them is what lets the item that obeys one and the floor that is
-    // built on it read the same value.
-    readonly property int rightMinWidth: 300
-    readonly property int panesMinHeight: 200
-    readonly property int commandsMinHeight: 120
-    /// Whether the working-tree pane has anything below its own fold —
-    /// the editor, the commit button and a stopped operation's exit card
-    /// keep their heights by construction, so in a short pane they are
-    /// reached by scrolling rather than not at all (`window-floor wip`).
-    readonly property bool wipBlockScrolls: wipPane.blockScrolls
-    /// …and how far the commit-details pane runs past its own bottom,
-    /// which is the same question asked of the other half of this seat.
-    readonly property real detailsOverHeight: detailsPane.contentOverHeight
+    /// What the window reads off the page it is showing: the floor it may
+    /// not be laid out under (`Main.floorWidth` / `floorHeight`) and the
+    /// two panes' own overflow, which the floor's own verb asks about.
+    readonly property real floorWidth: pageLayout.floorWidth
+    readonly property real floorHeight: pageLayout.floorHeight
+    readonly property bool wipBlockScrolls: pageLayout.wipBlockScrolls
+    readonly property real detailsOverHeight: pageLayout.detailsOverHeight
 
-    /// The middle column's floor. The graph gives up its own columns
-    /// first — the chips, then the lanes (`GraphPane.contentMinW`) — and
-    /// stops where all three of them would stop saying anything. Never
-    /// under what a side pane may be, so that three columns still read as
-    /// three at the floor.
-    readonly property real centreMinWidth:
-        Math.max(graphPane.contentMinW, sidebarPane.minOpenWidth)
-    /// What the folded list costs is the rail, so folding lowers this and
-    /// unfolding raises it — and a window standing at the old floor is
-    /// grown by the new one rather than cutting the list off (Main).
-    readonly property real floorWidth:
-        (page.sidebarCollapsed ? Theme.railWidth : sidebarPane.minOpenWidth)
-        + Theme.splitterWidth + page.centreMinWidth
-        + Theme.splitterWidth + page.rightMinWidth
-    /// The log is a second row when it is open, and it brings its own
-    /// floor with it — so opening it raises this the same way.
-    readonly property real floorHeight:
-        page.panesMinHeight
-        + (page.commandsOpen
-           ? Theme.splitterWidth + page.commandsMinHeight : 0)
-
-    /// Assigned, not bound — a drag writes the same attached property and
-    /// would be gone after the first one (規約 §左メニューを畳む).
-    function setDetailsWidth(w) {
-        rightPane.SplitView.preferredWidth = w
-    }
-
-    /// What dragging the two dividers inside the graph would leave. Only
-    /// the headless state check calls this; a person drags.
-    function setGraphColumns(labels, lanes) {
-        graphPane.labelWManual = labels
-        graphPane.graphColWManual = lanes
-    }
-
-    /// Hands the window's layout over to be remembered. Pulled on a timer
-    /// by the window rather than pushed as each value changes: a splitter
-    /// drag moves a width on every frame, and the point is to write what
-    /// it settled on.
+    /// …and what it calls: the layout is pulled on the window's timer, and
+    /// the two setters are the headless state check's (a person drags).
     function reportLayout() {
-        AppBackend.saveLayoutSizes(
-            // While the list is folded its width is the rail's; the width
-            // it goes back to is the one worth keeping.
-            page.sidebarCollapsed ? sidebarPane.openWidth : sidebarPane.width,
-            rightPane.width,
-            // The height it asks for, open or closed — not the one it was
-            // laid out at. A drag writes this same property, so what a
-            // hand set is here; what a short window squeezed it to is not
-            // (the same rule the folded list keeps: a size nobody chose is
-            // not a size to come back to. Measured before the window had a
-            // floor: opening the log in a 420px window wrote 168 over the
-            // 280 that had been asked for, and every launch after came
-            // back to the smaller one).
-            commandsPane.SplitView.preferredHeight,
-            // The dragged values, not the widths on screen: a column that
-            // nobody has moved reports -1 and goes on following the
-            // default rather than freezing today's number into the file.
-            graphPane.labelWManual, graphPane.graphColWManual)
-        AppBackend.saveLayoutFlags(page.sidebarCollapsed, page.commandsOpen,
-                                   repoTab.tagsShown, worktreeModel.treeView,
-                                   detailsModel.treeView)
-        AppBackend.saveSections(sidebarPane.expBranches, sidebarPane.expRemotes,
-                                sidebarPane.expWorktree, sidebarPane.expStashes,
-                                sidebarPane.expTags)
+        pageLayout.reportLayout()
+    }
+    function setDetailsWidth(w) {
+        pageLayout.setDetailsWidth(w)
+    }
+    function setGraphColumns(labels, lanes) {
+        pageLayout.setGraphColumns(labels, lanes)
     }
 
     Component.onCompleted: {
         // The bars that announced themselves before the watcher existed.
         page.earlyBars.forEach(b => splitWatch.holdSplitBar(b, false))
         page.earlyBars = []
-        page.applySavedLayout()
+        pageLayout.applySavedLayout()
         if (page.blank)
             return // no session to attach to; every model stays empty
         repoTab.attach(page.tab_id)
@@ -1497,7 +1413,7 @@ Item {
             OpenFailedScreen {
                 visible: page.openFailed
                 SplitView.fillHeight: true
-                SplitView.minimumHeight: page.panesMinHeight
+                SplitView.minimumHeight: pageLayout.panesMinHeight
                 kind: repoTab.errorKind
                 path: repoTab.errorPath
                 message: repoTab.error
@@ -1511,7 +1427,7 @@ Item {
             SplitView {
                 visible: !page.openFailed
                 SplitView.fillHeight: true
-                SplitView.minimumHeight: page.panesMinHeight
+                SplitView.minimumHeight: pageLayout.panesMinHeight
                 orientation: Qt.Horizontal
                 handle: SplitHandleBar {
                     onHandChanged: (which, held) => page.holdSplitBar(which, held)
@@ -1549,8 +1465,9 @@ Item {
                     // Not a number of its own: what the graph's own columns
                     // come to once they have both given everything they can,
                     // held up to a side pane's width so the middle never
-                    // reads as the thinnest of the three (page.centreMinWidth).
-                    SplitView.minimumWidth: page.centreMinWidth
+                    // reads as the thinnest of the three
+                    // (`PageLayout.centreMinWidth`).
+                    SplitView.minimumWidth: pageLayout.centreMinWidth
                     currentIndex: page.diffShown ? 1 : 0
 
                     GraphPane {
@@ -1629,7 +1546,7 @@ Item {
                     // Where it starts; `applySavedLayout` assigns over this
                     // with the width the window is set to.
                     SplitView.preferredWidth: 400
-                    SplitView.minimumWidth: page.rightMinWidth
+                    SplitView.minimumWidth: pageLayout.rightMinWidth
                     color: Theme.bgSurface
 
                     GitVersionCorner {
@@ -1720,7 +1637,7 @@ Item {
                 commandsModel: commandsModel
                 errorText: repoTab.lastError
                 SplitView.preferredHeight: 280
-                SplitView.minimumHeight: page.commandsMinHeight
+                SplitView.minimumHeight: pageLayout.commandsMinHeight
                 onCloseRequested: page.commandsOpen = false
                 onErrorCleared: repoTab.clearLastError()
                 onCopyRequested: text => clipboard.copy(text)
