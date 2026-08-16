@@ -106,6 +106,8 @@ pub async fn load(
 ) -> Result<AuthorConfig, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
+        // No key matching answers with code 1, which is an answer.
+        .answers_by_code()
         .args(["config", "-z", "--get-regexp", CONFIG_PATTERN]);
     // Exit 1 only means no key matched, which is a valid (empty) answer.
     let out = executor.run_unchecked(cmd, cancel).await?;

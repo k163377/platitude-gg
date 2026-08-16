@@ -9,6 +9,7 @@
 mod support;
 
 mod commit_branch_integration;
+mod config_reads;
 mod details_diff;
 mod edge_strings;
 mod eol_integration;

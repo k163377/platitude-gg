@@ -338,6 +338,10 @@ pub async fn configured_tool(
     for key in ["merge.guitool", "merge.tool"] {
         let cmd = GitCommand::new()
             .cwd(workdir)
+            // Neither key being set answers with code 1, which is an
+            // answer — and is what a machine that configured no merge tool
+            // says to both of them.
+            .answers_by_code()
             .args(["config", "--get", key]);
         let out = executor.run_unchecked(cmd, cancel).await?;
         if out.code == 0 {

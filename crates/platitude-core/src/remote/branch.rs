@@ -157,6 +157,9 @@ async fn tracking_branches(
 ) -> Result<Vec<String>, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
+        // No branch having any configuration answers with code 1, which is
+        // an answer.
+        .answers_by_code()
         .args(["config", "-z", "--get-regexp", r"^branch\."]);
     let out = executor.run_unchecked(cmd, cancel).await?;
     // 1 is "no matching keys" — a repository whose branches all stand on

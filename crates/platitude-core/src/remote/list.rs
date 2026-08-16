@@ -26,12 +26,17 @@ pub async fn list(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<Vec<Remote>, GitError> {
-    let cmd = GitCommand::new().cwd(workdir).args([
-        "config",
-        "-z",
-        "--get-regexp",
-        r"^remote\..*\.(url|pushurl)$",
-    ]);
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        // A repository with no remotes answers with code 1, which is an
+        // answer.
+        .answers_by_code()
+        .args([
+            "config",
+            "-z",
+            "--get-regexp",
+            r"^remote\..*\.(url|pushurl)$",
+        ]);
     // Exit code 1 just means "no matching keys" (a repository with no
     // remotes), which is not a failure.
     let out = executor.run_unchecked(cmd, cancel).await?;
@@ -161,6 +166,8 @@ pub(super) async fn config_value(
 ) -> Result<Option<String>, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
+        // The key not being set answers with code 1, which is an answer.
+        .answers_by_code()
         .args(["config", "--get", "--", key]);
     let out = executor.run_unchecked(cmd, cancel).await?;
     match out.code {
