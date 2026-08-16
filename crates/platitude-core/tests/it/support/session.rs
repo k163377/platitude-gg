@@ -148,6 +148,23 @@ impl CaptureSink {
         }
     }
 
+    /// Waits until the two repository snapshots started by `open` have
+    /// landed. `Opened` only means the path was accepted; refs and status
+    /// are deliberately started after that event, so it is not a safe
+    /// baseline for a test that counts their work.
+    pub async fn opening_snapshots(&self) {
+        self.wait_for("the opening snapshots", |events| {
+            let refs = events
+                .iter()
+                .any(|event| matches!(event, SessionEvent::RefsLoaded { .. }));
+            let status = events
+                .iter()
+                .any(|event| matches!(event, SessionEvent::StatusLoaded { .. }));
+            (refs && status).then_some(())
+        })
+        .await;
+    }
+
     /// Waits for the first graph pass after generation `after` to land,
     /// in whichever shape it landed in (see [`pass_of`]).
     ///

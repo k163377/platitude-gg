@@ -137,29 +137,83 @@ pub(super) struct Shared {
 /// pure synchronous queries; these are async subprocess reads that can be
 /// cancelled. `moka` evicts by age and size; these expire on an event and
 /// never on a clock. Neither axis is this one.
-#[derive(Default)]
-pub(super) struct Derived<T>(Mutex<Option<T>>);
+pub(super) struct Derived<T> {
+    state: Mutex<DerivedState<T>>,
+    /// One repository read at a time. This is an async mutex because the
+    /// protected work is an async subprocess, not CPU work.
+    reading: tokio::sync::Mutex<()>,
+}
 
-impl<T: Clone> Derived<T> {
-    /// What was read last, if it still stands.
-    pub(super) fn get(&self) -> Option<T> {
-        match self.0.lock() {
-            Ok(g) => g.clone(),
-            Err(e) => e.into_inner().clone(),
+struct DerivedState<T> {
+    generation: u64,
+    value: Option<T>,
+}
+
+impl<T> Default for Derived<T> {
+    fn default() -> Self {
+        Self {
+            state: Mutex::new(DerivedState {
+                generation: 0,
+                value: None,
+            }),
+            reading: tokio::sync::Mutex::new(()),
         }
     }
+}
 
-    pub(super) fn put(&self, value: T) {
-        match self.0.lock() {
-            Ok(mut g) => *g = Some(value),
-            Err(e) => *e.into_inner() = Some(value),
+impl<T: Clone> Derived<T> {
+    /// Returns the current answer, or lets exactly one caller read it.
+    ///
+    /// A plain `get` followed by an async read followed by `put` lets every
+    /// concurrent caller observe the same miss and spawn the same git
+    /// process. The async gate makes that sequence single-flight; callers
+    /// waiting behind it re-check the value rather than repeat the read.
+    ///
+    /// Invalidation does not wait for a slow read. It advances the
+    /// generation and clears the value synchronously. A reader that then
+    /// returns from git sees that its answer belonged to the old generation
+    /// and goes round again instead of restoring stale state.
+    pub(super) async fn get_or_try_init<E, F, Fut>(&self, mut read: F) -> Result<T, E>
+    where
+        F: FnMut() -> Fut,
+        Fut: std::future::Future<Output = Result<T, E>>,
+    {
+        if let Some(value) = self.lock_state().value.clone() {
+            return Ok(value);
+        }
+
+        let _reading = self.reading.lock().await;
+        loop {
+            let generation = {
+                let state = self.lock_state();
+                if let Some(value) = state.value.clone() {
+                    return Ok(value);
+                }
+                state.generation
+            };
+
+            let value = read().await?;
+            let mut state = self.lock_state();
+            if state.generation == generation {
+                state.value = Some(value.clone());
+                return Ok(value);
+            }
+            // Something invalidated the answer while git was reading it.
+            // Keep the gate and read the current generation before waking
+            // callers that are waiting for the same answer.
         }
     }
 
     pub(super) fn forget(&self) {
-        match self.0.lock() {
-            Ok(mut g) => *g = None,
-            Err(e) => *e.into_inner() = None,
+        let mut state = self.lock_state();
+        state.generation = state.generation.wrapping_add(1);
+        state.value = None;
+    }
+
+    fn lock_state(&self) -> std::sync::MutexGuard<'_, DerivedState<T>> {
+        match self.state.lock() {
+            Ok(state) => state,
+            Err(poisoned) => poisoned.into_inner(),
         }
     }
 }
@@ -281,6 +335,102 @@ pub(super) enum EndingContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn concurrent_callers_share_one_derived_read() {
+        let derived = Arc::new(Derived::<u32>::default());
+        let calls = Arc::new(AtomicU64::new(0));
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let release = Arc::new(tokio::sync::Notify::new());
+
+        let first = {
+            let derived = Arc::clone(&derived);
+            let calls = Arc::clone(&calls);
+            let release = Arc::clone(&release);
+            tokio::spawn(async move {
+                let mut entered_tx = Some(entered_tx);
+                derived
+                    .get_or_try_init(|| {
+                        calls.fetch_add(1, Ordering::SeqCst);
+                        if let Some(tx) = entered_tx.take() {
+                            let _ = tx.send(());
+                        }
+                        let release = Arc::clone(&release);
+                        async move {
+                            release.notified().await;
+                            Ok::<u32, ()>(42)
+                        }
+                    })
+                    .await
+            })
+        };
+        entered_rx.await.expect("the first read started");
+
+        let second = {
+            let derived = Arc::clone(&derived);
+            let calls = Arc::clone(&calls);
+            tokio::spawn(async move {
+                derived
+                    .get_or_try_init(|| {
+                        calls.fetch_add(1, Ordering::SeqCst);
+                        async { Ok::<u32, ()>(99) }
+                    })
+                    .await
+            })
+        };
+        release.notify_one();
+
+        assert_eq!(first.await.expect("first caller finished"), Ok(42));
+        assert_eq!(second.await.expect("second caller finished"), Ok(42));
+        assert_eq!(calls.load(Ordering::SeqCst), 1, "one shared read");
+    }
+
+    #[tokio::test]
+    async fn invalidation_during_a_derived_read_retries_before_publishing() {
+        let derived = Arc::new(Derived::<u32>::default());
+        let calls = Arc::new(AtomicU64::new(0));
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let release = Arc::new(tokio::sync::Notify::new());
+
+        let reader = {
+            let derived = Arc::clone(&derived);
+            let calls = Arc::clone(&calls);
+            let release = Arc::clone(&release);
+            tokio::spawn(async move {
+                let mut entered_tx = Some(entered_tx);
+                derived
+                    .get_or_try_init(|| {
+                        let call = calls.fetch_add(1, Ordering::SeqCst) + 1;
+                        if let Some(tx) = entered_tx.take() {
+                            let _ = tx.send(());
+                        }
+                        let release = Arc::clone(&release);
+                        async move {
+                            if call == 1 {
+                                release.notified().await;
+                            }
+                            Ok::<u32, ()>(call as u32)
+                        }
+                    })
+                    .await
+            })
+        };
+
+        entered_rx.await.expect("the old-generation read started");
+        derived.forget();
+        release.notify_one();
+
+        assert_eq!(reader.await.expect("reader finished"), Ok(2));
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "the stale read was retried"
+        );
+        let held = derived
+            .get_or_try_init(|| async { Ok::<u32, ()>(99) })
+            .await;
+        assert_eq!(held, Ok(2), "only the current generation was cached");
+    }
 
     #[test]
     fn the_first_caller_reads_and_the_second_books_one_more_pass() {

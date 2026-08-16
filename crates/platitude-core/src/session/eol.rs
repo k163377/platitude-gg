@@ -59,12 +59,9 @@ impl RepoSession {
         workdir: &Path,
         cancel: &CancellationToken,
     ) -> Result<bool, GitError> {
-        if let Some(known) = self.eol_normalises.get() {
-            return Ok(known);
-        }
-        let read = eol::normalises(&self.executor, workdir, cancel).await?;
-        self.eol_normalises.put(read);
-        Ok(read)
+        self.eol_normalises
+            .get_or_try_init(|| eol::normalises(&self.executor, workdir, cancel))
+            .await
     }
 
     /// The remotes this repository has, read once.
@@ -80,12 +77,9 @@ impl RepoSession {
         workdir: &Path,
         cancel: &CancellationToken,
     ) -> Result<Vec<remote::Remote>, GitError> {
-        if let Some(known) = self.remotes.get() {
-            return Ok(known);
-        }
-        let read = remote::list(&self.executor, workdir, cancel).await?;
-        self.remotes.put(read.clone());
-        Ok(read)
+        self.remotes
+            .get_or_try_init(|| remote::list(&self.executor, workdir, cancel))
+            .await
     }
 
     /// The cached baseline for a path's (directory, extension), sampling it

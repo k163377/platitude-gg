@@ -32,5 +32,13 @@ paths:
 - **コマンドログは executor の observer 1 本で取る**(`process::CommandObserver`)。セッションは利用者用と背景用の 2 ハンドル(`GitExecutor::observed`)を挿し、書き込みキューだけが利用者用 = 分類はキューの分岐 1 箇所で決まる。**auto fetch はキューを通るが背景扱い**(オフラインで毎分パネルが開くのを防ぐ)。記録しない時は `records()` で早期に降り、コピー用の完全形(`-c` 群 + 環境変数)を組み立てない
 - **終了コードで答える問い合わせはコマンドログの失敗にしない**(`GitCommand::answers_by_code()`。例: `merge-base --is-ancestor` の exit 1 は答え)。**`run_unchecked` で非ゼロを分岐に使っている箇所は全部これが要る** — 付け忘れるとその exit 1 のたびにパネルが開く(対象コマンドの一覧は rules-refs/core.md の `answers_by_code` 項)
 - **統合テストは 1 バイナリ** — 新しい統合テストは `tests/it/` にモジュールとして足し `main.rs` へ登録する(`tests/` 直下に .rs を置かない — 理由は違反時に pre-write hook が届ける)。部分実行は `cargo test -p platitude-core --test it <モジュール名>`
-- **「もう起きない」を sleep で確かめない** — キューに乗った書き込みは前の write の refresh まで終わってから始まるので、静かな時間の長さは「止まった」と「遅い」を区別しない(`cargo test --workspace` の負荷で落ちる)。タイマは手で進めて、進めた先が受け取ったかどうかを見る(`RepoSession::auto_fetch_ticker`)
-  - **待ちの上限も同じ** — 「待ち始めてから N 秒」は遅いだけの実行を落とす。**上限は沈黙に対して数える**(`session_integration::Patience`。イベントが 1 つ来るたび更新し、`OVERALL_BUDGET` だけを全体の歯止めに残す)。数字を上げて凌ぐと**そのファイルの全テストが同じだけ検出を遅らせる**(実測: 12 件の直列書き込みが単体 4.7s / `--workspace` の負荷下では 1 件 ~2.5s = 20 秒で 8 件目。沈黙で数えた側は静かなセッションを 20.2s で捕まえる)
+
+## 非同期・並行テストの実装方針
+
+- **正しさは時間ではなく因果で待つ** — 完了イベント、join handle、ack、barrier、世代番号、最終状態のいずれかを本体が返し、テストは「要求した処理」が終わった後だけ assert する。操作が成功してもイベントを出さない経路には明示的な完了境界を足す(`RefreshTask` / `RefreshOutcome`)。タイマは手で進めて、その tick の ack を待つ(`RepoSession::auto_fetch_ticker`)
+- **「もう起きない」を sleep / quiet window で証明しない** — quiet は「止まった」と「遅い」を区別できず、余剰性能が落ちた時だけ偽陽性になる。無変更・exactly-once・二重起動無しは、対象操作の完了後に件数または状態を読む。完了境界を作れない時はテストを先に弱めず、実装の観測可能性を直す
+- **baseline は開始条件を列挙して待つ** — `Opened` は path を受理しただけで、その後の refs / status / log は未完了。測定対象に先行処理を混ぜないよう `opening_snapshots`、着地した pass、tracked refresh 等を待つ。`support::settled` は baseline 用の補助であり、個別操作の完了証明には使わない
+- **並行実行を既定として設計する** — `--test-threads` を下げない・serial 化で隠さない。各テストは専用の一時 repository / 設定 / socket を持ち、固定 port、共有ファイル名、process-global の可変状態を避ける。in-process の mutex は別テストバイナリ・別セッションを隔離しない。重複排除を主張する実装は single-flight にし、同時 miss と read 中の invalidation を barrier / channel で再現して呼出回数も固定する(`Derived`)
+- **待ちの上限は失敗検出の backstop** — 「開始から N 秒以内」を正しさや性能の assert にしない。進捗イベントごとに沈黙予算を更新し、livelock 用の全体上限だけ別に残す(`Patience`)。性能予算は専用 benchmark / baseline で判定し、機能テストの狭い timeout と混ぜない
+- **runner の終了コードを失わない** — pipe、ログ整形、後続の `echo` 等で test process の非ゼロ終了を成功へ上書きしない。並列起動時は全 child の終了を回収し、1 件でも非ゼロなら全体を非ゼロにする
+- **同期プリミティブ・待ち helper を追加または変更した時は並列で反復検証する** — 関連 suite を独立 process でも同時実行し、最低 10 回確認する。11 回目以降まで続いた場合は、最後の NG の後に 5 回連続 OK になるまで方針を OK にしない

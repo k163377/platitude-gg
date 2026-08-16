@@ -7,7 +7,7 @@ use std::time::Duration;
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, is_stream_event, scenario};
 use platitude_core::GitExecutor;
-use platitude_core::session::{RepoSession, SessionEvent};
+use platitude_core::session::{RefreshOutcome, RepoSession, SessionEvent};
 
 /// A write rebuilds the graph exactly once. Committing turns a dirty tree
 /// clean, which removes the WIP row; reacting to that separately from the
@@ -75,15 +75,11 @@ async fn a_write_rebuilds_the_graph_once() {
     session.close();
 }
 
-/// Opens a session over `scenario()`, settles the first 5-row graph, then
-/// holds `refresh` to silence: a background pass over an unchanged
-/// repository must not emit a single stream event ("nothing happens" can
-/// only be observed by giving the pass ample time to run). Returns the
-/// stream-event count to measure "after" against. The quiet half of both
-/// refresh entry points is the same promise, so it is written once.
-async fn settled_and_silent(
-    refresh: impl Fn(&Arc<RepoSession>),
-) -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, usize) {
+/// Opens `scenario()` and takes a baseline only after the opening graph
+/// and snapshot reads have answered. The operation under test supplies
+/// its own completion boundary; this helper never infers completion from
+/// a quiet interval.
+async fn settled_graph() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, usize) {
     let (repo, _) = scenario();
     let sink = CaptureSink::new();
     let session = RepoSession::open(
@@ -93,16 +89,13 @@ async fn settled_and_silent(
         sink.clone(),
     );
     sink.settled_stream_gen(5).await;
-    let baseline = sink.count(is_stream_event);
-
-    refresh(&session);
-    tokio::time::sleep(Duration::from_millis(1500)).await;
-    assert_eq!(
-        sink.count(is_stream_event),
-        baseline,
-        "an unchanged rebuild stayed silent: {:?}",
-        sink.events.lock().unwrap()
+    sink.opening_snapshots().await;
+    let opening = session.refresh_log_tracked().outcome().await;
+    assert!(
+        matches!(opening, RefreshOutcome::Changed | RefreshOutcome::Unchanged),
+        "the opening graph was available: {opening:?}"
     );
+    let baseline = sink.count(is_stream_event);
     (repo, sink, session, baseline)
 }
 
@@ -111,14 +104,23 @@ async fn settled_and_silent(
 /// interval (or any other background refresh) from flickering the graph.
 #[tokio::test(flavor = "multi_thread")]
 async fn background_refresh_swaps_only_on_change() {
-    let (mut repo, sink, session, baseline) = settled_and_silent(|s| s.refresh_log()).await;
+    let (mut repo, sink, session, baseline) = settled_graph().await;
+
+    let quiet = session.refresh_log_tracked().outcome().await;
+    assert_eq!(quiet, RefreshOutcome::Unchanged);
+    assert_eq!(
+        sink.count(is_stream_event),
+        baseline,
+        "an unchanged rebuild stayed silent: {:?}",
+        sink.events.lock().unwrap()
+    );
 
     // History moved outside the session: the same call now delivers one
     // atomic replacement — a single LogReplaced carrying every row, so
     // the consumer never holds an empty model in between.
     repo.commit_file("h.txt", "x\n", "outside commit");
-    session.refresh_log();
-    let swap_gen = sink.settled_stream_gen(6).await;
+    let changed = session.refresh_log_tracked().outcome().await;
+    assert_eq!(changed, RefreshOutcome::Changed);
     let events = sink.events.lock().unwrap();
     let after: Vec<&SessionEvent> = events
         .iter()
@@ -130,7 +132,7 @@ async fn background_refresh_swaps_only_on_change() {
         SessionEvent::LogReplaced {
             generation, rows, ..
         } => {
-            assert_eq!(*generation, swap_gen);
+            assert!(*generation > 0);
             assert_eq!(rows.len(), 6, "the replacement carries the whole graph");
         }
         other => panic!("expected LogReplaced, got {other:?}"),
@@ -145,7 +147,24 @@ async fn background_refresh_swaps_only_on_change() {
 /// them. A re-read that finds every ref where it left it stays silent.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_external_ref_move_rebuilds_the_graph() {
-    let (mut repo, sink, session, _) = settled_and_silent(|s| s.refresh_refs()).await;
+    let (mut repo, sink, session, baseline) = settled_graph().await;
+
+    let quiet_refs = sink.count(|event| matches!(event, SessionEvent::RefsLoaded { .. }));
+    session.refresh_refs();
+    sink.wait_for("the unchanged refs read", |events| {
+        (events
+            .iter()
+            .filter(|event| matches!(event, SessionEvent::RefsLoaded { .. }))
+            .count()
+            > quiet_refs)
+            .then_some(())
+    })
+    .await;
+    assert_eq!(
+        sink.count(is_stream_event),
+        baseline,
+        "unchanged refs requested no graph refresh"
+    );
 
     // Now main moves under the session, with the working tree clean on
     // both sides: nothing but the refs can report this.
@@ -354,34 +373,20 @@ async fn a_poll_rebuilds_the_graph_once() {
     );
     // root + WIP row.
     sink.settled_stream_gen(2).await;
+    sink.opening_snapshots().await;
+    let opening = session.refresh_log_tracked().outcome().await;
+    assert!(
+        matches!(opening, RefreshOutcome::Changed | RefreshOutcome::Unchanged),
+        "the opening graph was available: {opening:?}"
+    );
 
     let replacements = || sink.count(|e| matches!(e, SessionEvent::LogReplaced { .. }));
     let starts = || sink.count(|e| matches!(e, SessionEvent::LogStarted { .. }));
     let (quiet_replacements, quiet_starts) = (replacements(), starts());
 
     // An idle repository is what the poll spends nearly all its ticks on.
-    let quiet_refs = sink.count(|e| matches!(e, SessionEvent::RefsLoaded { .. }));
-    let quiet_status = sink.count(|e| matches!(e, SessionEvent::StatusLoaded { .. }));
-    session.refresh_poll();
-    // What has to be over before the commit below is this tick, and the
-    // tick says so itself: it publishes both of its reads whatever it
-    // finds, so one more of each is it landing (規約 §「もう起きない」を
-    // sleep で確かめない). A fixed wait fails the assertion two
-    // paragraphs down the moment the machine is busy enough for the tick
-    // to outlast it — the poll's two reads then straddle the commit,
-    // report different worlds, and the graph rebuilds once for each.
-    sink.wait_for("the idle poll's two reads", |evs| {
-        let refs = evs
-            .iter()
-            .filter(|e| matches!(e, SessionEvent::RefsLoaded { .. }))
-            .count();
-        let status = evs
-            .iter()
-            .filter(|e| matches!(e, SessionEvent::StatusLoaded { .. }))
-            .count();
-        (refs > quiet_refs && status > quiet_status).then_some(())
-    })
-    .await;
+    let idle = session.refresh_poll_tracked().outcome().await;
+    assert_eq!(idle, RefreshOutcome::Unchanged);
     assert_eq!(
         (replacements(), starts()),
         (quiet_replacements, quiet_starts),
@@ -392,28 +397,8 @@ async fn a_poll_rebuilds_the_graph_once() {
     // Both signals move at once: `new.txt` becomes a commit, so the ref
     // advances and the WIP row goes away.
     repo.commit_file("new.txt", "content\n", "outside commit");
-    // A poll steps aside while another one is still running, so the tick
-    // that sees the commit need not be the first one asked for — the
-    // ticker would simply ask again. Asking again cannot add a rebuild of
-    // its own: a poll over a repository that has not moved is silent,
-    // which is exactly what the paragraph above established.
-    let rebuilt = sink.wait_for("the poll's rebuild", |evs| {
-        evs.iter()
-            .filter(|e| matches!(e, SessionEvent::LogReplaced { .. }))
-            .count()
-            .gt(&quiet_replacements)
-            .then_some(())
-    });
-    tokio::pin!(rebuilt);
-    loop {
-        session.refresh_poll();
-        tokio::select! {
-            () = &mut rebuilt => break,
-            () = tokio::time::sleep(Duration::from_millis(100)) => {}
-        }
-    }
-    // Give the second rebuild this guards against time to show up.
-    tokio::time::sleep(Duration::from_millis(600)).await;
+    let changed = session.refresh_poll_tracked().outcome().await;
+    assert_eq!(changed, RefreshOutcome::Changed);
     assert_eq!(
         replacements(),
         quiet_replacements + 1,

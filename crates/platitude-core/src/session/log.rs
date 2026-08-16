@@ -62,30 +62,11 @@ impl RepoSession {
                     ..options
                 };
                 if s.run_direct_pass(&workdir, fast, &run_cancel).await.is_ok() {
-                    s.run_swap_pass(&workdir, options, &run_cancel).await;
+                    let _outcome = s.run_swap_pass(&workdir, options, &run_cancel).await;
                 }
             } else {
                 let _completed = s.run_direct_pass(&workdir, options, &run_cancel).await;
             }
-        });
-    }
-
-    /// Rebuilds the graph off-screen and swaps it in only when it differs
-    /// from what the UI already shows (see [`RepoSession::run_swap_pass`]).
-    ///
-    /// Background triggers (auto fetch, a finished write, an external
-    /// dirty/clean flip) go through here instead of [`RepoSession::restart_log`]:
-    /// a reset-and-restream repaints the pane even when history did not
-    /// move, which reads as idle flicker once a periodic fetch is on.
-    pub fn refresh_log(self: &Arc<Self>) {
-        let Some(workdir) = self.workdir() else {
-            return;
-        };
-        let run_cancel = self.take_log_token();
-        let s = Arc::clone(self);
-        let options = self.log_options();
-        self.runtime.spawn(async move {
-            s.run_swap_pass(&workdir, options, &run_cancel).await;
         });
     }
 
@@ -96,7 +77,7 @@ impl RepoSession {
     /// never from inside the spawned task: call order is what decides
     /// which pass owns the graph, and spawn order does not follow it
     /// (core.md).
-    fn take_log_token(&self) -> CancellationToken {
+    pub(super) fn take_log_token(&self) -> CancellationToken {
         let run_cancel = self.root_cancel.child_token();
         if let Some(prev) = self
             .log_cancel
@@ -192,12 +173,12 @@ impl RepoSession {
     /// Builds a full pass off-screen, then swaps it in as one reset +
     /// one chunk (the UI drains all three events in a single slot call,
     /// so the replacement is flicker-free).
-    async fn run_swap_pass(
+    pub(super) async fn run_swap_pass(
         self: &Arc<Self>,
         workdir: &std::path::Path,
         options: LogOptions,
         cancel: &CancellationToken,
-    ) {
+    ) -> RefreshOutcome {
         let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
         let started = Instant::now();
         let mut builder = GraphBuilder::new();
@@ -210,10 +191,11 @@ impl RepoSession {
             Ok(walked) => walked,
             Err(error) => {
                 // The fast pass is already on screen; report quietly.
-                if !matches!(error, GitError::Cancelled { .. }) {
-                    self.fail("log", error);
+                if matches!(error, GitError::Cancelled { .. }) {
+                    return RefreshOutcome::Cancelled;
                 }
-                return;
+                self.fail("log", error);
+                return RefreshOutcome::Failed;
             }
         };
 
@@ -226,7 +208,7 @@ impl RepoSession {
             // when a pass begins running, which is not the order the
             // asks came in.
             if cancel.is_cancelled() {
-                return;
+                return RefreshOutcome::Cancelled;
             }
             let elapsed_ms = started.elapsed().as_millis() as u64;
             let mut applied: HashMap<u32, Vec<RefLabel>> = HashMap::new();
@@ -272,7 +254,7 @@ impl RepoSession {
                 // pass — and this walk numbered its rows the same way, or
                 // it would not have compared equal.
                 tracing::debug!(generation, total, "graph rebuild unchanged; swap skipped");
-                return;
+                return RefreshOutcome::Unchanged;
             }
             shared.sent_rows = rows.iter().map(RowPrint::of).collect();
             shared.sent_footer = Some(footer);
@@ -288,6 +270,7 @@ impl RepoSession {
                 truncated: footer.truncated,
             });
         }
+        RefreshOutcome::Changed
     }
 
     /// Refreshes refs, status(+op state), stashes and worktrees
@@ -298,37 +281,6 @@ impl RepoSession {
         self.refresh_status();
         self.refresh_stashes();
         self.refresh_worktrees();
-    }
-
-    /// The periodic re-read that runs while the repository is on screen:
-    /// refs and status only. Stashes and worktrees ride the focus and
-    /// post-write refreshes instead — two more processes every tick to
-    /// catch what a poll practically never sees move on its own.
-    ///
-    /// Skipped while a write runs (that repository is mid-operation, and
-    /// the write refreshes when it lands) and while the previous poll is
-    /// still going, so a slow repository polls less often instead of
-    /// stacking reads up.
-    pub fn refresh_poll(self: &Arc<Self>) {
-        if self.write_busy.load(Ordering::SeqCst) {
-            tracing::trace!("poll skipped: a write is running");
-            return;
-        }
-        let Ok(permit) = Arc::clone(&self.poll_slot).try_acquire_owned() else {
-            tracing::trace!("poll skipped: the previous one has not finished");
-            return;
-        };
-        let s = Arc::clone(self);
-        self.runtime.spawn(async move {
-            let _permit = permit;
-            // Both reads can call for a rebuild, but the graph is one
-            // picture: an external commit moves a ref *and* cleans the
-            // tree, and walking twice would throw one pass away.
-            let (refs_moved, wip_flipped) = tokio::join!(s.publish_refs(), s.publish_status());
-            if refs_moved || wip_flipped {
-                s.refresh_log();
-            }
-        });
     }
 
     async fn stream_log(

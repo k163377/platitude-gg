@@ -213,7 +213,7 @@ async fn the_walk_reads_head_from_the_refs_read_that_already_landed() {
     repo.commit_file("f.txt", "0\n", "root");
     let (sink, session) = opened(&repo).await;
     sink.settled_stream_gen(1).await;
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    sink.opening_snapshots().await;
     session.set_record_background(true);
     sink.events.lock().unwrap().clear();
 
@@ -243,7 +243,7 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
     repo.commit_file("f.txt", "0\n", "root");
     let (sink, session) = opened(&repo).await;
     sink.settled_stream_gen(1).await;
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    sink.opening_snapshots().await;
     session.set_record_background(true);
     sink.events.lock().unwrap().clear();
 
@@ -298,14 +298,15 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
     session.close();
 }
 
-/// Whether git normalises line endings is repository configuration, so it
-/// is read once however many diffs are opened.
+/// Whether git normalises line endings is repository configuration, so
+/// concurrent diff reads share one in-flight settings query.
 #[tokio::test(flavor = "multi_thread")]
-async fn the_line_ending_setting_is_read_once_for_the_repository() {
+async fn concurrent_diffs_share_the_line_ending_setting_read() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
     repo.commit_file("b.txt", "two\n", "second");
     let (sink, session) = opened(&repo).await;
+    sink.opening_snapshots().await;
     session.set_record_background(true);
     sink.events.lock().unwrap().clear();
 
@@ -318,14 +319,20 @@ async fn the_line_ending_setting_is_read_once_for_the_repository() {
             path: path.to_string(),
             orig_path: None,
         });
-        sink.wait_for("the diff", |evs| {
-            evs.iter()
-                .any(|e| matches!(e, SessionEvent::DiffLoaded { target, .. }
-                                  if matches!(target, DiffTarget::Commit { path: p, .. } if p == path)))
-                .then_some(())
-        })
-        .await;
     }
+    sink.wait_for("both concurrent diffs", |events| {
+        ["a.txt", "b.txt"]
+            .iter()
+            .all(|path| {
+                events.iter().any(|event| {
+                    matches!(event, SessionEvent::DiffLoaded { target, .. }
+                        if matches!(target, DiffTarget::Commit { path: seen, .. }
+                            if seen == path))
+                })
+            })
+            .then_some(())
+    })
+    .await;
 
     let reads = commands_of(&sink)
         .iter()

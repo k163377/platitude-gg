@@ -56,6 +56,7 @@ mod build;
 mod eol;
 mod event;
 mod feed;
+mod graph_refresh;
 #[cfg(test)]
 mod join_tests;
 mod log;
@@ -75,6 +76,7 @@ mod write;
 
 pub use event::SessionEvent;
 use feed::CommandFeed;
+pub use graph_refresh::{RefreshOutcome, RefreshTask};
 pub(crate) use model::LabelIndex;
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel};
 use print::RowPrint;
