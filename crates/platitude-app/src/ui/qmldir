@@ -42,7 +42,9 @@ GitVersionCorner 1.0 GitVersionCorner.qml
 GraphAutoScroll 1.0 GraphAutoScroll.qml
 GraphColumnMetrics 1.0 GraphColumnMetrics.qml
 GraphEmptyState 1.0 GraphEmptyState.qml
+GraphLaneCell 1.0 GraphLaneCell.qml
 GraphPane 1.0 GraphPane.qml
+GraphRowChips 1.0 GraphRowChips.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml
 HashPlate 1.0 HashPlate.qml
 HeadTrack 1.0 HeadTrack.qml
@@ -92,3 +94,4 @@ WindowAutoActDriver 1.0 WindowAutoActDriver.qml
 WindowButton 1.0 WindowButton.qml
 WipBucketHeader 1.0 WipBucketHeader.qml
 WipPane 1.0 WipPane.qml
+WipTallyRow 1.0 WipTallyRow.qml

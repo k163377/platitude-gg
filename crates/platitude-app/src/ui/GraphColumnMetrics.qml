@@ -65,12 +65,12 @@ QtObject {
     // is the widest ink any row puts on that lane, and its geometry —
     // author up-left by a border, badge centre a border inside the
     // node's edge, outline half in half out — mirrors what
-    // **GraphRowDelegate's canvases** draw. The ceiling lands that
+    // **GraphLaneCell's canvases** draw. The ceiling lands that
     // edge on a whole pixel; the tick stands `spaceSm` past the
     // column's edge (the subject column's own margin), so that much
     // comes back off the width. The faces are not cut on the way down:
     // their clipper leans the same `spaceSm` past the column (the
-    // delegate), so the floor is where ink meets ink, not where the
+    // cell), so the floor is where ink meets ink, not where the
     // clip ran out. One place, so the display, the divider's clamp and
     // the question of whether there is a drag in it at all agree.
     readonly property real graphColWMin:

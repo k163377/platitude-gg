@@ -106,7 +106,9 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/GraphAutoScroll.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphColumnMetrics.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphEmptyState.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/GraphLaneCell.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphPane.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/GraphRowChips.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphRowDelegate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HashPlate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HeadTrack.qml", "qt/qml/platitude");
@@ -156,6 +158,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/WindowButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipBucketHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipPane.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/WipTallyRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/Main.qml", "qt/qml/platitude");
     let code = app
         .register::<AppBackend>()
