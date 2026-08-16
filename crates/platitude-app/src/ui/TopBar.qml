@@ -325,9 +325,7 @@ Rectangle {
                      && topBar.curPage.pageTab.remoteCount > 0
                      && (fetchButton.stopped
                          || topBar.curPage.pageTab.busyCount === 0)
-            ToolTip.visible: hovered
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: {
+            tip: {
                 if (topBar.curPage === null)
                     return ""
                 const what = fetchButton.stopped
@@ -396,9 +394,7 @@ Rectangle {
                          || (mode === "diverged"
                              && topBar.curPage.canForcePush))
             onHeld: topBar.curPage.forcePush()
-            ToolTip.visible: hovered
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: {
+            tip: {
                 if (topBar.curPage === null)
                     return ""
                 const to = topBar.curPage.pushTargetLabel

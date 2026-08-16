@@ -83,10 +83,8 @@ Rectangle {
                 kind: header.tagsShown ? "eye" : "eye-off"
                 tint: header.tagsShown ? Theme.refTag : Theme.refTagDim
             }
-            ToolTip.visible: hovered
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: header.tagsShown ? qsTr("Hide tags in the graph")
-                                           : qsTr("Show tags in the graph")
+            tip: header.tagsShown ? qsTr("Hide tags in the graph")
+                                  : qsTr("Show tags in the graph")
             onToggled: header.tagsToggled(checked)
         }
     }

@@ -395,9 +395,7 @@ ColumnLayout {
                 font.pixelSize: Theme.fontSm
                 enabled: wipPane.repoTab.busyCount === 0
                          && wipPane.worktreeModel.total > 0
-                ToolTip.visible: hovered
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: qsTr("Set these changes aside for later")
+                tip: qsTr("Set these changes aside for later")
                 onClicked: {
                     if (stashCard.shown)
                         wipPane.closeStashPanel()

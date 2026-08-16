@@ -20,9 +20,7 @@ RowLayout {
         padding: 0
         implicitWidth: Theme.iconLg
         implicitHeight: Theme.iconLg
-        ToolTip.visible: hovered
-        ToolTip.delay: Metrics.tipDelayMs
-        ToolTip.text: qsTr("Tree view")
+        tip: qsTr("Tree view")
         onClicked: toggle.chosen(true)
         contentItem: NavIcon {
             kind: "hier"
@@ -33,9 +31,7 @@ RowLayout {
         padding: 0
         implicitWidth: Theme.iconLg
         implicitHeight: Theme.iconLg
-        ToolTip.visible: hovered
-        ToolTip.delay: Metrics.tipDelayMs
-        ToolTip.text: qsTr("Paths view")
+        tip: qsTr("Paths view")
         onClicked: toggle.chosen(false)
         contentItem: NavIcon {
             kind: "list"

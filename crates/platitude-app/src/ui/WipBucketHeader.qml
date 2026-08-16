@@ -89,11 +89,9 @@ Rectangle {
             text: bucketHeader.section === "staged"
                   ? qsTr("Unstage all") : qsTr("Stage all")
             font.pixelSize: Theme.fontSm
-            ToolTip.visible: hovered
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: bucketHeader.section === "staged"
-                ? qsTr("Unstage everything")
-                : qsTr("Stage everything, untracked included")
+            tip: bucketHeader.section === "staged"
+                 ? qsTr("Unstage everything")
+                 : qsTr("Stage everything, untracked included")
             onClicked: {
                 if (bucketHeader.section === "staged")
                     bucketHeader.repoTab.unstageAll()

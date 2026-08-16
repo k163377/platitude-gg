@@ -53,6 +53,20 @@ ToolButton {
     // not.
     hoverEnabled: true
 
+    /// The one thing the button's face had no room to say
+    /// (規約 §hover のツールチップ). Empty says nothing at all.
+    ///
+    /// A button whose tip comes out under some other condition — only
+    /// while the thing is refused, or while a hand is resting on another
+    /// item entirely — binds `ToolTip.visible` itself and leaves this
+    /// empty; a use-site binding replaces the one below.
+    property string tip: ""
+
+    ToolTip.visible: hoverToolButtonSelf.tip !== ""
+                     && hoverToolButtonSelf.hovered
+    ToolTip.delay: Metrics.tipDelayMs
+    ToolTip.text: hoverToolButtonSelf.tip
+
     background: Rectangle {
         implicitWidth: Theme.iconLg
         implicitHeight: Theme.iconLg

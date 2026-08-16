@@ -41,17 +41,13 @@ Rectangle {
         HoverToolButton {
             text: qsTr("Apply")
             font.pixelSize: Theme.fontSm
-            ToolTip.visible: hovered
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: qsTr("Apply this stash, keeping it")
+            tip: qsTr("Apply this stash, keeping it")
             onClicked: band.applyRequested(band.stashRef)
         }
         HoverToolButton {
             text: qsTr("Pop")
             font.pixelSize: Theme.fontSm
-            ToolTip.visible: hovered
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: qsTr("Apply this stash and drop it")
+            tip: qsTr("Apply this stash and drop it")
             onClicked: band.popRequested(band.stashRef)
         }
     }

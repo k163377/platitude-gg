@@ -89,13 +89,11 @@ Rectangle {
             tone: header.staged ? Theme.diffRemovedFg
                                 : Theme.diffAddedFg
             enabled: !header.busy
-            ToolTip.visible: hovered
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: header.conflicted
-                ? qsTr("Takes the file as it stands now")
-                : header.staged
-                ? qsTr("Unstage the whole file at once")
-                : qsTr("Stage the whole file at once")
+            tip: header.conflicted
+                 ? qsTr("Takes the file as it stands now")
+                 : header.staged
+                 ? qsTr("Unstage the whole file at once")
+                 : qsTr("Stage the whole file at once")
             onActivated: header.stageFileRequested()
         }
         HoverToolButton {
