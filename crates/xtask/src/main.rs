@@ -80,6 +80,8 @@ commands:
         authorship  every way an author and a committer can be two
         tags      a tag in every state a remote can put it in (fetch first)
         manytags  basic, with more tags than any pane can show at once
+        deep      more commits than the graph loads at once: the window
+                  cut, which nothing shorter can show (graph-tail)
         edges     every string at both ends of what git allows, in Japanese
         long      a message, a commit and a work tree that all run past
                   the pane they are shown in (80 files, 60-odd unstaged)

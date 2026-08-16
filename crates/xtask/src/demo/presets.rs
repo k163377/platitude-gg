@@ -11,7 +11,7 @@ use super::conflict::{
 };
 use super::remote::{behind, diverged, unpublished};
 use super::repo::DemoRepo;
-use super::scale::{edges, long, longpaths};
+use super::scale::{deep, edges, long, longpaths};
 use super::signing::{errsig, signed};
 use super::tags::{manytags, tags};
 
@@ -77,6 +77,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "authorship" => authorship(&mut repo)?,
         "tags" => tags(&mut repo)?,
         "manytags" => manytags(&mut repo)?,
+        "deep" => deep(&mut repo)?,
         "edges" => edges(&mut repo)?,
         "long" => long(&mut repo)?,
         "longpaths" => longpaths(&mut repo)?,

@@ -104,6 +104,13 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // One wanted line for every case: `line=` is already whichever
         // divider has the hand, so the argument does not change it.
         "divider-refuse" => Some("divider_refuse refuses=true line=true"),
+        // The end of a history and the end of what was loaded are the
+        // same picture but for one line, and a footer that failed to draw
+        // takes that line with it — so the cut says itself. `shown=` is
+        // the footer's own visible, beside the model's answer: the two
+        // are what the verb is for, and only neighbours are caught in one
+        // substring.
+        "graph-tail" => Some("graph_tail truncated=true shown=true"),
         // Which column the middle click landed in is the whole question,
         // and a photograph answers neither half of it: lanes carried
         // sideways and lanes left where they were frame alike at this

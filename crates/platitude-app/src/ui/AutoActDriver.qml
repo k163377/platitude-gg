@@ -117,7 +117,7 @@ Item {
                 "details-fit", "corner", "graph-step", "graph-step-edge", "graph-step-far",
                 "graph-step-named", "graph-step-dirty", "graph-step-diff", "diff-step",
                 "diff-step-edge", "graph-bar", "graph-bar-away", "middle-scroll",
-                "divider-refuse", "cherry-pick", "reword", "edit-message",
+                "graph-tail", "divider-refuse", "cherry-pick", "reword", "edit-message",
                 "edit-message-leave", "edit-message-discard", "edit-message-focus",
                 "eol-commit", "eol-hover",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
@@ -577,6 +577,56 @@ Item {
             AppBackend.report("ref_menu delete=" + refDeleteItem.code
                                        + " " + refDeleteItem.text
                                        + " note=" + refDeleteItem.note)
+            driver.complete()
+        }
+    }
+    // The window cut: the walk stops at a round number of commits and the
+    // footer is the only thing that says so — its lanes carry on for one
+    // more commit's worth and its line names the count.
+    //
+    // Nothing here is waited out. The walk has to have answered before
+    // `truncated` means anything (the initial false is "not asked yet",
+    // not "the whole history is loaded" — app-ui.md §UI 自動化の因果性),
+    // the footer has to have been given a height, and the view has to
+    // have actually arrived at the end rather than merely been told to
+    // go: `atYEnd` is the output, `positionViewAtEnd()` only the ask.
+    Timer {
+        id: graphTailTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (graphModel.loading || graphModel.rowTotal === 0)
+                return
+            // The footer lives at the far end of two thousand rows, and a
+            // ListView builds what is near its viewport — so it is asked
+            // for and then looked for, rather than looked for first.
+            const tail = graphPane.view.footerItem
+            if (tail === null || tail.height <= 0) {
+                graphPane.view.positionViewAtEnd()
+                return
+            }
+            // On screen whole, read off where it sits rather than off the
+            // call having been made: `positionViewAtEnd` puts the last
+            // *row* against the edge, and this pane keeps a run-out below
+            // it, so being told to go is not the same as having arrived.
+            const bottom = graphPane.view.contentY + graphPane.view.height
+            if (tail.y + tail.height > bottom + 0.5) {
+                graphPane.view.positionViewAtEnd()
+                return
+            }
+            graphTailTimer.stop()
+            // The verdict leads, and its two halves are neighbours: a
+            // graph that never cut and one whose footer failed to draw
+            // frame the same way — the end of a history and the end of
+            // what was loaded are the same picture without the line.
+            AppBackend.report(
+                "graph_tail truncated=" + graphModel.truncated
+                + " shown=" + tail.visible
+                + " walked=" + graphModel.walkedTotal
+                + " rows=" + graphPane.view.count
+                + " height=" + Math.round(tail.height)
+                + " lanes=" + (graphModel.tailGeometry === ""
+                               ? 0 : graphModel.tailGeometry.split(";").length))
             driver.complete()
         }
     }
@@ -1822,6 +1872,8 @@ Item {
             diffStepTimer.start()
         } else if (act === "name-box") {
             graphPane.startNaming(graphModel.oidAt(Number(arg)))
+        } else if (act === "graph-tail") {
+            graphTailTimer.start()
         } else if (act === "graph-bar" || act === "graph-bar-away"
                    || act === "middle-scroll") {
             // Both want lanes that do not fit their column, and no demo
