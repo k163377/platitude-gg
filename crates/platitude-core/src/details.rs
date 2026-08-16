@@ -336,7 +336,8 @@ pub async fn file_diff_raw(
             // Its arguments are filenames, not pathspecs — no magic prefix.
             let out = executor
                 .run_unchecked(
-                    base.args(["diff", "--no-ext-diff", "--no-index", "--", "/dev/null"])
+                    base.answers_by_code()
+                        .args(["diff", "--no-ext-diff", "--no-index", "--", "/dev/null"])
                         .arg(path),
                     cancel,
                 )

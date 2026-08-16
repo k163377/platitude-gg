@@ -17,70 +17,19 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
-use std::sync::{Arc, Mutex};
-
 use crate::support::TestRepo;
-use crate::support::exec::observed_env;
-use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor};
+use crate::support::exec::{Log, assert_answered, logged};
+use platitude_core::process::CommandEnd;
 use platitude_core::remote::{self, PushForce};
 use platitude_core::{conflict, eol, identity};
-use tokio_util::sync::CancellationToken;
 
 /// A `file://` remote answers instantly; the budget just has to exist.
 const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
 
-/// The command log's rows: what was spawned, and how it ended.
-#[derive(Default)]
-struct Log(Mutex<Vec<(String, Option<CommandEnd>)>>);
-
-impl Log {
-    /// How every configuration *read* of this run ended, in order. Both
-    /// spellings (`--get`, `--get-regexp`) and no writes.
-    fn config_reads(&self) -> Vec<CommandEnd> {
-        self.0
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|(display, _)| display.contains(" config ") && display.contains("--get"))
-            .filter_map(|(_, end)| *end)
-            .collect()
-    }
-}
-
-impl CommandObserver for Log {
-    fn records(&self, _user: bool) -> bool {
-        true
-    }
-
-    fn started(&self, display: &str, _full: &str, _user: bool) -> u64 {
-        let mut rows = self.0.lock().unwrap();
-        rows.push((display.to_string(), None));
-        rows.len() as u64 - 1
-    }
-
-    fn finished(&self, id: u64, end: CommandEnd, _elapsed_ms: u64, _message: &str) {
-        let mut rows = self.0.lock().unwrap();
-        if let Some(row) = rows.get_mut(id as usize) {
-            row.1 = Some(end);
-        }
-    }
-}
-
-fn logged() -> (GitExecutor, Arc<Log>, CancellationToken) {
-    let log = Arc::new(Log::default());
-    let (exec, cancel) = observed_env(log.clone(), true);
-    (exec, log, cancel)
-}
-
-/// For the reads whose exit code depends on what the machine happens to
-/// have configured: whichever way they answered, they answered.
-#[track_caller]
-fn assert_answered(reads: &[CommandEnd], what: &str) {
-    assert!(!reads.is_empty(), "{what}: nothing was read at all");
-    assert!(
-        reads.iter().all(|e| matches!(e, CommandEnd::Answered(_))),
-        "{what}: the log raises itself over an answer: {reads:?}"
-    );
+/// How every configuration *read* of this run ended, in order. Both
+/// spellings (`--get`, `--get-regexp`) and no writes.
+fn config_reads(log: &Log) -> Vec<CommandEnd> {
+    log.ends_of(&[" config ", "--get"])
 }
 
 /// A bare repository serving as `origin`, plus a working clone of it.
@@ -110,7 +59,7 @@ async fn reading_the_identity_answers_by_code() {
         .await
         .expect("load");
 
-    assert_eq!(log.config_reads(), vec![CommandEnd::Answered(0)]);
+    assert_eq!(config_reads(&log), vec![CommandEnd::Answered(0)]);
 }
 
 /// The remotes, read the same way — and here the empty answer is the one a
@@ -126,7 +75,7 @@ async fn listing_remotes_answers_by_code() {
         .expect("list");
 
     assert!(remotes.is_empty(), "a fresh repository has no remotes");
-    assert_eq!(log.config_reads(), vec![CommandEnd::Answered(1)]);
+    assert_eq!(config_reads(&log), vec![CommandEnd::Answered(1)]);
 }
 
 /// Renaming a branch on a remote ends by re-pointing whatever tracked it,
@@ -153,7 +102,7 @@ async fn reading_the_tracking_branches_answers_by_code() {
     .expect("rename remote branch");
 
     assert!(bare.git(&["branch", "--list"]).contains("billing-v2"));
-    assert_answered(&log.config_reads(), "the tracking-branch read");
+    assert_answered(&config_reads(&log), "the tracking-branch read");
 }
 
 /// Where a push would go, for a branch that tracks nothing: two keys asked
@@ -173,7 +122,7 @@ async fn planning_a_push_answers_by_code() {
         "nothing was tracked, so the push records it"
     );
     assert_eq!(
-        log.config_reads(),
+        config_reads(&log),
         vec![CommandEnd::Answered(1), CommandEnd::Answered(1)]
     );
 }
@@ -193,7 +142,7 @@ async fn reading_the_merge_tools_answers_by_code() {
         .await
         .expect("user defined tools");
 
-    assert_answered(&log.config_reads(), "the merge-tool reads");
+    assert_answered(&config_reads(&log), "the merge-tool reads");
 }
 
 /// Whether git normalises line endings on the way into the index.
@@ -208,5 +157,26 @@ async fn reading_core_autocrlf_answers_by_code() {
         .expect("normalises");
 
     assert!(!normalises, "the test repository sets core.autocrlf=false");
-    assert_eq!(log.config_reads(), vec![CommandEnd::Answered(0)]);
+    assert_eq!(config_reads(&log), vec![CommandEnd::Answered(0)]);
+}
+
+/// A key with no value at all is git's boolean true (`--type=bool` says
+/// so), and the CLI cannot write one — hand-edited configs can. The last
+/// record still wins: here it overrides the `false` the fixture sets.
+#[tokio::test]
+async fn a_valueless_core_autocrlf_reads_as_true() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    let config = repo.path.join(".git").join("config");
+    let mut text = std::fs::read_to_string(&config).expect("read config");
+    text.push_str("[core]\n\tautocrlf\n");
+    std::fs::write(&config, text).expect("write config");
+    let (exec, log, cancel) = logged();
+
+    let normalises = eol::normalises(&exec, &repo.path, &cancel)
+        .await
+        .expect("normalises");
+
+    assert!(normalises, "a valueless boolean key is git's true");
+    assert_eq!(config_reads(&log), vec![CommandEnd::Answered(0)]);
 }

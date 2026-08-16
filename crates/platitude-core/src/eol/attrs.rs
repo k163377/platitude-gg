@@ -171,14 +171,17 @@ pub async fn normalises(
     .await?;
     let mut effective = false;
     for record in config::parse_z_records(&out) {
-        let Some(value) = record.value() else {
+        if record.key().trim() != "core.autocrlf" {
             continue;
-        };
-        if record.key().trim() == "core.autocrlf" {
-            // `input` converts on the way in and not on the way out, which
-            // is still git deciding what gets stored.
-            effective = matches!(value.trim(), "true" | "input");
         }
+        // A valueless key is boolean true (`git config --type=bool`, and
+        // the same shape identity reads for `commit.gpgsign`). `input`
+        // converts on the way in and not on the way out, which is still
+        // git deciding what gets stored.
+        effective = match record.value() {
+            None => true,
+            Some(value) => matches!(value.trim(), "true" | "input"),
+        };
     }
     Ok(effective)
 }

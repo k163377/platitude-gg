@@ -129,6 +129,9 @@ pub(super) async fn current_branch(
 ) -> Result<String, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
+        // Exit 1 is the answer "detached" — reported to the caller as the
+        // error below, not raised again by the command log.
+        .answers_by_code()
         .args(["symbolic-ref", "-q", "--short", "HEAD"]);
     let out = executor.run_unchecked(cmd, cancel).await?;
     let name = out.stdout_utf8().trim().to_string();

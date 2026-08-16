@@ -284,6 +284,8 @@ pub async fn rename(
     };
     let at = GitCommand::new()
         .cwd(workdir)
+        // Exit 1 is the answer "no such entry" — the mismatch arm below.
+        .answers_by_code()
         .args(["rev-parse", "--verify", "--quiet", &shifted]);
     let found = executor.run_unchecked(at, cancel).await?;
     if found.stdout_utf8().trim() != entry.oid {

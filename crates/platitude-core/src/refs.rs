@@ -283,6 +283,8 @@ pub async fn head_state(
         .run_unchecked(
             GitCommand::new()
                 .cwd(workdir)
+                // Exit 1 is the answer "HEAD is detached".
+                .answers_by_code()
                 .args(["symbolic-ref", "-q", "--short", "HEAD"]),
             cancel,
         )
@@ -293,6 +295,8 @@ pub async fn head_state(
         .run_unchecked(
             GitCommand::new()
                 .cwd(workdir)
+                // Exit 1 is the answer "HEAD is unborn".
+                .answers_by_code()
                 .args(["rev-parse", "--verify", "-q", "HEAD"]),
             cancel,
         )
