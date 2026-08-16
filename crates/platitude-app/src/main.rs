@@ -115,12 +115,17 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/FormField.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GitVersionCorner.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphAutoScroll.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/GraphColumnDividers.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphColumnMetrics.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphEmptyState.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/GraphFind.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphLaneCell.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/GraphLanePan.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphRowChips.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphRowDelegate.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/GraphRowWalk.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/GraphTailFooter.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HashPlate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HeadPinRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HeadTrack.qml", "qt/qml/platitude");

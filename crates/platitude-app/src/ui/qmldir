@@ -51,12 +51,17 @@ FoldBlock 1.0 FoldBlock.qml
 FormField 1.0 FormField.qml
 GitVersionCorner 1.0 GitVersionCorner.qml
 GraphAutoScroll 1.0 GraphAutoScroll.qml
+GraphColumnDividers 1.0 GraphColumnDividers.qml
 GraphColumnMetrics 1.0 GraphColumnMetrics.qml
 GraphEmptyState 1.0 GraphEmptyState.qml
+GraphFind 1.0 GraphFind.qml
 GraphLaneCell 1.0 GraphLaneCell.qml
+GraphLanePan 1.0 GraphLanePan.qml
 GraphPane 1.0 GraphPane.qml
 GraphRowChips 1.0 GraphRowChips.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml
+GraphRowWalk 1.0 GraphRowWalk.qml
+GraphTailFooter 1.0 GraphTailFooter.qml
 HashPlate 1.0 HashPlate.qml
 HeadPinRow 1.0 HeadPinRow.qml
 HeadTrack 1.0 HeadTrack.qml
