@@ -9,6 +9,7 @@ use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
 
+use crate::config;
 use crate::error::GitError;
 use crate::integrate::InProgress;
 use crate::process::{GitCommand, GitExecutor, literal_pathspec};
@@ -442,29 +443,21 @@ pub async fn user_defined_tools(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<Vec<String>, GitError> {
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        // Nothing configured answers with code 1, which is an answer.
-        .answers_by_code()
-        .args(["config", "-z", "--get-regexp", r"^mergetool\..*\.cmd$"]);
-    let out = executor.run_unchecked(cmd, cancel).await?;
-    if out.code == 1 {
-        return Ok(Vec::new());
-    }
-    if out.code != 0 {
-        return Err(GitError::Failed {
-            command: "git config --get-regexp".to_string(),
-            code: out.code,
-            stderr: out.failure_message(),
-        });
-    }
-    // `-z` gives "key\nvalue" records, so a value holding newlines cannot
-    // be mistaken for the next key.
+    let out = config::get_regexp(
+        executor,
+        workdir,
+        r"^mergetool\..*\.cmd$",
+        "git config --get-regexp",
+        cancel,
+    )
+    .await?;
+    // Only the key is read: the command itself is git's to run, and a
+    // `cmd` written with no value still named a tool.
     let mut names = Vec::new();
-    for record in out.stdout.split(|b| *b == 0).filter(|r| !r.is_empty()) {
-        let text = String::from_utf8_lossy(record);
-        let key = text.split('\n').next().unwrap_or_default().trim();
-        let name = key
+    for record in config::parse_z_records(&out) {
+        let name = record
+            .key()
+            .trim()
             .strip_prefix("mergetool.")
             .and_then(|rest| rest.strip_suffix(".cmd"))
             .unwrap_or_default();

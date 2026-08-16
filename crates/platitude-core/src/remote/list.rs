@@ -5,6 +5,7 @@ use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
 
+use crate::config;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
@@ -26,44 +27,27 @@ pub async fn list(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<Vec<Remote>, GitError> {
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        // A repository with no remotes answers with code 1, which is an
-        // answer.
-        .answers_by_code()
-        .args([
-            "config",
-            "-z",
-            "--get-regexp",
-            r"^remote\..*\.(url|pushurl)$",
-        ]);
-    // Exit code 1 just means "no matching keys" (a repository with no
-    // remotes), which is not a failure.
-    let out = executor.run_unchecked(cmd, cancel).await?;
-    if out.code == 1 {
-        return Ok(Vec::new());
-    }
-    if out.code != 0 {
-        return Err(GitError::Failed {
-            command: "git config --get-regexp remote".to_string(),
-            code: out.code,
-            stderr: out.failure_message(),
-        });
-    }
-    Ok(parse_remote_config(&out.stdout))
+    let out = config::get_regexp(
+        executor,
+        workdir,
+        r"^remote\..*\.(url|pushurl)$",
+        "git config --get-regexp remote",
+        cancel,
+    )
+    .await?;
+    Ok(parse_remote_config(&out))
 }
 
-/// Parses `git config -z --get-regexp`: `key\nvalue` records, NUL-terminated.
 fn parse_remote_config(bytes: &[u8]) -> Vec<Remote> {
     let mut remotes: Vec<Remote> = Vec::new();
-    for record in bytes.split(|b| *b == 0).filter(|r| !r.is_empty()) {
-        let text = String::from_utf8_lossy(record);
-        let Some((key, value)) = text.split_once('\n') else {
+    for record in config::parse_z_records(bytes) {
+        // A remote is its URL; a key written without one names nothing.
+        let Some(value) = record.value() else {
             continue;
         };
         // `remote.<name>.url` — the name itself may contain dots, so take
         // the first and last segments and treat the middle as the name.
-        let Some(rest) = key.strip_prefix("remote.") else {
+        let Some(rest) = record.key().strip_prefix("remote.") else {
             continue;
         };
         let Some((name, field)) = rest.rsplit_once('.') else {
@@ -191,7 +175,7 @@ pub(super) async fn config_value(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::remote::testkit::z;
+    use crate::config::z;
     #[test]
     fn parses_urls_and_push_urls() {
         let bytes = z(&[

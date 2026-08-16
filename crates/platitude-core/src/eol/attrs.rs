@@ -6,6 +6,7 @@ use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
 
+use crate::config;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
@@ -160,29 +161,20 @@ pub async fn normalises(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<bool, GitError> {
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        // Neither key being set answers with code 1, which is an answer.
-        .answers_by_code()
-        .args(["config", "-z", "--get-regexp", r"^core\.(autocrlf|eol)$"]);
-    let out = executor.run_unchecked(cmd, cancel).await?;
-    if out.code == 1 {
-        return Ok(false);
-    }
-    if out.code != 0 {
-        return Err(GitError::Failed {
-            command: "git config --get-regexp core.autocrlf".to_string(),
-            code: out.code,
-            stderr: out.failure_message(),
-        });
-    }
+    let out = config::get_regexp(
+        executor,
+        workdir,
+        r"^core\.(autocrlf|eol)$",
+        "git config --get-regexp core.autocrlf",
+        cancel,
+    )
+    .await?;
     let mut effective = false;
-    for record in out.stdout.split(|b| *b == 0).filter(|r| !r.is_empty()) {
-        let text = String::from_utf8_lossy(record);
-        let Some((key, value)) = text.split_once('\n') else {
+    for record in config::parse_z_records(&out) {
+        let Some(value) = record.value() else {
             continue;
         };
-        if key.trim() == "core.autocrlf" {
+        if record.key().trim() == "core.autocrlf" {
             // `input` converts on the way in and not on the way out, which
             // is still git deciding what gets stored.
             effective = matches!(value.trim(), "true" | "input");

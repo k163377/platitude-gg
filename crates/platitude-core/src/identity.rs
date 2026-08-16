@@ -15,6 +15,7 @@ use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
 
+use crate::config;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
@@ -104,48 +105,34 @@ pub async fn load(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<AuthorConfig, GitError> {
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        // No key matching answers with code 1, which is an answer.
-        .answers_by_code()
-        .args(["config", "-z", "--get-regexp", CONFIG_PATTERN]);
-    // Exit 1 only means no key matched, which is a valid (empty) answer.
-    let out = executor.run_unchecked(cmd, cancel).await?;
-    if out.code == 1 {
-        return Ok(AuthorConfig::default());
-    }
-    if out.code != 0 {
-        return Err(GitError::Failed {
-            command: "git config --get-regexp".to_string(),
-            code: out.code,
-            stderr: out.failure_message(),
-        });
-    }
-    Ok(parse_config(&out.stdout))
+    let out = config::get_regexp(
+        executor,
+        workdir,
+        CONFIG_PATTERN,
+        "git config --get-regexp",
+        cancel,
+    )
+    .await?;
+    Ok(parse_config(&out))
 }
 
-/// Parses `git config -z --get-regexp`: `key\nvalue` records, NUL-terminated.
 fn parse_config(bytes: &[u8]) -> AuthorConfig {
-    let mut config = AuthorConfig::default();
-    for record in bytes.split(|b| *b == 0).filter(|r| !r.is_empty()) {
-        let text = String::from_utf8_lossy(record);
-        // A valueless key (`[commit] gpgsign`) has no newline and means true.
-        let (key, value) = match text.split_once('\n') {
-            Some((k, v)) => (k, v),
-            None => (text.as_ref(), ""),
-        };
-        let value = value.trim();
-        match key.trim() {
-            "user.name" => config.identity.name = non_empty(value),
-            "user.email" => config.identity.email = non_empty(value),
-            "user.signingkey" => config.signing.key = non_empty(value),
-            "commit.gpgsign" => config.signing.sign_commits = parse_bool(value),
-            "tag.gpgsign" => config.signing.sign_tags = parse_bool(value),
-            "gpg.format" => config.signing.format = SignatureFormat::parse(value),
+    let mut parsed = AuthorConfig::default();
+    for record in config::parse_z_records(bytes) {
+        // A valueless key (`[commit] gpgsign`) means true, so it reads as
+        // an empty value rather than being skipped.
+        let value = record.value().unwrap_or_default().trim();
+        match record.key().trim() {
+            "user.name" => parsed.identity.name = non_empty(value),
+            "user.email" => parsed.identity.email = non_empty(value),
+            "user.signingkey" => parsed.signing.key = non_empty(value),
+            "commit.gpgsign" => parsed.signing.sign_commits = parse_bool(value),
+            "tag.gpgsign" => parsed.signing.sign_tags = parse_bool(value),
+            "gpg.format" => parsed.signing.format = SignatureFormat::parse(value),
             _ => {}
         }
     }
-    config
+    parsed
 }
 
 fn non_empty(value: &str) -> Option<String> {
@@ -442,15 +429,7 @@ async fn write_pair(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn z(records: &[&str]) -> Vec<u8> {
-        let mut v = Vec::new();
-        for r in records {
-            v.extend_from_slice(r.as_bytes());
-            v.push(0);
-        }
-        v
-    }
+    use crate::config::z;
 
     #[test]
     fn parses_identity_and_signing() {

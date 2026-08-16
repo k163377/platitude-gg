@@ -17,9 +17,6 @@ mod list;
 mod push;
 mod tags;
 
-#[cfg(test)]
-mod testkit;
-
 pub use self::branch::{RemoteBranchState, branch_tip, delete_remote_branch, rename_remote_branch};
 pub use self::fetch::fetch;
 pub use self::list::{Remote, add, list, set_url};

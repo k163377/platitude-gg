@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
+use crate::config;
 use crate::error::GitError;
 use crate::oid::Oid;
 use crate::process::{GitCommand, GitExecutor};
@@ -155,26 +156,15 @@ async fn tracking_branches(
     branch: &str,
     cancel: &CancellationToken,
 ) -> Result<Vec<String>, GitError> {
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        // No branch having any configuration answers with code 1, which is
-        // an answer.
-        .answers_by_code()
-        .args(["config", "-z", "--get-regexp", r"^branch\."]);
-    let out = executor.run_unchecked(cmd, cancel).await?;
-    // 1 is "no matching keys" — a repository whose branches all stand on
-    // their own.
-    if out.code == 1 {
-        return Ok(Vec::new());
-    }
-    if out.code != 0 {
-        return Err(GitError::Failed {
-            command: "git config --get-regexp branch".to_string(),
-            code: out.code,
-            stderr: out.failure_message(),
-        });
-    }
-    Ok(parse_tracking(&out.stdout, remote, branch))
+    let out = config::get_regexp(
+        executor,
+        workdir,
+        r"^branch\.",
+        "git config --get-regexp branch",
+        cancel,
+    )
+    .await?;
+    Ok(parse_tracking(&out, remote, branch))
 }
 
 /// Picks the branches whose `remote` and `merge` both name the same remote
@@ -183,14 +173,15 @@ fn parse_tracking(bytes: &[u8], remote: &str, branch: &str) -> Vec<String> {
     let merge_ref = format!("refs/heads/{branch}");
     let mut remotes: Vec<(String, String)> = Vec::new();
     let mut merges: Vec<(String, String)> = Vec::new();
-    for record in bytes.split(|b| *b == 0).filter(|r| !r.is_empty()) {
-        let text = String::from_utf8_lossy(record);
-        let Some((key, value)) = text.split_once('\n') else {
+    for record in config::parse_z_records(bytes) {
+        // What a branch tracks is the value; a key written without one
+        // names nothing to compare against.
+        let Some(value) = record.value() else {
             continue;
         };
         // `branch.<name>.<field>` — a branch name may contain dots, so the
         // field is the last segment and everything between is the name.
-        let Some(rest) = key.strip_prefix("branch.") else {
+        let Some(rest) = record.key().strip_prefix("branch.") else {
             continue;
         };
         let Some((name, field)) = rest.rsplit_once('.') else {
@@ -217,7 +208,7 @@ fn parse_tracking(bytes: &[u8], remote: &str, branch: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::remote::testkit::z;
+    use crate::config::z;
 
     #[test]
     fn tracking_needs_both_halves_to_agree() {

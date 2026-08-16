@@ -8,6 +8,7 @@
 pub mod avatar;
 pub mod branch;
 pub mod commit;
+pub mod config;
 pub mod conflict;
 pub mod details;
 pub mod eol;
