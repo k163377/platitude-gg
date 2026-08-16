@@ -223,6 +223,7 @@ ComboBox {
                 id: rows
                 anchors.fill: parent
                 clip: true
+                boundsBehavior: Flickable.StopAtBounds
                 implicitHeight: contentHeight
                 model: combo.delegateModel
                 currentIndex: combo.highlightedIndex
