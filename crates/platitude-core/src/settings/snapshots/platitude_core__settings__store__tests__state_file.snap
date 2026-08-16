@@ -1,5 +1,5 @@
 ---
-source: crates/platitude-core/src/settings.rs
+source: crates/platitude-core/src/settings/store.rs
 expression: state.to_table().to_string()
 ---
 version = 1
