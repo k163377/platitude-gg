@@ -9,6 +9,10 @@
 - **`mod tests` を専用ファイルへ持ち上げる時、複数行文字列リテラルの中身は字下げされていない** — 一律 dedent は fixture を壊す。宣言行だけ下げ、リテラルの行はそのまま移す(`parse/diff/testkit.rs` の `PATCH` が実例)
 - **外部クレートと同名のモジュールを作ったら親の `use` は `self::` で書く** — `settings/toml.rs` があると mod.rs の `use toml::…` は extern prelude と衝突して E0659。子ファイル側は現モジュールに `toml` が無いので素の `use toml::…` のままでよい
 - **移動だけのコミットは、移動先を決める前に「どの行がどこへ行くか」を機械で突き合わせる** — 元ファイルの全行が行き先ちょうど 1 つに入り、落ちるのは列挙した scaffolding(バナー・共有 `use`・`mod tests` の包み)だけ、と検証してから書き出す。取りこぼし・二重取りはこれでしか出ない
+- **`include_bytes!` / `include_str!` はソースファイル基準** — 1 段深いディレクトリへ動かした項は `../` を足さないと**別の場所を読みに行く**(`winframe.rs` の `../assets/icon-*.png` → `winframe/win32/icon.rs` では `../../../assets/`)。パスが実在しなければコンパイルエラーで気付くが、移動先に同名のディレクトリが在れば黙って別物を焼き込む
+- **1 段深くした項の `pub(super)` は届く先が 1 段狭まる** — 元の親から呼ばれていたなら `pub(crate)` へ広げ、間に挟まった mod.rs が `pub(super) use` で元の広さへ戻す(再輸出は元より広くできない = `pub(super)` のままだと E0364/E0365)。`#[cfg(windows)] mod win32` 配下のような private な入れ子では、`pub(crate)` にしても外から辿れる道は増えない
+- **本体を移した fn からは `#[expect(unsafe_code)]` を剥がす** — `unsafe` をマクロや別 fn へ出した側は expectation が不発になり `-D warnings` で赤くなる(貼り忘れ側はエラーになるので、危ないのは剥がし忘れの方)
+- **generic な木・容器に `#[derive(Default)]` を貼らない** — `T: Default` の境界が付き、葉に Default の無い型(借用ポインタのタプル等)を入れられなくなる。`impl<T> Default` を手で書く
 
 - **QML の「描かないホスト」は `anchors.fill: parent` を書く** — メニュー・ポップアップ・ダイアログは宣言された親アイテム越しに窓を測る(`AppMenu.ownerItem.Window.window` / `AppDialog` の `anchors.centerIn: parent` / `Popup.x` は親座標)。page 直下から寸法ゼロの Item の下へ移すと、行幅の上限もダイアログの中央も 0 になる。行カード・チップ一覧のように**シーン座標を受け取って置く**ものも同じ(`row.mapToItem(host, …)` が page 相当になるのは埋めた時だけ)
 - **`page.` を名乗る名前を子へ移したら、外から呼ぶ口だけは page に残す** — 窓の帯は `curPage.<名前>` で能動タブを読む(`TopBar` の push 8 本)ので、alias 再輸出か 1 行の転送を残さないとボタンが黙って死ぬ。自動化(`AutoActDriver`)側は逆に**新しい持ち主を property で渡して呼ぶ**(page を経由しない)
