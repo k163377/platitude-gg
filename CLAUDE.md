@@ -33,10 +33,8 @@
 
 - **起動だけの要求(「rebase して起動」等)は fast path** — 起動までを複合コマンドで先に済ませて即報告し、fmt / clippy / test は報告後にバックグラウンドで追報する(Done の基準は不変)。手順は verify-ui スキル §起動 fast path
 - **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ。Linux ではその場で実行 — `bare` だけは常にコンテナ)。イメージは core / app / runtime(**宣言した依存だけ**)から自動選択、ビルド先は docker volume。最低 git バージョンを積んだ唯一の環境。**`bare` は建てた場所の外で動くかだけを見る**(実測は P5-確認事項 §実測済み)
-- **並行セッションは git worktree で分ける**(同一 checkout は `target/` が単一障害点)
-- **worktree は固定の座席 `a`〜`f` だけ**: `claude --worktree a` / セッション内は EnterWorktree で**空き座席の path** へ(非座席名は hook が確認を挟む)。**席は早い者勝ち**、取れなければ別の空き文字へ。**席のブランチ(`worktree-<席>`)がマージ済みなら `git reset --hard main` で先頭に揃えてから始める**。未マージの席は続きの仕事以外触らない — 全席詰まりなら増設せず報告。**完了しても main へは戻さない**(§Git 運用)
-- **本体 checkout で実装作業をしない**(ドキュメント編集・レビューは可。**ただしスキル・`.claude/rules`・`.claude/rules-refs` の編集は worktree で** — main 直コミットが並行セッションと衝突する)
-- **worktree からのアプリ起動は headless だけ**(実ウィンドウは画面と exe を占有する)。`cargo xtask verify-ui` を使うか、自分で叩くなら `QT_QPA_PLATFORM=offscreen` + `PG_AUTO_QUIT_MS` + **自分の worktree の** exe。`hook pre-shell` がそれ以外を deny — ユーザーが窓を明示指示した時だけ `PG_ALLOW_GUI=1` を先頭に付ける(本体 checkout からの起動は対象外)。**窓のビルドがどのツリーのものかは右下が名乗る**(実装は rules-refs/app-ui.md)
+- **実装作業は worktree 座席 `a`〜`f` で行う**(`claude --worktree <席>` / EnterWorktree で空き席の path へ。本体 checkout はドキュメント・レビューのみ — `target/` と release exe の取り合いを避ける)。空き状況は挨拶が言い、**入る直前の live 確認は `cargo xtask seats`**。**入席は hook が `git worktree lock` で自動 claim し、取られていれば deny する** — 別の空き文字へ(席は早い者勝ち・非座席名の新造は hook が確認を挟む)。マージ済みの席は `git reset --hard main` で先頭に揃えてから始める。未マージの席は続きの仕事以外触らない — 全席詰まりなら増設せず報告。**完了しても main へは戻さない**(§Git 運用)
+- **worktree からのアプリ起動は headless(`cargo xtask verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ **`PG_ALLOW_GUI=1 cargo xtask launch`**(自ツリーの居残り回収→ビルド→起動→生存確認まで一括)。exe が掴まれている・二重起動ゲートが出た時は **`cargo xtask kill`** — 原因は常に自ツリーの居残りで、これはそれだけを落とす(**画像名 kill は他席とユーザーの窓を巻き込むので hook が deny**)。本体 checkout からの起動は対象外(ユーザー自身の起動)。**窓のビルドがどのツリーのものかは右下が名乗る**(実装は rules-refs/app-ui.md)
 - 開発補助ツールを **.ps1 / .bat で作らない** — タスクランナーは `cargo xtask` パターン(ワークスペース内クレート + `.cargo/config.toml` の alias、依存は std のみ)で 3OS 同一に書き、OS 差はコード内の分岐に焼き込む。just / make 等の外部タスクランナーも導入しない
 
 ## Rust 規約
@@ -61,10 +59,8 @@
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)
 - force push しない
 - **rebase はその場でユーザーが指示した時だけ**(main への追従・squash を含む)。worktree ブランチが main より遅れたままは正常(例外は座席のマージ済みブランチの `reset --hard main`)。`hook pre-shell` が deny(`--abort` / `--quit` は除く)— 指示があった時だけ `PG_ALLOW_REBASE=1` を先頭に付ける
-- **main への反映もその場でユーザーが指示した時だけ**。セッションは `worktree-<名前>` に積んだまま「マージ可」と報告して終わる。自分の判断で ff-merge しない
-  - `hook pre-shell` が main を書く git(`merge` / `:main` への refspec / `branch -f main` / `update-ref`)と、本体 checkout からの `.claude/skills` / `.claude/rules` / `.claude/rules-refs` を含むコミットを deny する。**指示があった時だけ** `PG_ALLOW_MAIN=1` を付けて再実行(使い捨てリポジトリと worktree ブランチ上は対象外)
-  - **反映は本体 checkout の `git merge` で** — `update-ref` / `branch -f` は本体の index と作業ツリーを置き去りにし、落差が staged に見える(**中身は HEAD より後ろ** — コミットすると反映済みの仕事が消える)。診断は `git reflog show main`、復旧は `git restore --source=HEAD --staged --worktree -- .`
-- 本体 checkout での直コミットは可(ドキュメント等。**`.claude/skills` / `.claude/rules` / `.claude/rules-refs` は除く**)
+- **main を動かすのもその場でユーザーが指示した時だけ**。セッションは `worktree-<席>` に積んだまま「マージ可」と報告して終わる。**反映の指示を受けたら即 `PG_ALLOW_MAIN=1 cargo xtask land <branch>`**(fast path と同格 — 自分の Done ゲートや段 2 の完了待ちを前提条件にしない)。land はどのセッションからでも動き、本体 checkout の HEAD がどこに居ても安全な手を選ぶ(worktree セッションの git は自ツリーに隔離され、手動 `git merge` は本体に届かない。`branch -f` / `update-ref` の手動反映は本体の index を置き去りにする既知の罠)。hook が main を書く git を deny して land へ誘導する
+- 本体 checkout での直コミットは可(ドキュメント等。**`.claude/skills` / `.claude/rules` / `.claude/rules-refs` は除く** — worktree に積んで反映指示を待つ)
 
 ## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
 

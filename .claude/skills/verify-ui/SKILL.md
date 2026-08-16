@@ -17,13 +17,13 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 ユーザーが待っているのは**窓が出ること**で、Done パイプラインではない。前提は「rebase が通り、release exe がビルドできる」ことだけ — **fmt / clippy / test / verify-ui / linux 系を起動の前に置かない**。状態確認・生存確認を個別ターンに積まず、下の 1 コマンドに畳む。
 
-1. **停止 → rebase → ビルド → 起動 → 生存確認まで 1 個の複合コマンド**(GUI はユーザーの起動指示があるから可 — CLAUDE.md の worktree 起動規約):
+1. **停止 → rebase → ビルド → 起動 → 生存確認まで 1 個の複合コマンド**(ユーザーの指示が前提の操作なので、その指示を記録する escape を両方付ける):
 
-   ```powershell
-   Get-Process platitude-gg -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "*worktrees\<自分の worktree 名>*" } | ForEach-Object { $_.Kill() }; git rebase main; if ($LASTEXITCODE -eq 0) { cargo build --release -p platitude-app; if ($LASTEXITCODE -eq 0) { $env:PG_ALLOW_GUI = '1'; Start-Process "$PWD\target\release\platitude-gg.exe"; Start-Sleep -Milliseconds 900; $p = Get-Process platitude-gg -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "*worktrees\<自分の worktree 名>*" }; if ($p) { "launched pid=$($p.Id)" } else { "EXITED at once - Qt bin missing from PATH?" } } }
+   ```bash
+   PG_ALLOW_REBASE=1 git rebase main && PG_ALLOW_GUI=1 cargo xtask launch
    ```
 
-   qmake が見えないシェルでは先頭に `$env:PATH = "<Qt の bin>;" + $env:PATH` を足す(exe の**起動**にも要る — 無いと約 10ms で無言終了。下記の罠)。
+   `launch` が自ツリーの居残りプロセス回収(`cargo xtask kill` 相当)→ release ビルド → 切り離し起動 → 生存確認(約 10ms の無言終了 = Qt bin 不在の検出)まで行い、Qt の PATH も自分で解決する。rebase 不要の要求なら `PG_ALLOW_GUI=1 cargo xtask launch` だけ。**他席やユーザーの窓を殺さない** — 掴まれた exe・二重起動ゲートの原因は常に自ツリーの居残りで、`kill` / `launch` がそれだけを落とす(画像名 kill は hook が deny)。
 2. 窓が出たら**即報告してターンを終える**。起動を待たせてよいのは rebase の衝突と build エラーだけ(衝突を解決したら、Done パイプラインへ寄り道せずこの fast path の続きで起動まで行く)。
 3. 報告と同じターンで `cargo xtask check --verb '<触った動詞>'…` を **run_in_background で開始**し、結果が届いたら追報する。**Done の基準は CLAUDE.md ビルド・テスト(段 2)のまま不変** — 「マージ可」は check の green を確認してから言う。背景のテストビルドと次の release 再ビルドは cargo のロックで直列化されうる — 先に修正指示が来たら背景タスクを止めて修正を優先してよい。
 
