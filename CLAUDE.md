@@ -31,7 +31,7 @@
 
 **Done の基準**: 段 2 が全て通ること。UI 配線の Done は **両 OS の `verify-ui` が同じ動詞で PASS し、両方の PNG を目視するまで**(手順・動詞表・Windows の罠は **verify-ui スキル**を必ず呼ぶ)。
 
-- **起動だけの要求(「rebase して起動」等)は fast path** — 起動までを複合コマンドで先に済ませて即報告し、fmt / clippy / test は報告後にバックグラウンドで追報する(Done の基準は不変)。手順は verify-ui スキル §起動 fast path
+- **起動だけの要求(「rebase して起動」等)は fast path** — 即起動・即報告し、検証は報告後に追報(Done の基準は不変)。手順は verify-ui スキル §起動 fast path
 - **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ。Linux ではその場で実行 — `bare` だけは常にコンテナ)。イメージは core / app / runtime(**宣言した依存だけ**)から自動選択、ビルド先は docker volume。最低 git バージョンを積んだ唯一の環境。**`bare` は建てた場所の外で動くかだけを見る**(実測は P5-確認事項 §実測済み)
 - **実装作業は worktree 座席 `a`〜`f` で行う**(`claude --worktree <席>` / EnterWorktree で空き席の path へ。本体 checkout はドキュメント・レビューのみ — `target/` と release exe の取り合いを避ける)。空き状況は挨拶が言い、**入る直前の live 確認は `cargo xtask seats`**。**入席は hook が `git worktree lock` で自動 claim し、取られていれば deny する** — 別の空き文字へ(席は早い者勝ち・非座席名の新造は hook が確認を挟む)。マージ済みの席は `git reset --hard main` で先頭に揃えてから始める。未マージの席は続きの仕事以外触らない — 全席詰まりなら増設せず報告。**完了しても main へは戻さない**(§Git 運用)
 - **worktree からのアプリ起動は headless(`cargo xtask verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ **`PG_ALLOW_GUI=1 cargo xtask launch`**(自ツリーの居残り回収→ビルド→起動→生存確認まで一括)。exe が掴まれている・二重起動ゲートが出た時は **`cargo xtask kill`** — 原因は常に自ツリーの居残りで、これはそれだけを落とす(**画像名 kill は他席とユーザーの窓を巻き込むので hook が deny**)。本体 checkout からの起動は対象外(ユーザー自身の起動)。**窓のビルドがどのツリーのものかは右下が名乗る**(実装は rules-refs/app-ui.md)

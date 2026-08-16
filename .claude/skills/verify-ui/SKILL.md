@@ -1,6 +1,6 @@
 ---
 name: verify-ui
-description: platitude-gg の UI 動作確認・スクリーンショット検証をする時に必ず読む。cargo xtask verify-ui の使い方、PG_AUTO_ACT 動詞の全表(同ディレクトリの verbs.md — 使う動詞の項を Grep で引く)、headless(offscreen)起動と Windows での GUI 検証の罠(フォント・画面ロック・PrintWindow・PostMessage・hover)を全部ここに置く。hover 状態のスクショ(仮表示・強制表示)の標準手順は §hover の絵の撮り方。Done は両 OS — Linux 側は cargo xtask linux verify-ui で、差分は §Linux(コンテナ)での動確。「rebase して起動」等、起動だけの要求の手順も §起動 fast path が正(テストは起動報告の後ろへ)。
+description: platitude-gg の UI 動作確認・スクリーンショット検証・アプリ起動(「rebase して起動」含む)の前に必ず読む。verify-ui の使い方・PG_AUTO_ACT 動詞表(verbs.md を Grep)・Windows / Linux の検証の罠は全部ここ。
 ---
 
 # UI 動作確認(ヘッドレス検証)

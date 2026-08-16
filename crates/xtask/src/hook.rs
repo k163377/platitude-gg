@@ -79,7 +79,7 @@ fn pre_write(input: &str) -> Result<(), String> {
              one after another, so a file directly under tests/ becomes a second, \
              serialized binary and a second link. Add the test as a module under \
              crates/platitude-core/tests/it/ and register it in tests/it/main.rs \
-             (CLAUDE.md ビルド・テスト).\"}}}}"
+             (.claude/rules/core.md).\"}}}}"
         );
     }
     Ok(())
@@ -272,7 +272,10 @@ impl Offence {
                  `{MAIN_ESCAPE}=1 cargo xtask land <branch>` — it works from any \
                  session, worktree ones included, and reads where main actually \
                  is before it moves anything; a hand-typed merge inherits \
-                 whatever HEAD the primary checkout happens to be on."
+                 whatever HEAD the primary checkout happens to be on. Should \
+                 the permission layer refuse the env-prefixed form, the \
+                 PowerShell spelling `$env:{MAIN_ESCAPE}='1'; cargo xtask land \
+                 <branch>` says the same thing."
             ),
             Offence::Rebase => format!(
                 "{what} rewrites the branch under the session, and a rebase runs \
@@ -862,12 +865,19 @@ fn pre_worktree(input: &str) -> Result<(), String> {
         );
         return Ok(());
     }
-    let (Some(path), Some(cwd)) = (path, string_field(input, "cwd")) else {
+    let Some(cwd) = string_field(input, "cwd") else {
         return Ok(());
     };
-    if roster_seat(&path).is_none() {
+    // Entering by name lands in the seat's existing tree just as surely as
+    // entering by path — resolve it, or there is a door around the claim.
+    let target = match (path, name) {
+        (Some(path), _) => roster_seat(&path).is_some().then_some(path),
+        (None, Some(name)) => existing_seat_path(&cwd, &name),
+        (None, None) => None,
+    };
+    let Some(path) = target else {
         return Ok(());
-    }
+    };
     let session = string_field(input, "session_id").unwrap_or_default();
     if let Claim::Held(reason) = claim_seat(&cwd, &path, &session) {
         println!(
@@ -888,6 +898,16 @@ fn roster_seat(path: &str) -> Option<&'static str> {
     let root = worktree_root(path)?;
     let name = root.rsplit('/').next()?;
     SEATS.iter().find(|seat| **seat == name).copied()
+}
+
+/// The tree a roster letter already stands on, if it was ever created —
+/// a name for a missing seat creates it fresh, and needs no claim here.
+fn existing_seat_path(cwd: &str, name: &str) -> Option<String> {
+    let listing = git_query(cwd, &["worktree", "list", "--porcelain"])?;
+    seats::seat_entries(&listing)
+        .into_iter()
+        .find(|entry| entry.seat == name)
+        .map(|entry| entry.path)
 }
 
 /// How an attempt to claim a seat came out.
@@ -1609,11 +1629,26 @@ mod tests {
         SeatState {
             branch: branch.to_string(),
             locked,
+            lock_reason: String::new(),
             ahead: Some(ahead),
             behind: Some(behind),
             dirty: Some(dirty),
             index_age: None,
         }
+    }
+
+    #[test]
+    fn an_hour_idle_lock_is_flagged_as_maybe_stale() {
+        let mut state = surveyed("worktree-a", true, 0, 0, 0);
+        state.index_age = Some(std::time::Duration::from_secs(6 * 3600));
+        let survey = vec![Seat {
+            name: "a",
+            state: Some(state),
+        }];
+        let buckets = seat_buckets(&survey);
+        assert_eq!(buckets.in_use.len(), 1, "{:?}", buckets.in_use);
+        assert!(buckets.in_use[0].contains("stale?"), "{:?}", buckets.in_use);
+        assert!(buckets.takeable.is_empty(), "{:?}", buckets.takeable);
     }
 
     #[test]
@@ -1678,6 +1713,7 @@ mod tests {
             state: Some(SeatState {
                 branch: "worktree-e".to_string(),
                 locked: false,
+                lock_reason: String::new(),
                 ahead: None,
                 behind: None,
                 dirty: None,

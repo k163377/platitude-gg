@@ -31,8 +31,11 @@ pub(crate) struct SeatState {
     /// Branch name, empty while HEAD is detached — a rebase in flight
     /// detaches it, so an active session can read as branchless.
     pub branch: String,
-    /// Whether `git worktree lock` holds it — a session's explicit claim.
+    /// Whether `git worktree lock` holds it — a session's claim (the
+    /// entry hooks write one; manual locks land here too).
     pub locked: bool,
+    /// The lock's reason, empty when unlocked or given none.
+    pub lock_reason: String,
     /// Commits main does not have (`main..HEAD`); None when git could not
     /// answer. Ranges run on HEAD, not the branch name, so a detached
     /// seat still counts.
@@ -95,6 +98,7 @@ fn seat_state(entry: &SeatEntry, now: SystemTime) -> SeatState {
     SeatState {
         branch: entry.branch.clone(),
         locked: entry.locked,
+        lock_reason: entry.reason.clone(),
         ahead: commits_in(dir, "main..HEAD"),
         behind: commits_in(dir, "HEAD..main"),
         dirty: crate::git_query(dir, &["--no-optional-locks", "status", "--porcelain"])
@@ -131,6 +135,8 @@ pub(crate) struct SeatEntry {
     /// Branch name, empty when HEAD is detached.
     pub branch: String,
     pub locked: bool,
+    /// The lock's reason, empty when unlocked or given none.
+    pub reason: String,
 }
 
 /// Every roster seat the listing shows, in listing order.
@@ -140,13 +146,15 @@ pub(crate) fn seat_entries(listing: &str) -> Vec<SeatEntry> {
         let mut path = None;
         let mut branch = String::new();
         let mut locked = false;
+        let mut reason = String::new();
         for line in block.lines() {
             if let Some(rest) = line.strip_prefix("worktree ") {
                 path = Some(rest.replace('\\', "/"));
             } else if let Some(rest) = line.strip_prefix("branch refs/heads/") {
                 branch = rest.to_string();
-            } else if line == "locked" || line.starts_with("locked ") {
+            } else if let Some(rest) = line.strip_prefix("locked") {
                 locked = true;
+                reason = rest.trim().to_string();
             }
         }
         let Some(path) = path else {
@@ -163,6 +171,7 @@ pub(crate) fn seat_entries(listing: &str) -> Vec<SeatEntry> {
             path,
             branch,
             locked,
+            reason,
         });
     }
     seats
@@ -252,7 +261,11 @@ fn seat_row(seat: &Seat) -> ([String; 6], String) {
     let dirty = state
         .dirty
         .map_or("?".to_string(), |value| value.to_string());
-    let note = if state.locked { "locked" } else { "" };
+    let note = match (state.locked, state.lock_reason.is_empty()) {
+        (false, _) => String::new(),
+        (true, true) => "locked".to_string(),
+        (true, false) => format!("locked ({})", state.lock_reason),
+    };
     (
         [
             name,
@@ -301,12 +314,14 @@ mod tests {
                     path: "C:/x/platitude-gg/.claude/worktrees/a".to_string(),
                     branch: "worktree-a".to_string(),
                     locked: false,
+                    reason: String::new(),
                 },
                 SeatEntry {
                     seat: "b",
                     path: "C:/x/platitude-gg/.claude/worktrees/b".to_string(),
                     branch: "worktree-b".to_string(),
                     locked: true,
+                    reason: "claude session b (pid 1)".to_string(),
                 },
             ]
         );
@@ -329,6 +344,7 @@ mod tests {
                 state: Some(SeatState {
                     branch: "worktree-a".to_string(),
                     locked: false,
+                    lock_reason: String::new(),
                     ahead: Some(1),
                     behind: Some(0),
                     dirty: Some(13),
@@ -340,6 +356,7 @@ mod tests {
                 state: Some(SeatState {
                     branch: String::new(),
                     locked: true,
+                    lock_reason: "claude-seat abc123".to_string(),
                     ahead: Some(0),
                     behind: Some(0),
                     dirty: Some(0),
@@ -351,6 +368,7 @@ mod tests {
                 state: Some(SeatState {
                     branch: "worktree-c".to_string(),
                     locked: false,
+                    lock_reason: String::new(),
                     ahead: None,
                     behind: None,
                     dirty: None,
@@ -376,7 +394,7 @@ mod tests {
         assert!(
             lines[2].contains("(detached)")
                 && lines[2].contains("yes")
-                && lines[2].ends_with("locked"),
+                && lines[2].ends_with("locked (claude-seat abc123)"),
             "{table}"
         );
         assert!(lines[3].contains('?'), "{table}");
