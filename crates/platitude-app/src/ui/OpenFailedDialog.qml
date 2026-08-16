@@ -45,7 +45,7 @@ AppDialog {
 
     // The way on takes the focus: the other button is what Escape
     // already does, and every route out of here is one keystroke.
-    onOpened: chooseButton.forceActiveFocus()
+    onOpened: actions.acceptButton.forceActiveFocus()
 
     contentItem: ColumnLayout {
         spacing: Theme.spaceLg
@@ -85,31 +85,19 @@ AppDialog {
             text: openFailedDialog.message
         }
 
-        RowLayout {
-            Layout.alignment: Qt.AlignRight
-            spacing: Theme.spaceSm
-            ActionButton {
-                implicitHeight: Theme.controlHeight
-                activeFocusOnTab: true
-                text: qsTr("Cancel")
-                onActivated: openFailedDialog.close()
-            }
-            ActionButton {
-                id: chooseButton
-                implicitHeight: Theme.controlHeight
-                kind: "folder"
-                besideWord: true
-                frameColor: Theme.accent
-                activeFocusOnTab: true
-                // `again`, not `another`: on two of the three the folder
-                // was the wrong one and the heading has already said so,
-                // and on the third nobody knows that it was — a button
-                // that says "a different one" would be claiming what the
-                // check could not answer. What it promises in all three
-                // is the same, and it is the picker coming back.
-                text: qsTr("Choose again…")
-                onActivated: openFailedDialog.retry()
-            }
+        DialogActions {
+            id: actions
+            cancelText: qsTr("Cancel")
+            acceptKind: "folder"
+            // `again`, not `another`: on two of the three the folder was
+            // the wrong one and the heading has already said so, and on
+            // the third nobody knows that it was — a button that says "a
+            // different one" would be claiming what the check could not
+            // answer. What it promises in all three is the same, and it
+            // is the picker coming back.
+            acceptText: qsTr("Choose again…")
+            onCancelled: openFailedDialog.close()
+            onAccepted: openFailedDialog.retry()
         }
     }
 }

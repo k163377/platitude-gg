@@ -25,7 +25,7 @@ AppDialog {
     property bool saving: false
 
     function submit() {
-        if (!saveButton.enabled)
+        if (!actions.acceptEnabled)
             return
         identityDialog.saving = true
         AppBackend.saveIdentity(nameField.text, emailField.text)
@@ -177,28 +177,18 @@ AppDialog {
                     : ""
         }
 
-        RowLayout {
-            Layout.alignment: Qt.AlignRight
-            spacing: Theme.spaceSm
-            ActionButton {
-                implicitHeight: Theme.controlHeight
-                activeFocusOnTab: true
-                text: identityDialog.editing ? qsTr("Cancel") : qsTr("Not now")
-                onActivated: identityDialog.close()
-            }
-            ActionButton {
-                id: saveButton
-                implicitHeight: Theme.controlHeight
-                kind: "check"
-                besideWord: true
-                frameColor: enabled ? Theme.accent : Theme.borderDefault
-                activeFocusOnTab: true
-                text: AppBackend.identityBusy ? qsTr("Saving…") : qsTr("Save")
-                enabled: !AppBackend.identityBusy
-                         && nameField.text.trim() !== ""
-                         && emailField.text.trim() !== ""
-                onActivated: identityDialog.submit()
-            }
+        DialogActions {
+            id: actions
+            cancelText: identityDialog.editing ? qsTr("Cancel")
+                                               : qsTr("Not now")
+            acceptKind: "check"
+            acceptText: AppBackend.identityBusy ? qsTr("Saving…")
+                                                : qsTr("Save")
+            acceptEnabled: !AppBackend.identityBusy
+                           && nameField.text.trim() !== ""
+                           && emailField.text.trim() !== ""
+            onCancelled: identityDialog.close()
+            onAccepted: identityDialog.submit()
         }
     }
 }

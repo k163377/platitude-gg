@@ -102,6 +102,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/DiffPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffPaneHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffRowDelegate.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/DialogActions.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DotMark.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FileRowDelegate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FileRowMenu.qml", "qt/qml/platitude");

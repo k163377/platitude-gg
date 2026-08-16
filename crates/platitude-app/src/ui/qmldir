@@ -38,6 +38,7 @@ ConflictSideLegend 1.0 ConflictSideLegend.qml
 DiffPane 1.0 DiffPane.qml
 DiffPaneHeader 1.0 DiffPaneHeader.qml
 DiffRowDelegate 1.0 DiffRowDelegate.qml
+DialogActions 1.0 DialogActions.qml
 DotMark 1.0 DotMark.qml
 FileRowDelegate 1.0 FileRowDelegate.qml
 FileRowMenu 1.0 FileRowMenu.qml

@@ -441,27 +441,18 @@ AppDialog {
             // git keeps where every other git on this computer can see it.
             text: qsTr("The fetch interval is stored by Platitude GG. The merge editor is stored by git as merge.guitool, where every other git on this computer sees it.")
         }
-        RowLayout {
-            Layout.alignment: Qt.AlignRight
-            spacing: Theme.spaceSm
-            // One button, because there is only one thing left for a
-            // button to do. A Cancel here would promise to put back a
-            // picture that was assigned the moment it was named, and a
-            // Save would claim credit for writes that already happened.
-            ActionButton {
-                implicitHeight: Theme.controlHeight
-                text: qsTr("OK")
-                // The accent goes to whichever of the two the dialog was
-                // opened for, and the other keeps a plain frame — the
-                // same one expression, read the other way round
-                // (`chooseAvatar`). No icon: a check would claim credit
-                // for writes that already happened, which is the very
-                // thing the comment above says a `Save` here must not do.
-                frameColor: settingsDialog.prefillEmail === ""
-                            ? Theme.accent : Theme.borderDefault
-                activeFocusOnTab: true
-                onActivated: settingsDialog.close()
-            }
+        // One button, because there is only one thing left for a button to
+        // do. A Cancel here would promise to put back a picture that was
+        // assigned the moment it was named, and a Save would claim credit
+        // for writes that already happened — which is also why the one
+        // button carries no check.
+        DialogActions {
+            acceptText: qsTr("OK")
+            // The accent goes to whichever of the two the dialog was
+            // opened for, and the other keeps a plain frame — the same one
+            // expression, read the other way round (`chooseAvatar`).
+            acceptAccented: settingsDialog.prefillEmail === ""
+            onAccepted: settingsDialog.close()
         }
     }
 }

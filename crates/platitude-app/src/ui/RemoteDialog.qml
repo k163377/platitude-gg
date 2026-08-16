@@ -67,7 +67,7 @@ AppDialog {
     }
 
     function submit() {
-        if (!saveButton.enabled)
+        if (!actions.acceptEnabled)
             return
         const name = remoteDialog.editing !== "" ? remoteDialog.editing
                                                  : remoteDialog.wantedName
@@ -147,29 +147,17 @@ AppDialog {
             }
         }
 
-        RowLayout {
-            Layout.alignment: Qt.AlignRight
-            spacing: Theme.spaceSm
-            ActionButton {
-                implicitHeight: Theme.controlHeight
-                activeFocusOnTab: true
-                text: qsTr("Cancel")
-                onActivated: remoteDialog.close()
-            }
-            ActionButton {
-                id: saveButton
-                implicitHeight: Theme.controlHeight
-                kind: remoteDialog.editing === "" ? "plus" : "check"
-                besideWord: true
-                frameColor: enabled ? Theme.accent : Theme.borderDefault
-                activeFocusOnTab: true
-                text: remoteDialog.editing === "" ? qsTr("Add") : qsTr("Save")
-                enabled: remoteDialog.wantedUrl !== ""
-                         && (remoteDialog.editing !== ""
-                             || (remoteDialog.wantedName !== ""
-                                 && !remoteDialog.nameClashes))
-                onActivated: remoteDialog.submit()
-            }
+        DialogActions {
+            id: actions
+            cancelText: qsTr("Cancel")
+            acceptKind: remoteDialog.editing === "" ? "plus" : "check"
+            acceptText: remoteDialog.editing === "" ? qsTr("Add") : qsTr("Save")
+            acceptEnabled: remoteDialog.wantedUrl !== ""
+                           && (remoteDialog.editing !== ""
+                               || (remoteDialog.wantedName !== ""
+                                   && !remoteDialog.nameClashes))
+            onCancelled: remoteDialog.close()
+            onAccepted: remoteDialog.submit()
         }
     }
 }
