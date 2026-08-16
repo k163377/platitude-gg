@@ -15,7 +15,6 @@
 1102 crates/platitude-app/src/hub.rs
 557 crates/platitude-app/src/models/diff.rs
 759 crates/platitude-app/src/models/graph.rs
-578 crates/platitude-app/src/ui/ActionButton.qml
 1082 crates/platitude-app/src/ui/DiffPane.qml
 1297 crates/platitude-app/src/ui/GraphPane.qml
 764 crates/platitude-app/src/ui/GraphRowDelegate.qml

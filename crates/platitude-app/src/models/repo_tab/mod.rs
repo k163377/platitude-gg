@@ -20,6 +20,7 @@ mod state;
 /// Failed fetches in a row before the timer is stopped — more than one,
 /// so a brief offline blip (a lid closed on a train) does not stop it.
 const FETCH_FAILURES_BEFORE_STOP: i32 = 3;
+
 pub struct RepoTab {
     tab_id: i32,
     state: String,

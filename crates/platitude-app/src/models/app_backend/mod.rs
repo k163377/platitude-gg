@@ -51,6 +51,7 @@ enum AppMsg {
         email_saved: bool,
     },
 }
+
 pub struct AppBackend {
     git_state: String,
     git_version: String,
