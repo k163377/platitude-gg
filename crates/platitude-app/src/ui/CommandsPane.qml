@@ -138,17 +138,13 @@ Rectangle {
             }
         }
 
-        ListView {
+        AppListView {
             id: list
             Layout.fillWidth: true
             Layout.fillHeight: true
-            clip: true
             model: pane.commandsModel
-            reuseItems: true
-            boundsBehavior: Flickable.StopAtBounds
             topMargin: Theme.spaceXs
             bottomMargin: Theme.spaceXs
-            ScrollBar.vertical: AutoScrollBar {}
 
             /// Whether new rows pull the view along. Reading further up
             /// stops that until the end is reached again — the same rule

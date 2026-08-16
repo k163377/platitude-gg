@@ -8,6 +8,7 @@ ActionButtonSeat 1.0 ActionButtonSeat.qml
 AppCard 1.0 AppCard.qml
 AppCardFace 1.0 AppCardFace.qml
 AppCombo 1.0 AppCombo.qml
+AppListView 1.0 AppListView.qml
 AppDialog 1.0 AppDialog.qml
 AppMenu 1.0 AppMenu.qml
 AppMenuItem 1.0 AppMenuItem.qml

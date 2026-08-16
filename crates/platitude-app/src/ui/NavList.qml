@@ -6,7 +6,7 @@ import QtQuick.Layouts
 import platitude.ui
 
 // One sidebar section's scrolling list under its fixed NavHeader.
-ListView {
+AppListView {
     id: navList
     property var sectionModel
     property bool expanded: true
@@ -51,11 +51,7 @@ ListView {
     Layout.maximumHeight: !expanded ? 0
                           : stretch ? Number.POSITIVE_INFINITY
                           : count * Theme.rowHeight + Theme.borderWidth
-    clip: true
     model: sectionModel
-    reuseItems: true
-    boundsBehavior: Flickable.StopAtBounds
-    ScrollBar.vertical: AutoScrollBar {}
     delegate: NavItemDelegate {
         id: row
         listWidth: navList.width

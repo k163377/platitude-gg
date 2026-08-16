@@ -484,15 +484,11 @@ Rectangle {
                 sizeText: diffPane.diffModel.previewNewSize
             }
         }
-        ListView {
+        AppListView {
             id: diffList
             Layout.fillWidth: true
             Layout.fillHeight: true
-            clip: true
             model: diffPane.diffModel
-            reuseItems: true
-            boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: AutoScrollBar {}
             // The rows the write asked for have landed: put the view back
             // where it was reading. The empty half of the swap is not it —
             // a reset shows up here as a count of zero first.

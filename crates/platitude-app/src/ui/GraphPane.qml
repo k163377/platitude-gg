@@ -522,7 +522,7 @@ Rectangle {
         onNextRequested: graphArea.findNext()
         onPreviousRequested: graphArea.findPrevious()
     }
-    ListView {
+    AppListView {
         id: graphList
         anchors.left: parent.left
         anchors.right: parent.right
@@ -538,16 +538,11 @@ Rectangle {
         Behavior on anchors.topMargin {
             NumberAnimation { duration: 200 }
         }
-        clip: true
         model: graphArea.graphModel
-        reuseItems: true
-        // Nothing but this pane's own functions move the view. Left on,
-        // the list chases its current item: a background rebuild that
-        // re-resolves the selection onto a row one further down drags a
-        // reader parked in the history to wherever the selection is. The
-        // arrow keys move the view themselves, by as little as will do
-        // (`revealStep`), which is not what the chase would do for them.
-        highlightFollowsCurrentItem: false
+        // Nothing but this pane's own functions move the view — the chase
+        // is off in `AppListView`, and the arrow keys move it themselves
+        // by as little as will do (`revealStep`).
+        //
         // Qt's own key navigation moves `currentIndex` and tells nobody:
         // the highlight would walk off screen — the chase above is off —
         // while the panes on the right went on showing the commit it set
@@ -576,10 +571,8 @@ Rectangle {
             if (!graphList.visible)
                 graphList.focus = false
         }
-        boundsBehavior: Flickable.StopAtBounds
         flickDeceleration: 8000
         maximumFlickVelocity: 9000
-        ScrollBar.vertical: AutoScrollBar {}
         // The graph is the one pane with no header band; this sliver of
         // margin drops the first row so its bottom line meets the
         // neighbouring bands' bottom edge when scrolled to the top.

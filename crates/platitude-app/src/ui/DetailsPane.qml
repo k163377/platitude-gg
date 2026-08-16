@@ -433,15 +433,11 @@ ColumnLayout {
             }
         }
     }
-    ListView {
+    AppListView {
         id: fileList
         Layout.fillWidth: true
         Layout.fillHeight: true
-        clip: true
         model: detailsPane.details
-        reuseItems: true
-        boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: AutoScrollBar {}
         delegate: FileRowDelegate {
             listWidth: fileList.width
             pointedTipRow: detailsPane.pointedTipRow

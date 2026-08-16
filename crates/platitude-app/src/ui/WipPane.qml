@@ -643,15 +643,11 @@ ColumnLayout {
     // No question bar over this list: what a file row throws away is held
     // down on the menu row that names it, where the hand already is
     // (デザイン規約 §長押し).
-    ListView {
+    AppListView {
         id: wipList
         Layout.fillWidth: true
         Layout.fillHeight: true
-        clip: true
         model: wipPane.worktreeModel
-        reuseItems: true
-        boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: AutoScrollBar {}
         // GitKraken grouping: unstaged (incl. untracked) above, staged
         // below.
         section.property: "group"
