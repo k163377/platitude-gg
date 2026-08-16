@@ -2,7 +2,7 @@
 
 **platitude-gg** — 軽量・マルチプラットフォーム(Windows / macOS arm64 / Ubuntu)の git GUI。**Intel Mac は対象外**。
 機能要件・スコープ外の正本は [実装計画.md](internal-docs/実装計画.md) — 機能実装の前に該当セクションを読む(性能要件は本ファイル §性能予算)。
-本ファイルは全セッション共通の不変条件だけ。**規約本体は分割配置**: core → [.claude/rules/core.md](.claude/rules/core.md)、app → [.claude/rules/app-ui.md](.claude/rules/app-ui.md)(該当クレートに触れると自動ロード。**各論は `.claude/rules-refs/` の同名ファイル** — 触る項を Grep で引く)、動確手順と `PG_AUTO_ACT` 動詞表は **verify-ui スキル**。
+本ファイルは全セッション共通の不変条件だけ。**規約本体は分割配置**: core → [.claude/rules/core.md](.claude/rules/core.md)、app → [.claude/rules/app-ui.md](.claude/rules/app-ui.md)、分割・共通化 → [.claude/rules/structure.md](.claude/rules/structure.md)(該当クレートに触れると自動ロード。**各論は `.claude/rules-refs/` の同名ファイル** — 触る項を Grep で引く)、動確手順と `PG_AUTO_ACT` 動詞表は **verify-ui スキル**。
 
 ## 絶対制約(変更には人間の明示承認が必要)
 
@@ -73,7 +73,7 @@
 
 ## 規約の置き場所と本ファイルの運用
 
-- ルール追加は「非自明・繰り返し発生・行動可能」を満たす場合のみ。置き場所: 全セッション共通の不変条件 → 本ファイル(**15KB 以下を維持**)/ core → [.claude/rules/core.md](.claude/rules/core.md) / app・QML → [.claude/rules/app-ui.md](.claude/rules/app-ui.md)(**rules 本体は不変条件だけ。各論は `.claude/rules-refs/` の同名ファイルへ 1 項目 1 行で追記** — `.claude/rules/` 配下は再帰スキャンで常時ロードされるため参照ファイルを置かない)/ 検証手順・動詞 → verify-ui スキル / 機械で守れる禁止事項 → `.claude/settings.json` の hooks(実体は `cargo xtask hook`)
+- ルール追加は「非自明・繰り返し発生・行動可能」を満たす場合のみ。置き場所: 全セッション共通の不変条件 → 本ファイル(**15KB 以下を維持**)/ core → [.claude/rules/core.md](.claude/rules/core.md) / app・QML → [.claude/rules/app-ui.md](.claude/rules/app-ui.md) / 分割・共通化(全クレート) → [.claude/rules/structure.md](.claude/rules/structure.md)(**rules 本体は不変条件だけ。各論は `.claude/rules-refs/` の同名ファイルへ 1 項目 1 行で追記** — `.claude/rules/` 配下は再帰スキャンで常時ロードされるため参照ファイルを置かない)/ 検証手順・動詞 → verify-ui スキル / 機械で守れる禁止事項 → `.claude/settings.json` の hooks(実体は `cargo xtask hook`)
 - コードから読み取れるアーキテクチャ説明は書かない。罠と決定事項のみ
 - **バージョン番号をハードコードしない** — 依存は Cargo.toml / ロックファイル、製品要件は [実装計画.md](internal-docs/実装計画.md) が正(方針は「最新から開始」)
 - **増え続けるもの(機能一覧・確認事項・実測値)は本ファイルに置かない**。索引だけを置き、実体は分割先へ
