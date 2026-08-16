@@ -2439,55 +2439,15 @@ Item {
             }
 
             // ---- open failed ------------------------------------------
-            // The same three lines the picker's dialog says, out of the
-            // same place (`Words.openFailure`): which of the three it was
-            // is core's answer (`errorKind`), not something read off
-            // git's wording. Which of the two screens a failure lands on
-            // is decided by the road, not the kind: the picker's answers
-            // go to the dialog, everything else — a restored tab, a
-            // worktree row, PG_AUTO_OPEN — comes here.
-            Item {
+            OpenFailedScreen {
                 visible: page.openFailed
                 SplitView.fillHeight: true
                 SplitView.minimumHeight: page.panesMinHeight
-                Column {
-                    anchors.centerIn: parent
-                    spacing: Theme.spaceMd
-                    width: Math.min(700, page.width - 2 * Theme.spaceXl)
-                    Label {
-                        text: Words.openFailure(repoTab.errorKind)
-                        font.pixelSize: Theme.fontLg
-                        font.weight: Font.DemiBold
-                        anchors.horizontalCenter: parent.horizontalCenter
-                    }
-                    Label {
-                        text: repoTab.errorPath
-                        color: Theme.textSecondary
-                        elide: Text.ElideMiddle
-                        width: parent.width
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    // git's words, and the only red on this screen: the
-                    // gate that reports a git it cannot use draws the
-                    // line the same way (Main.qml).
-                    Label {
-                        visible: repoTab.errorKind === "other"
-                        text: repoTab.error
-                        color: Theme.danger
-                        wrapMode: Text.Wrap
-                        width: parent.width
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    // A plain frame (規約 §肯定側のボタン).
-                    ActionButton {
-                        implicitHeight: Theme.controlHeight
-                        text: qsTr("Close tab")
-                        frameColor: Theme.borderDefault
-                        activeFocusOnTab: true
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        onActivated: page.closeTabRequested()
-                    }
-                }
+                kind: repoTab.errorKind
+                path: repoTab.errorPath
+                message: repoTab.error
+                pageWidth: page.width
+                onCloseRequested: page.closeTabRequested()
             }
 
             // ---- three-pane layout --------------------------------------

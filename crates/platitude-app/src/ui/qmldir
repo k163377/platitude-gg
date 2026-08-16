@@ -54,6 +54,7 @@ NavRail 1.0 NavRail.qml
 OpExitCard 1.0 OpExitCard.qml
 OpExitRow 1.0 OpExitRow.qml
 OpenFailedDialog 1.0 OpenFailedDialog.qml
+OpenFailedScreen 1.0 OpenFailedScreen.qml
 PaneHeader 1.0 PaneHeader.qml
 RefChip 1.0 RefChip.qml
 RefListPopup 1.0 RefListPopup.qml
