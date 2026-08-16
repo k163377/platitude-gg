@@ -940,209 +940,19 @@ Item {
     }
 
     // ---- context menu on a working-tree file row --------------------
-    property string menuFilePath: ""
-    property string menuFileBucket: ""
-    /// Whether this menu's writing rows were on offer as it opened, held
-    /// still for as long as it stands (`menuCanSwitch` and the rest).
-    property bool menuFileCanWrite: false
-    /// How many files the rows here would touch, counted the way the
-    /// writes count them (`chosenRows()` skips folder rows, which nothing
-    /// in this menu acts on). Not `chosenCount` — that counts chosen
-    /// keys, so a folder in the choice would put a file on the tag that
-    /// no command is going to reach.
-    property int menuFileCount: 0
     function openFileMenu(bucket, path) {
         // A right-click is a click: it walks away from a question that
         // was standing, which may well be about another row.
         page.stopRowAsk()
-        page.menuFileBucket = bucket
-        page.menuFilePath = path
-        page.menuFileCanWrite = repoTab.busyCount === 0
-        // What the discard row would do, worked out once here: the choice
-        // cannot change while the menu is up, so the words the row says
-        // and the writes it runs are read off the same plan.
-        page.discardPlan = page.planDiscard()
-        page.menuFileCount = wipPane.chosenRows().length
-        fileMenu.offer()
-        if (AppBackend.autoAct !== "")
-            AppBackend.report("file_menu bucket=" + bucket
-                              + " rows=" + fileMenu.offeredRows)
+        fileRowMenu.offer(bucket, path)
     }
-    /// What the chosen rows' discard costs, by the bucket the row was
-    /// opened on (デザイン規約 §その他の操作):
-    ///
-    /// - unstaged — the edits on disk go, and what is staged stays
-    /// - untracked — the file goes; there the file *is* the change
-    /// - staged — both sides go, back to HEAD, and a rename takes the
-    ///   name it came from with it or leaves half of itself staged
-    ///
-    /// git refuses to restore a conflicted path until told how it was
-    /// resolved, so a conflicted row rides along untouched and uncounted.
-    property var discardPlan: null
-    function planDiscard() {
-        const rows = wipPane.chosenRows()
-        const plan = { count: 0, unstaged: [], untracked: [], staged: [] }
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i]
-            if (row.bucket === "conflicts")
-                continue
-            plan.count++
-            const bag = row.bucket === "untracked" ? plan.untracked
-                      : row.bucket === "staged" ? plan.staged : plan.unstaged
-            bag.push(row.fullName)
-            // A rename is undone by both of its names at once.
-            if (row.bucket === "staged" && row.orig_path !== "")
-                bag.push(row.orig_path)
-        }
-        return plan
-    }
-    function discardWords(plan) {
-        return !plan || plan.count === 0 ? "" : qsTr("Discard")
-    }
-    function discardNote(plan) {
-        if (!plan || plan.count === 0)
-            return ""
-        if (plan.count > 1)
-            return qsTr("%n files", "", plan.count)
-        if (plan.untracked.length > 0)
-            return qsTr("the file goes")
-        if (plan.staged.length > 0)
-            return qsTr("both sides")
-        return ""
-    }
-    /// Held, not asked (デザイン規約 §長押し).
-    function discardChosenNow(plan) {
-        if (!plan || plan.count === 0)
-            return
-        // One git command per bucket, however many rows were chosen: the
-        // paths cross the bridge one at a time and the write takes the
-        // whole set (デザイン規約 §その他の操作).
-        if (plan.unstaged.length > 0) {
-            page.sendPaths(plan.unstaged)
-            repoTab.discardPaths()
-        }
-        if (plan.untracked.length > 0) {
-            page.sendPaths(plan.untracked)
-            repoTab.removeUntrackedPaths()
-        }
-        if (plan.staged.length > 0) {
-            page.sendPaths(plan.staged)
-            repoTab.discardPathsToHead()
-        }
-    }
-    /// Hands a set of paths to the bridge for the write that follows.
-    function sendPaths(paths) {
-        repoTab.beginPaths()
-        for (let i = 0; i < paths.length; i++)
-            repoTab.addPath(paths[i])
-    }
-    /// The conflicted rows among those chosen — the only ones a side can
-    /// be taken on.
-    function chosenConflicts() {
-        const rows = wipPane.chosenRows()
-        const paths = []
-        for (let i = 0; i < rows.length; i++)
-            if (rows[i].bucket === "conflicts")
-                paths.push(rows[i].fullName)
-        return paths
-    }
-    /// Takes one side of every conflicted row that is highlighted, in one
-    /// git command (デザイン規約 §その他の操作).
-    function takeSideNow(side) {
-        const paths = page.chosenConflicts()
-        if (paths.length === 0)
-            return
-        page.sendPaths(paths)
-        repoTab.takeSidePaths(side)
-    }
-    /// The paths are always named: git walks a bare `mergetool` one file
-    /// at a time and holds the write queue for the whole walk.
-    function openInMergeTool() {
-        if (wipPane.workTree.mergeTool === "") {
-            page.settingsDialogRequested()
-            return
-        }
-        const paths = page.chosenConflicts()
-        if (paths.length === 0)
-            return
-        page.sendPaths(paths)
-        repoTab.openMergetool()
-    }
-    AppMenu {
-        id: fileMenu
-        // Named by branch rather than `--ours` / `--theirs` — during a
-        // rebase those two swap over (デザイン規約 §conflict の ours /
-        // theirs). Plain clicks: a conflicted file has no settled version
-        // to lose.
-        AppMenuItem {
-            text: wipPane.workTree.sideOurs !== ""
-                  ? qsTr("Keep %1's version").arg(wipPane.workTree.sideOurs)
-                  : qsTr("Keep this branch's version")
-            offered: page.menuFileBucket === "conflicts"
-                     && page.menuFileCanWrite
-            onTriggered: page.takeSideNow("ours")
-        }
-        AppMenuItem {
-            text: wipPane.workTree.sideTheirs !== ""
-                  ? qsTr("Take %1's version").arg(wipPane.workTree.sideTheirs)
-                  : qsTr("Take the incoming version")
-            offered: page.menuFileBucket === "conflicts"
-                     && page.menuFileCanWrite
-            onTriggered: page.takeSideNow("theirs")
-        }
-        // With nothing configured the row becomes the door to the setting
-        // (規約 §conflict を外部ツールへ渡す).
-        AppMenuItem {
-            text: wipPane.workTree.mergeTool !== ""
-                  ? qsTr("Edit in %1").arg(wipPane.workTree.mergeTool)
-                  : qsTr("Edit in <merge editor>…")
-            offered: page.menuFileBucket === "conflicts"
-                     && page.menuFileCanWrite
-            onTriggered: page.openInMergeTool()
-        }
-        AppMenuSeparator {}
-        AppMenuItem {
-            code: "stash"
-            note: page.menuFileCount > 1
-                  ? qsTr("%n files", "", page.menuFileCount) : ""
-            // git will not stash a tree with unresolved conflicts in it.
-            offered: page.menuFileBucket !== "conflicts"
-                     && page.menuFileCanWrite
-            onTriggered: {
-                const rows = wipPane.chosenRows()
-                const paths = []
-                for (let i = 0; i < rows.length; i++)
-                    paths.push(rows[i].fullName)
-                page.sendPaths(paths)
-                repoTab.stashPaths("")
-            }
-        }
-        // Held, not asked (デザイン規約 §長押し). On a file changed on
-        // both sides the two rows are the choice itself: the unstaged one
-        // keeps what is staged, the staged one takes the lot.
-        AppMenuItem {
-            id: fileDiscardItem
-            text: page.discardWords(page.discardPlan)
-            note: page.discardNote(page.discardPlan)
-            offered: page.menuFileBucket !== "conflicts"
-                     && page.menuFileCanWrite
-            holdMs: Metrics.holdMs
-            onHeld: {
-                fileMenu.close()
-                page.discardChosenNow(page.discardPlan)
-            }
-        }
-        AppMenuSeparator {}
-        AppMenuItem {
-            text: page.menuFileCount > 1 ? qsTr("Copy paths") : qsTr("Copy path")
-            onTriggered: {
-                const rows = wipPane.chosenRows()
-                const paths = []
-                for (let i = 0; i < rows.length; i++)
-                    paths.push(rows[i].fullName)
-                clipboard.copy(paths.join("\n"))
-            }
-        }
+    FileRowMenu {
+        id: fileRowMenu
+        repoTab: repoTab
+        workTree: workTree
+        wipPane: wipPane
+        onMergeToolWanted: page.settingsDialogRequested()
+        onCopyRequested: text => clipboard.copy(text)
     }
 
     // ---- context menu on a graph row -------------------------------
@@ -1409,8 +1219,9 @@ Item {
             gitCorner: gitCorner
             refMenu: refMenu
             refDeleteItem: refDeleteItem
-            fileMenu: fileMenu
-            fileDiscardItem: fileDiscardItem
+            fileRowMenu: fileRowMenu
+            fileMenu: fileRowMenu.menu
+            fileDiscardItem: fileRowMenu.discardItem
             commitMenu: commitRowMenu.menu
             dropCommitItem: commitRowMenu.dropItem
             stashDeleteItem: commitRowMenu.stashDropItem

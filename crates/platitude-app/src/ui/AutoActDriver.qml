@@ -45,6 +45,7 @@ Item {
 
     property AppMenu refMenu
     property AppMenuItem refDeleteItem
+    property FileRowMenu fileRowMenu
     property AppMenu fileMenu
     property AppMenuItem fileDiscardItem
     property AppMenu commitMenu
@@ -963,7 +964,7 @@ Item {
         } else if (act === "stash-file") {
             wipPane.chooseOnly("unstaged", arg)
             page.openFileMenu("unstaged", arg, "")
-            page.sendPaths([arg])
+            fileRowMenu.sendPaths([arg])
             repoTab.stashPaths("")
         } else if (act === "stage-many" || act === "stage-many-go") {
             page.showWip()
@@ -1020,7 +1021,7 @@ Item {
             wipPane.chooseOnly("conflicts", arg)
             page.openFileMenu("conflicts", arg, "")
             fileMenu.close()
-            page.takeSideNow(act === "take-side-ours" ? "ours" : "theirs")
+            fileRowMenu.takeSideNow(act === "take-side-ours" ? "ours" : "theirs")
         } else if (act === "open-mergetool") {
             // With a tool configured this holds the write queue until it
             // exits, so a demo tool that blocks leaves the wait on screen.
@@ -1028,7 +1029,7 @@ Item {
             wipPane.chooseOnly("conflicts", arg)
             page.openFileMenu("conflicts", arg, "")
             fileMenu.close()
-            page.openInMergeTool()
+            fileRowMenu.openInMergeTool()
             AppBackend.report("merge_tool " + wipPane.workTree.mergeTool)
         } else if (act === "discard-file" || act === "discard-file-go"
                    || act === "delete-file" || act === "delete-file-go"
