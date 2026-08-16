@@ -7,3 +7,6 @@
 - **mod.rs から出す型の `pub(super)` は `pub(crate)` と書き写す** — session は crate 直下なので mod.rs の `pub(super)` = `pub(crate)`。移動先で `pub(super)` にすると session 内へ狭まる(逆に mod.rs で private だった型は移動先で `pub(super)` にすると元と同じ範囲)
 
 ## 分割しない判断(超過理由の台帳 — 行が消えたら分割済み)
+
+- **`ui/AutoActDriver.qml`(1769 行)は割らない** — `runAutoAct()` の分岐が同じファイルの Timer を id で名指ししており、動詞の beat と dispatch は同じコンポーネントスコープに居ないと繋がらない(割れば Timer を property で渡し直すことになり、ページから渡す 27 本がもう一段増える)。中身は 1 動詞 1 分岐 = 増えるのは分岐の本数だけで、責務は増えない
+- **`ui/WindowAutoActDriver.qml`(630 行)も同じ理由**(窓側の beat と `begin()` の dispatch)
