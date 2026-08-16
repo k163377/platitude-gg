@@ -15,7 +15,7 @@
 - `push-retry`(**ボタンが黄 + `!` になる形は push を届かないリモートへ撃つ** — `fetch-fail` と同じ仕込み。push-retry は `--preset diverged` で実際の非早送り拒否を受けてから force で着地させ、報告行 `push_retry refused= branch=` が印の立った側を言う。**印が消えた側は最後の絵で見る**)
 - `reset-soft` / `reset-mixed` / `reset-hard`(引数は完全な oid か `row:<n>`。**省略時は HEAD の 1 つ下の行** — 先端への reset は何も動かず絵にならない)
 - `reset-hard-confirm`(hard はサブメニューの長押し行 — -confirm はメニューと行を出した所で止まり、reset-hard が長押しを完走させて実行。引数の解決は reset-soft と同じ)
-- `commit-menu` / `reset-menu` / `fetch` / `settings`
+- `commit-menu` / `reset-menu`(**判定は overlay.png 側の報告行**。must_say は `overlay saved=true popups=1` / サブメニューを開く `reset-menu` は `popups=2` — カードの写っていない絵は緑にならない)/ `fetch` / `settings`
 - `open-picker`(**ダイアログはプラットフォームの窓なのでどちらの PNG にも写らない** — 判定は報告行 `picker folder=` = 開いているリポジトリの親フォルダの `file:` URL)
 - `open-not-a-repo` / `open-bare` / `open-not-a-repo-retry` / `open-not-a-repo-cancel` / `open-fail-tab` / `open-fail-tab-bare`
 - `open-fail-tab-log`(**開けないフォルダの 6 通り**。規約 §リポジトリを開く = 置き場所は「どの道で来たか」・文言は種別。**引数を渡さなければ xtask がそのフォルダを作る** — 素のディレクトリか `git init --bare` した先で、**リポジトリになれないものが主題なので `--preset` で名指しできない**。前半 4 つがピッカー経由 = ダイアログ(報告行 `open_failed kind= dialog= tabs= active= near=`。**`tabs=` が「開けなかったフォルダはタブにならない」の答え**で、`-retry` は既存の `picker folder=` が**失敗フォルダの親**を名乗るか・`-cancel` は `tabs=` と `active=` が入る前と同じかを見る)、後半 3 つがそれ以外の道 = タブの中の画面(報告行 `open_fail_tab tabs= state= kind= commands=`。`-log` は `>_` を押して**その画面からログが届く**ことを見る = パネルは空でよい、届くことが答え)。**`dialog=` / `commands=` はどちらもその窓自身の可視性**。**3 つ目の種別(`other` = git が答えられなかった)はアプリから作れない** — 起こせるのは実質 10 秒のタイムアウトだけなので、撮る時は `repo::open` が `TimedOut` を返す**使い捨てパッチ**を当てる(コミットしない))

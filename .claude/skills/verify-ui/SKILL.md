@@ -16,7 +16,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 ## 壊れない動詞の実装と反復
 
 - **時間は成功条件にしない**。動詞は実際の入力経路を通し、対象の `loaded` / popup `visible` / tooltip `visible` / busy edge と終了 / write sequence / model output 等、その操作が生む観測可能な出力を待って `finishAutoAct()` する。25ms 等の Timer は状態 sampler であり、回数・経過時間で先へ進めない。`--quit-ms` は廃止済みで指定すると fail fast する
-- **`--watchdog-ms` は診断用の外側の天井だけ**。性能が落ちても正しい run の撮影時点を変えないよう通常は既定 120s のまま使う。短くして「通信中」や「起動途中」を狙わない。watchdog 到達は PASS ではなく screenshot 無しの FAIL
+- **`--watchdog-ms` は診断用の外側の天井だけ**。性能が落ちても正しい run の撮影時点を変えないよう通常は既定 120s のまま使う。短くして「通信中」や「起動途中」を狙わない。**watchdog 到達はそれだけで FAIL** — アプリは自分で `Qt.quit()` するので exit 0 で戻り、2 枚のうち app.png だけ書けた run は「screenshot saved=true」も持つ。判定は `auto-act watchdog expired` の行そのもの
 - **非因果の寿命管理を因果完了へ混ぜない**。性能測定の 12 秒窓は測定入力なので保持するが、起動からの固定 quit は成功条件にしない。`perf_done` と親 watchdog で perf の終了・kill を判定し、raw worktree app 起動は offscreen 環境変数だけでは許可しない。Windows の直接起動ではなく `cargo xtask verify-ui <verb>`、Linux では `cargo xtask linux verify-ui <verb>` を使う
 - **owner は 1 run に 1 つ**。page 内は `AutoActDriver.qml`、window 横断は `WindowAutoActDriver.qml` が完了を持ち、後者の動詞は page completion を defer する。`AutoShotDriver.claimPageAct()` より前に page 動詞を始めず、新規 tab に同じ動詞を replay させない。最終撮影は `AutoShotDriver` だけが行う
 - **中間状態は実 edge を latch する**。busy/loading/error を撮る動詞は対応 signal で edge を観測し、非同期画像 callback が終わるまで専用の automation latch で表示を保つ。固定時間の窓を探したり、入力側の bool だけ立てて出力を偽装しない。既存例は `force-push-hold` と `settings-tools-loading`
@@ -43,7 +43,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 **ダイアログ・メニューの見た目は headless で撮れる**: `PG_SHOT_DIR` 指定時、`Main.qml` のオーバーレイミラー(`ShaderEffectSource`)が **overlay.png** を app.png と並べて保存する(offscreen で成立・ロック状態と無関係 — 2026-08-05 実測)。オーバーレイ自体の grabToImage は "no QML engine" で不可、ミラーが唯一の経路。アンロック中の `PrintWindow` も引き続き可(実 hover 等、実ウィンドウが要る検証のみ)。
 
-**overlay.png は閉じたポップアップを写したままにする** — `ShaderEffectSource` はソースアイテムが描くものを失うと**新しいフレームを渡さなくなり、最後のテクスチャが残る**。つまり「メニューが閉じたか」を overlay.png で判定できない(閉じた後の絵は閉じる前と同じ)。**閉じたことを見たいなら QML に言わせる** — `Popup.opened` を `AppBackend.report()` で出し、報告行で読む。この状態を絵にする時は **app.png だけを使う**(合成すると消えたはずのカードが甦る)。
+**overlay.png は撮影時点のオーバーレイそのもの** — ミラーは live ではなく、撮影時に `scheduleUpdate()` を 1 回だけ受け、その完了(`scheduledUpdateCompleted`)を待って grab する。**白紙の overlay.png は「その時点で何も開いていなかった」の意味**で、フレームに追い越された絵ではない(閉じたポップアップの残像も残らない)。報告行 `overlay saved=<bool> popups=<n>` の **`popups=` がオーバーレイ自身が抱えていた数**(メニュー 1 / サブメニューを開けば 2 / モーダルは dimmer を伴って 2 以上)。`commit-menu` / `reset-menu` はこの行が must_say なので、カードの写っていない run は緑にならない — **overlay が主題の動詞には同じ 1 行を足せる**(`verify/verbs.rs`)。「閉じたか」を絵ではなく `Popup.opened` の報告行で読むのは変わらない(白紙は「何も無い」としか言えず、どのカードが閉じたかは言えない)。
 
 ## hover の絵の撮り方(仮表示)
 
@@ -51,7 +51,7 @@ hover はアプリへは注入できない(§Windows での実行・デバッグ
 
 1. **既にその状態の動詞がある** — [verbs.md](verbs.md) の一覧を見た目の種類から逆引きする。ツールチップ(attached ToolTip): `signature-tip` / `stash-tip` / `path-tip`(いずれも overlay.png 側。**意匠は共有インスタンス 1 つ** = `Main.dressToolTip` なので、どれか 1 枚で全ツールチップの見た目が言える)。hover カード: `row-card`(グラフ行)/ `ref-list-card`(チップの一覧)/ `author-card-open` / `co-authors-open` / `badges-hover`(帯の状態カード — `identity-tip` も同じカードを開く)/ `eol-hover`(WIP 行の `!`)/ `eol-commit`(コミットボタンの上のポインタ)/ `avatar-hover`(ペンのバッジ)。ポインタの下で色・印・道具が変わる形: `tab-mark`(タブと `✕`)/ `line-tools` / `hunk-tools`(hunk の照明)/ `stage-many`(行末の `+` と仲間の印)/ `graph-divider`(仕切りの線と禁止の輪)/ `graph-bar`(レーンのバー)/ `nav-peek` 系(レールの peek)/ `avatar-row-lit`(設定一覧の行)。
 2. **配線済みだが動詞が無い** — 動詞を 1 つ足すのが正道で、**安い**: xtask は動詞を検査せず `PG_AUTO_ACT` へ素通しする(許可リストは無い。判定が要る時だけ `verify/verbs.rs` の `must_say` に 1 行)ので、実装は QML の分岐と完了 predicate — ページ内は `AutoActDriver.qml`、ウィンドウ横断(タブ・identity・窓)は `WindowAutoActDriver.qml`。作法は 3 点: **実 hover が書くのと同じ 1 つのプロパティ / シグナルへ書く**(`eol-hover` / `pointAtTab` が手本。書き先が無い形なら先に `*PointedAt` / `pointed` の 1 本を切る — 形の一覧は rules-refs/app-ui.md)・**ページ側の判定を関数直呼びで迂回しない**(`row-card` の注意 = 出さないはずの場面まで開いて緑になる)・**入力した同じ callback 内や固定 Timer で完了せず、出力側 predicate を観測して `finishAutoAct()` する**。足したら verbs.md へ追記する。
-3. **未配線・意匠検討の仮当て(強制表示)** — 使い捨てパッチで出す。**worktree で当て、コミットしない**(`repo::open` の TimedOut パッチと同じ扱い)。出したい状態は**仮の bool 1 本に束ねて、見た目の条件へ `|| <その bool>` を足す**(差分が最小で revert しやすく、意匠が採用されたらそのまま道 2 の書き先になる)。QML は release exe 埋め込みなので**パッチのたびにビルドが要る**(同じビルドの撮り直しだけ `--no-build`)。撮影は周囲の状態を作る既存動詞に乗せる — 仮表示は無条件に出るので、どの動詞の PNG にも写る(ツールチップ・ポップアップは overlay.png 側 = 残像の罠は上の項)。**複数の的の棚卸しは一括で強制表示して 1 枚に集める**。往復しそうなら revert の前に `git diff > force-<何>.patch` で保存する。
+3. **未配線・意匠検討の仮当て(強制表示)** — 使い捨てパッチで出す。**worktree で当て、コミットしない**(`repo::open` の TimedOut パッチと同じ扱い)。出したい状態は**仮の bool 1 本に束ねて、見た目の条件へ `|| <その bool>` を足す**(差分が最小で revert しやすく、意匠が採用されたらそのまま道 2 の書き先になる)。QML は release exe 埋め込みなので**パッチのたびにビルドが要る**(同じビルドの撮り直しだけ `--no-build`)。撮影は周囲の状態を作る既存動詞に乗せる — 仮表示は無条件に出るので、どの動詞の PNG にも写る(ツールチップ・ポップアップは overlay.png 側 = 上の項)。**複数の的の棚卸しは一括で強制表示して 1 枚に集める**。往復しそうなら revert の前に `git diff > force-<何>.patch` で保存する。
 
 どの道でも `SetCursorPos` / `WM_MOUSEMOVE` / `SendInput` を試さない(罠の項 — 実マウスに奪還され、成功と失敗が再現不能に混ざる)。実窓でしか見えないのは OS カーソルとの重なりだけ。hover の**配送規則そのもの**(どこに handler を置くと立つか)の検証は使い捨ての qmltestrunner シーン(rules-refs/app-ui.md)。
 
