@@ -119,25 +119,17 @@ Rectangle {
             text: qsTr("%n file(s) are changed both in the staging area and on disk. git cannot take those apart, so the staged changes cannot go on their own.", "",
                        card.workTree.partiallyStagedCount)
         }
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spaceSm
-            Item { Layout.fillWidth: true }
-            HoverToolButton {
-                text: qsTr("Cancel")
-                font.pixelSize: Theme.fontSm
-                onClicked: card.close()
-            }
-            ActionButton {
-                implicitHeight: Theme.controlHeight
-                kind: "stash"
-                besideWord: true
-                frameColor: enabled ? Theme.accent : Theme.borderDefault
-                activeFocusOnTab: true
-                text: qsTr("Stash")
-                enabled: card.repoTab.busyCount === 0
-                onActivated: card.apply()
-            }
+        // The card is a mode of the pane rather than a window, but its
+        // foot is a dialog's: the way out on the left, the thing it is
+        // for on the right, and the accent following what that one can do
+        // (`DialogActions`).
+        DialogActions {
+            cancelText: qsTr("Cancel")
+            acceptKind: "stash"
+            acceptText: qsTr("Stash")
+            acceptEnabled: card.repoTab.busyCount === 0
+            onCancelled: card.close()
+            onAccepted: card.apply()
         }
     }
 }
