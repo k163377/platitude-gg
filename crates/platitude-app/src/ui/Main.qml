@@ -572,7 +572,7 @@ ApplicationWindow {
     // QML-declared mirror of the overlay is grabbable, which makes
     // popups photographable on the offscreen platform, where no OS
     // window exists to shoot from outside. Loaded only while a shot
-    // directory is set, so ordinary runs pay nothing for it.
+    // directory is set, and refreshed once at shot time: AutoShotDriver.
     Loader {
         id: overlayMirror
         active: AppBackend.shotDir !== ""
@@ -580,7 +580,7 @@ ApplicationWindow {
         z: -10000
         sourceComponent: ShaderEffectSource {
             sourceItem: root.Overlay.overlay
-            live: true
+            live: false
         }
     }
     AutoShotDriver {

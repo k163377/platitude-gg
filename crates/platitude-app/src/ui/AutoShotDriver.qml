@@ -18,6 +18,11 @@ Item {
     property bool pageActClaimed: false
     property bool shotPending: false
     property bool shotTaken: false
+    // A mirror that is not live still renders itself once when it is
+    // built, and announces that one the same way it announces an asked-for
+    // refresh. Only the refresh this driver asked for is the shot.
+    property bool overlayAsked: false
+    property bool overlayGrabbed: false
     property int shotParts: 0
     // Every PG_AUTO_ACT run has one explicit completion edge. A verb that
     // still relies on the old shot clock is a harness bug: the watchdog must
@@ -67,6 +72,24 @@ Item {
         }
     }
 
+    // The overlay's own render boundary, and the reason `Main.qml` builds
+    // the mirror with `live: false`. A live mirror leaves the shot nothing
+    // to wait on -- the grab reads whatever frame happened to have reached
+    // the texture, which for a popup opened in the turn that completed the
+    // verb is often none at all (2026-08-16: two of four concurrent
+    // `commit-menu` runs photographed a blank overlay and passed, while
+    // the same verb run one at a time never did). Asked for one refresh
+    // instead, this is the edge that says the refresh landed: from here
+    // the texture holds what the overlay held when the shot was called
+    // for.
+    Connections {
+        target: driver.overlayMirror ? driver.overlayMirror.item : null
+        ignoreUnknownSignals: true
+        function onScheduledUpdateCompleted() {
+            driver.grabOverlay()
+        }
+    }
+
     Timer {
         id: watchdog
         interval: Math.max(AppBackend.autoWatchdogMs, 1)
@@ -81,22 +104,36 @@ Item {
             Qt.quit()
     }
 
+    /// Refreshed texture in hand, the picture of the popups. `popups=` is
+    /// the overlay's own count of what it was holding: a blank overlay.png
+    /// now means nothing was open, never a shot that outran the frame.
+    function grabOverlay() {
+        if (!driver.overlayAsked || driver.overlayGrabbed)
+            return
+        driver.overlayGrabbed = true
+        const mirror = overlayMirror.item
+        const popups = mirror.sourceItem ? mirror.sourceItem.children.length : 0
+        const overlayOk = mirror.grabToImage(function (res) {
+            const saved = res.saveToFile(AppBackend.shotDir + "/overlay.png")
+            console.warn("overlay saved=" + saved + " popups=" + popups)
+            driver.partDone()
+        })
+        if (!overlayOk) {
+            console.warn("overlay grabToImage returned false")
+            driver.partDone()
+        }
+    }
+
     function takeShot() {
         if (driver.shotTaken)
             return
         driver.shotTaken = true
         const path = AppBackend.shotDir + "/app.png"
         driver.shotParts = overlayMirror.item ? 2 : 1
+        // Asked for here, taken in `grabOverlay` when the mirror answers.
         if (overlayMirror.item) {
-            const overlayOk = overlayMirror.item.grabToImage(function (res) {
-                const saved = res.saveToFile(AppBackend.shotDir + "/overlay.png")
-                console.warn("overlay saved=" + saved)
-                driver.partDone()
-            })
-            if (!overlayOk) {
-                console.warn("overlay grabToImage returned false")
-                driver.partDone()
-            }
+            driver.overlayAsked = true
+            overlayMirror.item.scheduleUpdate()
         }
         const shown = gate.visible ? gate : mainUi
         const ok = shown.grabToImage(function (res) {
