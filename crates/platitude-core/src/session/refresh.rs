@@ -404,60 +404,73 @@ impl RepoSession {
         });
     }
 
-    pub fn refresh_stashes(self: &Arc<Self>) {
+    /// One gated snapshot read: at most one in flight with a single repeat
+    /// booked behind it ([`ReadSlot`]), and an answer only from the pass
+    /// that is still the current one ([`OpGate`]).
+    ///
+    /// The slot and the gate are reached through accessors because the
+    /// spawned task outlives this call and each snapshot has its own pair.
+    ///
+    /// Not what refs and status do: those publish through a shared path
+    /// and answer their caller whether the graph has to be walked again.
+    fn refresh_gated<F, Fut>(
+        self: &Arc<Self>,
+        op: &'static str,
+        slot: fn(&Self) -> &ReadSlot,
+        gate: fn(&Self) -> &OpGate,
+        read: F,
+    ) where
+        F: Fn(Arc<Self>, PathBuf, CancellationToken) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<SessionEvent, GitError>> + Send,
+    {
         let Some(workdir) = self.workdir() else {
             return;
         };
-        if !self.stash_read.claim() {
+        if !slot(self).claim() {
             return;
         }
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            let _held = SlotHeld(&s.stash_read);
+            let _held = SlotHeld(slot(&s));
             loop {
-                let op_gen = s.stash_gate.begin();
+                let op_gen = gate(&s).begin();
                 let cancel = s.root_cancel.clone();
-                match stash::load(&s.executor, &workdir, &cancel).await {
-                    Ok(stashes) => {
-                        if s.stash_gate.is_current(op_gen) {
-                            s.sink.event(SessionEvent::StashesLoaded { stashes });
+                match read(Arc::clone(&s), workdir.clone(), cancel).await {
+                    Ok(event) => {
+                        if gate(&s).is_current(op_gen) {
+                            s.sink.event(event);
                         }
                     }
-                    Err(e) => s.fail("stash", e),
+                    Err(e) => s.fail(op, e),
                 }
-                if !s.stash_read.finish() {
+                if !slot(&s).finish() {
                     break;
                 }
             }
         });
     }
 
+    pub fn refresh_stashes(self: &Arc<Self>) {
+        self.refresh_gated(
+            "stash",
+            |s| &s.stash_read,
+            |s| &s.stash_gate,
+            |s, workdir, cancel| async move {
+                let stashes = stash::load(&s.executor, &workdir, &cancel).await?;
+                Ok(SessionEvent::StashesLoaded { stashes })
+            },
+        );
+    }
+
     pub fn refresh_worktrees(self: &Arc<Self>) {
-        let Some(workdir) = self.workdir() else {
-            return;
-        };
-        if !self.worktrees_read.claim() {
-            return;
-        }
-        let s = Arc::clone(self);
-        self.runtime.spawn(async move {
-            let _held = SlotHeld(&s.worktrees_read);
-            loop {
-                let op_gen = s.worktrees_gate.begin();
-                let cancel = s.root_cancel.clone();
-                match crate::worktrees::load(&s.executor, &workdir, &cancel).await {
-                    Ok(list) => {
-                        if s.worktrees_gate.is_current(op_gen) {
-                            s.sink
-                                .event(SessionEvent::WorktreesLoaded { worktrees: list });
-                        }
-                    }
-                    Err(e) => s.fail("worktrees", e),
-                }
-                if !s.worktrees_read.finish() {
-                    break;
-                }
-            }
-        });
+        self.refresh_gated(
+            "worktrees",
+            |s| &s.worktrees_read,
+            |s| &s.worktrees_gate,
+            |s, workdir, cancel| async move {
+                let worktrees = crate::worktrees::load(&s.executor, &workdir, &cancel).await?;
+                Ok(SessionEvent::WorktreesLoaded { worktrees })
+            },
+        );
     }
 }
