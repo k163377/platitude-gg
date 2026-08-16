@@ -16,6 +16,42 @@ use crate::refs;
 use crate::repo::RepoInfo;
 use crate::scratch::ScratchFile;
 
+/// Runs `cmd` over `paths`, each wrapped as a literal pathspec, and runs
+/// nothing at all when there are none.
+///
+/// **An empty list is not the same argument as no list.** These commands
+/// read "no pathspec" as "every path" — `git clean -f -d --` with nothing
+/// after it takes the whole work tree — so a selection that came out empty
+/// must not reach git.
+async fn run_over_paths(
+    executor: &GitExecutor,
+    cmd: GitCommand,
+    paths: &[String],
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let cmd = cmd.args(paths.iter().map(|p| literal_pathspec(p)));
+    executor.run(cmd, cancel).await.map(drop)
+}
+
+/// Whether HEAD names a commit yet.
+///
+/// Before the first one there is nothing to restore a path from, and the
+/// commands that would take one back to HEAD have to empty it out of the
+/// index instead.
+async fn head_is_unborn(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    Ok(refs::head_state(executor, workdir, cancel)
+        .await?
+        .oid
+        .is_none())
+}
+
 /// `git add -- <paths>`: stages modifications, additions and deletions.
 pub async fn stage_paths(
     executor: &GitExecutor,
@@ -23,14 +59,8 @@ pub async fn stage_paths(
     paths: &[String],
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    if paths.is_empty() {
-        return Ok(());
-    }
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        .args(["add", "--"])
-        .args(paths.iter().map(|p| literal_pathspec(p)));
-    executor.run(cmd, cancel).await.map(drop)
+    let cmd = GitCommand::new().cwd(workdir).args(["add", "--"]);
+    run_over_paths(executor, cmd, paths, cancel).await
 }
 
 /// `git add --all`: stages modifications, additions and deletions, plus the
@@ -51,11 +81,7 @@ pub async fn unstage_all(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let unborn = refs::head_state(executor, workdir, cancel)
-        .await?
-        .oid
-        .is_none();
-    let cmd = if unborn {
+    let cmd = if head_is_unborn(executor, workdir, cancel).await? {
         // No HEAD to reset to; drop every entry instead. `--ignore-unmatch`
         // because an empty index matches nothing and `git rm` calls that
         // fatal — but "unstage nothing" has succeeded at its job (実測:
@@ -85,14 +111,12 @@ pub async fn unstage_paths(
     paths: &[String],
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
+    // Asked here as well as in `run_over_paths`: nothing to unstage must
+    // not cost the spawn that reading HEAD takes.
     if paths.is_empty() {
         return Ok(());
     }
-    let unborn = refs::head_state(executor, workdir, cancel)
-        .await?
-        .oid
-        .is_none();
-    let cmd = if unborn {
+    let cmd = if head_is_unborn(executor, workdir, cancel).await? {
         GitCommand::new()
             .cwd(workdir)
             // `--ignore-unmatch` as in unstage_all: a path that is not in
@@ -103,8 +127,7 @@ pub async fn unstage_paths(
             .cwd(workdir)
             .args(["restore", "--staged", "--"])
     };
-    let cmd = cmd.args(paths.iter().map(|p| literal_pathspec(p)));
-    executor.run(cmd, cancel).await.map(drop)
+    run_over_paths(executor, cmd, paths, cancel).await
 }
 
 /// `git restore --worktree -- <paths>`: throws away unstaged modifications
@@ -115,14 +138,10 @@ pub async fn discard_worktree(
     paths: &[String],
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    if paths.is_empty() {
-        return Ok(());
-    }
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .args(["restore", "--worktree", "--"])
-        .args(paths.iter().map(|p| literal_pathspec(p)));
-    executor.run(cmd, cancel).await.map(drop)
+        .args(["restore", "--worktree", "--"]);
+    run_over_paths(executor, cmd, paths, cancel).await
 }
 
 /// `git restore --staged --worktree -- <paths>`: throws away both sides at
@@ -142,14 +161,12 @@ pub async fn discard_to_head(
     paths: &[String],
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
+    // As in unstage_paths: asked before HEAD is read, not only before the
+    // command runs.
     if paths.is_empty() {
         return Ok(());
     }
-    let unborn = refs::head_state(executor, workdir, cancel)
-        .await?
-        .oid
-        .is_none();
-    let cmd = if unborn {
+    let cmd = if head_is_unborn(executor, workdir, cancel).await? {
         GitCommand::new()
             .cwd(workdir)
             .args(["rm", "-f", "-r", "--quiet", "--"])
@@ -158,8 +175,7 @@ pub async fn discard_to_head(
             .cwd(workdir)
             .args(["restore", "--staged", "--worktree", "--"])
     };
-    let cmd = cmd.args(paths.iter().map(|p| literal_pathspec(p)));
-    executor.run(cmd, cancel).await.map(drop)
+    run_over_paths(executor, cmd, paths, cancel).await
 }
 
 /// `git clean -f -d -- <paths>`: deletes untracked files. `status -uall`
@@ -174,14 +190,10 @@ pub async fn remove_untracked(
     paths: &[String],
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    if paths.is_empty() {
-        return Ok(());
-    }
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .args(["clean", "-f", "-d", "--"])
-        .args(paths.iter().map(|p| literal_pathspec(p)));
-    executor.run(cmd, cancel).await.map(drop)
+        .args(["clean", "-f", "-d", "--"]);
+    run_over_paths(executor, cmd, paths, cancel).await
 }
 
 /// Stages or unstages part of one file's diff.

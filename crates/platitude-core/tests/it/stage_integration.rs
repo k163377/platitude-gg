@@ -3,10 +3,12 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
-use crate::support::TestRepo;
+use std::sync::Arc;
+
+use crate::support::{Ends, TestRepo};
 use platitude_core::details::DiffTarget;
 use platitude_core::patch::HunkSelect;
-use platitude_core::process::GitExecutor;
+use platitude_core::process::{CommandObserver, GitExecutor};
 use platitude_core::repo::RepoInfo;
 use platitude_core::{stage, status};
 use tokio_util::sync::CancellationToken;
@@ -43,6 +45,55 @@ async fn buckets(repo: &TestRepo) -> (Vec<String>, Vec<String>, Vec<String>) {
 /// Content of a path in the index (what a commit would record).
 fn indexed(repo: &mut TestRepo, path: &str) -> String {
     repo.git(&["show", &format!(":{path}")])
+}
+
+/// An empty selection is not "every path": every command here reads a
+/// missing pathspec as the whole work tree, and `git clean -f -d --` on
+/// its own would delete every untracked file. So nothing runs — not even
+/// the read of HEAD that two of them need before they can choose a
+/// command.
+#[tokio::test]
+async fn an_empty_selection_runs_nothing() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.write_file("a.txt", "edited\n");
+    repo.write_file("new.txt", "fresh\n");
+
+    let ends = Arc::new(Ends::default());
+    let exec = GitExecutor::new().observed(Arc::clone(&ends) as Arc<dyn CommandObserver>, true);
+    let cancel = CancellationToken::new();
+    let none: [String; 0] = [];
+
+    stage::stage_paths(&exec, &repo.path, &none, &cancel)
+        .await
+        .expect("stage");
+    stage::unstage_paths(&exec, &repo.path, &none, &cancel)
+        .await
+        .expect("unstage");
+    stage::discard_worktree(&exec, &repo.path, &none, &cancel)
+        .await
+        .expect("discard worktree");
+    stage::discard_to_head(&exec, &repo.path, &none, &cancel)
+        .await
+        .expect("discard to head");
+    stage::remove_untracked(&exec, &repo.path, &none, &cancel)
+        .await
+        .expect("remove untracked");
+
+    let ran = ends.0.lock().unwrap().clone();
+    assert!(ran.is_empty(), "git was run anyway: {ran:?}");
+
+    let (staged, unstaged, untracked) = buckets(&repo).await;
+    assert!(staged.is_empty());
+    assert_eq!(unstaged, vec!["a.txt"], "the edit is still there");
+    assert_eq!(untracked, vec!["new.txt"], "and so is the untracked file");
+
+    // The same observer does hear a call that has something to do, so the
+    // silence above was the guard and not the watching.
+    stage::stage_paths(&exec, &repo.path, &["a.txt".to_string()], &cancel)
+        .await
+        .expect("stage a.txt");
+    assert_eq!(ends.0.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
