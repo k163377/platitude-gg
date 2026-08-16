@@ -115,6 +115,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/GraphRowChips.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphRowDelegate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HashPlate.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/HeadPinRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HeadTrack.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HoldDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HoldIcon.qml", "qt/qml/platitude");
@@ -144,7 +145,9 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/RemoteDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RepoPage.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RowHoverHost.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SectionPeekPopup.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsDialog.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SidebarFilterRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SidebarPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SignatureMark.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SlimField.qml", "qt/qml/platitude");

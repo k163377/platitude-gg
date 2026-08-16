@@ -51,6 +51,7 @@ GraphPane 1.0 GraphPane.qml
 GraphRowChips 1.0 GraphRowChips.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml
 HashPlate 1.0 HashPlate.qml
+HeadPinRow 1.0 HeadPinRow.qml
 HeadTrack 1.0 HeadTrack.qml
 HoldDriver 1.0 HoldDriver.qml
 HoldIcon 1.0 HoldIcon.qml
@@ -80,7 +81,9 @@ RefusalBadge 1.0 RefusalBadge.qml
 RemoteDialog 1.0 RemoteDialog.qml
 RepoPage 1.0 RepoPage.qml
 RowHoverHost 1.0 RowHoverHost.qml
+SectionPeekPopup 1.0 SectionPeekPopup.qml
 SettingsDialog 1.0 SettingsDialog.qml
+SidebarFilterRow 1.0 SidebarFilterRow.qml
 SidebarPane 1.0 SidebarPane.qml
 SignatureMark 1.0 SignatureMark.qml
 SlimField 1.0 SlimField.qml

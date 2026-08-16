@@ -286,53 +286,17 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
         visible: !sidebar.collapsed
-        // This pane's header band: a frameless filter that takes all the
-        // width left over, and the fold control at the end of it. It is
-        // the band the other panes' headers line up with, so it takes the
-        // header height, and the hairline that closes it is the band's
-        // rather than the input's (it runs on under the button).
-        Item {
+        SidebarFilterRow {
+            id: refFilter
             Layout.fillWidth: true
-            implicitHeight: Theme.headerHeight
-            RowLayout {
-                anchors.fill: parent
-                spacing: 0
-                TextField {
-                    id: refFilter
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    font.pixelSize: Theme.fontMd
-                    leftPadding: Theme.spaceSm
-                    rightPadding: Theme.spaceSm
-                    topPadding: 0
-                    bottomPadding: 0
-                    placeholderText: qsTr("Filter")
-                    background: null
-                    onTextChanged: {
-                        sidebar.branchesModel.setFilter(text)
-                        sidebar.remotesModel.setFilter(text)
-                        sidebar.worktreesModel.setFilter(text)
-                        sidebar.stashesModel.setFilter(text)
-                        sidebar.tagsModel.setFilter(text)
-                    }
-                }
-                // The whole block is the button: the reach is the band's
-                // full height, not a mark's worth of it. The rail's band
-                // is the same block with the mark pointing back.
-                FoldBlock {
-                    Layout.fillHeight: true
-                    Layout.preferredWidth: Theme.headerHeight
-                    onActivated: sidebar.foldRequested(true)
-                }
+            onTextChanged: {
+                sidebar.branchesModel.setFilter(refFilter.text)
+                sidebar.remotesModel.setFilter(refFilter.text)
+                sidebar.worktreesModel.setFilter(refFilter.text)
+                sidebar.stashesModel.setFilter(refFilter.text)
+                sidebar.tagsModel.setFilter(refFilter.text)
             }
-            Rectangle {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                height: Theme.borderWidth
-                color: refFilter.activeFocus ? Theme.borderFocus
-                                             : Theme.borderSubtle
-            }
+            onFoldRequested: sidebar.foldRequested(true)
         }
 
         NavHeader {
@@ -358,96 +322,19 @@ Rectangle {
             onRefMenuRequested: (kind, name, full, oidHex) =>
                 sidebar.refMenuRequested(kind, name, full, oidHex)
 
-            // The current branch never leaves the viewport: while its own
-            // row is scrolled off, this stand-in rides the edge the row
-            // went out of, and it steps aside the moment the row itself
-            // is on screen — so the sidebar never shows the branch twice.
-            // A detached HEAD (and a branch a filter or a folded folder
-            // hides) has no row at all, so the stand-in stays on top.
-            Rectangle {
-                id: headPin
+            HeadPinRow {
                 // The list is a Flickable: children declared in one are
                 // adopted by its content item and scroll away with it.
-                // Parenting to the list itself is what keeps this still.
+                // Parenting to the list itself is what keeps this still,
+                // so the adoption is written here rather than inside the
+                // component (app-ui.md).
                 parent: branchList
-
-                readonly property real rowTop:
-                    sidebar.branchesModel.headRow * Theme.rowHeight
-                readonly property bool rowAbove:
-                    sidebar.branchesModel.headRow < 0
-                    || rowTop < branchList.contentY
-                readonly property bool rowBelow:
-                    rowTop + Theme.rowHeight
-                        > branchList.contentY + branchList.height
-
-                visible: (sidebar.branchesModel.headName !== ""
-                          || sidebar.workTree.detached)
-                         && (rowAbove || rowBelow)
+                branchesModel: sidebar.branchesModel
+                workTree: sidebar.workTree
+                contentY: branchList.contentY
+                viewHeight: branchList.height
                 width: branchList.width
-                height: Theme.rowHeight
-                y: rowAbove ? 0 : branchList.height - height
-                // Dressed as the row it stands for, down to the margins:
-                // the current branch's own highlight, not a header band.
-                color: Theme.accentMuted
-                Rectangle {
-                    anchors.fill: parent
-                    color: Theme.bgHover
-                    visible: headRowMouse.containsMouse
-                }
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spaceMd
-                    anchors.rightMargin: Theme.spaceSm
-                    spacing: Theme.spaceXs
-                    // The rows' mark slot, left empty: the stand-in has
-                    // no mark of its own, but its name has to begin in
-                    // the same column as the rows it rides above.
-                    Item {
-                        Layout.preferredWidth: Theme.iconMd
-                        Layout.preferredHeight: Theme.iconMd
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        text: sidebar.workTree.detached ? qsTr("DETACHED HEAD")
-                                                        : sidebar.branchesModel.headName
-                        color: sidebar.workTree.detached ? Theme.warning : Theme.textLink
-                        font.weight: Font.DemiBold
-                        font.pixelSize: Theme.fontMd
-                        elide: Text.ElideMiddle
-                    }
-                    HeadTrack {
-                        visible: !sidebar.workTree.detached && sidebar.workTree.upstream !== ""
-                        ahead: sidebar.workTree.ahead
-                        behind: sidebar.workTree.behind
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    NavIcon {
-                        visible: !sidebar.workTree.detached
-                                 && (sidebar.branchesModel.headHasRemote
-                                     || sidebar.branchesModel.headHasPr)
-                        kind: sidebar.branchesModel.headHasPr ? "pr" : "remote"
-                        tint: sidebar.branchesModel.headHasPr ? Theme.success
-                                                              : Theme.textSecondary
-                        width: Theme.iconSm
-                        height: Theme.iconSm
-                    }
-                }
-                // Hairline on the side the scrolled rows pass under.
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    y: headPin.rowAbove ? parent.height - height : 0
-                    height: Theme.borderWidth
-                    color: Theme.borderSubtle
-                }
-                MouseArea {
-                    id: headRowMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    enabled: sidebar.branchesModel.headOid !== ""
-                    onClicked: sidebar.refActivated(sidebar.branchesModel.headOid)
-                }
+                onActivated: oidHex => sidebar.refActivated(oidHex)
             }
         }
 
@@ -566,171 +453,39 @@ Rectangle {
     }
 
     // ---- the folded list's one open section --------------------------
-    // Which one is open, and whether it still has the pointer, are held
-    // here rather than on a cell: the cell is left behind the moment the
-    // pointer walks into what it opened.
-    property string peekKind: ""
-    property real peekTop: 0
-    property bool peekWanted: false
-    /// The pointer is down in the open section itself. The popup's own
-    /// hover writes this and so do the smoke hooks, so a headless run and
-    /// a real pointer come to one answer (the same shape as the diff's
-    /// hunk hover — 規約 §diff の中のステージ). What happens when it goes
-    /// false hangs off the change rather than off the hover, so there is
-    /// no way to say "gone" without the settle that has to follow.
-    property bool peekEntered: false
-    onPeekEnteredChanged: {
-        if (!sidebar.peekEntered)
-            sidebar.settlePeek()
-    }
-    /// What holds it open with the pointer elsewhere: a menu raised from
-    /// one of its rows is standing over it, and taking the row away from
-    /// under an open menu reads as the row having gone.
-    readonly property bool peekPinned: sidebar.menuOpen
-    readonly property var peekModel:
-        sidebar.peekKind === "" ? null : rail.modelOf(sidebar.peekKind)
-    // The section headers' own words, said again for the one section the
-    // folded list shows: the rail has only an icon to name it with.
-    readonly property string peekCaption:
-        sidebar.peekKind === "branch" ? qsTr("BRANCHES")
-        : sidebar.peekKind === "remote" ? qsTr("REMOTES")
-        : sidebar.peekKind === "worktree" ? qsTr("WORKTREES")
-        : sidebar.peekKind === "stash" ? qsTr("STASHES")
-        : sidebar.peekKind === "tag" ? qsTr("TAGS") : ""
+    // The section itself, and the bookkeeping that says when it is open,
+    // live in SectionPeekPopup. The pane keeps the names the rail, the
+    // fold and the smoke hooks already call it by.
+    property alias peekKind: peek.kind
+    property alias peekTop: peek.top
+    property alias peekEntered: peek.entered
 
     function openPeek(kind, top) {
-        sidebar.peekKind = kind
-        sidebar.peekTop = top
-        sidebar.peekWanted = true
-        peek.open()
+        peek.openAt(kind, top)
     }
-    /// A click landed on the cell the pointer is resting on. The section
-    /// standing beside the rail goes away, and a second click brings it
-    /// back — the hover cannot, because the pointer has not moved and so
-    /// nothing about it has changed.
     function togglePeek(kind, top) {
-        // Asked of `peekKind` rather than the popup: on the way out it is
-        // still visible, and a click that arrived then would close what it
-        // was meant to open.
-        if (sidebar.peekKind === kind)
-            sidebar.closePeek()
-        else
-            sidebar.openPeek(kind, top)
+        peek.toggleAt(kind, top)
     }
-    /// The pointer left a cell. Only the cell whose section is open can
-    /// take it away — the one being left on the way to another has
-    /// already been replaced by the time this runs, in whichever order
-    /// the two arrive.
     function leavePeek(kind) {
-        if (sidebar.peekKind === kind)
-            sidebar.peekWanted = false
-        sidebar.settlePeek()
-    }
-    // The section opens flush against the rail, so walking into it takes
-    // the pointer off the cell, and walking back out puts it on again.
-    // The two hovers change in different frames and in no fixed order —
-    // between them the pointer is on neither, and `Qt.callLater` lands
-    // there and closes the section under the hand. So the answer waits
-    // a beat (デザイン規約 §hover のツールチップ), by which time
-    // whichever of the two now holds the pointer has said so.
-    function settlePeek() {
-        peekSettle.restart()
-    }
-    Timer {
-        id: peekSettle
-        interval: Metrics.hoverKeepMs
-        onTriggered: {
-            if (!sidebar.peekEntered && !sidebar.peekWanted
-                    && !sidebar.peekPinned)
-                sidebar.closePeek()
-        }
+        peek.leaveAt(kind)
     }
     function closePeek() {
-        peek.close()
-        sidebar.peekKind = ""
-        sidebar.peekWanted = false
-        // The list it was in has gone, so the pointer is not in it
-        // whatever the last hover said.
-        sidebar.peekEntered = false
+        peek.shut()
     }
-    // The menu that was standing over it has gone: whether the pointer
-    // came back in the meantime decides what happens now.
-    onPeekPinnedChanged: sidebar.settlePeek()
 
-    Popup {
+    SectionPeekPopup {
         id: peek
         parent: sidebar
-        // Flush against the rail, with nothing in between for the pointer
-        // to fall through, and starting level with the cell that opened
-        // it. It only ever grows downwards from there: a section with more
-        // rows than the pane can hold would otherwise be laid out from the
-        // top edge of the pane, nowhere near the cell it came out of
-        // (a repository with 45,000 tags puts every peek up there —
-        // reported 2026-08-08). The rows that do not fit scroll.
-        x: sidebar.width
-        y: sidebar.peekTop
-        width: sidebar.openWidth
-        // As tall as it has rows, and never past the foot of the pane it
-        // comes out of. It never opens with no rows at all — a cell
-        // holding a zero does not open (NavRail).
-        height: Math.min(Theme.headerHeight + peekList.count * Theme.rowHeight
-                         + Theme.borderWidth,
-                         Math.max(0, sidebar.height - sidebar.peekTop))
-        padding: 0
-        margins: 0
-        // Leaving it is what closes it (above). Escape is for the reader
-        // whose pointer is already inside it.
-        closePolicy: Popup.CloseOnEscape
-
-        // It keeps the list's own ground rather than a menu's: what is in
-        // it is the sidebar, and the header band would be lost against
-        // `bgElevated`. The frame is what floats it (規約 §メニュー), and
-        // there is no rounding on a panel that starts flush against the
-        // rail.
-        background: Rectangle {
-            color: Theme.bgSurface
-            border.color: Theme.borderDefault
-            border.width: Theme.borderWidth
-        }
-
-        contentItem: ColumnLayout {
-            spacing: 0
-            HoverHandler {
-                id: peekHover
-                // The other half of leaving. The cells can only see the
-                // way back over themselves; walking out of the list the
-                // other way — right into the diff or the graph, or off
-                // its top or bottom edge — is an exit no cell is told
-                // about, and without this it raises no event at all.
-                onHoveredChanged: sidebar.peekEntered = peekHover.hovered
-            }
-            NavHeader {
-                caption: sidebar.peekCaption
-                iconKind: rail.sectionOf(sidebar.peekKind).icon
-                iconTint: rail.sectionOf(sidebar.peekKind).tint
-                count: sidebar.peekModel ? sidebar.peekModel.total : 0
-                // Nothing to fold away to: this list is the only thing on
-                // screen. What closes it is the pointer leaving.
-                foldable: false
-                showTagToggle: sidebar.peekKind === "tag"
-                tagsShown: sidebar.repoTab.tagsShown
-                onTagsToggled: shown => sidebar.repoTab.setTagsShown(shown)
-            }
-            NavList {
-                id: peekList
-                sectionModel: sidebar.peekModel
-                expanded: true
-                kindHint: sidebar.peekKind
-                gestures: sidebar
-                stretch: true
-                headTracks: sidebar.peekKind === "branch"
-                            && sidebar.workTree.upstream !== ""
-                headAhead: sidebar.workTree.ahead
-                headBehind: sidebar.workTree.behind
-                onRefActivated: oidHex => sidebar.refActivated(oidHex)
-                onRefMenuRequested: (kind, name, full, oidHex) =>
-                    sidebar.refMenuRequested(kind, name, full, oidHex)
-            }
-        }
+        repoTab: sidebar.repoTab
+        workTree: sidebar.workTree
+        rail: rail
+        gestures: sidebar
+        paneW: sidebar.width
+        paneH: sidebar.height
+        listW: sidebar.openWidth
+        pinned: sidebar.menuOpen
+        onRefActivated: oidHex => sidebar.refActivated(oidHex)
+        onRefMenuRequested: (kind, name, full, oidHex) =>
+            sidebar.refMenuRequested(kind, name, full, oidHex)
     }
 }
