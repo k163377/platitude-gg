@@ -96,35 +96,6 @@ Rectangle {
     readonly property real floorWidth:
         bandRow.Layout.minimumWidth + bandRow.anchors.rightMargin
 
-    /// One of the window's own buttons. The close button is the one
-    /// exception to the wash — red under the pointer is a convention old
-    /// enough that departing from it would read as a bug.
-    component WindowButton: Rectangle {
-        id: winBtn
-        property string kind: ""
-        property bool danger: false
-        signal triggered()
-
-        width: Theme.railWidth
-        height: parent ? parent.height : Theme.toolbarHeight
-        color: !winBtnMouse.containsMouse ? "transparent"
-               : winBtn.danger ? Theme.danger : Theme.bgHover
-        NavIcon {
-            anchors.centerIn: parent
-            width: Theme.iconMd
-            height: Theme.iconMd
-            kind: winBtn.kind
-            tint: winBtnMouse.containsMouse && winBtn.danger
-                  ? Theme.textOnAccent : Theme.textPrimary
-        }
-        MouseArea {
-            id: winBtnMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            onClicked: winBtn.triggered()
-        }
-    }
-
     /// Automation: run the push button's hold to its end. Does nothing
     /// unless the button is in the shape that arms it.
     function completePushHold() {
