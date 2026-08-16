@@ -5,7 +5,7 @@ use super::*;
 // fields below are then only the declaration — `#[derive(QModelItem)]`
 // turns them into the role names the delegate resolves by, and `Role`
 // answers under those names (held to this list by the test at the foot of
-// the file).
+// `role.rs`).
 #[derive(QModelItem, Default)]
 pub struct NavItem {
     /// Display text: the last path segment in tree mode, the full name in
@@ -35,7 +35,7 @@ pub struct NavItem {
     /// The same source written the way the row writes names — what a
     /// delegate shows (`encode::rename_source`). A made row never carries
     /// one; the field is here because **the view's role table is one role
-    /// per field of this struct** (the test at the foot of this file), and
+    /// per field of this struct** (the test at the foot of `role.rs`), and
     /// a role no field stands for cannot be asked for by name.
     pub(super) orig_name: String,
     pub(super) is_head: bool,

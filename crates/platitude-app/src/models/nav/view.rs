@@ -48,7 +48,7 @@ impl QAbstractItemModel for NavSectionModel {
 
     /// The names QML resolves a role by. Spelled where the answers are
     /// (`Role`), and held to the item's own derived table by the test at
-    /// the foot of this file.
+    /// the foot of `role.rs`.
     fn role_names(&self) -> QHash<i32, QByteArray> {
         let mut names = QHash::default();
         for (number, role) in Role::ALL.iter().enumerate() {
