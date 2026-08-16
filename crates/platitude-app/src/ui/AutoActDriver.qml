@@ -53,6 +53,7 @@ Item {
     property AppMenuItem stashDeleteItem
     property AppMenu resetMenu
     property AppMenuItem hardResetItem
+    property PublishFlow publishFlow
     property RemoteDialog remoteDialog
     property RefListPopup refList
     property CommitHoverCard rowCard
@@ -544,7 +545,7 @@ Item {
         interval: 1800
         onTriggered: {
             AppBackend.report("push_retry refused=" + page.pushFailed
-                              + " branch=" + page.pushFailBranch)
+                              + " branch=" + publishFlow.pushFailBranch)
             page.forcePush()
         }
     }
@@ -909,25 +910,25 @@ Item {
             // question is exercised too, not just the question.
             page.pushNow()
             if (act === "publish-taken")
-                page.setPublishBranch(arg === "" ? "taken" : arg)
+                publishFlow.setPublishBranch(arg === "" ? "taken" : arg)
             else if (act === "publish-add" || act === "publish-new-go")
-                page.startPublishAddRemote(arg)
+                publishFlow.startPublishAddRemote(arg)
             else if (arg !== "")
-                page.setPublishBranch(arg)
+                publishFlow.setPublishBranch(arg)
             if (act === "publish-new-go")
                 publishAddTimer.start()
             else if (act === "publish-go")
                 publishAnswerTimer.start()
             else if (act === "publish-remotes")
-                page.openPublishRemotes()
+                publishFlow.openPublishRemotes()
             else
                 publishSettleTimer.start()
             // `dialog=` / `name=` say whether the remote dialog stands and
             // what its name box holds — the no-remote push opens it by
             // itself, and only this line can say so headless.
             AppBackend.report("publish state=" + page.pushState
-                              + " remote=" + page.publishRemote
-                              + " branch=" + page.publishBranch
+                              + " remote=" + publishFlow.publishRemote
+                              + " branch=" + publishFlow.publishBranch
                               + " dialog=" + remoteDialog.visible
                               + " name=" + remoteDialog.wantedName)
         } else if (act === "commit") {
@@ -1733,11 +1734,12 @@ Item {
     Timer {
         id: publishSettleTimer
         interval: 1200
-        onTriggered: AppBackend.report("publish settled far=" + page.publishState
+        onTriggered: AppBackend.report("publish settled far="
+                                       + publishFlow.publishState
                                        + " code=" + graphPane.askCode
                                        + " hold=" + graphPane.askHold
                                        + " alert=" + graphPane.askAlert
-                                       + " lease=" + (page.publishLease !== "")
+                                       + " lease=" + (publishFlow.publishLease !== "")
                                        + " theirs=" + repoTab.remoteBranchTheirs)
     }
     /// Automation: the answer, given after the remote has had time to say
@@ -1749,12 +1751,13 @@ Item {
             // `far` is what the far side turned out to hold — the other
             // line's `state` is this end's own push state, and the two
             // answer different questions.
-            AppBackend.report("publish answering far=" + page.publishState
-                              + " unsure=" + page.publishUnsure
+            AppBackend.report("publish answering far="
+                              + publishFlow.publishState
+                              + " unsure=" + publishFlow.publishUnsure
                               + " answerable=" + graphPane.askAnswerable)
             // The same gesture a person is given: a hold cannot be
             // answered by a click here either.
-            if (page.publishRefused)
+            if (publishFlow.publishRefused)
                 graphPane.completeHold()
             else
                 page.answerRowAsk()
