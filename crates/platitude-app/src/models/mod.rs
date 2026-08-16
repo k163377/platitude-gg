@@ -12,6 +12,8 @@ mod app_backend;
 mod commands;
 mod details;
 mod diff;
+#[cfg(test)]
+mod diff_tests;
 mod graph;
 mod nav;
 mod notify;
