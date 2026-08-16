@@ -9,9 +9,14 @@ use super::*;
 /// instead of guessing from a period of silence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefreshOutcome {
-    /// The operation was not started (the session is not open, a write is
-    /// active, or the previous poll still owns the slot).
-    Skipped,
+    /// The operation was not started because the repository is not open.
+    Unavailable,
+    /// The operation was not started because a write and its follow-up
+    /// refreshes still own the repository.
+    WriteBusy,
+    /// The operation was not started because the previous poll still owns
+    /// the single-flight slot.
+    Busy,
     /// The operation completed and the graph already showed its answer.
     Unchanged,
     /// The operation completed and installed a different graph.
@@ -124,7 +129,7 @@ impl RepoSession {
 
     fn start_refresh_log(self: &Arc<Self>) -> RefreshTask {
         let Some(workdir) = self.workdir() else {
-            return RefreshTask::ready(RefreshOutcome::Skipped);
+            return RefreshTask::ready(RefreshOutcome::Unavailable);
         };
         let run_cancel = self.take_log_token();
         let s = Arc::clone(self);
@@ -161,23 +166,23 @@ impl RepoSession {
     fn start_refresh_poll(self: &Arc<Self>) -> RefreshTask {
         if self.write_busy.load(Ordering::SeqCst) {
             tracing::trace!("poll skipped: a write is running");
-            return RefreshTask::ready(RefreshOutcome::Skipped);
+            return RefreshTask::ready(RefreshOutcome::WriteBusy);
         }
         let Ok(permit) = Arc::clone(&self.poll_slot).try_acquire_owned() else {
             tracing::trace!("poll skipped: the previous one has not finished");
-            return RefreshTask::ready(RefreshOutcome::Skipped);
+            return RefreshTask::ready(RefreshOutcome::Busy);
         };
         let s = Arc::clone(self);
         let (finished, task) = RefreshTask::pending();
         self.runtime.spawn(async move {
-            let _permit = permit;
             // Both reads can call for a rebuild, but the graph is one
             // picture: an external commit moves a ref *and* cleans the
             // tree, and walking twice would throw one pass away.
             let (refs_moved, wip_flipped) = tokio::join!(s.publish_refs(true), s.publish_status());
             let outcome = if refs_moved || wip_flipped {
                 let Some(workdir) = s.workdir() else {
-                    if finished.send(RefreshOutcome::Skipped).is_err() {
+                    drop(permit);
+                    if finished.send(RefreshOutcome::Cancelled).is_err() {
                         tracing::trace!("poll completion was not observed");
                     }
                     return;
@@ -188,6 +193,9 @@ impl RepoSession {
             } else {
                 RefreshOutcome::Unchanged
             };
+            // The completion is also the single-flight ownership boundary:
+            // a caller woken by it must be able to start the following poll.
+            drop(permit);
             if finished.send(outcome).is_err() {
                 tracing::trace!("poll completion was not observed");
             }

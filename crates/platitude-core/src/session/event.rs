@@ -223,7 +223,9 @@ pub enum SessionEvent {
     WriteStarted {
         op: &'static str,
     },
-    /// A write operation ended. `error` carries git's own message.
+    /// A write operation's Git command ended. `error` carries Git's own
+    /// message. The queue can still be settling its follow-up snapshots and
+    /// graph, so this is deliberately not a queue-idle boundary.
     WriteFinished {
         op: &'static str,
         error: Option<String>,

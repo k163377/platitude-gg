@@ -377,6 +377,45 @@ async fn tags_out_of_the_walk_are_not_worth_a_round_trip() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_remote_tag_completion_returns_its_single_flight_slot() {
+    let (_bare, work, _root, _head) = tag_scenario();
+    let (_sink, session) = opened(&work).await;
+    session.set_auto_fetch(Some(Duration::from_secs(600)));
+
+    // `Opened` is delivered before its eager catch-up is started, so that
+    // untracked read is allowed to own the slot first.  Acquire this test's
+    // flight by its explicit Busy state, without guessing how long the
+    // opening work needs.  The assertion below deliberately does *not* use
+    // this loop: it is the ack whose ownership boundary we are testing.
+    let completed = tokio::time::timeout(crate::support::wait::OVERALL_BUDGET, async {
+        loop {
+            let outcome = session.refresh_remote_tags_tracked().outcome().await;
+            if outcome != RemoteTagRefreshOutcome::Busy {
+                break outcome;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the opening remote-tag flight returns its slot");
+    assert!(
+        matches!(
+            completed,
+            RemoteTagRefreshOutcome::Changed | RemoteTagRefreshOutcome::Unchanged
+        ),
+        "the first remote-tag read completed: {completed:?}"
+    );
+    let following = session.refresh_remote_tags_tracked().outcome().await;
+    assert!(
+        matches!(
+            following,
+            RemoteTagRefreshOutcome::Changed | RemoteTagRefreshOutcome::Unchanged
+        ),
+        "its ack returned the permit before the next request: {following:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_drifted_tag_puts_its_name_on_both_rows() {
     let (_bare, work, root, head) = tag_scenario();
     let (sink, session) = opened(&work).await;

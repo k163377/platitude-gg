@@ -160,8 +160,8 @@ impl RepoSession {
         let timeout = self.network_timeout();
         let (finished, task) = RemoteTagRefreshTask::pending();
         self.runtime.spawn(async move {
-            let _permit = permit;
             let Some(workdir) = s.workdir() else {
+                drop(permit);
                 if finished.send(RemoteTagRefreshOutcome::Unavailable).is_err() {
                     tracing::trace!("remote-tag refresh completion was not observed");
                 }
@@ -179,6 +179,9 @@ impl RepoSession {
             } else {
                 RemoteTagRefreshOutcome::Unchanged
             };
+            // `outcome()` closes ownership as well as the read: an immediate
+            // following request must not race the old permit's destructor.
+            drop(permit);
             if finished.send(outcome).is_err() {
                 tracing::trace!("remote-tag refresh completion was not observed");
             }

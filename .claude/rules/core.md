@@ -42,4 +42,5 @@ paths:
 - **外部設定は executor 単位で隔離する** — integration test の Git は一時 `GIT_CONFIG_GLOBAL` / `XDG_CONFIG_HOME` と `GIT_CONFIG_NOSYSTEM=1` を全 subprocess に渡し、利用者の identity・ignore・hook・system config を読まない。process-global env の書換えは並行 test と競合するため使わず、意図的に host config を読む test だけ raw executor を明示する
 - **待ちの上限は失敗検出の backstop** — 「開始から N 秒以内」を正しさや性能の assert にしない。通知待ちと同時に backstop を arm し(通知が止まっても永久待機しない)、進捗イベントごとに沈黙予算を更新し、livelock 用の全体上限だけ別に残す(`Patience`)。性能予算は専用 benchmark / baseline で判定し、機能テストの狭い timeout と混ぜない
 - **runner の終了コードを失わない** — pipe、ログ整形、後続の `echo` 等で test process の非ゼロ終了を成功へ上書きしない。並列起動時は全 child の終了を回収し、1 件でも非ゼロなら全体を非ゼロにする
-- **同期プリミティブ・待ち helper を追加または変更した時は並列で反復検証する** — 関連 suite を独立 process でも同時実行し、最低 10 回確認する。11 回目以降まで続いた場合は、最後の NG の後に 5 回連続 OK になるまで方針を OK にしない
+- **日常開発を flaky campaign にしない** — 通常の変更は関連 test を既定並列度で 1 回と通常の Done ゲートで確認し、10 回反復を課さない。偶発的な赤を再実行の緑で打ち消さず、再現条件と失敗を残して、当該変更で直すか専用 cleanup task に切り出す
+- **本格的な flaky cleanup task だけ反復 campaign を行う** — 対象を再現に必要な最小 suite に絞り、観測された OS・runner の並走・負荷形態を含める。修正した実装ごとに 0 から数え、最低 10 回連続 OK。途中の NG は原因を直してから新しい実装として数え直す。全 workspace / 段 2 は最後に 1 回でよく、同じ全量 suite を 10 回回さない

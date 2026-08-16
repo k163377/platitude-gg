@@ -395,6 +395,11 @@ async fn a_poll_rebuilds_the_graph_once() {
     let idle = session.refresh_poll_tracked().outcome().await;
     assert_eq!(idle, RefreshOutcome::Unchanged);
     assert_eq!(
+        session.refresh_poll_tracked().outcome().await,
+        RefreshOutcome::Unchanged,
+        "the completion returned the single-flight slot before waking us"
+    );
+    assert_eq!(
         (replacements(), starts()),
         (quiet_replacements, quiet_starts),
         "a poll over an unchanged repository stayed silent: {:?}",

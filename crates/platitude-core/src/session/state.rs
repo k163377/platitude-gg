@@ -278,14 +278,23 @@ mod tests {
         let second = {
             let derived = Arc::clone(&derived);
             let calls = Arc::clone(&calls);
-            tokio::spawn(async move {
+            let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+            let task = tokio::spawn(async move {
+                let _ = started_tx.send(());
                 derived
                     .get_or_try_init(|| {
                         calls.fetch_add(1, Ordering::SeqCst);
                         async { Ok::<u32, ()>(99) }
                     })
                     .await
-            })
+            });
+            started_rx
+                .await
+                .expect("the second caller reached the read");
+            // Let it run through the fast-path miss and park on the
+            // single-flight gate before the first answer is published.
+            tokio::task::yield_now().await;
+            task
         };
         release.notify_one();
 
