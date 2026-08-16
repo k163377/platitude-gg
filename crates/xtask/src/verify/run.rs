@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use super::options::parse;
 use super::outcome::Outcome;
 use super::ownership::{claim_resource, fresh_shot_dir};
-use super::repos::{body_for, folder_for, tab_width_repos};
+use super::repos::{body_for, folder_for, seed_merge_tool, tab_width_repos};
 use super::shim::{
     SHIM_REAL, SHIM_VERSION, identity_answer, identity_seed, real_git, stage_old_git,
 };
@@ -65,6 +65,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
             }
         }
     }
+
+    // Written after the claim above, so a repository this run was handed
+    // is owned before it is added to.
+    seed_merge_tool(&opts.verb, &repos, &path)?;
 
     // The build's PATH, not the run's: the git shim below goes onto the
     // child's PATH only, so the build never sees it.

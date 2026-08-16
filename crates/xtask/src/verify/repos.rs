@@ -76,6 +76,48 @@ pub(super) fn body_for(verb: &str) -> Option<String> {
     }
 }
 
+/// The one merge tool the candidate list is guaranteed to hold.
+///
+/// Named rather than found: `git mergetool --tool-help` is an inventory
+/// of the machine, and a container built to run tests has no windowed
+/// merge tool on it at all.
+const SEEDED_TOOL: &str = "mergetool.demo-editor.cmd";
+
+/// Puts a tool in the repository's own config, for the verbs whose
+/// picture is the list of them.
+///
+/// The candidates arrive in two waves — names written in config, then
+/// the installed sweep — and only the first is the run's to decide. Where
+/// the second answers with nothing the list is empty, and an empty list
+/// is an answer: the card closes itself (`AppCombo.hasList`), leaving the
+/// verb waiting on a popup that will not open again. So the run brings
+/// its own row, and the first wave carries the picture on every machine.
+///
+/// The command is never run — what is being photographed is the name.
+pub(super) fn seed_merge_tool(
+    verb: &str,
+    repos: &[PathBuf],
+    path: &std::ffi::OsStr,
+) -> Result<(), String> {
+    if verb != "settings-tools" && verb != "settings-tools-loading" {
+        return Ok(());
+    }
+    for repo in repos {
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["config", SEEDED_TOOL, "true"])
+            .env("PATH", path)
+            .status()
+            .map_err(|e| format!("failed to run git: {e}"))?;
+        if !status.success() {
+            return Err(format!("could not name a merge tool in {}", repo.display()));
+        }
+    }
+    println!("merge editor named in config: {SEEDED_TOOL} (the list's first wave)");
+    Ok(())
+}
+
 /// The folder a verb needs handed to it, made on the spot.
 ///
 /// The open-refused verbs are the only ones whose subject is a folder no
