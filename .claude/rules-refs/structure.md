@@ -13,6 +13,7 @@
 - **1 段深くした項の `pub(super)` は届く先が 1 段狭まる** — 元の親から呼ばれていたなら `pub(crate)` へ広げ、間に挟まった mod.rs が `pub(super) use` で元の広さへ戻す(再輸出は元より広くできない = `pub(super)` のままだと E0364/E0365)。`#[cfg(windows)] mod win32` 配下のような private な入れ子では、`pub(crate)` にしても外から辿れる道は増えない
 - **本体を移した fn からは `#[expect(unsafe_code)]` を剥がす** — `unsafe` をマクロや別 fn へ出した側は expectation が不発になり `-D warnings` で赤くなる(貼り忘れ側はエラーになるので、危ないのは剥がし忘れの方)
 - **generic な木・容器に `#[derive(Default)]` を貼らない** — `T: Default` の境界が付き、葉に Default の無い型(借用ポインタのタプル等)を入れられなくなる。`impl<T> Default` を手で書く
+- **`hook/mod.rs` だけは実装(`run` のディスパッチと `pre_shell` の連鎖)を持つ意図した例外** — 拒否は pre_git → pre_kill → pre_launch の順で最初の拒否が答え。この順序が安全性そのもので、1 ファイルに見えていることが mod.rs 純度に勝つ
 
 - **QML の「描かないホスト」は `anchors.fill: parent` を書く** — メニュー・ポップアップ・ダイアログは宣言された親アイテム越しに窓を測る(`AppMenu.ownerItem.Window.window` / `AppDialog` の `anchors.centerIn: parent` / `Popup.x` は親座標)。page 直下から寸法ゼロの Item の下へ移すと、行幅の上限もダイアログの中央も 0 になる。行カード・チップ一覧のように**シーン座標を受け取って置く**ものも同じ(`row.mapToItem(host, …)` が page 相当になるのは埋めた時だけ)
 - **`page.` を名乗る名前を子へ移したら、外から呼ぶ口だけは page に残す** — 窓の帯は `curPage.<名前>` で能動タブを読む(`TopBar` の push 8 本)ので、alias 再輸出か 1 行の転送を残さないとボタンが黙って死ぬ。自動化(`AutoActDriver`)側は逆に**新しい持ち主を property で渡して呼ぶ**(page を経由しない)
@@ -25,9 +26,9 @@
 
 - **この見出しの節は `cargo xtask structure` が機械で読む** — **ファイルの恒久免除になるのは行頭が `- **` + バッククォート付きパスの箇条書きだけ**(パス後方一致)。fn 単位の項のようにパスを文中で挙げるだけの行は免除にならない。太字を落とすと免除が外れて count が赤くなる(失敗の向きはこちら側で正しい)。見出し文字列を変えると免除が全部外れる(節が無い時はツールがエラーで止まる)。範囲は次の `## ` 見出しまで
 
-- **`ui/AutoActDriver.qml`(1769 行)は割らない** — `runAutoAct()` の分岐が同じファイルの Timer を id で名指ししており、動詞の beat と dispatch は同じコンポーネントスコープに居ないと繋がらない(割れば Timer を property で渡し直すことになり、ページから渡す 27 本がもう一段増える)。中身は 1 動詞 1 分岐 = 増えるのは分岐の本数だけで、責務は増えない
-- **`ui/WindowAutoActDriver.qml`(630 行)も同じ理由**(窓側の beat と `begin()` の dispatch)
-- **`ui/WipPane.qml`(739 行)は残りを割らない** — 部品化済み(MessageEditor / StashOptionsCard / OpExitCard / TreeViewToggle)の外に残るのは選択・ステージ・EOL 指しの機構で、全員が `wipList.itemAtIndex` 走査とデリゲート再利用前提の鍵(`<bucket>:<path>`)を共有し、`RepoPage`(`chosenRows` = menuFileCount)と自動化(`chooseOnly` / `rowAt` / `rowFor` / `pointEol`)がその API を直接叩く — これ以上は list と鍵の渡し直し配線だけが増える
-- **`models/repo_tab/qobject.rs`(808 行)は割らない** — `#[qobject]` ブロックは QMetaInfo の一貫性で 1 型 1 ブロック 1 ファイル(規約 §分割)。中身は `qproperty!` 53 本(128 行)+ スロット 76 本の署名 + その doc 168 行で、**本体は全て素の impl へ委譲済み**(`drain` / `ops_stage` / `ops_conflict` / `ops_remote` / `ops_config`)— 残るのは Qt に見せる面そのものなので、これ以上はスロットを減らすしか縮め方が無い
+- **`ui/AutoActDriver.qml`(1773 行)は割らない** — `runAutoAct()` の分岐が同じファイルの Timer を id で名指ししており、動詞の beat と dispatch は同じコンポーネントスコープに居ないと繋がらない(割れば Timer を property で渡し直すことになり、ページから渡す 27 本がもう一段増える)。中身は 1 動詞 1 分岐 = 増えるのは分岐の本数だけで、責務は増えない
+- **`ui/WindowAutoActDriver.qml`(632 行)も同じ理由**(窓側の beat と `begin()` の dispatch)
+- **`ui/WipPane.qml`(733 行)は残りを割らない** — 部品化済み(MessageEditor / StashOptionsCard / OpExitCard / TreeViewToggle)の外に残るのは選択・ステージ・EOL 指しの機構で、全員が `wipList.itemAtIndex` 走査とデリゲート再利用前提の鍵(`<bucket>:<path>`)を共有し、`RepoPage`(`chosenRows` = menuFileCount)と自動化(`chooseOnly` / `rowAt` / `rowFor` / `pointEol`)がその API を直接叩く — これ以上は list と鍵の渡し直し配線だけが増える
+- **`models/repo_tab/qobject.rs`(768 行)は割らない** — `#[qobject]` ブロックは QMetaInfo の一貫性で 1 型 1 ブロック 1 ファイル(規約 §分割)。中身は `qproperty!` 53 本(128 行)+ スロット 76 本の署名 + その doc 168 行で、**本体は全て素の impl へ委譲済み**(`drain` / `ops_stage`(集めたパスの 5 スロットは `drain_paths` 1 本)/ `ops_conflict` / `ops_remote` / `ops_config` / `state` の commit・reset)— 残るのは Qt に見せる面と 1〜3 行の転送だけなので、これ以上はスロットを減らすしか縮め方が無い
 - `parse/diff/parse.rs` の `parse_patch` は 196 行(上限 100)— 6 本の可変ローカルを全分岐が触るので、分解は移動と別の変更として理由を立てる。`#[expect(clippy::too_many_lines)]` を貼る
 - **`#[expect]` の不発判定は lint の有効・無効ではなく「その lint が実際に発火するか」** — 未有効(pedantic)のままでも長い fn なら不発にならない。不発になるのは fn が閾値を下回った時だけで、`-D warnings` 下ではそれが error になる(実測: 247 行の fn に lint 未有効で貼って無音、短い fn に貼って unfulfilled)

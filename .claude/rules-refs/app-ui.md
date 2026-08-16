@@ -170,6 +170,7 @@
 - `DescriptionBox` の上限は自分の ask の下で動く(2026-08-11 実測): `room` は次のレイアウトまで再計算されず、枠が伸びた直後に読み直すと上限も増えて後から比べると必ず「収まった」と答える(632 に詰まって ceil=1144)。判定は `pullTo()` の中・`setBoxHeight()` の前に bool で持つ(列の仕切りの上限は動かないので式のままでよい)
 - タブの内側の余白は `✕` の air を引いてから配る(規約 §余白)。幅は `ceil(implicitWidth) + tabPadW` の実寸で採る — `+ 2 * spaceSm` は左右の余白の合計と食い違い、配りきれない分が最後の要素の後ろに落ちて右だけ広がる(`fillWidth` の要素が無いため)。`markAir` / `tabPadW` / `tabFixedW` は `tabs`(ListView)が持つ — 縮める計算(下記)と delegate が同じ 1 つを読む
 - タブは長い名前から縮み、縮みきったらスクロール(規約 §ウィンドウの縁。配り方は `TopBar.settleTitleCap()`)。下限 `tabTitleMinW` は `FontMetrics` から引く — 規約の表が持つのは字数 3 で px ではない(実測 Segoe UI / `fontMd` で 56px。平均送りは小文字より広く実際は 5 文字前後)
+- **`tabTitleMinW`(TabStrip)と `BandStateGroup` の同型式は、バインディング内の `advanceWidth()` が偶然でしか再評価されない** — 同じ式に `averageCharacterWidth`(プロパティ・fontChanged 通知つき)が居るから引きずられて動いているだけ。式を advanceWidth 単独へ簡略化すると既定フォントの初回値で凍る(§FontMetrics の罠)— 触るなら `settleTitleCap` の関数押し出し形へ
 - 縮める計算は測る用の隠し `Label` を別に持つ(`TopBar.titleMeasure`)— 縮められている当の Label から自然幅を採ると、cap → 幅 → cap の輪をエンジンがループと読む。現在タブの DemiBold も写す(写さないと cap が数 px 甘い)。バインディングにせず関数で押し出す — バインディングはアイテムが 1 つ増えたことを見られない
 - cap は `floor`・タブ幅は `ceil` の整数で計算(`tabs.runAvail`)— 端数のまま配ると溢れていないのに 1px スクロールする strip になる(実測 content=897 対 run=896)
 - `✕` は前に居るタブと手の下のタブにだけ出す(規約 §タブの所作)。`visible` ではなく `opacity` — レイアウトから消えると席ごと消え、閉じに来た手の下でタブが縮む。報告 `markShown` は印自身の `opacity`(入力側を報告するとバインディングが切れていても緑になる)
