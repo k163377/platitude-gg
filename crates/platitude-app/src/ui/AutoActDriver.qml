@@ -810,8 +810,17 @@ Item {
     // Nothing reaches for the keyboard first, and that is half of what
     // this reads — the diff takes it by coming on screen, so `focused=`
     // is a claim about the arrival and not about a press this made
-    // (規約 §diff を上下に送る). The wait is for the file's rows to land:
-    // a list still empty has nothing to send and refuses every step.
+    // (規約 §diff を上下に送る).
+    //
+    // The wait is for the view, not for the model. `diffSettled()` says the
+    // rows arrived; it says nothing about the list having laid them out,
+    // and a list whose `contentHeight` is still zero clamps every step to
+    // where it already was — the walk then reads exactly like a diff with
+    // nothing to scroll (2026-08-16 実測: 1 run in 3 came through with
+    // `contentHeight` 0 at the step and 216 by the time it was reported).
+    // So what is waited for is the output the step consumes: a view with
+    // room to be sent, which is `atEnd` answering false over a laid-out
+    // height (app-ui.md §UI 自動化の因果性「まだ答えが無い」と値を分ける).
     Timer {
         id: diffStepTimer
         interval: 25
@@ -819,7 +828,8 @@ Item {
         /// How many rows, and which way.
         property int steps: 1
         onTriggered: {
-            if (!page.diffShown || !diffPane.diffSettled())
+            if (!page.diffShown || !diffPane.diffSettled()
+                    || diffPane.view.height <= 0 || diffPane.atEnd)
                 return
             diffStepTimer.stop()
             diffStepReport.from = driver.diffRow()
