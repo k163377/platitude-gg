@@ -59,12 +59,14 @@ mod model;
 mod ops_integrate;
 mod ops_remote;
 mod ops_tree;
+mod print;
 mod query;
 mod refresh;
 mod write;
 
 pub(crate) use model::LabelIndex;
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel};
+use print::RowPrint;
 
 /// First chunk is small so the first paint happens as early as possible.
 const FIRST_CHUNK_ROWS: usize = 512;
@@ -83,108 +85,6 @@ pub const AUTO_FETCH_DEFAULT_MINUTES: u32 = 1;
 /// memory and stream time on 100k+ commit repositories; the UI shows a
 /// truncation hint when the cap is hit.
 pub const DEFAULT_LOG_LIMIT: u32 = 2000;
-
-/// One delivered row, small enough to keep for every row on screen.
-///
-/// **What the session keeps of the graph it has sent.** The only question
-/// asked of it is whether a rebuild arrived at the same picture, and a
-/// hash answers that in sixteen bytes where the row itself takes 822
-/// (measured on `JetBrains/kotlin`, 2,001 rows —
-/// ci/baseline/perf-windows-x64.md). The window defaults to 2,000 rows
-/// and can be widened (`LogOptions::limit`), so this is the part of the
-/// graph's cost that grows with what somebody asks to see.
-///
-/// **Two halves because the chips move on their own.** A refs read that
-/// finds new badges writes them into rows already delivered rather than
-/// replacing the graph (`apply_refs`), and it holds the new chips and
-/// nothing else — so the half it has to restate is the only half it can.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct RowPrint {
-    /// Everything except the chips.
-    rest: u64,
-    labels: u64,
-}
-
-impl crate::mem::Footprint for RowPrint {
-    fn heap_bytes(&self) -> usize {
-        0
-    }
-}
-
-impl RowPrint {
-    fn of(row: &LogRow) -> Self {
-        Self {
-            rest: Self::rest_of(row),
-            labels: Self::labels_of(&row.labels),
-        }
-    }
-
-    /// **Destructured on purpose.** A field added to [`LogRow`] and not
-    /// added here is a change the graph would stop noticing — the rebuild
-    /// would call the new picture the old one and leave the screen as it
-    /// was. Naming every field makes that a build error instead.
-    fn rest_of(row: &LogRow) -> u64 {
-        use std::hash::{Hash, Hasher};
-        let LogRow {
-            row,
-            oid_hex,
-            short_sha,
-            author,
-            author_email,
-            co_authors,
-            time,
-            subject,
-            body,
-            node_lane,
-            node_color,
-            width,
-            segments,
-            labels: _,
-            stash_ref,
-        } = row;
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        row.hash(&mut h);
-        oid_hex.hash(&mut h);
-        short_sha.hash(&mut h);
-        author.hash(&mut h);
-        author_email.hash(&mut h);
-        for a in co_authors {
-            a.name.hash(&mut h);
-            a.email.hash(&mut h);
-        }
-        co_authors.len().hash(&mut h);
-        time.hash(&mut h);
-        subject.hash(&mut h);
-        body.hash(&mut h);
-        node_lane.hash(&mut h);
-        node_color.hash(&mut h);
-        width.hash(&mut h);
-        for s in segments {
-            (s.kind as u8).hash(&mut h);
-            s.lane.hash(&mut h);
-            s.color.hash(&mut h);
-            s.dashed.hash(&mut h);
-        }
-        segments.len().hash(&mut h);
-        stash_ref.hash(&mut h);
-        h.finish()
-    }
-
-    fn labels_of(labels: &[RefLabel]) -> u64 {
-        use std::hash::{Hash, Hasher};
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        for l in labels {
-            l.text.hash(&mut h);
-            (l.kind as u8).hash(&mut h);
-            l.has_remote.hash(&mut h);
-            l.is_head.hash(&mut h);
-            l.here.hash(&mut h);
-            l.remote.hash(&mut h);
-        }
-        labels.len().hash(&mut h);
-        h.finish()
-    }
-}
 
 /// What the remotes last said they carry under `refs/tags/`: for each tag
 /// name, every commit some remote has it on and what is known about it
@@ -1389,94 +1289,6 @@ mod tests {
     use super::build::{RefJoins, build_label_map, build_snapshot};
     use super::*;
     use crate::remote::RemoteTag;
-
-    /// A row that differs anywhere prints differently.
-    ///
-    /// This is the whole safety of keeping prints instead of rows: a field
-    /// the print forgets is a change the graph stops noticing, and what
-    /// that looks like is a screen that quietly keeps showing the old one.
-    /// Every field is moved here, one at a time, so forgetting one fails
-    /// rather than passing quietly.
-    #[test]
-    fn a_row_that_differs_anywhere_prints_differently() {
-        let base = LogRow {
-            row: 3,
-            oid_hex: "a".repeat(40),
-            short_sha: "aaaaaaa".into(),
-            author: "Ada".into(),
-            author_email: "ada@example.com".into(),
-            co_authors: vec![crate::details::CoAuthor {
-                name: "Bo".into(),
-                email: "bo@example.com".into(),
-            }],
-            time: 1_700_000_000,
-            subject: "a subject".into(),
-            body: "a body".into(),
-            node_lane: 1,
-            node_color: 2,
-            width: 4,
-            segments: vec![Segment {
-                kind: crate::graph::SegmentKind::Through,
-                lane: 1,
-                color: 2,
-                dashed: false,
-            }],
-            labels: vec![RefLabel {
-                text: "main".into(),
-                kind: LabelKind::LocalBranch,
-                has_remote: false,
-                is_head: true,
-                here: true,
-                remote: String::new(),
-            }],
-            stash_ref: String::new(),
-        };
-        let print = RowPrint::of(&base);
-
-        type Moved = (&'static str, Box<dyn Fn(&mut LogRow)>);
-        let moved: Vec<Moved> = vec![
-            ("row", Box::new(|r: &mut LogRow| r.row = 4)),
-            ("oid_hex", Box::new(|r| r.oid_hex = "b".repeat(40))),
-            ("short_sha", Box::new(|r| r.short_sha = "bbbbbbb".into())),
-            ("author", Box::new(|r| r.author = "Bo".into())),
-            (
-                "author_email",
-                Box::new(|r| r.author_email = "b@e.com".into()),
-            ),
-            ("co_authors", Box::new(|r| r.co_authors.clear())),
-            ("time", Box::new(|r| r.time += 1)),
-            ("subject", Box::new(|r| r.subject = "another".into())),
-            ("body", Box::new(|r| r.body = "another".into())),
-            ("node_lane", Box::new(|r| r.node_lane = 5)),
-            ("node_color", Box::new(|r| r.node_color = 5)),
-            ("width", Box::new(|r| r.width = 9)),
-            ("segments", Box::new(|r| r.segments[0].dashed = true)),
-            ("stash_ref", Box::new(|r| r.stash_ref = "stash@{0}".into())),
-        ];
-        for (field, change) in moved {
-            let mut row = base.clone();
-            change(&mut row);
-            assert_ne!(row, base, "the change to {field} landed");
-            assert_ne!(
-                RowPrint::of(&row).rest,
-                print.rest,
-                "{field} is not in the print, so a rebuild would call this \
-                 row unchanged and leave the old one on screen"
-            );
-        }
-
-        // The chips are the other half, and the half a refs read restates
-        // on its own (`apply_refs`).
-        let mut chipped = base.clone();
-        chipped.labels[0].is_head = false;
-        assert_eq!(RowPrint::of(&chipped).rest, print.rest, "the same row");
-        assert_ne!(RowPrint::of(&chipped).labels, print.labels);
-        assert_eq!(
-            RowPrint::labels_of(&chipped.labels),
-            RowPrint::of(&chipped).labels,
-            "what `apply_refs` writes back is what a rebuild computes"
-        );
-    }
 
     #[test]
     fn the_first_caller_reads_and_the_second_books_one_more_pass() {
