@@ -36,10 +36,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "pre-write" => pre_write(&input),
         "post-write" => post_write(&input),
         "pre-shell" => pre_shell(&input),
-        // Worktrees whose branch predates pre-shell still name this event in
-        // their own .claude/settings.json, and they keep the git guard until
-        // they pick the new wiring up.
-        "pre-git" => pre_git(&input).map(|_| ()),
         "pre-worktree" => pre_worktree(&input),
         "session-start" => session_start(&input),
         "session-end" => session_end(&input),
