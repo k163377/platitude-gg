@@ -124,31 +124,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let path = crate::qt::path_with_qt()?;
     guard_the_window(&root)?;
 
-    if opts.build {
-        println!("building (release{})…", feature_note(opts.breakdown));
-        let mut cmd = Command::new("cargo");
-        cmd.args(["build", "--release", "-p", "platitude-app"]);
-        if opts.breakdown {
-            cmd.args(["--features", "memprobe"]);
-        }
-        let status = cmd
-            .current_dir(&root)
-            .env("PATH", &path)
-            .status()
-            .map_err(|e| format!("failed to run cargo: {e}"))?;
-        if !status.success() {
-            return Err("cargo build --release failed".into());
-        }
+    let mut extra = vec!["-p", "platitude-app"];
+    if opts.breakdown {
+        extra.extend(["--features", "memprobe"]);
     }
-
-    let exe = root.join("target").join("release").join(if cfg!(windows) {
-        "platitude-gg.exe"
-    } else {
-        "platitude-gg"
-    });
-    if !exe.is_file() {
-        return Err(format!("{} not found — build first", exe.display()));
-    }
+    let exe = crate::app_exe(&root, &path, opts.build, &extra)?;
 
     println!(
         "repo: {} | runs: {} (the first is discarded — cold cache)",
@@ -201,10 +181,6 @@ fn guard_the_window(root: &std::path::Path) -> Result<(), String> {
          it). Run it again with PG_ALLOW_GUI=1 when the window was asked for."
             .into(),
     )
-}
-
-fn feature_note(breakdown: bool) -> &'static str {
-    if breakdown { ", memprobe" } else { "" }
 }
 
 fn mb(bytes: u64) -> f64 {

@@ -53,25 +53,7 @@ pub fn launch(args: &[String]) -> Result<(), String> {
     for (pid, exe) in reap_under(&root)? {
         println!("reaped this tree's stale run first: {pid} ({exe})");
     }
-    if build {
-        println!("building (release)…");
-        let status = Command::new("cargo")
-            .args(["build", "--release"])
-            .current_dir(&root)
-            .env("PATH", &path)
-            .status()
-            .map_err(|e| format!("failed to run cargo: {e}"))?;
-        if !status.success() {
-            return Err("cargo build --release failed".into());
-        }
-    }
-    let exe = root.join("target").join("release").join(exe_name());
-    if !exe.is_file() {
-        return Err(format!(
-            "{} not found — build first (or drop --no-build)",
-            exe.display()
-        ));
-    }
+    let exe = crate::app_exe(&root, &path, build, &[])?;
     let child = Command::new(&exe)
         .current_dir(&root)
         .env("PATH", &path)
@@ -96,14 +78,6 @@ pub fn launch(args: &[String]) -> Result<(), String> {
 }
 
 const APP_NAME: &str = "platitude-gg";
-
-fn exe_name() -> &'static str {
-    if cfg!(windows) {
-        "platitude-gg.exe"
-    } else {
-        "platitude-gg"
-    }
-}
 
 /// Kills every app process whose executable sits under `root`, and
 /// answers who they were. Enumeration is per-OS; the path judgement is

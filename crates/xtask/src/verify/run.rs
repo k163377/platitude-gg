@@ -49,30 +49,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
         made
     };
 
-    if opts.build {
-        println!("building (release)…");
-        let status = Command::new("cargo")
-            .args(["build", "--release"])
-            .current_dir(&root)
-            .env("PATH", &path)
-            .status()
-            .map_err(|e| format!("failed to run cargo: {e}"))?;
-        if !status.success() {
-            return Err("cargo build --release failed".into());
-        }
-    }
-
-    let exe = root.join("target").join("release").join(if cfg!(windows) {
-        "platitude-gg.exe"
-    } else {
-        "platitude-gg"
-    });
-    if !exe.is_file() {
-        return Err(format!(
-            "{} not found — build first (or drop --no-build)",
-            exe.display()
-        ));
-    }
+    // The build's PATH, not the run's: the git shim below goes onto the
+    // child's PATH only, so the build never sees it.
+    let exe = crate::app_exe(&root, &path, opts.build, &[])?;
 
     let shot_dir = match &opts.shot_dir {
         Some(dir) => dir.clone(),

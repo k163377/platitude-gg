@@ -275,6 +275,52 @@ pub(crate) fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// Builds the app in release unless `build` says not to, and answers
+/// where its binary sits either way — `--no-build` still needs the path.
+///
+/// `extra` follows `build --release`: the package and features a caller
+/// needs, and the `--features` value names itself in the building line.
+/// `path` is the PATH the *build* runs with, which is not always the one
+/// the run itself gets — verify-ui stages a git shim onto its child's
+/// PATH, and building against that would build against the shim.
+pub(crate) fn app_exe(
+    root: &Path,
+    path: &std::ffi::OsStr,
+    build: bool,
+    extra: &[&str],
+) -> Result<PathBuf, String> {
+    if build {
+        let features = extra
+            .windows(2)
+            .find(|pair| pair[0] == "--features")
+            .map(|pair| format!(", {}", pair[1]))
+            .unwrap_or_default();
+        println!("building (release{features})…");
+        let status = std::process::Command::new("cargo")
+            .args(["build", "--release"])
+            .args(extra)
+            .current_dir(root)
+            .env("PATH", path)
+            .status()
+            .map_err(|e| format!("failed to run cargo: {e}"))?;
+        if !status.success() {
+            return Err("cargo build --release failed".into());
+        }
+    }
+    let exe = root.join("target").join("release").join(if cfg!(windows) {
+        "platitude-gg.exe"
+    } else {
+        "platitude-gg"
+    });
+    if !exe.is_file() {
+        return Err(format!(
+            "{} not found — build first (or drop --no-build)",
+            exe.display()
+        ));
+    }
+    Ok(exe)
+}
+
 /// Runs a command to completion, capturing output; errors carry context.
 pub(crate) fn run_captured(
     cmd: &mut std::process::Command,
