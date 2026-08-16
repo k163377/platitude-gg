@@ -36,12 +36,10 @@ Item {
             font.weight: Font.DemiBold
             anchors.horizontalCenter: parent.horizontalCenter
         }
-        Label {
+        NoticeLine {
             visible: AppBackend.alreadyRunning
             text: qsTr("Platitude GG is already open. Its window is the one to use.")
-            wrapMode: Text.Wrap
             width: parent.width
-            horizontalAlignment: Text.AlignHCenter
         }
         // Which one, since two builds are alike on screen and the
         // taskbar's launch entry does not say which it started.
@@ -55,15 +53,9 @@ Item {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
         }
-        // The way out: the band is the title bar and it is inside the
-        // part that stays hidden. A plain frame (規約 §アクセント).
-        ActionButton {
+        NoticeButton {
             visible: AppBackend.alreadyRunning
-            implicitHeight: Theme.controlHeight
             text: qsTr("Close")
-            frameColor: Theme.borderDefault
-            activeFocusOnTab: true
-            anchors.horizontalCenter: parent.horizontalCenter
             onActivated: gate.closeRequested()
         }
         // The drawn ring, not Fusion's BusyIndicator
@@ -75,21 +67,17 @@ Item {
             height: Theme.iconLg
             anchors.horizontalCenter: parent.horizontalCenter
         }
-        Label {
+        NoticeLine {
             visible: AppBackend.gitState === "missing"
             text: qsTr("git was not found on PATH. Install git %1 or newer and restart.")
                       .arg(AppBackend.minimumGit)
-            wrapMode: Text.Wrap
             width: parent.width
-            horizontalAlignment: Text.AlignHCenter
         }
-        Label {
+        NoticeLine {
             visible: AppBackend.gitState === "error"
             text: AppBackend.gitError
             color: Theme.danger
-            wrapMode: Text.Wrap
             width: parent.width
-            horizontalAlignment: Text.AlignHCenter
         }
     }
 }

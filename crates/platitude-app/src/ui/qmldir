@@ -76,6 +76,8 @@ NavIcon 1.0 NavIcon.qml
 NavItemDelegate 1.0 NavItemDelegate.qml
 NavList 1.0 NavList.qml
 NavRail 1.0 NavRail.qml
+NoticeButton 1.0 NoticeButton.qml
+NoticeLine 1.0 NoticeLine.qml
 OpExitCard 1.0 OpExitCard.qml
 OpExitRow 1.0 OpExitRow.qml
 OpenFailedDialog 1.0 OpenFailedDialog.qml

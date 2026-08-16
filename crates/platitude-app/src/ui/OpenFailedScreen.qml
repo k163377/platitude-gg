@@ -53,21 +53,14 @@ Item {
         // git's words, and the only red on this screen: the gate that
         // reports a git it cannot use draws the line the same way
         // (Main.qml).
-        Label {
+        NoticeLine {
             visible: screen.kind === "other"
             text: screen.message
             color: Theme.danger
-            wrapMode: Text.Wrap
             width: parent.width
-            horizontalAlignment: Text.AlignHCenter
         }
-        // A plain frame (規約 §肯定側のボタン).
-        ActionButton {
-            implicitHeight: Theme.controlHeight
+        NoticeButton {
             text: qsTr("Close tab")
-            frameColor: Theme.borderDefault
-            activeFocusOnTab: true
-            anchors.horizontalCenter: parent.horizontalCenter
             onActivated: screen.closeRequested()
         }
     }
