@@ -617,15 +617,29 @@ Item {
             middleScrollTimer.start()
         }
     }
-    // Long enough for the 16ms ticker to have taken the lanes as far as
-    // they go: a pan that ran and a pan that was refused must not read
-    // alike in the report.
+    // Where the lanes ended up is the whole question, so that is what is
+    // waited for — a pan that ran and a pan that was refused must not
+    // read alike in the report.
+    //
+    // A gesture that carries the lanes runs until they have nowhere left
+    // to go: the pointer was put a whole pane's width out, so the ticker
+    // saturates the clamp and `graphX` stops at its own maximum. One that
+    // does not carry them has already answered by starting without the
+    // carry — `panning` is settled in `start()` by where the click landed
+    // — and no tick will ever move them.
+    //
+    // Not "wait for `autoPanning` to go false": the flag is kept for the
+    // whole gesture (デザイン規約 §グラフを横へ送る), and nothing here
+    // ends the gesture, so the lane column's own case never completed
+    // (2026-08-16 実測: watchdog on both systems, `message` passing beside
+    // it because that one never pans).
     Timer {
         id: middleScrollTimer
         interval: 25
         repeat: true
         onTriggered: {
-            if (graphPane.autoPanning)
+            if (graphPane.autoPanning
+                    && graphPane.graphX < graphPane.graphXMax - 0.5)
                 return
             middleScrollTimer.stop()
             AppBackend.report(

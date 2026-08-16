@@ -104,6 +104,14 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // One wanted line for every case: `line=` is already whichever
         // divider has the hand, so the argument does not change it.
         "divider-refuse" => Some("divider_refuse refuses=true line=true"),
+        // Which column the middle click landed in is the whole question,
+        // and a photograph answers neither half of it: lanes carried
+        // sideways and lanes left where they were frame alike at this
+        // size, and so do a gesture that panned and one that never
+        // started. The two halves want opposite lines, which is what the
+        // argument is for.
+        "middle-scroll" if arg == "message" => Some("middle_scroll lanes=false x=0"),
+        "middle-scroll" => Some("middle_scroll lanes=true"),
         // The three states themselves. A run where one of them never stood
         // photographs a band that was never crowded, and that picture
         // cannot be told from a band that gave the crowd room — so the
