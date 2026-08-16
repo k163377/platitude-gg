@@ -294,6 +294,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
             .chain(out_lines.iter())
             .any(|l| l.contains("screenshot saved=true")),
         timed_out,
+        watchdog_expired: err_lines
+            .iter()
+            .chain(out_lines.iter())
+            .any(|l| l.contains("auto-act watchdog expired")),
         write_failures: err_lines
             .iter()
             .filter(|l| l.contains("write failed"))
@@ -343,6 +347,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
         println!(
             "  the run never said `{wanted}` — and this verb's picture reads the same \
              whether it should have or not."
+        );
+    }
+    if outcome.watchdog_expired {
+        println!(
+            "  the app's own watchdog ended this run — the verb never reached its \
+             completion, and a run that wedged between the two grabs still leaves app.png \
+             behind to pass on."
         );
     }
     if outcome.write_sank_it() {

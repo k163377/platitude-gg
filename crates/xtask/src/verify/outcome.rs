@@ -11,6 +11,13 @@ pub(super) struct Outcome {
     pub(super) exit_ok: bool,
     pub(super) saved: bool,
     pub(super) timed_out: bool,
+    /// Whether the app's own watchdog ended the run. It quits cleanly when
+    /// it fires, so the parent sees an ordinary exit — and a run that
+    /// wedged after its first `grabToImage` came back has a screenshot to
+    /// show for itself as well (2026-08-16: a half-finished shot pair
+    /// passed on the strength of `app.png` alone). Reaching the ceiling is
+    /// never a pass: it is the harness saying it stopped waiting.
+    pub(super) watchdog_expired: bool,
     pub(super) write_failures: usize,
     pub(super) allow_write_failure: bool,
     /// What a verb whose failure the camera cannot see has to be caught
@@ -29,6 +36,7 @@ impl Outcome {
         self.exit_ok
             && self.saved
             && !self.timed_out
+            && !self.watchdog_expired
             && !self.write_sank_it()
             && (self.must_say.is_none() || self.said)
     }
@@ -49,6 +57,7 @@ mod tests {
         exit_ok: true,
         saved: true,
         timed_out: false,
+        watchdog_expired: false,
         write_failures: 0,
         allow_write_failure: false,
         must_say: None,
@@ -101,6 +110,19 @@ mod tests {
     }
 
     #[test]
+    fn a_run_that_reached_its_ceiling_fails_with_a_picture_in_hand() {
+        // The app quits itself when the watchdog fires, and one half of a
+        // shot pair can already be on disk by then: exit 0, screenshot
+        // saved, nothing refused.
+        let wedged = Outcome {
+            watchdog_expired: true,
+            ..WELL
+        };
+        assert!(!wedged.passed());
+        assert!(!wedged.write_sank_it());
+    }
+
+    #[test]
     fn the_other_ways_to_fail_are_not_blamed_on_the_write() {
         for broken in [
             Outcome {
@@ -113,6 +135,10 @@ mod tests {
             },
             Outcome {
                 timed_out: true,
+                ..WELL
+            },
+            Outcome {
+                watchdog_expired: true,
                 ..WELL
             },
         ] {
