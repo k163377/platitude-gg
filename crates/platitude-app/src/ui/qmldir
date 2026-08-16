@@ -101,6 +101,7 @@ SpinnerIcon 1.0 SpinnerIcon.qml
 SplitBarWatch 1.0 SplitBarWatch.qml
 SplitHandleBar 1.0 SplitHandleBar.qml
 SplitRefusalOverlay 1.0 SplitRefusalOverlay.qml
+StartupGate 1.0 StartupGate.qml
 StashActionsBand 1.0 StashActionsBand.qml
 StashOptionsCard 1.0 StashOptionsCard.qml
 StateBadge 1.0 StateBadge.qml
