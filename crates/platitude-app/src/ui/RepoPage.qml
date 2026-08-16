@@ -1804,7 +1804,10 @@ Item {
         }
         const mid = bar.mapToItem(null, bar.width / 2, bar.height / 2)
         const gap = bar.sideways ? sceneX - mid.x : sceneY - mid.y
-        splitRefusal.at = splitRefusal.mapFromItem(null, sceneX, sceneY)
+        // Scene coordinates, as `SplitRefusalOverlay.at` documents: the
+        // overlay maps every source into itself once, in `pointFor` —
+        // mapping here too put the badge a TopBar's height above the hand.
+        splitRefusal.at = Qt.point(sceneX, sceneY)
         // Past the bar by more than the bar is wide, for the reason the
         // graph's dividers use the same slack: the pointer sits somewhere
         // inside the bar it grabbed, and SplitView carries the bar along
