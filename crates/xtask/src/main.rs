@@ -13,6 +13,7 @@ mod linux;
 mod perf;
 mod qt;
 mod seats;
+mod structure;
 mod verify;
 
 use std::path::{Path, PathBuf};
@@ -24,8 +25,9 @@ cargo xtask <command>
 commands:
   check [--verb <v>]...
       Stage-2 verification (CLAUDE.md 確認は 3 段), with the host and the
-      container running in parallel: fmt, clippy and the workspace tests
-      here, while the container runs test -p platitude-core, verify-ui
+      container running in parallel: structure, fmt, clippy and the
+      workspace tests here, while the container runs test -p
+      platitude-core, verify-ui
       for each --verb, and bare. The two sides write to different build
       trees (target/ vs the docker volume), so the wall clock is
       whichever side finishes last. Each --verb also runs verify-ui on
@@ -35,6 +37,20 @@ commands:
       co-authors'). Without --verb the summary says the touched verbs
       still have to run — it never passes for the whole of stage 2 on
       its own.
+
+  structure
+      The per-file line ceilings of .claude/rules/structure.md (src 500,
+      tests 1000, physical lines) over crates/**/*.rs and *.qml — first
+      step of `check`, and a second or two on its own. Three standings:
+      a file the ledger (.claude/rules-refs/structure.md 分割しない判断)
+      gives a written reason not to split has no ceiling; a file already
+      over when this went in is pinned by crates/xtask/structure-baseline.txt
+      at the length it had, free to shrink (the pin follows it down) and
+      not to grow; everything else meets the ceiling as written, so a file
+      that crosses it for the first time fails the run that sees it. The
+      other half of that § — fn 100 lines — is clippy's too_many_lines,
+      raised to warn in the workspace lints, and an existing long function
+      carries #[expect(clippy::too_many_lines)] until it is cut up.
 
   demo-repo <preset> [--at <dir>]
       Build a throwaway repository (isolated from your git config) and
@@ -239,6 +255,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("check") => check::run(&args[1..]),
+        Some("structure") => structure::run(&args[1..]),
         Some("demo-repo") => demo::run(&args[1..]).map(|path| {
             // The path is the output: scripts consume `(cargo xtask ...)`.
             println!("{}", path.display());

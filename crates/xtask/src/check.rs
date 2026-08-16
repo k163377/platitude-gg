@@ -41,6 +41,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     let words = |line: &[&str]| line.iter().map(|w| (*w).to_string()).collect::<Vec<_>>();
     let mut host_steps: Vec<Vec<String>> = vec![
+        // First because it is the cheapest thing here that can fail — it
+        // builds nothing and answers in a second or two, and a line ceiling
+        // is not worth finding out about after ten minutes of compiling.
+        words(&["cargo", "xtask", "structure"]),
         words(&["cargo", "fmt", "--all", "--", "--check"]),
         words(&[
             "cargo",
