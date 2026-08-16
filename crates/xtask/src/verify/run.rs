@@ -14,8 +14,7 @@ use super::shim::{
 };
 use super::verbs;
 
-/// Grace on top of PG_AUTO_QUIT_MS before the run is killed: startup,
-/// repository load, and the write itself happen inside this.
+/// Grace after the app-side watchdog before the parent reaps a wedged GUI.
 const GRACE_MS: u64 = 20_000;
 
 #[expect(clippy::too_many_lines)]
@@ -152,6 +151,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         .env("QT_FORCE_STDERR_LOGGING", "1")
         .env("PG_CONFIG_DIR", &config_dir)
         .env("PG_AUTO_QUIT_MS", opts.quit_ms.to_string())
+        .env("PG_AUTO_WATCHDOG_MS", opts.watchdog_ms.to_string())
         .env("PG_SHOT_DIR", &shot_dir)
         .env("PG_AUTO_ACT", &opts.verb)
         .env("PG_AUTO_ACT_ARG", &arg)
@@ -246,7 +246,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let stderr = child.stderr.take().map(collect_lines);
 
     // Bounded wait with a kill guard — never an unbounded wait or poll.
-    let deadline = Duration::from_millis(opts.quit_ms + GRACE_MS);
+    let deadline = Duration::from_millis(opts.watchdog_ms + GRACE_MS);
     let mut timed_out = false;
     let status = loop {
         match child.try_wait().map_err(|e| e.to_string())? {

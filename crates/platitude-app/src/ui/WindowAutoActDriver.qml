@@ -104,19 +104,29 @@ Item {
     // half goes on to open the command log the way the toolbar's `>_`
     // does.
     Timer {
-        interval: 1200
+        id: failTabActTimer
+        interval: 25
+        repeat: true
         running: AppBackend.autoAct === "open-fail-tab"
                  || AppBackend.autoAct === "open-fail-tab-bare"
                  || AppBackend.autoAct === "open-fail-tab-log"
         onTriggered: {
+            if (window.curPage === null || window.curPage.pageTab.state !== "open")
+                return
+            failTabActTimer.stop()
             tabsModel.openRepositoryPath(AppBackend.autoActArg)
             failTabTimer.start()
         }
     }
     Timer {
         id: failTabTimer
-        interval: 900
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (window.curPage === null || window.curPage.pageTab.state !== "error"
+                    || window.curPage.pageTab.errorKind === "")
+                return
+            failTabTimer.stop()
             if (AppBackend.autoAct === "open-fail-tab-log" && window.curPage !== null)
                 window.curPage.toggleCommands()
             AppBackend.report(
@@ -124,6 +134,7 @@ Item {
                 + " state=" + (window.curPage !== null ? window.curPage.pageTab.state : "-")
                 + " kind=" + (window.curPage !== null ? window.curPage.pageTab.errorKind : "-")
                 + " commands=" + (window.curPage !== null ? window.curPage.commandsShown : "-"))
+            window.finishAutoAct()
         }
     }
     /// What the run has to show for itself. `dialog=` is the dialog's own

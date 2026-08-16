@@ -81,6 +81,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/AuthorCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AutoActDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AutoScrollBar.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/AutoShotDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AvatarButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ChangeIcon.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ClipboardHelper.qml", "qt/qml/platitude");

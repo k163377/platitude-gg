@@ -64,6 +64,7 @@ impl AppBackend {
     qproperty!("autoOpen", Member = auto_open, Constant);
     qproperty!("shotDir", Member = shot_dir, Constant);
     qproperty!("autoQuitMs", Member = auto_quit_ms, Constant);
+    qproperty!("autoWatchdogMs", Member = auto_watchdog_ms, Constant);
     qproperty!("autoSelect", Member = auto_select, Constant);
     qproperty!("autoScroll", Member = auto_scroll, Constant);
     qproperty!("autoWip", Member = auto_wip, Constant);

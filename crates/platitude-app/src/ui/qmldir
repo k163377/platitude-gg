@@ -17,6 +17,7 @@ AskBar 1.0 AskBar.qml
 AuthorCard 1.0 AuthorCard.qml
 AutoActDriver 1.0 AutoActDriver.qml
 AutoScrollBar 1.0 AutoScrollBar.qml
+AutoShotDriver 1.0 AutoShotDriver.qml
 AvatarButton 1.0 AvatarButton.qml
 ChangeIcon 1.0 ChangeIcon.qml
 ClipboardHelper 1.0 ClipboardHelper.qml

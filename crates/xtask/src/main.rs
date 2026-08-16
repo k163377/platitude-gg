@@ -117,6 +117,7 @@ commands:
         --no-build        reuse the existing release binary
         --select          also set PG_AUTO_SELECT=1
         --quit-ms <n>     PG_AUTO_QUIT_MS (default 10000)
+        --watchdog-ms <n> maximum run time; never chooses the shot (default 120000)
         --shot-dir <dir>  screenshot directory (default: temp, kept)
         --config-dir <d>  settings.toml / state.toml directory. Fresh per
                           run by default; name one to carry what a run

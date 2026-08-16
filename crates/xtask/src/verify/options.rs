@@ -13,6 +13,8 @@ pub(super) struct Options {
     pub(super) build: bool,
     pub(super) select: bool,
     pub(super) quit_ms: u64,
+    /// Diagnostic ceiling for a run whose causal completion never arrives.
+    pub(super) watchdog_ms: u64,
     pub(super) shot_dir: Option<PathBuf>,
     /// Where the run keeps its settings and state. A fresh directory per
     /// run unless one is named, so a headless run never reads or writes
@@ -38,6 +40,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         build: true,
         select: false,
         quit_ms: 10_000,
+        watchdog_ms: 120_000,
         shot_dir: None,
         config_dir: None,
         restore: false,
@@ -62,6 +65,13 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                     .ok_or("--quit-ms needs a number")?
                     .parse()
                     .map_err(|e| format!("--quit-ms: {e}"))?;
+            }
+            "--watchdog-ms" => {
+                opts.watchdog_ms = it
+                    .next()
+                    .ok_or("--watchdog-ms needs a number")?
+                    .parse()
+                    .map_err(|e| format!("--watchdog-ms: {e}"))?;
             }
             "--shot-dir" => {
                 opts.shot_dir = Some(PathBuf::from(it.next().ok_or("--shot-dir needs a path")?));
@@ -107,5 +117,23 @@ mod tests {
         assert!(asked.allow_write_failure);
         assert_eq!(asked.verb, "fetch-fail");
         assert_eq!(asked.arg, "3");
+    }
+
+    #[test]
+    fn the_watchdog_is_separate_from_the_legacy_shot_clock() {
+        let plain = parse(&["commit".to_string()]).expect("verb only");
+        assert_eq!(plain.quit_ms, 10_000);
+        assert_eq!(plain.watchdog_ms, 120_000);
+
+        let asked = parse(&[
+            "commit".to_string(),
+            "--quit-ms".to_string(),
+            "2500".to_string(),
+            "--watchdog-ms".to_string(),
+            "9000".to_string(),
+        ])
+        .expect("two independent clocks");
+        assert_eq!(asked.quit_ms, 2500);
+        assert_eq!(asked.watchdog_ms, 9000);
     }
 }

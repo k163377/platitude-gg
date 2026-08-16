@@ -74,6 +74,10 @@ impl Default for AppBackend {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(0),
+            auto_watchdog_ms: std::env::var("PG_AUTO_WATCHDOG_MS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0),
             auto_select: std::env::var("PG_AUTO_SELECT").as_deref() == Ok("1"),
             auto_scroll: std::env::var("PG_AUTO_SCROLL").as_deref() == Ok("1"),
             mem_report: crate::memprobe::enabled(),

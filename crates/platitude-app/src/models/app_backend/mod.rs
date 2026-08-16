@@ -85,6 +85,9 @@ pub struct AppBackend {
     auto_open: String,
     shot_dir: String,
     auto_quit_ms: i32,
+    /// Harness-only deadline. Unlike `auto_quit_ms`, this never chooses
+    /// when a screenshot is taken; it only keeps a broken run bounded.
+    auto_watchdog_ms: i32,
     auto_select: bool,
     auto_scroll: bool,
     /// `PG_MEM_REPORT=1`: the window drives the memory breakdown off a

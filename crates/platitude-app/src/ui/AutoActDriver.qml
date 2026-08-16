@@ -60,14 +60,36 @@ Item {
 
     /// Kicked off by the page once its models are attached: a verb that
     /// ran before them would act on a repository nothing has read yet.
+    property bool claimed: false
     function begin() {
         autoActTimer.start()
     }
 
+    function complete() {
+        page.Window.window.finishAutoAct()
+    }
+
     Timer {
         id: autoActTimer
-        interval: 1200
-        onTriggered: driver.runAutoAct()
+        interval: 25
+        repeat: true
+        onTriggered: {
+            // Tabs are constructed before their active index settles. The
+            // page that becomes current claims the one process-wide verb;
+            // pages opened by that verb can never replay it.
+            if (!driver.claimed) {
+                if (!page.pageCurrent || !page.Window.window.claimAutoPageAct())
+                    return
+                driver.claimed = true
+            }
+            // `Opened` only means the path was accepted. Refs and the graph
+            // are the baseline every page verb is allowed to act on.
+            if (repoTab.state !== "open" || !branchesModel.refsLoaded
+                    || graphModel.finishCount === 0)
+                return
+            autoActTimer.stop()
+            driver.runAutoAct()
+        }
     }
     // HEAD's author has to arrive before the offer to take it over can
     // be there to tick.
@@ -116,11 +138,6 @@ Item {
         id: stageRowTimer
         interval: 50
         repeat: true
-        // Where the asking stops. Long enough for a repository still
-        // reading tens of thousands of refs beside the diff, and short
-        // enough to leave the write some of these end with room to land
-        // before `PG_AUTO_QUIT_MS` takes the picture.
-        readonly property int waitMs: 5000
         property int waited: 0
         function begin() {
             stageRowTimer.waited = 0
@@ -139,7 +156,7 @@ Item {
         onTriggered: {
             stageRowTimer.waited += stageRowTimer.interval
             const arrived = stageRowTimer.ready()
-            if (!arrived && stageRowTimer.waited < stageRowTimer.waitMs)
+            if (!arrived)
                 return
             stageRowTimer.stop()
             const act = AppBackend.autoAct
@@ -163,7 +180,8 @@ Item {
                                   + " lines=" + d.endingLines
                                   + " text=" + Words.lineEndings(
                                       d.endingKind, d.endingFrom, d.endingTo,
-                                      d.endingLines, d.endingScope, d.endingExt))
+                                  d.endingLines, d.endingScope, d.endingExt))
+                driver.complete()
                 return
             }
             // The squares a line only puts out under the pointer, named
@@ -604,11 +622,16 @@ Item {
     // on screen, so the shot and the report both wait for them.
     Timer {
         id: signatureTimer
-        interval: 800
-        onTriggered: AppBackend.report(
-            "signature kind=" + page.selectedSignatureKind
-            + " code=" + page.selectedSignatureCode
-            + " signer=" + page.selectedSignatureSigner)
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!page.signatureIsForSelection)
+                return
+            signatureTimer.stop()
+            AppBackend.report("signature kind=" + page.selectedSignatureKind
+                              + " code=" + page.selectedSignatureCode
+                              + " signer=" + page.selectedSignatureSigner)
+        }
     }
     // The tooltip halves of signature-tip / stash-tip: the state has to
     // land (gpg's verdict, the stash's details) before the target is
@@ -616,18 +639,28 @@ Item {
     // what it reads is the tip on screen.
     Timer {
         id: signatureTipTimer
-        interval: 800
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (!page.signatureIsForSelection)
+                return
+            signatureTipTimer.stop()
             detailsPane.signaturePointedAt = true
             signatureTipReport.start()
         }
     }
     Timer {
         id: signatureTipReport
-        interval: 800
-        onTriggered: AppBackend.report(
-            "signature_tip code=" + page.selectedSignatureCode
-            + " tip=" + detailsPane.signatureTipShown)
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!detailsPane.signatureTipShown)
+                return
+            signatureTipReport.stop()
+            AppBackend.report("signature_tip code=" + page.selectedSignatureCode
+                              + " tip=" + detailsPane.signatureTipShown)
+            driver.complete()
+        }
     }
     Timer {
         id: stashTipTimer

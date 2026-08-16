@@ -308,6 +308,8 @@ ApplicationWindow {
     // page's bench reads it through Window.window.
     property int frameCounter: 0
     onFrameSwapped: frameCounter++
+    function claimAutoPageAct() { return autoShotDriver.claimPageAct() }
+    function finishAutoAct() { autoShotDriver.finish() }
 
     // Memory breakdown (PG_MEM_REPORT=1). A tick rather than a few chosen
     // moments: the harness samples the process every 100ms and takes the
@@ -570,15 +572,7 @@ ApplicationWindow {
         }
         if (autoActLoader.item)
             autoActLoader.item.begin()
-        if (AppBackend.autoQuitMs > 0)
-            quitTimer.start()
-        if (AppBackend.shotDir !== "")
-            shotTimer.start()
-    }
-    Timer {
-        id: quitTimer
-        interval: Math.max(AppBackend.autoQuitMs, 1)
-        onTriggered: Qt.quit()
+        autoShotDriver.begin()
     }
     // Popups (dialogs, menus) render in the window overlay, whose
     // C++-created items grabToImage refuses ("no QML engine"). This
@@ -596,28 +590,12 @@ ApplicationWindow {
             live: true
         }
     }
-    Timer {
-        id: shotTimer
-        interval: AppBackend.autoQuitMs > 800 ? AppBackend.autoQuitMs - 800 : 3500
-        onTriggered: {
-            const path = AppBackend.shotDir + "/app.png"
-            if (overlayMirror.item)
-                overlayMirror.item.grabToImage(function (res) {
-                    const saved = res.saveToFile(AppBackend.shotDir + "/overlay.png")
-                    console.warn("overlay saved=" + saved)
-                })
-            // The gate is a sibling of `mainUi`, not a child — grab
-            // whichever the window is actually showing.
-            const shown = gate.visible ? gate : mainUi
-            const ok = shown.grabToImage(function (res) {
-                const saved = res.saveToFile(path)
-                console.warn("screenshot saved=" + saved + " path=" + path)
-                if (AppBackend.autoQuitMs <= 0)
-                    Qt.quit()
-            })
-            if (!ok)
-                console.warn("grabToImage returned false")
-        }
+    AutoShotDriver {
+        id: autoShotDriver
+        window: root
+        overlayMirror: overlayMirror
+        mainUi: mainUi
+        gate: gate
     }
 
     // ---- the two ways the window has nothing to show ---------------------
