@@ -130,6 +130,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/SignatureMark.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SlimField.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SplitHandleBar.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SplitRefusalOverlay.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/StashActionsBand.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/StashOptionsCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SummaryArea.qml", "qt/qml/platitude");

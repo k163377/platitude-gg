@@ -66,6 +66,7 @@ SidebarPane 1.0 SidebarPane.qml
 SignatureMark 1.0 SignatureMark.qml
 SlimField 1.0 SlimField.qml
 SplitHandleBar 1.0 SplitHandleBar.qml
+SplitRefusalOverlay 1.0 SplitRefusalOverlay.qml
 StashActionsBand 1.0 StashActionsBand.qml
 StashOptionsCard 1.0 StashOptionsCard.qml
 SummaryArea 1.0 SummaryArea.qml

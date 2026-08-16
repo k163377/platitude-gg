@@ -2796,41 +2796,10 @@ Item {
                           + " graphW=" + graphPane.graphColW)
     }
 
-    // Front-most over the page and drawing nothing but the badge. A
-    // passive grab is the only thing that sees the pointer while SplitView
-    // has the drag, and being passive it leaves SplitView the drag
-    // (measured: the boundary still moved while this reported the hand out
-    // past it).
-    Item {
+    SplitRefusalOverlay {
         id: splitRefusal
-        anchors.fill: parent
-        z: 50
-        /// Where the split bar's hand is, in scene coordinates, and
-        /// whether it is being refused. The other two sources keep their
-        /// own; this one is the overlay's because only it can see them.
-        property point at: Qt.point(0, 0)
-        property bool refuses: false
-        PointHandler {
-            onPointChanged: page.settleSplitRefusal(point.scenePosition.x,
-                                                    point.scenePosition.y)
-            // Letting go ends the ask, the same way the graph's dividers
-            // end theirs — nothing to remember to take back down.
-            onActiveChanged: if (!active) splitRefusal.refuses = false
-        }
-
-        // ---- the one badge in the window ----------------------------
-        // A refused drag has the hand *outside* the thing it was
-        // dragging, so a badge parented to the divider's own pane lands
-        // outside its parent and is composited under the page's panes
-        // (2026-08-11 ユーザー報告); over the whole page it is above them
-        // all. `mapFromItem` is a method and would not re-run on its own,
-        // but the point it reads changes on every move of the drag that
-        // raised it, which is the only time this is up (app-ui.md).
-        RefusalBadge {
-            id: refusalBadge
-            at: page.refusalAt(page.refusalSource)
-            shown: page.refusalSource !== null
-        }
+        refusalSource: page.refusalSource
+        onPointMoved: (sceneX, sceneY) => page.settleSplitRefusal(sceneX, sceneY)
     }
 
     /// Whichever boundary is refusing, or null. One pointer, so the order
@@ -2842,14 +2811,10 @@ Item {
         : wipPane.descRefuses ? wipPane.descPoint
         : splitRefusal.refuses ? splitRefusal.at
         : null
-    function refusalAt(scene) {
-        return scene === null ? Qt.point(0, 0)
-                              : splitRefusal.mapFromItem(null, scene.x, scene.y)
-    }
 
     /// What is drawn, not what was asked for — the one badge's own
     /// `shown` (`RefusalBadge`, on why not its `visible`).
-    readonly property alias refusalShown: refusalBadge.shown
+    readonly property alias refusalShown: splitRefusal.shown
 
     function jumpToRef(oidHex) {
         page.guardEdits(oidHex, function () {
