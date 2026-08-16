@@ -386,83 +386,19 @@ ColumnLayout {
                     blockHeight: blockCol.implicitHeight
                     onWheelPastEnd: pixels => detailsPane.rollBlock(pixels)
                 }
-                // Only once something is actually changed: until then the pane
-                // keeps its resting shape and nothing invites a rewrite.
-                ColumnLayout {
+                // Only once something is actually changed: until then the
+                // pane keeps its resting shape (`MessageActionsRow`).
+                MessageActionsRow {
                     Layout.fillWidth: true
-                    spacing: Theme.spaceXs
-                    visible: detailsPane.messageDirty
-                    // The newest commit is amended in place and costs nothing;
-                    // an older one is replayed, and everything built on it
-                    // comes back as different commits. Only the second case is
-                    // worth a line.
-                    Label {
-                        Layout.fillWidth: true
-                        visible: !detailsPane.asking
-                                 && detailsPane.details.shaHex !== detailsPane.headOid
-                        wrapMode: Text.Wrap
-                        text: qsTr("Saving replays this commit, so every commit after it gets a new identity.")
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSm
-                    }
-                    // Said, not asked, like the amend editor's tag: the save
-                    // still goes ahead, and this line is the warning it gets.
-                    Label {
-                        Layout.fillWidth: true
-                        visible: !detailsPane.asking && detailsPane.published
-                        wrapMode: Text.Wrap
-                        text: qsTr("This commit is on a remote. Rewriting it leaves anyone who already has it out of step.")
-                        color: Theme.warning
-                        font.pixelSize: Theme.fontSm
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        visible: detailsPane.asking
-                        wrapMode: Text.Wrap
-                        text: qsTr("Moving to another commit leaves this text behind.")
-                        color: Theme.warning
-                        font.pixelSize: Theme.fontSm
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.spaceSm
-                        Item { Layout.fillWidth: true }
-                        HoverToolButton {
-                            visible: !detailsPane.asking
-                            text: qsTr("Cancel")
-                            font.pixelSize: Theme.fontSm
-                            onClicked: detailsPane.revertMessage()
-                        }
-                        ActionButton {
-                            visible: !detailsPane.asking
-                            implicitHeight: Theme.controlHeight
-                            kind: "check"
-                            besideWord: true
-                            frameColor: enabled ? Theme.accent : Theme.borderDefault
-                            activeFocusOnTab: true
-                            text: qsTr("Save message")
-                            enabled: !detailsPane.busy && msgEditor.subjectText.trim() !== ""
-                            onActivated: detailsPane.submitMessage()
-                        }
-                        // The two ways out of the question. Staying is the
-                        // framed one: it is the answer that loses nothing.
-                        HoverToolButton {
-                            visible: detailsPane.asking
-                            text: qsTr("Discard edits")
-                            font.pixelSize: Theme.fontSm
-                            onClicked: detailsPane.leaveResolved(true)
-                        }
-                        ActionButton {
-                            visible: detailsPane.asking
-                            implicitHeight: Theme.controlHeight
-                            kind: "pen"
-                            besideWord: true
-                            frameColor: Theme.accent
-                            activeFocusOnTab: true
-                            text: qsTr("Keep editing")
-                            onActivated: detailsPane.leaveResolved(false)
-                        }
-                    }
+                    dirty: detailsPane.messageDirty
+                    asking: detailsPane.asking
+                    replays: detailsPane.details.shaHex !== detailsPane.headOid
+                    published: detailsPane.published
+                    busy: detailsPane.busy
+                    canSave: msgEditor.subjectText.trim() !== ""
+                    onRevertRequested: detailsPane.revertMessage()
+                    onSaveRequested: detailsPane.submitMessage()
+                    onLeaveResolved: discard => detailsPane.leaveResolved(discard)
                 }
                 // -- author card: avatar + name/date on the left, own hash over
                 // parent hash on the right (rows aligned) --
