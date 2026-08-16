@@ -51,18 +51,7 @@ impl RepoSession {
             return;
         };
 
-        // Swapped here, on the caller's thread, not inside the spawned
-        // task: call order is what decides which pass owns the graph, and
-        // spawn order does not follow it (core.md).
-        let run_cancel = self.root_cancel.child_token();
-        if let Some(prev) = self
-            .log_cancel
-            .lock()
-            .map(|mut g| g.replace(run_cancel.clone()))
-            .unwrap_or_default()
-        {
-            prev.cancel();
-        }
+        let run_cancel = self.take_log_token();
 
         let s = Arc::clone(self);
         let options = self.log_options();
@@ -92,6 +81,22 @@ impl RepoSession {
         let Some(workdir) = self.workdir() else {
             return;
         };
+        let run_cancel = self.take_log_token();
+        let s = Arc::clone(self);
+        let options = self.log_options();
+        self.runtime.spawn(async move {
+            s.run_swap_pass(&workdir, options, &run_cancel).await;
+        });
+    }
+
+    /// Takes the log stream over: a fresh token for this pass, with the
+    /// one it displaces cancelled.
+    ///
+    /// **Called on the caller's thread, before the pass is spawned**,
+    /// never from inside the spawned task: call order is what decides
+    /// which pass owns the graph, and spawn order does not follow it
+    /// (core.md).
+    fn take_log_token(&self) -> CancellationToken {
         let run_cancel = self.root_cancel.child_token();
         if let Some(prev) = self
             .log_cancel
@@ -101,11 +106,7 @@ impl RepoSession {
         {
             prev.cancel();
         }
-        let s = Arc::clone(self);
-        let options = self.log_options();
-        self.runtime.spawn(async move {
-            s.run_swap_pass(&workdir, options, &run_cancel).await;
-        });
+        run_cancel
     }
 
     /// Streams one pass straight to the UI (chunked, resets the graph).
