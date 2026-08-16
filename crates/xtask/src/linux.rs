@@ -330,9 +330,9 @@ fn bare(root: &Path, discover: bool) -> Result<(), String> {
         "set -e; \
          test -x /built/release/pg-todo-editor \
            || {{ echo 'pg-todo-editor is not beside the app'; exit 2; }}; \
-         QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 \
-         PG_AUTO_QUIT_MS={QUIT_MS} PG_SHOT_DIR={OUT_MOUNT} \
-         /built/release/platitude-gg"
+         timeout 50s env QT_QPA_PLATFORM=offscreen \
+         QT_FORCE_STDERR_LOGGING=1 PG_AUTO_ACT=band \
+         PG_AUTO_WATCHDOG_MS={BARE_WATCHDOG_MS} PG_SHOT_DIR={OUT_MOUNT} /built/release/platitude-gg"
     );
     let status = run_on_bare(root, &runtime, &out, &script)?;
     if !status.success() {
@@ -358,7 +358,7 @@ fn bare(root: &Path, discover: bool) -> Result<(), String> {
     Ok(())
 }
 
-const QUIT_MS: u32 = 4000;
+const BARE_WATCHDOG_MS: u32 = 30_000;
 
 /// Every library this has ever been stopped on, and the Ubuntu package
 /// that carries it. A name that is not in here stops the discovery and
@@ -399,7 +399,7 @@ apt-get install -y -qq --no-install-recommends git >/dev/null 2>&1
 needed="git"
 for _ in $(seq 1 20); do
   out=$(QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 \
-        PG_AUTO_QUIT_MS={QUIT_MS} PG_SHOT_DIR={OUT_MOUNT} \
+        PG_AUTO_ACT=band PG_AUTO_WATCHDOG_MS={BARE_WATCHDOG_MS} PG_SHOT_DIR={OUT_MOUNT} \
         timeout 60 /built/release/platitude-gg 2>&1)
   [ $? = 0 ] && break
   soname=$(printf '%s' "$out" | sed -n 's/.*error while loading shared libraries: \([^:]*\).*/\1/p' | head -1)

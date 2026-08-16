@@ -1,13 +1,15 @@
 //! The run itself: build, start the app offscreen, wait on it, and judge
 //! what came back.
 
+use std::collections::BTreeSet;
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use super::options::parse;
 use super::outcome::Outcome;
+use super::ownership::{claim_resource, fresh_shot_dir};
 use super::repos::{body_for, folder_for, tab_width_repos};
 use super::shim::{
     SHIM_REAL, SHIM_VERSION, identity_answer, identity_seed, real_git, stage_old_git,
@@ -49,23 +51,35 @@ pub fn run(args: &[String]) -> Result<(), String> {
         made
     };
 
+    // Explicit resources are allowed to survive across sequential runs,
+    // but never to be owned by two verify-ui processes at once. That would
+    // mix Git writes, settings, or PNGs and can manufacture a false PASS.
+    // Fresh preset repositories need no cross-process claim: their creator
+    // already gave this run a private directory.
+    let mut claimed = BTreeSet::new();
+    let mut _resource_claims = Vec::new();
+    if !opts.repo.is_empty() {
+        for repo in &repos {
+            if let Some(claim) = claim_resource(repo, "repository", &mut claimed)? {
+                _resource_claims.push(claim);
+            }
+        }
+    }
+
     // The build's PATH, not the run's: the git shim below goes onto the
     // child's PATH only, so the build never sees it.
     let exe = crate::app_exe(&root, &path, opts.build, &[])?;
 
     let shot_dir = match &opts.shot_dir {
-        Some(dir) => dir.clone(),
-        None => {
-            let nanos = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(|e| e.to_string())?
-                .as_nanos();
-            std::env::temp_dir()
-                .join("pg-verify")
-                .join(format!("{}-{nanos}", opts.verb))
+        Some(dir) => {
+            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+            if let Some(claim) = claim_resource(dir, "shot directory", &mut claimed)? {
+                _resource_claims.push(claim);
+            }
+            dir.clone()
         }
+        None => fresh_shot_dir(&opts.verb)?,
     };
-    std::fs::create_dir_all(&shot_dir).map_err(|e| e.to_string())?;
 
     // A run of its own unless told otherwise. The app would refuse the
     // real files anyway once it sees a PG_* variable, but naming a
@@ -76,6 +90,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
         None => shot_dir.join("config"),
     };
     std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    if opts.config_dir.is_some()
+        && let Some(claim) = claim_resource(&config_dir, "config directory", &mut claimed)?
+    {
+        _resource_claims.push(claim);
+    }
     println!("config dir: {}", config_dir.display());
 
     // The verbs that need the configuration to say something before the
@@ -150,7 +169,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
         .env("QT_QPA_PLATFORM", "offscreen")
         .env("QT_FORCE_STDERR_LOGGING", "1")
         .env("PG_CONFIG_DIR", &config_dir)
-        .env("PG_AUTO_QUIT_MS", opts.quit_ms.to_string())
         .env("PG_AUTO_WATCHDOG_MS", opts.watchdog_ms.to_string())
         .env("PG_SHOT_DIR", &shot_dir)
         .env("PG_AUTO_ACT", &opts.verb)

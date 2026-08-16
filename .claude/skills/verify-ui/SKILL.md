@@ -5,13 +5,22 @@ description: platitude-gg の UI 動作確認・スクリーンショット検�
 
 # UI 動作確認(ヘッドレス検証)
 
-**ヘッドレス動確は `cargo xtask verify-ui <動詞> [引数]`** — release ビルド → 使い捨て demo リポジトリ生成 → offscreen 起動 → `PG_AUTO_ACT` → `screenshot saved=true` 判定と PNG 保存まで 1 コマンド。`--no-build` で連続実行、`--preset` / `--repo` で対象指定、素材だけ欲しければ `cargo xtask demo-repo <preset>`。**UI 配線の Done は、これと `cargo xtask linux verify-ui` が同じ動詞で PASS し、両方の PNG を目視するまで**(CLAUDE.md ビルド・テスト。Linux 側の差分は §Linux での動確)。
+**ヘッドレス動確は `cargo xtask verify-ui <動詞> [引数]`** — release ビルド → 使い捨て demo リポジトリ生成 → offscreen 起動 → `PG_AUTO_ACT` の因果的完了 → `screenshot saved=true` 判定と PNG 保存まで 1 コマンド。`--no-build` で連続実行、`--preset` / `--repo` で対象指定、素材だけ欲しければ `cargo xtask demo-repo <preset>`。**UI 配線の Done は、これと `cargo xtask linux verify-ui` が同じ動詞で PASS し、両方の PNG を目視するまで**(CLAUDE.md ビルド・テスト。Linux 側の差分は §Linux での動確)。
 
 presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正。
 
 **動詞はまとめて撮る(1 動詞 1 ターンにしない)** — 同じビルドで撮れる動詞は 1 個の複合コマンドに並べて 1 ターンで実行し(2 発目以降は `--no-build`)、PNG の目視も 1 ターンに複数枚まとめて読む。段 2 と重なる時は `cargo xtask check --verb '<動詞と引数>' --verb …` の一括(ホスト / コンテナ並列)が最速。1 動詞ずつ「撮る→見る→直す」を回してよいのは、直前の絵が次の編集を決める時だけ。
 
 **判定には書き込みの失敗も入る** — `write failed` が 1 行でもあれば FAIL(撮れた PNG は「届かなかった状態」のもの)。**`--allow-write-failure` を付けてよいのは「その拒否がこの動詞の見せ物である」時だけ**(対象動詞の全列挙は `cargo xtask` の USAGE が正)。引数の渡し忘れも同じ行に出る(`delete-branch-refused` を引数なしで撃つと `git branch --delete -- ''` が拒まれ、`not merged` の絵は撮れていない)。
+
+## 壊れない動詞の実装と反復
+
+- **時間は成功条件にしない**。動詞は実際の入力経路を通し、対象の `loaded` / popup `visible` / tooltip `visible` / busy edge と終了 / write sequence / model output 等、その操作が生む観測可能な出力を待って `finishAutoAct()` する。25ms 等の Timer は状態 sampler であり、回数・経過時間で先へ進めない。`--quit-ms` は廃止済みで指定すると fail fast する
+- **`--watchdog-ms` は診断用の外側の天井だけ**。性能が落ちても正しい run の撮影時点を変えないよう通常は既定 120s のまま使う。短くして「通信中」や「起動途中」を狙わない。watchdog 到達は PASS ではなく screenshot 無しの FAIL
+- **owner は 1 run に 1 つ**。page 内は `AutoActDriver.qml`、window 横断は `WindowAutoActDriver.qml` が完了を持ち、後者の動詞は page completion を defer する。`AutoShotDriver.claimPageAct()` より前に page 動詞を始めず、新規 tab に同じ動詞を replay させない。最終撮影は `AutoShotDriver` だけが行う
+- **中間状態は実 edge を latch する**。busy/loading/error を撮る動詞は対応 signal で edge を観測し、非同期画像 callback が終わるまで専用の automation latch で表示を保つ。固定時間の窓を探したり、入力側の bool だけ立てて出力を偽装しない。既存例は `force-push-hold` と `settings-tools-loading`
+- **並行反復は build 後に `--no-build`**。既定の repo/config/shot は run ごとに一意かつ atomic claim される。明示した `--repo` / `--config-dir` / `--shot-dir` は同じ path の同時利用を fail fast するので、並行 batch には別 path を渡す。状態往復のように共有が目的の組は同じ path で直列実行する
+- flaky 方針の合否を反復で決める時は **最低 10 run**。10 を超えて 1 回でも NG が出たら、修正後に **5 run 連続 OK** を取り直す。並行 batch は各 process を 1 run と数え、全 process の exit / `must_say` / screenshot を個別に判定する
 
 ## 起動 fast path(「rebase して起動」等、起動だけの要求)
 
@@ -29,7 +38,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 ## PG_AUTO_ACT 動詞表
 
-**全動詞の正本は [verbs.md](verbs.md)** — 動確の前に、使う動詞の項を必ず読む(引数・preset・報告行の読み方・`must_say` が動詞ごとに違い、引数を省くと何も撮れない動詞がある)。一覧は 1 動詞 1 行 = 動詞名の Grep で該当行だけ引ける。動詞ごとの仕込み(preset・リポジトリの建て方・`--config-dir` の 2 回実行)と `--quit-ms` の狙い方も全部そこ。**動詞を足したら verbs.md へ追記する**(一覧は 1 行・仕込みは段落)。
+**全動詞の正本は [verbs.md](verbs.md)** — 動確の前に、使う動詞の項を必ず読む(引数・preset・報告行の読み方・`must_say` が動詞ごとに違い、引数を省くと何も撮れない動詞がある)。一覧は 1 動詞 1 行 = 動詞名の Grep で該当行だけ引ける。動詞ごとの仕込み(preset・リポジトリの建て方・`--config-dir` の 2 回実行)も全部そこ。**動詞を足したら verbs.md へ追記する**(一覧は 1 行・仕込みは段落)。
 
 **ダイアログ・メニューの見た目は headless で撮れる**: `PG_SHOT_DIR` 指定時、`Main.qml` のオーバーレイミラー(`ShaderEffectSource`)が **overlay.png** を app.png と並べて保存する(offscreen で成立・ロック状態と無関係 — 2026-08-05 実測)。オーバーレイ自体の grabToImage は "no QML engine" で不可、ミラーが唯一の経路。アンロック中の `PrintWindow` も引き続き可(実 hover 等、実ウィンドウが要る検証のみ)。
 
@@ -40,14 +49,14 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 hover はアプリへは注入できない(§Windows での実行・デバッグの罠)が、**絵は撮れる** — 入力(ポインタ)だけを迂回し、表示側は実 hover と同じ経路を通す。**「hover は再現できない」で止まってユーザーに実操作を頼まない**。上から順に 3 つの道を検討する:
 
 1. **既にその状態の動詞がある** — [verbs.md](verbs.md) の一覧を見た目の種類から逆引きする。ツールチップ(attached ToolTip): `signature-tip` / `stash-tip` / `path-tip`(いずれも overlay.png 側。**意匠は共有インスタンス 1 つ** = `Main.dressToolTip` なので、どれか 1 枚で全ツールチップの見た目が言える)。hover カード: `row-card`(グラフ行)/ `ref-list-card`(チップの一覧)/ `author-card-open` / `co-authors-open` / `badges-hover`(帯の状態カード — `identity-tip` も同じカードを開く)/ `eol-hover`(WIP 行の `!`)/ `eol-commit`(コミットボタンの上のポインタ)/ `avatar-hover`(ペンのバッジ)。ポインタの下で色・印・道具が変わる形: `tab-mark`(タブと `✕`)/ `line-tools` / `hunk-tools`(hunk の照明)/ `stage-many`(行末の `+` と仲間の印)/ `graph-divider`(仕切りの線と禁止の輪)/ `graph-bar`(レーンのバー)/ `nav-peek` 系(レールの peek)/ `avatar-row-lit`(設定一覧の行)。
-2. **配線済みだが動詞が無い** — 動詞を 1 つ足すのが正道で、**安い**: xtask は動詞を検査せず `PG_AUTO_ACT` へ素通しする(許可リストは無い。判定が要る時だけ verify.rs の `must_say` に 1 行)ので、実装は QML の分岐 1 つ — ページ内は `RepoPage.qml` の `autoActTimer`、ウィンドウ横断(タブ・identity・窓)は `Main.qml`。作法は 2 点だけ: **実 hover が書くのと同じ 1 つのプロパティ / シグナルへ書く**(`eol-hover` / `pointAtTab` が手本。書き先が無い形なら先に `*PointedAt` / `pointed` の 1 本を切る — 形の一覧は rules-refs/app-ui.md)・**ページ側の判定を関数直呼びで迂回しない**(`row-card` の注意 = 出さないはずの場面まで開いて緑になる)。足したら verbs.md へ追記する。
+2. **配線済みだが動詞が無い** — 動詞を 1 つ足すのが正道で、**安い**: xtask は動詞を検査せず `PG_AUTO_ACT` へ素通しする(許可リストは無い。判定が要る時だけ `verify/verbs.rs` の `must_say` に 1 行)ので、実装は QML の分岐と完了 predicate — ページ内は `AutoActDriver.qml`、ウィンドウ横断(タブ・identity・窓)は `WindowAutoActDriver.qml`。作法は 3 点: **実 hover が書くのと同じ 1 つのプロパティ / シグナルへ書く**(`eol-hover` / `pointAtTab` が手本。書き先が無い形なら先に `*PointedAt` / `pointed` の 1 本を切る — 形の一覧は rules-refs/app-ui.md)・**ページ側の判定を関数直呼びで迂回しない**(`row-card` の注意 = 出さないはずの場面まで開いて緑になる)・**入力した同じ callback 内や固定 Timer で完了せず、出力側 predicate を観測して `finishAutoAct()` する**。足したら verbs.md へ追記する。
 3. **未配線・意匠検討の仮当て(強制表示)** — 使い捨てパッチで出す。**worktree で当て、コミットしない**(`repo::open` の TimedOut パッチと同じ扱い)。出したい状態は**仮の bool 1 本に束ねて、見た目の条件へ `|| <その bool>` を足す**(差分が最小で revert しやすく、意匠が採用されたらそのまま道 2 の書き先になる)。QML は release exe 埋め込みなので**パッチのたびにビルドが要る**(同じビルドの撮り直しだけ `--no-build`)。撮影は周囲の状態を作る既存動詞に乗せる — 仮表示は無条件に出るので、どの動詞の PNG にも写る(ツールチップ・ポップアップは overlay.png 側 = 残像の罠は上の項)。**複数の的の棚卸しは一括で強制表示して 1 枚に集める**。往復しそうなら revert の前に `git diff > force-<何>.patch` で保存する。
 
 どの道でも `SetCursorPos` / `WM_MOUSEMOVE` / `SendInput` を試さない(罠の項 — 実マウスに奪還され、成功と失敗が再現不能に混ざる)。実窓でしか見えないのは OS カーソルとの重なりだけ。hover の**配送規則そのもの**(どこに handler を置くと立つか)の検証は使い捨ての qmltestrunner シーン(rules-refs/app-ui.md)。
 
 ## Linux(コンテナ)での動確 — Done は両 OS
 
-**`cargo xtask linux verify-ui <動詞> [引数]`** が Ubuntu 側の同じ 1 コマンド。オプションも動詞も **verbs.md の表がそのまま通る**(`--preset` / `--repo` / `--no-build` / `--quit-ms` / `--select` …)。フォントスタックも Qt のビルドも別物で、**片方の PASS はもう片方を保証しない**。
+**`cargo xtask linux verify-ui <動詞> [引数]`** が Ubuntu 側の同じ 1 コマンド。オプションも動詞も **verbs.md の表がそのまま通る**(`--preset` / `--repo` / `--no-build` / `--watchdog-ms` / `--select` …)。フォントスタックも Qt のビルドも別物で、**片方の PASS はもう片方を保証しない**。
 
 - **スクショはホスト側の一時ディレクトリに出る**。パスは実行時に `screenshots and settings: <path>` として印字されるので、そこを読む(コンテナ内の `/out` を見に行かない)。`--shot-dir` を明示した時はそちらが優先され、この橋渡しは行われない
 - **offscreen はコンテナでは既定の姿**。Windows のような `QT_QPA_FONTDIR` の指定は要らず、**.ttc の罠も無い**(fontconfig 経由)。イメージが `fonts-noto-cjk` を持つので**日本語はそのまま出る** — デザイン規約が Ubuntu 側に名指ししている `Noto Sans CJK JP` が完全一致で解決することは実測済み
@@ -62,8 +71,8 @@ hover はアプリへは注入できない(§Windows での実行・デバッグ
 - Qt / QML のログ(console.*、QML ロードエラー含む)は既定で OutputDebugString 行き — **`QT_FORCE_STDERR_LOGGING=1` を付けないと stderr に出ず、QML の失敗が無音になる**
 - release ビルドは GUI サブシステム(`windows_subsystem`)のため PowerShell から直接起動すると**待機されない**(即座に制御が返り、プロセスが残って exe をロックする)。検証は `Start-Process -PassThru` + `WaitForExit` で行う
 - **ログを読みたい起動は `cargo run --release -p platitude-app [--features …]` で撃つ**(memprobe の `mem report` を読む時など、verify-ui に乗らない 1 回きりの計測)。GUI サブシステムの exe を PowerShell から直に撃つと**出力は自分のターンより後に届いて 1 行も掴めず**、`Start-Process -RedirectStandardError` は**空のファイルを残す**(2026-08-12 実測)。cargo は子を待って stdio をそのまま繋ぐので普通に読める。**Qt の bin を PATH に足すのを忘れない**(無いと約 10ms で無言終了 = 下の項)
-- **画面ロック中は通常起動の GUI 検証がハングする**(プロセスは動きログも出るが、`grabToImage` の完了と `PG_AUTO_QUIT_MS` の自動終了が発生しない — 2026-08-03 ロック実測)。GUI 起動を伴う検証は必ず `WaitForExit(ms)` タイムアウト + 未終了なら `Kill()` のガード付きで実行し、無限待ち・無限ポーリングをしない
-- **ヘッドレス検証の標準**(ロック状態と無関係に成立、2026-08-03 ロック実測): `QT_QPA_PLATFORM=offscreen` + `QT_QPA_FONTDIR=C:\Windows\Fonts` + 自動化 env(PG_AUTO_OPEN / PG_AUTO_QUIT_MS / PG_SHOT_DIR / PG_AUTO_SELECT 等)。成否は stderr の `screenshot saved=true` と保存 PNG の目視で判定する。**FONTDIR 指定が無いと全文字が豆腐**(offscreen は Windows のシステムフォントを自動検出しない)
+- **画面ロック中は通常起動の GUI 検証がハングする**(プロセスは動きログも出るが `grabToImage` callback が返らない — 2026-08-03 ロック実測)。GUI 起動を伴う検証は必ず `WaitForExit(ms)` タイムアウト + 未終了なら `Kill()` のガード付きで実行し、無限待ち・無限ポーリングをしない。`verify-ui` は app-side watchdog + parent kill guard の二重境界を持つ
+- **ヘッドレス検証の標準**(ロック状態と無関係に成立、2026-08-03 ロック実測): `QT_QPA_PLATFORM=offscreen` + `QT_QPA_FONTDIR=C:\Windows\Fonts` + 自動化 env(PG_AUTO_OPEN / PG_AUTO_WATCHDOG_MS / PG_SHOT_DIR / PG_AUTO_SELECT 等)。成否は stderr の `screenshot saved=true` と保存 PNG の目視で判定する。**FONTDIR 指定が無いと全文字が豆腐**(offscreen は Windows のシステムフォントを自動検出しない)
 - **FONTDIR の .ttc(TrueType Collection)は読み込まれない**(offscreen の FreeType フォント DB は TTC を登録せず、名指しでも豆腐 — 2026-08-08 実測)。Windows 標準の CJK フォント(Yu Gothic / MS Gothic / Meiryo / YaHei / SimSun)は全て .ttc なので、**スクショに日本語が出るのは FONTDIR に .ttf / .otf の CJK フォントが在る時だけ**(この開発機は `NotoSansJP-VF.ttf` が C:\Windows\Fonts に居るため出る)。実ウィンドウの GDI/DirectWrite では TTC は普通に使える — 検証環境だけの罠。日本語の字形検証は demo `basic` の日本語コミット(`docs: 利用案内の骨子を日本語で直す` — 直 / 骨 が中国語字形だと一目で分かる)を目視する
 - fps 計測(PG_AUTO_SCROLL)は offscreen でも完走するが、値は疑似フレームループの上限で表示性能ではない — **性能実測はアンロック状態の通常起動でのみ行う**
 - **ポップアップ(Popup / Dialog / Menu)は `grabToImage` に写らない** — ウィンドウのオーバーレイ層に描かれ、掴んだアイテムの部分木の外にいる。撮影は `PG_SHOT_DIR` の overlay.png(上記ミラー)で足りる。実ウィンドウが要る検証は OS 側から `PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT=2)` で撮る(GPU 描画のため flags 必須。アンロック中はダイアログも写る — 2026-08-03 設定ダイアログで実測)。キー入力の注入は `SendKeys` が届かない(このシェルはフォアグラウンドを取れず、ユーザーの操作中ウィンドウへ飛ぶ危険もある)。`PostMessage(hwnd, WM_KEYDOWN/UP)` を使う。クリックも `PostMessage(WM_LBUTTONDOWN/UP)` で確実に届くが、**hover は注入で検証不能**(`WM_MOUSEMOVE` 注入・`SetCursorPos` とも実マウスの動きに hover 状態を奪還され、成功と失敗が再現不能に混ざる — 2026-08-03 実測)。hover の絵は §hover の絵の撮り方で出す。**ただし「Qt が hover をどう配るか」だけは測れる** — 使い捨ての QML シーンを書いて `qmltestrunner.exe -input tst_*.qml`(offscreen 可・Qt の bin に同梱)の `mouseMove()` で本物の hover を配れるので、**アプリでは注入できない代わりに、依存している配送規則の方を実測してから配線する**。この形で確かめた 1 つ: **親の `HoverHandler` は、子の hoverEnabled な `MouseArea`(や子自身の `HoverHandler`)の上にポインタが居ても hovered のまま**(handlers are passive。`GraphPane.pointerInside` = レーンの横スクロールバーがこれに乗っている)。**フォーカスは要アクティブ化**(非アクティブウィンドウでは `activeFocusItem` が null のまま。PostMessage はアクティブにしないが、フォアグラウンドスレッドへ `AttachThreadInput` してから `SetForegroundWindow` すれば奪えて検証可能 — 2026-08-04 実測)

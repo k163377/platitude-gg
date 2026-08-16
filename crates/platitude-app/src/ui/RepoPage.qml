@@ -957,6 +957,9 @@ Item {
     /// What the panel is doing, rather than what was asked of it — the
     /// automation reads this one, so a cut binding cannot pass.
     readonly property bool commandsShown: commandsPane.visible
+    /// Automation reads the laid-out width, not the preferred width it
+    /// requested, before persisting a state round trip.
+    readonly property real stateDetailsWidth: rightPane.width
     /// Automation only: the header's `Clear`, pressed from outside the
     /// pane. The answer to what it clears is on the band, which cannot
     /// reach in here (`PG_AUTO_ACT=commands-clear`).

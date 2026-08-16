@@ -8,6 +8,7 @@
 
 mod options;
 mod outcome;
+mod ownership;
 mod repos;
 mod run;
 mod shim;

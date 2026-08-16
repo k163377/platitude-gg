@@ -23,6 +23,18 @@ AppDialog {
     }
     /// Stops a late answer from overwriting something already typed.
     property bool toolTouched: false
+    // Automation can photograph both phases without racing a wall clock.
+    // The loading latch is raised only after the real model reports an
+    // outstanding tool read, then keeps that observed visual state alive
+    // until grabToImage has finished.
+    property bool autoToolLoadingLatched: false
+    readonly property bool autoToolsLoadingReady:
+        settingsDialog.opened && settingsDialog.autoToolLoadingLatched
+        && toolField.popup.opened
+    readonly property bool autoToolsSettledReady:
+        settingsDialog.opened && settingsDialog.curPage
+        && !settingsDialog.curPage.pageTab.mergeToolsLoading
+        && settingsDialog.toolChoices.length > 0 && toolField.popup.opened
 
     /// Stands in for the pointer on one row, which headless cannot inject.
     property int pointedAtRow: -1
@@ -93,10 +105,16 @@ AppDialog {
     /// name in a third, so the value has three chances to be knocked out
     /// by something that is not a person — report it at each.
     function reportTool() {
-        if (AppBackend.autoAct === "settings-tools")
+        if (AppBackend.autoAct === "settings-tools"
+                || AppBackend.autoAct === "settings-tools-loading")
             AppBackend.report("merge_editor wanted=" + toolField.wanted
                               + " shown=" + toolField.editText
-                              + " configured=" + settingsDialog.mergeTool)
+                              + " configured=" + settingsDialog.mergeTool
+                              + " settled=" + (settingsDialog.curPage
+                                  && !settingsDialog.curPage.pageTab.mergeToolsLoading)
+                              + " loading=" + toolField.loading
+                              + " open=" + toolField.popup.opened
+                              + " choices=" + settingsDialog.toolChoices.length)
     }
     onToolChoicesChanged: settingsDialog.reportTool()
 
@@ -105,6 +123,7 @@ AppDialog {
                           ? String(AppBackend.autoFetchMinutes) : ""
         toolField.wanted = settingsDialog.mergeTool
         settingsDialog.toolTouched = false
+        settingsDialog.autoToolLoadingLatched = false
         // Headless has no pointer to put on a row, and the lit row is
         // what the dim/bright pair is photographed by.
         settingsDialog.pointedAtRow =
@@ -116,7 +135,13 @@ AppDialog {
             // a separate, far slower read — hence the turning indicator.
             settingsDialog.curPage.pageTab.askMergeTool()
             settingsDialog.curPage.pageTab.askMergeTools()
+            if (AppBackend.autoAct === "settings-tools-loading"
+                    && settingsDialog.curPage.pageTab.mergeToolsLoading)
+                settingsDialog.autoToolLoadingLatched = true
         }
+        if (AppBackend.autoAct === "settings-tools"
+                || AppBackend.autoAct === "settings-tools-loading")
+            toolField.popup.open()
         // Opened from an avatar, the first thing left to do is name the
         // picture, so the focus goes there rather than to the top field.
         if (settingsDialog.prefillEmail !== "") {
@@ -144,6 +169,14 @@ AppDialog {
             settingsDialog.toolTouched = false
         }
         settingsDialog.reportTool()
+    }
+    Connections {
+        target: settingsDialog.curPage ? settingsDialog.curPage.pageTab : null
+        function onMergeToolsLoadingChanged() {
+            if (AppBackend.autoAct === "settings-tools-loading"
+                    && settingsDialog.curPage.pageTab.mergeToolsLoading)
+                settingsDialog.autoToolLoadingLatched = true
+        }
     }
     // An empty field is the off switch — nothing to type is the
     // clearest way to say "do not do this".
@@ -212,16 +245,12 @@ AppDialog {
                     id: toolField
                     Layout.fillWidth: true
                     placeholder: qsTr("none")
-                    // Smoke hook: the popup is drawn here rather than by
-                    // Fusion, so it needs its own look at (PG_AUTO_ACT).
-                    Timer {
-                        running: settingsDialog.opened
-                                 && AppBackend.autoAct === "settings-tools"
-                        interval: 400
-                        onTriggered: toolField.popup.open()
-                    }
-                    loading: settingsDialog.curPage
-                             && settingsDialog.curPage.pageTab.mergeToolsLoading
+                    // The popup is opened by the dialog's actual `opened`
+                    // edge above. Loading stays latched only for the
+                    // automation verb that deliberately photographs it.
+                    loading: settingsDialog.autoToolLoadingLatched
+                             || (settingsDialog.curPage
+                                 && settingsDialog.curPage.pageTab.mergeToolsLoading)
                     model: settingsDialog.toolChoices
                     onWantedChanged: settingsDialog.toolTouched = true
                     // A row picked from the list is a finished answer;

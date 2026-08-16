@@ -233,7 +233,7 @@
 - 表示名の確認に PowerShell の `FileVersionInfo` を使わない — このリソースの文字列を全部空で返し、入っているものを「入っていない」と読む。読むのは Win32 の `VerQueryValue` と `AssocQueryString`(`ASSOCSTR_FRIENDLYAPPNAME`)/ エクスプローラの説明列。`.rc` は ASCII のまま保つ(`rc.exe` はシステムのコードページで読む)
 - 2 つ目のプロセスは「もう開いている」窓だけ(規約 §アプリ名。判定は `main` の `claim_store` で終わっている)。追い返された run には空の store — 出て行く前に 1 バイトも書けない。`Component.onCompleted` は `decorateWindow()` だけ通す(前回の形は本物の窓が今着ている)・`stateTimer` / `onClosing` の申告も止める
 - その窓には `Close` ボタンが要る(ゲート中 `mainUi` は不可視で閉じる手が無い)。accent を着せない — 押しに来た人が居ない(空ページの 1 個ボタンと同じ `borderDefault`)
-- ゲートは `mainUi` の兄弟で、`shotTimer` は出ている方を掴む(`gate.visible ? gate : mainUi`)— 無いとゲートで終わった run が「なれなかったアプリ」を撮る。ヘッドレスは `solo`(仕込み・`blocked=true` の判定は verbs.md)
+- ゲートは `mainUi` の兄弟で、`AutoShotDriver` は出ている方を掴む(`gate.visible ? gate : mainUi`)— 無いとゲートで終わった run が「なれなかったアプリ」を撮る。ヘッドレスは `solo`(仕込み・`blocked=true` の判定は verbs.md)
 - worktree ビルドは右下の git バージョンの隣に自分のツリー名を出す(`AppBackend.buildTree`)。環境変数でなくビルドパス(`CARGO_MANIFEST_DIR`)から採る — 印がファイルと一緒に動き、素の checkout / 配布ビルドには最初から付かない。起動時に `build tree tree=` を 1 行ログ(窓の出ない run でも stderr で判る)
 - その隅の文字はファイル一覧が届いたら退く(判定は `bottomRoom` と `roomNeeded` の比較 1 つ)。上に自前の空気を足さない(ユーザー判断 — 行は自分の高さで既に空いている)。ここは `visible` でよい — 隠れた `Label` も implicitHeight を保つ(隠れている間に届いた text も込み。qmltestrunner 実測 2026-08-10)。`z: 1` は退いた後の並び順を次の住人へ保つため。ヘッドレスは `corner`(使い方は verbs.md)
 - アプリメニュー(ハンバーガー)は `offer()` でなく `open()` で開く — 固定行で空になり得ず、`offer()` の引数なし `popup()` はポインタ位置に出して `y` の座席が失われる(右クリック系は `offer()` のまま)
@@ -241,7 +241,7 @@
 - 同じ内容の再公開では行を建て直さない(`NavSectionModel::take` がエントリ同士を比較 — poll は動かなくても再公開する)。比較は届いた側の型で(行を建ててから比べると捨てるためだけに 12MB 確保)。新しいハンドルは動いていなくても受け取る — 古い `Arc` を握ると同内容のスナップショットが 2 つ生きる
 - モデルのメモリは `crate::memprobe::note()` を drain の末尾に(`PG_MEM_REPORT=1` の時だけ O(行数))。1 行にまとめるのは `AppBackend.noteMemory()` — そこでしか同時に読めない(Hub は thread_local・モデルは QML 所有)。内訳の読み方は rules-refs/core.md の同項
 - qmlcachegen はメモリ対策にならない — 測って見送り(2026-08-11): qrc の QML はディスクキャッシュに載らない(タイムスタンプ無し = 60 ファイル毎起動コンパイル)が、AOT で動かせるコンパイル単位は計 1.34MB = 予算の 0.4%。窓の 32MB は実体化したオブジェクト木。起動 883–1,171ms / 予算 3s で build.rs 導入の理由にならない
-- `Qt6Network` / `Qt6Svg` は見送り済み(2026-08-11)。`Qt6Network` は `Qt6Qml` / `Qt6Quick` の静的インポート(dumpbin 確認)で外せば起動不能 — 通信禁止には「載っているが使っていない」が正。`Qt6Svg` は imageformats が引き、天井 0.65MB = 予算の 0.2%。`QT_PLUGIN_PATH` で外す A/B は成立しない — 既定の探索パスへ追加するだけ(実測で踏んだ)。外すなら exe の隣の `qt.conf` の `[Paths] Plugins=`(一式が欠けると窓が上がらず `PG_AUTO_QUIT_MS` も効かない)
+- `Qt6Network` / `Qt6Svg` は見送り済み(2026-08-11)。`Qt6Network` は `Qt6Qml` / `Qt6Quick` の静的インポート(dumpbin 確認)で外せば起動不能 — 通信禁止には「載っているが使っていない」が正。`Qt6Svg` は imageformats が引き、天井 0.65MB = 予算の 0.2%。`QT_PLUGIN_PATH` で外す A/B は成立しない — 既定の探索パスへ追加するだけ(実測で踏んだ)。外すなら exe の隣の `qt.conf` の `[Paths] Plugins=`(一式が欠けると窓が上がらず app-side watchdog も起動しないため、parent kill guard が最後の境界)
 - ロードされない同梱物を除いてもメモリに効かない(2026-08-11 実測: `qmltooling` / `tls` / `networkinformation` / `opengl32sw` / `d3dcompiler_47` / `dxcompiler` / `dxil` / `qtuiotouch` / `qsvgicon` / `Qt6QuickShapes` はどれもロードされず計 24.9MB)— 配布物のサイズと攻撃面の話で `windeployqt` の採否は P5(候補は windows-x64.md §3)。`opengl32sw` と shader compiler の除外は robustness を削る — この開発機でロードされない ≠ 不要
 - 長押しの状態機械は `HoldDriver` 1 部品(`ActionButton` / `AppMenuItem` / `AskBar` / `OpExitRow` は身振りと絵だけ・`holdProgress` は readonly alias)— 塗りを直す時にファイルを 4 つ回らない
 - diff の行の色は Rust の markup を `Text.StyledText` で出す(`encode::styled` / `DiffRow.rich`)。素の StyledText は HTML と同じ空白処理で先頭の字下げを全部捨てる(2026-08-12 実測: 0 空白と 4 空白が同じ x に着く)— 空白は `&nbsp;`・タブは 4 桁のタブストップまで展開(`encode::push_escaped` が `&` `<` `>` も実体参照に)
@@ -250,3 +250,8 @@
 - コンフリクトのマーカ行は `textMuted` に落とし背景は追加行のまま(`DiffRow.fence`)— git の足場を追加行の緑で塗ると誰も読まない部分が一番大きな声になる。背景を残すのは実際に作業ツリーへ入っている行だから。`markers`(combined の列)とは別物 — あちらは「どちらの側から来たか」
 - hunk 見出しの Label は `hunkTools.visible` の時だけ右端の `Discard hunk` / `Stage hunk` へ幅を明け渡す(`@@` 行は signature ぶん長く、明け渡さないと重なる。フォントの段は規約 §タイポグラフィ)
 - hunk 見出しは行の左端から・行番号列は数字に合わせて切る(規約 §diff の中のステージ / §レイアウト初期値。2026-08-13 ユーザー指示)。列幅(`DiffPane.numberColW`)の measure は隠し Label — `TextMetrics` は数 px 狭く出る(`ActionButton` / `TopBar` と同じ)。行の印(`+` / `−`)の席は空の `Item` で幅だけ確保し、印自身は Row の外に置いて `x` で座らせる — Row の中へ入れると後から宣言の `lineHover` にクリックを取られる
+- verify-ui の固定 shot clock 廃止(2026-08-16): page current の claim が無いと新規 tab が同じ動詞を再実行し、page / window の完了競合は中間状態を撮った。全動詞を 1 owner の causal completion にし、window-level 動詞は page を defer、`AutoShotDriver` だけが最終撮影を所有する
+- offscreen の描画完了は `frameSwapped` 単独で待たない(2026-08-16 並行実測: `signature-tip` が状態完成後も 2 回無発火)。`requestUpdate` → event-loop turn → app / overlay の `grabToImage` callback を最終境界にする
+- readiness の初期値は出力ではない(2026-08-16 実測: `wip` が一覧ロード前の 0 件を clean と誤認して PASS、PNG は変更 0 なのに graph は +1/-2)。`WorkTreeModel.loaded` のような answer edge の後だけ 0 / false を判定する
+- polling より短い状態は edge を latch する(2026-08-16 実測: command/fetch の error と force-push の busy が 25ms sampler の間に立って消えた)。error 回復は「立った証拠」と最終 quiet の対、通信中の絵は実 busy/loading edge でだけ latch し、画像 callback 完了まで表示を保持する
+- verify-ui の明示リソースは排他(2026-08-16): 同じ `--repo` / `--config-dir` / `--shot-dir` の並行利用は Git 書換え・state・PNG を混線させるため、target 外の atomic lock で fail fast。既定 path は pid + time + serial の名前だけでなく `create_dir` 成功を ownership edge にする

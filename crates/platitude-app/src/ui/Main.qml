@@ -368,10 +368,9 @@ ApplicationWindow {
         if (near !== "")
             folderDialog.currentFolder = near
         folderDialog.open()
-        if (AppBackend.autoAct !== "")
+        if (AppBackend.autoAct !== "" && AppBackend.autoAct !== "open-picker")
             AppBackend.report("picker folder=" + folderDialog.currentFolder)
     }
-
     // The size and place the window was left in. Assigned rather than
     // bound: from here on the window manager and the person dragging it
     // own these. An unsaved position stays unset so the platform gets to
@@ -509,6 +508,8 @@ ApplicationWindow {
             gate: gate
             openFailedDialog: openFailedDialog
             identityDialog: identityDialog
+            folderDialog: folderDialog
+            settingsDialog: settingsDialog
         }
     }
 
@@ -608,7 +609,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: AppBackend.gitState !== "ok" || AppBackend.alreadyRunning
         // Its own ground rather than the window's, so that a grab of this
-        // item is a picture of the screen (`shotTimer`). Nothing under it
+        // item is a picture of the screen (`AutoShotDriver`). Nothing under it
         // is drawn while it is up — `mainUi` is hidden — so the colour is
         // the one the window would have shown anyway.
         Rectangle {
@@ -763,47 +764,6 @@ ApplicationWindow {
             onCloseRequested: root.close()
             onCaptionStripMoved: root.reportCaptionStrip()
         }
-        // Smoke hook (PG_AUTO_ACT=middle-close): what is still open
-        // afterwards is the report, since a closed tab leaves nothing of
-        // itself in the picture.
-        Timer {
-            interval: 1200
-            running: AppBackend.autoAct === "middle-close"
-            onTriggered: {
-                topBar.middleClickTab(Number(AppBackend.autoActArg))
-                AppBackend.report("middle_close tabs=" + pageRepeater.count
-                                  + " active=" + tabsModel.currentIndex
-                                  + " open=" + topBar.tabPaths())
-            }
-        }
-
-        // Smoke hook (PG_AUTO_ACT=open-again): asking for a repository
-        // the strip already holds. No new tab may appear, and `active`
-        // has to have moved to the one already holding it (デザイン規約
-        // §タブの所作).
-        Timer {
-            interval: 1200
-            running: AppBackend.autoAct === "open-again"
-            onTriggered: {
-                const asked = AppBackend.autoActArg !== ""
-                            ? AppBackend.autoActArg : topBar.tabPathAt(0)
-                tabsModel.openRepositoryPath(asked)
-                AppBackend.report("open_again tabs=" + pageRepeater.count
-                                  + " active=" + tabsModel.currentIndex
-                                  + " asked=" + asked
-                                  + " open=" + topBar.tabPaths())
-            }
-        }
-
-        // Smoke hook (PG_AUTO_ACT=force-push-hold): waits out the page's
-        // own auto-act beat so the branch's standing is settled first —
-        // the hold is armed only where the two histories have parted.
-        Timer {
-            interval: 2000
-            running: AppBackend.autoAct === "force-push-hold"
-            onTriggered: topBar.completePushHold()
-        }
-
         // Divider under the tab toolbar — same look as the pane splitters.
         Rectangle {
             Layout.fillWidth: true

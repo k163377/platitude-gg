@@ -63,7 +63,6 @@ impl AppBackend {
     qproperty!("autoIdentitySave", Member = auto_identity_save, Constant);
     qproperty!("autoOpen", Member = auto_open, Constant);
     qproperty!("shotDir", Member = shot_dir, Constant);
-    qproperty!("autoQuitMs", Member = auto_quit_ms, Constant);
     qproperty!("autoWatchdogMs", Member = auto_watchdog_ms, Constant);
     qproperty!("autoSelect", Member = auto_select, Constant);
     qproperty!("autoScroll", Member = auto_scroll, Constant);

@@ -65,8 +65,130 @@ Item {
         autoActTimer.start()
     }
 
+    // Completion belongs to the page that claimed the run.  A rendered
+    // surface is enough for a read-only, synchronous verb.  A write is
+    // different: seeing its request leave this item says nothing about the
+    // repository, so retain the busy edge and the write answer as a causal
+    // barrier before handing the shot driver a completed scene.
+    property bool completionDeferred: false
+    property bool writeExpected: false
+    property bool writeStarted: false
+    property int writeSeqBefore: 0
+
+    function isWriteAct(act) {
+        return ["publish", "publish-taken", "publish-add", "publish-go",
+                "publish-new-go", "commit", "amend", "amend-reset-author",
+                "stash", "stash-staged", "stash-file", "stage-many-go",
+                "discard-many-go", "take-side-ours", "take-side-theirs",
+                "open-mergetool", "discard-file-go", "delete-file-go",
+                "discard-staged-go", "switch", "switch-remote", "nav-dbl",
+                "rename-branch", "rename-tag", "rename-stash", "rename-remote",
+                "rename-remote-go", "rename-local-upstream", "delete-branch",
+                "delete-branch-go", "delete-tag-go", "delete-stash-go",
+                "delete-remote-go", "delete-force", "delete-branch-refused",
+                "delete-stash-row", "stash-apply-row", "stash-pop-row",
+                "branch-at-tag", "dbl-local", "dbl-remote", "move-branch",
+                "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
+                "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
+                "rebase-onto", "revert-commit", "op-exit-go", "stage-hunk",
+                "stage-line", "stage-lines", "keep-place", "discard-hunk-go",
+                "push", "force-push", "push-retry", "fetch", "fetch-ref-list",
+                "commands", "commands-fail", "commands-clear", "fetch-recover",
+                "fetch-fail", "fetch-resume"].indexOf(act) >= 0
+    }
+
+    function defersCompletion(act) {
+        return ["publish", "publish-taken", "publish-remotes", "publish-add",
+                "publish-go", "publish-new-go", "amend-reset-author",
+                "eol-commit", "eol-hover",
+                "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
+                "diff-file", "line-tools", "hunk-tools", "pick-lines", "stage-lines",
+                "keep-place", "colour-place", "delete-branch-go", "nav-fold",
+                "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
+                "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
+                "nav-filter", "delete-branch-refused", "chip-menu", "chip-menu-current",
+                "delete-blocked-tip", "delete-branch-early", "ref-list-card",
+                "signature", "signature-tip", "stash-tip", "path-tip", "row-card",
+                "author-card", "author-card-open", "co-authors", "co-authors-open",
+                "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
+                "details-fit", "corner", "graph-step", "graph-step-edge", "graph-step-far",
+                "graph-step-named", "graph-step-dirty", "graph-step-diff", "diff-step",
+                "diff-step-edge", "graph-bar", "graph-bar-away", "middle-scroll",
+                "divider-refuse", "cherry-pick", "reword", "edit-message",
+                "edit-message-leave", "edit-message-discard", "edit-message-focus",
+                "eol-commit", "eol-hover",
+                "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
+                "avatar-settings", "avatar-combo", "avatar-row-lit", "avatar-remove",
+                "find", "find-next", "find-prev",
+                // These flows are completed by Main/WindowAutoActDriver.
+                // Some still begin here (picker, command failure, recovery),
+                // but the page must never photograph their intermediate
+                // state before the window-level predicate has answered.
+                "open-picker", "commands-clear", "fetch-recover",
+                "open-not-a-repo", "open-bare", "open-not-a-repo-retry",
+                "open-not-a-repo-cancel", "open-fail-tab",
+                "open-fail-tab-bare", "open-fail-tab-log", "identity",
+                "identity-half", "identity-tip", "band", "tab-widths",
+                "tab-mark", "window-fill", "solo", "window-floor",
+                "badges", "badges-hover", "old-git", "old-git-card",
+                "old-git-fold", "state", "middle-close", "open-again",
+                "force-push-hold", "settings-tools",
+                "settings-tools-loading"].indexOf(act) >= 0
+    }
+
+    function prepareCompletion(act) {
+        driver.completionDeferred = driver.defersCompletion(act)
+        driver.writeExpected = driver.isWriteAct(act)
+        driver.writeStarted = repoTab.busyCount > 0
+        driver.writeSeqBefore = repoTab.writeSeq
+    }
+
+    function dispatchFinished() {
+        if (driver.completionDeferred)
+            return
+        if (driver.writeExpected) {
+            writeBarrier.start()
+            return
+        }
+        renderedBarrier.begin()
+    }
+
     function complete() {
         page.Window.window.finishAutoAct()
+    }
+
+    Connections {
+        target: repoTab
+        function onBusyCountChanged() {
+            if (driver.writeExpected && repoTab.busyCount > 0)
+                driver.writeStarted = true
+        }
+    }
+
+    // AutoShotDriver owns the final render boundary: it requests an update,
+    // advances the event loop, and waits for grabToImage callbacks. Do not
+    // wait for frameSwapped here. A quiet scene is allowed not to emit one
+    // (the pilot reproduced that hang twice under concurrent load).
+    QtObject {
+        id: renderedBarrier
+        function begin() {
+            driver.complete()
+        }
+    }
+    // A write has two separate causal edges.  `busyCount` proves the
+    // process was actually admitted, and `writeSeq` proves its answer was
+    // absorbed.  Both must precede the final rendered state.
+    Timer {
+        id: writeBarrier
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!driver.writeStarted || repoTab.busyCount !== 0
+                    || repoTab.writeSeq <= driver.writeSeqBefore)
+                return
+            writeBarrier.stop()
+            renderedBarrier.begin()
+        }
     }
 
     Timer {
@@ -84,8 +206,8 @@ Item {
             }
             // `Opened` only means the path was accepted. Refs and the graph
             // are the baseline every page verb is allowed to act on.
-            if (repoTab.state !== "open" || !branchesModel.refsLoaded
-                    || graphModel.finishCount === 0)
+            if (repoTab.state !== "open" || !workTree.loaded
+                    || !branchesModel.refsLoaded || graphModel.finishCount === 0)
                 return
             autoActTimer.stop()
             driver.runAutoAct()
@@ -95,8 +217,12 @@ Item {
     // be there to tick.
     Timer {
         id: resetAuthorTimer
-        interval: 800
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (repoTab.headAuthorName === "")
+                return
+            resetAuthorTimer.stop()
             AppBackend.report("head_author differs="
                               + repoTab.headAuthorDiffers
                               + " name=" + repoTab.headAuthorName)
@@ -108,24 +234,36 @@ Item {
     // Staging has to land before the button can know what it carries.
     Timer {
         id: eolCommitTimer
-        interval: 1200
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (workTree.stagedCount === 0)
+                return
             wipPane.pointAtCommit = true
+            if (!wipPane.eolCardOpen)
+                return
+            eolCommitTimer.stop()
             AppBackend.report("eol_commit staged=" + workTree.stagedCount
                               + " warned=" + workTree.eolStagedCount
                               + " card=" + wipPane.eolCardOpen)
+            driver.complete()
         }
     }
     // The marks arrive with the status read, so the row named for its
     // sentence has to be named again once they are in.
     Timer {
         id: eolHoverTimer
-        interval: 800
+        interval: 25
+        repeat: true
         onTriggered: {
             wipPane.pointEol(AppBackend.autoActArg)
+            if (!wipPane.eolCardOpen)
+                return
+            eolHoverTimer.stop()
             AppBackend.report("eol_hover path=" + wipPane.pointedEolPath
                               + " card=" + wipPane.eolCardOpen
                               + " text=" + wipPane.pointedEolText)
+            driver.complete()
         }
     }
     // The diff has to arrive before a row of it can be staged. Asked for
@@ -188,6 +326,7 @@ Item {
             // rather than hovered (hover cannot be injected on Windows).
             if (act === "line-tools") {
                 diffPane.showLineTools(0, line)
+                renderedBarrier.begin()
                 return
             }
             // The heading's two words carry their colours only under the
@@ -195,6 +334,7 @@ Item {
             // instead. A heading's own row is line -1 (`flatten_patches`).
             if (act === "hunk-tools") {
                 diffPane.showLineTools(0, -1)
+                renderedBarrier.begin()
                 return
             }
             // Reading part way down a long diff and then writing: the
@@ -202,7 +342,10 @@ Item {
             // reported by the restore.
             if (act === "keep-place") {
                 diffPane.scrollTo(400)
+                driver.writeSeqBefore = repoTab.writeSeq
+                driver.writeStarted = repoTab.busyCount > 0
                 page.stageSelection(0, line)
+                writeBarrier.start()
                 return
             }
             if (act === "pick-lines" || act === "stage-lines") {
@@ -212,18 +355,35 @@ Item {
                 const got = diffPane.chooseLines(0, want)
                 AppBackend.report("picked_lines any=" + (got > 0)
                                   + " got=" + got + " want=" + want)
+                if (act === "stage-lines") {
+                    driver.writeSeqBefore = repoTab.writeSeq
+                    driver.writeStarted = repoTab.busyCount > 0
+                }
                 if (act === "stage-lines")
                     page.stageChosenLines()
+                if (act === "stage-lines")
+                    writeBarrier.start()
+                else
+                    renderedBarrier.begin()
                 return
             }
             if (act === "stage-hunk" || act === "stage-line") {
+                driver.writeSeqBefore = repoTab.writeSeq
+                driver.writeStarted = repoTab.busyCount > 0
                 page.stageSelection(0, act === "stage-line" ? line : -1)
+                writeBarrier.start()
                 return
             }
             // No line-level discard exists — a hunk is the smallest piece
             // that can be thrown away.
-            if (act === "discard-hunk-go")
+            if (act === "discard-hunk-go") {
+                driver.writeSeqBefore = repoTab.writeSeq
+                driver.writeStarted = repoTab.busyCount > 0
                 diffPane.completeHold()
+                writeBarrier.start()
+            } else {
+                renderedBarrier.begin()
+            }
         }
     }
     // A reader who scrolled before the colours landed: the whole list is
@@ -233,7 +393,6 @@ Item {
         id: colourPlaceTimer
         interval: 50
         repeat: true
-        readonly property int waitMs: 8000
         property int waited: 0
         property bool scrolled: false
         function begin() {
@@ -243,17 +402,16 @@ Item {
         }
         onTriggered: {
             colourPlaceTimer.waited += colourPlaceTimer.interval
-            const late = colourPlaceTimer.waited >= colourPlaceTimer.waitMs
             if (!colourPlaceTimer.scrolled) {
                 // Read down the file the moment the rows are there, which
                 // is well before the colours are.
-                if (diffPane.firstChangedLine(0) < 0 && !late)
+                if (diffPane.firstChangedLine(0) < 0)
                     return
                 diffPane.scrollTo(400)
                 colourPlaceTimer.scrolled = true
                 return
             }
-            if (!diffPane.diffModel.coloured && !late)
+            if (!diffPane.diffModel.coloured)
                 return
             colourPlaceTimer.stop()
             AppBackend.report("colour_place coloured="
@@ -261,25 +419,39 @@ Item {
                               + " at=" + Math.round(diffPane.view.contentY)
                               + " rows=" + diffPane.view.count
                               + " waited=" + colourPlaceTimer.waited)
+            driver.complete()
         }
     }
     // git's refusal has to come back before the row it turns into a held
     // one can be held — or photographed.
     Timer {
         id: forceDeleteTimer
-        interval: 800
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (repoTab.writeSeq <= driver.writeSeqBefore
+                    || repoTab.busyCount !== 0 || refDeleteItem.holdMs <= 0)
+                return
+            forceDeleteTimer.stop()
             AppBackend.report("ref_menu delete=" + refDeleteItem.text
                               + " note=" + refDeleteItem.note)
+            driver.writeSeqBefore = repoTab.writeSeq
+            driver.writeStarted = repoTab.busyCount > 0
             refDeleteItem.completeHold()
+            writeBarrier.start()
         }
     }
     // The splitter has to have handed the pane its new width before the
     // width can be reported — the fold sets it, the layout takes it.
     Timer {
         id: navRailTimer
-        interval: 400
-        onTriggered: AppBackend.report(
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (sidebarPane.width <= 0 || sidebarPane.height <= 0)
+                return
+            navRailTimer.stop()
+            AppBackend.report(
             "nav_rail collapsed=" + page.sidebarCollapsed
             + " width=" + Math.round(sidebarPane.width)
             + " peek=" + sidebarPane.peekKind
@@ -297,31 +469,47 @@ Item {
             // What the centre holds: the list coming back closes a file,
             // so the two are read together or not at all.
             + " diff=" + page.diffShown)
+            driver.complete()
+        }
     }
     // The column has to be laid out again before the header that was
     // closed can say where it ended up.
     Timer {
         id: navSectionTimer
-        interval: 400
-        onTriggered: AppBackend.report(
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (sidebarPane.height <= 0)
+                return
+            navSectionTimer.stop()
+            AppBackend.report(
             "nav_section closed=" + AppBackend.autoActArg
             + " header=" + Math.round(
                 sidebarPane.headerTopOf(AppBackend.autoActArg))
             + " ground=" + Math.round(sidebarPane.groundTop)
             + " pane=" + Math.round(sidebarPane.height))
+            driver.complete()
+        }
     }
     /// What each section kept of what it holds. The rows a filter leaves
     /// are the ones the sections work out for themselves, so the counts
     /// are read off the models and the picture says what they drew.
     Timer {
         id: navFilterTimer
-        interval: 400
-        onTriggered: AppBackend.report(
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (sidebarPane.width <= 0)
+                return
+            navFilterTimer.stop()
+            AppBackend.report(
             "nav_filter typed=" + AppBackend.autoActArg
             + " branches=" + branchesModel.shown() + "/" + branchesModel.total
             + " remotes=" + remotesModel.shown() + "/" + remotesModel.total
             + " tags=" + tagsModel.shown() + "/" + tagsModel.total
             + " stashes=" + stashesModel.shown() + "/" + stashesModel.total)
+            driver.complete()
+        }
     }
     // The blocked row's line, worn where the pointer would put it.
     // Past `tipDelayMs`, like the other forced tooltips: read any sooner
@@ -329,44 +517,76 @@ Item {
     // false while the picture taken at quit holds it.
     Timer {
         id: blockedTipTimer
-        interval: 800
-        onTriggered: AppBackend.report(
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!refDeleteItem.ToolTip.visible)
+                return
+            blockedTipTimer.stop()
+            AppBackend.report(
             "delete_blocked code=" + refDeleteItem.code
             + " tip=" + refDeleteItem.ToolTip.visible
             + " reason=" + refDeleteItem.blockedReason)
+            driver.complete()
+        }
     }
     Timer {
         id: chipMenuTimer
-        interval: 200
-        onTriggered: AppBackend.report("chip_menu ref=" + refMenu.opened
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!refMenu.opened && !commitMenu.opened)
+                return
+            chipMenuTimer.stop()
+            AppBackend.report("chip_menu ref=" + refMenu.opened
                                        + " commit=" + commitMenu.opened
                                        + " delete=" + refDeleteItem.code
                                        + " " + refDeleteItem.text)
+            driver.complete()
+        }
     }
     // Waits on the early answer, not on a refusal: nothing here writes.
     Timer {
         id: earlyDeleteTimer
-        interval: 800
-        onTriggered: AppBackend.report("delete_early asked="
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (refDeleteItem.code === "")
+                return
+            earlyDeleteTimer.stop()
+            AppBackend.report("delete_early asked="
                                        + (repoTab.branchDeleteAsked !== "")
                                        + " merged=" + repoTab.branchDeleteMerged
                                        + " code=" + refDeleteItem.code
                                        + " held=" + (refDeleteItem.holdMs > 0)
                                        + " note=" + refDeleteItem.note)
+            driver.complete()
+        }
     }
     Timer {
         id: refusedRowTimer
-        interval: 800
-        onTriggered: AppBackend.report("ref_menu delete=" + refDeleteItem.code
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0)
+                return
+            refusedRowTimer.stop()
+            AppBackend.report("ref_menu delete=" + refDeleteItem.code
                                        + " " + refDeleteItem.text
                                        + " note=" + refDeleteItem.note)
+            driver.complete()
+        }
     }
     // The lane column has to have taken its narrower width before there
     // is anywhere to pan to, or a bar worth wanting.
     Timer {
         id: graphPanTimer
-        interval: 400
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (graphPane.graphXMax <= 0)
+                return
+            graphPanTimer.stop()
             // Where the pointer is, which is the whole of what puts the
             // bar on screen. `-away` walks it back out again: a bar that
             // comes when the pointer does proves nothing on its own
@@ -378,6 +598,7 @@ Item {
                 AppBackend.report(
                     "graph_bar shown=" + graphPane.laneBarShown
                     + " overflow=" + Math.round(graphPane.graphXMax))
+                driver.complete()
                 return
             }
             // The middle click, then the pointer drifting sideways off
@@ -398,11 +619,18 @@ Item {
     // alike in the report.
     Timer {
         id: middleScrollTimer
-        interval: 400
-        onTriggered: AppBackend.report(
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (graphPane.autoPanning)
+                return
+            middleScrollTimer.stop()
+            AppBackend.report(
             "middle_scroll lanes=" + graphPane.autoPanning
             + " x=" + Math.round(graphPane.graphX)
             + " max=" + Math.round(graphPane.graphXMax))
+            driver.complete()
+        }
     }
     // The arrow keys, which no headless run can press: the walk enters
     // where `Keys.onDownPressed` enters (`GraphPane.stepRow`) after
@@ -411,7 +639,8 @@ Item {
     // which is what the wait is for — the same one the reword verbs keep.
     Timer {
         id: graphStepTimer
-        interval: 800
+        interval: 25
+        repeat: true
         /// How many rows, and which way. The refusing runs fix their own.
         property int steps: 1
         /// The two grounds a step is refused on that a run can stand up:
@@ -429,6 +658,9 @@ Item {
         /// argument — the file has to be one the selected commit touched.
         property string diffPath: ""
         onTriggered: {
+            if (detailsModel.shaHex !== page.selectedOid)
+                return
+            graphStepTimer.stop()
             if (graphStepTimer.dirty)
                 detailsPane.setMessageText("wip: half of a subject", "")
             if (graphStepTimer.named)
@@ -450,8 +682,12 @@ Item {
     // opened would still find the pane on screen.
     Timer {
         id: graphStepWalk
-        interval: 200
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (graphStepTimer.diffPath !== "" && !page.diffShown)
+                return
+            graphStepWalk.stop()
             if (graphStepTimer.away)
                 graphPane.view.contentY = graphPane.view.clampY(Infinity)
             graphStepReport.from = graphPane.view.currentIndex
@@ -476,12 +712,17 @@ Item {
     // on the right ended up on.
     Timer {
         id: graphStepReport
-        interval: 400
+        interval: 25
+        repeat: true
         property int from: -1
         property real wasY: 0
         property int refused: 0
         onTriggered: {
             const row = graphPane.view.currentIndex
+            if (row < 0 || (graphStepTimer.diffPath === "" && page.selectedOid
+                            !== graphModel.oidAt(row)))
+                return
+            graphStepReport.stop()
             AppBackend.report(
                 "graph_step from=" + graphStepReport.from
                 + " row=" + row
@@ -494,6 +735,7 @@ Item {
                 + " diff=" + page.diffShown
                 + " onscreen=" + graphPane.rowOnScreen(row)
                 + " selected=" + (page.selectedOid === graphModel.oidAt(row)))
+            driver.complete()
         }
     }
     // The diff's own arrows, which no headless run can press either: the
@@ -505,10 +747,14 @@ Item {
     // a list still empty has nothing to send and refuses every step.
     Timer {
         id: diffStepTimer
-        interval: 800
+        interval: 25
+        repeat: true
         /// How many rows, and which way.
         property int steps: 1
         onTriggered: {
+            if (!page.diffShown || !diffPane.diffSettled())
+                return
+            diffStepTimer.stop()
             diffStepReport.from = driver.diffRow()
             diffStepReport.stopped = false
             const way = diffStepTimer.steps < 0 ? -1 : 1
@@ -525,10 +771,15 @@ Item {
     }
     Timer {
         id: diffStepReport
-        interval: 300
+        interval: 25
+        repeat: true
         property int from: -1
         property bool stopped: false
-        onTriggered: AppBackend.report(
+        onTriggered: {
+            if (!diffPane.diffSettled())
+                return
+            diffStepReport.stop()
+            AppBackend.report(
             "diff_step from=" + diffStepReport.from
             + " rows=" + driver.diffRow()
             + " steps=" + diffStepTimer.steps
@@ -536,6 +787,8 @@ Item {
             + " atEnd=" + diffPane.atEnd
             + " stopped=" + diffStepReport.stopped
             + " focused=" + diffPane.view.activeFocus)
+            driver.complete()
+        }
     }
     /// Where the diff's view stands, in rows — what the walk is counted
     /// in, and steadier than a pixel count to read off a report line.
@@ -546,13 +799,19 @@ Item {
     // stacked ones are worth unstacking.
     Timer {
         id: fetchedRefListTimer
-        interval: 1500
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
+                return
             const stacked = graphPane.view.itemAtIndex(
                 Number(AppBackend.autoActArg))
-            if (stacked)
-                graphPane.view.chipExpandRequested(
-                    stacked.chipItem.records, stacked.chipItem)
+            if (!stacked)
+                return
+            fetchedRefListTimer.stop()
+            graphPane.view.chipExpandRequested(
+                stacked.chipItem.records, stacked.chipItem)
+            renderedBarrier.begin()
         }
     }
     // The refusal has to be back and on the button before the second go
@@ -560,11 +819,18 @@ Item {
     // is gone again by the time the screenshot is taken.
     Timer {
         id: pushRetryTimer
-        interval: 1800
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (!page.pushFailed || repoTab.busyCount !== 0)
+                return
+            pushRetryTimer.stop()
             AppBackend.report("push_retry refused=" + page.pushFailed
                               + " branch=" + publishFlow.pushFailBranch)
+            driver.writeSeqBefore = repoTab.writeSeq
+            driver.writeStarted = repoTab.busyCount > 0
             page.forcePush()
+            writeBarrier.start()
         }
     }
     // Where an operation that answers at the tip left the reader — one
@@ -574,9 +840,14 @@ Item {
     // somewhere nobody can see.
     Timer {
         id: tipLandedTimer
-        interval: 1800
+        interval: 25
+        repeat: true
         onTriggered: {
             const row = graphModel.rowOf(page.selectedOid)
+            if (repoTab.busyCount !== 0 || row < 0 || !graphPane.rowOnScreen(row)
+                    || page.selectedOid !== branchesModel.headOid)
+                return
+            tipLandedTimer.stop()
             AppBackend.report(
                 "tip_landed follows="
                 + (page.selectedOid !== "" && page.selectedOid === branchesModel.headOid)
@@ -585,14 +856,19 @@ Item {
                 + " head=" + branchesModel.headOid.substring(0, 8)
                 + " selected=" + page.selectedOid.substring(0, 8)
                 + " row=" + row)
+            driver.complete()
         }
     }
     // The message has to arrive before it can be typed over, and the
     // "is this commit ours to rewrite?" answer before it may be saved.
     Timer {
         id: rewordTimer
-        interval: 800
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (detailsModel.shaHex !== page.selectedOid)
+                return
+            rewordTimer.stop()
             // "edit-message-focus" types nothing: the commit's own body
             // is what the caret has to be photographed on top of, and
             // an empty box would only show the placeholder.
@@ -601,10 +877,15 @@ Item {
                 AppBackend.report("message_focus pane=details focused="
                                   + detailsPane.descriptionFocused
                                   + " color=" + detailsPane.descriptionColor)
+                driver.complete()
                 return
             }
             detailsPane.setMessageText(AppBackend.autoActArg, "")
             // "edit-message" stops here, with the save row on screen.
+            if (AppBackend.autoAct === "reword") {
+                driver.writeSeqBefore = repoTab.writeSeq
+                driver.writeStarted = repoTab.busyCount > 0
+            }
             if (AppBackend.autoAct === "reword")
                 detailsPane.submitMessage()
             // "edit-message-leave" walks away from the unsaved text,
@@ -616,6 +897,10 @@ Item {
                 if (AppBackend.autoAct === "edit-message-discard")
                     detailsPane.leaveResolved(true)
             }
+            if (AppBackend.autoAct === "reword")
+                writeBarrier.start()
+            else
+                renderedBarrier.begin()
         }
     }
     // gpg / ssh-keygen have to finish before the mark they decide can be
@@ -631,6 +916,7 @@ Item {
             AppBackend.report("signature kind=" + page.selectedSignatureKind
                               + " code=" + page.selectedSignatureCode
                               + " signer=" + page.selectedSignatureSigner)
+            driver.complete()
         }
     }
     // The tooltip halves of signature-tip / stash-tip: the state has to
@@ -664,18 +950,29 @@ Item {
     }
     Timer {
         id: stashTipTimer
-        interval: 800
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (detailsModel.shaHex !== page.selectedOid)
+                return
+            stashTipTimer.stop()
             detailsPane.summaryPointedAt = true
             stashTipReport.start()
         }
     }
     Timer {
         id: stashTipReport
-        interval: 800
-        onTriggered: AppBackend.report(
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!detailsPane.summaryTipShown)
+                return
+            stashTipReport.stop()
+            AppBackend.report(
             "stash_tip blocked=" + (detailsPane.editBlocked !== "")
             + " tip=" + detailsPane.summaryTipShown)
+            driver.complete()
+        }
     }
     // The tooltip half of path-tip: the list has to land before a row
     // can be pointed at, and the report then waits out tipDelayMs so
@@ -684,8 +981,14 @@ Item {
     Timer {
         id: pathTipTimer
         property bool wipSide: true
-        interval: 800
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (pathTipTimer.wipSide && worktreeModel.total === 0)
+                return
+            if (!pathTipTimer.wipSide && detailsModel.shaHex !== page.selectedOid)
+                return
+            pathTipTimer.stop()
             if (pathTipTimer.wipSide)
                 wipPane.pointedTipRow = 0
             else
@@ -695,9 +998,13 @@ Item {
     }
     Timer {
         id: pathTipReport
-        interval: 800
+        interval: 25
+        repeat: true
         onTriggered: {
             const tip = page.ToolTip.toolTip
+            if (!tip.visible)
+                return
+            pathTipReport.stop()
             AppBackend.report("path_tip pane="
                 + (pathTipTimer.wipSide ? "wip" : "details")
                 + " tree=" + (pathTipTimer.wipSide
@@ -705,14 +1012,19 @@ Item {
                               : detailsModel.treeView)
                 + " tip=" + tip.visible
                 + " text=" + tip.text)
+            driver.complete()
         }
     }
     // Automation: the details have to land before the author card can be
     // worked, since it is that author the picture is filed against.
     Timer {
         id: avatarAssignTimer
-        interval: 400
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (detailsModel.authorEmail === "")
+                return
+            avatarAssignTimer.stop()
             AppBackend.assignAvatar(detailsModel.authorEmail,
                                     detailsModel.authorName,
                                     AppBackend.autoActArg)
@@ -721,8 +1033,15 @@ Item {
     }
     Timer {
         id: avatarBadgeTimer
-        interval: 400
-        onTriggered: detailsPane.avatarClicked()
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (detailsModel.shaHex !== page.selectedOid)
+                return
+            avatarBadgeTimer.stop()
+            detailsPane.avatarClicked()
+            renderedBarrier.begin()
+        }
     }
     // What the graph did about the find bar, read after it finished doing
     // it. The step down out from under the card is animated, so the value
@@ -731,16 +1050,27 @@ Item {
     // line above already carries as `clears=`.
     Timer {
         id: findSettled
-        interval: 300
-        onTriggered: AppBackend.report(
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!graphPane.findOpen)
+                return
+            findSettled.stop()
+            AppBackend.report(
             "find_settled shift=" + Math.round(graphPane.findShift))
+            driver.complete()
+        }
     }
     // The store starts empty in every run, so the card's own verbs put a
     // picture in it before opening on it.
     Timer {
         id: avatarSeedTimer
-        interval: 400
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (detailsModel.authorEmail === "")
+                return
+            avatarSeedTimer.stop()
             AppBackend.assignAvatar(detailsModel.authorEmail,
                                     detailsModel.authorName,
                                     AppBackend.autoActArg)
@@ -751,49 +1081,76 @@ Item {
     // is a beat after the write rather than the instant it returns.
     Timer {
         id: avatarReportTimer
-        interval: 600
-        onTriggered: AppBackend.report(
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (detailsModel.avatarUrl === "" && AppBackend.avatarError === "")
+                return
+            avatarReportTimer.stop()
+            AppBackend.report(
             "avatar email=" + detailsModel.authorEmail
             + " details=" + (detailsModel.avatarUrl !== "")
             + " rows=" + graphModel.avatarRowCount()
             + " error=" + AppBackend.avatarError)
+            driver.complete()
+        }
     }
     // The card is opened synchronously; this just lets the layout settle
     // before it is measured and photographed.
     Timer {
         id: rowCardTimer
-        interval: 400
-        onTriggered: AppBackend.report(
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!rowCard.opened && !refList.opened)
+                return
+            rowCardTimer.stop()
+            AppBackend.report(
             "row_card open=" + rowCard.opened
             + " credit=" + Math.round(rowCard.creditWidth)
             + " cut=" + rowCard.creditCut
             + " list=" + refList.opened
             + " subject=" + (rowCard.subject !== "")
             + " body=" + (rowCard.body !== ""))
+            driver.complete()
+        }
     }
     // The details have to arrive before the name can name anybody.
     Timer {
         id: authorCardTimer
-        interval: 800
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (detailsModel.shaHex !== page.selectedOid)
+                return
             if (AppBackend.autoAct === "author-card-open")
                 detailsPane.showAuthor(true)
+            if (AppBackend.autoAct === "author-card-open" && !detailsPane.authorCardOpen)
+                return
+            authorCardTimer.stop()
             AppBackend.report(
                 "author_card open=" + detailsPane.authorCardOpen
                 + " author=" + detailsPane.details.authorEmail
                 + " committer=" + detailsPane.details.committerEmail
                 + " other=" + detailsPane.details.committerDiffers
                 + " later=" + detailsPane.details.commitTimeDiffers)
+            driver.complete()
         }
     }
     // The details have to arrive before the credit line they carry can
     // be opened or counted.
     Timer {
         id: coAuthorTimer
-        interval: 800
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (detailsModel.shaHex !== page.selectedOid)
+                return
             if (AppBackend.autoAct === "co-authors-open")
                 detailsPane.showCoAuthors(true)
+            if (AppBackend.autoAct === "co-authors-open" && !detailsPane.matesCardOpen)
+                return
+            coAuthorTimer.stop()
             // `open` is the card's own visibility, not the input that
             // asked for it: reporting the input would go green with the
             // binding cut.
@@ -801,16 +1158,23 @@ Item {
                 "co_authors count=" + detailsPane.coAuthorRecords.length
                 + " first=" + detailsPane.coAuthorName(0)
                 + " open=" + detailsPane.matesCardOpen)
+            driver.complete()
         }
     }
     // The details have to arrive, and the column has to be laid out with
     // them, before there is anything to measure.
     Timer {
         id: detailsFitTimer
-        interval: 800
+        interval: 25
+        repeat: true
         // A pane width the splitter left on a fraction can put a fraction
         // in the answer; what this verb is about is tens of pixels.
-        onTriggered: AppBackend.report(
+        onTriggered: {
+            if (detailsModel.shaHex !== page.selectedOid || detailsPane.width <= 0
+                    || detailsPane.height <= 0)
+                return
+            detailsFitTimer.stop()
+            AppBackend.report(
             "details_fit fits=" + (detailsPane.contentOverflow < 1)
             + " over=" + Math.round(detailsPane.contentOverflow)
             + " pane=" + Math.round(detailsPane.width)
@@ -820,27 +1184,37 @@ Item {
             // own, and the answer depends on the window, not on this verb.
             + " overH=" + Math.round(detailsPane.contentOverHeight)
             + " paneH=" + Math.round(detailsPane.height))
+            driver.complete()
+        }
     }
     // The rows have to arrive, and the list be laid out with them, before
     // what they leave bare is worth measuring.
     Timer {
         id: cornerTimer
-        interval: 800
+        interval: 25
+        repeat: true
         // `shown=` is the label's own visibility, not the room that
         // decided it: reporting what was asked for would go green with
         // the binding cut.
-        onTriggered: AppBackend.report(
+        onTriggered: {
+            if (gitCorner.parent === null || gitCorner.width <= 0)
+                return
+            cornerTimer.stop()
+            AppBackend.report(
             "git_corner pane=" + (page.wipShown ? "wip" : "details")
             + " shown=" + gitCorner.visible
             + " room=" + Math.round(gitCorner.roomLeft)
             + " needs=" + Math.round(gitCorner.roomNeeded))
+            driver.complete()
+        }
     }
     // Same wait as details-fit, for the same reason: the message has to
     // be in the box, and the box laid out with it, before there is a
     // ceiling to pull on.
     Timer {
         id: descGrowTimer
-        interval: 800
+        interval: 25
+        repeat: true
         // Pulled past everything, so where it stops is the bound itself
         // rather than a number this verb chose.
         readonly property int pull: 1000
@@ -852,24 +1226,22 @@ Item {
         /// raising the command log under it — the one way a headless run
         /// can make the pane shorter than the box it is already holding.
         property bool squeeze: false
+        property int frameBefore: 0
         /// Which end this run is carrying the grip past, or empty for the
         /// ordinary pull. Same wait and same box — the difference is that
         /// the grip is in hand, so the box answers instead of just
         /// stopping (規約 §掴める境界は答える).
         property string refuse: ""
         onTriggered: {
+            if (descGrowTimer.pane.width <= 0 || descGrowTimer.pane.height <= 0
+                    || descGrowTimer.pane.descCap <= 0)
+                return
+            descGrowTimer.stop()
+            descGrowTimer.frameBefore = page.Window.window.frameCounter
             if (descGrowTimer.refuse !== "") {
                 descGrowTimer.pane.pullDescriptionPast(
                     descGrowTimer.refuse === "desc-max")
-                AppBackend.report(
-                    "divider_refuse refuses=" + page.refusalShown
-                    // The grip itself, still offered: the box moves the
-                    // other way, and a corner that withdrew its mark would
-                    // be answering a different question.
-                    + " line=" + descGrowTimer.pane.descGrips
-                    + " case=" + descGrowTimer.refuse
-                    + " box=" + Math.round(descGrowTimer.pane.descHeight)
-                    + " wants=" + Math.round(descGrowTimer.pane.descWants))
+                descGrowSettle.start()
                 return
             }
             descGrowTimer.pane.growDescription(descGrowTimer.pull)
@@ -889,8 +1261,24 @@ Item {
     // footer.
     Timer {
         id: descGrowSettle
-        interval: 200
-        onTriggered: AppBackend.report(
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (page.Window.window.frameCounter <= descGrowTimer.frameBefore)
+                return
+            if (descGrowTimer.refuse !== "" && !page.refusalShown)
+                return
+            descGrowSettle.stop()
+            if (descGrowTimer.refuse !== "") {
+                AppBackend.report("divider_refuse refuses=" + page.refusalShown
+                                  + " line=" + descGrowTimer.pane.descGrips
+                                  + " case=" + descGrowTimer.refuse
+                                  + " box=" + Math.round(descGrowTimer.pane.descHeight)
+                                  + " wants=" + Math.round(descGrowTimer.pane.descWants))
+                driver.complete()
+                return
+            }
+            AppBackend.report(
             "description_grow keeps=" + descGrowTimer.pane.descKeeps
             + " pane=" + descGrowTimer.paneName
             + " grip=" + descGrowTimer.pane.descGrips
@@ -898,6 +1286,8 @@ Item {
             + " wants=" + Math.round(descGrowTimer.pane.descWants)
             + " cap=" + Math.round(descGrowTimer.pane.descCap)
             + " rows=" + descGrowTimer.pane.descListRows)
+            driver.complete()
+        }
     }
     /// Automation: how long a run of failed fetches the verb asked for,
     /// and whether to hold the button that resumes once it is there.
@@ -936,6 +1326,7 @@ Item {
     function runAutoAct() {
         const act = AppBackend.autoAct
         const arg = AppBackend.autoActArg
+        driver.prepareCompletion(act)
         if (act === "publish" || act === "publish-taken"
                 || act === "publish-add" || act === "publish-go"
                 || act === "publish-new-go" || act === "publish-remotes") {
@@ -949,11 +1340,15 @@ Item {
             else if (arg !== "")
                 publishFlow.setPublishBranch(arg)
             if (act === "publish-new-go")
-                publishAddTimer.start()
+                publishNewTimer.start()
             else if (act === "publish-go")
                 publishAnswerTimer.start()
             else if (act === "publish-remotes")
-                publishFlow.openPublishRemotes()
+                publishRemotesTimer.start()
+            else if (act === "publish-add")
+                publishDialogTimer.start()
+            else if (act === "publish")
+                publishSurfaceTimer.start()
             else
                 publishSettleTimer.start()
             // `dialog=` / `name=` say whether the remote dialog stands and
@@ -1174,8 +1569,10 @@ Item {
                 remotesModel.toggleFolder(ref.substring(0, ref.indexOf("/")))
             sidebarPane.beginRename("remote", ref,
                                     act === "rename-remote-box" ? parts[1] : was)
-            if (act === "rename-remote-box")
+            if (act === "rename-remote-box") {
+                renderedBarrier.begin()
                 return
+            }
             sidebarPane.submitEdit(parts[1])
             if (act === "rename-remote-go")
                 graphPane.completeHold()
@@ -1443,6 +1840,7 @@ Item {
                 descGrowTimer.start()
             } else {
                 page.reportDividerRefusal(arg)
+                renderedBarrier.begin()
             }
         } else if (act === "graph-divider") {
             // Read against two repositories: a line withheld on a linear
@@ -1673,7 +2071,8 @@ Item {
             page.toggleDiff("staged", arg, "")
         } else if (act === "open-picker") {
             page.openRepositoryPicker()
-        } else if (act === "settings" || act === "settings-tools") {
+        } else if (act === "settings" || act === "settings-tools"
+                   || act === "settings-tools-loading") {
             // `-tools` goes on to open the candidate list from inside the
             // dialog, and leaves the fetch interval where it was.
             page.settingsDialogRequested()
@@ -1751,13 +2150,64 @@ Item {
             repoTab.fetch("")
         }
         AppBackend.report("auto_act ran=" + act)
+        driver.dispatchFinished()
     }
 
-    /// Automation: the dialog's own button, once it is up.
+    /// The first-push surface is either the standing question (a remote
+    /// exists) or the add-remote dialog (none does). Do not wait for a
+    /// remote check in the latter case: there is no target to check yet.
     Timer {
-        id: publishAddTimer
-        interval: 600
+        id: publishSurfaceTimer
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (!remoteDialog.visible && !publishFlow.publishChecked)
+                return
+            publishSurfaceTimer.stop()
+            driver.complete()
+        }
+    }
+    /// `publish-remotes` is about the popup, not merely the call which
+    /// requested it. The form is created asynchronously with the ask bar.
+    Timer {
+        id: publishRemotesTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!publishFlow.publishRemotesOpen()) {
+                publishFlow.openPublishRemotes()
+                return
+            }
+            publishRemotesTimer.stop()
+            driver.complete()
+        }
+    }
+    /// `publish-add` stops with the real dialog on screen. A check that
+    /// happens to finish behind it is unrelated and must not end the run.
+    Timer {
+        id: publishDialogTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!remoteDialog.visible)
+                return
+            publishDialogTimer.stop()
+            driver.complete()
+        }
+    }
+    /// Automation: the dialog's own button, once it is both visible and
+    /// valid. This is the `-go` path; an empty URL cannot be submitted.
+    Timer {
+        id: publishNewTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!remoteDialog.visible || remoteDialog.wantedName === ""
+                    || remoteDialog.wantedUrl === "")
+                return
+            publishNewTimer.stop()
+            driver.writeSeqBefore = repoTab.writeSeq
+            driver.writeStarted = repoTab.busyCount > 0
             remoteDialog.submit()
             publishAnswerTimer.start()
         }
@@ -1766,21 +2216,32 @@ Item {
     /// has had time to answer.
     Timer {
         id: publishSettleTimer
-        interval: 1200
-        onTriggered: AppBackend.report("publish settled far="
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!publishFlow.publishChecked)
+                return
+            publishSettleTimer.stop()
+            AppBackend.report("publish settled far="
                                        + publishFlow.publishState
                                        + " code=" + graphPane.askCode
                                        + " hold=" + graphPane.askHold
                                        + " alert=" + graphPane.askAlert
                                        + " lease=" + (publishFlow.publishLease !== "")
                                        + " theirs=" + repoTab.remoteBranchTheirs)
+            driver.complete()
+        }
     }
     /// Automation: the answer, given after the remote has had time to say
     /// what it has — the pill is dead until it has.
     Timer {
         id: publishAnswerTimer
-        interval: 1200
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (!publishFlow.publishChecked || !graphPane.askAnswerable)
+                return
+            publishAnswerTimer.stop()
             // `far` is what the far side turned out to hold — the other
             // line's `state` is this end's own push state, and the two
             // answer different questions.
@@ -1790,17 +2251,27 @@ Item {
                               + " answerable=" + graphPane.askAnswerable)
             // The same gesture a person is given: a hold cannot be
             // answered by a click here either.
+            driver.writeSeqBefore = repoTab.writeSeq
+            driver.writeStarted = repoTab.busyCount > 0
             if (publishFlow.publishRefused)
                 graphPane.completeHold()
             else
                 page.answerRowAsk()
+            writeBarrier.start()
         }
     }
     // The log has to be on screen and laid out before the bar above it has
     // a place to be measured from.
     Timer {
         id: splitRefuseTimer
-        interval: 400
-        onTriggered: page.reportDividerRefusal(AppBackend.autoActArg)
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!page.commandsOpen || !page.commandsShown)
+                return
+            splitRefuseTimer.stop()
+            page.reportDividerRefusal(AppBackend.autoActArg)
+            renderedBarrier.begin()
+        }
     }
 }

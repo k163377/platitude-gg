@@ -96,11 +96,26 @@ Rectangle {
     readonly property real floorWidth:
         bandRow.Layout.minimumWidth + bandRow.anchors.rightMargin
 
-    /// Automation: run the push button's hold to its end. Does nothing
-    /// unless the button is in the shape that arms it.
+    /// Automation: run the push button's hold to its end. The busy visual
+    /// is latched only after the real RepoTab reports that push started;
+    /// this makes an intentionally intermediate screenshot causal even
+    /// when the subprocess completes before grabToImage runs.
+    property bool autoPushBusyLatched: false
+    readonly property string pushMode: pushButton.mode
     function completePushHold() {
         pushButton.completeHold()
-        AppBackend.report("push_hold mode=" + pushButton.mode)
+    }
+    function reportPushBusy() {
+        AppBackend.report("push_hold mode=" + pushButton.mode
+                          + " busy=" + topBar.autoPushBusyLatched)
+    }
+    Connections {
+        target: topBar.curPage ? topBar.curPage.pageTab : null
+        function onBusyOpChanged() {
+            if (AppBackend.autoAct === "force-push-hold"
+                    && topBar.curPage.pageTab.busyOp === "push")
+                topBar.autoPushBusyLatched = true
+        }
     }
 
     /// Automation: the strip's own hooks, handed on. What `Main` and
@@ -363,8 +378,9 @@ Rectangle {
             readonly property bool warned: pushButton.mode === "diverged"
                                            || pushButton.failed
             kind: "push"
-            busy: topBar.curPage !== null
-                  && topBar.curPage.pageTab.busyOp === "push"
+            busy: topBar.autoPushBusyLatched
+                  || (topBar.curPage !== null
+                      && topBar.curPage.pageTab.busyOp === "push")
             // Two fixed wordings, no counts: a number here would make the
             // button a different width for every value it took
             // (デザイン規約 §リモートへ送る).

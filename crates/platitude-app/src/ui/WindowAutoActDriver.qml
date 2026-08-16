@@ -33,28 +33,155 @@ Item {
     property Item gate
     property OpenFailedDialog openFailedDialog
     property IdentityDialog identityDialog
+    property var folderDialog
+    property var settingsDialog
+    // Negative/error states can be shorter than a polling cadence when a
+    // later background command also finishes. Observe their change signals
+    // synchronously, then carry that proof into the recovery report.
+    property bool commandsWrongSeen: false
+    property bool errorLineSeen: false
+    Connections {
+        target: topBar
+        function onCommandsWrongChanged() {
+            if (topBar.commandsWrong)
+                driver.commandsWrongSeen = true
+        }
+    }
+    Connections {
+        target: window.curPage ? window.curPage.pageTab : null
+        function onChanged() {
+            if (window.curPage && window.curPage.pageTab.lastError !== "")
+                driver.errorLineSeen = true
+        }
+    }
 
     /// Kicked off by the window once its tabs are open: a verb that ran
     /// before them would answer for a window holding nothing. The verbs
     /// missing from this list start themselves — theirs is a `running:`
     /// that is true from the moment this is built.
     function begin() {
-        if (AppBackend.autoAct === "state")
-            stateActTimer.start()
-        if (AppBackend.autoAct === "commands-clear")
-            commandsClearActTimer.start()
-        if (AppBackend.autoAct === "fetch-recover")
-            fetchRecoverActTimer.start()
-        if (AppBackend.autoAct === "band")
-            bandActTimer.start()
-        if (AppBackend.autoAct === "tab-widths")
-            tabWidthActTimer.start()
-        if (AppBackend.autoAct === "tab-mark")
-            tabMarkActTimer.start()
-        if (AppBackend.autoAct === "window-fill")
-            fillActTimer.start()
-        if (AppBackend.autoAct === "solo")
-            soloActTimer.start()
+        // All timers below are state polls. They never decide that a state
+        // is ready because a duration elapsed; each one stops only after the
+        // property/event it reports is observable. The parent watchdog is
+        // the sole hang ceiling.
+    }
+
+    // The platform picker completes only once its own window is open.
+    Timer {
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "open-picker"
+        onTriggered: {
+            if (!folderDialog.opened)
+                return
+            stop()
+            AppBackend.report("picker folder=" + folderDialog.currentFolder)
+            window.finishAutoAct()
+        }
+    }
+
+    // The tools popup has two separately latched output states: a real
+    // loading edge and the populated, settled choices.
+    Timer {
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "settings-tools"
+                 || AppBackend.autoAct === "settings-tools-loading"
+        onTriggered: {
+            const ready = AppBackend.autoAct === "settings-tools-loading"
+                        ? settingsDialog.autoToolsLoadingReady
+                        : settingsDialog.autoToolsSettledReady
+            if (!ready)
+                return
+            stop()
+            settingsDialog.reportTool()
+            window.finishAutoAct()
+        }
+    }
+
+    // What remains after a middle-click is the output under test. Wait
+    // for the tab-model count edge rather than allowing a fixed delay to
+    // stand in for it.
+    Timer {
+        id: middleCloseTimer
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "middle-close"
+        property bool requested: false
+        property int beforeCount: -1
+        onTriggered: {
+            if (pageRepeater.count < 2)
+                return
+            if (!middleCloseTimer.requested) {
+                middleCloseTimer.requested = true
+                middleCloseTimer.beforeCount = pageRepeater.count
+                topBar.middleClickTab(Number(AppBackend.autoActArg))
+                return
+            }
+            if (pageRepeater.count >= middleCloseTimer.beforeCount)
+                return
+            stop()
+            AppBackend.report("middle_close tabs=" + pageRepeater.count
+                              + " active=" + tabsModel.currentIndex
+                              + " open=" + topBar.tabPaths())
+            window.finishAutoAct()
+        }
+    }
+
+    // Reopening an existing path must select its tab without adding one.
+    Timer {
+        id: openAgainTimer
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "open-again"
+        property bool requested: false
+        property string asked: ""
+        property int beforeCount: -1
+        onTriggered: {
+            if (pageRepeater.count === 0)
+                return
+            if (!openAgainTimer.requested) {
+                openAgainTimer.requested = true
+                openAgainTimer.beforeCount = pageRepeater.count
+                openAgainTimer.asked = AppBackend.autoActArg !== ""
+                        ? AppBackend.autoActArg : topBar.tabPathAt(0)
+                tabsModel.openRepositoryPath(openAgainTimer.asked)
+                return
+            }
+            if (pageRepeater.count !== openAgainTimer.beforeCount
+                    || tabsModel.currentIndex < 0)
+                return
+            stop()
+            AppBackend.report("open_again tabs=" + pageRepeater.count
+                              + " active=" + tabsModel.currentIndex
+                              + " asked=" + openAgainTimer.asked
+                              + " open=" + topBar.tabPaths())
+            window.finishAutoAct()
+        }
+    }
+
+    // Capture the communication ring from a real busy edge. TopBar
+    // latches the visual only after RepoTab actually enters `push`, so a
+    // fast child cannot clear it before the image callback runs.
+    Timer {
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "force-push-hold"
+        property bool requested: false
+        onTriggered: {
+            if (topBar.curPage === null || topBar.pushMode !== "diverged")
+                return
+            if (!requested) {
+                requested = true
+                topBar.completePushHold()
+                return
+            }
+            if (!topBar.autoPushBusyLatched)
+                return
+            stop()
+            topBar.reportPushBusy()
+            window.finishAutoAct()
+        }
     }
 
     // Smoke hooks (PG_AUTO_ACT=open-not-a-repo / open-bare and the two
@@ -64,38 +191,53 @@ Item {
                                     || AppBackend.autoAct === "open-bare"
                                     || AppBackend.autoAct === "open-not-a-repo-retry"
                                     || AppBackend.autoAct === "open-not-a-repo-cancel"
+    property bool pickStarted: false
     Timer {
-        interval: 1200
+        interval: 25
+        repeat: true
         running: driver.pickAct
         onTriggered: {
+            if (driver.pickStarted || !window.visible)
+                return
+            driver.pickStarted = true
             tabsModel.openPickedPath(AppBackend.autoActArg)
             pickAnswerTimer.start()
         }
     }
-    // The answer is one `git rev-parse` away (実測 30–36ms on Windows,
-    // repository or not), so this is a beat rather than a wait.
+    // Poll the dialog's observable answer. The 25ms cadence is sampling
+    // only; it is not a correctness deadline.
     Timer {
         id: pickAnswerTimer
-        interval: 400
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (!openFailedDialog.opened)
+                return
             if (AppBackend.autoAct === "open-not-a-repo-retry")
                 openFailedDialog.retry()
             else if (AppBackend.autoAct === "open-not-a-repo-cancel")
                 openFailedDialog.close()
             else {
+                pickAnswerTimer.stop()
                 driver.reportPick()
+                window.finishAutoAct()
                 return
             }
-            // Both ways out end the dialog, and a closing popup is still
-            // `opened` for a frame or two — the answer this reads is
-            // whether it went, so it is read after it has had the time.
+            pickAnswerTimer.stop()
             pickSettleTimer.start()
         }
     }
     Timer {
         id: pickSettleTimer
-        interval: 300
-        onTriggered: driver.reportPick()
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (openFailedDialog.opened)
+                return
+            pickSettleTimer.stop()
+            driver.reportPick()
+            window.finishAutoAct()
+        }
     }
 
     // Smoke hooks (PG_AUTO_ACT=open-fail-tab / -bare / -log): the road
@@ -122,13 +264,20 @@ Item {
         id: failTabTimer
         interval: 25
         repeat: true
+        property bool commandsRequested: false
         onTriggered: {
             if (window.curPage === null || window.curPage.pageTab.state !== "error"
                     || window.curPage.pageTab.errorKind === "")
                 return
-            failTabTimer.stop()
             if (AppBackend.autoAct === "open-fail-tab-log" && window.curPage !== null)
-                window.curPage.toggleCommands()
+                if (!failTabTimer.commandsRequested) {
+                    failTabTimer.commandsRequested = true
+                    window.curPage.toggleCommands()
+                    return
+                } else if (!window.curPage.commandsShown) {
+                    return
+                }
+            failTabTimer.stop()
             AppBackend.report(
                 "open_fail_tab tabs=" + pageRepeater.count
                 + " state=" + (window.curPage !== null ? window.curPage.pageTab.state : "-")
@@ -153,17 +302,31 @@ Item {
     // take looks exactly like one nobody has answered yet. Read the two
     // verbs as a pair.
     Timer {
-        interval: 1200
+        interval: 25
+        repeat: true
         running: AppBackend.autoAct === "identity"
                  || AppBackend.autoAct === "identity-half"
-        onTriggered: AppBackend.report(
-            "identity state=" + AppBackend.identityState
-            + " dialog=" + identityDialog.opened
-            + " nameSaved=" + AppBackend.identityNameSaved
-            + " emailSaved=" + AppBackend.identityEmailSaved
-            + " unsaved=" + AppBackend.identityUnsaved
-            + " badge=" + topBar.identityBadgeShown
-            + " said=" + (AppBackend.identityError !== ""))
+        onTriggered: {
+            const wholeReady = AppBackend.autoAct === "identity"
+                               && AppBackend.identityState === "missing"
+                               && identityDialog.opened
+            const halfReady = AppBackend.autoAct === "identity-half"
+                              && AppBackend.identityState === "ready"
+                              && AppBackend.identityUnsaved
+                              && identityDialog.opened
+            if (!wholeReady && !halfReady)
+                return
+            stop()
+            AppBackend.report(
+                "identity state=" + AppBackend.identityState
+                + " dialog=" + identityDialog.opened
+                + " nameSaved=" + AppBackend.identityNameSaved
+                + " emailSaved=" + AppBackend.identityEmailSaved
+                + " unsaved=" + AppBackend.identityUnsaved
+                + " badge=" + topBar.identityBadgeShown
+                + " said=" + (AppBackend.identityError !== ""))
+            window.finishAutoAct()
+        }
     }
 
     // PG_AUTO_ACT=identity-tip: the mark's reason, read where the pointer
@@ -171,30 +334,46 @@ Item {
     // in whichever shape the width left it — reading the mark alone would
     // fail a band that is saying exactly what it should.
     Timer {
-        interval: 1600
+        interval: 25
+        repeat: true
         running: AppBackend.autoAct === "identity-tip"
         onTriggered: {
+            if (!identityDialog.opened && !AppBackend.identityUnsaved)
+                return
             window.dismissIdentity()
+            stop()
             identityTipTimer.start()
         }
     }
     Timer {
         id: identityTipTimer
-        interval: 400
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (identityDialog.opened)
+                return
             topBar.statePointedAt = true
+            stop()
             identityTipReport.start()
         }
     }
-    // Past Metrics.tipDelayMs, so what is reported is what is on screen.
+    // The attached card intentionally has a visual tip delay. Completion is
+    // still gated by its opened property, never by that duration.
     Timer {
         id: identityTipReport
-        interval: 800
-        onTriggered: AppBackend.report(
-            "identity_tip unsaved=" + AppBackend.identityUnsaved
-            + " badge=" + (topBar.stateWordsShown || topBar.stateMarkShown)
-            + " tip=" + topBar.stateCardOpen
-            + " rows=" + topBar.stateCardRows)
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!topBar.stateCardOpen)
+                return
+            stop()
+            AppBackend.report(
+                "identity_tip unsaved=" + AppBackend.identityUnsaved
+                + " badge=" + (topBar.stateWordsShown || topBar.stateMarkShown)
+                + " tip=" + topBar.stateCardOpen
+                + " rows=" + topBar.stateCardRows)
+            window.finishAutoAct()
+        }
     }
 
     // PG_AUTO_ACT=commands-clear. The band is where the answer is — the
@@ -204,17 +383,32 @@ Item {
     // press: `was=` is the half the picture cannot hold.
     Timer {
         id: commandsClearActTimer
-        interval: 2400
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "commands-clear"
+        property bool clearRequested: false
+        property bool was: false
         onTriggered: {
-            const was = topBar.commandsWrong
-            if (window.curPage !== null)
+            if (window.curPage === null || !driver.commandsWrongSeen
+                    || window.curPage.pageCommands.running
+                    || !window.curPage.commandsShown)
+                return
+            if (!commandsClearActTimer.clearRequested) {
+                commandsClearActTimer.was = driver.commandsWrongSeen
+                commandsClearActTimer.clearRequested = true
                 window.curPage.clearCommandLog()
+                return
+            }
+            if (topBar.commandsWrong)
+                return
+            stop()
             AppBackend.report(
-                "commands_clear was=" + was
+                "commands_clear was=" + commandsClearActTimer.was
                 + " wrong=" + topBar.commandsWrong
                 + " mark=" + topBar.commandsMarkColor
                 + " open=" + (window.curPage !== null
                               && window.curPage.commandsShown))
+            window.finishAutoAct()
         }
     }
 
@@ -224,31 +418,39 @@ Item {
     // picture can only hold the quiet half.
     Timer {
         id: fetchRecoverActTimer
-        interval: 3000
-        onTriggered: {
-            fetchRecoverReport.was = topBar.commandsWrong
-            fetchRecoverReport.hadLine = window.curPage !== null
-                && window.curPage.pageTab.lastError !== ""
-            if (window.curPage !== null)
-                window.curPage.pageTab.fetch("")
-            fetchRecoverReport.start()
-        }
-    }
-    Timer {
-        id: fetchRecoverReport
-        interval: 1600
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "fetch-recover"
+        property bool fetchRequested: false
         property bool was: false
         property bool hadLine: false
-        onTriggered: AppBackend.report(
-            "fetch_recover was=" + was
-            + " hadline=" + hadLine
-            + " wrong=" + topBar.commandsWrong
-            + " line=" + (window.curPage !== null
-                          && window.curPage.pageTab.lastError !== "")
-            + " failures=" + (window.curPage !== null
-                              ? window.curPage.pageTab.fetchFailures : -1)
-            + " open=" + (window.curPage !== null
-                          && window.curPage.commandsShown))
+        onTriggered: {
+            if (window.curPage === null)
+                return
+            if (!fetchRecoverActTimer.fetchRequested) {
+                if (!driver.commandsWrongSeen && !driver.errorLineSeen)
+                    return
+                fetchRecoverActTimer.was = driver.commandsWrongSeen
+                fetchRecoverActTimer.hadLine = driver.errorLineSeen
+                fetchRecoverActTimer.fetchRequested = true
+                window.curPage.pageTab.fetch("")
+                return
+            }
+            if (topBar.commandsWrong
+                    || window.curPage.pageTab.lastError !== ""
+                    || window.curPage.pageTab.busyCount !== 0
+                    || window.curPage.pageTab.fetchFailures !== 0)
+                return
+            stop()
+            AppBackend.report(
+                "fetch_recover was=" + fetchRecoverActTimer.was
+                + " hadline=" + fetchRecoverActTimer.hadLine
+                + " wrong=" + topBar.commandsWrong
+                + " line=" + (window.curPage.pageTab.lastError !== "")
+                + " failures=" + window.curPage.pageTab.fetchFailures
+                + " open=" + window.curPage.commandsShown)
+            window.finishAutoAct()
+        }
     }
 
     // PG_AUTO_ACT=band: numbers rather than a screenshot — the headless
@@ -257,15 +459,26 @@ Item {
     // picture.
     Timer {
         id: bandActTimer
-        interval: 1200
-        onTriggered: AppBackend.report(
-            "band merged=" + window.captionMerged
-            + " plain=" + AppBackend.plainChrome
-            + " grabRun=" + topBar.bandGrabRun
-            + " buttonsX=" + topBar.bandButtonsX
-            + " width=" + topBar.width
-            + " tabsW=" + topBar.bandTabsWidth
-            + " rightMargin=" + topBar.bandRightMargin)
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "band"
+        onTriggered: {
+            // No tabs is a valid laid-out band, not an unanswered one.
+            // Read readiness from the window and bar themselves, then let
+            // `tabsW=0` describe the empty output.
+            if (!window.visible || mainUi.width <= 0 || topBar.width <= 0)
+                return
+            stop()
+            AppBackend.report(
+                "band merged=" + window.captionMerged
+                + " plain=" + AppBackend.plainChrome
+                + " grabRun=" + topBar.bandGrabRun
+                + " buttonsX=" + topBar.bandButtonsX
+                + " width=" + topBar.width
+                + " tabsW=" + topBar.bandTabsWidth
+                + " rightMargin=" + topBar.bandRightMargin)
+            window.finishAutoAct()
+        }
     }
 
     // PG_AUTO_ACT=tab-widths: numbers for the band's reason — a strip
@@ -273,17 +486,25 @@ Item {
     // right. `widths=` is the answer.
     Timer {
         id: tabWidthActTimer
-        interval: 1200
-        onTriggered: AppBackend.report(
-            "tab_widths tabs=" + topBar.bandTabCount
-            + " run=" + Math.round(topBar.bandTabRun)
-            + " cap=" + Math.round(topBar.tabTitleCap)
-            + " floor=" + topBar.tabTitleMinW
-            + " max=" + topBar.tabTitleMaxW
-            + " content=" + Math.round(topBar.bandTabContent)
-            + " view=" + Math.round(topBar.bandTabsWidth)
-            + " scrolls=" + topBar.bandTabScrolls
-            + " widths=" + topBar.tabWidths())
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "tab-widths"
+        onTriggered: {
+            if (topBar.bandTabCount <= 0 || topBar.bandTabRun <= 0)
+                return
+            stop()
+            AppBackend.report(
+                "tab_widths tabs=" + topBar.bandTabCount
+                + " run=" + Math.round(topBar.bandTabRun)
+                + " cap=" + Math.round(topBar.tabTitleCap)
+                + " floor=" + topBar.tabTitleMinW
+                + " max=" + topBar.tabTitleMaxW
+                + " content=" + Math.round(topBar.bandTabContent)
+                + " view=" + Math.round(topBar.bandTabsWidth)
+                + " scrolls=" + topBar.bandTabScrolls
+                + " widths=" + topBar.tabWidths())
+            window.finishAutoAct()
+        }
     }
 
     // PG_AUTO_ACT=tab-mark: the argument is which tab the hand is on —
@@ -291,14 +512,30 @@ Item {
     // any other verb does not already say.
     Timer {
         id: tabMarkActTimer
-        interval: 1200
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "tab-mark"
+        property bool requested: false
+        property string beforeMarks: ""
         onTriggered: {
-            topBar.pointAtTab(Number(AppBackend.autoActArg || 1))
+            const pointed = Number(AppBackend.autoActArg || 1)
+            if (topBar.bandTabCount < pointed)
+                return
+            if (!tabMarkActTimer.requested) {
+                tabMarkActTimer.requested = true
+                tabMarkActTimer.beforeMarks = topBar.tabMarks()
+                topBar.pointAtTab(pointed)
+                return
+            }
+            if (topBar.tabMarks() === tabMarkActTimer.beforeMarks)
+                return
+            stop()
             AppBackend.report(
                 "tab_marks tabs=" + topBar.bandTabCount
                 + " current=" + tabsModel.currentIndex
-                + " pointed=" + Number(AppBackend.autoActArg || 1)
+                + " pointed=" + pointed
                 + " marks=" + topBar.tabMarks())
+            window.finishAutoAct()
         }
     }
 
@@ -308,9 +545,21 @@ Item {
     // a gap against.
     Timer {
         id: fillActTimer
-        interval: 1200
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "window-fill"
+        property bool maximizeRequested: false
         onTriggered: {
-            window.visibility = Window.Maximized
+            if (!fillActTimer.maximizeRequested) {
+                fillActTimer.maximizeRequested = true
+                window.visibility = Window.Maximized
+                return
+            }
+            if (window.visibility !== Window.Maximized
+                    || mainUi.width !== window.width
+                    || mainUi.height !== window.height)
+                return
+            stop()
             fillReportTimer.start()
         }
     }
@@ -318,12 +567,18 @@ Item {
     // inside the new size, before either can be read back.
     Timer {
         id: fillReportTimer
-        interval: 400
+        interval: 25
+        repeat: true
         // Measured in scene coordinates rather than from the margins that
         // were asked for, because a margin that misses is exactly what
         // this is looking for.
         onTriggered: {
             const at = mainUi.mapToItem(null, 0, 0)
+            if (at.x !== 0 || at.y !== 0
+                    || mainUi.width !== window.width
+                    || mainUi.height !== window.height)
+                return
+            stop()
             AppBackend.report(
                 "window_fill fills=" + (at.x === 0 && at.y === 0
                                         && mainUi.width === window.width
@@ -336,6 +591,7 @@ Item {
             // the shape of the offscreen screen is a picture of the
             // harness.
             window.visibility = Window.Windowed
+            window.finishAutoAct()
         }
     }
 
@@ -344,12 +600,20 @@ Item {
     // mechanism and not of a flag that imitates it.
     Timer {
         id: soloActTimer
-        interval: 1200
-        onTriggered: AppBackend.report(
-            "solo blocked=" + AppBackend.alreadyRunning
-            + " held=" + (AppBackend.heldElsewhere !== "")
-            + " gate=" + gate.visible
-            + " main=" + mainUi.visible)
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "solo"
+        onTriggered: {
+            if (!AppBackend.alreadyRunning || !gate.visible)
+                return
+            stop()
+            AppBackend.report(
+                "solo blocked=" + AppBackend.alreadyRunning
+                + " held=" + (AppBackend.heldElsewhere !== "")
+                + " gate=" + gate.visible
+                + " main=" + mainUi.visible)
+            window.finishAutoAct()
+        }
     }
 
     // PG_AUTO_ACT=window-floor:
@@ -364,29 +628,63 @@ Item {
     //                  floor without the log, then the log opened
     Timer {
         id: floorActTimer
-        interval: 1200
+        interval: 25
+        repeat: true
         running: AppBackend.autoAct === "window-floor"
+        property bool shapeRequested: false
         onTriggered: {
-            if (window.floorPage === null || AppBackend.autoActArg === "") {
+            if (window.floorPage === null)
+                return
+            if (AppBackend.autoActArg === "") {
+                if (window.width < window.floorWidth
+                        || window.height < window.floorHeight)
+                    return
+                stop()
                 driver.reportFloor()
                 return
             }
-            if (AppBackend.autoActArg === "fold")
-                window.floorPage.sidebarCollapsed = true
-            else if (AppBackend.autoActArg === "wip")
-                window.floorPage.showWip()
+            if (!floorActTimer.shapeRequested) {
+                floorActTimer.shapeRequested = true
+                if (AppBackend.autoActArg === "fold")
+                    window.floorPage.sidebarCollapsed = true
+                else if (AppBackend.autoActArg === "wip")
+                    window.floorPage.showWip()
+                else if (AppBackend.autoActArg !== "log")
+                    return
+                return
+            }
+            if (AppBackend.autoActArg === "fold"
+                    && !window.floorPage.sidebarCollapsed)
+                return
+            if (AppBackend.autoActArg === "wip" && !window.floorPage.wipShown)
+                return
             floorShrinkTimer.start()
+            stop()
         }
     }
-    // A beat apart from the fold above, which has to have reached the
-    // layout before the floor it leaves can be read off.
+    // Poll until the requested size has actually reached the window floor.
     Timer {
         id: floorShrinkTimer
-        interval: Metrics.anchorDelayMs
+        interval: 25
+        repeat: true
+        property bool resized: false
         onTriggered: {
-            window.width = Math.ceil(window.floorWidth)
-            window.height = Math.ceil(window.floorHeight)
-            driver.floorStoodAt = window.width + "x" + window.height
+            if (!floorShrinkTimer.resized
+                    && (AppBackend.autoActArg === "wip"
+                        || window.floorPage.sidebarCollapsed
+                        || AppBackend.autoActArg === "log")) {
+                window.width = Math.ceil(window.floorWidth)
+                window.height = Math.ceil(window.floorHeight)
+                driver.floorStoodAt = window.width + "x" + window.height
+                floorShrinkTimer.resized = true
+                return
+            }
+            if (!floorShrinkTimer.resized)
+                return
+            if (window.width < window.floorWidth
+                    || window.height < window.floorHeight)
+                return
+            stop()
             floorRaiseTimer.start()
         }
     }
@@ -396,19 +694,50 @@ Item {
     property string floorStoodAt: ""
     Timer {
         id: floorRaiseTimer
-        interval: Metrics.anchorDelayMs
+        interval: 25
+        repeat: true
+        property bool raised: false
         onTriggered: {
-            if (AppBackend.autoActArg === "fold")
+            if (!floorRaiseTimer.raised && AppBackend.autoActArg === "fold") {
                 window.floorPage.sidebarCollapsed = false
-            else if (AppBackend.autoActArg === "log")
+                floorRaiseTimer.raised = true
+                return
+            }
+            if (!floorRaiseTimer.raised && AppBackend.autoActArg === "log") {
                 window.floorPage.commandsOpen = true
+                floorRaiseTimer.raised = true
+                return
+            }
+            if (AppBackend.autoActArg === "fold"
+                    && window.floorPage.sidebarCollapsed)
+                return
+            if (AppBackend.autoActArg === "log"
+                    && !window.floorPage.commandsOpen)
+                return
+            stop()
             floorReportTimer.start()
         }
     }
     Timer {
         id: floorReportTimer
-        interval: Metrics.anchorDelayMs
-        onTriggered: driver.reportFloor()
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (window.width < Math.ceil(window.floorWidth)
+                    || window.height < Math.ceil(window.floorHeight))
+                return
+            if (AppBackend.autoActArg === "fold"
+                    && window.floorPage.sidebarCollapsed)
+                return
+            if (AppBackend.autoActArg === "log"
+                    && !window.floorPage.commandsOpen)
+                return
+            if (AppBackend.autoActArg === "wip"
+                    && !window.floorPage.wipBlockScrolls)
+                return
+            stop()
+            driver.reportFloor()
+        }
     }
     /// `fits=` is the whole verdict: reporting the floor alone would pass
     /// with the window nowhere near it.
@@ -436,6 +765,7 @@ Item {
                                 && window.floorPage.wipBlockScrolls)
             + " detailsOver=" + (window.floorPage !== null
                                  ? window.floorPage.detailsOverHeight : 0))
+        window.finishAutoAct()
     }
 
     // PG_AUTO_ACT=badges: all three of the band's state badges at once —
@@ -445,46 +775,60 @@ Item {
     // down on the floor the three badges leave.
     Timer {
         id: badgesActTimer
-        interval: 1200
+        interval: 25
+        repeat: true
         running: AppBackend.autoAct === "badges"
                  || AppBackend.autoAct === "badges-hover"
+        property bool stateRequested: false
+        property bool sizeRequested: false
+        property int requestedWidth: -1
         onTriggered: {
+            if (identityDialog.opened || topBar.bandTabsWidth <= 0
+                    || window.curPage === null || !window.curPage.pageWt.loaded
+                    || !topBar.opBadgeShown || !topBar.conflictBadgeShown
+                    || !topBar.identityBadgeShown)
+                return
             const arg = AppBackend.autoActArg
             const wantedW = parseInt(arg)
             const sized = arg === "floor" || (!isNaN(wantedW) && wantedW > 0)
             // The pointer, where headless cannot put one. Written to the
             // same one property the real hover writes, so the card cannot
             // be opened by a road the hand does not have (app-ui.md).
-            if (AppBackend.autoAct === "badges-hover")
+            if (AppBackend.autoAct === "badges-hover" && !stateRequested) {
                 topBar.statePointedAt = true
-            if (arg === "floor") {
-                window.width = Math.ceil(window.floorWidth)
+                stateRequested = true
+            }
+            if (!badgesActTimer.sizeRequested && arg === "floor") {
+                badgesActTimer.requestedWidth = Math.ceil(window.floorWidth)
+                window.width = badgesActTimer.requestedWidth
                 window.height = Math.ceil(window.floorHeight)
-            } else if (!isNaN(wantedW) && wantedW > 0) {
+                badgesActTimer.sizeRequested = true
+                return
+            } else if (!badgesActTimer.sizeRequested
+                       && !isNaN(wantedW) && wantedW > 0) {
                 // Which width brings on which of the group's three shapes
                 // is a question about the installed fonts, so the run
                 // names the number and the report says the shape. Not
                 // held at the floor: the third shape sits below what a
                 // hand can drag to today, and a shape nothing can
                 // photograph is a shape nobody can check.
-                window.width = wantedW
-            }
-            // A beat later if anything was moved or opened; straight away
-            // if this run is only reading the band as it stands.
-            if (sized || AppBackend.autoAct === "badges-hover") {
-                badgesReportTimer.start()
+                badgesActTimer.requestedWidth = wantedW
+                window.width = badgesActTimer.requestedWidth
+                badgesActTimer.sizeRequested = true
                 return
             }
+            if (sized && (topBar.width !== mainUi.width
+                    || (arg === "floor"
+                        ? window.width < badgesActTimer.requestedWidth
+                        : Math.round(window.width) !== badgesActTimer.requestedWidth)))
+                return
+            if (AppBackend.autoAct === "badges-hover") {
+                if (!topBar.stateCardOpen)
+                    return
+            }
+            stop()
             driver.reportBadges()
         }
-    }
-    // A beat after the shrink, for the same reason the floor verb waits:
-    // what is being read is where the layout came to rest, not what it
-    // was asked for.
-    Timer {
-        id: badgesReportTimer
-        interval: Metrics.anchorDelayMs
-        onTriggered: driver.reportBadges()
     }
     /// Which rule painted the folded group's mark (規約 §状態: 色は最も
     /// 重い状態が決める). Read off the band's own colour, not off the
@@ -523,6 +867,7 @@ Item {
             + " floorW=" + floorW + " w=" + window.width
             + " tabsW=" + Math.round(topBar.bandTabsWidth)
             + " grabRun=" + Math.round(topBar.bandGrabRun))
+        window.finishAutoAct()
     }
 
     // PG_AUTO_ACT=old-git / old-git-card / old-git-fold. Nothing here
@@ -531,69 +876,107 @@ Item {
     // badge is answering a real reading of a real program.
     Timer {
         id: oldGitActTimer
-        interval: 1200
+        interval: 25
+        repeat: true
         running: AppBackend.autoAct === "old-git"
                  || AppBackend.autoAct === "old-git-card"
                  || AppBackend.autoAct === "old-git-fold"
+        property bool stateRequested: false
+        property bool sizeRequested: false
+        property int requestedWidth: -1
         onTriggered: {
             // The pointer, where headless cannot put one — the same one
             // property the real hover writes (app-ui.md).
-            if (AppBackend.autoAct === "old-git-card")
-                topBar.statePointedAt = true
+            if (topBar.bandTabsWidth <= 0)
+                return
             // `-fold` brings its own width: the shape it is for is a
             // folded group with nothing red in it — the only place the
             // mark's colour is the mark's whole meaning (規約 §状態).
             const arg = AppBackend.autoAct === "old-git-fold"
                         ? "floor" : AppBackend.autoActArg
             const wantedW = parseInt(arg)
-            if (arg === "floor") {
-                window.width = Math.ceil(window.floorWidth)
+            if (!oldGitActTimer.sizeRequested && arg === "floor") {
+                oldGitActTimer.requestedWidth = Math.ceil(window.floorWidth)
+                window.width = oldGitActTimer.requestedWidth
                 window.height = Math.ceil(window.floorHeight)
-            } else if (!isNaN(wantedW) && wantedW > 0) {
-                window.width = wantedW
+                oldGitActTimer.sizeRequested = true
+                return
+            } else if (!oldGitActTimer.sizeRequested
+                       && !isNaN(wantedW) && wantedW > 0) {
+                oldGitActTimer.requestedWidth = wantedW
+                window.width = oldGitActTimer.requestedWidth
+                oldGitActTimer.sizeRequested = true
+                return
             }
-            oldGitReportTimer.start()
-        }
-    }
-    Timer {
-        id: oldGitReportTimer
-        interval: Metrics.anchorDelayMs
-        onTriggered: AppBackend.report(
+            if (AppBackend.gitVersion === "" || !topBar.oldGitBadgeShown)
+                return
+            if (oldGitActTimer.sizeRequested
+                    && (topBar.width !== mainUi.width
+                        || (arg === "floor"
+                            ? window.width < oldGitActTimer.requestedWidth
+                            : Math.round(window.width)
+                              !== oldGitActTimer.requestedWidth)))
+                return
+            // The card decides whether it has any rows on the pointer
+            // edge. Pointing before the version badge exists would ask an
+            // empty group once and leave `pointedAt` true, so no later edge
+            // could reopen it when the badge arrives.
+            if (AppBackend.autoAct === "old-git-card" && !stateRequested) {
+                topBar.statePointedAt = true
+                stateRequested = true
+                return
+            }
+            if (AppBackend.autoAct === "old-git-card"
+                    && !topBar.stateCardOpen)
+                return
+            stop()
             // `version=` says which git answered — a run whose shim never
             // got onto PATH photographs an ordinary window, and an
             // ordinary window photographs well.
-            "old-git badge=" + topBar.oldGitBadgeShown
-            + " card=" + topBar.stateCardOpen
-            + " rows=" + topBar.stateCardRows
-            + " words=" + topBar.stateWordsShown
-            + " mark=" + topBar.stateMarkShown
-            + " tint=" + driver.stateTint
-            + " cap=" + topBar.stateCapW
-            + " version=" + AppBackend.gitVersion
-            + " min=" + AppBackend.minimumGit
-            + " w=" + window.width)
+            AppBackend.report(
+                "old-git badge=" + topBar.oldGitBadgeShown
+                + " card=" + topBar.stateCardOpen
+                + " rows=" + topBar.stateCardRows
+                + " words=" + topBar.stateWordsShown
+                + " mark=" + topBar.stateMarkShown
+                + " tint=" + driver.stateTint
+                + " cap=" + topBar.stateCapW
+                + " version=" + AppBackend.gitVersion
+                + " min=" + AppBackend.minimumGit
+                + " w=" + window.width)
+            window.finishAutoAct()
+        }
     }
 
     // PG_AUTO_ACT=state: two runs sharing one --config-dir are what
     // actually tests this — a single run can only ever agree with itself.
     Timer {
         id: stateActTimer
-        interval: 1200
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "state"
+        property bool stateRequested: false
         onTriggered: {
-            if (AppBackend.autoActArg === "change" && window.curPage !== null) {
-                window.curPage.sidebarCollapsed = true
-                window.curPage.commandsOpen = true
-                window.curPage.setDetailsWidth(520)
-                window.curPage.setGraphColumns(190, 300)
-                // The other file: a decision, written out at once rather
-                // than on the state timer.
-                AppBackend.setAutoFetchMinutes(7)
+            if (window.curPage === null
+                    || window.curPage.pageTab.state !== "open")
+                return
+            if (!stateActTimer.stateRequested) {
+                stateActTimer.stateRequested = true
+                if (AppBackend.autoActArg === "change" && window.curPage !== null) {
+                    window.curPage.sidebarCollapsed = true
+                    window.curPage.commandsOpen = true
+                    window.curPage.setDetailsWidth(520)
+                    window.curPage.setGraphColumns(190, 300)
+                    AppBackend.setAutoFetchMinutes(7)
+                }
+                if (AppBackend.autoActArg === "minimize")
+                    window.visibility = Window.Maximized
+                return
             }
-            // A run that ends with the window down. Up first, because the
-            // window whose numbers go wrong while it is minimised is the
-            // one that was maximised.
-            if (AppBackend.autoActArg === "minimize")
-                window.visibility = Window.Maximized
+            if (AppBackend.autoActArg === "minimize"
+                    && window.visibility !== Window.Maximized)
+                return
+            stop()
             stateReportTimer.start()
         }
     }
@@ -601,8 +984,19 @@ Item {
     // read back off the panes.
     Timer {
         id: stateReportTimer
-        interval: 400
+        interval: 25
+        repeat: true
         onTriggered: {
+            if (AppBackend.autoActArg === "minimize"
+                    && window.visibility !== Window.Maximized)
+                return
+            if (AppBackend.autoActArg === "change"
+                    && (window.curPage === null
+                        || !window.curPage.sidebarCollapsed
+                        || !window.curPage.commandsOpen
+                        || !window.curPage.commandsShown
+                        || Math.abs(window.curPage.stateDetailsWidth - 520) >= 1))
+                return
             // Up, then down, with a report from each: what the file holds
             // once the window is down has to be what it held while it was
             // up. Without the first report there is nothing for the
@@ -638,6 +1032,8 @@ Item {
             // screen, and a shot that shape is a shot of the harness.
             if (AppBackend.autoActArg === "minimize")
                 window.visibility = Window.Windowed
+            stop()
+            window.finishAutoAct()
         }
     }
 }

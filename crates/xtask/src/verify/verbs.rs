@@ -70,6 +70,13 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "fetch-recover" => {
             Some("fetch_recover was=true hadline=true wrong=false line=false failures=0")
         }
+        // Intermediate communication is valid only after the real busy
+        // edge was observed and latched for the asynchronous image grab.
+        "force-push-hold" => Some("push_hold mode=diverged busy=true"),
+        // The same popup has a real loading and a causally settled form;
+        // neither is selected by a millisecond window.
+        "settings-tools-loading" => Some("settled=false loading=true open=true"),
+        "settings-tools" => Some("settled=true loading=false open=true"),
         // `edge=` rides along in that report but is not judged: whether an
         // edge would land off the screen is a question about a real
         // monitor, and the offscreen platform has none to answer with.

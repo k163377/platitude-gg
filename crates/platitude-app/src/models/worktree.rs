@@ -14,6 +14,9 @@ use super::qml_register;
 
 #[derive(Default)]
 pub struct WorkTreeModel {
+    /// The first status snapshot has landed. Counts of zero mean clean only
+    /// after this edge; before it they mean no answer yet.
+    loaded: bool,
     branch: String,
     /// Commit HEAD is on, branch or not (empty before the first commit).
     head_oid: String,
@@ -83,6 +86,7 @@ pub struct WorkTreeModel {
 
 #[qobject(ConvertToCamelCase, NoQmlElement)]
 impl WorkTreeModel {
+    qproperty!("loaded", Member = loaded, Notify = changed);
     qproperty!("branch", Member = branch, Notify = changed);
     qproperty!("headOid", Member = head_oid, Notify = changed);
     qproperty!("detached", Member = detached, Notify = changed);
@@ -150,6 +154,7 @@ impl WorkTreeModel {
             return;
         };
         self.side_ours = sides.ours;
+        self.loaded = true;
         self.side_theirs = sides.theirs;
         self.merge_tool = merge_tool;
         self.eol_staged_count =

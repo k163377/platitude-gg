@@ -19,12 +19,11 @@ Item {
     property bool shotPending: false
     property bool shotTaken: false
     property int shotParts: 0
-    readonly property bool causal:
-        AppBackend.autoAct === "diff-file"
-        || AppBackend.autoAct === "signature-tip"
-        || AppBackend.autoAct === "open-fail-tab"
-        || AppBackend.autoAct === "open-fail-tab-bare"
-        || AppBackend.autoAct === "open-fail-tab-log"
+    // Every PG_AUTO_ACT run has one explicit completion edge. A verb that
+    // still relies on the old shot clock is a harness bug: the watchdog must
+    // expose it instead of taking a plausible picture of an intermediate
+    // state.
+    readonly property bool causal: AppBackend.autoAct !== ""
 
     function claimPageAct() {
         if (driver.pageActClaimed)
@@ -34,15 +33,17 @@ Item {
     }
 
     function begin() {
-        if (AppBackend.autoWatchdogMs > 0 || AppBackend.autoQuitMs > 0)
+        if (AppBackend.autoWatchdogMs > 0)
             watchdog.start()
-        if (AppBackend.shotDir !== "" && !driver.causal)
-            legacyShot.start()
     }
 
     function finish() {
         if (!driver.causal || driver.shotTaken || driver.shotPending)
             return
+        if (AppBackend.shotDir === "") {
+            Qt.quit()
+            return
+        }
         AppBackend.report("auto_act complete=" + AppBackend.autoAct)
         driver.shotPending = true
         window.requestUpdate()
@@ -68,18 +69,11 @@ Item {
 
     Timer {
         id: watchdog
-        interval: Math.max(AppBackend.autoWatchdogMs > 0
-                           ? AppBackend.autoWatchdogMs
-                           : AppBackend.autoQuitMs, 1)
+        interval: Math.max(AppBackend.autoWatchdogMs, 1)
         onTriggered: {
             console.warn("auto-act watchdog expired verb=" + AppBackend.autoAct)
             Qt.quit()
         }
-    }
-    Timer {
-        id: legacyShot
-        interval: AppBackend.autoQuitMs > 800 ? AppBackend.autoQuitMs - 800 : 3500
-        onTriggered: driver.takeShot()
     }
     function partDone() {
         driver.shotParts--

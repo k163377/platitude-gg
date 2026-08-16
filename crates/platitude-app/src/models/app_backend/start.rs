@@ -70,10 +70,6 @@ impl Default for AppBackend {
             shot_dir: std::env::var("PG_SHOT_DIR")
                 .unwrap_or_default()
                 .replace('\\', "/"),
-            auto_quit_ms: std::env::var("PG_AUTO_QUIT_MS")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(0),
             auto_watchdog_ms: std::env::var("PG_AUTO_WATCHDOG_MS")
                 .ok()
                 .and_then(|v| v.parse().ok())

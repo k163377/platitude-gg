@@ -38,6 +38,15 @@ UI の色・寸法・用語の正本は [デザイン規約.md](../../internal-d
 - **`ListView.highlightFollowsCurrentItem` は false にする**(`AppListView` が持つ — スクロールする一覧はこれを使う)— 既定の true では `currentIndex` を動かすだけでビューが追いかけ、背景更新で選択行が 1 つずれただけでも履歴を読んでいる人の視界を選択位置まで飛ばす。行の入れ替えでコンテンツが N 行ずれる分は `GraphPane.shiftRows()` で contentY を戻す(**レイアウト前なので 1 拍遅らせる** — 直後は contentHeight が旧値で clamp に食われる)
 - **モデルリセット後の ListView は `currentIndex` を保ったまま `contentY` だけ 0 に戻る** — 直後の `positionViewAtIndex` は後続の relayout(polish)に上書きされ、`Qt.callLater` でも不十分。短い Timer(50ms)で遅らせる(`GraphPane` の anchorTimer)
 
+## UI 自動化の因果性
+
+- **固定時間を完了条件にしない** — `PG_AUTO_ACT` は、入力の受理 → 必要なら busy 開始 → busy 終了 → 対象モデルの更新 → 出力プロパティまたは描画可能状態、というその動詞固有の因果を待つ。短い反復 Timer は状態を観測する sampler としてだけ使い、回数・経過時間で成功にしない。`--watchdog-ms` は壊れた run を診断して止める外側の天井であり、撮影時点を選ばない
+- **1 run の完了 owner は 1 つ** — page が動詞を原子的に claim し、window-level 動詞は page completion を defer する。新しく開いた tab が同じ動詞を再実行してはならない。撮影は owner が `finishAutoAct()` を 1 回通知した後だけ
+- **「まだ答えが無い」と値 0 / false を分ける** — 非同期モデルは `loaded` / request generation / sequence 等の readiness を公開し、自動化は readiness の後で値を読む。初期値 0 を clean・空・完了と判定しない
+- **一瞬だけ立つ状態は signal で観測して latch する** — error / busy / loading が polling 1 周より短くても、その実 edge を見た証拠を保持し、非同期 `grabToImage` が終わるまで意図した中間表示を保つ。入力フラグを立てただけで出力状態を偽装しない
+- **描画境界は画像 callback が答える** — completion 後に `requestUpdate()` と event-loop turn を通し、app / overlay 両方の `grabToImage` callback が返ってから終了する。静止した offscreen scene は `frameSwapped` を出さないことがあるため、それ単独を完了条件にしない
+- **並行 run は状態を共有しない** — preset repository・config・shot directory は run ごとに作り、明示した `--repo` / `--config-dir` / `--shot-dir` は原子的に所有権を取る。同じ明示リソースの同時利用は待って混線させず fail fast。build は一度済ませ、反復・並行実行は `--no-build` にする
+
 ## 配線済み操作の意匠と実装対応
 
 **個々の操作・部品の意匠決定・実装対応・罠、および配線済み操作の一覧の正本は [rules-refs/app-ui.md](../rules-refs/app-ui.md)**(自動ロードされない)— 触る部品名・操作名・動詞名・規約 §名で Grep して該当行だけを読み(全読みしない)、配線・決定・罠は該当行へ 1 行で追記する(本ファイルへは全セッション共通の不変条件だけを昇格。CLAUDE.md は未配線だけを持つ)。

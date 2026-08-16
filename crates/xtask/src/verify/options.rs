@@ -12,7 +12,6 @@ pub(super) struct Options {
     pub(super) preset: Vec<String>,
     pub(super) build: bool,
     pub(super) select: bool,
-    pub(super) quit_ms: u64,
     /// Diagnostic ceiling for a run whose causal completion never arrives.
     pub(super) watchdog_ms: u64,
     pub(super) shot_dir: Option<PathBuf>,
@@ -39,7 +38,6 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         preset: Vec::new(),
         build: true,
         select: false,
-        quit_ms: 10_000,
         watchdog_ms: 120_000,
         shot_dir: None,
         config_dir: None,
@@ -60,11 +58,10 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--no-build" => opts.build = false,
             "--select" => opts.select = true,
             "--quit-ms" => {
-                opts.quit_ms = it
-                    .next()
-                    .ok_or("--quit-ms needs a number")?
-                    .parse()
-                    .map_err(|e| format!("--quit-ms: {e}"))?;
+                return Err(
+                    "unknown verify-ui option: --quit-ms (wall-clock shot selection was removed; use --watchdog-ms only as a diagnostic ceiling)"
+                        .into(),
+                );
             }
             "--watchdog-ms" => {
                 opts.watchdog_ms = it
@@ -97,6 +94,14 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         }
         more => return Err(format!("too many positional arguments: {more:?}")),
     }
+    if opts.verb == "publish-new-go"
+        && !opts
+            .arg
+            .split_once('|')
+            .is_some_and(|(_, url)| !url.trim().is_empty())
+    {
+        return Err("publish-new-go needs <name>|<url> with a non-empty URL".into());
+    }
     Ok(opts)
 }
 
@@ -120,20 +125,42 @@ mod tests {
     }
 
     #[test]
-    fn the_watchdog_is_separate_from_the_legacy_shot_clock() {
+    fn the_watchdog_is_the_only_time_ceiling() {
         let plain = parse(&["commit".to_string()]).expect("verb only");
-        assert_eq!(plain.quit_ms, 10_000);
         assert_eq!(plain.watchdog_ms, 120_000);
 
         let asked = parse(&[
             "commit".to_string(),
-            "--quit-ms".to_string(),
-            "2500".to_string(),
             "--watchdog-ms".to_string(),
             "9000".to_string(),
         ])
-        .expect("two independent clocks");
-        assert_eq!(asked.quit_ms, 2500);
+        .expect("diagnostic ceiling");
         assert_eq!(asked.watchdog_ms, 9000);
+    }
+
+    #[test]
+    fn the_removed_shot_clock_fails_fast() {
+        let result = parse(&[
+            "commit".to_string(),
+            "--quit-ms".to_string(),
+            "2500".to_string(),
+        ]);
+        let Err(err) = result else {
+            panic!("wall-clock screenshot selection must stay removed");
+        };
+        assert!(err.contains("unknown verify-ui option: --quit-ms"));
+    }
+
+    #[test]
+    fn publish_new_go_fails_before_launch_without_a_remote_url() {
+        for args in [
+            vec!["publish-new-go".to_string()],
+            vec!["publish-new-go".to_string(), "origin|".to_string()],
+        ] {
+            let Err(error) = parse(&args) else {
+                panic!("an unanswerable dialog must not run until the watchdog")
+            };
+            assert!(error.contains("non-empty URL"));
+        }
     }
 }

@@ -307,8 +307,17 @@ Item {
     /// Automation: the chooser's list, which no injected click can reach.
     function openPublishRemotes() {
         const form = publishFlow.graphPane.askForm
-        if (form && form.remotePick)
-            form.remotePick.popup.open()
+        if (!form || !form.remotePick)
+            return false
+        form.remotePick.popup.open()
+        return form.remotePick.popup.visible
+    }
+    /// Automation reads the popup itself, rather than assuming that the
+    /// call which requested it also put it on screen.
+    function publishRemotesOpen() {
+        const form = publishFlow.graphPane.askForm
+        return Boolean(form && form.remotePick
+                       && form.remotePick.popup.visible)
     }
 
     function answerPublish() {
