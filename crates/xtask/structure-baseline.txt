@@ -15,9 +15,9 @@
 1102 crates/platitude-app/src/hub.rs
 557 crates/platitude-app/src/models/diff.rs
 759 crates/platitude-app/src/models/graph.rs
-574 crates/platitude-app/src/ui/DiffPane.qml
-1069 crates/platitude-app/src/ui/GraphPane.qml
-904 crates/platitude-app/src/ui/Main.qml
+570 crates/platitude-app/src/ui/DiffPane.qml
+1062 crates/platitude-app/src/ui/GraphPane.qml
+892 crates/platitude-app/src/ui/Main.qml
 1908 crates/platitude-app/src/ui/RepoPage.qml
 885 crates/platitude-app/src/winframe.rs
 644 crates/platitude-core/src/conflict.rs
