@@ -268,7 +268,7 @@ fn seat_row(seat: &Seat) -> ([String; 6], String) {
 
 /// An age as the shortest round figure that still ranks seats: seconds
 /// under a minute, then minutes, hours, days.
-fn format_age(age: Option<Duration>) -> String {
+pub(crate) fn format_age(age: Option<Duration>) -> String {
     let Some(age) = age else {
         return "?".to_string();
     };

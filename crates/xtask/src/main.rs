@@ -6,7 +6,9 @@
 
 mod check;
 mod demo;
+mod gui;
 mod hook;
+mod land;
 mod linux;
 mod perf;
 mod qt;
@@ -188,6 +190,31 @@ commands:
         --shell          open a shell in the container instead
         --stage <name>   core or app, when the guess is not the one wanted
 
+  land [<branch>]
+      Put a branch on main — the one sanctioned way (CLAUDE.md Git 運用;
+      the pre-shell hook asks for PG_ALLOW_MAIN=1 in front, which is how
+      the transcript records that the user asked). Reads where main is
+      checked out before moving anything: merges in the primary checkout
+      when it sits on main; fast-forwards the ref (and reattaches a
+      detached primary) when main is checked out nowhere; refuses the
+      ambiguous rest with what to do instead. Bare `land` from a seat
+      lands the seat's own branch.
+
+  kill
+      Reap this tree's app processes — the ones holding this tree's exe
+      against the next link, or its store lock against the next window —
+      and nobody else's. The pre-shell hook points image-name kills
+      (taskkill /IM, Stop-Process -Name), which reach every seat and the
+      user's own window, at this instead.
+
+  launch [--no-build]
+      Real-window start for 「起動して」 asks (the verify-ui skill's fast
+      path): reap this tree's stale runs, build release, start detached,
+      and confirm it outlived its first second. Run it with
+      PG_ALLOW_GUI=1 in front — a real window is the user's ask. The app
+      keeps a per-tree settings store on its own, so seats never fight
+      over one instance lock.
+
   seats
       Where the six worktree seats a-f stand right now, one line each:
       branch, whether HEAD sits at main's tip, commits ahead of main
@@ -202,7 +229,8 @@ commands:
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads
       the hook payload from stdin). Events: pre-write, post-write,
-      pre-shell (pre-git on branches that predate it), session-start.
+      pre-shell (pre-git on branches that predate it), pre-worktree,
+      session-start, session-end.
 ";
 
 fn main() -> ExitCode {
@@ -220,6 +248,9 @@ fn main() -> ExitCode {
         Some("perf") => perf::run(&args[1..]),
         Some("linux") => linux::run(&args[1..]),
         Some("seats") => seats::run(&args[1..]),
+        Some("land") => land::run(&args[1..]),
+        Some("kill") => gui::kill(&args[1..]),
+        Some("launch") => gui::launch(&args[1..]),
         Some("hook") => hook::run(&args[1..]),
         _ => {
             print!("{USAGE}");

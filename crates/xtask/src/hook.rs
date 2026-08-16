@@ -19,6 +19,13 @@ const REBASE_ESCAPE: &str = "PG_ALLOW_REBASE";
 /// The same, for an instruction that asked for a real window.
 const WINDOW_ESCAPE: &str = "PG_ALLOW_GUI";
 
+/// The same, for an instruction that asked to kill runs beyond this tree.
+const KILL_ESCAPE: &str = "PG_ALLOW_KILL";
+
+/// The mark a session's seat claim carries in `git worktree lock`'s
+/// reason, followed by the session id.
+const SEAT_CLAIM: &str = "claude-seat";
+
 pub fn run(args: &[String]) -> Result<(), String> {
     let event = args.first().map(String::as_str).unwrap_or("");
     let mut input = String::new();
@@ -35,6 +42,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "pre-git" => pre_git(&input).map(|_| ()),
         "pre-worktree" => pre_worktree(&input),
         "session-start" => session_start(&input),
+        "session-end" => session_end(&input),
         other => Err(format!("unknown hook event: {other:?}")),
     }
 }
@@ -44,6 +52,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// guards run in order and the first refusal is the answer.
 fn pre_shell(input: &str) -> Result<(), String> {
     if pre_git(input)? {
+        return Ok(());
+    }
+    if pre_kill(input)? {
         return Ok(());
     }
     pre_launch(input)
@@ -257,8 +268,11 @@ impl Offence {
                 "{what} would put commits on main, and main moves only when the \
                  user asks for it in so many words (CLAUDE.md Git 運用). Leave \
                  the work on its branch and report it as ready to merge instead. \
-                 If the user did ask for this one, run the same command again \
-                 with {MAIN_ESCAPE}=1 in front of it."
+                 If the user did ask for this one, run \
+                 `{MAIN_ESCAPE}=1 cargo xtask land <branch>` — it works from any \
+                 session, worktree ones included, and reads where main actually \
+                 is before it moves anything; a hand-typed merge inherits \
+                 whatever HEAD the primary checkout happens to be on."
             ),
             Offence::Rebase => format!(
                 "{what} rewrites the branch under the session, and a rebase runs \
@@ -280,6 +294,17 @@ impl Offence {
 /// rewrites whichever branch it runs on.
 fn reflection(command: &str) -> Option<Reflection<'_>> {
     let tokens: Vec<&str> = command.split_whitespace().collect();
+    // The sanctioned landing verb is still a landing: the escape in front
+    // is what says the user asked for this one.
+    if xtask_verb(&tokens, "land") {
+        return Some(Reflection {
+            dir: None,
+            offence: Offence::LandsOnMain {
+                only_from_main: false,
+            },
+            what: "`cargo xtask land`",
+        });
+    }
     let mut cd_dir = None;
     let mut index = 0;
     while index < tokens.len() {
@@ -368,6 +393,61 @@ fn is_main_ref(token: &str) -> bool {
 
 fn unquote(token: &str) -> &str {
     token.trim_matches(['"', '\''])
+}
+
+/// Whether the line invokes `cargo xtask <verb>` (or the unaliased
+/// `cargo run -p xtask -- <verb>`): a bare `xtask` token whose next
+/// positional token is the verb. A quoted mention keeps its quote
+/// character on the token and does not match.
+fn xtask_verb(tokens: &[&str], verb: &str) -> bool {
+    let mut after = tokens.iter().skip_while(|token| **token != "xtask");
+    after.next().is_some()
+        && after
+            .find(|token| !token.starts_with('-'))
+            .is_some_and(|token| *token == verb)
+}
+
+/// PreToolUse(Bash|PowerShell): a kill aimed at the app by image name
+/// reaps every seat's runs and the user's own window in one line.
+/// Answers whether it refused, like `pre_git`.
+fn pre_kill(input: &str) -> Result<bool, String> {
+    let Some(command) = string_field(input, "command") else {
+        return Ok(false);
+    };
+    if command.contains(KILL_ESCAPE) || !broad_kill(&command) {
+        return Ok(false);
+    }
+    println!(
+        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
+         \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
+         \"This kill reaches by image name, so it takes every seat's runs \
+         and the user's own window with it. The exe lock and the \
+         second-instance gate both come from THIS tree's own stale run: \
+         `cargo xtask kill` reaps exactly those (processes whose exe lives \
+         under this tree) and nothing else. If the user asked to kill the \
+         others in so many words, run the same command again with \
+         {KILL_ESCAPE}=1 in front of it.\"}}}}"
+    );
+    Ok(true)
+}
+
+/// Whether a shell line kills the app without pinning the kill to one
+/// tree's processes. `$_.Path`-filtered PowerShell pipelines are the one
+/// hand-written shape that is scoped; taskkill and the name-keyed forms
+/// cannot filter by path at all.
+fn broad_kill(command: &str) -> bool {
+    let line = command.to_lowercase();
+    if !line.contains("platitude") {
+        return false;
+    }
+    let path_scoped = line.contains("$_.path") || line.contains("path -like");
+    (line.contains("taskkill") && line.contains("platitude"))
+        || (!path_scoped
+            && (line.contains("stop-process")
+                || line.contains(".kill(")
+                || line.contains("pkill")
+                || line.contains("killall")
+                || (line.contains("wmic") && line.contains("delete"))))
 }
 
 /// The primary checkout may commit documents directly, except the files
@@ -639,6 +719,15 @@ fn launch_objections(command: &str, cwd: &str) -> Vec<String> {
     let Some(root) = worktree_root(cwd) else {
         return Vec::new();
     };
+    // `cargo xtask launch` reaps its own tree and builds for itself; the
+    // one thing left to object to is the window, which is its purpose.
+    if xtask_verb(&command.split_whitespace().collect::<Vec<_>>(), "launch") {
+        return vec![
+            "it opens a real window over whatever is on the screen, which is \
+             what `xtask launch` is for"
+                .to_string(),
+        ];
+    }
     let Some(launch) = launch(command) else {
         return Vec::new();
     };
@@ -753,9 +842,11 @@ fn resolve(cwd: &str, path: &str) -> String {
 
 /// PreToolUse(EnterWorktree): a worktree name outside the seat roster
 /// starts a cold target/ nobody will reuse (CLAUDE.md ビルド・テスト).
-/// Entering by path is how a session takes an existing seat, and creating
-/// a missing seat by its own letter is fine; anything else waits for the
-/// user to say so.
+/// Entering an existing seat by path claims it here, atomically, with
+/// `git worktree lock` — the survey a session read is a snapshot, and
+/// two sessions told "a is free" would otherwise both settle in
+/// (observed). Creating a missing seat needs no claim: the second
+/// `git worktree add` of one letter fails by itself.
 fn pre_worktree(input: &str) -> Result<(), String> {
     let name = string_field(input, "name");
     let path = string_field(input, "path");
@@ -769,6 +860,107 @@ fn pre_worktree(input: &str) -> Result<(), String> {
              ビルド・テスト). A worktree outside the roster needs the user's \
              say-so.\"}}}}"
         );
+        return Ok(());
+    }
+    let (Some(path), Some(cwd)) = (path, string_field(input, "cwd")) else {
+        return Ok(());
+    };
+    if roster_seat(&path).is_none() {
+        return Ok(());
+    }
+    let session = string_field(input, "session_id").unwrap_or_default();
+    if let Claim::Held(reason) = claim_seat(&cwd, &path, &session) {
+        println!(
+            "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
+             \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
+             \"This seat is already claimed (locked: {}). Seats are first \
+             come, first served — run `cargo xtask seats` and take a free \
+             letter instead of retrying this one (CLAUDE.md \
+             ビルド・テスト).\"}}}}",
+            printable(&reason)
+        );
+    }
+    Ok(())
+}
+
+/// The roster letter `path` points into, if it is a seat's tree at all.
+fn roster_seat(path: &str) -> Option<&'static str> {
+    let root = worktree_root(path)?;
+    let name = root.rsplit('/').next()?;
+    SEATS.iter().find(|seat| **seat == name).copied()
+}
+
+/// How an attempt to claim a seat came out.
+enum Claim {
+    /// Locked by us now, or in some state git could not judge — the tool
+    /// call itself will surface whatever is actually wrong.
+    OursOrMoot,
+    /// Somebody holds it: the lock's reason, possibly empty.
+    Held(String),
+}
+
+/// One atomic claim: `git worktree lock` refuses a second lock, so the
+/// loser of a race is told here and not after settling in.
+fn claim_seat(cwd: &str, seat_path: &str, session: &str) -> Claim {
+    let reason = format!("{SEAT_CLAIM} {session}");
+    let mut command = std::process::Command::new("git");
+    command
+        .arg("-C")
+        .arg(cwd)
+        .args(["worktree", "lock", "--reason", &reason, seat_path]);
+    let Ok(output) = crate::run_captured(&mut command) else {
+        return Claim::OursOrMoot;
+    };
+    if output.status.success() {
+        return Claim::OursOrMoot;
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if let Some(rest) = stderr.split("already locked").nth(1) {
+        let reason = rest
+            .split_once("reason:")
+            .map(|(_, reason)| reason.trim().to_string())
+            .unwrap_or_default();
+        return Claim::Held(reason);
+    }
+    Claim::OursOrMoot
+}
+
+/// A string sanitized for splicing into the hook's hand-built JSON:
+/// everything that could end the string or the payload early is dropped.
+fn printable(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            '"' | '\\' => '\'',
+            '\n' | '\r' | '\t' => ' ',
+            other => other,
+        })
+        .collect()
+}
+
+/// The reason on this worktree's own lock, if it is locked at all.
+fn lock_reason(cwd: &str) -> Option<String> {
+    let git_dir = git_query(cwd, &["rev-parse", "--path-format=absolute", "--git-dir"])?;
+    let reason = std::fs::read_to_string(format!("{git_dir}/locked")).ok()?;
+    Some(reason.trim().to_string())
+}
+
+/// SessionEnd: a seat claimed by this session is handed back. A lock
+/// somebody else wrote stays — ending inside a seat that was never ours
+/// is the collision case, not a reason to free it.
+fn session_end(input: &str) -> Result<(), String> {
+    let cwd = string_field(input, "cwd").unwrap_or_default();
+    if roster_seat(&cwd).is_none() {
+        return Ok(());
+    }
+    let session = string_field(input, "session_id").unwrap_or_default();
+    if session.is_empty() {
+        return Ok(());
+    }
+    if lock_reason(&cwd).is_some_and(|reason| reason.contains(&session))
+        && git_query(&cwd, &["worktree", "unlock", &cwd]).is_none()
+    {
+        // Nobody is left to tell; the stale mark in `cargo xtask seats`
+        // is the fallback.
     }
     Ok(())
 }
@@ -811,6 +1003,10 @@ fn session_start(input: &str) -> Result<(), String> {
         Some(root) => {
             let name = root.rsplit('/').next().unwrap_or_default();
             if SEATS.contains(&name) {
+                let session = string_field(input, "session_id").unwrap_or_default();
+                if let Some(note) = claim_at_start(&cwd, &session) {
+                    println!("{note}");
+                }
                 if let Some(stand) = seat_stand(&cwd, &seats) {
                     println!("{stand}");
                 }
@@ -826,6 +1022,35 @@ fn session_start(input: &str) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// A session that starts inside an unclaimed seat claims it, so the
+/// `claude --worktree <letter>` road is covered the same way EnterWorktree
+/// is. A seat locked by somebody else gets a warning, not a fight.
+fn claim_at_start(cwd: &str, session: &str) -> Option<String> {
+    match lock_reason(cwd) {
+        None => {
+            let reason = format!("{SEAT_CLAIM} {session}");
+            let mut command = std::process::Command::new("git");
+            command
+                .arg("-C")
+                .arg(cwd)
+                .args(["worktree", "lock", "--reason", &reason, cwd]);
+            if crate::run_captured(&mut command).is_err() {
+                // A claim that could not be written is a survey concern;
+                // the greeting still says where the seat stands.
+            }
+            None
+        }
+        Some(reason) if !session.is_empty() && reason.contains(session) => None,
+        Some(reason) => Some(format!(
+            "This seat is locked by another session ({reason}). If \
+             `cargo xtask seats` shows it active (fresh index-age, dirty \
+             files), move to a free seat with EnterWorktree; only a claim \
+             whose session is clearly gone is lifted, with `git worktree \
+             unlock` on this seat's path."
+        )),
+    }
 }
 
 /// One line about the seat this session sits in. A merged seat starts
@@ -914,7 +1139,21 @@ fn seat_buckets(survey: &[seats::Seat]) -> SeatBuckets {
             continue;
         };
         if state.locked {
-            buckets.in_use.push(format!("{name} (locked)"));
+            // A claim outlives a session that died with it: index-age is
+            // the tell, and hours of stillness under a lock reads as a
+            // leftover, not a session.
+            let idle = state
+                .index_age
+                .filter(|age| age.as_secs() >= 3600)
+                .map(|age| {
+                    format!(
+                        ", idle {} — stale? `git worktree unlock \
+                         .claude/worktrees/{name}` if its session is gone",
+                        seats::format_age(Some(age))
+                    )
+                })
+                .unwrap_or_default();
+            buckets.in_use.push(format!("{name} (locked{idle})"));
             continue;
         }
         match (state.ahead, state.behind, state.dirty) {
@@ -1003,8 +1242,8 @@ fn string_field(input: &str, key: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        Offence, commit, launch_objections, names_shared_rules, qml_font_notes, reflection,
-        resolve, seat_buckets, string_field, worktree_objection,
+        Offence, broad_kill, commit, launch_objections, names_shared_rules, qml_font_notes,
+        reflection, resolve, seat_buckets, string_field, worktree_objection,
     };
     use crate::seats::{Seat, SeatState, worktree_root};
 
@@ -1179,6 +1418,97 @@ mod tests {
             Some(Offence::LandsOnMain {
                 only_from_main: false
             })
+        );
+    }
+
+    #[test]
+    fn flags_the_landing_verb_and_reads_its_raw_form_too() {
+        for command in [
+            "cargo xtask land",
+            "cargo xtask land worktree-a",
+            "cargo run --quiet -p xtask -- land worktree-a",
+        ] {
+            let landing = reflection(command);
+            assert!(
+                landing.as_ref().is_some_and(|r| r.what.contains("land")),
+                "{command}"
+            );
+        }
+        for command in [
+            "cargo xtask seats",
+            "cargo xtask launch",
+            "git commit -m \"xtask land notes\"",
+        ] {
+            assert!(reflection(command).is_none(), "{command}");
+        }
+    }
+
+    #[test]
+    fn holds_kills_that_reach_past_this_tree() {
+        for command in [
+            "taskkill /F /IM platitude-gg.exe",
+            "Stop-Process -Name platitude-gg -Force",
+            "Get-Process platitude-gg | ForEach-Object { $_.Kill() }",
+            "pkill -9 platitude-gg",
+            "killall platitude-gg",
+            "wmic process where \"name='platitude-gg.exe'\" delete",
+        ] {
+            assert!(broad_kill(command), "{command}");
+        }
+    }
+
+    #[test]
+    fn lets_scoped_and_unrelated_kills_through() {
+        for command in [
+            // The one hand-written scoped shape: pinned to a tree's path.
+            "Get-Process platitude-gg -ErrorAction SilentlyContinue | \
+             Where-Object { $_.Path -like \"*worktrees\\a*\" } | \
+             ForEach-Object { $_.Kill() }",
+            // Precise by pid, and the sanctioned verb.
+            "taskkill /F /PID 1234",
+            "cargo xtask kill",
+            "kill -9 4321",
+            "pkill -f some-other-tool",
+        ] {
+            assert!(!broad_kill(command), "{command}");
+        }
+    }
+
+    #[test]
+    fn knows_a_seat_path_from_the_rest() {
+        use super::roster_seat;
+        assert_eq!(
+            roster_seat("C:\\x\\platitude-gg\\.claude\\worktrees\\a"),
+            Some("a")
+        );
+        assert_eq!(
+            roster_seat("C:/x/platitude-gg/.claude/worktrees/b/crates"),
+            Some("b")
+        );
+        assert_eq!(
+            roster_seat("C:/x/platitude-gg/.claude/worktrees/tooltip"),
+            None
+        );
+        assert_eq!(roster_seat("C:/x/platitude-gg"), None);
+    }
+
+    #[test]
+    fn sanitizes_a_lock_reason_for_the_json_it_rides_in() {
+        use super::printable;
+        assert_eq!(
+            printable("claude-seat abc\"def\\x\ny"),
+            "claude-seat abc'def'x y"
+        );
+    }
+
+    #[test]
+    fn objects_to_an_xtask_launch_only_for_its_window() {
+        let objections = launch_objections("cargo xtask launch", IN_WORKTREE);
+        assert_eq!(objections.len(), 1, "{objections:?}");
+        assert!(objections[0].contains("real window"));
+        assert!(
+            launch_objections("cargo xtask launch", PRIMARY).is_empty(),
+            "a primary-checkout launch is the user's own"
         );
     }
 
