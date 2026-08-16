@@ -77,6 +77,7 @@ StashActionsBand 1.0 StashActionsBand.qml
 StashOptionsCard 1.0 StashOptionsCard.qml
 SummaryArea 1.0 SummaryArea.qml
 TabItemDelegate 1.0 TabItemDelegate.qml
+TabStrip 1.0 TabStrip.qml
 TopBar 1.0 TopBar.qml
 TreeViewToggle 1.0 TreeViewToggle.qml
 WindowAutoActDriver 1.0 WindowAutoActDriver.qml

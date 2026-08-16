@@ -24,22 +24,17 @@ Rectangle {
     /// Automation: what the band came out to. A layout change can lose the
     /// window's own buttons, or the run of band left to take hold of, or
     /// push either off the end — and none of that shows in a screenshot
-    /// taken where the platform draws no buttons at all.
-    readonly property real bandGrabRun: tabs.grabRun
+    /// taken where the platform draws no buttons at all. The strip's own
+    /// readings come back through here because the hooks ask the band
+    /// rather than the strip (`WindowAutoActDriver`).
+    readonly property real bandGrabRun: tabStrip.grabRun
     readonly property real bandButtonsX: minimizeButton.x
     readonly property real bandRightMargin: bandRow.anchors.rightMargin
-    /// What the strip itself came out to. A broken term in its width
-    /// expression turns it NaN, and NaN draws as "no tabs at all" with
-    /// nothing on stderr — this is the number that catches it.
-    readonly property real bandTabsWidth: tabs.width
-    /// Automation: the run the tabs were handed, and what they made of it.
-    /// A picture cannot say which tabs gave way and which were left alone
-    /// — every strip that fits looks like every other one — so the widths
-    /// themselves are the answer (`PG_AUTO_ACT=tab-widths`).
-    readonly property int bandTabCount: tabs.count
-    readonly property real bandTabRun: tabs.runAvail
-    readonly property real bandTabContent: tabs.contentWidth
-    readonly property bool bandTabScrolls: tabs.contentWidth > tabs.width
+    readonly property real bandTabsWidth: tabStrip.tabsWidth
+    readonly property int bandTabCount: tabStrip.tabCount
+    readonly property real bandTabRun: tabStrip.runAvail
+    readonly property real bandTabContent: tabStrip.contentWidth
+    readonly property bool bandTabScrolls: tabStrip.contentWidth > tabStrip.tabsWidth
     /// Automation: what the command log's mark came out to — the band's
     /// own reading of the log and the error line together, and the colour
     /// it painted from it. Asked here rather than of the page, because
@@ -227,7 +222,7 @@ Rectangle {
     /// maximised inset, the window resizing) and reports the strip on.
     signal captionStripMoved()
     /// The run itself, for `Main` to measure in scene coordinates.
-    readonly property Item grabRunItem: grabArea
+    readonly property Item grabRunItem: tabStrip.grabRunItem
 
     /// The narrowest this band can be laid out at — one of the two
     /// numbers the window's floor is the larger of (`Main.floorWidth`).
@@ -272,72 +267,15 @@ Rectangle {
         AppBackend.report("push_hold mode=" + pushButton.mode)
     }
 
-    /// The left button picks the tab up, the middle one closes it
-    /// (デザイン規約 §タブの所作). The real press and the smoke hook both
-    /// come through here.
-    function pressTab(index, id, button) {
-        if (button === Qt.MiddleButton)
-            topBar.tabsModel.closeTab(id)
-        else
-            topBar.tabsModel.setCurrentIndex(index)
-    }
-
-    /// Automation: the middle click, landed on the tab at `index`
-    /// (`PG_AUTO_ACT=middle-close`).
-    function middleClickTab(index) {
-        const tab = tabs.itemAtIndex(index)
-        if (tab)
-            topBar.pressTab(index, tab.tab_id, Qt.MiddleButton)
-    }
-
-    /// Automation: the paths rather than the titles — every demo
-    /// repository is called the same thing, and a strip of one name
-    /// proves nothing.
-    function tabPaths() {
-        let paths = []
-        for (let i = 0; i < tabs.count; i++) {
-            const tab = tabs.itemAtIndex(i)
-            if (tab)
-                paths.push(tab.repo_path)
-        }
-        return paths.join(",")
-    }
-
-    /// Automation: the path a tab was opened with, spelled the way the
-    /// strip has it (`PG_AUTO_ACT=open-again`).
-    function tabPathAt(index) {
-        const tab = tabs.itemAtIndex(index)
-        return tab ? tab.repo_path : ""
-    }
-
-    /// Automation: every tab's width, in the order they sit in
-    /// (`PG_AUTO_ACT=tab-widths`).
-    function tabWidths() {
-        let widths = []
-        for (let i = 0; i < tabs.count; i++) {
-            const tab = tabs.itemAtIndex(i)
-            widths.push(tab ? Math.round(tab.width) : 0)
-        }
-        return widths.join(",")
-    }
-
-    /// Automation: the pointer, set down on the tab at `index` — the half
-    /// no headless run can reach any other way (`PG_AUTO_ACT=tab-mark`).
-    function pointAtTab(index) {
-        const tab = tabs.itemAtIndex(index)
-        if (tab)
-            tab.pointed = true
-    }
-
-    /// Automation: which tabs have their mark out, in strip order.
-    function tabMarks() {
-        let marks = []
-        for (let i = 0; i < tabs.count; i++) {
-            const tab = tabs.itemAtIndex(i)
-            marks.push(tab ? tab.markShown : 0)
-        }
-        return marks.join(",")
-    }
+    /// Automation: the strip's own hooks, handed on. What `Main` and
+    /// `WindowAutoActDriver` hold is the band, so the way in stays here
+    /// after the tabs themselves have gone (`TabStrip`).
+    function middleClickTab(index) { tabStrip.middleClickTab(index) }
+    function tabPaths() { return tabStrip.tabPaths() }
+    function tabPathAt(index) { return tabStrip.tabPathAt(index) }
+    function tabWidths() { return tabStrip.tabWidths() }
+    function pointAtTab(index) { tabStrip.pointAtTab(index) }
+    function tabMarks() { return tabStrip.tabMarks() }
 
     /// The word both toolbar buttons are measured for: one box for the
     /// pair keeps either from shifting the other, and which wording is
@@ -381,97 +319,12 @@ Rectangle {
         text: "push -f"
     }
 
-    /// The longest a tab's name is ever drawn (デザイン規約 レイアウト初期値).
-    readonly property int tabTitleMaxW: 180
-    /// The shortest, in characters rather than pixels (同表): the same
-    /// count costs a different number of pixels in each platform's UI
-    /// font and at every scaling, so the length comes out of the font.
-    readonly property int tabTitleMinChars: 3
-    readonly property int tabTitleMinW:
-        Math.ceil(tabTitleFont.advanceWidth("…")
-                  + topBar.tabTitleMinChars * tabTitleFont.averageCharacterWidth)
-    /// What every tab's name is capped at right now — the strip's answer
-    /// to how much room it was given (`settleTitleCap`).
-    property real tabTitleCap: topBar.tabTitleMaxW
-    /// What the strip would take with nothing cut (`settleTitleCap`), and
-    /// the least it is ever laid out at. Two tabs, not one (2026-08-11
-    /// ユーザー指示、規約 §ウィンドウの縁).
-    property real tabsWantWidth: 0
-    readonly property int tabStripFloorW:
-        menuButton.width + plusButton.width + tabs.grabRun
-        + 2 * (tabs.tabFixedW + topBar.tabTitleMinW)
-    FontMetrics {
-        id: tabTitleFont
-        font.family: Theme.uiFamily
-        font.pixelSize: Theme.fontMd
-    }
-
-    /// Hands the run out among the tab names, the longest giving way last
-    /// (デザイン規約 §ウィンドウの縁); below `tabTitleMinW` the strip
-    /// scrolls instead. Settled by hand rather than bound: the widths are
-    /// read off a list of items, and a binding cannot see one of those
-    /// arrive. Whole pixels throughout: a strip sized off fractional
-    /// widths comes out a pixel over the run it was told to fit in, which
-    /// is a strip that scrolls when nothing is out of room (実測
-    /// content=897 against run=896 without the rounding).
-    function settleTitleCap() {
-        let want = []
-        for (let i = 0; i < titleMeasure.count; i++) {
-            const label = titleMeasure.itemAt(i)
-            if (label)
-                want.push(Math.min(Math.ceil(label.implicitWidth),
-                                   topBar.tabTitleMaxW))
-        }
-        // What the row is asked for, so the band's leftover is shared
-        // with the state group in proportion — asking for the floor
-        // instead had the tabs down to three characters beside two whole
-        // badges (reported 2026-08-11). Measured off the same hidden
-        // labels the cap is, so it does not move with the run it is about
-        // to be handed.
-        topBar.tabsWantWidth =
-            menuButton.width + plusButton.width + tabs.grabRun
-            + want.reduce((sum, w) => sum + w, 0)
-            + want.length * tabs.tabFixedW
-        if (want.length === 0) {
-            topBar.tabTitleCap = topBar.tabTitleMaxW
-            return
-        }
-        want.sort((a, b) => a - b)
-        let left = Math.floor(tabs.runAvail) - want.length * tabs.tabFixedW
-        let cap = topBar.tabTitleMaxW
-        for (let i = 0; i < want.length; i++) {
-            const share = Math.floor(left / (want.length - i))
-            if (want[i] > share) {
-                cap = share
-                break
-            }
-            left -= want[i]
-        }
-        topBar.tabTitleCap = Math.max(topBar.tabTitleMinW,
-                                      Math.min(cap, topBar.tabTitleMaxW))
-    }
-
-    /// The names at their natural width, off screen. The strip's own
-    /// labels are the ones being capped, so they cannot also be what the
-    /// cap is measured from. These carry the font the strip draws in —
-    /// the heavier weight the current tab is set in included, which is
-    /// wider — so what comes back is the width the strip will ask for.
-    Repeater {
-        id: titleMeasure
-        model: topBar.tabsModel
-        onCountChanged: topBar.settleTitleCap()
-        delegate: Label {
-            required property int index
-            required property string title
-
-            visible: false
-            text: title
-            font.weight: topBar.tabsModel.currentIndex === index
-                         ? Font.DemiBold : Font.Normal
-            onImplicitWidthChanged: topBar.settleTitleCap()
-            Component.onCompleted: topBar.settleTitleCap()
-        }
-    }
+    /// Automation: what the strip made of the run it was handed, and the
+    /// two ends it was settled between (`PG_AUTO_ACT=tab-widths` /
+    /// `badges`). Re-exposed for the reason the band's other readings are.
+    readonly property real tabTitleCap: tabStrip.tabTitleCap
+    readonly property int tabTitleMinW: tabStrip.tabTitleMinW
+    readonly property int tabTitleMaxW: tabStrip.tabTitleMaxW
 
     implicitHeight: Theme.toolbarHeight
     color: Theme.bgElevated
@@ -486,200 +339,27 @@ Rectangle {
         // edge). `spaceXs` lands it flush instead.
         anchors.rightMargin: topBar.captionMerged ? Theme.spaceXs : Theme.spaceMd
         spacing: Theme.spaceXs
-        // The strip. Placed by hand rather than by a Row so the leftover
-        // is measurable — it is both what the tabs may grow into and
-        // where the window is taken hold of. No TabBar: full geometry
-        // control is what puts the selected tab's underline exactly on
-        // the band's bottom edge with no styling leftovers beneath it.
-        Item {
+        TabStrip {
             id: tabStrip
+            tabsModel: topBar.tabsModel
+            captionMerged: topBar.captionMerged
+            curPage: topBar.curPage
             Layout.fillWidth: true
             Layout.fillHeight: true
-            implicitWidth: topBar.tabsWantWidth
-            Layout.minimumWidth: topBar.tabStripFloorW
+            Layout.minimumWidth: tabStrip.tabStripFloorW
             // The band's order when it runs short: the tab names narrow
             // together, then the state group's words do, then the strip
             // scrolls, then the group becomes a mark (2026-08-11
             // ユーザー指示) — a stretch this much larger than the group's
             // puts the strip at the front of both queues.
             Layout.horizontalStretchFactor: 100
-            // App menu; most entries are placeholders until their phases
-            // land. Sized as the head of the folded sidebar's column —
-            // `railWidth` wide, the rail cells' wash — so this mark and
-            // the section marks under it stand on one line (デザイン規約
-            // §寸法).
-            ToolButton {
-                id: menuButton
-                width: Theme.railWidth
-                height: tabStrip.height
-                padding: 0
-                hoverEnabled: true
-                Accessible.name: qsTr("Application menu")
-                // Written out instead of borrowing HoverToolButton: an
-                // open menu keeps the wash, which no hover of its own can
-                // say — what is on screen has to say which mark put it
-                // there (`NavRail`).
-                background: Rectangle {
-                    color: menuButton.hovered || appMenu.opened
-                           ? Theme.bgHover : "transparent"
-                }
-                contentItem: Item {
-                    NavIcon {
-                        anchors.centerIn: parent
-                        width: Theme.iconLg
-                        height: Theme.iconLg
-                        kind: "menu"
-                        tint: Theme.textPrimary
-                    }
-                }
-                onClicked: appMenu.open()
-                AppMenu {
-                    id: appMenu
-                    // A full-height cell ends where the band does, so the
-                    // card would otherwise open on top of the divider.
-                    y: menuButton.height + Theme.splitterWidth
-                    AppMenuItem {
-                        text: qsTr("Open repository…")
-                        onTriggered: topBar.openRepositoryRequested()
-                    }
-                    AppMenuItem {
-                        text: qsTr("Clone repository…")
-                        enabled: false
-                    }
-                    AppMenuSeparator {}
-                    // A local re-read (no network), for where the on-tick
-                    // refresh cannot reach.
-                    AppMenuItem {
-                        text: qsTr("Reload")
-                        enabled: topBar.curPage !== null
-                        onTriggered: topBar.curPage.pageTab.refreshAll()
-                    }
-                    AppMenuSeparator {}
-                    AppMenuItem {
-                        text: qsTr("Identity…")
-                        onTriggered: topBar.identityEditRequested()
-                    }
-                    AppMenuItem {
-                        text: qsTr("Settings…")
-                        onTriggered: topBar.settingsRequested()
-                    }
-                    AppMenuItem {
-                        text: qsTr("About Platitude GG")
-                        enabled: false
-                    }
-                    AppMenuSeparator {}
-                    AppMenuItem {
-                        text: qsTr("Exit")
-                        onTriggered: Qt.quit()
-                    }
-                }
-            }
-            // As wide as the tabs it holds, up to what the strip has left;
-            // past that it scrolls. The tabs narrow before it comes to
-            // that (`settleTitleCap`), so the scrolling starts where they
-            // can give no more.
-            ListView {
-                id: tabs
-                x: menuButton.width
-                height: tabStrip.height
-                /// Band the tabs may not grow into: the empty run past the
-                /// last tab is the only place left to take hold of the
-                /// window, so opening one more tab may not squeeze it to
-                /// nothing.
-                readonly property real grabRun: topBar.captionMerged
-                                                ? 2 * Theme.railWidth : 0
-                /// The run the tabs share out between them; the width
-                /// below and the cap both read this one expression.
-                //
-                // `tabs.grabRun` stays qualified: an unqualified name here
-                // reads whatever id happens to share it — ids outrank the
-                // enclosing object's own properties — and an Item minus a
-                // number is NaN, which took the whole strip's width with
-                // it once (no tabs drawn, nothing said why).
-                readonly property real runAvail:
-                    Math.max(0, tabStrip.width - menuButton.width
-                                - plusButton.width - tabs.grabRun)
-                onRunAvailChanged: {
-                    topBar.settleTitleCap()
-                    // The state group folds off this strip's width as well
-                    // as its own, and the two do not always change in the
-                    // same frame.
-                    stateGroup.settleCap()
-                }
-                /// The air a tab is set in (デザイン規約 §余白; the
-                /// delegate below carries the reasoning).
-                readonly property int markAir: (Theme.iconLg - Theme.iconSm) / 2
-                                               + Theme.spaceXs
-                readonly property real tabPadW: Theme.spaceSm
-                                                + (Theme.spaceSm - tabs.markAir)
-                /// What a tab costs before its name has a single letter in
-                /// it — that air, and the mark at its end.
-                readonly property real tabFixedW: tabs.tabPadW + Theme.iconLg
-                width: Math.max(0, Math.min(contentWidth, tabs.runAvail))
-                orientation: ListView.Horizontal
-                // Hard stop at the ends, as everywhere else that scrolls
-                // (デザイン規約 §QML 実装ルール).
-                boundsBehavior: Flickable.StopAtBounds
-                clip: true
-                // Wheel only. Left interactive, the view watches every
-                // press for a drag and steals the grab at the platform's
-                // threshold (4px on Windows), so a click with a little
-                // sideways motion cancels the tab's own MouseArea instead
-                // of switching (reported as "the tab stopped taking the
-                // first click").
-                interactive: false
-                // Every delegate stays alive however far the strip is
-                // scrolled: the automation walks the items (`tabPaths` /
-                // `middleClickTab`), and a released delegate answers with
-                // null. Tabs are counted in ones, so this costs nothing.
-                cacheBuffer: 65536
-                // A plain wheel only ever reports "vertical", so either
-                // axis moves the strip sideways.
-                WheelHandler {
-                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                    onWheel: event => {
-                        const step = event.angleDelta.x !== 0
-                                     ? event.angleDelta.x : event.angleDelta.y
-                        tabs.contentX = Math.max(
-                            0, Math.min(tabs.contentWidth - tabs.width,
-                                        tabs.contentX - step))
-                    }
-                }
-                model: topBar.tabsModel
-                delegate: TabItemDelegate {
-                    id: tabItem
-                    tabsModel: topBar.tabsModel
-                    titleCap: topBar.tabTitleCap
-                    padW: tabs.tabPadW
-                    markAir: tabs.markAir
-                    stripHeight: tabs.height
-                    onTabPressed: button => topBar.pressTab(tabItem.index,
-                                                            tabItem.tab_id,
-                                                            button)
-                }
-            }
-            HoverToolButton {
-                id: plusButton
-                x: tabs.x + tabs.width
-                anchors.verticalCenter: parent.verticalCenter
-                text: "+"
-                font.pixelSize: Theme.fontLg
-                onClicked: topBar.openRepositoryRequested()
-            }
-            // The run of empty band past the last tab. The hit test
-            // answers HTCAPTION for this rectangle (`winframe::hit_test`),
-            // so a press here never reaches the scene and every gesture is
-            // the platform's own. No handlers — the scene's only job is
-            // saying where the run is.
-            Item {
-                id: grabArea
-                x: plusButton.x + plusButton.width
-                width: Math.max(0, tabStrip.width - x)
-                height: tabStrip.height
-                onXChanged: topBar.captionStripMoved()
-                onWidthChanged: topBar.captionStripMoved()
-                Component.onCompleted: topBar.captionStripMoved()
-            }
+            // The state group folds off this strip's width as well as its
+            // own, and the two do not always change in the same frame.
+            onRunAvailChanged: stateGroup.settleCap()
+            onOpenRepositoryRequested: topBar.openRepositoryRequested()
+            onIdentityEditRequested: topBar.identityEditRequested()
+            onSettingsRequested: topBar.settingsRequested()
+            onCaptionStripMoved: topBar.captionStripMoved()
         }
 
         // The state badges give way in the two steps the tab names do
@@ -720,13 +400,14 @@ Rectangle {
             /// and an assignment made in `settleCap` would never be asked
             /// for again (2026-08-11 報告).
             readonly property bool tabsScrolling:
-                tabs.contentWidth > tabs.runAvail
+                tabStrip.contentWidth > tabStrip.runAvail
             /// How many tabs the strip has room for as they are drawn now.
             /// Off their real width rather than their cap: a cap is a
             /// ceiling the names may be nowhere near.
             readonly property int tabsInView: {
-                const each = tabs.count > 0 ? tabs.contentWidth / tabs.count : 0
-                return each > 0 ? Math.floor(tabs.runAvail / each) : 3
+                const each = tabStrip.tabCount > 0
+                             ? tabStrip.contentWidth / tabStrip.tabCount : 0
+                return each > 0 ? Math.floor(tabStrip.runAvail / each) : 3
             }
             readonly property bool folded:
                 stateGroup.cap < topBar.stateBadgeMinW
@@ -734,7 +415,8 @@ Rectangle {
                 || topBar.windowAtFloor
 
             /// The same max-min share the tab names are settled with
-            /// (`settleTitleCap`), settled by hand for the same reason.
+            /// (`TabStrip.settleTitleCap`), settled by hand for the same
+            /// reason.
             function settleCap() {
                 let want = []
                 if (topBar.opBadgeShown)
