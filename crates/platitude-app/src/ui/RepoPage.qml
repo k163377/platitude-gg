@@ -87,9 +87,9 @@ Item {
             if (page.selectedOid !== ""
                     && repoTab.publishRange === page.selectedOid + "^!")
                 page.selectedPublished = repoTab.publishPublished > 0
-            if (page.rebaseRange !== ""
-                    && repoTab.publishRange === page.rebaseRange)
-                page.rebasePublished = repoTab.publishPublished > 0
+            if (refRowMenu.rebaseRange !== ""
+                    && repoTab.publishRange === refRowMenu.rebaseRange)
+                refRowMenu.rebasePublished = repoTab.publishPublished > 0
             page.absorbHeadMessage()
             page.absorbMoveAsk()
             page.absorbWriteResult()
@@ -583,64 +583,25 @@ Item {
     }
 
     // ---- context menu on a sidebar row ------------------------------
-    // `menuRefName` is what the row shows, `menuRefId` what git knows it
-    // by (they differ for a stash: a message and a selector).
-    property string menuRefKind: ""
-    property string menuRefName: ""
-    property string menuRefId: ""
-    property string menuRefOid: ""
-    /// The branch git has just refused to delete, while the menu that
-    /// asked is still standing.
-    property string forceDeleteBranch: ""
-    /// What this menu offers, decided as it opens and held while it
-    /// stands: the conditions are live (a timer fetch alone moves
-    /// `busyCount`), and a row that appears or vanishes under the pointer
-    /// is a row clicked by accident (デザイン規約 §メニュー).
-    property bool menuCanSwitch: false
-    property bool menuCanIntegrateFrom: false
-    property bool menuCanDelete: false
-    /// The remote reading a branch row can also shed (`origin/main`),
-    /// empty where it has none. What the remote-side delete rows name.
-    property string menuRemoteCounterpart: ""
-    property bool menuCanDeleteRemote: false
-    /// Why the delete table's rows are out — decided as the menu opens,
-    /// worn as the rows' `blockedReason` (デザイン規約 §無効).
-    property bool menuOnCurrentBranch: false
-    property bool menuWriteRunning: false
-    readonly property string deleteBlockedOnCurrent:
-        qsTr("Switch away first — this is the branch you are on")
-    readonly property string deleteBlockedWhileBusy:
-        qsTr("Another git command is still running")
+    RefRowMenu {
+        id: refRowMenu
+        repoTab: repoTab
+        workTree: workTree
+        branchesModel: branchesModel
+        onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
+        onDeleteRequested: (kind, id, name, oidHex) =>
+            page.deleteRow(kind, id, name, oidHex)
+        onDropStashRequested: selector => page.dropStashNow(selector)
+        // The settle re-run is for a menu that stood on the stacked
+        // list's row: the list stayed up under it, and whether it stays
+        // now is the pointer's to answer again.
+        onDismissed: rowHost.settleRefList()
+    }
+    /// The one door into that menu: the sidebar's rows, a chip, the
+    /// stacked list and the automation all come through here. Says
+    /// whether it opened.
     function openRefMenu(kind, name, full, oidHex) {
-        page.menuRefKind = kind
-        page.menuRefName = name
-        page.menuRefId = full
-        page.menuRefOid = oidHex
-        page.forceDeleteBranch = ""
-        page.rebasePublished = false
-        page.menuCanSwitch = (kind === "branch" || kind === "remote")
-                             && full !== workTree.branch
-        page.menuCanIntegrateFrom = page.canIntegrateFrom
-        // git refuses to delete the branch the working tree is on; its
-        // remote reading can still be deleted.
-        page.menuCanDelete = repoTab.busyCount === 0
-                             && !(kind === "branch" && full === workTree.branch)
-        page.menuRemoteCounterpart =
-            kind === "branch" ? branchesModel.upstreamOf(full) : ""
-        page.menuCanDeleteRemote = repoTab.busyCount === 0
-                                   && page.menuRemoteCounterpart !== ""
-        page.menuOnCurrentBranch = kind === "branch" && full === workTree.branch
-        page.menuWriteRunning = repoTab.busyCount !== 0
-        if (repoTab.state === "open" && page.rebaseRange !== "")
-            repoTab.checkPublish(page.rebaseRange)
-        // Whether the everyday delete would be refused, asked as the menu
-        // opens: the unmerged answer usually lands before the pointer
-        // does, and the delete row wears `-D` from the start instead of
-        // only after a refused click (§左メニューの所作). The chip
-        // column is settled at open, so the swap moves no other row.
-        if (repoTab.state === "open" && kind === "branch" && page.menuCanDelete)
-            repoTab.checkBranchDelete(full)
-        return refMenu.offer()
+        return refRowMenu.offerOn(kind, name, full, oidHex)
     }
 
     /// A chip's right-click: the ref menu for the name the chip shows. A
@@ -664,173 +625,6 @@ Item {
                   : tagsModel.oidOfName(name)
         if (!page.openRefMenu(kind, name, name, oid) && oidHex !== "")
             page.openRowMenu(oidHex)
-    }
-
-    // ---- bringing two lines of history together --------------------
-    readonly property bool canIntegrateFrom:
-        repoTab.state === "open" && repoTab.busyCount === 0
-        && !workTree.detached && workTree.branch !== ""
-        && workTree.opText === ""
-        && page.menuRefId !== "" && page.menuRefId !== workTree.branch
-    /// The commits a rebase onto this row would rewrite. Asked as the
-    /// menu opens — the answer is a whole git call away.
-    readonly property string rebaseRange:
-        (page.menuRefKind === "branch" || page.menuRefKind === "remote")
-        && page.menuRefId !== "" ? page.menuRefId + "..HEAD" : ""
-    property bool rebasePublished: false
-    AppMenu {
-        id: refMenu
-        // Walking away from a refused delete takes the offer with it.
-        // The settle re-run is for a menu that stood on the stacked
-        // list's row: the list stayed up under it, and whether it stays
-        // now is the pointer's to answer again.
-        onClosed: {
-            page.forceDeleteBranch = ""
-            rowHost.settleRefList()
-        }
-        AppMenuItem {
-            code: "switch"
-            offered: page.menuCanSwitch
-            // Through the chips' dispatcher: a remote branch whose local
-            // one already exists cannot simply be created.
-            onTriggered: page.switchToRef(page.menuRefKind === "remote" ? "R" : "L",
-                                          page.menuRefId)
-        }
-        AppMenuItem {
-            code: "merge"
-            //: Follows the `merge` chip: "merge into main".
-            text: qsTr("into %1").arg(workTree.branch)
-            offered: (page.menuRefKind === "branch"
-                      || page.menuRefKind === "remote"
-                      || page.menuRefKind === "tag")
-                     && page.menuCanIntegrateFrom
-            onTriggered: repoTab.merge(page.menuRefId, false, false, "")
-        }
-        AppMenuItem {
-            code: "rebase"
-            //: Follows the `rebase` chip: "rebase main onto it".
-            text: qsTr("%1 onto it").arg(workTree.branch)
-            // Deliberately not offered on a tag — that row belongs with
-            // the tag's own gestures.
-            offered: (page.menuRefKind === "branch"
-                      || page.menuRefKind === "remote")
-                     && page.menuCanIntegrateFrom
-            // Said, not asked (要望: rewriting a pushed commit shows a
-            // warning). Published = reachable from a remote-tracking ref,
-            // only as fresh as the last fetch.
-            note: page.rebasePublished ? qsTr("rewrites pushed commits") : ""
-            onTriggered: repoTab.rebase(page.menuRefId, "", true)
-        }
-        AppMenuSeparator {}
-        AppMenuItem {
-            id: refDeleteItem
-            // Alone in this menu the delete re-states its target: during
-            // the hold the name of what is about to go has to be readable
-            // on the row itself (デザイン規約 §メニュー 言い直さない、の例外).
-            readonly property bool stashRow: page.menuRefKind === "stash"
-            readonly property bool remoteRow: page.menuRefKind === "remote"
-            readonly property bool tagRow: page.menuRefKind === "tag"
-            readonly property bool branchRow: page.menuRefKind === "branch"
-            // git already refused `--delete` while this menu stood — or
-            // the check run at open came back unmerged, the same answer a
-            // click ahead of time (§左メニューの所作).
-            readonly property bool refusedRow:
-                branchRow
-                && (page.forceDeleteBranch === page.menuRefId
-                    || (repoTab.branchDeleteAsked === page.menuRefId
-                        && !repoTab.branchDeleteMerged))
-            readonly property bool heldRow: stashRow || remoteRow || tagRow
-                                            || refusedRow
-            code: refusedRow ? "branch -D"
-                : branchRow ? "branch --delete"
-                : tagRow ? "tag --delete"
-                : remoteRow ? "push --delete"
-                : "drop"
-            // The name is data, not sentence: never translated, and it
-            // does not bid for the menu's width (`growsForText`).
-            text: stashRow ? "" : page.menuRefId
-            growsForText: false
-            note: refusedRow ? qsTr("not merged") : ""
-            // On a branch the three delete forms are a fixed table — rows
-            // that cannot be chosen stay and grey out, the app-menu rule
-            // rather than the assembled-menu one (デザイン規約 §メニュー、
-            // 2026-08-11 ユーザー判断): the current branch keeps its rows,
-            // saying why nothing here answers. The other kinds keep the
-            // assembled rule.
-            offered: branchRow || (heldRow && page.menuCanDelete)
-            blockedReason: !branchRow || page.menuCanDelete ? ""
-                         : page.menuOnCurrentBranch ? page.deleteBlockedOnCurrent
-                                                    : page.deleteBlockedWhileBusy
-            holdMs: heldRow ? Metrics.holdMs : 0
-            // A branch's plain delete keeps the menu up: git's answer has
-            // nowhere to land otherwise, and this row is where it lands.
-            staysOpen: branchRow
-            // Reaching past this machine is the warning tone; throwing
-            // away what is in hand is danger (デザイン規約 §状態).
-            holdTone: remoteRow ? Theme.warning : Theme.danger
-            onPicked: page.deleteRow(page.menuRefKind, page.menuRefId,
-                                     page.menuRefName, page.menuRefOid)
-            onHeld: {
-                refMenu.close()
-                if (stashRow)
-                    page.dropStashNow(page.menuRefId)
-                else if (remoteRow)
-                    page.deleteRemoteNow(page.menuRefId)
-                else if (tagRow)
-                    repoTab.deleteTag(page.menuRefId)
-                else
-                    repoTab.deleteBranch(page.menuRefId, true)
-            }
-        }
-        // The branch's remote reading, deleted without touching the local
-        // one — on the current branch the one delete on offer at all
-        // (デザイン規約 §左メニューの所作).
-        AppMenuItem {
-            id: refRemoteDeleteItem
-            code: "push --delete"
-            text: page.menuRemoteCounterpart
-            growsForText: false
-            // In the table only while the branch has a remote reading at
-            // all: a row for a target that does not exist keeps no seat
-            // (2026-08-11 ユーザー判断). Grey is for "not now" — busy —
-            // not for "no such thing".
-            offered: page.menuRefKind === "branch"
-                     && page.menuRemoteCounterpart !== ""
-            blockedReason: page.menuCanDeleteRemote
-                           ? "" : page.deleteBlockedWhileBusy
-            holdMs: Metrics.holdMs
-            holdTone: Theme.warning
-            onHeld: {
-                refMenu.close()
-                page.deleteRemoteNow(page.menuRemoteCounterpart)
-            }
-        }
-        // A composite of two commands is no one command, so words rather
-        // than a chip (§git 用語のコード表記 の 1:1 規則). The local half
-        // runs first and a refusal stops the pair with nothing touched.
-        AppMenuItem {
-            id: refBothDeleteItem
-            text: qsTr("Delete both")
-            note: refDeleteItem.refusedRow ? qsTr("not merged") : ""
-            offered: page.menuRefKind === "branch"
-                     && page.menuRemoteCounterpart !== ""
-            blockedReason: page.menuCanDelete && page.menuCanDeleteRemote ? ""
-                         : page.menuOnCurrentBranch ? page.deleteBlockedOnCurrent
-                                                    : page.deleteBlockedWhileBusy
-            holdMs: Metrics.holdMs
-            holdTone: Theme.warning
-            onHeld: {
-                refMenu.close()
-                const c = page.menuRemoteCounterpart
-                const cut = c.indexOf("/")
-                if (cut < 0)
-                    return
-                repoTab.deleteBranchEverywhere(page.menuRefId,
-                                               c.substring(0, cut),
-                                               c.substring(cut + 1),
-                                               refDeleteItem.refusedRow)
-            }
-        }
     }
 
     // ---- what the sidebar's rows ask for ---------------------------
@@ -911,16 +705,6 @@ Item {
         page.expectedRefusals++
         repoTab.deleteBranch(id, false)
     }
-    /// Held, not asked: git refuses nothing here — the branch is on the
-    /// far side, so no `-d` can weigh what it holds — and the hold stands
-    /// in for that refusal (デザイン規約 §リモートブランチを消す).
-    function deleteRemoteNow(remoteRef) {
-        const cut = remoteRef.indexOf("/")
-        if (cut < 0)
-            return
-        repoTab.deleteRemoteBranch(remoteRef.substring(0, cut),
-                                   remoteRef.substring(cut + 1))
-    }
     /// Held, not asked (デザイン規約 §長押し).
     function dropStashNow(ref) {
         repoTab.dropStash(ref)
@@ -934,7 +718,7 @@ Item {
     /// branch merged into HEAD but not yet pushed is refused while nothing
     /// at all would be lost (実測).
     function noteForceDelete(name) {
-        page.forceDeleteBranch = name
+        refRowMenu.forceDeleteBranch = name
         if (AppBackend.autoAct !== "")
             AppBackend.report("force_delete_offered branch=" + name)
     }
@@ -1042,7 +826,7 @@ Item {
         id: rowHost
         graphPane: graphPane
         currentBranch: workTree.branch
-        menuStanding: refMenu.opened
+        menuStanding: refRowMenu.opened
         onRecordActivated: record => page.activateRecord(record)
         onRecordMenuAsked: record => page.openRecordMenu(record, "")
     }
@@ -1217,8 +1001,8 @@ Item {
             diffPane: diffPane
             wipPane: wipPane
             gitCorner: gitCorner
-            refMenu: refMenu
-            refDeleteItem: refDeleteItem
+            refMenu: refRowMenu.menu
+            refDeleteItem: refRowMenu.deleteItem
             fileRowMenu: fileRowMenu
             fileMenu: fileRowMenu.menu
             fileDiscardItem: fileRowMenu.discardItem
@@ -1287,7 +1071,7 @@ Item {
         if (page.pendingDeleteBranch !== "") {
             page.pendingDeleteBranch = ""
             page.expectedRefusals = Math.max(0, page.expectedRefusals - 1)
-            refMenu.close()
+            refRowMenu.close()
         }
         // The branch took its new name here; the remote it speaks for is
         // still under the old one. Asked only now, and only because there
@@ -2068,7 +1852,7 @@ Item {
                     collapsed: page.sidebarCollapsed
                     // The menus the rows raise are the page's, so only the
                     // page can say one is standing over the folded list.
-                    menuOpen: refMenu.visible
+                    menuOpen: refRowMenu.showing
                     onFoldRequested: collapse => page.foldByHand(collapse)
                     onRefActivated: oidHex => page.jumpToRef(oidHex)
                     onRefMenuRequested: (kind, name, full, oidHex) =>

@@ -60,6 +60,7 @@ OpenFailedScreen 1.0 OpenFailedScreen.qml
 PaneHeader 1.0 PaneHeader.qml
 RefChip 1.0 RefChip.qml
 RefListPopup 1.0 RefListPopup.qml
+RefRowMenu 1.0 RefRowMenu.qml
 RefusalBadge 1.0 RefusalBadge.qml
 RemoteDialog 1.0 RemoteDialog.qml
 RepoPage 1.0 RepoPage.qml
