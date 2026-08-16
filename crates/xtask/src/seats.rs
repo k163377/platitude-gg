@@ -139,9 +139,24 @@ pub(crate) struct SeatEntry {
     pub reason: String,
 }
 
-/// Every roster seat the listing shows, in listing order.
-pub(crate) fn seat_entries(listing: &str) -> Vec<SeatEntry> {
-    let mut seats = Vec::new();
+/// One tree of `git worktree list --porcelain`, as the listing gives it.
+///
+/// Nothing is filtered and the order is the listing's, because the first
+/// entry is the primary checkout and `land` turns on that.
+#[derive(Debug, PartialEq)]
+pub(crate) struct WorktreeBlock {
+    /// The worktree's path, slashes forward, for `git -C`.
+    pub path: String,
+    /// Branch name, empty when HEAD is detached.
+    pub branch: String,
+    pub locked: bool,
+    /// The lock's reason, empty when unlocked or given none.
+    pub reason: String,
+}
+
+/// Every tree the listing shows, in listing order.
+pub(crate) fn worktree_blocks(listing: &str) -> Vec<WorktreeBlock> {
+    let mut blocks = Vec::new();
     for block in listing.split("\n\n") {
         let mut path = None;
         let mut branch = String::new();
@@ -157,24 +172,36 @@ pub(crate) fn seat_entries(listing: &str) -> Vec<SeatEntry> {
                 reason = rest.trim().to_string();
             }
         }
-        let Some(path) = path else {
-            continue;
-        };
-        let Some(seat) = worktree_root(&path).and_then(|root| {
-            let name = root.rsplit('/').next()?.to_string();
-            SEATS.iter().find(|seat| **seat == name).copied()
-        }) else {
-            continue;
-        };
-        seats.push(SeatEntry {
-            seat,
-            path,
-            branch,
-            locked,
-            reason,
-        });
+        if let Some(path) = path {
+            blocks.push(WorktreeBlock {
+                path,
+                branch,
+                locked,
+                reason,
+            });
+        }
     }
-    seats
+    blocks
+}
+
+/// Every roster seat the listing shows, in listing order.
+pub(crate) fn seat_entries(listing: &str) -> Vec<SeatEntry> {
+    worktree_blocks(listing)
+        .into_iter()
+        .filter_map(|block| {
+            let seat = worktree_root(&block.path).and_then(|root| {
+                let name = root.rsplit('/').next()?.to_string();
+                SEATS.iter().find(|seat| **seat == name).copied()
+            })?;
+            Some(SeatEntry {
+                seat,
+                path: block.path,
+                branch: block.branch,
+                locked: block.locked,
+                reason: block.reason,
+            })
+        })
+        .collect()
 }
 
 /// The worktree `cwd` sits in: the path down to the directory named under

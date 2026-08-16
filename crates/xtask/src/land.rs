@@ -10,6 +10,7 @@
 //! in front of it, so the transcript records that the user asked.
 
 use crate::git_query;
+use crate::seats::{WorktreeBlock, worktree_blocks};
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let root = crate::workspace_root();
@@ -40,7 +41,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     let listing =
         git_query(&here, &["worktree", "list", "--porcelain"]).ok_or("git worktree list failed")?;
-    let trees = trees(&listing);
+    let trees = worktree_blocks(&listing);
     let Some(primary) = trees.first() else {
         return Err("git worktree list answered with no trees at all".into());
     };
@@ -105,13 +106,13 @@ fn merge_in(primary: &str, branch: &str) -> Result<(), String> {
 /// Main is checked out nowhere, so the ref can move without leaving any
 /// index behind — but only forward: without a working tree there is no
 /// place for a real merge to happen.
-fn forward_ref(here: &str, primary: &Tree, branch: &str) -> Result<(), String> {
+fn forward_ref(here: &str, primary: &WorktreeBlock, branch: &str) -> Result<(), String> {
     if git_query(here, &["merge-base", "--is-ancestor", "main", branch]).is_none() {
         return Err(format!(
             "main and {branch} have diverged, and main is checked out nowhere \
              (the primary checkout sits on {}) — put the primary back on main \
              (`git switch main` there, with the user) and land again",
-            primary.head_name()
+            head_name(primary)
         ));
     }
     git_query(here, &["fetch", ".", &format!("{branch}:main")])
@@ -123,7 +124,7 @@ fn forward_ref(here: &str, primary: &Tree, branch: &str) -> Result<(), String> {
 /// If the primary checkout was detached exactly at what main now is, put
 /// it back on the branch — its working tree does not move, and the next
 /// land finds main checked out where everyone expects it.
-fn reattach(primary: &Tree) {
+fn reattach(primary: &WorktreeBlock) {
     if !primary.branch.is_empty() {
         return;
     }
@@ -142,55 +143,29 @@ fn reattach(primary: &Tree) {
     }
 }
 
-/// One tree of `git worktree list --porcelain`, first entry the primary.
-struct Tree {
-    path: String,
-    /// Branch name, empty when detached.
-    branch: String,
-}
-
-impl Tree {
-    fn head_name(&self) -> &str {
-        if self.branch.is_empty() {
-            "a detached HEAD"
-        } else {
-            self.branch.as_str()
-        }
+/// What to call the primary checkout's HEAD in a sentence.
+fn head_name(tree: &WorktreeBlock) -> &str {
+    if tree.branch.is_empty() {
+        "a detached HEAD"
+    } else {
+        tree.branch.as_str()
     }
-}
-
-fn trees(listing: &str) -> Vec<Tree> {
-    let mut trees = Vec::new();
-    for block in listing.split("\n\n") {
-        let mut path = None;
-        let mut branch = String::new();
-        for line in block.lines() {
-            if let Some(rest) = line.strip_prefix("worktree ") {
-                path = Some(rest.replace('\\', "/"));
-            } else if let Some(rest) = line.strip_prefix("branch refs/heads/") {
-                branch = rest.to_string();
-            }
-        }
-        if let Some(path) = path {
-            trees.push(Tree { path, branch });
-        }
-    }
-    trees
 }
 
 #[cfg(test)]
 mod tests {
-    use super::trees;
+    use super::head_name;
+    use crate::seats::worktree_blocks;
 
     #[test]
     fn reads_the_primary_first_and_detachment_as_an_empty_branch() {
         let listing = "worktree C:/x/platitude-gg\nHEAD 1111\ndetached\n\n\
                        worktree C:/x/platitude-gg/.claude/worktrees/a\nHEAD 2222\nbranch refs/heads/worktree-a\n";
-        let trees = trees(listing);
+        let trees = worktree_blocks(listing);
         assert_eq!(trees.len(), 2);
         assert_eq!(trees[0].path, "C:/x/platitude-gg");
         assert!(trees[0].branch.is_empty());
-        assert_eq!(trees[0].head_name(), "a detached HEAD");
+        assert_eq!(head_name(&trees[0]), "a detached HEAD");
         assert_eq!(trees[1].branch, "worktree-a");
     }
 }
