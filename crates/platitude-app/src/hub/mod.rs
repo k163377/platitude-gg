@@ -34,6 +34,7 @@ mod tabs;
 pub use feed::{Feed, Feeds, attach_feed, attached};
 pub use msg::{CommandMsg, DiffMsg, GraphMsg, PickMsg, StatusMsg, TabMsg};
 pub use prefs::AvatarUrls;
+pub use tabs::{from_session, with_session};
 
 // The five siblings reach the imports above through `use super::*`,
 // which sees what this module can see -- the block stays whole here

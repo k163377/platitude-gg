@@ -164,7 +164,7 @@ impl NavSectionModel {
         if let Some(feed) = self.worktrees_feed.clone()
             && let Some(list) = feed.drain().pop()
         {
-            let current = Hub::with(|hub| hub.session(self.tab_id).and_then(|s| s.workdir()))
+            let current = crate::hub::from_session(self.tab_id, |s| s.workdir())
                 .flatten()
                 .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
                 .unwrap_or_default();

@@ -70,8 +70,6 @@ impl RepoTab {
         }
         self.tags_shown = shown;
         self.changed();
-        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
-            session.set_include_tags(shown);
-        }
+        self.with_session(|s| s.set_include_tags(shown));
     }
 }

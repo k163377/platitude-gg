@@ -249,6 +249,20 @@ impl Hub {
     }
 }
 
+/// Asks a tab's session something, or answers `None` because there is no
+/// session to ask: a tab that has been closed, or one nobody has looked at
+/// yet ([`Hub::ensure_open`] is what opens one).
+pub fn from_session<R>(tab_id: i32, f: impl FnOnce(&Arc<RepoSession>) -> R) -> Option<R> {
+    let session = Hub::with(|hub| hub.session(tab_id))??;
+    Some(f(&session))
+}
+
+/// The same for telling it to do something, where there being no session
+/// means there is nothing to do.
+pub fn with_session(tab_id: i32, f: impl FnOnce(&Arc<RepoSession>)) {
+    from_session(tab_id, f);
+}
+
 fn minutes_to_interval(minutes: u32) -> Option<std::time::Duration> {
     (minutes > 0).then(|| std::time::Duration::from_secs(u64::from(minutes) * 60))
 }

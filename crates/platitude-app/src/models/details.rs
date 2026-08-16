@@ -290,9 +290,7 @@ impl DetailsModel {
         self.requested_at = Some(Instant::now());
         self.loading = true;
         self.changed();
-        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
-            session.load_details(oid);
-        }
+        crate::hub::with_session(self.tab_id, |s| s.load_details(oid));
     }
 
     #[qslot]

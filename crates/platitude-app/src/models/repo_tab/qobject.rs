@@ -186,9 +186,7 @@ impl RepoTab {
     /// Cheap refresh: refs + status + stashes (window focus, post-op).
     #[qslot]
     fn refresh_quick(&mut self) {
-        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
-            session.refresh_quick();
-        }
+        self.with_session(|s| s.refresh_quick());
     }
 
     /// The tick the page runs while it is on screen: refs + status, and a
@@ -196,18 +194,16 @@ impl RepoTab {
     /// the session is busy are dropped there, not queued.
     #[qslot]
     fn refresh_poll(&mut self) {
-        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
-            session.refresh_poll();
-        }
+        self.with_session(|s| s.refresh_poll());
     }
 
     /// Full refresh: restarts the log stream as well (manual refresh).
     #[qslot]
     fn refresh_all(&mut self) {
-        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
-            session.restart_log();
-            session.refresh_quick();
-        }
+        self.with_session(|s| {
+            s.restart_log();
+            s.refresh_quick();
+        });
     }
 
     #[qslot]

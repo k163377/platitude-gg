@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::hub::{CommandMsg, Feed, Hub};
+use crate::hub::{CommandMsg, Feed};
 
 use super::qml_register;
 
@@ -139,9 +139,7 @@ impl CommandsModel {
     #[qslot]
     fn set_background_reads(&mut self, on: bool) {
         self.background_reads = on;
-        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
-            session.set_record_background(on);
-        }
+        crate::hub::with_session(self.tab_id, |s| s.set_record_background(on));
         self.changed();
     }
 

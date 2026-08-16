@@ -71,9 +71,7 @@ impl Default for RepoTab {
 impl RepoTab {
     /// Runs `f` with this tab's session, if the tab is still open.
     pub(super) fn with_session(&self, f: impl FnOnce(&Arc<platitude_core::session::RepoSession>)) {
-        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
-            f(&session);
-        }
+        crate::hub::with_session(self.tab_id, f);
     }
 
     /// A fetch ended, whoever asked for it. Counts the ones that failed
@@ -109,11 +107,8 @@ impl RepoTab {
         // Whether there was a timer to stop is the answer to "is this a
         // repository that fetches on its own at all": one that does not
         // has nothing suspended, and nothing to be told about it.
-        let mut stopped = false;
-        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
-            stopped = session.suspend_auto_fetch();
-        }
-        self.auto_fetch_suspended = stopped;
+        self.auto_fetch_suspended =
+            crate::hub::from_session(self.tab_id, |s| s.suspend_auto_fetch()).unwrap_or(false);
     }
 
     /// Whether HEAD carries someone else's name — the only case where an

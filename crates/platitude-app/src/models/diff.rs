@@ -12,7 +12,7 @@ use crate::encode::{
     DiffRow, diff_key, flatten_patches, human_size, image_data_url, is_combined, is_new_file,
     is_unmerged_only,
 };
-use crate::hub::{DiffMsg, Feed, Hub};
+use crate::hub::{DiffMsg, Feed};
 
 use super::{impl_extend_notified, impl_notify_runs, qml_register};
 
@@ -391,9 +391,7 @@ impl DiffModel {
             self.reset();
         }
         self.changed();
-        if let Some(Some(session)) = Hub::with(|hub| hub.session(self.tab_id)) {
-            session.load_diff(target);
-        }
+        crate::hub::with_session(self.tab_id, |s| s.load_diff(target));
     }
 
     /// Takes a line-ending notice apart into the pieces its sentence needs.
