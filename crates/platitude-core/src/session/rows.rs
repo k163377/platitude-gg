@@ -46,12 +46,30 @@ pub(super) struct StreamItem {
     pub(super) stash_ref: Option<String>,
 }
 
+impl StreamItem {
+    /// This entry as a display row. The stash selector is what asks for
+    /// the dashed first-parent edge, and is put back onto the row after
+    /// the build — a row carries the selector the operations act on.
+    ///
+    /// The one place a row is built from a sifted entry: the streaming
+    /// pass, the buffered pass and the chunk emitter all come through
+    /// here, and the three of them drawing a stash row differently is the
+    /// bug this shape is here to make impossible.
+    pub(super) fn row(&self, pool: &crate::model::StrPool, builder: &mut GraphBuilder) -> LogRow {
+        let mut row = make_row(&self.meta, pool, builder, self.stash_ref.is_some());
+        if let Some(stash_ref) = &self.stash_ref {
+            row.stash_ref = stash_ref.clone();
+        }
+        row
+    }
+}
+
 /// Filters a parsed batch for display: stash commits keep only their
 /// first-parent edge (the base commit), and their synthetic index /
 /// untracked parent commits are recorded and dropped when they arrive
 /// later (the walk shows no parent before all of its children, so the
 /// stash row always streams first).
-pub(super) fn sift_batch(
+fn sift_batch(
     batch: Vec<CommitMeta>,
     stash_refs: &HashMap<Oid, String>,
     skip: &mut std::collections::HashSet<Oid>,
@@ -72,9 +90,45 @@ pub(super) fn sift_batch(
     }
 }
 
+/// What one pass sifts its batches against, and what they have cost so
+/// far: the stash oids whose extra parents are folded away, the synthetic
+/// parents already spoken for, and the commits the walk has emitted
+/// ([`LogTotals::walked`]).
+///
+/// Both passes drive the sifting through this — the streaming one when a
+/// chunk's worth has piled up, the buffered one on every callback — so
+/// the skip set and the count cannot come apart from the batches that
+/// filled them.
+pub(super) struct Sifter<'a> {
+    stash_refs: &'a HashMap<Oid, String>,
+    skip: std::collections::HashSet<Oid>,
+    /// Commits the walk emitted, batch by batch.
+    pub(super) walked: u32,
+}
+
+impl<'a> Sifter<'a> {
+    pub(super) fn new(stash_refs: &'a HashMap<Oid, String>) -> Self {
+        Self {
+            stash_refs,
+            skip: std::collections::HashSet::new(),
+            walked: 0,
+        }
+    }
+
+    /// Takes everything the parser has produced so far and sifts it for
+    /// display, leaving `pending` empty for the next batch.
+    pub(super) fn take(&mut self, pending: &mut Vec<CommitMeta>) -> Vec<StreamItem> {
+        let batch = std::mem::take(pending);
+        self.walked += batch.len() as u32;
+        let mut items = Vec::with_capacity(batch.len());
+        sift_batch(batch, self.stash_refs, &mut self.skip, &mut items);
+        items
+    }
+}
+
 /// Builds one display row from a commit (labels attached by the caller).
 /// `dashed_edge` draws the first-parent edge dashed (stash rows).
-pub(super) fn make_row(
+fn make_row(
     commit: &CommitMeta,
     pool: &crate::model::StrPool,
     builder: &mut GraphBuilder,

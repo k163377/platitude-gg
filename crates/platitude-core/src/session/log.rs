@@ -1,7 +1,7 @@
 //! The streaming log -> graph pipeline: options, the direct and swap
 //! passes, background refreshes, and chunked row/label delivery.
 
-use super::rows::{LogTotals, StreamItem, make_row, sift_batch, wip_row};
+use super::rows::{LogTotals, Sifter, StreamItem, wip_row};
 use super::*;
 
 impl RepoSession {
@@ -360,7 +360,7 @@ impl RepoSession {
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
-        let mut stash_skip: std::collections::HashSet<Oid> = std::collections::HashSet::new();
+        let mut sifter = Sifter::new(&stash_refs);
         let mut first_sent = false;
         let mut parse_error: Option<String> = None;
         let mut totals = LogTotals::default();
@@ -391,10 +391,7 @@ impl RepoSession {
                     FIRST_CHUNK_ROWS
                 };
                 if pending.len() >= threshold {
-                    let batch = std::mem::take(&mut pending);
-                    totals.walked += batch.len() as u32;
-                    let mut items = Vec::with_capacity(batch.len());
-                    sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
+                    let items = sifter.take(&mut pending);
                     totals.shown += items.len() as u32;
                     first_sent = true;
                     self.emit_rows(generation, &items, parser.pool());
@@ -409,13 +406,11 @@ impl RepoSession {
             .finish()
             .map_err(|e| unreadable_walk(e.to_string()))?;
         if !pending.is_empty() {
-            let batch = std::mem::take(&mut pending);
-            totals.walked += batch.len() as u32;
-            let mut items = Vec::with_capacity(batch.len());
-            sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
+            let items = sifter.take(&mut pending);
             totals.shown += items.len() as u32;
             self.emit_rows(generation, &items, parser.pool());
         }
+        totals.walked = sifter.walked;
         Ok(totals)
     }
 
@@ -460,9 +455,8 @@ impl RepoSession {
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
-        let mut stash_skip: std::collections::HashSet<Oid> = std::collections::HashSet::new();
+        let mut sifter = Sifter::new(&stash_refs);
         let mut parse_error: Option<String> = None;
-        let mut walked: u32 = 0;
 
         let result = self
             .executor
@@ -475,17 +469,8 @@ impl RepoSession {
                     cancel.cancel();
                     return;
                 }
-                let batch = std::mem::take(&mut pending);
-                walked += batch.len() as u32;
-                let mut items = Vec::with_capacity(batch.len());
-                sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
-                for item in items {
-                    let mut row =
-                        make_row(&item.meta, parser.pool(), builder, item.stash_ref.is_some());
-                    if let Some(r) = item.stash_ref {
-                        row.stash_ref = r;
-                    }
-                    out.push(row);
+                for item in &sifter.take(&mut pending) {
+                    out.push(item.row(parser.pool(), builder));
                 }
             })
             .await;
@@ -495,18 +480,10 @@ impl RepoSession {
         parser
             .finish()
             .map_err(|e| unreadable_walk(e.to_string()))?;
-        let batch = std::mem::take(&mut pending);
-        walked += batch.len() as u32;
-        let mut items = Vec::with_capacity(batch.len());
-        sift_batch(batch, &stash_refs, &mut stash_skip, &mut items);
-        for item in items {
-            let mut row = make_row(&item.meta, parser.pool(), builder, item.stash_ref.is_some());
-            if let Some(r) = item.stash_ref {
-                row.stash_ref = r;
-            }
-            out.push(row);
+        for item in &sifter.take(&mut pending) {
+            out.push(item.row(parser.pool(), builder));
         }
-        Ok(walked)
+        Ok(sifter.walked)
     }
 
     /// Sends the synthetic WIP row (dirty working tree) as its own chunk.
@@ -539,15 +516,7 @@ impl RepoSession {
         let shared = &mut *guard;
         let mut rows = Vec::with_capacity(batch.len());
         for item in batch {
-            let mut row = make_row(
-                &item.meta,
-                pool,
-                &mut shared.builder,
-                item.stash_ref.is_some(),
-            );
-            if let Some(r) = &item.stash_ref {
-                row.stash_ref = r.clone();
-            }
+            let mut row = item.row(pool, &mut shared.builder);
             let labels = shared.label_map.labels_of(&item.meta.oid).to_vec();
             if !labels.is_empty() {
                 row.labels = labels.clone();
