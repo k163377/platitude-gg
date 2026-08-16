@@ -15,6 +15,7 @@ mod diff;
 mod graph;
 mod nav;
 mod notify;
+mod pathtree;
 mod repo_tab;
 mod tabs;
 mod worktree;

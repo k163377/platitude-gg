@@ -10,47 +10,24 @@ impl NavSectionModel {
         group: &str,
         out: &mut Vec<Arranged>,
     ) {
-        #[derive(Default)]
-        struct DirNode {
-            dirs: std::collections::BTreeMap<String, DirNode>,
-            /// The source rows sitting in this directory, each with where
-            /// in its path the file's own name begins.
-            files: Vec<(u32, u32)>,
-        }
-        let mut root = DirNode::default();
+        // The leaves are the source rows themselves: an index and where in
+        // its path the file's own name begins, so nothing is copied.
+        let mut root: DirNode<(u32, u32)> = DirNode::default();
         for at in run {
             let Some(of) = self.all.entry(at) else {
                 continue;
             };
-            let mut node = &mut root;
-            let mut rest = of.full();
-            let mut from = 0;
-            while let Some((dir, tail)) = rest.split_once('/') {
-                node = node.dirs.entry(dir.to_string()).or_default();
-                from += dir.len() + 1;
-                rest = tail;
-            }
-            node.files.push((at as u32, from as u32));
+            root.insert(of.full(), |from| (at as u32, from as u32));
         }
         fn emit(
-            node: &DirNode,
+            node: &DirNode<(u32, u32)>,
             group: &str,
             prefix: &str,
             depth: i32,
             overrides: &HashMap<String, bool>,
             out: &mut Vec<Arranged>,
         ) {
-            for (dir_name, child) in &node.dirs {
-                let mut label = dir_name.clone();
-                let mut target = child;
-                while target.files.is_empty() && target.dirs.len() == 1 {
-                    let Some((next_name, next)) = target.dirs.iter().next() else {
-                        break;
-                    };
-                    label.push('/');
-                    label.push_str(next_name);
-                    target = next;
-                }
+            for (label, target) in node.folders() {
                 let path = format!("{prefix}{label}");
                 let key = format!("{group}:{path}");
                 let expanded = overrides.get(&key).copied().unwrap_or(true);
@@ -77,7 +54,7 @@ impl NavSectionModel {
                     );
                 }
             }
-            for (at, from) in &node.files {
+            for (at, from) in node.files() {
                 out.push(Arranged::At {
                     at: *at,
                     depth,

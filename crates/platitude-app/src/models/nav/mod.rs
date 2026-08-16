@@ -10,6 +10,7 @@ use qtbridge::{QAbstractItemModel, QAbstractItemModelBase, QModelItem, QObjectHo
 
 use crate::hub::{Feed, Hub, StatusMsg, attached};
 
+use super::pathtree::DirNode;
 use super::qml_register;
 
 mod field;

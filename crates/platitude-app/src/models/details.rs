@@ -7,6 +7,7 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::hub::{Feed, Hub};
 
+use super::pathtree::DirNode;
 use super::qml_register;
 
 // ---------------------------------------------------------------------------
@@ -46,46 +47,26 @@ impl platitude_core::mem::Footprint for FileItem {
 /// first (alphabetical), single-child directory chains compacted into one
 /// row (`a/b/c`), leaves labeled by their last segment.
 fn build_file_tree(raw: &[FileItem], overrides: &HashMap<String, bool>) -> Vec<FileItem> {
-    #[derive(Default)]
-    struct DirNode {
-        dirs: std::collections::BTreeMap<String, DirNode>,
-        files: Vec<FileItem>,
-    }
     let mut root = DirNode::default();
     for entry in raw {
-        let mut node = &mut root;
-        let mut rest = entry.path.as_str();
-        while let Some((dir, tail)) = rest.split_once('/') {
-            node = node.dirs.entry(dir.to_string()).or_default();
-            rest = tail;
-        }
-        let mut leaf = entry.clone();
-        leaf.name = rest.to_string();
-        // The folders above the row spell this much of its path; a
-        // rename's source gives up the same prefix when it had one.
-        let cut = entry.path.len() - rest.len();
-        leaf.orig_name =
-            crate::encode::rename_source(&entry.orig_path, &entry.path, cut).to_string();
-        node.files.push(leaf);
+        root.insert(&entry.path, |cut| {
+            let mut leaf = entry.clone();
+            leaf.name = entry.path[cut..].to_string();
+            // The folders above the row spell this much of its path; a
+            // rename's source gives up the same prefix when it had one.
+            leaf.orig_name =
+                crate::encode::rename_source(&entry.orig_path, &entry.path, cut).to_string();
+            leaf
+        });
     }
     fn emit(
-        node: &DirNode,
+        node: &DirNode<FileItem>,
         prefix: &str,
         depth: i32,
         overrides: &HashMap<String, bool>,
         out: &mut Vec<FileItem>,
     ) {
-        for (dir_name, child) in &node.dirs {
-            let mut label = dir_name.clone();
-            let mut target = child;
-            while target.files.is_empty() && target.dirs.len() == 1 {
-                let Some((next_name, next)) = target.dirs.iter().next() else {
-                    break;
-                };
-                label.push('/');
-                label.push_str(next_name);
-                target = next;
-            }
+        for (label, target) in node.folders() {
             let key = format!("{prefix}{label}");
             let expanded = overrides.get(&key).copied().unwrap_or(true);
             out.push(FileItem {
@@ -100,7 +81,7 @@ fn build_file_tree(raw: &[FileItem], overrides: &HashMap<String, bool>) -> Vec<F
                 emit(target, &format!("{key}/"), depth + 1, overrides, out);
             }
         }
-        for f in &node.files {
+        for f in node.files() {
             let mut item = f.clone();
             item.depth = depth;
             out.push(item);
