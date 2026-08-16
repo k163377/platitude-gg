@@ -415,99 +415,29 @@ Rectangle {
         }
     }
 
-    // Adjustable column widths (labels / graph); -1 = automatic. The
-    // graph column starts at a default lane count and scrolls
-    // horizontally when the full graph is wider.
-    property real labelWManual: -1
-    property real graphColWManual: -1
-    // The narrowest the chip column goes, and the widest. `spaceXxl` is
-    // where the divider has always refused to be dragged any further in.
-    // The far end is where the two columns after it would stop being able
-    // to say anything: one lane, and enough message column to show that
-    // there is a message (規約 §グラフ列は最も広い所のレーンまで).
-    readonly property real labelColWMin: Theme.spaceXxl
-    readonly property real labelColWMax: Math.max(labelColWMin,
-        width - graphColWMin - Metrics.messageMinW)
-    // The chip column does not give when the pane narrows — the lanes do
-    // (`graphColWMax`), and the window's floor holds this one's width in
-    // reserve (規約 §窓の床). Squeezing it was tried and taken back out:
-    // a column narrower than a chip draws a crushed one, and a column
-    // that follows the pane changes width whenever the left menu folds,
-    // which is a thing moving on screen that nobody asked to move
-    // (2026-08-09 ユーザー報告 — 3 つの症状が全部これだった).
-    //
-    // A column somebody dragged is still held inside what the pane can
-    // lay out: that one is as wide as a hand made it, and the message
-    // column has to survive the window being narrowed afterwards.
-    //
-    // Read back rounded — here and in `graphColW` — because the two
-    // kinds of reader sit on different grids: the rows' ticks are laid
-    // out by RowLayouts, which snap to whole pixels, while the divider
-    // hover lines read these raw. On a fractional width (a drag, or a
-    // fractional floor) the tick and the line straddle the same half
-    // pixel differently and stop meeting (2026-08-11 報告). Rounding
-    // what everyone reads keeps one grid without touching what the
-    // drag wrote down.
-    readonly property real labelW: Math.round(
-        labelWManual >= 0
-        ? Math.max(labelColWMin, Math.min(labelWManual, labelColWMax))
-        : Metrics.labelColW)
-    // The narrowest this pane can be laid out with all three columns still
-    // saying something. The page's floor is built on it (RepoPage), which
-    // is what keeps the window from being dragged past it.
-    readonly property real contentMinW:
-        Metrics.labelColW + graphColWMin + Metrics.messageMinW
-    readonly property real graphFullW: Metrics.laneInset
-                                       + Math.max(1, graphModel.maxLanes) * Metrics.laneW
-                                       + Theme.spaceSm
-    // The narrowest the column goes: the message tick brought up
-    // against lane 0's co-author badge without touching it. The badge
-    // is the widest ink any row puts on that lane, and its geometry —
-    // author up-left by a border, badge centre a border inside the
-    // node's edge, outline half in half out — mirrors what
-    // **GraphRowDelegate's canvases** draw. The ceiling lands that
-    // edge on a whole pixel; the tick stands `spaceSm` past the
-    // column's edge (the subject column's own margin), so that much
-    // comes back off the width. The faces are not cut on the way down:
-    // their clipper leans the same `spaceSm` past the column (the
-    // delegate), so the floor is where ink meets ink, not where the
-    // clip ran out. One place, so the display, the divider's clamp and
-    // the question of whether there is a drag in it at all agree.
-    readonly property real graphColWMin:
-        Math.ceil(Metrics.laneInset + Metrics.laneW / 2
-                  + Metrics.nodeIcon / 2 - 2 * Theme.borderWidth
-                  + (Theme.iconSm + Theme.borderWidth) / 2)
-        - Theme.spaceSm
-    // How far the divider may be pulled: as wide as the lanes ever get,
-    // and no wider — a column past the last lane is emptiness taken from
-    // the message column. A narrow window stops it earlier still, where
-    // the message column would stop showing that a message is there
-    // (規約 §グラフ列は最も広い所のレーンまで).
-    readonly property real graphColWMax: Math.max(graphColWMin,
-        Math.min(graphFullW, width - labelW - Metrics.messageMinW))
-    /// Whether the column is the only width it can be — nothing left
-    /// between its ceiling and its floor but the tail gap. Even a
-    /// one-lane history keeps a real drag now: its full width holds
-    /// the gap after the last lane, the floor tucks the tick against
-    /// the badge, and the stretch between the two does something. The
-    /// divider draws no line and turns the cursor away only when the
-    /// window has squeezed the ceiling down onto the floor and a drag
-    /// would come to nothing (規約 §グラフ列は最も広い所のレーンまで).
-    readonly property bool graphColWFixed: graphColWMax <= graphColWMin + Theme.spaceSm
-    // Rounded for the same one-grid reason as `labelW`.
-    readonly property real graphColW: Math.round(Math.min(graphColWMax,
-        graphColWManual >= 0 ? Math.max(graphColWManual, graphColWMin)
-                             : Metrics.laneInset + Metrics.graphDefaultLanes * Metrics.laneW
-                               + Theme.spaceSm))
-    property real graphX: 0
-    readonly property real graphXMax: Math.max(0, graphFullW - graphColW)
-    onGraphXMaxChanged: graphX = Math.min(graphX, graphXMax)
-    /// Where a subject's first character sits — the two columns, then the
-    /// tick and the gap after it. **Must match GraphRowDelegate's third
-    /// column**, whose RowLayout lays out the same three steps; the find
-    /// bar measures its cap from here (§コミットを探す).
-    readonly property real subjectTextX: labelW + graphColW + Theme.spaceSm
-                                         + 2 * Theme.borderWidth + Theme.spaceXs
+    // The three columns' widths, and how far the lanes have been sent
+    // sideways. Worked out in GraphColumnMetrics; the pane's own name for
+    // each answer is the alias below it, so the rows, the dividers, the
+    // find bar and the page all keep reading them off this pane.
+    GraphColumnMetrics {
+        id: metrics
+        paneW: graphArea.width
+        maxLanes: graphArea.graphModel.maxLanes
+    }
+    property alias labelWManual: metrics.labelWManual
+    property alias graphColWManual: metrics.graphColWManual
+    readonly property alias labelColWMin: metrics.labelColWMin
+    readonly property alias labelColWMax: metrics.labelColWMax
+    readonly property alias labelW: metrics.labelW
+    readonly property alias contentMinW: metrics.contentMinW
+    readonly property alias graphFullW: metrics.graphFullW
+    readonly property alias graphColWMin: metrics.graphColWMin
+    readonly property alias graphColWMax: metrics.graphColWMax
+    readonly property alias graphColWFixed: metrics.graphColWFixed
+    readonly property alias graphColW: metrics.graphColW
+    property alias graphX: metrics.graphX
+    readonly property alias graphXMax: metrics.graphXMax
+    readonly property alias subjectTextX: metrics.subjectTextX
 
     color: Theme.bgSurface
 
@@ -832,87 +762,31 @@ Rectangle {
             }
         }
     }
-    // Middle-click toggles autoscroll mode: the pointer distance from
-    // the anchor sets the speed; any click exits.
-    property bool autoScrolling: false
-    property real autoAnchorX: 0
-    property real autoAnchorY: 0
-    property real autoCurrentX: 0
-    property real autoCurrentY: 0
-    /// Whether this autoscroll carries the lanes sideways as well. Decided
-    /// by where the middle click landed, and kept for the whole gesture
-    /// (デザイン規約 §グラフを横へ送る).
-    property bool autoPanning: false
-    /// Starts autoscroll from a point in this pane's frame. The press and
-    /// the automation hook both come through here, so which column offers
-    /// the sideways drift is answered in exactly one place.
+    /// Whether a middle-click autoscroll is under way, and whether it
+    /// carries the lanes sideways as well — read by the wheel, which ends
+    /// the gesture, and by the automation hook.
+    property alias autoScrolling: autoScroll.scrolling
+    readonly property alias autoPanning: autoScroll.panning
+    /// Starts autoscroll from a point in this pane's frame, and moves the
+    /// pointer of one already under way. The presses and the automation
+    /// hook both come through here.
     function startAutoScroll(x, y) {
-        graphArea.autoAnchorX = x
-        graphArea.autoAnchorY = y
-        graphArea.autoCurrentX = x
-        graphArea.autoCurrentY = y
-        graphArea.autoPanning = x >= graphArea.labelW
-                                && x < graphArea.labelW + graphArea.graphColW
-        graphArea.autoScrolling = true
+        autoScroll.start(x, y)
     }
-    /// Where the pointer has drifted to since. Its distance from the
-    /// anchor is what the ticker below reads as speed — the moving
-    /// pointer and the automation hook write the same two values.
     function driftPointer(x, y) {
-        graphArea.autoCurrentX = x
-        graphArea.autoCurrentY = y
+        autoScroll.drift(x, y)
     }
-    MouseArea {
+    GraphAutoScroll {
+        id: autoScroll
         anchors.fill: parent
-        acceptedButtons: Qt.MiddleButton
-        onClicked: mouse => graphArea.startAutoScroll(mouse.x, mouse.y)
-    }
-    MouseArea {
-        visible: graphArea.autoScrolling
-        anchors.fill: parent
-        hoverEnabled: true
-        acceptedButtons: Qt.AllButtons
-        // The cursor says which ways this gesture goes, so a press that
-        // did not land on the lanes does not look broken when the lanes
-        // stay put under a sideways drift.
-        cursorShape: graphArea.autoPanning ? Qt.SizeAllCursor : Qt.SizeVerCursor
-        onPositionChanged: mouse => graphArea.driftPointer(mouse.x, mouse.y)
-        onPressed: mouse => {
-            graphArea.autoScrolling = false
-            mouse.accepted = true
-        }
-        Timer {
-            running: graphArea.autoScrolling
-            interval: 16
-            repeat: true
-            onTriggered: {
-                const delta = (graphArea.autoCurrentY - graphArea.autoAnchorY)
-                            * Metrics.middleScrollGain
-                graphList.contentY = graphList.clampY(graphList.contentY + delta)
-                if (graphArea.autoPanning && graphArea.graphXMax > 0) {
-                    const dx = (graphArea.autoCurrentX - graphArea.autoAnchorX)
-                             * Metrics.middleScrollGain
-                    graphArea.graphX = Math.max(0, Math.min(graphArea.graphX + dx,
-                                                            graphArea.graphXMax))
-                }
-            }
-        }
-        Rectangle {
-            x: graphArea.autoAnchorX - Theme.iconMd / 2
-            y: graphArea.autoAnchorY - Theme.iconMd / 2
-            width: Theme.iconMd
-            height: Theme.iconMd
-            radius: Theme.iconMd / 2
-            color: "transparent"
-            border.color: Theme.borderStrong
-            border.width: Theme.borderWidth
-            Rectangle {
-                anchors.centerIn: parent
-                width: Theme.spaceXs
-                height: Theme.spaceXs
-                radius: Theme.spaceXs / 2
-                color: Theme.borderStrong
-            }
+        laneFrom: graphArea.labelW
+        laneTo: graphArea.labelW + graphArea.graphColW
+        canPan: graphArea.graphXMax > 0
+        onDrifted: (dy, dx) => {
+            graphList.contentY = graphList.clampY(graphList.contentY + dy)
+            if (dx !== 0)
+                graphArea.graphX = Math.max(0, Math.min(graphArea.graphX + dx,
+                                                        graphArea.graphXMax))
         }
     }
     // Left-drag inside the lanes pans them horizontally when they
@@ -982,61 +856,26 @@ Rectangle {
     }
 
     // Draggable column dividers (labels | graph | message).
-    MouseArea {
+    ColumnDivider {
         id: labelDivider
+        frame: graphArea
         x: graphArea.labelW - Theme.splitterWidth / 2
-        width: Theme.splitterWidth
-        height: parent.height
-        z: 2
         visible: !graphArea.blank
-        hoverEnabled: true
-        cursorShape: Qt.SplitHCursor
-        preventStealing: true
-        onContainsMouseChanged: {
-            graphArea.labelPointed = containsMouse
-            // Entering does not always bring a move with it, and the
-            // badge is drawn where this says the hand is.
-            if (containsMouse)
-                graphArea.labelPoint = labelDivider.mapToItem(null, mouseX, mouseY)
-        }
-        onPositionChanged: mouse => {
-            graphArea.labelPoint = labelDivider.mapToItem(null, mouse.x, mouse.y)
-            if (!pressed)
-                return
-            graphArea.dragLabelTo(mapToItem(graphArea, mouse.x, 0).x)
-        }
+        onPointedInto: inside => graphArea.labelPointed = inside
+        onPointedAt: at => graphArea.labelPoint = at
+        onDragged: x => graphArea.dragLabelTo(x)
     }
-    MouseArea {
+    ColumnDivider {
         id: graphDivider
+        frame: graphArea
         // Sits behind the message tick column so the hover line
         // overlaps the ticks.
         x: graphArea.labelW + graphArea.graphColW + Theme.spaceSm
            + Theme.borderWidth - Theme.splitterWidth / 2
-        width: Theme.splitterWidth
-        height: parent.height
-        z: 2
         visible: !graphArea.blank
-        hoverEnabled: true
-        // The cursor never changes: it is the platform's splitter shape
-        // in both states, and a column that will not move says so with
-        // the badge below instead (規約 §グラフ列は最も広い所のレーン
-        // まで). Swapping in a drawn arrow made the refusal read as a
-        // different tool from the divider one column over.
-        cursorShape: Qt.SplitHCursor
-        preventStealing: true
-        onContainsMouseChanged: {
-            graphArea.dividerPointed = containsMouse
-            // Entering does not always bring a move with it, and the
-            // mark is drawn where this says the hand is.
-            if (containsMouse)
-                graphArea.dividerPoint = graphDivider.mapToItem(null, mouseX, mouseY)
-        }
-        onPositionChanged: mouse => {
-            graphArea.dividerPoint = graphDivider.mapToItem(null, mouse.x, mouse.y)
-            if (!pressed)
-                return
-            graphArea.dragDividerTo(mapToItem(graphArea, mouse.x, 0).x)
-        }
+        onPointedInto: inside => graphArea.dividerPointed = inside
+        onPointedAt: at => graphArea.dividerPoint = at
+        onDragged: x => graphArea.dragDividerTo(x)
     }
     /// Where a drag on the graph divider leaves the column, and what it
     /// asked for on the way. The handler and the automation hook both come
@@ -1220,78 +1059,11 @@ Rectangle {
                     position * graphArea.graphFullW, graphArea.graphXMax))
         }
     }
-    // First load, before any row exists. The drawn ring, not Fusion's
-    // BusyIndicator — the window has one turning mark and this is it
-    // (規約 §進行中・長押しの定数).
-    NavIcon {
-        anchors.centerIn: parent
-        width: Theme.iconLg
-        height: Theme.iconLg
-        kind: "spinner"
-        tint: Theme.textSecondary
-        visible: graphArea.graphModel.loading && graphArea.graphModel.rowTotal === 0
-        // On the render thread, so it keeps turning while the GUI
-        // thread drains models.
-        RotationAnimator on rotation {
-            running: graphArea.graphModel.loading
-                     && graphArea.graphModel.rowTotal === 0
-                     && AppBackend.shotDir === ""
-            loops: Animation.Infinite
-            from: 0
-            to: 360
-            duration: Metrics.spinMs
-        }
-    }
-    Label {
-        anchors.centerIn: parent
-        visible: graphArea.graphModel.error !== ""
-        text: graphArea.graphModel.error
-        color: Theme.danger
-        width: parent.width - 2 * Theme.spaceXl
-        wrapMode: Text.Wrap
-        horizontalAlignment: Text.AlignHCenter
-    }
-    // Empty window: the one thing worth doing sits in the column that
-    // will hold the history.
-    Column {
-        anchors.centerIn: parent
-        visible: graphArea.blank
-        spacing: Theme.spaceLg
-        Label {
-            text: qsTr("Platitude GG")
-            font.pixelSize: Theme.fontXl
-            font.weight: Font.DemiBold
-            anchors.horizontalCenter: parent.horizontalCenter
-        }
-        Label {
-            text: qsTr("A thin, fast GUI over your installed git.")
-            color: Theme.textSecondary
-            // Its natural width while the column has room for it, and
-            // wrapped inside the column when it has not: at the window's
-            // floor this pane is narrower than the line asks for, and
-            // unbounded it took the difference from the panes on either
-            // side (規約 §窓の床). The same shape the error line above
-            // already has.
-            width: Math.min(implicitWidth,
-                            graphArea.width - 2 * Theme.spaceXl)
-            wrapMode: Text.Wrap
-            horizontalAlignment: Text.AlignHCenter
-            anchors.horizontalCenter: parent.horizontalCenter
-        }
-        // A plain frame, not the accent: the accent is for the button
-        // somebody came to press, and this page is what stands there when
-        // nobody has opened anything yet. A frame all the same — bare is
-        // the shape an answer takes beside a framed one, and there is
-        // nothing beside this to read it against; under two lines of
-        // centred text a button with no edge is a third line
-        // (規約 §肯定側のボタン / §枠を持てる場所にだけ枠を出す).
-        ActionButton {
-            implicitHeight: Theme.controlHeight
-            text: qsTr("Open repository…")
-            frameColor: Theme.borderDefault
-            activeFocusOnTab: true
-            anchors.horizontalCenter: parent.horizontalCenter
-            onActivated: graphArea.openRepositoryRequested()
-        }
+    // What stands in the middle while there is no history to draw.
+    GraphEmptyState {
+        anchors.fill: parent
+        graphModel: graphArea.graphModel
+        blank: graphArea.blank
+        onOpenRepositoryRequested: graphArea.openRepositoryRequested()
     }
 }

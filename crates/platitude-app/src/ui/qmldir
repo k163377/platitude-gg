@@ -22,6 +22,7 @@ BandStateGroup 1.0 BandStateGroup.qml
 CoAuthorCard 1.0 CoAuthorCard.qml
 CoAuthorLine 1.0 CoAuthorLine.qml
 CodeChip 1.0 CodeChip.qml
+ColumnDivider 1.0 ColumnDivider.qml
 CommitAuthorRow 1.0 CommitAuthorRow.qml
 CommitHoverCard 1.0 CommitHoverCard.qml
 CommitRowMenu 1.0 CommitRowMenu.qml
@@ -38,6 +39,9 @@ FindBar 1.0 FindBar.qml
 FoldBlock 1.0 FoldBlock.qml
 FormField 1.0 FormField.qml
 GitVersionCorner 1.0 GitVersionCorner.qml
+GraphAutoScroll 1.0 GraphAutoScroll.qml
+GraphColumnMetrics 1.0 GraphColumnMetrics.qml
+GraphEmptyState 1.0 GraphEmptyState.qml
 GraphPane 1.0 GraphPane.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml
 HashPlate 1.0 HashPlate.qml
