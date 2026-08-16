@@ -235,13 +235,22 @@ fn ledger_paths(root: &Path) -> Result<Vec<String>, String> {
     Ok(ledger_entries(section))
 }
 
-/// The backticked file names in a ledger section, up to the next heading.
+/// The files a ledger section exempts, up to the next heading.
+///
+/// A bullet exempts the file it is *about*, and that is the one it opens
+/// with in bold: ``- **`path`(N 行)は割らない** — …``. The same section
+/// also carries bullets about one long function inside a file, which name
+/// their file in passing and must not hand the whole file a ceiling
+/// exemption; leading on the file in bold is what tells the two apart.
+/// Losing the bold costs an exemption and turns the count red, which is
+/// the direction a formatting slip should fail in.
 fn ledger_entries(section: &str) -> Vec<String> {
     let section = section.split("\n## ").next().unwrap_or(section);
     section
-        .split('`')
-        .skip(1)
-        .step_by(2)
+        .lines()
+        .filter_map(|line| line.trim_start().strip_prefix("- **"))
+        .filter_map(|lead| lead.strip_prefix('`'))
+        .filter_map(|rest| rest.split('`').next())
         .filter(|token| token.ends_with(".rs") || token.ends_with(".qml"))
         .map(|token| token.replace('\\', "/"))
         .collect()
@@ -318,6 +327,16 @@ mod tests {
             ledger_entries("- `runAutoAct()` の分岐は割らない\n"),
             [""; 0]
         );
+    }
+
+    #[test]
+    fn reads_no_file_exemption_out_of_a_bullet_about_one_function() {
+        // The fn ceiling keeps its entries in the same section; a file
+        // named there in passing keeps its own ceiling.
+        let section = "\n\
+             - `parse/diff/parse.rs` の `parse_patch` は 196 行(上限 100)\n\
+             - **`ui/Pane.qml`(700 行)は割らない** — 理由\n";
+        assert_eq!(ledger_entries(section), ["ui/Pane.qml"]);
     }
 
     #[test]
