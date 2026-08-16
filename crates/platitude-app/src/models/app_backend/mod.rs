@@ -10,6 +10,8 @@ use crate::hub::{Feed, Hub};
 use super::qml_register;
 
 mod build_id;
+mod lifecycle;
+mod persist;
 mod qobject;
 mod start;
 
