@@ -208,8 +208,8 @@
 - 床は 2 か所の大きい方(`TopBar.floorWidth` / `RepoPage.floorWidth`。実測 824×245、畳むと 688)。帯側は足し算を書かず `bandRow.implicitWidth` から採る(コントロールが増えても数え漏らさない)
 - 床を読む相手は `curPage` ではなく `Main.floorPage` — タブ 0 枚でも窓は同じ 3 ペインの空ページを出しており、`curPage`(null)のままだと空ページの窓だけ帯の床まで縮められる。ヘッドレスは `window-floor --restore`(`tabs=0` でも `floorW=824` が答え)
 - `holdFloor` が窓を広げたら `askedWidth` / `askedHeight` も更新 — しないと成長が frame slop として測られ、その分小さい形がファイルへ書かれる(実測: 床に立った窓が 510 と記録された)
-- 中央ペインの下限は数ではなく式(`RepoPage.centreMinWidth`。実測 336)。不採用: チップ列を窓に合わせて詰める — チップを潰して描く・畳みだけで列幅が動く・床が確保済み、の 3 症状で取り消し(規約 §窓の床)。`labelWManual`(手がドラッグした列)だけ `labelColWMax` で抑える — 抑えないと窓を狭めた時に message 列が消える
-- コマンドログの高さは `preferredHeight` を書き留める(`RepoPage.reportLayout`)— laid-out の `height` を書くと、短い窓で開いた 1 回が憶えている高さを食う(実測: 窓 420 で 280 → 168 になり、以後の起動が全部 168 から始まった)。手が置いた値は `SplitView` が書き換える `preferredHeight` の側に在る
+- 中央ペインの下限は数ではなく式(`PageLayout.centreMinWidth`。実測 336)。不採用: チップ列を窓に合わせて詰める — チップを潰して描く・畳みだけで列幅が動く・床が確保済み、の 3 症状で取り消し(規約 §窓の床)。`labelWManual`(手がドラッグした列)だけ `labelColWMax` で抑える — 抑えないと窓を狭めた時に message 列が消える
+- コマンドログの高さは `preferredHeight` を書き留める(`PageLayout.reportLayout`。窓は `curPage.reportLayout` の 1 行転送で呼ぶ)— laid-out の `height` を書くと、短い窓で開いた 1 回が憶えている高さを食う(実測: 窓 420 で 280 → 168 になり、以後の起動が全部 168 から始まった)。手が置いた値は `SplitView` が書き換える `preferredHeight` の側に在る
 - メッセージの枠はホイールを自分で取り、端で外へ渡す(規約 §窓の床。`DescriptionBox.rollBy` / `wheelPastEnd` / `rollBlock` / `rollSummary`)。受け側は `contentY - pixels` — 足すと逆へ動く。`ScrollView` 内の `Flickable` は `interactive: false` — 同じホイールを 2 回処理し「一瞬上へ行って引き戻される」。不採用: `event.accepted = false` で Qt に流す(ホイールは注入できない = ヘッドレスで証明できない)
 - 右ペインの 2 つの姿(`WipPane` / `DetailsPane`)の `descOwed` / `blockScrolls` は `blockRoom` と比べる — 並べ終わった `blockScroll.height` と比べると輪になり取った分を全部返す(実測: `wip-grow` が cap=120 rows=25 = 掴みが効かないまま緑。正は cap=667 rows=2。規約 §窓の床)
 - ヘッドレスは `window-floor` の 4 形(`wip`)と `details-fit`(仕込み・報告行は verbs.md)
