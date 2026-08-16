@@ -4,13 +4,8 @@
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 use crate::support::TestRepo;
-use platitude_core::process::GitExecutor;
+use crate::support::exec::env;
 use platitude_core::{stash, tag};
-use tokio_util::sync::CancellationToken;
-
-fn env() -> (GitExecutor, CancellationToken) {
-    (GitExecutor::new(), CancellationToken::new())
-}
 
 #[tokio::test]
 async fn renaming_a_tag_keeps_the_object_it_names() {

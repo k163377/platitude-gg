@@ -5,17 +5,12 @@
 
 use std::sync::Arc;
 
+use crate::support::exec::{env, observed_env};
 use crate::support::{Ends, TestRepo};
 use platitude_core::details::DiffTarget;
 use platitude_core::patch::HunkSelect;
-use platitude_core::process::{CommandObserver, GitExecutor};
 use platitude_core::repo::RepoInfo;
 use platitude_core::{stage, status};
-use tokio_util::sync::CancellationToken;
-
-fn env() -> (GitExecutor, CancellationToken) {
-    (GitExecutor::new(), CancellationToken::new())
-}
 
 async fn info(repo: &TestRepo) -> RepoInfo {
     let (exec, cancel) = env();
@@ -60,8 +55,7 @@ async fn an_empty_selection_runs_nothing() {
     repo.write_file("new.txt", "fresh\n");
 
     let ends = Arc::new(Ends::default());
-    let exec = GitExecutor::new().observed(Arc::clone(&ends) as Arc<dyn CommandObserver>, true);
-    let cancel = CancellationToken::new();
+    let (exec, cancel) = observed_env(ends.clone(), true);
     let none: [String; 0] = [];
 
     stage::stage_paths(&exec, &repo.path, &none, &cancel)

@@ -4,15 +4,10 @@
 use std::path::PathBuf;
 
 use crate::support::TestRepo;
+use crate::support::exec::env;
 use platitude_core::integrate::InProgress;
 use platitude_core::opstate;
-use platitude_core::process::GitExecutor;
 use platitude_core::repo::RepoInfo;
-use tokio_util::sync::CancellationToken;
-
-pub fn env() -> (GitExecutor, CancellationToken) {
-    (GitExecutor::new(), CancellationToken::new())
-}
 
 pub async fn info(repo: &TestRepo) -> RepoInfo {
     let (exec, cancel) = env();

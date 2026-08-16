@@ -3,13 +3,13 @@
 use std::time::Duration;
 
 use crate::support::TestRepo;
+use crate::support::exec::{env, observed_env};
 use platitude_core::{GitCommand, GitError, GitExecutor, repo, version};
 use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
 async fn detects_a_supported_git_version() {
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let v = version::detect(&executor, &cancel).await.unwrap();
     assert!(v.supported(), "dev/CI machines must have git >= 2.43");
 }
@@ -27,8 +27,7 @@ async fn opens_a_valid_repository() {
     let mut repo_dir = TestRepo::init();
     repo_dir.commit_file("a.txt", "hello\n", "initial");
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let info = repo::open(&executor, &repo_dir.path, &cancel)
         .await
         .unwrap();
@@ -49,8 +48,7 @@ async fn open_from_a_subdirectory_resolves_the_root() {
     let mut repo_dir = TestRepo::init();
     repo_dir.commit_file("sub/dir/file.txt", "x\n", "nested");
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let sub = repo_dir.path.join("sub").join("dir");
     let info = repo::open(&executor, &sub, &cancel).await.unwrap();
 
@@ -61,8 +59,7 @@ async fn open_from_a_subdirectory_resolves_the_root() {
 #[tokio::test]
 async fn open_rejects_a_non_repository() {
     let dir = tempfile::tempdir().unwrap();
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let err = repo::open(&executor, dir.path(), &cancel)
         .await
         .unwrap_err();
@@ -76,8 +73,7 @@ async fn open_rejects_a_non_repository() {
 async fn open_rejects_a_missing_path() {
     let dir = tempfile::tempdir().unwrap();
     let missing = dir.path().join("nope");
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let err = repo::open(&executor, &missing, &cancel).await.unwrap_err();
     assert!(
         matches!(err, GitError::NotARepository { bare: false, .. }),
@@ -100,8 +96,7 @@ async fn open_rejects_a_bare_repository_as_bare() {
         .expect("git init --bare");
     assert!(status.success());
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let err = repo::open(&executor, &bare, &cancel).await.unwrap_err();
     assert!(
         matches!(err, GitError::NotARepository { bare: true, .. }),
@@ -114,8 +109,7 @@ async fn failed_commands_surface_gits_stderr() {
     let mut repo_dir = TestRepo::init();
     repo_dir.commit_file("a.txt", "hello\n", "initial");
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let cmd =
         GitCommand::new()
             .cwd(&repo_dir.path)
@@ -137,8 +131,7 @@ async fn streaming_delivers_all_stdout_chunks() {
     let c2 = repo_dir.commit_file("a.txt", "2\n", "two");
     let c3 = repo_dir.commit_file("a.txt", "3\n", "three");
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let cmd = GitCommand::new()
         .cwd(&repo_dir.path)
         .args(["log", "--format=%H"])
@@ -162,8 +155,7 @@ async fn pre_cancelled_token_short_circuits() {
     let mut repo_dir = TestRepo::init();
     repo_dir.commit_file("a.txt", "hello\n", "initial");
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     cancel.cancel();
     let cmd = GitCommand::new().cwd(&repo_dir.path).args(["status"]);
     let err = executor.run(cmd, &cancel).await.unwrap_err();
@@ -185,8 +177,7 @@ async fn answers_by_code_reports_only_zero_and_one_as_answers() {
     let c2 = repo_dir.commit_file("a.txt", "2\n", "two");
 
     let ends = Arc::new(Ends::default());
-    let executor = GitExecutor::new().observed(Arc::clone(&ends) as _, true);
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = observed_env(ends.clone(), true);
     let ancestor = |a: String, b: String| {
         GitCommand::new()
             .cwd(&repo_dir.path)

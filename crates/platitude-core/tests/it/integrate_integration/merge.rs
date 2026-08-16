@@ -2,7 +2,8 @@
 //! either to a resolution or to an abort.
 
 use crate::support::TestRepo;
-use crate::support::integrate::{conflicting_branches, current_op, env};
+use crate::support::exec::env;
+use crate::support::integrate::{conflicting_branches, current_op};
 use platitude_core::conflict::{self, ConflictKind, Side};
 use platitude_core::integrate::{self, Continuation, InProgress, MergeOptions};
 use platitude_core::status;

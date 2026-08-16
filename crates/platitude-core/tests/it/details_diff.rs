@@ -4,10 +4,10 @@
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 use crate::support::TestRepo;
+use crate::support::exec::env;
+use platitude_core::Oid;
 use platitude_core::details::{self, DiffTarget};
 use platitude_core::parse::diff::DiffLineKind;
-use platitude_core::{GitExecutor, Oid};
-use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
 async fn details_of_a_merge_commit_use_the_first_parent() {
@@ -27,8 +27,7 @@ async fn details_of_a_merge_commit_use_the_first_parent() {
     let merge_sha = repo.git(&["rev-parse", "HEAD"]);
     let main_sha = repo.git(&["rev-parse", "HEAD^1"]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let oid = Oid::from_hex_str(&merge_sha).unwrap();
     let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
         .await
@@ -50,8 +49,7 @@ async fn details_of_the_root_commit_show_created_files() {
     let mut repo = TestRepo::init();
     let root = repo.commit_file("first.txt", "hello\n", "root commit");
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let oid = Oid::from_hex_str(&root).unwrap();
     let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
         .await
@@ -75,8 +73,7 @@ async fn details_read_co_authors_whatever_case_the_trailer_used() {
          co-authored-by: Bob Builder <bob@example.com>",
     );
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let oid = Oid::from_hex_str(&sha).unwrap();
     let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
         .await
@@ -104,8 +101,7 @@ async fn details_of_a_commit_without_the_trailer_credit_nobody() {
         "feat: alone\n\nI wrote Co-authored-by: nobody <n@e.com> in the body\n\nand kept going.",
     );
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let oid = Oid::from_hex_str(&sha).unwrap();
     let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
         .await
@@ -121,8 +117,7 @@ async fn details_report_renames_with_scores() {
     repo.git(&["commit", "-m", "rename it"]);
     let sha = repo.git(&["rev-parse", "HEAD"]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let oid = Oid::from_hex_str(&sha).unwrap();
     let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
         .await
@@ -142,8 +137,7 @@ async fn details_of_a_commit_that_changed_nothing_list_no_files() {
     repo.git(&["commit", "--allow-empty", "-m", "nothing to see"]);
     let sha = repo.git(&["rev-parse", "HEAD"]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let oid = Oid::from_hex_str(&sha).unwrap();
     let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
         .await
@@ -166,8 +160,7 @@ async fn a_message_that_reads_like_a_file_list_is_not_read_as_one() {
         "docs: explain the notation\n\nA\tinvented/one.txt\nM\tinvented/two.txt",
     );
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let oid = Oid::from_hex_str(&sha).unwrap();
     let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
         .await
@@ -186,8 +179,7 @@ async fn commit_file_diff_has_hunks_and_line_numbers() {
     let sha = repo.git(&["rev-parse", "HEAD"]);
     let parent = repo.git(&["rev-parse", "HEAD^"]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let target = DiffTarget::Commit {
         oid: Oid::from_hex_str(&sha).unwrap(),
         parent: Some(Oid::from_hex_str(&parent).unwrap()),
@@ -224,8 +216,7 @@ async fn staged_and_unstaged_diffs_are_separate() {
     repo.git(&["add", "--", "f.txt"]);
     repo.write_file("f.txt", "worktree version\n");
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
 
     let staged = details::file_diff(
         &executor,
@@ -271,8 +262,7 @@ async fn untracked_file_renders_as_all_additions() {
     repo.commit_file("base.txt", "x\n", "base");
     repo.write_file("brand new.txt", "line 1\nline 2\n");
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let patches = details::file_diff(
         &executor,
         &repo.path,
@@ -300,8 +290,7 @@ async fn binary_file_diff_is_flagged() {
     let sha = repo.git(&["rev-parse", "HEAD"]);
     let parent = repo.git(&["rev-parse", "HEAD^"]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let patches = details::file_diff(
         &executor,
         &repo.path,
@@ -357,8 +346,7 @@ async fn a_stopped_merge_reads_back_all_four_conflict_kinds() {
     let mut repo = TestRepo::init();
     stopped_merge_of_four_kinds(&mut repo);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
 
     // UU — both changed it: the full combined shape, markers and all.
     let patches = details::file_diff(

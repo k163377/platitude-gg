@@ -13,15 +13,12 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use crate::support::TestRepo;
+use crate::support::exec::{env, observed_env};
 use platitude_core::commit::{self, CommitOptions};
 use platitude_core::identity::{self, ConfigScope, SignatureFormat, SignatureStatus};
 use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor};
 use platitude_core::repo::RepoInfo;
 use tokio_util::sync::CancellationToken;
-
-fn env() -> (GitExecutor, CancellationToken) {
-    (GitExecutor::new(), CancellationToken::new())
-}
 
 /// Records what was spawned, so a test can count processes rather than
 /// take the answer's word for how it was reached.
@@ -50,8 +47,10 @@ impl CommandObserver for Spawns {
 
 fn counted() -> (GitExecutor, Arc<Spawns>, CancellationToken) {
     let spawns = Arc::new(Spawns::default());
-    let exec = GitExecutor::new().observed(Arc::clone(&spawns) as Arc<dyn CommandObserver>, false);
-    (exec, spawns, CancellationToken::new())
+    // `false`: these are the reads a session makes on its own, and what the
+    // test counts is that they are spawned, not that they reach the log.
+    let (exec, cancel) = observed_env(spawns.clone(), false);
+    (exec, spawns, cancel)
 }
 
 async fn info(repo: &TestRepo) -> RepoInfo {

@@ -20,6 +20,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::support::TestRepo;
+use crate::support::exec::observed_env;
 use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor};
 use platitude_core::remote::{self, PushForce};
 use platitude_core::{conflict, eol, identity};
@@ -67,8 +68,8 @@ impl CommandObserver for Log {
 
 fn logged() -> (GitExecutor, Arc<Log>, CancellationToken) {
     let log = Arc::new(Log::default());
-    let exec = GitExecutor::new().observed(Arc::clone(&log) as Arc<dyn CommandObserver>, true);
-    (exec, log, CancellationToken::new())
+    let (exec, cancel) = observed_env(log.clone(), true);
+    (exec, log, cancel)
 }
 
 /// For the reads whose exit code depends on what the machine happens to

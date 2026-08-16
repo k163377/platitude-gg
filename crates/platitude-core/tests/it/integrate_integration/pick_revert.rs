@@ -1,11 +1,10 @@
 //! Cherry-pick and revert, including the ones that land as nothing.
 
 use crate::support::TestRepo;
-use crate::support::integrate::{current_op, env};
+use crate::support::exec::{env, observed_env};
+use crate::support::integrate::current_op;
 use platitude_core::integrate::{self, Continuation, InProgress};
 use platitude_core::opstate;
-use platitude_core::process::GitExecutor;
-use tokio_util::sync::CancellationToken;
 
 /// Nothing of the operation is left on disk: not the marker a badge
 /// reads, and not the sequence a `--skip` steps. The two come apart —
@@ -72,8 +71,7 @@ async fn a_cherry_pick_the_branch_already_has_leaves_nothing_behind() {
     let before = repo.git(&["rev-parse", "HEAD"]);
 
     let ends = Arc::new(Ends::default());
-    let exec = GitExecutor::new().observed(Arc::clone(&ends) as _, true);
-    let cancel = CancellationToken::new();
+    let (exec, cancel) = observed_env(ends.clone(), true);
     integrate::cherry_pick(&exec, &repo.path, &[picked], &cancel)
         .await
         .expect("a pick with nothing in it is not a failure");

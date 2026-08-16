@@ -1,7 +1,8 @@
 //! What a stopped operation says about the two sides it sits between.
 
 use crate::support::TestRepo;
-use crate::support::integrate::{conflicting_branches, env};
+use crate::support::exec::env;
+use crate::support::integrate::conflicting_branches;
 use platitude_core::conflict;
 use platitude_core::integrate::{self, InProgress, MergeOptions, RebaseOptions};
 

@@ -10,9 +10,8 @@
 #![allow(clippy::expect_used)]
 
 use crate::support::TestRepo;
-use platitude_core::GitExecutor;
+use crate::support::exec::env;
 use platitude_core::reachable;
-use tokio_util::sync::CancellationToken;
 
 /// Three commits on `main` and nothing else.
 fn scenario() -> TestRepo {
@@ -25,8 +24,7 @@ fn scenario() -> TestRepo {
 
 async fn reached(repo: &mut TestRepo) -> bool {
     let tip = repo.git(&["rev-parse", "HEAD"]);
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     reachable::reached_without_branch(&executor, &repo.path, &tip, "main", &cancel)
         .await
         .expect("ask what holds the tip")
@@ -97,8 +95,7 @@ async fn a_stash_made_on_the_tip_holds_it() {
 async fn the_branch_being_asked_about_is_left_out_of_the_walk() {
     let mut repo = scenario();
     let tip = repo.git(&["rev-parse", "HEAD"]);
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
 
     let excluded = reachable::reached_without_branch(&executor, &repo.path, &tip, "main", &cancel)
         .await

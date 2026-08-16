@@ -5,17 +5,12 @@
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 use crate::support::TestRepo;
+use crate::support::exec::env;
 use platitude_core::GitError;
 use platitude_core::commit;
-use platitude_core::process::GitExecutor;
 use platitude_core::remote::{self, PushForce, PushSpec};
 use platitude_core::stash::{self, PushOptions};
 use platitude_core::status;
-use tokio_util::sync::CancellationToken;
-
-fn env() -> (GitExecutor, CancellationToken) {
-    (GitExecutor::new(), CancellationToken::new())
-}
 
 /// A `file://` remote answers instantly; the budget just has to exist.
 const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;

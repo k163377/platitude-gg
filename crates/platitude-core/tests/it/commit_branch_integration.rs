@@ -4,15 +4,10 @@
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 use crate::support::TestRepo;
+use crate::support::exec::env;
 use platitude_core::branch::{self, CheckoutOutcome, CheckoutTarget, ResetMode};
 use platitude_core::commit::{self, CommitOptions};
-use platitude_core::process::GitExecutor;
 use platitude_core::repo::RepoInfo;
-use tokio_util::sync::CancellationToken;
-
-fn env() -> (GitExecutor, CancellationToken) {
-    (GitExecutor::new(), CancellationToken::new())
-}
 
 async fn info(repo: &TestRepo) -> RepoInfo {
     let (exec, cancel) = env();

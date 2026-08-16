@@ -4,10 +4,10 @@
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 use crate::support::TestRepo;
+use crate::support::exec::env;
+use platitude_core::Oid;
 use platitude_core::details::{self, DiffTarget};
 use platitude_core::preview::{self, IMAGE_BYTE_CAP};
-use platitude_core::{GitExecutor, Oid};
-use tokio_util::sync::CancellationToken;
 
 /// A tiny valid PNG (1x1 RGBA). Contains NUL bytes, so git classifies the
 /// file as binary; the exact pixels are irrelevant here.
@@ -36,8 +36,7 @@ async fn untracked_image_previews_the_new_side_only() {
     repo.commit_file("base.txt", "x\n", "base");
     write_bytes(&repo, "logo.png", TINY_PNG);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let target = DiffTarget::Untracked {
         path: "logo.png".to_string(),
     };
@@ -68,8 +67,7 @@ async fn staged_new_image_reads_the_index_blob() {
     write_bytes(&repo, "art/logo.png", TINY_PNG);
     repo.git(&["add", "--", "art/logo.png"]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let target = DiffTarget::Staged {
         path: "art/logo.png".to_string(),
         orig_path: None,
@@ -90,8 +88,7 @@ async fn modified_image_previews_both_sides() {
     let v2 = tiny_png_v2();
     write_bytes(&repo, "logo.png", &v2);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let target = DiffTarget::Unstaged {
         path: "logo.png".to_string(),
     };
@@ -110,8 +107,7 @@ async fn staged_deletion_previews_the_old_side_only() {
     repo.git(&["commit", "-m", "add image"]);
     repo.git(&["rm", "--", "logo.png"]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let target = DiffTarget::Staged {
         path: "logo.png".to_string(),
         orig_path: None,
@@ -136,8 +132,7 @@ async fn committed_image_previews_parent_and_commit_blobs() {
     let head = repo.git(&["rev-parse", "HEAD"]);
     let parent = repo.git(&["rev-parse", "HEAD^"]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let target = DiffTarget::Commit {
         oid: Oid::from_hex_str(&head).unwrap(),
         parent: Some(Oid::from_hex_str(&parent).unwrap()),
@@ -159,8 +154,7 @@ async fn root_commit_image_has_no_old_side() {
     repo.git(&["commit", "-m", "root"]);
     let head = repo.git(&["rev-parse", "HEAD"]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let target = DiffTarget::Commit {
         oid: Oid::from_hex_str(&head).unwrap(),
         parent: None,
@@ -185,8 +179,7 @@ async fn renamed_image_reads_the_old_side_from_orig_path() {
     let head = repo.git(&["rev-parse", "HEAD"]);
     let parent = repo.git(&["rev-parse", "HEAD^"]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let target = DiffTarget::Commit {
         oid: Oid::from_hex_str(&head).unwrap(),
         parent: Some(Oid::from_hex_str(&parent).unwrap()),
@@ -210,8 +203,7 @@ async fn non_image_binary_reports_sizes_without_bytes() {
     let new_bytes = [0u8, 1, 2, 3, 4, 5, 6, 7];
     write_bytes(&repo, "blob.bin", &new_bytes);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let target = DiffTarget::Unstaged {
         path: "blob.bin".to_string(),
     };
@@ -238,8 +230,7 @@ async fn plain_text_has_no_preview() {
     repo.commit_file("notes.txt", "a\n", "base");
     repo.write_file("notes.txt", "b\n");
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let target = DiffTarget::Unstaged {
         path: "notes.txt".to_string(),
     };
@@ -254,8 +245,7 @@ async fn svg_gets_an_image_preview_alongside_its_text_diff() {
     let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"/>\n";
     repo.write_file("icon.svg", svg);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let target = DiffTarget::Untracked {
         path: "icon.svg".to_string(),
     };
@@ -280,8 +270,7 @@ async fn oversized_image_reports_size_only() {
     let big = vec![0u8; (IMAGE_BYTE_CAP + 1) as usize];
     write_bytes(&repo, "huge.png", &big);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let target = DiffTarget::Untracked {
         path: "huge.png".to_string(),
     };

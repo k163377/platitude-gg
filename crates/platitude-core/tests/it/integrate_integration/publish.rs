@@ -1,7 +1,7 @@
 //! What a range's publish state says about the remotes that hold it.
 
 use crate::support::TestRepo;
-use crate::support::integrate::env;
+use crate::support::exec::env;
 use platitude_core::publish;
 
 // --- published-history warning ------------------------------------------

@@ -1,7 +1,8 @@
 //! Handing a stopped merge to the configured mergetool.
 
 use crate::support::TestRepo;
-use crate::support::integrate::{conflicting_branches, env};
+use crate::support::exec::env;
+use crate::support::integrate::conflicting_branches;
 use platitude_core::integrate::{self, MergeOptions};
 use platitude_core::{conflict, status};
 

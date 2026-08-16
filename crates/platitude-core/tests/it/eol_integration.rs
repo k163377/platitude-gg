@@ -10,14 +10,13 @@
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 use crate::support::TestRepo;
+use crate::support::exec::env;
+use platitude_core::Oid;
 use platitude_core::details::{self, DiffTarget};
 use platitude_core::eol::{self, Baseline, Eol, Reading, Ruling, Scope};
-use platitude_core::{GitExecutor, Oid};
-use tokio_util::sync::CancellationToken;
 
 async fn reading(repo: &TestRepo, target: DiffTarget) -> Reading {
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let raw = details::file_diff_raw(&executor, &repo.path, &target, &cancel)
         .await
         .expect("run diff");
@@ -25,16 +24,14 @@ async fn reading(repo: &TestRepo, target: DiffTarget) -> Reading {
 }
 
 async fn baseline(repo: &TestRepo, path: &str) -> Option<Baseline> {
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     eol::baseline(&executor, &repo.path, path, &cancel)
         .await
         .expect("resolve baseline")
 }
 
 async fn ruling(repo: &TestRepo, path: &str) -> Ruling {
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     eol::ruling(&executor, &repo.path, path, &cancel)
         .await
         .expect("resolve ruling")

@@ -2,9 +2,9 @@
 //! output, including the `-z` record-terminator behavior.
 
 use crate::support::TestRepo;
+use crate::support::exec::env;
+use platitude_core::GitCommand;
 use platitude_core::parse::log::{LOG_FORMAT_ARG, LogParser};
-use platitude_core::{GitCommand, GitExecutor};
-use tokio_util::sync::CancellationToken;
 
 /// Builds: root ── a ── merge(main) with a side branch, plus a unicode
 /// subject and an empty-message-ish subject case.
@@ -24,8 +24,7 @@ fn scenario() -> (TestRepo, Vec<String>) {
 async fn real_git_log_streams_through_the_parser() {
     let (repo, shas) = scenario();
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let cmd = GitCommand::new().cwd(&repo.path).args([
         "log",
         "-z",
@@ -94,8 +93,7 @@ async fn parse_log(
     repo: &TestRepo,
     extra: &[&str],
 ) -> (Vec<platitude_core::CommitMeta>, LogParser) {
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let mut args: Vec<&str> = vec!["log", "-z", "--date-order", LOG_FORMAT_ARG];
     args.extend_from_slice(extra);
     let cmd = GitCommand::new().cwd(&repo.path).args(args);
@@ -190,8 +188,7 @@ async fn parser_handles_tiny_chunks_from_real_output() {
     let (repo, _) = scenario();
 
     // Capture the raw bytes once, then re-parse with pathological chunking.
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let cmd = GitCommand::new().cwd(&repo.path).args([
         "log",
         "-z",

@@ -8,9 +8,9 @@
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 use crate::support::TestRepo;
+use crate::support::exec::env;
 use platitude_core::status::StatusItem;
-use platitude_core::{GitExecutor, stash, status};
-use tokio_util::sync::CancellationToken;
+use platitude_core::{stash, status};
 
 /// staged add + staged rename + unstaged modify + untracked, on main with
 /// two commits of history.
@@ -30,8 +30,7 @@ fn dirty_scenario() -> TestRepo {
 #[tokio::test]
 async fn status_buckets_reflect_the_working_tree() {
     let repo = dirty_scenario();
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
 
     let s = status::load(&executor, &repo.path, &cancel).await.unwrap();
     assert_eq!(s.branch_head.as_deref(), Some("main"));
@@ -78,8 +77,7 @@ async fn stash_list_round_trips() {
     repo.write_file("f.txt", "wip 2\n");
     repo.git(&["stash", "push"]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let stashes = stash::load(&executor, &repo.path, &cancel).await.unwrap();
 
     assert_eq!(stashes.len(), 2);
@@ -95,8 +93,7 @@ async fn clean_repo_has_empty_stash_and_status() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "base\n", "base");
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let s = status::load(&executor, &repo.path, &cancel).await.unwrap();
     assert!(s.items.is_empty());
     let stashes = stash::load(&executor, &repo.path, &cancel).await.unwrap();

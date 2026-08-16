@@ -1,7 +1,8 @@
 //! Rebase: replaying onto an upstream, and each way the replay stops.
 
 use crate::support::TestRepo;
-use crate::support::integrate::{current_op, env, helper, info};
+use crate::support::exec::env;
+use crate::support::integrate::{current_op, helper, info};
 use platitude_core::conflict::{self, Side};
 use platitude_core::integrate::{self, Continuation, InProgress, RebaseOptions};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};

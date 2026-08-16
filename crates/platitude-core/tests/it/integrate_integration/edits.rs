@@ -1,7 +1,8 @@
 //! Squashing and rewording a commit already down in the history.
 
 use crate::support::TestRepo;
-use crate::support::integrate::{env, helper, info};
+use crate::support::exec::env;
+use crate::support::integrate::{helper, info};
 use platitude_core::integrate::RebaseOptions;
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 

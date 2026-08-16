@@ -12,11 +12,14 @@ use std::process::{Command, Output};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use platitude_core::process::{CommandEnd, CommandObserver};
 use platitude_core::session::{LogRow, RefLabel, SessionEvent};
 
+pub mod exec;
 pub mod integrate;
 pub mod session;
+
+// `crate::support::Ends` is where the suite has always reached for it.
+pub use exec::Ends;
 
 /// Base timestamp for deterministic commits (arbitrary fixed epoch).
 const BASE_EPOCH: u64 = 1_700_000_000;
@@ -402,22 +405,5 @@ pub async fn settled(events: &Mutex<Vec<SessionEvent>>) {
         }
         patience.check("the session to settle", events);
         tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-}
-
-/// Collects every [`CommandEnd`] the executor reports, for tests that read
-/// exit codes off the command-log path (`GitExecutor::observed`).
-#[derive(Default)]
-pub struct Ends(pub Mutex<Vec<CommandEnd>>);
-
-impl CommandObserver for Ends {
-    fn records(&self, _user: bool) -> bool {
-        true
-    }
-    fn started(&self, _display: &str, _full: &str, _user: bool) -> u64 {
-        0
-    }
-    fn finished(&self, _id: u64, end: CommandEnd, _elapsed_ms: u64, _message: &str) {
-        self.0.lock().unwrap().push(end);
     }
 }

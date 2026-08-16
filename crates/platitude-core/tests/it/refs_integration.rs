@@ -5,9 +5,9 @@
 #![allow(clippy::expect_used)]
 
 use crate::support::TestRepo;
+use crate::support::exec::env;
+use platitude_core::Oid;
 use platitude_core::refs::{self, RefKind};
-use platitude_core::{GitExecutor, Oid};
-use tokio_util::sync::CancellationToken;
 
 /// main (upstream: origin/main) + feature (no upstream, same name on
 /// origin) + local-only + annotated & lightweight tags.
@@ -41,8 +41,7 @@ fn scenario() -> TestRepo {
 #[tokio::test]
 async fn lists_branches_tags_and_remotes() {
     let mut repo = scenario();
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
 
     let refs = refs::load(&executor, &repo.path, &cancel).await.unwrap();
 
@@ -92,8 +91,7 @@ async fn lists_branches_tags_and_remotes() {
 async fn head_state_on_branch_and_detached() {
     let mut repo = TestRepo::init();
     let sha = repo.commit_file("a.txt", "1\n", "initial");
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
 
     let on_branch = refs::head_state(&executor, &repo.path, &cancel)
         .await
@@ -118,8 +116,7 @@ async fn head_state_on_branch_and_detached() {
 #[tokio::test]
 async fn empty_repository_has_unborn_head() {
     let repo = TestRepo::init();
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
 
     let state = refs::head_state(&executor, &repo.path, &cancel)
         .await

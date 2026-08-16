@@ -20,10 +20,10 @@
 #![allow(clippy::expect_used)]
 
 use crate::support::TestRepo;
+use crate::support::exec::env;
 use platitude_core::parse::log::{LOG_FORMAT_ARG, LogParser};
 use platitude_core::refs::{self, RefKind};
-use platitude_core::{GitCommand, GitExecutor, status};
-use tokio_util::sync::CancellationToken;
+use platitude_core::{GitCommand, status};
 
 /// Bytes a ref's last component may have, from the measurement above.
 const REF_WALL: usize = 250;
@@ -62,8 +62,7 @@ fn pasted(bytes: usize) -> String {
     reason = "test helper; panicking on setup failure is the point"
 )]
 async fn walk(repo: &TestRepo) -> (Vec<platitude_core::CommitMeta>, LogParser) {
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let cmd = GitCommand::new().cwd(&repo.path).args([
         "log",
         "-z",
@@ -93,8 +92,7 @@ async fn a_ref_whose_last_character_ends_on_the_wall_comes_back_whole() {
     repo.git(&["branch", &branch]);
     repo.git(&["tag", &tag]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let listed = refs::load(&executor, &repo.path, &cancel)
         .await
         .expect("refs load");
@@ -115,8 +113,7 @@ async fn one_character_is_a_name_too_and_so_is_one_kanji() {
     repo.git(&["branch", "あ"]);
     repo.git(&["tag", "示"]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let listed = refs::load(&executor, &repo.path, &cancel)
         .await
         .expect("refs load");
@@ -219,8 +216,7 @@ async fn a_path_of_kanji_and_spaces_comes_back_as_it_was_written() {
     repo.write_file(spaced, "space\n");
     repo.git(&["add", "--", deep]);
 
-    let executor = GitExecutor::new();
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = env();
     let state = status::load(&executor, &repo.path, &cancel)
         .await
         .expect("status load");

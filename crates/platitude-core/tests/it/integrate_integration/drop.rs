@@ -1,10 +1,9 @@
 //! Dropping a commit out from under the history that follows it.
 
 use crate::support::TestRepo;
-use crate::support::integrate::{env, helper, info};
-use platitude_core::process::GitExecutor;
+use crate::support::exec::{env, observed_env};
+use crate::support::integrate::{helper, info};
 use platitude_core::sequencer;
-use tokio_util::sync::CancellationToken;
 
 /// Dropping one commit out of the middle leaves everything after it in
 /// place, rewritten onto the gap.
@@ -112,8 +111,7 @@ async fn reaching_past_the_first_commit_is_an_answer_not_a_failure() {
     repo.commit_file("b.txt", "two\n", "the second");
 
     let ends = Arc::new(Ends::default());
-    let executor = GitExecutor::new().observed(Arc::clone(&ends) as _, true);
-    let cancel = CancellationToken::new();
+    let (executor, cancel) = observed_env(ends.clone(), true);
     let plan = sequencer::plan_edit(
         &executor,
         &repo.path,
