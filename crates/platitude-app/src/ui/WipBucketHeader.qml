@@ -75,22 +75,10 @@ Rectangle {
             font.pixelSize: Theme.fontSm
             color: Theme.textSecondary
         }
-        NavIcon {
-            visible: bucketHeader.waitingForTool
+        SpinnerIcon {
+            spinning: bucketHeader.waitingForTool
             Layout.preferredWidth: Theme.iconSm
             Layout.preferredHeight: Theme.iconSm
-            kind: "spinner"
-            tint: Theme.textSecondary
-            // On the render thread, so it keeps turning while the
-            // GUI thread drains models.
-            RotationAnimator on rotation {
-                running: bucketHeader.waitingForTool
-                         && AppBackend.shotDir === ""
-                loops: Animation.Infinite
-                from: 0
-                to: 360
-                duration: Metrics.spinMs
-            }
         }
         HoverToolButton {
             visible: bucketHeader.section !== "conflicts"

@@ -679,24 +679,12 @@ ApplicationWindow {
             }
             // The drawn ring, not Fusion's BusyIndicator
             // (規約 §進行中・長押しの定数).
-            NavIcon {
-                visible: AppBackend.gitState === "checking" && !AppBackend.alreadyRunning
+            SpinnerIcon {
+                spinning: AppBackend.gitState === "checking"
+                          && !AppBackend.alreadyRunning
                 width: Theme.iconLg
                 height: Theme.iconLg
-                kind: "spinner"
-                tint: Theme.textSecondary
                 anchors.horizontalCenter: parent.horizontalCenter
-                // On the render thread, so it keeps turning while the GUI
-                // thread drains models.
-                RotationAnimator on rotation {
-                    running: AppBackend.gitState === "checking"
-                             && !AppBackend.alreadyRunning
-                             && AppBackend.shotDir === ""
-                    loops: Animation.Infinite
-                    from: 0
-                    to: 360
-                    duration: Metrics.spinMs
-                }
             }
             Label {
                 visible: AppBackend.gitState === "missing"

@@ -321,7 +321,6 @@ Rectangle {
             busy: topBar.curPage !== null
                   && (topBar.curPage.pageTab.busyOp === "fetch"
                       || topBar.curPage.pageTab.autoFetchRunning)
-            still: AppBackend.shotDir !== ""
             enabled: topBar.curPage !== null
                      && topBar.curPage.pageTab.remoteCount > 0
                      && (fetchButton.stopped
@@ -368,7 +367,6 @@ Rectangle {
             kind: "push"
             busy: topBar.curPage !== null
                   && topBar.curPage.pageTab.busyOp === "push"
-            still: AppBackend.shotDir !== ""
             // Two fixed wordings, no counts: a number here would make the
             // button a different width for every value it took
             // (デザイン規約 §リモートへ送る).

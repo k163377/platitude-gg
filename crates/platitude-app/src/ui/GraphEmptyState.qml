@@ -20,25 +20,12 @@ Item {
     // First load, before any row exists. The drawn ring, not Fusion's
     // BusyIndicator — the window has one turning mark and this is it
     // (規約 §進行中・長押しの定数).
-    NavIcon {
+    SpinnerIcon {
         anchors.centerIn: parent
         width: Theme.iconLg
         height: Theme.iconLg
-        kind: "spinner"
-        tint: Theme.textSecondary
-        visible: emptyState.graphModel.loading
-                 && emptyState.graphModel.rowTotal === 0
-        // On the render thread, so it keeps turning while the GUI
-        // thread drains models.
-        RotationAnimator on rotation {
-            running: emptyState.graphModel.loading
-                     && emptyState.graphModel.rowTotal === 0
-                     && AppBackend.shotDir === ""
-            loops: Animation.Infinite
-            from: 0
-            to: 360
-            duration: Metrics.spinMs
-        }
+        spinning: emptyState.graphModel.loading
+                  && emptyState.graphModel.rowTotal === 0
     }
     Label {
         anchors.centerIn: parent

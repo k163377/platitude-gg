@@ -26,9 +26,6 @@ HoverToolButton {
     /// focus away, and the press that started the network call is the
     /// very one that may have come from the keyboard.
     property bool busy: false
-    /// Hold the turn still (automation — a spinning icon photographs
-    /// differently every time).
-    property bool still: false
     /// How long this button has to be held to fire `held()`; zero for an
     /// ordinary button, where a click is the whole gesture (デザイン規約
     /// §進行中・長押しの定数).
@@ -329,22 +326,12 @@ HoverToolButton {
         // Its own item rather than a rotation on the icon above: an
         // animator leaves the angle where it stopped, and the icon that
         // returns must not come back tilted.
-        NavIcon {
+        SpinnerIcon {
             anchors.centerIn: parent
             width: Theme.iconMd
             height: Theme.iconMd
-            kind: "spinner"
             tint: actionBtn.toneDim
-            visible: actionBtn.busy
-            // On the render thread, so it keeps turning while the GUI
-            // thread drains models.
-            RotationAnimator on rotation {
-                running: actionBtn.busy && !actionBtn.still
-                loops: Animation.Infinite
-                from: 0
-                to: 360
-                duration: Metrics.spinMs
-            }
+            spinning: actionBtn.busy
         }
     }
 }

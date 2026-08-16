@@ -213,21 +213,11 @@ ComboBox {
         // press is the same size as the card that answers it.
         contentItem: Item {
             implicitHeight: rows.count > 0 ? rows.contentHeight : Theme.rowHeight
-            NavIcon {
-                id: cardRing
+            SpinnerIcon {
                 anchors.centerIn: parent
                 width: Theme.iconMd
                 height: Theme.iconMd
-                visible: rows.count === 0 && combo.loading
-                kind: "spinner"
-                tint: Theme.textSecondary
-                RotationAnimator on rotation {
-                    running: cardRing.visible && AppBackend.shotDir === ""
-                    loops: Animation.Infinite
-                    from: 0
-                    to: 360
-                    duration: Metrics.spinMs
-                }
+                spinning: rows.count === 0 && combo.loading
             }
             ListView {
                 id: rows
