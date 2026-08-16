@@ -190,6 +190,9 @@ Rectangle {
         id: scrollPlace
         view: diffList
     }
+    /// Automation: where the rebuild put the view back, and -1 until it
+    /// has put it anywhere.
+    readonly property real placeLandedY: scrollPlace.landedY
     function holdScroll() { scrollPlace.hold() }
     function restoreScroll() { scrollPlace.restore() }
     /// Automation: read the view away from the top, so that a rebuild can

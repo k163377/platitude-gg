@@ -225,7 +225,14 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "hunk-tools" => Some("diff_row act=hunk-tools ready=true"),
         "stage-hunk" => Some("diff_row act=stage-hunk ready=true"),
         "stage-line" => Some("diff_row act=stage-line ready=true"),
-        "keep-place" => Some("diff_row act=keep-place ready=true"),
+        // Not the row this one: `ready=` says the diff arrived, and a diff
+        // that arrived is where this verb's failures start rather than
+        // ends. The place is only kept if the rebuilt list came back to
+        // it, so `at=` is read against `want=` — and `room=` is there
+        // because the fixture is half of it: a file whose diff fits the
+        // pane has no place to lose, scrolls nowhere, and photographs
+        // exactly like one that lost nothing (`--preset manyhunks`).
+        "keep-place" => Some("diff_place at=400 want=400"),
         "discard-hunk" => Some("diff_row act=discard-hunk ready=true"),
         "discard-hunk-go" => Some("diff_row act=discard-hunk-go ready=true"),
         // These two answer with a count of their own, so the count is

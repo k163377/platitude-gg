@@ -160,6 +160,19 @@ Item {
         page.Window.window.finishAutoAct()
     }
 
+    /// How far down a diff the reader is taken before the thing that could
+    /// cost them their place happens — the rebuild a partial write asks
+    /// for (`keep-place`), and the swap the colours arrive in
+    /// (`colour-place`). One number for both, because both are judged on
+    /// getting exactly it back, and a place nobody can name is not one
+    /// either of them can be caught losing.
+    readonly property real readY: 400
+    function reportPlace(at, room) {
+        AppBackend.report("diff_place at=" + Math.round(at)
+                          + " want=" + Math.round(driver.readY)
+                          + " room=" + Math.round(room))
+    }
+
     Connections {
         target: repoTab
         function onBusyCountChanged() {
@@ -341,14 +354,9 @@ Item {
                 return
             }
             // Reading part way down a long diff and then writing: the
-            // rebuild has to come back to the same place. `diff_place` is
-            // reported by the restore.
+            // rebuild has to come back to the same place.
             if (act === "keep-place") {
-                diffPane.scrollTo(400)
-                driver.writeSeqBefore = repoTab.writeSeq
-                driver.writeStarted = repoTab.busyCount > 0
-                page.stageSelection(0, line)
-                writeBarrier.start()
+                keepPlaceTimer.begin(line)
                 return
             }
             if (act === "pick-lines" || act === "stage-lines") {
@@ -389,6 +397,69 @@ Item {
             }
         }
     }
+    // Reading part way down a long diff and then writing: the rebuild has
+    // to come back to the same place.
+    //
+    // The wait is for the view, not for the model (`diff-step` learned
+    // the same lesson): rows that have arrived are not rows the list has
+    // laid out, and until it has there is no place to lose — the scroll
+    // goes nowhere and the restore has nothing to undo. So what is waited
+    // for is the room the reading consumes, and a diff that is laid out
+    // and still too short says so and stops there rather than at the
+    // watchdog: nothing that short can hold a place, and a run over it
+    // photographs a pane that proves nothing (app-ui.md §UI 自動化の
+    // 因果性).
+    Timer {
+        id: keepPlaceTimer
+        interval: 25
+        repeat: true
+        /// The line of the first hunk that gets staged, which is what
+        /// rebuilds the diff under the reader.
+        property int line: -1
+        property bool wrote: false
+        function begin(atLine) {
+            keepPlaceTimer.line = atLine
+            keepPlaceTimer.wrote = false
+            keepPlaceTimer.start()
+        }
+        /// Rows the list has actually put down, as against rows it has
+        /// been handed: `contentHeight` is still zero for the first of
+        /// those and `maxY` cannot be read before it.
+        function laidOut() {
+            return diffPane.view.count > 0 && diffPane.view.height > 0
+                    && diffPane.view.contentHeight > 0
+        }
+        onTriggered: {
+            if (!keepPlaceTimer.wrote) {
+                if (!keepPlaceTimer.laidOut())
+                    return
+                if (diffPane.view.maxY < driver.readY) {
+                    keepPlaceTimer.stop()
+                    driver.reportPlace(diffPane.view.contentY, diffPane.view.maxY)
+                    renderedBarrier.begin()
+                    return
+                }
+                diffPane.scrollTo(driver.readY)
+                driver.writeSeqBefore = repoTab.writeSeq
+                driver.writeStarted = repoTab.busyCount > 0
+                page.stageSelection(0, keepPlaceTimer.line)
+                keepPlaceTimer.wrote = true
+                return
+            }
+            // Both edges of the write, and then the one output the whole
+            // verb is about: the rebuilt list put back on the place. A
+            // write that emptied this side never gets a row back and so
+            // never lands anywhere — which is a fixture with no place in
+            // it, and the run waits rather than passing on the silence.
+            if (!driver.writeStarted || repoTab.busyCount !== 0
+                    || repoTab.writeSeq <= driver.writeSeqBefore
+                    || diffPane.placeLandedY < 0)
+                return
+            keepPlaceTimer.stop()
+            driver.reportPlace(diffPane.placeLandedY, diffPane.view.maxY)
+            renderedBarrier.begin()
+        }
+    }
     // A reader who scrolled before the colours landed: the whole list is
     // swapped again when the colours turn up (`DiffModel::lay_out_rows`),
     // and that swap must not cost the place being read.
@@ -410,7 +481,7 @@ Item {
                 // is well before the colours are.
                 if (diffPane.firstChangedLine(0) < 0)
                     return
-                diffPane.scrollTo(400)
+                diffPane.scrollTo(driver.readY)
                 colourPlaceTimer.scrolled = true
                 return
             }

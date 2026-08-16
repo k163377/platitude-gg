@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import platitude
 import platitude.ui
 
 // The view's place in a diff that is about to be rebuilt.
@@ -18,8 +17,14 @@ Item {
     required property var view
 
     property real heldY: -1
+    /// Automation: where the restore actually put the view, and -1 until
+    /// it has run at all. The whole story ends here, so this is what a
+    /// verb waits for — a rebuild that emptied the list never gets its
+    /// count back above zero and so never restores anything.
+    property real landedY: -1
     function hold() {
         place.heldY = place.view.contentY
+        place.landedY = -1
     }
     function restore() {
         if (place.heldY >= 0)
@@ -38,8 +43,7 @@ Item {
             place.heldY = -1
             place.view.contentY = Math.max(0, Math.min(
                 want, place.view.contentHeight - place.view.height))
-            if (AppBackend.autoAct !== "")
-                AppBackend.report("diff_place " + Math.round(place.view.contentY))
+            place.landedY = place.view.contentY
         }
     }
     /// Automation: read the view away from the top, so that a rebuild can

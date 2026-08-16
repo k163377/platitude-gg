@@ -101,7 +101,7 @@
 - 行末の `+` / `−` は光っている行すべてに効く(規約 §その他の操作。`stageTargets` / `stagePeerOf`、動詞 `stage-many`)
 - **行選択 `chosenLines` は毎回新しい object を代入する** — 同じものを返すと行が追えない(WIP の `chosenKeys` と同じ形)。`encode::line_selection` は負の index を捨てる(`hunk_selection` と違い「hunk 全部」の意味を持たせない)
 - **側が空になった diff は閉じる**(規約 §diff の中のステージ。`closeWhenEmpty`)。`count` の 0 を直接見ない — reset で一度 0 を通る。画像・バイナリは行 0 でも中身なので `isBinary` / `previewKind` で除く
-- **diff の作り直しで画面を飛ばさない**(規約 §diff の中のステージ。`begin_request` は同じファイルなら行を消さない)。`holdScroll()` は `onCountChanged` の 0 を無視する(reset が先に来る)。動詞 `keep-place`
+- **diff の作り直しで画面を飛ばさない**(規約 §diff の中のステージ。`begin_request` は同じファイルなら行を消さない)。`holdScroll()` は `onCountChanged` の 0 を無視する(reset が先に来る)。**戻した位置は `DiffScrollPlace.landedY`(復元前は -1)**= 自動化が待つ出力で、書き込みが片側を空にした diff では行が戻らないので永久に -1 のまま。動詞 `keep-place`(`--preset manyhunks`)
 - **diff の色は行の後から届く**(`SessionEvent::DiffColoured`。規約 §シンタックスハイライト)。syntect は行数に比例して重い — 6001 行の `.rs` で 951ms・同内容の `.txt` は 3ms(2026-08-13 実測)、UI スレッドは無実(`flatten_patches` は 2ms)。色を乗せる時に行を作り直さない — `ListView` は新しいリストで先頭へ戻る(`repaint_rows` が `text` / `rich` だけ書き換える。実測 `at=400`)。追い越された読みは色を付けない(`diff_epoch` — 無いと、ファイルを次々クリックした時に離れた行の色付けが 1 件ずつ後ろに残る)。動詞 `colour-place`
 - **diff の feed だけ `push_replace` ではなく `push`**(`hub.rs`)— 1 つの diff が行と色の 2 通を出し、置き換えると片割れが消える。応答は要求順に返らない(色付き 951ms / プレーン 3ms)ので、遅れて着いた古い応答が新しい方を上書き → stale として捨てられ、開いているファイルの diff が二度と来なかった(2026-08-13 実測。「diff が出たり出なかったりする」の正体)
 - **diff の行を触る自動化フックは待ち時間で計らない**(`RepoPage.stageRowTimer`)。固定 800ms は、読みが間に合わない run と dirty でない run を「空のペインを撮って PASS」に潰していた(2026-08-13 実測: `picked_lines 0` で緑)。諦めても実行して報告する — 黙って return すると FAIL の理由が消える(報告行は verbs.md)
