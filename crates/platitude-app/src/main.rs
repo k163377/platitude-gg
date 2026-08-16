@@ -140,6 +140,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/StashActionsBand.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/StashOptionsCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SummaryArea.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/TabItemDelegate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TopBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TreeViewToggle.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowAutoActDriver.qml", "qt/qml/platitude");
