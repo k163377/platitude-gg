@@ -1,4 +1,5 @@
 # Enforced with `-D warnings` in CI (see internal-docs/実装計画.md §11.1 and CLAUDE.md).
+too-many-lines-threshold = 100
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true

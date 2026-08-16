@@ -383,6 +383,7 @@ impl GraphModel {
     }
 
     #[qslot]
+    #[expect(clippy::too_many_lines)]
     fn drain(&mut self) {
         let Some(feed) = self.feed.clone() else {
             return;

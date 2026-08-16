@@ -673,6 +673,7 @@ impl NavSectionModel {
     /// **The only place a row's fields are worked out.** The view reads
     /// it through `data`, and the slots below read it directly, so no row
     /// can show the delegate one thing and tell automation another.
+    #[expect(clippy::too_many_lines)]
     fn field<'a>(&self, row: Row<'a>, role: Role) -> Value<'a> {
         let (of, depth, from) = match row {
             Row::Made(item) => {

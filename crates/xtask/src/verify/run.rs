@@ -18,6 +18,7 @@ use super::verbs;
 /// repository load, and the write itself happen inside this.
 const GRACE_MS: u64 = 20_000;
 
+#[expect(clippy::too_many_lines)]
 pub fn run(args: &[String]) -> Result<(), String> {
     let opts = parse(args)?;
     let root = crate::workspace_root();

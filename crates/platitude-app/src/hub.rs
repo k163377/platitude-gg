@@ -378,6 +378,7 @@ struct BridgeSink {
 }
 
 impl SessionSink for BridgeSink {
+    #[expect(clippy::too_many_lines)]
     fn event(&self, event: SessionEvent) {
         match event {
             SessionEvent::Opened { info } => {

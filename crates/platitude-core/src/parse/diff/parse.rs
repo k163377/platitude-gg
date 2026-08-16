@@ -10,6 +10,7 @@ use super::{DiffHunk, DiffLine, DiffLineKind, FilePatch};
 ///
 /// Unknown lines are skipped (with a trace log) rather than failing: a diff
 /// that renders slightly incomplete beats an empty error pane.
+#[expect(clippy::too_many_lines)]
 pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
     let text = String::from_utf8_lossy(bytes);
     let mut files: Vec<FilePatch> = Vec::new();

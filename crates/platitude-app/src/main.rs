@@ -19,6 +19,7 @@ use models::{
 use platitude_core::settings::{Build, Claim, Store};
 use qtbridge::QApp;
 
+#[expect(clippy::too_many_lines)]
 fn main() {
     init_tracing();
     // Said once, before anything else can fail: a run whose window never
