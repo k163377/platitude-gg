@@ -440,11 +440,11 @@ Rectangle {
     function driftPointer(x, y) {
         autoScroll.drift(x, y)
     }
-    GraphAutoScroll {
+    MiddleAutoScroll {
         id: autoScroll
         anchors.fill: parent
-        laneFrom: graphArea.labelW
-        laneTo: graphArea.labelW + graphArea.graphColW
+        panFrom: graphArea.labelW
+        panTo: graphArea.labelW + graphArea.graphColW
         canPan: graphArea.graphXMax > 0
         onDrifted: (dy, dx) => {
             graphList.contentY = graphList.clampY(graphList.contentY + dy)

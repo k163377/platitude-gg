@@ -116,7 +116,6 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/FoldBlock.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FormField.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GitVersionCorner.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/GraphAutoScroll.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphColumnDividers.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphColumnMetrics.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphEmptyState.qml", "qt/qml/platitude");
@@ -141,6 +140,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/LabeledField.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/MessageActionsRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/MessageEditor.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/MiddleAutoScroll.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NameCell.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NavHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NavIcon.qml", "qt/qml/platitude");

@@ -52,7 +52,6 @@ FindBar 1.0 FindBar.qml
 FoldBlock 1.0 FoldBlock.qml
 FormField 1.0 FormField.qml
 GitVersionCorner 1.0 GitVersionCorner.qml
-GraphAutoScroll 1.0 GraphAutoScroll.qml
 GraphColumnDividers 1.0 GraphColumnDividers.qml
 GraphColumnMetrics 1.0 GraphColumnMetrics.qml
 GraphEmptyState 1.0 GraphEmptyState.qml
@@ -77,6 +76,7 @@ ImagePreviewCell 1.0 ImagePreviewCell.qml
 LabeledField 1.0 LabeledField.qml
 MessageActionsRow 1.0 MessageActionsRow.qml
 MessageEditor 1.0 MessageEditor.qml
+MiddleAutoScroll 1.0 MiddleAutoScroll.qml
 NameCell 1.0 NameCell.qml
 NavHeader 1.0 NavHeader.qml
 NavIcon 1.0 NavIcon.qml

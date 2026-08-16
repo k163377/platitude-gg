@@ -6,13 +6,17 @@ import platitude.ui
 // Middle-click toggles autoscroll mode: the pointer distance from
 // the anchor sets the speed; any click exits. What the drift means —
 // which list moves, and how far it may go — is the pane's (`drifted`).
+//
+// Not the graph's own: the diff moves under the same hand, and the two
+// panes differ only in where sideways is offered (the graph asks for the
+// lanes column, the diff is one column of text throughout).
 Item {
     id: autoScroll
 
-    /// Where the lanes column begins and ends in this frame. A gesture
-    /// that starts between the two carries the lanes sideways as well.
-    required property real laneFrom
-    required property real laneTo
+    /// Where the column that goes sideways begins and ends in this frame.
+    /// A gesture that starts between the two carries it sideways as well.
+    required property real panFrom
+    required property real panTo
     /// Whether there is anywhere sideways to go at all.
     required property bool canPan
 
@@ -21,9 +25,9 @@ Item {
     property real anchorY: 0
     property real currentX: 0
     property real currentY: 0
-    /// Whether this autoscroll carries the lanes sideways as well. Decided
-    /// by where the middle click landed, and kept for the whole gesture
-    /// (デザイン規約 §グラフを横へ送る).
+    /// Whether this autoscroll carries the column sideways as well.
+    /// Decided by where the middle click landed, and kept for the whole
+    /// gesture (デザイン規約 §グラフを横へ送る).
     property bool panning: false
 
     /// How far the drift has travelled since the last tick. `dx` is 0
@@ -38,7 +42,7 @@ Item {
         autoScroll.anchorY = y
         autoScroll.currentX = x
         autoScroll.currentY = y
-        autoScroll.panning = x >= autoScroll.laneFrom && x < autoScroll.laneTo
+        autoScroll.panning = x >= autoScroll.panFrom && x < autoScroll.panTo
         autoScroll.scrolling = true
     }
     /// Where the pointer has drifted to since. Its distance from the
