@@ -9,7 +9,8 @@ paths:
 
 ## 上限(物理行)
 
-- **src 1 ファイル 500 行 / fn 100 行**(clippy `too_many_lines` 相当)**/ tests 1 ファイル 1000 行**
+- **src 1 ファイル 500 行 / fn 100 行**(clippy `too_many_lines` 相当)**/ tests 1 ファイル 1000 行** — **機械化済み: `cargo xtask structure`(check に内蔵)**。ファイルは物理行を数え、fn は clippy(workspace lints + clippy.toml の閾値)
+- 既存超過の固定先: ファイルは `crates/xtask/structure-baseline.txt`(縮めば自動追従・伸ばせば fail)、fn は `#[expect(clippy::too_many_lines)]`。**どちらも縮めた時に外す必要がある** — 基準線は書き換わったファイルを commit、`#[expect]` は剥がす(貼ったまま fn が 100 行を切ると unfulfilled で赤くなる)
 - **上限超過ファイルへ追記しない** — 先にその責務を切り出す。切り出しが今の変更を膨らませすぎる時だけ追記し、分割タスクを積んで報告する(黙認しない)
 - 分割しない判断をした超過ファイルは [rules-refs/structure.md](../rules-refs/structure.md) へ理由 1 行(記載の無い超過は違反)
 
