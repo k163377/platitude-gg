@@ -21,6 +21,7 @@ CoAuthorLine 1.0 CoAuthorLine.qml
 CodeChip 1.0 CodeChip.qml
 CommitAuthorRow 1.0 CommitAuthorRow.qml
 CommitHoverCard 1.0 CommitHoverCard.qml
+CommitRowMenu 1.0 CommitRowMenu.qml
 EolHoverCard 1.0 EolHoverCard.qml
 CommandRowDelegate 1.0 CommandRowDelegate.qml
 CommandsPane 1.0 CommandsPane.qml

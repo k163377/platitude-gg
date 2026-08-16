@@ -1171,7 +1171,7 @@ Item {
         page.menuStashRef = graphModel.stashRefOf(oidHex)
         if (page.menuStashRef !== "") {
             page.menuStashCanWrite = repoTab.busyCount === 0
-            stashMenu.offer()
+            commitRowMenu.offerStash()
             return
         }
         page.menuPublished = false
@@ -1182,134 +1182,30 @@ Item {
         page.menuCanMoveBranch = page.canMoveBranchHere
         if (repoTab.state === "open")
             repoTab.checkPublish(oidHex + "^!")
-        commitMenu.offer()
+        commitRowMenu.offerCommit()
     }
 
-    AppMenu {
-        id: stashMenu
-        AppMenuItem {
-            code: "apply"
-            offered: page.menuStashCanWrite
-            onTriggered: repoTab.applyStash(page.menuStashRef)
+    CommitRowMenu {
+        id: commitRowMenu
+        repoTab: repoTab
+        branch: workTree.branch
+        oid: page.menuOid
+        stashRef: page.menuStashRef
+        published: page.menuPublished
+        canSequence: page.menuCanSequence
+        canIntegrate: page.menuCanIntegrate
+        canEditHistory: page.menuCanEditHistory
+        canMoveBranch: page.menuCanMoveBranch
+        stashCanWrite: page.menuStashCanWrite
+        onSquashRequested: oidHex => page.squashCommit(oidHex)
+        onDropRequested: oidHex => page.dropCommit(oidHex)
+        onResetRequested: mode => page.moveBranchHere(mode)
+        onApplyStashRequested: selector => repoTab.applyStash(selector)
+        onPopStashRequested: selector => {
+            repoTab.popStash(selector)
+            page.selectedStashRef = ""
         }
-        AppMenuItem {
-            code: "pop"
-            offered: page.menuStashCanWrite
-            onTriggered: {
-                repoTab.popStash(page.menuStashRef)
-                page.selectedStashRef = ""
-            }
-        }
-        AppMenuSeparator {}
-        // Held, not asked (デザイン規約 §長押し).
-        AppMenuItem {
-            id: stashDeleteItem
-            code: "drop"
-            offered: page.menuStashCanWrite
-            holdMs: Metrics.holdMs
-            onHeld: {
-                stashMenu.close()
-                page.dropStashNow(page.menuStashRef)
-            }
-        }
-    }
-
-    AppMenu {
-        id: commitMenu
-        AppMenuItem {
-            code: "cherry-pick"
-            offered: page.menuCanSequence
-            onTriggered: repoTab.cherryPick(page.menuOid)
-        }
-        // Both cherry-pick and revert only add a commit, so neither is
-        // asked about or held.
-        AppMenuItem {
-            code: "revert"
-            offered: page.menuCanSequence
-            onTriggered: repoTab.revert(page.menuOid)
-        }
-        AppMenuSeparator {}
-        AppMenuItem {
-            code: "merge"
-            //: Follows the `merge` chip: "merge into main".
-            text: qsTr("into %1").arg(workTree.branch)
-            offered: page.menuCanIntegrate
-            onTriggered: repoTab.merge(page.menuOid, false, false, "")
-        }
-        AppMenuItem {
-            code: "rebase"
-            //: Follows the `rebase` chip: "rebase main onto it".
-            text: qsTr("%1 onto it").arg(workTree.branch)
-            note: page.menuPublished ? qsTr("rewrites pushed commits") : ""
-            offered: page.menuCanIntegrate
-            onTriggered: repoTab.rebase(page.menuOid, "", true)
-        }
-        // No row for landing on the commit itself: that leaves HEAD on no
-        // branch (デザイン規約 §ブランチ・コミットへの移動) — the
-        // double-click already offers a branch at this commit.
-        AppMenuSeparator {}
-        // No entry for editing the message: the click that opens this
-        // menu already puts the message in the details pane's boxes.
-        AppMenuItem {
-            code: "squash"
-            //: Follows the `squash` chip: "squash into parent".
-            text: qsTr("into parent")
-            // Said, not asked (要望: rewriting a pushed commit shows a
-            // warning): the squash goes ahead, and this tag is the warning.
-            note: page.menuPublished ? qsTr("already pushed") : ""
-            offered: page.menuCanEditHistory
-            onTriggered: page.squashCommit(page.menuOid)
-        }
-        // Held while this branch is the only thing holding its tip; a
-        // plain click once something else does — then the replaced
-        // commits stay drawn and a cherry-pick brings any of them back
-        // (デザイン規約 §長押し). The answer is a property of the branch,
-        // not of the row, so it is already in hand when the menu opens: a
-        // mark appearing later would re-indent every row
-        // (`AppMenu.holdIndent`) with the hand already on its way.
-        AppMenuItem {
-            id: dropCommitItem
-            code: "drop"
-            note: page.menuPublished ? qsTr("already pushed") : ""
-            offered: page.menuCanEditHistory
-            holdMs: repoTab.headReachedElsewhere ? 0 : Metrics.holdMs
-            onTriggered: page.dropCommit(page.menuOid)
-            onHeld: {
-                commitMenu.close()
-                page.dropCommit(page.menuOid)
-            }
-        }
-        AppMenu {
-            id: resetMenu
-            titleCode: "reset"
-            //: Follows the `reset` chip: "reset main here".
-            title: workTree.branch !== ""
-                   ? qsTr("%1 here").arg(workTree.branch)
-                   : qsTr("the branch here")
-            applies: page.menuCanMoveBranch
-            AppMenuItem {
-                code: "--soft"
-                text: qsTr("Keep everything, staged")
-                onTriggered: page.moveBranchHere("soft")
-            }
-            AppMenuItem {
-                code: "--mixed"
-                text: qsTr("Keep everything, unstaged")
-                onTriggered: page.moveBranchHere("mixed")
-            }
-            // Held, not asked (デザイン規約 §長押し).
-            AppMenuItem {
-                id: hardResetItem
-                code: "--hard"
-                text: qsTr("Discard everything after it")
-                holdMs: Metrics.holdMs
-                onHeld: {
-                    resetMenu.close()
-                    commitMenu.close()
-                    page.moveBranchHere("hard")
-                }
-            }
-        }
+        onDropStashRequested: selector => page.dropStashNow(selector)
     }
 
     ClipboardHelper {
@@ -1515,11 +1411,11 @@ Item {
             refDeleteItem: refDeleteItem
             fileMenu: fileMenu
             fileDiscardItem: fileDiscardItem
-            commitMenu: commitMenu
-            dropCommitItem: dropCommitItem
-            stashDeleteItem: stashDeleteItem
-            resetMenu: resetMenu
-            hardResetItem: hardResetItem
+            commitMenu: commitRowMenu.menu
+            dropCommitItem: commitRowMenu.dropItem
+            stashDeleteItem: commitRowMenu.stashDropItem
+            resetMenu: commitRowMenu.resetSubmenu
+            hardResetItem: commitRowMenu.hardResetRow
             remoteDialog: remoteDialog
             refList: rowHost.listPopup
             rowCard: rowHost.hoverCard
