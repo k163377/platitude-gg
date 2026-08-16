@@ -37,6 +37,5 @@
 711 crates/platitude-core/src/session/build.rs
 692 crates/platitude-core/src/session/log.rs
 542 crates/platitude-core/src/status.rs
-1775 crates/platitude-core/tests/it/integrate_integration.rs
 654 crates/xtask/src/linux.rs
 540 crates/xtask/src/perf.rs
