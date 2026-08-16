@@ -399,47 +399,11 @@ ColumnLayout {
             spacing: 0
 
             // Stash actions when the selected row is a stash.
-            Rectangle {
-                visible: detailsPane.stashRef !== ""
+            StashActionsBand {
                 Layout.fillWidth: true
-                implicitHeight: Theme.headerHeight
-                color: Theme.bgElevated
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spaceSm
-                    anchors.rightMargin: Theme.spaceXs
-                    spacing: Theme.spaceXs
-                    NavIcon {
-                        kind: "stash"
-                        tint: Theme.textSecondary
-                        width: Theme.iconMd
-                        height: Theme.iconMd
-                    }
-                    Label {
-                        text: detailsPane.stashRef
-                        font.family: Theme.monoFamily
-                        font.pixelSize: Theme.fontSm
-                        color: Theme.textSecondary
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                    }
-                    HoverToolButton {
-                        text: qsTr("Apply")
-                        font.pixelSize: Theme.fontSm
-                        ToolTip.visible: hovered
-                        ToolTip.delay: Metrics.tipDelayMs
-                        ToolTip.text: qsTr("Apply this stash, keeping it")
-                        onClicked: detailsPane.applyStashRequested(detailsPane.stashRef)
-                    }
-                    HoverToolButton {
-                        text: qsTr("Pop")
-                        font.pixelSize: Theme.fontSm
-                        ToolTip.visible: hovered
-                        ToolTip.delay: Metrics.tipDelayMs
-                        ToolTip.text: qsTr("Apply this stash and drop it")
-                        onClicked: detailsPane.popStashRequested(detailsPane.stashRef)
-                    }
-                }
+                stashRef: detailsPane.stashRef
+                onApplyRequested: selector => detailsPane.applyStashRequested(selector)
+                onPopRequested: selector => detailsPane.popStashRequested(selector)
             }
             // Inset on all four sides — the message box carries its own frame,
             // and flush against the header band the two borders read as one
