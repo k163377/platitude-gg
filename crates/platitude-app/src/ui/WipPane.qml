@@ -356,40 +356,15 @@ ColumnLayout {
                                wipList.originY + wipList.contentHeight
                                - wipList.contentY))
 
-    // The stash options open right under the button that asks for them,
-    // as a mode of this pane rather than a window over it (デザイン規約
-    // §可否・警告の出し場所: ダイアログでなければ成立しない UI ではない).
-    // A stash destroys nothing, so the card chooses what goes; it never
-    // asks whether it may.
-    property bool stashPanelShown: false
-    function openStashPanel() {
-        stashName.text = ""
-        stashUntracked.checked = true
-        stashKeepIndex.checked = false
-        stashStagedOnly.checked = false
-        wipPane.stashPanelShown = true
-        stashName.forceActiveFocus()
-    }
-    function closeStashPanel() {
-        wipPane.stashPanelShown = false
-    }
+    // The stash options card is a mode of this pane (`StashOptionsCard`);
+    // the automation enters through these names, so the pane keeps them
+    // and forwards into the card.
+    function openStashPanel() { stashCard.open() }
+    function closeStashPanel() { stashCard.close() }
     /// The click path onto "Only the staged changes" (the page's smoke
-    /// hook): setting `checked` skips `toggled`, a click does not.
-    function stashClickStagedOnly() {
-        stashStagedOnly.toggle()
-        stashStagedOnly.toggled()
-    }
-    function stashApply() {
-        // What is sent is what the boxes show — a box ruled out by the
-        // staged-only choice does not smuggle its old tick through
-        // (git refuses --staged together with --include-untracked).
-        const stagedOnly = stashStagedOnly.checked
-        wipPane.stashSubmitted(stashName.text,
-                               !stagedOnly && stashUntracked.checked,
-                               !stagedOnly && stashKeepIndex.checked,
-                               stagedOnly)
-        wipPane.closeStashPanel()
-    }
+    /// hook) — a click, not a `checked` write (`StashOptionsCard`).
+    function stashClickStagedOnly() { stashCard.clickStagedOnly() }
+    function stashApply() { stashCard.apply() }
 
     spacing: 0
 
@@ -431,7 +406,7 @@ ColumnLayout {
                 ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: qsTr("Set these changes aside for later")
                 onClicked: {
-                    if (wipPane.stashPanelShown)
+                    if (stashCard.shown)
                         wipPane.closeStashPanel()
                     else
                         wipPane.openStashPanel()
@@ -481,99 +456,16 @@ ColumnLayout {
             // Stash options card, under the button that opened it. The same
             // framed-card inset rhythm as the editor below (帯 → 枠 → 枠 = one
             // even spaceXs step).
-            Rectangle {
-                visible: wipPane.stashPanelShown
+            StashOptionsCard {
+                id: stashCard
                 Layout.fillWidth: true
                 Layout.leftMargin: Theme.spaceSm
                 Layout.rightMargin: Theme.spaceSm
                 Layout.topMargin: Theme.spaceXs
-                implicitHeight: stashCol.implicitHeight + 2 * Theme.spaceSm
-                color: Theme.bgBase
-                radius: Theme.radiusMd
-                border.color: Theme.borderDefault
-                border.width: Theme.borderWidth
-                ColumnLayout {
-                    id: stashCol
-                    anchors.fill: parent
-                    anchors.margins: Theme.spaceSm
-                    spacing: Theme.spaceXs
-                    FormField {
-                        id: stashName
-                        Layout.fillWidth: true
-                        placeholderText: qsTr("What this is, for finding it later")
-                        onAccepted: wipPane.stashApply()
-                        Keys.onEscapePressed: wipPane.closeStashPanel()
-                    }
-                    CheckBox {
-                        id: stashUntracked
-                        // A stash that leaves new files behind is the surprise
-                        // most often reported to other git GUIs, so this starts
-                        // on — the same choice the switch dialog makes.
-                        text: qsTr("Include files git is not tracking yet")
-                        font.pixelSize: Theme.fontSm
-                        implicitHeight: Theme.controlHeight
-                        enabled: !stashStagedOnly.checked
-                    }
-                    CheckBox {
-                        id: stashKeepIndex
-                        text: qsTr("Leave the staged changes staged")
-                        font.pixelSize: Theme.fontSm
-                        implicitHeight: Theme.controlHeight
-                        enabled: !stashStagedOnly.checked
-                    }
-                    CheckBox {
-                        id: stashStagedOnly
-                        text: qsTr("Only the staged changes")
-                        font.pixelSize: Theme.fontSm
-                        implicitHeight: Theme.controlHeight
-                        // git refuses it together with untracked files, and
-                        // cannot do it at all for a file changed on both sides:
-                        // it writes the entry, then fails to clear the tree and
-                        // leaves the entry behind with nothing else done
-                        // (measured). Refusing first is the only way that does
-                        // not surprise.
-                        enabled: wipPane.workTree.partiallyStagedCount === 0
-                        // A disabled box keeps its tick, and what is sent is
-                        // what the boxes show — so the boxes this tick rules
-                        // out are unticked, not just greyed with their ticks
-                        // still live.
-                        onToggled: {
-                            if (checked) {
-                                stashUntracked.checked = false
-                                stashKeepIndex.checked = false
-                            }
-                        }
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        visible: wipPane.workTree.partiallyStagedCount > 0
-                        wrapMode: Text.Wrap
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fontSm
-                        text: qsTr("%n file(s) are changed both in the staging area and on disk. git cannot take those apart, so the staged changes cannot go on their own.", "",
-                                   wipPane.workTree.partiallyStagedCount)
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.spaceSm
-                        Item { Layout.fillWidth: true }
-                        HoverToolButton {
-                            text: qsTr("Cancel")
-                            font.pixelSize: Theme.fontSm
-                            onClicked: wipPane.closeStashPanel()
-                        }
-                        ActionButton {
-                            implicitHeight: Theme.controlHeight
-                            kind: "stash"
-                            besideWord: true
-                            frameColor: enabled ? Theme.accent : Theme.borderDefault
-                            activeFocusOnTab: true
-                            text: qsTr("Stash")
-                            enabled: wipPane.repoTab.busyCount === 0
-                            onActivated: wipPane.stashApply()
-                        }
-                    }
-                }
+                repoTab: wipPane.repoTab
+                workTree: wipPane.workTree
+                onSubmitted: (message, untracked, keepIndex, stagedOnly) =>
+                    wipPane.stashSubmitted(message, untracked, keepIndex, stagedOnly)
             }
             // Message editor pinned on top — identical shape in commit details,
             // amend and new-commit creation, inset the same way (see

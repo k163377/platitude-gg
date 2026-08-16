@@ -58,6 +58,7 @@ SettingsDialog 1.0 SettingsDialog.qml
 SidebarPane 1.0 SidebarPane.qml
 SlimField 1.0 SlimField.qml
 SplitHandleBar 1.0 SplitHandleBar.qml
+StashOptionsCard 1.0 StashOptionsCard.qml
 SummaryArea 1.0 SummaryArea.qml
 TopBar 1.0 TopBar.qml
 TreeViewToggle 1.0 TreeViewToggle.qml
