@@ -281,6 +281,31 @@ impl GraphModel {
             .filter(|(_, r)| r.matched)
             .map(|(i, _)| i as i32)
     }
+
+    /// What the footer under the graph says once a walk has stopped: the
+    /// counts, the time it took, and — only where the walk was cut short —
+    /// the lanes still running off the bottom of the last row.
+    ///
+    /// Whether this stream is the one being listened to stays with the
+    /// caller: a chunked walk answers only for its own generation, and a
+    /// replacement supersedes anything older. So does what only a
+    /// replacement resets.
+    fn settle_footer(&mut self, row_total: i32, elapsed_ms: u64, walked: u32, truncated: bool) {
+        self.loading = false;
+        self.total_ms = elapsed_ms as i32;
+        self.row_total = row_total;
+        self.walked_total = walked as i32;
+        self.truncated = truncated;
+        self.finish_count += 1;
+        self.tail_geometry = if truncated {
+            self.rows
+                .last()
+                .map(|r| crate::encode::tail_lanes(&r.geometry))
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+    }
 }
 
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
@@ -413,20 +438,7 @@ impl GraphModel {
                     truncated,
                 } => {
                     if generation == self.generation {
-                        self.loading = false;
-                        self.total_ms = elapsed_ms as i32;
-                        self.row_total = total as i32;
-                        self.walked_total = walked as i32;
-                        self.truncated = truncated;
-                        self.finish_count += 1;
-                        self.tail_geometry = if truncated {
-                            self.rows
-                                .last()
-                                .map(|r| crate::encode::tail_lanes(&r.geometry))
-                                .unwrap_or_default()
-                        } else {
-                            String::new()
-                        };
+                        self.settle_footer(total as i32, elapsed_ms, walked, truncated);
                         self.rows.shrink_to_fit();
                         tracing::info!(total, elapsed_ms, truncated, "graph stream finished");
                     }
@@ -458,21 +470,12 @@ impl GraphModel {
                         .unwrap_or(1)
                         .max(1);
                     self.splice_notified(items);
-                    self.loading = false;
+                    let loaded = self.rows.len() as i32;
+                    self.settle_footer(loaded, elapsed_ms, walked, truncated);
+                    // Only a replacement zeroes these: it is one message
+                    // rather than a stream, so there was no first chunk to
+                    // time, and it is the answer to whatever failed last.
                     self.first_chunk_ms = 0;
-                    self.total_ms = elapsed_ms as i32;
-                    self.row_total = self.rows.len() as i32;
-                    self.walked_total = walked as i32;
-                    self.truncated = truncated;
-                    self.finish_count += 1;
-                    self.tail_geometry = if truncated {
-                        self.rows
-                            .last()
-                            .map(|r| crate::encode::tail_lanes(&r.geometry))
-                            .unwrap_or_default()
-                    } else {
-                        String::new()
-                    };
                     self.error = String::new();
                     tracing::info!(
                         total = self.row_total,
