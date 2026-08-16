@@ -214,7 +214,10 @@ commands:
       when it sits on main; fast-forwards the ref (and reattaches a
       detached primary) when main is checked out nowhere; refuses the
       ambiguous rest with what to do instead. Bare `land` from a seat
-      lands the seat's own branch.
+      lands the seat's own branch. A landed branch's seat is handed
+      back: its claude-seat claim is released once the commits are on
+      main, and the next edit there claims it back (a lock written by
+      hand stays).
 
   kill
       Reap this tree's app processes — the ones holding this tree's exe

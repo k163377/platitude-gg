@@ -1,13 +1,10 @@
-//! The seat roster guard: which worktrees a session may enter, and the
-//! atomic claim that keeps two sessions out of one seat.
+//! The seat roster guard: which worktrees a session may enter, the atomic
+//! claim that keeps two sessions out of one seat, and the re-claim that
+//! puts a claim back on a seat `land` set free.
 
 use super::payload::string_field;
 use crate::git_query;
-use crate::seats::{self, SEATS, worktree_root};
-
-/// The mark a session's seat claim carries in `git worktree lock`'s
-/// reason, followed by the session id.
-const SEAT_CLAIM: &str = "claude-seat";
+use crate::seats::{self, SEAT_CLAIM, SEATS, worktree_root};
 
 /// PreToolUse(EnterWorktree): a worktree name outside the seat roster
 /// starts a cold target/ nobody will reuse (CLAUDE.md ビルド・テスト).
@@ -154,6 +151,69 @@ pub(super) fn session_end(input: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// PostToolUse(Write|Edit): an edit inside a roster seat is work, and work
+/// holds a claim. Seats come free mid-session — `land` releases the claim
+/// the moment a seat's branch is on main (CLAUDE.md ビルド・テスト) — so
+/// the next stretch of work claims the seat back at its first edit. Quiet
+/// while the claim is already this session's; a note when the re-claim
+/// takes; a warning when the seat belongs to somebody else.
+pub(super) fn reclaim(input: &str, path: &str) -> Option<String> {
+    let root = worktree_root(path)?;
+    let name = root.rsplit('/').next()?.to_string();
+    if !SEATS.contains(&name.as_str()) {
+        return None;
+    }
+    let session = string_field(input, "session_id").unwrap_or_default();
+    match standing(lock_reason(&root), &session) {
+        Standing::Ours => None,
+        Standing::Foreign(reason) => Some(collision(&name, &reason)),
+        Standing::Free => match lock_seat(&root, &root, &session) {
+            Claim::Held(reason) => Some(collision(&name, &reason)),
+            // OursOrMoot cannot tell "claimed now" from "git could not
+            // judge" — only a claim that verifiably took is announced.
+            Claim::OursOrMoot => lock_reason(&root).map(|_| {
+                format!(
+                    "Seat {name} stood unclaimed and this edit re-claimed it \
+                     for the session (a landed seat comes unlocked; further \
+                     work claims it back at its first edit — CLAUDE.md \
+                     ビルド・テスト)."
+                )
+            }),
+        },
+    }
+}
+
+/// Where a seat's lock stands relative to this session. Pure so the tests
+/// can ask.
+enum Standing {
+    /// No lock at all.
+    Free,
+    /// This session's claim — or a session id too empty to judge by,
+    /// where fighting over the seat helps nobody.
+    Ours,
+    /// Somebody else's claim, or a lock a person wrote by hand.
+    Foreign(String),
+}
+
+fn standing(reason: Option<String>, session: &str) -> Standing {
+    match reason {
+        None => Standing::Free,
+        Some(reason) if session.is_empty() || reason.contains(session) => Standing::Ours,
+        Some(reason) => Standing::Foreign(reason),
+    }
+}
+
+/// The warning an edit into somebody else's seat rides out on.
+fn collision(name: &str, reason: &str) -> String {
+    format!(
+        "This edit landed in seat {name}, which another session holds \
+         (locked: {}). Two sessions in one seat trample each other's tree — \
+         move to a free seat (`cargo xtask seats`) and carry over only your \
+         own hunks (CLAUDE.md ビルド・テスト).",
+        printable(reason)
+    )
+}
+
 /// Why an EnterWorktree call is held, if it is. Pure so the tests can ask.
 fn worktree_objection(name: Option<&str>, path: Option<&str>) -> Option<&'static str> {
     if path.is_some() || name.is_some_and(|name| SEATS.contains(&name)) {
@@ -171,7 +231,7 @@ fn worktree_objection(name: Option<&str>, path: Option<&str>) -> Option<&'static
 
 #[cfg(test)]
 mod tests {
-    use super::{printable, roster_seat, worktree_objection};
+    use super::{Standing, printable, roster_seat, standing, worktree_objection};
 
     #[test]
     fn knows_a_seat_path_from_the_rest() {
@@ -196,6 +256,28 @@ mod tests {
             printable("claude-seat abc\"def\\x\ny"),
             "claude-seat abc'def'x y"
         );
+    }
+
+    #[test]
+    fn stands_a_lock_relative_to_the_session() {
+        assert!(matches!(standing(None, "s1"), Standing::Free));
+        assert!(matches!(
+            standing(Some("claude-seat s1".into()), "s1"),
+            Standing::Ours
+        ));
+        assert!(matches!(
+            standing(Some("claude-seat s2".into()), "s1"),
+            Standing::Foreign(_)
+        ));
+        assert!(matches!(
+            standing(Some("parked by hand".into()), "s1"),
+            Standing::Foreign(_)
+        ));
+        // An empty session id can match no claim — leave whatever holds.
+        assert!(matches!(
+            standing(Some("claude-seat s2".into()), ""),
+            Standing::Ours
+        ));
     }
 
     #[test]

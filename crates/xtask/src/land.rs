@@ -10,7 +10,7 @@
 //! in front of it, so the transcript records that the user asked.
 
 use crate::git_query;
-use crate::seats::{WorktreeBlock, worktree_blocks};
+use crate::seats::{SEAT_CLAIM, WorktreeBlock, worktree_blocks};
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let root = crate::workspace_root();
@@ -62,7 +62,40 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     let after = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
     println!("landed {branch}: main {before} -> {after} ({ahead} commit(s)).");
+    release_claim(&here, &trees, &branch);
     Ok(())
+}
+
+/// The claim's release point (CLAUDE.md ビルド・テスト): the reflection
+/// instruction ends a seat's stretch of work, so the landed branch's
+/// worktree is handed back the moment its commits are on main — whether
+/// the session that worked it is still around or not. Further work there
+/// claims the seat back at its first edit (the post-write hook). Only the
+/// hooks' own kind of lock is lifted; a lock a person wrote stays.
+fn release_claim(here: &str, trees: &[WorktreeBlock], branch: &str) {
+    let Some(tree) = landed_claim(trees, branch) else {
+        return;
+    };
+    if git_query(here, &["worktree", "unlock", &tree.path]).is_some() {
+        println!(
+            "released the seat claim on {} — the next edit there claims it back.",
+            tree.path
+        );
+    } else {
+        println!(
+            "note: the seat claim on {} did not release — \
+             `git worktree unlock {}` by hand.",
+            tree.path, tree.path
+        );
+    }
+}
+
+/// The tree whose checked-out branch just landed, when a session's claim
+/// (not a hand-written lock) holds it.
+fn landed_claim<'a>(trees: &'a [WorktreeBlock], branch: &str) -> Option<&'a WorktreeBlock> {
+    trees
+        .iter()
+        .find(|tree| tree.branch == branch && tree.locked && tree.reason.starts_with(SEAT_CLAIM))
 }
 
 /// The branch under the tree this runs from, when it is a seat branch —
@@ -154,8 +187,33 @@ fn head_name(tree: &WorktreeBlock) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::head_name;
+    use super::{head_name, landed_claim};
     use crate::seats::worktree_blocks;
+
+    #[test]
+    fn releases_only_a_landed_tree_held_by_a_session_claim() {
+        let listing = "worktree C:/x/platitude-gg\nHEAD 1111\nbranch refs/heads/main\n\n\
+                       worktree C:/x/platitude-gg/.claude/worktrees/a\nHEAD 2222\nbranch refs/heads/worktree-a\nlocked claude-seat abc\n\n\
+                       worktree C:/x/platitude-gg/.claude/worktrees/b\nHEAD 3333\nbranch refs/heads/worktree-b\nlocked parked by hand\n\n\
+                       worktree C:/x/platitude-gg/.claude/worktrees/c\nHEAD 4444\nbranch refs/heads/worktree-c\n";
+        let trees = worktree_blocks(listing);
+        assert_eq!(
+            landed_claim(&trees, "worktree-a").map(|tree| tree.path.as_str()),
+            Some("C:/x/platitude-gg/.claude/worktrees/a")
+        );
+        assert!(
+            landed_claim(&trees, "worktree-b").is_none(),
+            "a lock a person wrote stays"
+        );
+        assert!(
+            landed_claim(&trees, "worktree-c").is_none(),
+            "no lock, nothing to release"
+        );
+        assert!(
+            landed_claim(&trees, "worktree-x").is_none(),
+            "a branch checked out nowhere has no seat to hand back"
+        );
+    }
 
     #[test]
     fn reads_the_primary_first_and_detachment_as_an_empty_branch() {

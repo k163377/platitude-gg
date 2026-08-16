@@ -16,6 +16,12 @@ use std::time::{Duration, SystemTime};
 /// (CLAUDE.md ビルド・テスト).
 pub(crate) const SEATS: [&str; 6] = ["a", "b", "c", "d", "e", "f"];
 
+/// The mark a session's seat claim carries in `git worktree lock`'s
+/// reason, followed by the session id. The entry hooks and the post-write
+/// re-claim write it; `land` and the session-end hook release it. A lock
+/// without this mark is a person's, and nothing automatic touches it.
+pub(crate) const SEAT_CLAIM: &str = "claude-seat";
+
 /// The directory every worktree of this repository sits under.
 const WORKTREES: &str = "/.claude/worktrees/";
 

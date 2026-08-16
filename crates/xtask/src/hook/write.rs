@@ -1,7 +1,9 @@
-//! The Write and Edit guards: where a new test file may land, and the QML
-//! rules a change keeps missing by attention.
+//! The Write and Edit guards: where a new test file may land, the QML
+//! rules a change keeps missing by attention, and the seat claim an edit
+//! into an unclaimed seat puts back.
 
 use super::payload::string_field;
+use super::seat;
 
 /// PreToolUse(Write): a new .rs directly under crates/platitude-core/tests/
 /// would become a second, serialized test binary — integration tests are one
@@ -28,23 +30,41 @@ pub(super) fn pre_write(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// PostToolUse(Write|Edit): rules a QML change keeps missing by
-/// attention. A file absent from qmldir or main.rs silently fails to
-/// resolve at runtime (qmldir directories only expose enumerated
-/// types), and the font rules below dodge review because the wrong
-/// form still renders fine on the machine it was written on.
+/// PostToolUse(Write|Edit): the seat re-claim, then the QML rules a
+/// change keeps missing by attention. One JSON object is the whole
+/// answer, so every note this call has rides out in a single
+/// additionalContext.
 pub(super) fn post_write(input: &str) -> Result<(), String> {
     let Some(path) = string_field(input, "file_path") else {
         return Ok(());
     };
     let path = path.replace('\\', "/");
+    let mut notes: Vec<String> = Vec::new();
+    notes.extend(seat::reclaim(input, &path));
+    notes.extend(qml_notes(&path)?);
+    if !notes.is_empty() {
+        println!(
+            "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PostToolUse\",\
+             \"additionalContext\":\"{}\"}}}}",
+            notes.join(" ")
+        );
+    }
+    Ok(())
+}
+
+/// Rules a QML change keeps missing by attention. A file absent from
+/// qmldir or main.rs silently fails to resolve at runtime (qmldir
+/// directories only expose enumerated types), and the font rules below
+/// dodge review because the wrong form still renders fine on the machine
+/// it was written on.
+fn qml_notes(path: &str) -> Result<Vec<String>, String> {
     if !path.ends_with(".qml") || !path.contains("crates/platitude-app/src/ui/") {
-        return Ok(());
+        return Ok(Vec::new());
     }
     let Some(file_name) = path.rsplit('/').next().map(str::to_string) else {
-        return Ok(());
+        return Ok(Vec::new());
     };
-    let ui_dir = std::path::Path::new(&path)
+    let ui_dir = std::path::Path::new(path)
         .parent()
         .ok_or("qml path has no parent")?;
     let mut notes: Vec<String> = Vec::new();
@@ -70,17 +90,10 @@ pub(super) fn post_write(input: &str) -> Result<(), String> {
             missing.join(" and ")
         ));
     }
-    if let Ok(content) = std::fs::read_to_string(&path) {
+    if let Ok(content) = std::fs::read_to_string(path) {
         notes.extend(qml_font_notes(&content));
     }
-    if !notes.is_empty() {
-        println!(
-            "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PostToolUse\",\
-             \"additionalContext\":\"{}\"}}}}",
-            notes.join(" ")
-        );
-    }
-    Ok(())
+    Ok(notes)
 }
 
 /// The font rules of デザイン規約 §QML 実装ルール, checked line by line.
