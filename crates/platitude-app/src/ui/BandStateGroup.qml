@@ -163,22 +163,17 @@ Item {
 
     /// Whether anything is asking for the card: the pointer on the mark,
     /// the pointer inside the card, or the hook standing in for either.
-    readonly property bool stateLit: groupHover.hovered
-                                     || stateGroup.pointedAt
-                                     || stateCard.pointerInside
+    readonly property alias stateLit: stateKeep.lit
 
     signal identityEditRequested()
 
-    /// Opens the card, or starts the wait that closes it. The wait is
-    /// `Metrics.hoverKeepMs` rather than `Qt.callLater`: the mark and the
-    /// card change their hover in separate frames and in either order, and
-    /// callLater runs in between (app-ui.md の 5 つの罠 (3)).
+    /// Opens the card; `stateKeep` is what closes it a beat after the
+    /// last thing asking for it lets go.
     function settleStateCard() {
         if (!stateGroup.stateLit) {
-            stateSettle.restart()
+            stateKeep.settle()
             return
         }
-        stateSettle.stop()
         if (!stateCard.opened && stateGroup.stateShown)
             stateCard.open()
     }
@@ -228,13 +223,10 @@ Item {
     // puts the strip and this group in proportion.
     implicitWidth: stateGroup.naturalWidth
 
-    Timer {
-        id: stateSettle
-        interval: Metrics.hoverKeepMs
-        onTriggered: {
-            if (!stateGroup.stateLit)
-                stateCard.close()
-        }
+    HoverCardHost {
+        id: stateKeep
+        card: stateCard
+        pointedAt: groupHover.hovered || stateGroup.pointedAt
     }
     FontMetrics {
         id: stateFont

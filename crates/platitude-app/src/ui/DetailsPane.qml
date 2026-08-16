@@ -102,27 +102,13 @@ ColumnLayout {
         mateCard.y = p.y
         mateCard.open()
     }
-    // The card opens flush under the stretch, so walking into it takes
-    // the pointer off the stretch on the way and walking back out puts
-    // it on again. Both hovers change in the same frame and in no fixed
-    // order, so the answer waits for the end of this round of events.
-    function settleMateCard() {
-        mateSettle.restart()
-    }
-    // A beat, not a turn of the event loop: the two hovers change in
-    // different frames when the pointer walks from the line into the
-    // card, and `Qt.callLater` lands between them (2026-08-09 report).
-    Timer {
-        id: mateSettle
-        interval: Metrics.hoverKeepMs
-        onTriggered: {
-            if (!mateCard.pointerInside && !authorRow.matesPointed)
-                mateCard.close()
-        }
-    }
     CoAuthorCard {
         id: mateCard
-        onPointerInsideChanged: detailsPane.settleMateCard()
+    }
+    HoverCardHost {
+        id: mateKeep
+        card: mateCard
+        pointedAt: authorRow.matesPointed
     }
 
     /// Smoke hook and hover handler both land here (`CommitAuthorRow`).
@@ -141,14 +127,6 @@ ColumnLayout {
         authorCard.y = p.y
         authorCard.open()
     }
-    Timer {
-        id: authorSettle
-        interval: Metrics.hoverKeepMs
-        onTriggered: {
-            if (!authorCard.pointerInside && !authorRow.authorPointed)
-                authorCard.close()
-        }
-    }
     AuthorCard {
         id: authorCard
         authorName: detailsPane.details.authorName
@@ -163,7 +141,11 @@ ColumnLayout {
         committedAt: detailsPane.details.committerTime
         committerDiffers: detailsPane.details.committerDiffers
         timeDiffers: detailsPane.details.commitTimeDiffers
-        onPointerInsideChanged: authorSettle.restart()
+    }
+    HoverCardHost {
+        id: authorKeep
+        card: authorCard
+        pointedAt: authorRow.authorPointed
     }
 
     signal fileActivated(string path, string origPath)
@@ -417,9 +399,9 @@ ColumnLayout {
                     onCopyRequested: text => detailsPane.copyRequested(text)
                     onParentClicked: oidHex => detailsPane.parentClicked(oidHex)
                     onOpenMateRequested: at => detailsPane.openMateCard(at)
-                    onSettleMateRequested: detailsPane.settleMateCard()
+                    onSettleMateRequested: mateKeep.settle()
                     onOpenAuthorRequested: at => detailsPane.openAuthorCard(at)
-                    onSettleAuthorRequested: authorSettle.restart()
+                    onSettleAuthorRequested: authorKeep.settle()
                 }
             }
         }

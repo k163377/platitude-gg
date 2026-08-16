@@ -70,7 +70,7 @@ Item {
         rowCard.open()
     }
     function settleRowCard() {
-        rowCardSettle.restart()
+        rowCardKeep.settle()
     }
     /// Down now, not in a beat's time: what makes way for the chip's list
     /// has to be gone before it is drawn, or the two overlap for as long
@@ -98,14 +98,8 @@ Item {
         host.refListWanted = false
         host.settleRefList()
     }
-    // The list opens flush under the chip, so walking into it takes the
-    // pointer off the chip on the way, and walking back out puts it on
-    // again. The two hovers change in different frames and in no fixed
-    // order, and `Qt.callLater` runs between them — the list shut under
-    // the hand on the way in (2026-08-09 report). So the answer waits a
-    // beat, the way the row's card does.
     function settleRefList() {
-        refListSettle.restart()
+        refListKeep.settle()
     }
 
     // The refs one chip had to stack, unstacked under it. It opens and
@@ -120,7 +114,16 @@ Item {
             host.refListWanted = false
             host.refListAnchor = null
         }
-        onPointerInsideChanged: host.settleRefList()
+    }
+    // A ref menu standing on one of the list's rows keeps the list up
+    // under it: the hand went into the menu, not away, and closing the
+    // list would pull the ground out from what it right-clicked. The
+    // menu's own close settles this again (`RepoPage.onDismissed`).
+    HoverCardHost {
+        id: refListKeep
+        card: refList
+        pointedAt: host.refListWanted
+        grace: host.menuStanding
     }
     // ---- the row's own card -----------------------------------------
     // Opened by a row once the pointer has rested on it, closed when the
@@ -131,34 +134,13 @@ Item {
         // A quarter each to the subject and the body, so the card can
         // never pass half the pane however long a message is.
         textHeight: host.graphPane.height / 4
-        onPointerInsideChanged: host.settleRowCard()
+    }
+    HoverCardHost {
+        id: rowCardKeep
+        card: rowCard
+        pointedAt: host.rowCardWanted
     }
 
-    // Closing waits a beat rather than a turn of the event loop. Walking
-    // from the row into the card it opened crosses a boundary where the
-    // two hovers change in different frames, and `Qt.callLater` runs
-    // between them — the card closed under the hand (2026-08-09 report).
-    Timer {
-        id: rowCardSettle
-        interval: Metrics.hoverKeepMs
-        onTriggered: {
-            if (!rowCard.pointerInside && !host.rowCardWanted)
-                rowCard.close()
-        }
-    }
-    Timer {
-        id: refListSettle
-        interval: Metrics.hoverKeepMs
-        onTriggered: {
-            // A ref menu standing on one of the list's rows keeps the
-            // list up under it: the hand went into the menu, not away,
-            // and closing the list would pull the ground out from what
-            // it right-clicked. The menu's own close settles this again.
-            if (!refList.pointerInside && !host.refListWanted
-                    && !host.menuStanding)
-                refList.close()
-        }
-    }
     Connections {
         // The row it hangs off is a delegate, and delegates travel: once
         // the graph moves under it the list is pointing at nothing.
