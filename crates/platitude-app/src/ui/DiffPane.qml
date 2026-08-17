@@ -101,13 +101,58 @@ Rectangle {
     function stageLine(hunk, line) {
         diffPane.stageSelectionRequested(hunk, line)
     }
-    /// Whether the pointer is anywhere in this pane. Read by the sideways
-    /// bar, which lies over the last row and so only comes out while there
-    /// is a hand here. **On the pane, not on an overlay** — a handler laid
-    /// over the rows takes their own hover away, and the `+` a line puts
-    /// out under the pointer never appears (2026-08-17 実測).
+    /// Where the pointer is, and whether it is in this pane at all.
+    ///
+    /// **The rows do not answer for themselves.** Every write rebuilds the
+    /// list under the hand, and a freshly built item is not hovered until
+    /// the mouse moves again — Qt delivers hover on movement — so the mark
+    /// stayed away after a press and the next line could not be staged
+    /// without waggling the mouse first (2026-08-17 ユーザー報告). The
+    /// pane works out which row the pointer is over instead, and writes
+    /// the same pair of properties the automation writes.
+    ///
+    /// **On the pane, not on an overlay**: a handler laid over the rows
+    /// takes their hover away entirely (2026-08-17 実測).
     HoverHandler {
         id: panePointer
+        onPointChanged: diffPane.settlePointedRow()
+        // Leaving takes the mark with it. Said here rather than in
+        // `settlePointedRow`, which a headless run must not reach: there
+        // the pointer never arrives and never leaves, and the row the
+        // automation named has to stand (verify-ui).
+        onHoveredChanged: {
+            if (panePointer.hovered)
+                diffPane.settlePointedRow()
+            else
+                diffPane.showLineTools(-1, -1)
+        }
+    }
+    /// Names the row the pointer is over, or nothing where it is over none
+    /// of them. A heading is named as itself (line -1), which is what
+    /// lights its whole hunk.
+    function settlePointedRow() {
+        if (!panePointer.hovered)
+            return
+        const at = diffPane.mapToItem(diffList, panePointer.point.position.x,
+                                      panePointer.point.position.y)
+        const row = at.y >= 0 && at.y <= diffList.height
+                  ? diffList.itemAt(at.x + diffList.contentX,
+                                    at.y + diffList.contentY)
+                  : null
+        if (!row) {
+            diffPane.showLineTools(-1, -1)
+            return
+        }
+        diffPane.showLineTools(row.hunk, row.kind === "hunk" ? -1 : row.line)
+    }
+    // The rows the pointer is over have just been replaced. The wait is
+    // the one the scroll restore takes, and for the same reason: on the
+    // frame the rows land the list has not laid them out, and nothing is
+    // under the pointer yet (`DiffScrollPlace`).
+    Timer {
+        id: pointedRowTimer
+        interval: Metrics.anchorDelayMs
+        onTriggered: diffPane.settlePointedRow()
     }
     // ---- the keyboard -----------------------------------------------
     /// Where the keyboard goes when this pane comes on screen. Unlike the
@@ -352,9 +397,18 @@ Rectangle {
             Layout.fillHeight: true
             model: diffPane.diffModel
             // The rows the write asked for have landed: put the view back
-            // where it was reading. The empty half of the swap is not it —
-            // a reset shows up here as a count of zero first.
-            onCountChanged: if (count > 0) diffPane.restoreScroll()
+            // where it was reading, and work out again which of the new
+            // rows the pointer is over. The empty half of the swap is not
+            // it — a reset shows up here as a count of zero first.
+            onCountChanged: {
+                if (count > 0) {
+                    diffPane.restoreScroll()
+                    pointedRowTimer.restart()
+                }
+            }
+            // A row moving under a pointer that is standing still is the
+            // same question as the pointer moving over the rows.
+            onContentYChanged: diffPane.settlePointedRow()
             // An image with no text rows hands its space to the preview
             // (SVG edits keep both).
             visible: diffPane.diffModel.previewKind !== "image"
@@ -414,14 +468,6 @@ Rectangle {
                 theirsColor: diffPane.sideColor("theirs")
                 hoverHunk: diffPane.hoverHunk
                 hoverLine: diffPane.hoverLine
-                onHunkPointedAt: (inside, hunk) => {
-                    if (inside) {
-                        diffPane.hoverHunk = hunk
-                        diffPane.hoverLine = -1
-                    } else if (diffPane.hoverHunk === hunk) {
-                        diffPane.hoverHunk = -1
-                    }
-                }
                 onLineStageRequested: (hunk, line) =>
                     diffPane.stageLine(hunk, line)
                 onDiscardRequested: hunk => diffPane.discardHunkRequested(hunk)

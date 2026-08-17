@@ -906,6 +906,21 @@ Item {
         }
         page.closeDiff()
     }
+    /// Whether the diff on screen is still catching up with a write.
+    ///
+    /// A press addresses the rows it was made on, and carries the
+    /// fingerprint of the bytes they were read from; git refuses it
+    /// against anything else. So from the moment a write goes out until
+    /// the rows it changed are back, the pane must not take another one —
+    /// pressed twice in a row, the second landed on the diff the first had
+    /// already replaced and came back with a refusal in the log
+    /// (2026-08-17 ユーザー報告).
+    ///
+    /// Three parts, in the order they happen: the write is running, the
+    /// tree it moved has not been read yet (`seenTreeTally`), and the file
+    /// is being read again.
+    readonly property bool diffSettling:
+        repoTab.busyCount > 0 || page.seenTreeTally === "" || diffModel.loading
     /// A write on the working tree has landed, so the open diff is a
     /// picture of what the file used to be.
     ///
@@ -1555,7 +1570,7 @@ Item {
                         sideTheirs: workTree.sideTheirs
                         sideColorOurs: page.sideColorOurs
                         sideColorTheirs: page.sideColorTheirs
-                        busy: repoTab.busyCount > 0
+                        busy: page.diffSettling
                         onCloseRequested: page.closeDiff()
                         onNothingLeft: page.followEmptySide()
                         onDiscardHunkRequested: hunk => page.discardHunkNow(hunk)

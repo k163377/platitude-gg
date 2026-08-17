@@ -10,15 +10,11 @@ import platitude.ui
 // heading — the two words that act on the whole hunk.
 //
 // **The mark is the only thing in a row that takes a press**
-// (デザイン規約 §diff の中のステージ). The row itself answers the pointer
-// and nothing else, so the text under it stays free for the hand that
-// wants to read or copy it.
-//
-// The pointer is read with a `HoverHandler` rather than a `MouseArea`: a
-// `MouseArea` loses `containsMouse` the moment the pointer crosses onto
-// the hoverEnabled one inside the mark, so the mark flickered out from
-// under the hand reaching for it (2026-08-17 実測, qmltestrunner —
-// handlers are passive and keep the row hovered).
+// (デザイン規約 §diff の中のステージ). Nothing else in the row is a
+// target at all, so the text stays free for the hand that wants to read
+// or copy it — and whether the pointer is here is not the row's question
+// either: the pane works it out and names the row (`hoverHunk` /
+// `hoverLine`, see `DiffPane.settlePointedRow`).
 //
 // Everything the pane knows arrives as a property; everything the pane has
 // to do about a press leaves as a signal.
@@ -63,14 +59,13 @@ Rectangle {
     required property bool sidesTold
     required property var oursColor
     required property var theirsColor
-    /// Which hunk and line the pane has been told the pointer is on. Only
-    /// the automation writes it — hover cannot be injected — and it stands
-    /// in for the real pointer wherever one is read (verify-ui).
+    /// Which hunk and line the pointer is on, as the pane works it out
+    /// (`DiffPane.settlePointedRow`) — and as the automation names it,
+    /// since hover cannot be injected (verify-ui). One pair, one answer,
+    /// whichever way it was arrived at.
     required property int hoverHunk
     required property int hoverLine
 
-    /// The pointer arrived on this hunk's heading, or left it.
-    signal hunkPointedAt(bool inside, int hunk)
     /// A press on the line's own mark: this line goes over to the other
     /// side now.
     signal lineStageRequested(int hunk, int line)
@@ -88,12 +83,11 @@ Rectangle {
            : kind === "del" ? Theme.diffRemovedBg
            : kind === "hunk" ? Theme.diffHunkHeaderBg
            : "transparent"
-    /// Under the pointer, or named as if it were. A heading's own row is
-    /// line -1, so a hunk named without a line means the heading.
+    /// Under the pointer. A heading's own row is line -1, so a hunk named
+    /// without a line means the heading.
     readonly property bool underPointer:
-        rowHover.hovered
-        || (diffRow.hoverHunk === diffRow.hunk
-            && diffRow.hoverLine === diffRow.line)
+        diffRow.hoverHunk === diffRow.hunk
+        && diffRow.hoverLine === diffRow.line
     /// The pointer is on this hunk's heading, so the whole
     /// hunk lights: the heading's two words act on exactly
     /// these rows, and this is what says so
@@ -120,17 +114,6 @@ Rectangle {
     readonly property real toolsRoom:
         hunkTools.visible ? hunkTools.width + Theme.spaceSm * 2 : 0
 
-    // The whole row answers the pointer, and only the heading's does
-    // anything with the answer. Passive, so the mark inside keeps it
-    // (see the note at the top).
-    HoverHandler {
-        id: rowHover
-        enabled: diffRow.partial
-        onHoveredChanged: {
-            if (diffRow.kind === "hunk")
-                diffRow.hunkPointedAt(rowHover.hovered, diffRow.hunk)
-        }
-    }
     // The hunk under the pointer wears the wash a row anywhere else in the
     // app wears under one.
     Rectangle {
