@@ -688,6 +688,9 @@ Item {
         if (repoTab.writeSeq === page.seenWriteSeq)
             return
         page.seenWriteSeq = repoTab.writeSeq
+        // The press has its answer. What is left of the wait is the read,
+        // which says so itself (`diffSettling`).
+        page.diffAwaits = false
         // A push this button sent has come back; what it means for the
         // toolbar's button is the flow's to work out.
         publishFlow.noteWriteAnswer(repoTab.lastWriteOp, repoTab.lastWriteError)
@@ -756,18 +759,23 @@ Item {
         // either is a picture of a file as it was — the same staleness the
         // file list's own `+` used to leave behind.
         //
-        // **Marked, not read.** This lands before the status the write
-        // moved (`session::write` finishes the write and then publishes
-        // status), so reading the file here would read it against a tree
-        // the app has not caught up with — and then read it a second time
-        // when it does. Saying the tally is unknown makes the one read
-        // happen where the tree has settled, which is also where a change
-        // nobody in this window made arrives.
+        // **Read here, where the answer is.** git has already moved the
+        // index by the time it answers, so the file's diff is the new one
+        // — what has not caught up yet is the *file list*, and that is a
+        // different question (`followEmptySide` asks it later). The status
+        // that follows would be the other place to read from, but it is
+        // published only when it has rows to change, so a second line
+        // staged out of the same file would never be read at all.
+        //
+        // Which write this was is remembered, so the status that follows
+        // does not read the same file over again.
         if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage"
                 || repoTab.lastWriteOp === "discard"
                 || repoTab.lastWriteOp === "commit"
-                || repoTab.lastWriteOp === "stash")
-            page.seenTreeTally = ""
+                || repoTab.lastWriteOp === "stash") {
+            page.diffReadAt = repoTab.writeSeq
+            page.reloadDiff()
+        }
         // The message landed: the editor stops offering to save it, and
         // keeps what was written until the selection catches up with
         // the commit that now carries it.
@@ -853,6 +861,11 @@ Item {
     function stageSelection(hunk, line) {
         // The shown diff's fingerprint rides along: the write refuses to
         // apply the indices to bytes that drifted since this was read.
+        //
+        // Said here rather than left to `busyCount`, which rises when the
+        // queue starts the write rather than when the press is made: two
+        // presses in a row both went out before the first had begun.
+        page.diffAwaits = true
         repoTab.stageSelection(page.diffKind, page.diffPath, page.diffOrigPath,
                                hunk, line, diffModel.fingerprint)
     }
@@ -862,6 +875,7 @@ Item {
     /// be thrown away on its own — the hunk is the smallest piece — though
     /// it can still be staged on its own, which loses nothing.
     function discardHunkNow(hunk) {
+        page.diffAwaits = true
         repoTab.discardSelection(page.diffKind, page.diffPath,
                                  page.diffOrigPath, hunk, -1,
                                  diffModel.fingerprint)
@@ -910,17 +924,27 @@ Item {
     ///
     /// A press addresses the rows it was made on, and carries the
     /// fingerprint of the bytes they were read from; git refuses it
-    /// against anything else. So from the moment a write goes out until
+    /// against anything else. So from the moment a press goes out until
     /// the rows it changed are back, the pane must not take another one —
     /// pressed twice in a row, the second landed on the diff the first had
     /// already replaced and came back with a refusal in the log
     /// (2026-08-17 ユーザー報告).
     ///
-    /// Three parts, in the order they happen: the write is running, the
-    /// tree it moved has not been read yet (`seenTreeTally`), and the file
-    /// is being read again.
+    /// Three parts, in the order they happen, and **every one of them ends
+    /// by itself**: the press is out and no answer has come (`diffAwaits`,
+    /// put down by the write's own answer), git is running (`busyCount`,
+    /// which the session balances), the file is being read again
+    /// (`loading`, put down by the rows arriving).
+    ///
+    /// **Nothing here waits on a signal that may not come.** Held on "the
+    /// tree has not been read yet" instead, it wedged for good the first
+    /// time a write moved no rows — staging a second line of a file
+    /// already on both sides — because the file list only says `changed`
+    /// when its rows differ, and then no `+` anywhere would go in again
+    /// (2026-08-17 ユーザー報告).
+    property bool diffAwaits: false
     readonly property bool diffSettling:
-        repoTab.busyCount > 0 || page.seenTreeTally === "" || diffModel.loading
+        page.diffAwaits || repoTab.busyCount > 0 || diffModel.loading
     /// A write on the working tree has landed, so the open diff is a
     /// picture of what the file used to be.
     ///
@@ -1305,13 +1329,38 @@ Item {
     }
     /// What the working tree looked like the last time the open diff was
     /// read against it. Not a diff of the file — the counts of the four
-    /// buckets, which is what a stage or an unstage moves whoever made it
-    /// (another window, a terminal, this pane's own `+`).
+    /// buckets, which is what a stage or an unstage moves whoever made it.
     property string seenTreeTally: ""
+    /// The write whose answer already re-read the file, so that the status
+    /// arriving behind it does not read the same file over again. -1 once
+    /// that status has come and gone.
+    property int diffReadAt: -1
     function treeTally() {
         return workTree.stagedCount + "/" + workTree.unstagedCount + "/"
-             + workTree.untrackedCount + "/" + workTree.conflictCount + "/"
-             + worktreeModel.total
+             + workTree.untrackedCount + "/" + workTree.conflictCount
+    }
+    // **The tree was read.** Said by the working-tree model rather than by
+    // the file list beside it: the list says `changed` only when its rows
+    // differ, and a status that moved no row is exactly the one this has
+    // to hear about (a second line staged out of a file already on both
+    // sides moves nothing).
+    Connections {
+        target: workTree
+        function onChanged() {
+            const tally = page.treeTally()
+            const moved = tally !== page.seenTreeTally
+            page.seenTreeTally = tally
+            // The status that follows this window's own write: the file
+            // was read when the write answered.
+            const ours = page.diffReadAt === repoTab.writeSeq
+            page.diffReadAt = -1
+            // Something outside this window moved the tree, so the rows on
+            // screen — and the fingerprint the next `+` would be written
+            // against — are a picture of the file as it was. Pressing one
+            // then came back with git's refusal (2026-08-17 ユーザー報告).
+            if (moved && !ours)
+                page.reloadDiff()
+        }
     }
     Connections {
         target: worktreeModel
@@ -1320,21 +1369,6 @@ Item {
             // the last moment its neighbour can be read (see
             // `noteDiffNeighbour`).
             page.noteDiffNeighbour()
-            // The one place the open diff is read again, whatever moved
-            // the tree — this pane's own `+`, the file list's, another
-            // window, a terminal. Left to the writes it could see, the
-            // rows on screen and the fingerprint the next `+` is written
-            // against stayed a picture of the file as it was, and pressing
-            // one came back with git's refusal (2026-08-17 ユーザー報告).
-            //
-            // Read against the tally rather than every tick: a refresh
-            // that found the same tree has nothing to catch up with, and
-            // a write says so by putting the tally beyond reach.
-            const tally = page.treeTally()
-            if (tally !== page.seenTreeTally) {
-                page.seenTreeTally = tally
-                page.reloadDiff()
-            }
             // The working tree emptied. After a commit of our own that is
             // the end of the editor's job; when someone else committed
             // these changes it happens with no warning, so a message being

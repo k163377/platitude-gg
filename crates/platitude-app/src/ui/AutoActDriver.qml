@@ -75,7 +75,14 @@ Item {
     // barrier before handing the shot driver a completed scene.
     property bool completionDeferred: false
     property bool writeExpected: false
-    property bool writeStarted: false
+    /// The write counter as it stood immediately before the request went
+    /// out, so that its moving is proof this run's own write answered.
+    ///
+    /// **That is the whole of the proof.** Waiting to *see* `busyCount`
+    /// rise as well wedges on a write that begins and ends between two
+    /// looks at it — which the container did and the host did not, and
+    /// which taking work out of the post-write refresh made likelier still
+    /// (2026-08-17 実測: `line-back`, then `keep-place`).
     property int writeSeqBefore: 0
 
     function isWriteAct(act) {
@@ -95,6 +102,7 @@ Item {
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
                 "rebase-onto", "revert-commit", "op-exit-go", "stage-hunk",
                 "stage-line", "keep-place", "discard-hunk-go", "line-back", "diff-follow",
+                "line-run",
                 "stage-all", "unstage-all",
                 "push", "force-push", "push-retry", "fetch", "fetch-ref-list",
                 "commands", "commands-fail", "commands-clear", "fetch-recover",
@@ -107,7 +115,8 @@ Item {
                 "eol-commit", "eol-hover",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "line-tools", "hunk-tools",
-                "code-send", "line-back", "diff-follow", "stage-all", "unstage-all",
+                "code-send", "line-back", "diff-follow", "line-run",
+                "stage-all", "unstage-all",
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
@@ -144,7 +153,6 @@ Item {
     function prepareCompletion(act) {
         driver.completionDeferred = driver.defersCompletion(act)
         driver.writeExpected = driver.isWriteAct(act)
-        driver.writeStarted = repoTab.busyCount > 0
         driver.writeSeqBefore = repoTab.writeSeq
     }
 
@@ -175,14 +183,6 @@ Item {
                           + " room=" + Math.round(room))
     }
 
-    Connections {
-        target: repoTab
-        function onBusyCountChanged() {
-            if (driver.writeExpected && repoTab.busyCount > 0)
-                driver.writeStarted = true
-        }
-    }
-
     // AutoShotDriver owns the final render boundary: it requests an update,
     // advances the event loop, and waits for grabToImage callbacks. Do not
     // wait for frameSwapped here. A quiet scene is allowed not to emit one
@@ -201,7 +201,7 @@ Item {
         interval: 25
         repeat: true
         onTriggered: {
-            if (!driver.writeStarted || repoTab.busyCount !== 0
+            if (repoTab.busyCount !== 0
                     || repoTab.writeSeq <= driver.writeSeqBefore)
                 return
             writeBarrier.stop()
@@ -363,7 +363,6 @@ Item {
             }
             if (act === "stage-hunk" || act === "stage-line") {
                 driver.writeSeqBefore = repoTab.writeSeq
-                driver.writeStarted = repoTab.busyCount > 0
                 // One line goes through its own mark — the press writes,
                 // there and then — and a hunk through its heading's word.
                 if (act === "stage-line")
@@ -380,6 +379,10 @@ Item {
                 codeSendTimer.begin()
                 return
             }
+            if (act === "line-run") {
+                lineRunTimer.begin()
+                return
+            }
             if (act === "diff-follow") {
                 followTimer.begin()
                 return
@@ -392,7 +395,6 @@ Item {
             // that can be thrown away.
             if (act === "discard-hunk-go") {
                 driver.writeSeqBefore = repoTab.writeSeq
-                driver.writeStarted = repoTab.busyCount > 0
                 diffPane.completeHold()
                 writeBarrier.start()
             } else {
@@ -485,6 +487,66 @@ Item {
             renderedBarrier.begin()
         }
     }
+    // Line after line, the way a hand does it. The pane refuses a press
+    // while the rows it would be written against are still coming
+    // (`RepoPage.diffSettling`), so this waits for exactly that and no
+    // clock — which is also the thing that broke: held on a signal the
+    // file list only sends when its rows differ, the pane went quiet for
+    // good at the second line of a file already on both sides, and no `+`
+    // anywhere would go in again (2026-08-17 ユーザー報告).
+    Timer {
+        id: lineRunTimer
+        interval: 25
+        repeat: true
+        readonly property int want: 3
+        property int done: 0
+        /// How long the list has gone without a row to name, which is not
+        /// the same as having none (see below).
+        property int waited: 0
+        function begin() {
+            lineRunTimer.done = 0
+            lineRunTimer.waited = 0
+            lineRunTimer.start()
+        }
+        function report() {
+            AppBackend.report("line_run staged=" + lineRunTimer.done
+                              + " want=" + lineRunTimer.want
+                              + " rows=" + diffPane.view.count
+                              + " waited=" + lineRunTimer.waited)
+        }
+        onTriggered: {
+            // The pane is still catching up with the last press.
+            if (page.diffSettling)
+                return
+            if (lineRunTimer.done === lineRunTimer.want) {
+                lineRunTimer.stop()
+                lineRunTimer.report()
+                renderedBarrier.begin()
+                return
+            }
+            // A row is named by walking the list's own items, and the
+            // list builds them a frame after the model hands the rows
+            // over: read too early it names nothing, which is not the
+            // same as there being nothing (`keep-place` learned it too).
+            // So an empty answer is waited on — but not for ever, since a
+            // fixture with fewer changed lines than this asks for is the
+            // run's own fault and has to show as one rather than as a
+            // watchdog.
+            const line = diffPane.firstChangedLine(0)
+            if (line < 0) {
+                lineRunTimer.waited += lineRunTimer.interval
+                if (lineRunTimer.waited < 5000)
+                    return
+                lineRunTimer.stop()
+                lineRunTimer.report()
+                renderedBarrier.begin()
+                return
+            }
+            lineRunTimer.waited = 0
+            lineRunTimer.done++
+            diffPane.stageLine(0, line)
+        }
+    }
     // Where the reader lands when the file under the open diff is moved
     // whole from the file list. Two answers, and which one is right
     // depends on what is left behind (デザイン規約 §diff の中のステージ):
@@ -574,13 +636,10 @@ Item {
                         || !wipPane.moveBucket(bucketAllTimer.from))
                     return
                 driver.writeSeqBefore = repoTab.writeSeq
-                driver.writeStarted = repoTab.busyCount > 0
                 bucketAllTimer.pressed = true
                 return
             }
-            if (!driver.writeStarted && repoTab.busyCount > 0)
-                driver.writeStarted = true
-            if (!driver.writeStarted || repoTab.busyCount !== 0
+            if (repoTab.busyCount !== 0
                     || repoTab.writeSeq <= driver.writeSeqBefore)
                 return
             // The bucket that was emptied has to be empty before its
@@ -712,7 +771,6 @@ Item {
                 }
                 diffPane.scrollTo(driver.readY)
                 driver.writeSeqBefore = repoTab.writeSeq
-                driver.writeStarted = repoTab.busyCount > 0
                 page.stageSelection(0, keepPlaceTimer.line)
                 keepPlaceTimer.wrote = true
                 return
@@ -722,7 +780,7 @@ Item {
             // write that emptied this side never gets a row back and so
             // never lands anywhere — which is a fixture with no place in
             // it, and the run waits rather than passing on the silence.
-            if (!driver.writeStarted || repoTab.busyCount !== 0
+            if (repoTab.busyCount !== 0
                     || repoTab.writeSeq <= driver.writeSeqBefore
                     || diffPane.placeLandedY < 0)
                 return
@@ -781,7 +839,6 @@ Item {
             AppBackend.report("ref_menu delete=" + refDeleteItem.text
                               + " note=" + refDeleteItem.note)
             driver.writeSeqBefore = repoTab.writeSeq
-            driver.writeStarted = repoTab.busyCount > 0
             refDeleteItem.completeHold()
             writeBarrier.start()
         }
@@ -1247,7 +1304,6 @@ Item {
             AppBackend.report("push_retry refused=" + page.pushFailed
                               + " branch=" + publishFlow.pushFailBranch)
             driver.writeSeqBefore = repoTab.writeSeq
-            driver.writeStarted = repoTab.busyCount > 0
             page.forcePush()
             writeBarrier.start()
         }
@@ -1303,7 +1359,6 @@ Item {
             // "edit-message" stops here, with the save row on screen.
             if (AppBackend.autoAct === "reword") {
                 driver.writeSeqBefore = repoTab.writeSeq
-                driver.writeStarted = repoTab.busyCount > 0
             }
             if (AppBackend.autoAct === "reword")
                 detailsPane.submitMessage()
@@ -2426,7 +2481,7 @@ Item {
                    || act === "diff-file" || act === "line-tools"
                    || act === "hunk-tools" || act === "keep-place"
                    || act === "code-send" || act === "line-back"
-                   || act === "diff-follow") {
+                   || act === "diff-follow" || act === "line-run") {
             // All enter through one file's diff and act on its first
             // hunk. The bucket rides in front of the path
             // (`<bucket>:<path>`) when it is not the usual unstaged one:
@@ -2632,7 +2687,6 @@ Item {
                 return
             publishNewTimer.stop()
             driver.writeSeqBefore = repoTab.writeSeq
-            driver.writeStarted = repoTab.busyCount > 0
             remoteDialog.submit()
             publishAnswerTimer.start()
         }
@@ -2677,7 +2731,6 @@ Item {
             // The same gesture a person is given: a hold cannot be
             // answered by a click here either.
             driver.writeSeqBefore = repoTab.writeSeq
-            driver.writeStarted = repoTab.busyCount > 0
             if (publishFlow.publishRefused)
                 graphPane.completeHold()
             else

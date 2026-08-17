@@ -274,6 +274,11 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // of, so the landing is read: `shown=true` is the half that fails
         // when the pane closes on the reader instead of following.
         "diff-follow" => Some("diff_follow shown=true"),
+        // Three lines staged one after another, each pressed the moment
+        // the pane will take one. The count is the whole judgement: a pane
+        // that stops taking presses after the first stops here too, and
+        // the picture of it is a diff either way.
+        "line-run" => Some("line_run staged=3 want=3"),
         // A bucket emptied from its own heading keeps that heading, both
         // ways round — which is the whole claim, so both headings are
         // read back whichever direction was pressed. The picture cannot
