@@ -99,6 +99,9 @@ Item {
                 "push", "force-push", "push-retry", "fetch", "fetch-ref-list",
                 "commands", "commands-fail", "commands-clear", "fetch-recover",
                 "fetch-fail", "fetch-resume"].indexOf(act) >= 0
+            // A double-click on a tag writes nothing: it opens the box for a name instead (デザイン規約 §左メニューの所作),
+            // and a run held at the write barrier for one waits out the watchdog in silence.
+            && !(act === "nav-dbl" && AppBackend.autoActArg.startsWith("tag:"))
     }
 
     function defersCompletion(act) {
