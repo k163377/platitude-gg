@@ -18,6 +18,11 @@ Item {
     // Required: the margin below is read while this is built, and an unset window would fail it once in silence.
     required property var window
 
+    /// The press that took the caret away landed somewhere else. Whatever was standing open on the strength of
+    /// holding the keyboard is walked away from here — the left menu's in-place name box, which nothing else closes
+    /// (デザイン規約 §左メニューの所作「Escape と他所のクリックで取り消す」).
+    signal pressedAway()
+
     anchors.fill: parent
     anchors.topMargin: -watcher.window.contentItem.y
     z: 10000
@@ -32,8 +37,10 @@ Item {
             if (!item || item.cursorPosition === undefined)
                 return
             const local = item.mapFromItem(null, point.scenePressPosition)
-            if (local.x < 0 || local.y < 0 || local.x >= item.width || local.y >= item.height)
+            if (local.x < 0 || local.y < 0 || local.x >= item.width || local.y >= item.height) {
                 watcher.window.contentItem.forceActiveFocus()
+                watcher.pressedAway()
+            }
         }
     }
 }

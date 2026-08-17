@@ -256,6 +256,25 @@ Item {
         editField.selectAll()
         editField.forceActiveFocus()
     }
+    /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
+    /// the row itself rather than at a copy of what the row would have decided (PG_AUTO_ACT=nav-reclick).
+    function leftClick(modifiers) {
+        // The second click of a double-click: the first one already did what a click does, and the gesture is the
+        // double.
+        if (doubleGuard.running)
+            return
+        const wasActive = navRow.activeKey === navRow.rowKey
+        doubleGuard.restart()
+        navRow.rowClicked()
+        navRow.ordinaryClick(modifiers)
+        if (wasActive && navRow.nameable)
+            renameTimer.restart()
+    }
+    /// Whether this row is holding the wait the name box opens after, and whether a click landing now would still be
+    /// counted as the other half of a double-click. What a headless run reads to see the gesture armed, and to know
+    /// when a second click of its own counts as a second (app-ui.md §UI 自動化の因果性).
+    readonly property bool renameArmed: renameTimer.running
+    readonly property bool clickGuarded: doubleGuard.running
     function ordinaryClick(modifiers) {
         if (navRow.folder) {
             navRow.folderClicked(navRow.full)
@@ -295,16 +314,7 @@ Item {
                     navRow.fileMenuRequested(navRow.bucket, navRow.fullName)
                 return
             }
-            // The second click of a double-click: the first one already did what a click does, and the gesture is the
-            // double.
-            if (doubleGuard.running)
-                return
-            const wasActive = navRow.activeKey === navRow.rowKey
-            doubleGuard.restart()
-            navRow.rowClicked()
-            navRow.ordinaryClick(mouse.modifiers)
-            if (wasActive && navRow.nameable)
-                renameTimer.restart()
+            navRow.leftClick(mouse.modifiers)
         }
         onDoubleClicked: mouse => {
             if (mouse.button !== Qt.LeftButton || navRow.folder)

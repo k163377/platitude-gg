@@ -101,12 +101,34 @@ Popup {
         peekSettle.restart()
     }
     function shut() {
+        // The mark on the row a click last landed on goes with the rows
+        // it was on. The rename gesture's second click has to be aimed
+        // at a mark that stayed on screen (デザイン規約 §左メニューの所作
+        // 「2 回目の狙いどころが見えないとこの所作は成立しない」), and this
+        // list comes and goes with the pointer — without this the first
+        // click of a later peek lands on a row still counted as clicked
+        // and opens a name box nobody asked for, which puts the whole
+        // list back over the diff the fold was made for (2026-08-18
+        // ユーザー報告).
+        if (peek.kind !== "")
+            peek.gestures.activeKey = ""
         peek.close()
         peek.kind = ""
         peek.wanted = false
         // The list it was in has gone, so the pointer is not in it
         // whatever the last hover said.
         peek.entered = false
+    }
+    /// Smoke hooks (PG_AUTO_ACT=nav-reclick): the three the open list answers, for the section standing beside the
+    /// folded rail.
+    function clickRow(index) {
+        return peekList.clickRow(index)
+    }
+    function rowArmed(index) {
+        return peekList.rowArmed(index)
+    }
+    function rowGuarded(index) {
+        return peekList.rowGuarded(index)
     }
     Timer {
         id: peekSettle

@@ -250,6 +250,11 @@ Rectangle {
         // with the rail — including when what put the list back was a
         // row in that very section (startEdit).
         sidebar.closePeek()
+        // And the box goes with the list it stood in: folded, one left
+        // open comes back up under the pointer on a row nobody clicked
+        // (2026-08-18 ユーザー報告). `startEdit` puts the list back before
+        // opening its own box, so that one is never this one.
+        sidebar.stopEdit()
         if (sidebar.collapsed) {
             // Only a width the splitter has actually handed over is worth
             // going back to. A page built already folded — one restored
@@ -458,6 +463,10 @@ Rectangle {
     property alias peekKind: peek.kind
     property alias peekTop: peek.top
     property alias peekEntered: peek.entered
+    /// The open section itself, for the smoke hooks alone (the shape
+    /// `GraphPane.view` already has): clicks cannot be injected, so
+    /// PG_AUTO_ACT=nav-reclick puts one in at a row in here.
+    readonly property var peekSection: peek
 
     function openPeek(kind, top) {
         peek.openAt(kind, top)

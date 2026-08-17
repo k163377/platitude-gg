@@ -74,6 +74,23 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // behind. Read as a pair with `row-card`, which proves that same
         // input does open the card (2026-08-17 ユーザー報告).
         "menu-hover" => Some("menu_hover menu=true card=false"),
+        // The left menu's rename gesture, and the absence that is the
+        // whole of its bug: a click landing in the folded list's section
+        // after that section went away and came back is an ordinary
+        // click, not the gesture's second one. A picture cannot carry it
+        // — the run that armed nothing frames as a folded rail with a
+        // section beside it, which is what `nav-peek` frames as too. So
+        // the pair is read out loud: `armed=` is the row's own answer to
+        // the click it was given, `collapsed=`/`box=` what came of it
+        // (the box puts the whole list back over the diff the fold was
+        // made for — 2026-08-18 ユーザー報告).
+        "nav-reclick" => Some("away=false armed=true collapsed=false box=true"),
+        "nav-reclick-away" => Some("away=true armed=false collapsed=true box=false"),
+        // The two ways the box is walked away from with nothing typed
+        // into it. Same blind spot: a pane with no box in it frames like
+        // a pane that never opened one.
+        "nav-rename-drop" if arg == "fold" => Some("nav_drop how=fold collapsed=true box=false"),
+        "nav-rename-drop" => Some("nav_drop how=away collapsed=false box=false"),
         // An emptied panel with a red mark over it and an emptied panel
         // with a quiet one frame the same from the waist down: the panel
         // is the picture, and the mark is 12 pixels of it in a corner.

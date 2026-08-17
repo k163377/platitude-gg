@@ -36,6 +36,26 @@ AppListView {
         return navList.kindHint + ":" + (full !== "" ? full : name)
     }
 
+    /// Smoke hooks (PG_AUTO_ACT=nav-reclick): a left click on one row, and what that row made of it. Clicks cannot be
+    /// injected (verify-ui スキル), so they go in at the row's own answer. `clickRow` says false when the view has not
+    /// built that row yet — the delegate arrives on the layout after the model got the rows, and a run that counted
+    /// the miss as a press would wait for a gesture nobody made (app-ui.md §UI 自動化の因果性).
+    function clickRow(index) {
+        const row = navList.itemAtIndex(index)
+        if (!row)
+            return false
+        row.leftClick(Qt.NoModifier)
+        return true
+    }
+    function rowArmed(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.renameArmed : false
+    }
+    function rowGuarded(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.clickGuarded : false
+    }
+
     visible: expanded
     Layout.fillWidth: true
     Layout.fillHeight: expanded

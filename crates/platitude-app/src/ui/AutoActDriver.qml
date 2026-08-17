@@ -112,7 +112,8 @@ Item {
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
-                "nav-filter", "delete-branch-refused", "chip-menu", "chip-menu-current",
+                "nav-filter", "nav-reclick", "nav-reclick-away",
+                "delete-branch-refused", "chip-menu", "chip-menu-current",
                 "delete-blocked-tip", "delete-branch-early", "ref-list-card",
                 "signature", "signature-tip", "stash-tip", "path-tip", "row-card", "menu-hover",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
@@ -791,6 +792,79 @@ Item {
             // What the centre holds: the list coming back closes a file, so the two are read together or not at all.
             + " diff=" + page.diffShown)
             driver.complete()
+        }
+    }
+    // PG_AUTO_ACT=nav-reclick / nav-reclick-away: the two clicks of the rename gesture, put in at the rows of the
+    // section the folded rail has open, and what those rows made of them. Every step waits for its own answer — the
+    // row has to exist before it can be clicked, the double-click window the first click opened has to have passed
+    // before a second one counts as a second, and "-away" waits for the section to have actually gone (the pointer
+    // leaving is answered a beat later — SectionPeekPopup.settle).
+    property bool reclickAway: false
+    property bool reclickArmed: false
+    property int reclickStep: 0
+    Timer {
+        id: reclickTimer
+        interval: 25
+        repeat: true
+        /// Which section, and which of its rows. A section whose names fold into folders has no row to rename at the
+        /// top of it, so the row travels with the argument (`branch:2`) and defaults to the first.
+        readonly property string kind: {
+            const arg = AppBackend.autoActArg
+            const cut = arg.indexOf(":")
+            return cut < 0 ? arg : arg.substring(0, cut)
+        }
+        readonly property int row: {
+            const arg = AppBackend.autoActArg
+            const cut = arg.indexOf(":")
+            return cut < 0 ? 0 : Number(arg.substring(cut + 1))
+        }
+        // The pointer comes to rest on the cell. A section whose model has no rows yet opens nothing (NavRail.enterAt),
+        // so the arrival is made again until one stands.
+        function peeked() {
+            if (sidebarPane.peekKind !== "")
+                return true
+            sidebarPane.peekAt(reclickTimer.kind)
+            return false
+        }
+        onTriggered: {
+            const section = sidebarPane.peekSection
+            if (driver.reclickStep === 0) {
+                if (!reclickTimer.peeked() || !section.clickRow(reclickTimer.row))
+                    return
+                driver.reclickStep = driver.reclickAway ? 1 : 3
+            } else if (driver.reclickStep === 1) {
+                sidebarPane.peekAway(reclickTimer.kind)
+                driver.reclickStep = 2
+            } else if (driver.reclickStep === 2) {
+                // The pointer leaving is answered a beat later, so the section is gone when it says so and not before.
+                if (sidebarPane.peekKind !== "")
+                    return
+                driver.reclickStep = 3
+            } else if (driver.reclickStep === 3) {
+                if (!reclickTimer.peeked() || section.rowGuarded(reclickTimer.row)
+                        || !section.clickRow(reclickTimer.row))
+                    return
+                // Read where it is set, not where it lapses: the wait is short and the box is what it turns into.
+                driver.reclickArmed = section.rowArmed(reclickTimer.row)
+                driver.reclickStep = 4
+            } else if (driver.reclickStep === 4) {
+                // Armed, the box opens once that wait runs out, and it opens in the list — which has to come back
+                // first (SidebarPane.startEdit). Unarmed there is nothing further to wait for.
+                if (driver.reclickArmed && sidebarPane.editKey === "")
+                    return
+                reclickTimer.stop()
+                AppBackend.report(
+                "nav_reclick section=" + reclickTimer.kind
+                + " row=" + reclickTimer.row
+                + " marked=" + sidebarPane.activeKey
+                + " away=" + driver.reclickAway
+                + " armed=" + driver.reclickArmed
+                + " collapsed=" + page.sidebarCollapsed
+                + " box=" + (sidebarPane.editKey !== "")
+                + " peek=" + sidebarPane.peekKind
+                + " editing=" + sidebarPane.editKey)
+                driver.complete()
+            }
         }
     }
     // The column has to be laid out again before the header that was closed can say where it ended up.
@@ -1967,6 +2041,29 @@ Item {
                                         workTree.branch)
             }
             navRailTimer.start()
+        } else if (act === "nav-reclick" || act === "nav-reclick-away") {
+            // The rename gesture, on the section the folded rail has open. The plain verb clicks the same row twice
+            // with that section standing; "-away" lets the pointer leave in between, so the two clicks land in a list
+            // that went and came back — and that one must not read as a second click (デザイン規約 §左メニューの所作).
+            // The argument is `<section>[:<row>]`.
+            page.foldByHand(true)
+            driver.reclickAway = act === "nav-reclick-away"
+            driver.reclickArmed = false
+            driver.reclickStep = 0
+            reclickTimer.start()
+        } else if (act === "nav-rename-drop") {
+            // The box, and the two ways it is walked away from without a word being typed: "fold" takes the list down
+            // to the rail, "away" is the press that landed anywhere else (Main's `FocusRelease` enters here).
+            sidebarPane.beginRename("branch", workTree.branch,
+                                    workTree.branch)
+            if (arg === "fold")
+                page.foldByHand(true)
+            else
+                page.releaseRowEdit()
+            AppBackend.report("nav_drop how=" + arg
+                              + " collapsed=" + page.sidebarCollapsed
+                              + " box=" + (sidebarPane.editKey !== "")
+                              + " editing=" + sidebarPane.editKey)
         } else if (act === "nav-close") {
             // The pane keeps sections packed against the top; what is read is where the closed header came to rest — at
             // the foot of the pane is the failure this watches for.

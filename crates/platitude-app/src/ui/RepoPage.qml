@@ -39,6 +39,11 @@ Item {
             page.foldedByDiff = false
         }
     }
+    /// A press landed away from whatever held the keyboard (Main's `FocusRelease`). The left menu's name box goes with
+    /// it — nothing is asked, what it costs is the typing (デザイン規約 §左メニューの所作).
+    function releaseRowEdit() {
+        sidebarPane.stopEdit()
+    }
     function foldByHand(collapse) {
         page.sidebarCollapsed = collapse
         page.foldedByDiff = false
