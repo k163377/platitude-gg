@@ -49,8 +49,7 @@ ApplicationWindow {
     /// blank page, which has the same three panes with the same minimums.
     readonly property var floorPage: root.curPage !== null ? root.curPage : blankPage.item
     readonly property real floorWidth:
-        Math.max(topBar.floorWidth,
-                 root.floorPage !== null ? root.floorPage.floorWidth : 0)
+        Math.max(topBar.floorWidth, root.floorPage !== null ? root.floorPage.floorWidth : 0)
     readonly property real floorHeight:
         // The band, the divider under it, and the line the window's bottom edge is drawn as — the three rows of
         // `mainUi` that are not the page (they carry their own heights; the page's is its own floor).
