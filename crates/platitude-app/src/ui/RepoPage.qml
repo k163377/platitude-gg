@@ -840,6 +840,10 @@ Item {
     /// Reads one file, whoever asked — a row that was clicked, or the pane
     /// moving itself off a side that ran out (`followEmptySide`).
     function openDiff(kind, path, origPath) {
+        // Whatever place a rebuild of the last diff was keeping is the
+        // last diff's: restored here it would put the new rows at the old
+        // file's scroll (規約 §diff を横へ送る「別のファイルは左端から」).
+        diffPane.dropScroll()
         page.diffKey = kind + ":" + path
         page.diffKind = kind
         page.diffPath = path
@@ -895,15 +899,29 @@ Item {
             return
         page.diffNeighbour = worktreeModel.besidePath(page.diffKind, page.diffPath)
     }
-    /// Everything that was on this side has gone over to the other one.
-    /// The reader is left standing on an empty frame, so the pane moves
-    /// rather than closing (デザイン規約 §diff の中のステージ):
+    /// Everything the open diff's file had on the side being read has gone
+    /// over — staged, unstaged, thrown away, committed. The reader is left
+    /// standing on it, so the pane moves rather than closing
+    /// (デザイン規約 §diff の中のステージ):
     ///
     ///  - the next file of the side that ran out, if it still has one;
     ///  - otherwise the same file, read from wherever it went — the whole
     ///    of it is on the other side now, which is the thing to look at;
     ///  - and only with nothing uncommitted left does the pane close.
+    ///
+    /// **The file list is what says so** — this runs on its `changed` and
+    /// stands down while it still holds the file on the side being read.
+    /// The re-read's own emptiness cannot say it: the read runs beside the
+    /// status rather than after it (`load_diff` / `publish_status`), so an
+    /// empty answer could land first and ask a list that still held the
+    /// pre-write rows for a neighbour — and some sides never read empty at
+    /// all (an untracked file staged whole still renders as its whole
+    /// content, a picture has no rows either way). Asked here, the answers
+    /// below are read from the very change that said the file moved.
     function followEmptySide() {
+        if (!page.diffShown || page.diffKind === "commit"
+                || worktreeModel.holdsPath(page.diffKind, page.diffPath))
+            return
         const cut = page.diffNeighbour.indexOf(":")
         if (cut > 0) {
             const bucket = page.diffNeighbour.substring(0, cut)
@@ -962,10 +980,6 @@ Item {
         // not move until the answer lands, so this is still the place the
         // reader was at (`DiffScrollPlace`).
         diffPane.holdScroll()
-        // If this write took the last of what was on this side, the pane
-        // has nothing left to stand on and closes (デザイン規約 §diff の
-        // 中のステージ).
-        diffPane.closeWhenEmpty = true
         diffModel.requestWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
     }
 
@@ -1367,8 +1381,11 @@ Item {
         function onChanged() {
             // The file the diff is on is still where it was, so this is
             // the last moment its neighbour can be read (see
-            // `noteDiffNeighbour`).
+            // `noteDiffNeighbour`) — and the change that takes it off the
+            // side being read is the one that moves the pane, with the
+            // neighbour noted by every change before it (`followEmptySide`).
             page.noteDiffNeighbour()
+            page.followEmptySide()
             // The working tree emptied. After a commit of our own that is
             // the end of the editor's job; when someone else committed
             // these changes it happens with no warning, so a message being
@@ -1606,7 +1623,6 @@ Item {
                         sideColorTheirs: page.sideColorTheirs
                         busy: page.diffSettling
                         onCloseRequested: page.closeDiff()
-                        onNothingLeft: page.followEmptySide()
                         onDiscardHunkRequested: hunk => page.discardHunkNow(hunk)
                         onStageFileRequested: {
                             if (page.diffStaged)
