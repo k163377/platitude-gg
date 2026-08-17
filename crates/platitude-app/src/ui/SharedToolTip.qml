@@ -6,7 +6,8 @@ import platitude.ui
 /// it arrives in Fusion's own clothes: a pale yellow ground, a frame that reads the *text* role (so the palette cannot
 /// separate the two), and a drawn shadow. Reaching it through `host` is the only way to dress it, and dressing it once
 /// carries to every `ToolTip.text` in the tree.
-// An Item, not a QtObject: the two Components below are children, and QtObject has nowhere to put a child.
+///
+/// An Item, not a QtObject: the two Components below are children, and a QtObject has nowhere to put a child.
 Item {
     id: shared
 

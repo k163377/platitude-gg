@@ -24,6 +24,7 @@
 - **性能敏感な QML(行デリゲート)は「切り出す部品の root を、置き換える当のアイテムにする」** — `Layout.*` / `anchors` / `visible` は使用側に残るので、アイテム木は分割前と同じ本数のまま(包み Item が増えない)。`GraphRowDelegate` → `GraphLaneCell` / `GraphRowChips` / `WipTallyRow` と `DiffPane` の行がこの形。基準リポジトリ(kotlin 227k commits)で分割前後とも 99.7–99.8fps = 差無し(2026-08-16 実測、vsync 100Hz 上限)
 - **`ListView.view` 直読を in-property 化しても、`ListView.onReused` だけはデリゲート root から動かせない** — attached `ListView` は root にしか生えない。切り出した子の再描画はデリゲートから子のメソッドを呼ぶ(`GraphLaneCell.loadFace` / `repaintLanes`)
 - **手を持つ部品と、その手が上げる線は同じファイルに入らない** — QML の重なりは親の 1 つの `z` でまとまるので、線をリストの下(`z` 既定)に、当たり判定をリストの上(`z: 2`)に置くことは 1 つの子アイテムでは両立しない。`GraphColumnDividers` は手だけを持ち、線は `GraphPane` に残して状態を property で読む(包みには元の `ColumnDivider` と同じ `z: 2` を書く — 書かないと `lanePan`(z:1)・`laneBar`(z:2)との前後が入れ替わる)
+- **切り出した非表示のホストは `QtObject` ではなく `Item` にする** — `QtObject` は子を置く場所を持たないので、`Component` / `Timer` を連れて出た瞬間に `Cannot assign to non-existent property "data"` で**その型ごと unavailable になり、Main.qml が丸ごとロードに失敗する**(窓は出ず、verify-ui は watchdog まで無言 = 140 秒後に FAIL)。既存の非表示ホスト(`WindowPerfDriver` / `AutoShotDriver`)が全部 `Item` なのはこれが理由
 - **`ListView` の `delegate:` を独立ファイルへ出す時、モデルのロールに依存する「使用側の式」は使用側に書ける** — `picked: … lineChosen(diffRow.hunk, diffRow.line)` のように、宣言した id 経由でその行自身の required property を読める。行が持つ状態(選択集合)をペイン側に残したまま行を純表示に保てる(`DiffRowDelegate`)
 
 ## 分割しない判断(超過理由の台帳 — 行が消えたら分割済み)
