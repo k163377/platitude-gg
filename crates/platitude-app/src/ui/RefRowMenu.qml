@@ -287,7 +287,11 @@ Item {
                              ? refRowMenu.deleteBlockedOnCurrent
                              : refRowMenu.deleteBlockedWhileBusy
             holdMs: Metrics.holdMs
-            holdTone: Theme.warning
+            // The colour of the half that decides: reaching past this
+            // machine is warning, but once the local half runs as `-D`
+            // this row throws away commits that live nowhere else, and
+            // that is danger (デザイン規約 §状態).
+            holdTone: refDeleteItem.refusedRow ? Theme.danger : Theme.warning
             onHeld: {
                 refMenu.close()
                 const c = refRowMenu.remoteCounterpart
