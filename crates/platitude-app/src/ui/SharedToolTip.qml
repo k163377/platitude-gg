@@ -6,7 +6,8 @@ import platitude.ui
 /// it arrives in Fusion's own clothes: a pale yellow ground, a frame that reads the *text* role (so the palette cannot
 /// separate the two), and a drawn shadow. Reaching it through `host` is the only way to dress it, and dressing it once
 /// carries to every `ToolTip.text` in the tree.
-QtObject {
+// An Item, not a QtObject: the two Components below are children, and QtObject has nowhere to put a child.
+Item {
     id: shared
 
     /// The item the attached tooltip is read off — one is enough for the whole tree. Required: `sharedTip` below is
@@ -22,24 +23,22 @@ QtObject {
         shared.sharedTip.padding = Theme.spaceSm
     }
 
-    data: [
-        Component {
-            id: tipGround
-            Rectangle {
-                color: Theme.bgElevated
-                radius: Theme.radiusMd
-                border.color: Theme.borderDefault
-                border.width: Theme.borderWidth
-            }
-        },
-        Component {
-            id: tipWord
-            Text {
-                text: shared.sharedTip.text
-                font: shared.sharedTip.font
-                color: Theme.textPrimary
-                wrapMode: Text.Wrap
-            }
+    Component {
+        id: tipGround
+        Rectangle {
+            color: Theme.bgElevated
+            radius: Theme.radiusMd
+            border.color: Theme.borderDefault
+            border.width: Theme.borderWidth
         }
-    ]
+    }
+    Component {
+        id: tipWord
+        Text {
+            text: shared.sharedTip.text
+            font: shared.sharedTip.font
+            color: Theme.textPrimary
+            wrapMode: Text.Wrap
+        }
+    }
 }
