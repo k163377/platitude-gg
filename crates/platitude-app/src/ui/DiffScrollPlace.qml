@@ -23,12 +23,32 @@ Item {
     /// count back above zero and so never restores anything.
     property real landedY: -1
     function hold() {
-        place.heldY = place.view.contentY
+        // A held place outlives the swap it was taken for when the next
+        // write goes out inside the restore's own layout beat — the rows
+        // land, the marks wake, and a hand (or `line-run`) presses again
+        // before the timer below has fired. At that moment the view is
+        // standing in the reset-to-top the swap left it in, so capturing
+        // again would keep the top as "the place"; the reader's place is
+        // the one already held. The pending restore is stopped rather
+        // than raced: the next swap's own restore finishes the story.
+        placeTimer.stop()
+        if (place.heldY < 0)
+            place.heldY = place.view.contentY
         place.landedY = -1
     }
     function restore() {
         if (place.heldY >= 0)
             placeTimer.restart()
+    }
+    /// The pane moved to another file (or another side of the same one):
+    /// what was held is the old diff's place, and restoring it onto rows
+    /// it was never read at would carry the scroll somewhere the reader
+    /// has not been (規約 §diff を横へ送る「別のファイルは左端から」—
+    /// the vertical half of the same rule).
+    function drop() {
+        placeTimer.stop()
+        place.heldY = -1
+        place.landedY = -1
     }
     // The wait is the graph's (`Metrics.anchorDelayMs`, and `shiftRows`
     // learned it the same way): on the frame the rows land the list has
