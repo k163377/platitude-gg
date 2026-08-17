@@ -15,36 +15,34 @@ ApplicationWindow {
     visible: true
     /// Whether the tab row is the window's title bar.
     ///
-    /// Named by platform rather than worked out from what the hints did: they are read when the window is created, and
-    /// a window that came up without a way to close it cannot be taken back. Windows is the one that has been seen to
-    /// work; everywhere else keeps the platform's own title bar above an ordinary tab row (P3-確認事項 §ウィンドウ chrome).
-    /// `PG_PLAIN_CHROME=1` asks for the other shape from here.
+    /// Decided by platform, not read back from the hints: hints are read when the window is created, and a window
+    /// that came up without a way to close it cannot be taken back. Only Windows is known to work; everywhere else
+    /// keeps the platform's own title bar above an ordinary tab row (P3-確認事項 §ウィンドウ chrome). `PG_PLAIN_CHROME=1`
+    /// asks for the other shape from here.
     readonly property bool captionMerged: Qt.platform.os === "windows" && !AppBackend.plainChrome
 
-    // No frame at all, rather than a frame asked to behave: an expanded client area over the caption still leaves a
-    // real non-client frame, which is inflated past the screen when maximised (measured: it covered eight columns of
-    // the next monitor), shows a white pixel no DWM attribute moves, and makes a remembered size come back too wide.
-    // `FramelessWindowHint` deletes the whole area — the edge is drawn in the scene (below), and the resize edges and
-    // grab run are the subclass's (`winframe::take_frame_hit_test`, which stays: Qt 6.10's own custom-chrome answer
-    // synthesises input from a poll and loses track of it — the dead first click and the frozen hover).
-    // `keepWindowGestures` puts back the system's minimise/maximise/menu style bits, and the subclass pins a maximise
-    // to the work area (`clamp_maximized`) because Windows would otherwise maximise a frameless window over the whole
-    // monitor. No shadow is owed: the drawn edge stands in for it.
+    // No frame at all: an expanded client area over the caption still leaves a real non-client frame — inflated past
+    // the screen when maximised (measured: it covered eight columns of the next monitor), a white pixel no DWM
+    // attribute moves, a remembered size coming back too wide. `FramelessWindowHint` deletes the whole area; the edge
+    // is drawn in the scene (below), and the resize edges and grab run stay with the subclass
+    // (`winframe::take_frame_hit_test` — Qt 6.10's own custom-chrome answer synthesises input from a poll and loses
+    // track of it: the dead first click and the frozen hover). `keepWindowGestures` puts back the system's
+    // minimise/maximise/menu style bits, and the subclass pins a maximise to the work area (`clamp_maximized`) because
+    // Windows would otherwise maximise a frameless window over the whole monitor. No shadow: the drawn edge stands in.
     flags: root.captionMerged ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
     title: qsTr("Platitude GG")
     color: Theme.bgBase
 
     // ---- the floor the window may not be dragged under --------------------
-    // `SplitView` and the layouts here stop shrinking their items at the minimum and lay the rest out past their own
-    // edge, and nothing in this window scrolls sideways to reach what went over (measured 2026-08-09: at 640px the
-    // right pane had 32 of its 300 on screen).
+    // Past the minimums, `SplitView` and the layouts here lay items out over their own edge, and nothing scrolls
+    // sideways to reach what went over (measured 2026-08-09: at 640px the right pane had 32 of its 300 on screen).
     //
-    // The number is read off what is on screen because two things move it: the list folding and the command log
-    // opening. Qt grows a window when a floor rises under it, which is the way back from fold → shrink → unfold.
+    // Read off what is on screen because the list folding and the command log opening both move it. Qt grows a
+    // window when a floor rises under it, which is the way back from fold → shrink → unfold.
     //
-    // `minimumWidth` alone only covers a person dragging an edge: `QWindow::resize` hands the size straight to the
-    // platform without looking at the hints (measured: asked for 200x150 against the floor, the window took it). So
-    // every size this application sets itself goes through `holdFloor` below.
+    // `minimumWidth` alone only covers a dragged edge: `QWindow::resize` hands the size straight to the platform
+    // without reading the hints (measured: asked for 200x150 against the floor, the window took it). So every size
+    // this application sets itself goes through `holdFloor` below.
     /// The page the floor is read off. Not `curPage`: with no tab open that is null while the window is showing the
     /// blank page, which has the same three panes with the same minimums.
     readonly property var floorPage: root.curPage !== null ? root.curPage : blankPage.item
@@ -57,11 +55,10 @@ ApplicationWindow {
         + (root.floorPage !== null ? root.floorPage.floorHeight : 0)
     minimumWidth: Math.ceil(root.floorWidth)
     minimumHeight: Math.ceil(root.floorHeight)
-    /// Puts a window standing under its floor back on it. Only a window in its own shape: maximised and minimised ones
-    /// are the platform's to size. A size this puts up is a size this asked for, so the frame slop keeps measuring the
-    /// difference between the two — without that the growth itself reads as slop, and every launch after writes the
-    /// window down that much smaller (measured: a window lifted from a 320-wide file stood at 704 and 510 went into the
-    /// file).
+    /// Puts a window standing under its floor back on it — only in its own shape: maximised and minimised are the
+    /// platform's to size. The lifted size also goes into `asked*`, or the growth itself would read as frame slop and
+    /// every later launch would write the window down that much smaller (measured: lifted from a 320-wide file the
+    /// window stood at 704 and 510 went into the file).
     function holdFloor() {
         if (root.visibility !== Window.Windowed)
             return
@@ -78,12 +75,10 @@ ApplicationWindow {
     onFloorHeightChanged: root.holdFloor()
 
     // ---- what a title bar does, now that this band is one ----------------
-    /// The button and the band's double-click have to mean the same thing, so both go to the platform.
-    ///
-    /// `visibility` alone does not: Qt maximises a frameless window by resizing it, and the platform is then holding no
-    /// maximised state to put back — the button left the window large while the double-click, which the platform
-    /// handles, restored it (reported 2026-08-09). `visibility` still says what the window *is*, and still carries the
-    /// state everywhere the platform has no command of its own.
+    /// The button and the band's double-click have to mean the same thing, so both go to the platform: Qt maximises
+    /// a frameless window by resizing it, leaving the platform no maximised state to put back — the button left the
+    /// window large while the platform-handled double-click restored it (reported 2026-08-09). `visibility` still
+    /// says what the window *is*, and still carries the state where the platform has no command of its own.
     function toggleMaximized() {
         const wanted = root.visibility !== Window.Maximized
         if (root.captionMerged)
@@ -95,9 +90,9 @@ ApplicationWindow {
         root.visibility = Window.Minimized
     }
     /// Tells the hit test where the band's grab-run is, in scene coordinates — the one stretch it answers HTCAPTION
-    /// for, which is what makes it drag, snap, maximise on a double-click and open the window menu, all as the
-    /// platform's own gestures. Called from the strip's own layout changes and from the one shift the strip cannot see:
-    /// the window resizing, which maximising is.
+    /// for, which gives the band drag, snap, double-click maximise and the window menu as the platform's own
+    /// gestures. Called from the strip's layout changes and from the one shift it cannot see: the window resizing,
+    /// which maximising is.
     function reportCaptionStrip() {
         if (!root.captionMerged || topBar.grabRunItem === null)
             return
@@ -107,17 +102,15 @@ ApplicationWindow {
     }
     onWidthChanged: root.reportCaptionStrip()
 
-    /// What Windows has to be told about this window, whatever the window turns out to be for. A run that was turned
-    /// away gets a window too, and an undecorated one would be a second application on the taskbar wearing the shell's
-    /// generic icon.
+    /// What Windows has to be told about this window. A run that was turned away gets a window too, and undecorated
+    /// it would sit on the taskbar as a second application wearing the shell's generic icon.
     function decorateWindow() {
         // Windows 11 rounds the window itself and leaves the corner pixels transparent, so the desktop shows through
         // them. The window is up by now (`visible` is set above), which is all the switch needs.
         AppBackend.squareWindowCorners()
         // Without this the window wears the shell's generic icon, in the title bar and on the taskbar button alike.
         AppBackend.setWindowIcon()
-        // Asking for no drawn buttons took the system's own gestures with them; this puts those back (see `flags`
-        // above).
+        // Asking for no drawn buttons took the system's own gestures with them; this puts those back (see `flags`).
         if (!root.captionMerged)
             return
         AppBackend.keepWindowGestures()
@@ -181,19 +174,19 @@ ApplicationWindow {
     readonly property bool onScreen: root.visible
                                      && root.visibility !== Window.Minimized && root.visibility !== Window.Hidden
 
-    // QML never drops a text input's focus on its own: once the sidebar filter or the commit editor was clicked, its
-    // caret kept blinking until some other editor took focus. This watcher hands focus back to the window whenever a
-    // press lands outside the focused editor.
+    // QML never drops a text input's focus on its own: a clicked filter or commit editor kept its caret until some
+    // other editor took focus. This watcher hands focus back to the window whenever a press lands outside the
+    // focused editor.
     //
-    // It must sit *above* every pane: press delivery visits items front to back and stops at the first one that
-    // accepts, so a handler on the window's own content item never hears clicks that land on a row's MouseArea
-    // (measured: focus survived a graph click). And it must be a PointHandler — a fronted TapHandler swallowed the
-    // press and the control underneath never received it (measured: the filter field stopped taking focus at all).
-    // PointHandler is the one handler specified to take only passive grabs and accept nothing, so everything below
-    // keeps working. Modal dialogs live in the window overlay above this item and are unaffected.
+    // It must sit *above* every pane: press delivery stops at the first item that accepts, so a handler on the
+    // window's content item never hears clicks a row's MouseArea takes (measured: focus survived a graph click). And
+    // it must be a PointHandler — the one handler specified to take only passive grabs and accept nothing, so
+    // everything below keeps working; a fronted TapHandler swallowed the press and the control underneath never
+    // received it (measured: the filter field stopped taking focus at all). Modal dialogs live in the window overlay
+    // above this item and are unaffected.
     //
-    // The top margin reaches up over the safe-area inset the same way the chrome itself does, so presses on the band
-    // are heard too.
+    // The top margin reaches up over the safe-area inset the same way the chrome does, so presses on the band are
+    // heard too.
     Item {
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
@@ -218,9 +211,9 @@ ApplicationWindow {
     // menu or the toolbar badge.
     property bool identityDismissed: false
     property bool identityEditing: false
-    // A save that only half landed leaves an identity that *is* set, so `missing` on its own takes the screen away at
-    // the one moment it has something to say: measured, the state flipped to `ready` on the name that did land and this
-    // window closed the dialog out from under the answer. What holds it open is the flag the marks read.
+    // A half-landed save leaves an identity that *is* set, so `missing` alone takes the screen away at the one moment
+    // it has something to say (measured: the state flipped to `ready` on the name that did land, and this window
+    // closed the dialog out from under the answer). What holds it open is `identityUnsaved` — the flag the marks read.
     readonly property bool identityWanted: AppBackend.gitState === "ok"
                                            && (identityEditing
                                                || ((AppBackend.identityState === "missing"
@@ -248,8 +241,7 @@ ApplicationWindow {
     }
 
     Shortcut {
-        // The plural: the platform's "find" is more than one key on some of them, and `sequence` would take only the
-        // first and say so.
+        // The plural: some platforms give "find" more than one key, and `sequence` takes only the first and says so.
         sequences: [StandardKey.Find]
         enabled: root.curPage !== null
         onActivated: root.curPage.startFind()
@@ -292,12 +284,11 @@ ApplicationWindow {
         onAccepted: tabsModel.openRepositoryUrl(selectedFolder.toString())
     }
 
-    // Every way in goes through here so the picker opens beside the repository that is already open. Left to itself the
-    // dialog comes back up inside the folder it last accepted — the repository — and the next one is always a level up
-    // from there.
+    // Every way in goes through here so the picker opens beside the repository that is already open — left to itself
+    // the dialog reopens inside the folder it last accepted, and the next pick is always a level up from there.
     //
-    // `nearUrl` names a folder to start at instead: a second try after a folder that turned out not to be a repository
-    // opens where that one sits, which is where the one being looked for usually is.
+    // `nearUrl` names a folder to start at instead: a second try after a folder that was not a repository opens where
+    // that one sits, which is where the one being looked for usually is.
     function openRepositoryPicker(nearUrl) {
         const near = (nearUrl !== undefined && nearUrl !== "")
                    ? nearUrl
@@ -309,8 +300,8 @@ ApplicationWindow {
             AppBackend.report("picker folder=" + folderDialog.currentFolder)
     }
     // The size and place the window was left in. Assigned rather than bound: from here on the window manager and the
-    // person dragging it own these. An unsaved position stays unset so the platform gets to place the window itself — a
-    // first run should not open at 0,0.
+    // person dragging it own these. An unsaved position stays unset so the platform places the window itself — a first
+    // run should not open at 0,0.
     function applySavedWindow() {
         // Over the floor on the way in, not after: what is assigned here is what `settleTimer` measures the frame slop
         // from, and what a maximise would come back to.
@@ -331,20 +322,20 @@ ApplicationWindow {
             root.y = y
         }
         // The *frame* has to fit, and it is wider than the window says it is (measured 2026-08-09: a remembered 1920
-        // came back as a 1936-wide frame at x=-5 on a 1920 screen). `insideScreen` cannot see either number; the
-        // platform side moves the window back and says whether it had to. Before the maximise, not after: the shape
-        // standing when a window is maximised is the shape a restore comes back to.
+        // came back as a 1936-wide frame at x=-5 on a 1920 screen). `insideScreen` sees neither number; the platform
+        // side moves the window back and says whether it had to. Before the maximise, not after: the shape standing
+        // when a window is maximised is the shape a restore comes back to.
         const moved = AppBackend.fitWindowToScreen()
         if (AppBackend.startWindowMaximized()) {
-            // Let the platform do it, so the platform holds the shape to come back to (`toggleMaximized`'s story).
-            // Where there is no platform command, `visibility` still carries it.
+            // Through the platform, so it holds the shape to come back to (`toggleMaximized`). Where there is no
+            // platform command, `visibility` still carries it.
             if (root.captionMerged)
                 AppBackend.setWindowMaximized(true)
             else
                 root.visibility = Window.Maximized
         } else if (!moved) {
-            // Nothing is measured on a run that was moved or maximised: the frame slop is the difference between what
-            // the window was handed and what it says it is, and neither is that.
+            // A run that was moved or maximised measures nothing: the slop is the difference between the size the
+            // window was handed and the size it reports, and neither of those is that.
             settleTimer.restart()
         }
     }
@@ -353,14 +344,14 @@ ApplicationWindow {
 
     /// A remembered length, kept inside the screen the window comes up on. `Screen.width`, *not*
     /// `Screen.desktopAvailableWidth` — that is the whole virtual desktop (measured on a three-monitor machine: 5760,
-    /// so nothing is ever wider than it). Automated runs are exempt: the offscreen platform reports an 800x800 screen
-    /// that would cut every screenshot to fit.
+    /// so nothing is ever wider). Automated runs are exempt: the offscreen platform reports an 800x800 screen that
+    /// would cut every screenshot to fit.
     function insideScreen(saved, screen) {
         return AppBackend.automated ? saved : Math.min(saved, screen)
     }
 
-    /// What this window adds to a size on the way in. It does not read back the way it is written (measured on the
-    /// merged chrome: asked for 1200 it calls itself 1206, so writing down what it says grew the window 6px on every
+    /// What this window adds to a size on the way in. A size does not read back the way it was written (measured on
+    /// the merged chrome: asked for 1200 it calls itself 1206, so writing down what it says grew the window 6px every
     /// launch). Qt takes the frame margins from one place when it sets the geometry and another when it reads it back,
     /// so the difference is read off the window itself and taken away again on the way out.
     property int widthSlop: 0
@@ -375,9 +366,8 @@ ApplicationWindow {
         // not inside the assignment.
         interval: Metrics.anchorDelayMs
         onTriggered: {
-            // Only measured against a size this window was just handed, and only while nothing else has had a chance to
-            // resize it — a maximise or a snap resizes on the way, and a difference read off that is not a frame
-            // margin.
+            // Only against a size this window was just handed, and only while nothing else has resized it — a maximise
+            // or a snap resizes on the way, and a difference read off that is not a frame margin.
             if (root.askedWidth <= 0 || root.visibility !== Window.Windowed)
                 return
             root.widthSlop = root.width - root.askedWidth
@@ -387,9 +377,9 @@ ApplicationWindow {
 
     /// Everything the next launch should come back to (rules-refs/core.md — settings.toml / state.toml).
     function reportState() {
-        // A minimised window says nothing. Measured on Windows: while it is down the window reports neither its
-        // windowed nor its maximised numbers and its visibility is no longer Maximized — a report from here wrote a
-        // window wider than the screen and cleared the flag that would have restored the maximised one.
+        // A minimised window says nothing. Measured on Windows: while down it reports neither its windowed nor its
+        // maximised numbers and its visibility is no longer Maximized — a report from here wrote a window wider than
+        // the screen and cleared the flag that would have restored the maximised one.
         if (root.visibility !== Window.Minimized)
             AppBackend.saveWindow(root.x, root.y,
                                   root.width - root.widthSlop,
@@ -404,15 +394,14 @@ ApplicationWindow {
         id: stateTimer
         interval: Metrics.stateFlushMs
         repeat: true
-        // A run that was turned away holds an empty store, so its reports would reach no file — it does not make them
-        // all the same.
+        // A run that was turned away holds an empty store, so its reports would reach no file.
         running: !AppBackend.alreadyRunning
         onTriggered: root.reportState()
     }
 
     // ---- smoke hooks -----------------------------------------------
     // The whole of the window's PG_AUTO_ACT harness, built only when a verb was given so an ordinary run carries none
-    // of it. A file of its own cannot see this one's ids, so everything the verbs act on is named here — an
+    // of it. A file of its own cannot see this one's ids, so everything the verbs act on is handed over here — an
     // automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
     Loader {
         id: autoActLoader
@@ -440,7 +429,7 @@ ApplicationWindow {
     /// The shared tooltip — the one popup in this app nobody declares. The attached property builds it from the style,
     /// so it arrives in Fusion's own clothes: a pale yellow ground, a frame that reads the *text* role (so the palette
     /// cannot separate the two), and a drawn shadow. Reaching it is the only way to dress it, and dressing it once
-    /// reaches every `ToolTip.text` in the tree.
+    /// carries to every `ToolTip.text` in the tree.
     readonly property var sharedTip: mainUi.ToolTip.toolTip
     /// Puts the app's own card on it (デザイン規約 §背景 names `bgElevated` as the tooltip's ground).
     function dressToolTip() {
@@ -490,7 +479,7 @@ ApplicationWindow {
         autoShotDriver.begin()
     }
     // Popups (dialogs, menus) render in the window overlay, whose C++-created items grabToImage refuses ("no QML
-    // engine"). This QML-declared mirror of the overlay is grabbable, which makes popups photographable on the
+    // engine"). This QML-declared mirror of the overlay is grabbable, which is what makes popups photographable on the
     // offscreen platform, where no OS window exists to shoot from outside. Loaded only while a shot directory is set,
     // and refreshed once at shot time: AutoShotDriver.
     Loader {
@@ -522,8 +511,8 @@ ApplicationWindow {
 
     // ---- identity dialog -------------------------------------------------
     // Opened and closed from the state above rather than by binding `visible`: Escape closes a popup imperatively,
-    // which would overwrite such a binding and leave the menu entry unable to open it again. Closing for any reason
-    // answers the state, so the two stay in step.
+    // which would overwrite such a binding and leave the menu entry unable to open it again. Every close answers the
+    // state, so the two stay in step.
     IdentityDialog {
         id: identityDialog
         editing: root.identityEditing
@@ -566,7 +555,7 @@ ApplicationWindow {
         // starts below the title bar (measured on Windows: y = 31). The chrome reaches back up over that inset with a
         // negative top margin — the content item does not clip, so both painting and input carry. Not by reparenting
         // onto the window's root item: content outside the content item never wakes the render loop, so every change
-        // waited for the next input event to be painted — "the first click did nothing" (measured).
+        // waited for the next input event to be painted (measured: "the first click did nothing").
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
         spacing: 0
@@ -598,8 +587,7 @@ ApplicationWindow {
             color: Theme.borderSubtle
         }
 
-        // Nothing open: the blank page. Built only while it is needed, so an app that starts with tabs never pays for
-        // it.
+        // Nothing open: the blank page. Built only while needed, so an app that starts with tabs never pays for it.
         Loader {
             id: blankPage
             Layout.fillWidth: true
@@ -643,9 +631,9 @@ ApplicationWindow {
             }
         }
 
-        // The window's floor, and — while the edge above is drawn — the bottom side of it as well: one line in
-        // borderDefault doing both. Drawn while the window fills the screen too, unlike the edge: this side still has
-        // the taskbar under it.
+        // The window's floor, and — while the edge above is drawn — its bottom side as well: one line in borderDefault
+        // doing both. Unlike the edge, drawn while the window fills the screen too: this side still has the taskbar
+        // under it.
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: Theme.borderWidth
