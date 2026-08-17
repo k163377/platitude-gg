@@ -22,10 +22,20 @@ ColumnLayout {
     /// row's tooltip can be photographed (PG_AUTO_ACT=path-tip). -1
     /// points at no row.
     property int pointedTipRow: -1
+    /// Which working-tree file the middle pane is reading, handed down by the
+    /// page: what the arrows walk from, and empty while the graph is in the
+    /// middle (規約 §diff のファイル一覧). The light that says so is this
+    /// list's own choice — see `readOne`.
+    property string readBucket: ""
+    property string readPath: ""
 
     signal amendToggled(bool on)
     signal commitClicked()
     signal fileActivated(string bucket, string path, string origPath)
+    /// The arrows walked onto another file. Not the signal a click raises: a
+    /// click on the file already open closes the diff, and holding Down must
+    /// not (規約 §diff のファイル一覧).
+    signal fileWalked(string bucket, string path, string origPath)
     /// The stash card's Stash button: message / include untracked /
     /// keep index / staged only.
     signal stashSubmitted(string message, bool untracked, bool keepIndex, bool stagedOnly)
@@ -79,6 +89,24 @@ ColumnLayout {
         if (wipPane.chosenCount !== 1 || !wipPane.isChosen(bucket, path))
             wipPane.chooseOnly(bucket, path)
     }
+
+    // ---- walking the files with the arrow keys ------------------------
+    // The light this list already had is the choice, so a step moves the
+    // choice; the reading follows a beat later (規約 §diff のファイル一覧).
+    FileRowWalk {
+        id: fileWalk
+        view: wipList
+        model: wipPane.worktreeModel
+        readBucket: wipPane.readBucket
+        readPath: wipPane.readPath
+        onStepped: (bucket, path) => wipPane.chooseOnly(bucket, path)
+        onLanded: (bucket, path, origPath) =>
+            wipPane.fileWalked(bucket, path, origPath)
+    }
+    /// Automation only: the walk itself, for a run that has to press the
+    /// arrows and read where they landed — the same kind of exposure
+    /// `GraphPane.view` is (verify-ui).
+    readonly property alias filesWalk: fileWalk
     function clearChoice() {
         wipPane.chosenKeys = ({})
         wipPane.chosenCount = 0
@@ -724,6 +752,12 @@ ColumnLayout {
             visible: wipPane.workTree.stagedCount === 0
                      && wipPane.worktreeModel.total > 0
         }
+        // Qt's own key navigation moves `currentIndex` and tells nobody; the
+        // arrows are answered here instead, where they move the file being
+        // read (規約 §diff のファイル一覧).
+        keyNavigationEnabled: false
+        Keys.onUpPressed: event => event.accepted = fileWalk.stepFile(-1)
+        Keys.onDownPressed: event => event.accepted = fileWalk.stepFile(1)
         delegate: NavItemDelegate {
             listWidth: wipList.width
             kindHint: "wt"
@@ -742,7 +776,10 @@ ColumnLayout {
             onEolPointed: (path, on) => wipPane.pointEol(on ? path : "")
             onFileClicked: (bucket, path, origPath, modifiers) => {
                 // Choosing rows is not reading one: only a plain click
-                // moves the diff.
+                // moves the diff. Either way the press landed in this list,
+                // so this is where the keyboard is (規約 §diff のファイル
+                // 一覧).
+                wipList.forceActiveFocus()
                 if (wipPane.applyClick(bucket, path, modifiers))
                     wipPane.fileActivated(bucket, path, origPath)
             }

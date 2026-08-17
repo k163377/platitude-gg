@@ -204,14 +204,28 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // back to the graph. A picture of the diff still standing is also
         // a picture of a run where the arrow was never pressed.
         "graph-step-diff" => Some("back=true refused=1 focused=false diff=true"),
+        // The file list's arrows, and the half of the keyboard rule the
+        // diff's own arrows are the other half of: nothing here pressed the
+        // diff, so `focused=true` says the list *kept* the keyboard when the
+        // diff opened over the graph. `lit=true` is the row painted as the
+        // one being read — the rectangle's own answer, not the condition
+        // behind it — and `moved=true` says the diff followed the light
+        // rather than only the light moving. The picture is a weak witness:
+        // one file's diff frames like another's.
+        "changes-step" | "wip-step" => Some("moved=true stopped=false lit=true focused=true"),
+        // And the end it stops at rather than wraps past, the same shape
+        // `diff-step-edge` reads: the walk asks for ten files, runs out, and
+        // the rest answer false. `moved=true` beside it is what tells this
+        // from a walk that was refused from the first press.
+        "changes-step-edge" => Some("moved=true stopped=true lit=true focused=true"),
         // The diff's own arrows, where the picture is the weakest witness
         // in the app: a diff scrolled two rows and a diff never scrolled
         // at all are the same photograph of the same file. Everything that
-        // matters is in the line. `focused=true` is the arrival taking the
-        // keyboard — nothing pressed this pane, so a false here means the
-        // arrows would have been dead in a real window — and `moved=true`
-        // with `atEnd=false stopped=false` is a walk that had somewhere to
-        // go and went there.
+        // matters is in the line. `focused=true` is the hand's arrival
+        // taking the keyboard — the pane does not take it by appearing, so a
+        // false here means the walk was pressing on a pane the file list
+        // still owns — and `moved=true` with `atEnd=false stopped=false` is a
+        // walk that had somewhere to go and went there.
         "diff-step" => Some("moved=true atEnd=false stopped=false focused=true"),
         // And the end it stops at rather than wraps past. `stopped=true`
         // is the refusal itself: the walk asks for twenty rows, gets as

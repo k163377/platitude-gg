@@ -27,10 +27,16 @@ Item {
     property string readPath: ""
     readonly property bool selected:
         !fileRow.isFolder && fileRow.pathText === fileRow.readPath
-    /// Whether this row is painted as the one being read — what a headless
-    /// run reports, since reading the condition back would go green with the
-    /// rectangle unwired.
-    readonly property bool lit: selectedBox.visible
+    /// What the walk over this list calls this row, empty on a folder — the
+    /// one name both file lists' rows answer to (`FileRowWalk`).
+    readonly property string walkKey:
+        fileRow.isFolder ? "" : fileRow.pathText
+    /// That name while the row is painted as the one being read, empty
+    /// otherwise — what a headless run reads off the list. The rectangle's
+    /// own `visible`, since reading the condition back would go green with
+    /// the rectangle unwired.
+    readonly property string litKey:
+        selectedBox.visible ? fileRow.walkKey : ""
 
     /// Stands in for the pointer where headless cannot put one, so a
     /// cut-down row's tooltip can be photographed (PG_AUTO_ACT=path-tip).

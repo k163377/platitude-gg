@@ -95,10 +95,14 @@ Item {
                                     && navRow.editKey === navRow.rowKey
     /// The name git knows this row by.
     readonly property string fullName: navRow.full !== "" ? navRow.full : navRow.name
-    /// Whether this row is painted as one of the chosen — what a headless
-    /// run reports, since reading `chosen` back would go green with the
+    /// What the walk over this list calls this row, empty on a folder — the
+    /// one name both file lists' rows answer to (`FileRowWalk`).
+    readonly property string walkKey: navRow.folder ? "" : navRow.fullName
+    /// That name while the row is painted as one of the chosen, empty
+    /// otherwise — what a headless run reads off the list. The rectangle's
+    /// own `visible`, since reading `chosen` back would go green with the
     /// rectangle unwired.
-    readonly property bool lit: chosenBox.visible
+    readonly property string litKey: chosenBox.visible ? navRow.walkKey : ""
 
     signal refClicked(string oidHex)
     /// A working-tree file row was clicked. `modifiers` carries Ctrl and

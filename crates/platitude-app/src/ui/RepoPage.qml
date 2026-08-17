@@ -1694,8 +1694,12 @@ Item {
                         headPublished: page.headPublished
                         onAmendToggled: on => page.amendToggled(on)
                         onCommitClicked: page.commitNow()
+                        readBucket: page.diffFromWt ? page.diffKind : ""
+                        readPath: page.diffFromWt ? page.diffPath : ""
                         onFileActivated: (bucket, path, origPath) =>
                             page.toggleDiff(bucket, path, origPath)
+                        onFileWalked: (bucket, path, origPath) =>
+                            page.openDiff(bucket, path, origPath)
                         onStashSubmitted: (message, untracked, keepIndex, stagedOnly) =>
                             repoTab.pushStash(message, untracked, keepIndex, stagedOnly)
                         onFileMenuRequested: (bucket, path) =>
@@ -1734,6 +1738,8 @@ Item {
                             page.saveMessage(oidHex, subject, body)
                         onFileActivated: (path, origPath) =>
                             page.toggleDiff("commit", path, origPath)
+                        onFileWalked: (path, origPath) =>
+                            page.openDiff("commit", path, origPath)
                         onParentClicked: oidHex => page.jumpToRef(oidHex)
                         // The badge's press goes to the window, which owns
                         // the settings card.

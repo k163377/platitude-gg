@@ -14,23 +14,27 @@ use super::qml_register;
 // DetailsModel: commit metadata + changed files
 // ---------------------------------------------------------------------------
 
+// Every field is `pub(super)` because the rows are also what
+// `details_tests` builds a commit out of: the tests sit beside the model
+// rather than in it (.claude/rules/structure.md), and `models` is as far as
+// the widening reaches.
 #[derive(QModelItem, Default, Clone)]
 pub struct FileItem {
-    change: String,
+    pub(super) change: String,
     /// Full path (diff request + tooltip); folder rows carry their
     /// directory path here, which doubles as the fold toggle key.
-    path: String,
-    orig_path: String,
+    pub(super) path: String,
+    pub(super) orig_path: String,
     /// Display text: the last segment in tree view, the full path in
     /// path view.
-    name: String,
+    pub(super) name: String,
     /// The same for a rename's source, cut back exactly as far as `name`
     /// is (`encode::rename_source`). `orig_path` stays whole beside it —
     /// that one addresses a diff, this one is only read.
-    orig_name: String,
-    depth: i32,
-    folder: bool,
-    collapsed: bool,
+    pub(super) orig_name: String,
+    pub(super) depth: i32,
+    pub(super) folder: bool,
+    pub(super) collapsed: bool,
 }
 
 impl platitude_core::mem::Footprint for FileItem {
@@ -93,11 +97,11 @@ fn build_file_tree(raw: &[FileItem], overrides: &HashMap<String, bool>) -> Vec<F
 }
 
 pub struct DetailsModel {
-    files: Vec<FileItem>,
+    pub(super) files: Vec<FileItem>,
     /// Flat entries in git output order; display rows derive from these.
-    raw_files: Vec<FileItem>,
+    pub(super) raw_files: Vec<FileItem>,
     file_total: i32,
-    tree_view: bool,
+    pub(super) tree_view: bool,
     /// Explicit folder open/close choices (key = directory path); cleared
     /// per commit, anything absent defaults to open.
     folder_overrides: HashMap<String, bool>,
@@ -173,7 +177,7 @@ impl Default for DetailsModel {
 
 impl DetailsModel {
     /// Rebuilds display rows from the raw entries for the current view.
-    fn rebuild_rows(&mut self) {
+    pub(super) fn rebuild_rows(&mut self) {
         self.files = if self.tree_view {
             build_file_tree(&self.raw_files, &self.folder_overrides)
         } else {
@@ -371,6 +375,58 @@ impl DetailsModel {
         self.folder_overrides.insert(key, !expanded);
         self.rebuild_rows();
         self.reset();
+    }
+
+    /// The changed file `way` steps from `path` among the rows this list
+    /// shows, as `<row>\u{1e}<bucket>\u{1e}<path>`. Empty where the walk has
+    /// nowhere left to go — which is how the arrows stop at the ends rather
+    /// than wrapping — and empty where the path is not shown at all
+    /// (デザイン規約 §diff のファイル一覧).
+    ///
+    /// Only the sign of `way` is read: one press is one file.
+    ///
+    /// Folder rows are stepped over, since a folder has no diff to move to,
+    /// and the rows walked are the ones on screen — a folder the reader
+    /// closed is one the walk does not enter.
+    ///
+    /// The bucket field is always empty here (a commit's changed files sit
+    /// in no bucket); it is in the record so that one walk reads both file
+    /// lists. The path comes last because it is the only field git lets hold
+    /// the separator.
+    #[qslot]
+    pub(super) fn step_file(&self, _bucket: String, path: String, way: i32) -> String {
+        let Some(from) = self.files.iter().position(|f| !f.folder && f.path == path) else {
+            return String::new();
+        };
+        let file = |at: &usize| self.files.get(*at).is_some_and(|f| !f.folder);
+        let landed = if way < 0 {
+            (0..from).rev().find(file)
+        } else {
+            (from + 1..self.files.len()).find(file)
+        };
+        landed
+            .and_then(|at| self.files.get(at).map(|f| (at, f)))
+            .map(|(at, f)| {
+                format!(
+                    "{at}{sep}{sep}{path}",
+                    sep = crate::encode::FIELD_SEP,
+                    path = f.path
+                )
+            })
+            .unwrap_or_default()
+    }
+
+    /// Where a renamed file came from, by path — whole, the way a diff wants
+    /// it (a rename's diff is read by naming both of its sides). The row's
+    /// own `orig_path` is the same answer; this is for the callers holding a
+    /// path and not a row.
+    #[qslot]
+    pub(super) fn orig_of(&self, path: String) -> String {
+        self.raw_files
+            .iter()
+            .find(|f| f.path == path)
+            .map(|f| f.orig_path.clone())
+            .unwrap_or_default()
     }
 
     /// Path of the changed file at `row` of the flat list (automation).

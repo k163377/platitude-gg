@@ -50,6 +50,7 @@ DialogActions 1.0 DialogActions.qml
 DotMark 1.0 DotMark.qml
 FileRowDelegate 1.0 FileRowDelegate.qml
 FileRowMenu 1.0 FileRowMenu.qml
+FileRowWalk 1.0 FileRowWalk.qml
 FindBar 1.0 FindBar.qml
 FoldBlock 1.0 FoldBlock.qml
 FormField 1.0 FormField.qml

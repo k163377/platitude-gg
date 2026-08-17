@@ -15,17 +15,21 @@ Item {
     /// The list being sent.
     required property var view
 
-    /// Where the keyboard goes when this pane comes on screen. Unlike the
-    /// graph, which waits to be clicked because a window has several
-    /// places worth typing into, the diff arrives *because* a hand pressed
-    /// a file in CHANGES — that press already said "read here", so the
-    /// pane takes the keyboard by arriving (デザイン規約 §diff を上下に送る).
+    /// The hand has arrived in this pane — it sent the rows with the wheel,
+    /// or pressed something in them — and the keyboard comes with it
+    /// (デザイン規約 §diff を上下に送る).
+    ///
+    /// **Not on arriving.** The press that opened this diff landed in the
+    /// file list, so that is where the hand was, and until it moves on the
+    /// arrows are that list's (規約 §diff のファイル一覧). Automation comes
+    /// in by the same door: a wheel cannot be injected any more than a
+    /// keystroke can (verify-ui).
     ///
     /// Refused to a list that is not on screen: an image-only preview
     /// hands its space to the picture and draws no rows. Focus on
     /// something invisible is the hole the graph closed from the other
     /// side — Qt keeps active focus there and the keys go on arriving.
-    function takeKeyboard() {
+    function handArrived() {
         if (walk.view.visible)
             walk.view.forceActiveFocus()
     }
@@ -52,14 +56,13 @@ Item {
     /// A diff with nothing to scroll reads as at its end, because it is.
     readonly property bool atEnd: walk.view.contentY >= walk.view.maxY - 0.5
 
-    // Taken on the way in, let go on the way out. The second half is the
-    // rule the graph is already keeping (規約 §矢印で履歴を辿る「画面から
-    // 退いたペインはキーボードを手放す」): a pane swapped off the screen
-    // that keeps focus goes on answering arrows nobody can see.
+    // Let go on the way out — the rule the graph is already keeping
+    // (規約 §矢印で履歴を辿る「画面から退いたペインはキーボードを手放す」):
+    // a pane swapped off the screen that keeps focus goes on answering
+    // arrows nobody can see. Nothing on the way in: the hand has to come
+    // here for the keyboard to (`handArrived`).
     onVisibleChanged: {
-        if (walk.visible)
-            walk.takeKeyboard()
-        else
+        if (!walk.visible)
             walk.view.focus = false
     }
 }

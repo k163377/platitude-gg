@@ -295,6 +295,13 @@ impl NavSectionModel {
         self.beside(&bucket, &path)
     }
 
+    /// The file row the arrows land on, `way` steps from `path` in `bucket`
+    /// (see [`Self::step`]). What the file list's own arrows walk.
+    #[qslot]
+    fn step_file(&self, bucket: String, path: String, way: i32) -> String {
+        self.step(&bucket, &path, way)
+    }
+
     /// Where a renamed file came from, by path — whole, the way a diff
     /// wants it (a rename's diff is read by naming both of its sides).
     ///

@@ -123,6 +123,20 @@ Rectangle {
                 diffPane.showLineTools(-1, -1)
         }
     }
+    // Every press in this pane, whatever it was for: the hand is here now,
+    // so the arrows are (規約 §diff のファイル一覧). A `PointHandler` because
+    // it is the one handler specified to take only passive grabs — the
+    // buttons, the bars and the rows' own marks all keep working underneath
+    // (the same reason the window's own watcher is one — `Main.qml`). On the
+    // pane rather than an overlay: a handler laid over the rows takes their
+    // hover away (2026-08-17 実測).
+    PointHandler {
+        acceptedButtons: Qt.AllButtons
+        onActiveChanged: {
+            if (active)
+                diffPane.handArrived()
+        }
+    }
     /// Names the row the pointer is over, or nothing where it is over none
     /// of them. A heading is named as itself (line -1), which is what
     /// lights its whole hunk.
@@ -158,7 +172,7 @@ Rectangle {
         id: rowWalk
         view: diffList
     }
-    function takeKeyboard() { rowWalk.takeKeyboard() }
+    function handArrived() { rowWalk.handArrived() }
     function stepRows(delta) { return rowWalk.stepRows(delta) }
     readonly property alias atEnd: rowWalk.atEnd
     /// Automation only: the list itself, for a run that has to read where
@@ -380,6 +394,9 @@ Rectangle {
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse
                 onWheel: event => {
+                    // Sending the rows is the hand arriving here without a
+                    // press to say so (規約 §diff のファイル一覧).
+                    diffPane.handArrived()
                     diffList.cancelFlick()
                     // The wheel's own sideways component — a tilt wheel, a
                     // touchpad — says where it wants to go in the input

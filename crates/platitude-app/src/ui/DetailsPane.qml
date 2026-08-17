@@ -154,6 +154,10 @@ ColumnLayout {
     }
 
     signal fileActivated(string path, string origPath)
+    /// The arrows walked onto another file. Not the signal a click raises: a
+    /// click on the file already open closes the diff, and holding Down must
+    /// not (規約 §diff のファイル一覧).
+    signal fileWalked(string path, string origPath)
     signal parentClicked(string oidHex)
     signal copyRequested(string text)
     signal applyStashRequested(string selector)
@@ -285,6 +289,24 @@ ColumnLayout {
         function onChanged() { detailsPane.syncMessage() }
     }
     Component.onCompleted: detailsPane.syncMessage()
+
+    // ---- walking the changed files with the arrow keys ----------------
+    // Where the arrows stand is where the diff is: the page says so through
+    // `readPath`, whoever moved it, and the walk sends the light and the
+    // reading on from there (規約 §diff のファイル一覧).
+    FileRowWalk {
+        id: fileWalk
+        view: fileList
+        model: detailsPane.details
+        readBucket: ""
+        readPath: detailsPane.readPath
+        onLanded: (bucket, path, origPath) =>
+            detailsPane.fileWalked(path, origPath)
+    }
+    /// Automation only: the walk itself, for a run that has to press the
+    /// arrows and read where they landed — the same kind of exposure
+    /// `GraphPane.view` is (verify-ui).
+    readonly property alias filesWalk: fileWalk
 
     /// How far this pane's own content runs past its right edge, in px.
     /// A child with no `Layout.fillWidth` of its own is Fixed -- only a
@@ -443,12 +465,23 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
         model: detailsPane.details
+        // Qt's own key navigation moves `currentIndex` and tells nobody;
+        // the arrows are answered here instead, where they move the file
+        // being read (規約 §diff のファイル一覧).
+        keyNavigationEnabled: false
+        Keys.onUpPressed: event => event.accepted = fileWalk.stepFile(-1)
+        Keys.onDownPressed: event => event.accepted = fileWalk.stepFile(1)
         delegate: FileRowDelegate {
             listWidth: fileList.width
             pointedTipRow: detailsPane.pointedTipRow
             readPath: detailsPane.readPath
-            onActivated: (bucket, path, origPath) =>
+            // The press that opened the diff landed in this list, so this is
+            // where the keyboard is (規約 §diff のファイル一覧). A folder
+            // row does not take it: nothing is being read from one.
+            onActivated: (bucket, path, origPath) => {
+                fileList.forceActiveFocus()
                 detailsPane.fileActivated(path, origPath)
+            }
             onFolderToggled: key => detailsPane.details.toggleFolder(key)
         }
     }

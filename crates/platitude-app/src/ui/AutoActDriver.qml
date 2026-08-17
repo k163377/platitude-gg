@@ -127,7 +127,8 @@ Item {
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
                 "details-fit", "corner", "graph-step", "graph-step-edge", "graph-step-far",
                 "graph-step-named", "graph-step-dirty", "graph-step-diff", "diff-step",
-                "diff-step-edge", "graph-bar", "graph-bar-away", "middle-scroll",
+                "diff-step-edge", "changes-step", "changes-step-edge", "wip-step",
+                "graph-bar", "graph-bar-away", "middle-scroll",
                 "graph-tail", "divider-refuse", "cherry-pick", "reword", "edit-message",
                 "edit-message-leave", "edit-message-discard", "edit-message-focus",
                 "eol-commit", "eol-hover",
@@ -1210,11 +1211,117 @@ Item {
             driver.complete()
         }
     }
+    // The file list's arrows: the light and the diff move together, one file
+    // per press (規約 §diff のファイル一覧). Two things have to be real for
+    // this to say anything, so both go through the door a hand goes through:
+    //
+    //  - the click. The row's own signal is raised by name, not the pane's
+    //    handler — the handler is where the keyboard is handed to the list,
+    //    and calling past it would leave `focused=` proving nothing (the same
+    //    reason `nav-peek` strikes the cell and not `SidebarPane`).
+    //  - the step, which enters at `stepFile` where `Keys.onDownPressed`
+    //    enters. A keystroke cannot be injected (verify-ui).
+    //
+    // Nothing here reaches for the keyboard, and that is the point: the diff
+    // opened without taking it, so an arrow still belongs to the list.
+    Timer {
+        id: fileStepTimer
+        interval: 25
+        repeat: true
+        /// Which list, `changes` or `wip`, and how far to walk. `overrun`
+        /// asks for more files than the list holds, which is how the end it
+        /// stops at is reached — the count is only known once the commit's
+        /// details have arrived, so it cannot be a number set up here.
+        property string pane: "changes"
+        property int steps: 1
+        property bool overrun: false
+        /// The file clicked, and the bucket its row sits in (empty for the
+        /// commit's list, whose files sit in none).
+        property string bucket: ""
+        property string path: ""
+        /// Whether the click has gone out, so the tick that follows is
+        /// waiting for the diff rather than for the row.
+        property bool clicked: false
+        property bool stopped: false
+        function begin() {
+            fileStepTimer.clicked = false
+            fileStepTimer.stopped = false
+            fileStepTimer.steps = 1
+            fileStepTimer.start()
+        }
+        readonly property var walk:
+            fileStepTimer.pane === "wip" ? wipPane.filesWalk
+                                         : detailsPane.filesWalk
+        onTriggered: {
+            if (!fileStepTimer.clicked) {
+                const row = fileStepTimer.walk.rowFor(fileStepTimer.bucket,
+                                                      fileStepTimer.path)
+                if (!row)
+                    return
+                fileStepTimer.clicked = true
+                if (fileStepTimer.pane === "wip")
+                    row.fileClicked(fileStepTimer.bucket, fileStepTimer.path,
+                                    worktreeModel.origOf(fileStepTimer.path),
+                                    Qt.NoModifier)
+                else
+                    row.activated("", fileStepTimer.path,
+                                  detailsModel.origOf(fileStepTimer.path))
+                return
+            }
+            // The click has to have landed before a step means anything: a
+            // walk with nothing being read is refused, and reading that as
+            // "the end" would go green on a click that never arrived.
+            if (!page.diffShown || page.diffPath !== fileStepTimer.path)
+                return
+            fileStepTimer.stop()
+            if (fileStepTimer.overrun)
+                fileStepTimer.steps = fileStepTimer.walk.view.count + 5
+            const way = fileStepTimer.steps < 0 ? -1 : 1
+            for (let n = 0; n < Math.abs(fileStepTimer.steps); n++) {
+                if (!fileStepTimer.walk.stepFile(way))
+                    fileStepTimer.stopped = true
+            }
+            fileStepReport.start()
+        }
+    }
+    // Longer than the settle behind the walk (`keyStepSettleMs`), because
+    // what is read is the reading a hand coming off the key gets: the light
+    // runs at the key's rate and the diff catches up after it, so a run that
+    // moved the light and never moved the diff has to be told apart from one
+    // that did (規約 §diff のファイル一覧).
+    Timer {
+        id: fileStepReport
+        interval: 25
+        repeat: true
+        onTriggered: {
+            const walk = fileStepTimer.walk
+            // The diff the walk landed on has been asked for, has arrived,
+            // and the row that says which file it is has been built. All
+            // three are the output; the step was the cause. The middle one is
+            // what keeps the picture worth looking at — a pane still waiting
+            // on its read photographs empty.
+            if (!page.diffShown || page.diffPath === fileStepTimer.path
+                    || !diffPane.diffSettled() || walk.litPath() === "")
+                return
+            fileStepReport.stop()
+            AppBackend.report(
+                "file_step pane=" + fileStepTimer.pane
+                + " from=" + fileStepTimer.path
+                + " steps=" + fileStepTimer.steps
+                + " read=" + (page.diffKind + ":" + page.diffPath)
+                + " moved=" + (page.diffPath !== fileStepTimer.path)
+                + " stopped=" + fileStepTimer.stopped
+                + " lit=" + (walk.litPath() === page.diffPath)
+                + " focused=" + walk.view.activeFocus)
+            driver.complete()
+        }
+    }
     // The diff's own arrows, which no headless run can press either: the
     // walk enters where `Keys.onDownPressed` enters (`DiffPane.stepRows`).
-    // Nothing reaches for the keyboard first, and that is half of what
-    // this reads — the diff takes it by coming on screen, so `focused=`
-    // is a claim about the arrival and not about a press this made
+    // The hand is walked into the pane first, through the same door the
+    // wheel comes in by (`DiffPane.handArrived`) — the diff does not take
+    // the keyboard by appearing, so without that the arrows are still the
+    // file list's and `focused=` would be false for the right reason
     // (規約 §diff を上下に送る).
     //
     // The wait is for the view, not for the model. `diffSettled()` says the
@@ -2277,6 +2384,32 @@ Item {
                                  : act === "graph-step-diff" ? 1
                                  : arg === "" ? 1 : Number(arg)
             graphStepTimer.start()
+        } else if (act === "changes-step" || act === "changes-step-edge"
+                   || act === "wip-step") {
+            // The file list's arrows: one file per press, the light and the
+            // diff moving together (規約 §diff のファイル一覧). `-edge` walks
+            // further than the list is long, so the last presses are refused
+            // and it stops rather than wrapping. The argument is the file to
+            // start on — `<bucket>:<path>` for the working tree's list, where
+            // a file changed on both sides has a row under each.
+            if (act === "wip-step") {
+                const cut = arg.indexOf(":")
+                const head = cut > 0 ? arg.substring(0, cut) : ""
+                const named = head === "staged" || head === "unstaged"
+                              || head === "untracked" || head === "conflicts"
+                page.showWip()
+                fileStepTimer.pane = "wip"
+                fileStepTimer.bucket = named ? head : "unstaged"
+                fileStepTimer.path = named ? arg.substring(cut + 1) : arg
+            } else {
+                page.activateRow(branchesModel.headOid !== ""
+                                 ? branchesModel.headOid : graphModel.oidAt(0))
+                fileStepTimer.pane = "changes"
+                fileStepTimer.bucket = ""
+                fileStepTimer.path = arg
+            }
+            fileStepTimer.overrun = act === "changes-step-edge"
+            fileStepTimer.begin()
         } else if (act === "diff-step" || act === "diff-step-edge") {
             // Moves the view, not a selection (規約 §diff を上下に送る).
             // Rides the 320x240 seed: no demo file's diff is longer than
@@ -2284,6 +2417,11 @@ Item {
             // two rows (実測) — which is why the plain walk is one row.
             page.showWip()
             page.toggleDiff("untracked", arg, "")
+            // The hand walks into the pane, through the same door the wheel
+            // comes in by: the diff does not take the keyboard by appearing
+            // (規約 §diff のファイル一覧), so without this the arrows are
+            // still the file list's.
+            diffPane.handArrived()
             diffStepTimer.steps = act === "diff-step-edge" ? 20 : 1
             diffStepTimer.start()
         } else if (act === "name-box") {
