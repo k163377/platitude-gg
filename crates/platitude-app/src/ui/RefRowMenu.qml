@@ -141,22 +141,22 @@ Item {
             refRowMenu.forceDeleteBranch = ""
             refRowMenu.dismissed()
         }
+        // A branch of one's own, started where this row stands. Ahead of everything and behind a rule of its own —
+        // deliberately not beside `switch`, which is where it would read as a variant of moving onto what is already
+        // there; nothing here moves anywhere until a name has been typed (2026-08-17 ユーザー判断). Same seat, same words
+        // as the commit menu's row (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
+        AppMenuItem {
+            id: refBranchHereItem
+            text: qsTr("Create branch here…")
+            offered: refRowMenu.canBranchHere
+            onTriggered: refRowMenu.branchHereRequested(refRowMenu.refOid)
+        }
+        AppMenuSeparator {}
         AppMenuItem {
             code: "switch"
             offered: refRowMenu.canSwitch
             // Through the chips' dispatcher: a remote branch whose local one already exists cannot simply be created.
             onTriggered: refRowMenu.switchRequested(refRowMenu.kind === "remote" ? "R" : "L", refRowMenu.refId)
-        }
-        // The other way to stand somewhere: on a branch of one's own, started where this row is. Next to `switch`
-        // because the two answer the same question, and worded the same wherever it is met — the commit menu carries
-        // the identical row (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
-        AppMenuItem {
-            id: refBranchHereItem
-            code: "switch --create"
-            //: Follows the `switch --create` chip: the name the box this row opens will take.
-            text: qsTr("<name>")
-            offered: refRowMenu.canBranchHere
-            onTriggered: refRowMenu.branchHereRequested(refRowMenu.refOid)
         }
         AppMenuItem {
             code: "merge"

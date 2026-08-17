@@ -91,16 +91,17 @@ Item {
 
     AppMenu {
         id: commitMenu
-        // Where this row leads rather than what it brings here, so it stands ahead of the rest and apart from them —
-        // the same seat `switch` takes in the ref menu (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
+        // Where this row leads rather than what it brings here, so it stands ahead of the rest and behind a rule of its
+        // own — the same seat and the same words in the ref menu (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
         //
-        // The chip is the command that eventually runs; the placeholder is the half of it nobody has typed yet, which
-        // is also why this row opens a box instead of doing anything (デザイン規約 §長さ の山括弧).
+        // Words rather than a chip, alone in a menu that is otherwise a column of commands: no one command is what this
+        // row runs. It opens a box, and what git is finally spawned with depends on what is typed into it — the ellipsis
+        // is that (`Stash…` / `Open repository…`). The one command that would fit, `switch --create`, is the spelling
+        // the row above the ref menu's own `switch` would then share, and switching is precisely what this row does not
+        // do until a name exists (2026-08-17 ユーザー判断).
         AppMenuItem {
             id: branchHereCommitItem
-            code: "switch --create"
-            //: Follows the `switch --create` chip: the name the box this row opens will take.
-            text: qsTr("<name>")
+            text: qsTr("Create branch here…")
             offered: rowMenu.canBranchHere
             onTriggered: rowMenu.branchHereRequested(rowMenu.oid)
         }
