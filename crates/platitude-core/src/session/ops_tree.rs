@@ -9,7 +9,7 @@ impl RepoSession {
     pub fn stage_paths(self: &Arc<Self>, paths: Vec<String>) {
         self.write(
             "stage",
-            AfterWrite::Snapshots,
+            AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::stage_paths(&exec, &repo.workdir, &paths, &cancel).await
             },
@@ -20,7 +20,7 @@ impl RepoSession {
     pub fn stage_all(self: &Arc<Self>) {
         self.write(
             "stage",
-            AfterWrite::Snapshots,
+            AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::stage_all(&exec, &repo.workdir, &cancel).await
             },
@@ -31,7 +31,7 @@ impl RepoSession {
     pub fn unstage_all(self: &Arc<Self>) {
         self.write(
             "unstage",
-            AfterWrite::Snapshots,
+            AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::unstage_all(&exec, &repo.workdir, &cancel).await
             },
@@ -42,7 +42,7 @@ impl RepoSession {
     pub fn unstage_paths(self: &Arc<Self>, paths: Vec<String>) {
         self.write(
             "unstage",
-            AfterWrite::Snapshots,
+            AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::unstage_paths(&exec, &repo.workdir, &paths, &cancel).await
             },
@@ -53,7 +53,7 @@ impl RepoSession {
     pub fn discard_paths(self: &Arc<Self>, paths: Vec<String>) {
         self.write(
             "discard",
-            AfterWrite::Snapshots,
+            AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::discard_worktree(&exec, &repo.workdir, &paths, &cancel).await
             },
@@ -66,7 +66,7 @@ impl RepoSession {
     pub fn discard_paths_to_head(self: &Arc<Self>, paths: Vec<String>) {
         self.write(
             "discard",
-            AfterWrite::Snapshots,
+            AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::discard_to_head(&exec, &repo.workdir, &paths, &cancel).await
             },
@@ -77,7 +77,7 @@ impl RepoSession {
     pub fn remove_untracked(self: &Arc<Self>, paths: Vec<String>) {
         self.write(
             "clean",
-            AfterWrite::Snapshots,
+            AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::remove_untracked(&exec, &repo.workdir, &paths, &cancel).await
             },
@@ -94,7 +94,7 @@ impl RepoSession {
     ) {
         self.write(
             "discard",
-            AfterWrite::Snapshots,
+            AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::discard_partial(&exec, &repo, &target, &selects, seen, &cancel).await
             },
@@ -112,7 +112,7 @@ impl RepoSession {
     ) {
         self.write(
             "stage",
-            AfterWrite::Snapshots,
+            AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::apply_partial(&exec, &repo, &target, &selects, seen, &cancel).await
             },

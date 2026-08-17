@@ -106,8 +106,16 @@ impl RepoSession {
         // the WIP row exists only while the tree is dirty and a write that
         // lands a commit moves a ref, so rebuilding first and then reacting
         // to either would walk the whole history twice for one write.
-        let (wip_flipped, refs_moved) =
-            tokio::join!(self.publish_status(), self.publish_refs(false));
+        //
+        // A write that only moved the index reads the tree alone: the refs
+        // are where they were, and asking again is the longest read in the
+        // app on a repository with refs in it (`AfterWrite::Tree`).
+        let tree_only = after == AfterWrite::Tree;
+        let (wip_flipped, refs_moved) = if tree_only {
+            (self.publish_status().await, false)
+        } else {
+            tokio::join!(self.publish_status(), self.publish_refs(false))
+        };
         if rebuild_graph || wip_flipped || refs_moved {
             // Off-screen rebuild: the pane keeps showing the old graph
             // until the finished one swaps in (or nothing changed and
@@ -120,11 +128,17 @@ impl RepoSession {
         // A stash push, pop or drop moves no ref, so the refs read has no
         // reason to ask again — and it is exactly what changes whether
         // something other than this branch still holds the tip.
-        if !refs_moved {
-            self.settle_head_reach();
+        //
+        // An index-only write changes none of the three: what is published
+        // is a question about commits, a stash is made by a command that
+        // says so, and a worktree is added or removed by another.
+        if !tree_only {
+            if !refs_moved {
+                self.settle_head_reach();
+            }
+            self.refresh_stashes();
+            self.refresh_worktrees();
         }
-        self.refresh_stashes();
-        self.refresh_worktrees();
         if after == AfterWrite::Author {
             self.refresh_author();
         }

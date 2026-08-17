@@ -111,6 +111,24 @@ pub const DEFAULT_LOG_LIMIT: u32 = 2000;
 /// What a write invalidates once it succeeds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AfterWrite {
+    /// The index and the working tree, and nothing else: staging,
+    /// unstaging, discarding, cleaning. No ref moves, no stash appears or
+    /// goes, no worktree is added or removed, and what is published is
+    /// what it was — so none of those are read again.
+    ///
+    /// The saving is per press. Staging one line cost fourteen git
+    /// invocations on a demo repository, ten of which could not have
+    /// changed (2026-08-17 実測, Windows: `for-each-ref` 25ms, two
+    /// `rev-list --count` 54ms, `stash list` + `worktree list` 46ms,
+    /// `config --get-regexp remote` 25ms). On a repository with fifty
+    /// thousand refs the first of those is the whole of the wait.
+    ///
+    /// **What it gives up**: a write no longer doubles as a poll for ref
+    /// moves made outside this window. Those land on the next refresh
+    /// instead — and staging is done with the graph off screen, where
+    /// there is nothing for a poll to keep current
+    /// (2026-08-17 ユーザー判断).
+    Tree,
     /// Working tree / index / stash only.
     Snapshots,
     /// History or refs moved, so the graph has to be rebuilt too.
