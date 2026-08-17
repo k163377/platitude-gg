@@ -810,7 +810,7 @@ Item {
         interval: 25
         repeat: true
         /// Which section, and which of its rows. A section whose names fold into folders has no row to rename at the
-        /// top of it, so the row travels with the argument (`branch:2`) and defaults to the first.
+        /// top of it, so the row travels with the argument (`branch:1`) and defaults to the first.
         readonly property string kind: {
             const arg = AppBackend.autoActArg
             const cut = arg.indexOf(":")
