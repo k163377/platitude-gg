@@ -109,9 +109,7 @@ ApplicationWindow {
     // ---- automation entry points ----------------------------------------
     Component.onCompleted: {
         if (SpikeConfig.autoBench !== "") {
-            startBench(SpikeConfig.autoBench === "all"
-                       ? [0, 1, 2]
-                       : [benchModeIndex(SpikeConfig.autoBench)])
+            startBench(SpikeConfig.autoBench === "all" ? [0, 1, 2] : [benchModeIndex(SpikeConfig.autoBench)])
         } else if (SpikeConfig.autoLog !== "") {
             tabBar.currentIndex = 3
             logModel.load(SpikeConfig.autoLog, SpikeConfig.logTopo)
@@ -570,8 +568,7 @@ ApplicationWindow {
                 property int lane: 0
                 strokeWidth: 3
                 fillColor: "transparent"
-                strokeColor: (rowShape.through_mask >> lp.lane) & 1
-                             ? root.laneColors[lp.lane % 10] : "transparent"
+                strokeColor: (rowShape.through_mask >> lp.lane) & 1 ? root.laneColors[lp.lane % 10] : "transparent"
                 startX: lp.lane * root.laneW + root.laneW / 2
                 startY: 0
                 PathLine {
@@ -594,8 +591,7 @@ ApplicationWindow {
                 ShapePath {
                     strokeWidth: 3
                     fillColor: "transparent"
-                    strokeColor: rowShape.conn_from >= 0
-                                 ? root.laneColors[rowShape.conn_from % 10] : "transparent"
+                    strokeColor: rowShape.conn_from >= 0 ? root.laneColors[rowShape.conn_from % 10] : "transparent"
                     startX: (rowShape.conn_from < 0 ? 0 : rowShape.conn_from) * root.laneW + root.laneW / 2
                     startY: 0
                     PathLine {

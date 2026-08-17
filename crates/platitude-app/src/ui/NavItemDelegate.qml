@@ -5,9 +5,8 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// One sidebar row: ref / file / folder, shared by every section and the
-// WIP file list. What a click means is the owner's business — the row
-// only reports it.
+// One sidebar row: ref / file / folder, shared by every section and the WIP file list. What a click means is the
+// owner's business — the row only reports it.
 Item {
     id: navRow
     required property int index
@@ -17,9 +16,8 @@ Item {
     required property string change
     required property string bucket
     required property string orig_path
-    /// The same source written the way this row writes names — what the
-    /// row shows. `orig_path` stays whole beside it: that one addresses a
-    /// diff (`models::nav`).
+    /// The same source written the way this row writes names — what the row shows. `orig_path` stays whole beside it:
+    /// that one addresses a diff (`models::nav`).
     required property string orig_name
     required property bool is_head
     required property bool has_remote
@@ -28,8 +26,8 @@ Item {
     required property int depth
     required property bool folder
     required property bool eol_mark
-    /// The pointed row's line-ending words, handed down by the pane — the
-    /// section model keeps one copy rather than every row keeping its own.
+    /// The pointed row's line-ending words, handed down by the pane — the section model keeps one copy rather than
+    /// every row keeping its own.
     property string pointedEolPath: ""
     property string pointedEolKind: ""
     property string pointedEolFrom: ""
@@ -39,74 +37,61 @@ Item {
     property string pointedEolExt: ""
     /// The pointer arrived at, or left, a row carrying the mark.
     signal eolPointed(string path, bool on)
-    /// Stands in for the pointer where headless cannot put one, so a
-    /// cut-down row's tooltip can be photographed (PG_AUTO_ACT=path-tip).
-    /// -1 points at no row.
+    /// Stands in for the pointer where headless cannot put one, so a cut-down row's tooltip can be photographed
+    /// (PG_AUTO_ACT=path-tip). -1 points at no row.
     property int pointedTipRow: -1
     property string kindHint: "branch"
-    /// The current branch's ahead / behind. What travels is the two
-    /// numbers — the row draws the arrows itself (`HeadTrack`).
+    /// The current branch's ahead / behind. What travels is the two numbers — the row draws the arrows itself
+    /// (`HeadTrack`).
     property bool headTracks: false
     property int headAhead: 0
     property int headBehind: 0
     property real listWidth: 200
     // Shows the hover stage/unstage affordance (WIP view).
     property bool showStage: false
-    /// Whether this row is one of those chosen (working-tree list). Held
-    /// by the list, since a delegate is recycled the moment its row
-    /// scrolls off.
+    /// Whether this row is one of those chosen (working-tree list). Held by the list, since a delegate is recycled the
+    /// moment its row scrolls off.
     property bool chosen: false
-    /// The pointer is on another chosen row's stage affordance, and this
-    /// row goes with it. The marks come out together so that what one
-    /// press moves is seen before it is pressed
-    /// (デザイン規約 §その他の操作).
+    /// The pointer is on another chosen row's stage affordance, and this row goes with it. The marks come out together
+    /// so that what one press moves is seen before it is pressed (デザイン規約 §その他の操作).
     property bool stagePeer: false
-    /// What each side of a conflict is called. **The two swap over during
-    /// a rebase**, so they are handed down from the model rather than
-    /// worked out here (`WorkTreeModel.sideOurs` / `sideTheirs`); empty
-    /// where git left nothing to name a side by.
+    /// What each side of a conflict is called. **The two swap over during a rebase**, so they are handed down from the
+    /// model rather than worked out here (`WorkTreeModel.sideOurs` / `sideTheirs`); empty where git left nothing to
+    /// name a side by.
     property string sideOurs: ""
     property string sideTheirs: ""
 
-    /// What the two sides each did to this file (デザイン規約 §conflict
-    /// の種別). The sentence itself lives in `Words`: the diff pane says
-    /// the same one on the conflicts git prints no patch for, and two
-    /// copies of it would be two answers.
+    /// What the two sides each did to this file (デザイン規約 §conflict の種別). The sentence itself lives in `Words`: the diff
+    /// pane says the same one on the conflicts git prints no patch for, and two copies of it would be two answers.
     function conflictWords() {
         return Words.conflict(navRow.change, navRow.sideOurs, navRow.sideTheirs)
     }
 
     // ---- the two-click gestures ------------------------------------
-    // Which row was clicked last, and which is being typed into, are held
-    // by the sidebar: delegates are recycled the moment a row scrolls off
-    // (デザイン規約 §左メニューの所作).
+    // Which row was clicked last, and which is being typed into, are held by the sidebar: delegates are recycled the
+    // moment a row scrolls off (デザイン規約 §左メニューの所作).
     property string rowKey: ""
     property string activeKey: ""
     property string editKey: ""
-    /// "rename" (the name is in the box) or "branch" (a name for a new
-    /// branch on this row's commit).
+    /// "rename" (the name is in the box) or "branch" (a name for a new branch on this row's commit).
     property string editMode: ""
-    /// What has been typed so far, held by the sidebar so a row that
-    /// scrolls off and comes back does not lose it.
+    /// What has been typed so far, held by the sidebar so a row that scrolls off and comes back does not lose it.
     property string editText: ""
     property bool editRefused: false
     property string editRefusedWhy: ""
-    readonly property bool editing: navRow.editKey !== ""
-                                    && navRow.editKey === navRow.rowKey
+    readonly property bool editing: navRow.editKey !== "" && navRow.editKey === navRow.rowKey
     /// The name git knows this row by.
     readonly property string fullName: navRow.full !== "" ? navRow.full : navRow.name
-    /// What the walk over this list calls this row, empty on a folder — the
-    /// one name both file lists' rows answer to (`FileRowWalk`).
+    /// What the walk over this list calls this row, empty on a folder — the one name both file lists' rows answer to
+    /// (`FileRowWalk`).
     readonly property string walkKey: navRow.folder ? "" : navRow.fullName
-    /// That name while the row is painted as one of the chosen, empty
-    /// otherwise — what a headless run reads off the list. The rectangle's
-    /// own `visible`, since reading `chosen` back would go green with the
-    /// rectangle unwired.
+    /// That name while the row is painted as one of the chosen, empty otherwise — what a headless run reads off the
+    /// list. The rectangle's own `visible`, since reading `chosen` back would go green with the rectangle unwired.
     readonly property string litKey: chosenBox.visible ? navRow.walkKey : ""
 
     signal refClicked(string oidHex)
-    /// A working-tree file row was clicked. `modifiers` carries Ctrl and
-    /// Shift, which is how several rows are chosen at once.
+    /// A working-tree file row was clicked. `modifiers` carries Ctrl and Shift, which is how several rows are chosen at
+    /// once.
     signal fileClicked(string bucket, string path, string origPath, int modifiers)
     signal folderClicked(string key)
     signal stageClicked(string bucket, string path)
@@ -116,118 +101,94 @@ Item {
     signal rowClicked()
     /// Double-click: go where this row leads.
     signal activateRequested()
-    /// A second click, once the double-click window has passed: put this
-    /// row's name in a box.
+    /// A second click, once the double-click window has passed: put this row's name in a box.
     signal renameRequested()
     /// The box: typed into, accepted, walked away from.
     signal editTyped(string text)
     signal editAccepted(string text)
     signal editCancelled()
-    /// Right-click on a ref row; the page owns the menu because
-    /// delegates are recycled out from under an open popup. `name` is
-    /// what the row shows, `full` what git knows it by (a stash shows a
-    /// message and answers to a selector).
+    /// Right-click on a ref row; the page owns the menu because delegates are recycled out from under an open popup.
+    /// `name` is what the row shows, `full` what git knows it by (a stash shows a message and answers to a selector).
     signal refMenuRequested(string name, string full, string oidHex)
-    /// Right-click on a working-tree file row, for the same reason.
-    /// Undoing a rename takes both of its names, but the menu reads them
-    /// off the chosen rows (`orig_path`), so the row itself is enough.
+    /// Right-click on a working-tree file row, for the same reason. Undoing a rename takes both of its names, but the
+    /// menu reads them off the chosen rows (`orig_path`), so the row itself is enough.
     signal fileMenuRequested(string bucket, string path)
 
     width: listWidth
     height: Theme.rowHeight
 
-    // The current branch stays highlighted inside the list (the sidebar's
-    // sticky row only stands in for it while this row is scrolled off).
+    // The current branch stays highlighted inside the list (the sidebar's sticky row only stands in for it while this
+    // row is scrolled off).
     Rectangle {
         anchors.fill: parent
         color: Theme.accentMuted
         visible: navRow.is_head && !navRow.folder
     }
-    // The row a click last landed on. Without it the second click of the
-    // rename gesture would be aimed at nothing, and a click on a worktree
-    // row — which has nowhere to jump to — would look like it missed.
+    // The row a click last landed on. Without it the second click of the rename gesture would be aimed at nothing, and
+    // a click on a worktree row — which has nowhere to jump to — would look like it missed.
     Rectangle {
         id: chosenBox
         anchors.fill: parent
         color: Theme.bgSelected
-        visible: !navRow.folder
-                 && (navRow.chosen
-                     || (navRow.rowKey !== ""
-                         && navRow.activeKey === navRow.rowKey))
+        visible: !navRow.folder && (navRow.chosen || (navRow.rowKey !== "" && navRow.activeKey === navRow.rowKey))
     }
     Rectangle {
         anchors.fill: parent
         color: Theme.bgHover
         visible: itemMouse.containsMouse
     }
-    // No mark: nothing asks a question about a row in this list any more.
-    // What one of these rows takes away is held down on the menu row that
-    // names it, and that menu is standing over the row while it is held
-    // (デザイン規約 §長押し).
+    // No mark: nothing asks a question about a row in this list any more. What one of these rows takes away is held
+    // down on the menu row that names it, and that menu is standing over the row while it is held (デザイン規約 §長押し).
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceMd + navRow.depth * Theme.spaceMd
         anchors.rightMargin: Theme.spaceSm
         spacing: Theme.spaceXs
-        // The mark and the name, in the part both file lists share
-        // (`NameCell`): the slot every row opens with — a folder's fold
-        // arrow, a worktree file's change icon, and later the mark for a
-        // hidden branch — and the name after it. A ref row has nothing to
-        // put in the slot and it stays open all the same, which is what
-        // keeps every name at a given depth beginning in one column.
+        // The mark and the name, in the part both file lists share (`NameCell`): the slot every row opens with — a
+        // folder's fold arrow, a worktree file's change icon, and later the mark for a hidden branch — and the name
+        // after it. A ref row has nothing to put in the slot and it stays open all the same, which is what keeps every
+        // name at a given depth beginning in one column.
         NameCell {
             id: nameCell
-            // The box below takes the row's slack while it is open, and
-            // the slot stays where it is: a name going into a box must not
-            // walk the columns beside it sideways.
+            // The box below takes the row's slack while it is open, and the slot stays where it is: a name going into a
+            // box must not walk the columns beside it sideways.
             Layout.fillWidth: !navRow.editing
             showName: !navRow.editing
             folder: navRow.folder
             change: navRow.change
             showChange: navRow.kindHint === "wt"
             name: navRow.name
-            // Where a renamed file came from, said the same way the
-            // commit's own file list says it: a rename is two names, and a
-            // row that shows only the new one leaves the reader to work
-            // out what moved. Empty on everything else — the model fills
-            // it for staged files alone, which is the only side git names
-            // a source on, and a folder row keeps its own path in the
-            // slot beside it (`orig_path`, which this is not).
+            // Where a renamed file came from, said the same way the commit's own file list says it: a rename is two
+            // names, and a row that shows only the new one leaves the reader to work out what moved. Empty on
+            // everything else — the model fills it for staged files alone, which is the only side git names a source
+            // on, and a folder row keeps its own path in the slot beside it (`orig_path`, which this is not).
             origPath: navRow.orig_name
-            // The name says where the ref is, the way a chip's does: grey
-            // for one this repository does not hold (デザイン規約
+            // The name says where the ref is, the way a chip's does: grey for one this repository does not hold (デザイン規約
             // §ref の種別).
-            tone: navRow.is_head ? Theme.textLink
-                  : navRow.only_remote ? Theme.textSecondary
-                                       : Theme.textPrimary
+            tone: navRow.is_head ? Theme.textLink : navRow.only_remote ? Theme.textSecondary : Theme.textPrimary
             weight: navRow.is_head ? Font.DemiBold : Font.Normal
-            // A pending file whose change says something about its line
-            // endings wears the mark on the name's shoulder. What it is
-            // about is the row's hover; the sentence in full is the diff
-            // pane's.
+            // A pending file whose change says something about its line endings wears the mark on the name's shoulder.
+            // What it is about is the row's hover; the sentence in full is the diff pane's.
             marked: navRow.kindHint === "wt" && navRow.eol_mark
         }
-        // The name, in a box, where the name was. Nothing is asked before
-        // it opens or when it is walked away from: what it costs is the
-        // typing (デザイン規約 §可否・警告の出し場所).
+        // The name, in a box, where the name was. Nothing is asked before it opens or when it is walked away from: what
+        // it costs is the typing (デザイン規約 §可否・警告の出し場所).
         SlimField {
             id: editField
             visible: navRow.editing
             Layout.fillWidth: true
             font.pixelSize: Theme.fontMd
             refused: navRow.editRefused
-            placeholderText: navRow.editMode === "branch"
-                             ? qsTr("Create branch here?") : ""
+            placeholderText: navRow.editMode === "branch" ? qsTr("Create branch here?") : ""
             onTextEdited: navRow.editTyped(editField.text)
-            // Refused text stays in the box: Enter that does nothing is
-            // the answer, and the frame and its tooltip say why.
+            // Refused text stays in the box: Enter that does nothing is the answer, and the frame and its tooltip say
+            // why.
             onAccepted: {
                 if (!navRow.editRefused)
                     navRow.editAccepted(editField.text)
             }
             Keys.onEscapePressed: navRow.editCancelled()
-            ToolTip.visible: navRow.editRefused && editField.activeFocus
-                             && navRow.editRefusedWhy !== ""
+            ToolTip.visible: navRow.editRefused && editField.activeFocus && navRow.editRefusedWhy !== ""
             ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: navRow.editRefusedWhy
         }
@@ -242,59 +203,49 @@ Item {
         }
         // Current branch's ahead/behind, left of the state icon.
         HeadTrack {
-            visible: !navRow.folder && navRow.kindHint === "branch"
-                     && navRow.is_head && navRow.headTracks
+            visible: !navRow.folder && navRow.kindHint === "branch" && navRow.is_head && navRow.headTracks
             ahead: navRow.headAhead
             behind: navRow.headBehind
             Layout.alignment: Qt.AlignVCenter
         }
-        // Branch remote state: nothing = local only, remote icon =
-        // has a remote, PR icon = has a PR (real data in Phase 4;
-        // PG_FAKE_PR previews the look). Remote-branch and worktree
-        // rows show the PR state too. A tag reads the same way — the
-        // badge answers "is this only here?" whatever it is on, and
-        // the fetch carries the bit for it (`ls-remote --tags`).
+        // Branch remote state: nothing = local only, remote icon = has a remote, PR icon = has a PR (real data in Phase
+        // 4; PG_FAKE_PR previews the look). Remote-branch and worktree rows show the PR state too. A tag reads the same
+        // way — the badge answers "is this only here?" whatever it is on, and the fetch carries the bit for it
+        // (`ls-remote --tags`).
         NavIcon {
             visible: !navRow.folder
                      && (((navRow.kindHint === "branch"
                            || navRow.kindHint === "tag")
                           && (navRow.has_remote || navRow.has_pr))
-                         || ((navRow.kindHint === "remote"
-                              || navRow.kindHint === "worktree")
-                             && navRow.has_pr))
+                         || ((navRow.kindHint === "remote" || navRow.kindHint === "worktree") && navRow.has_pr))
             kind: navRow.has_pr ? "pr" : "remote"
             tint: navRow.has_pr ? Theme.success : Theme.textSecondary
-            // The size the graph's chips wear the same badge at: one
-            // question, one mark, one size (デザイン規約 §寸法).
+            // The size the graph's chips wear the same badge at: one question, one mark, one size (デザイン規約 §寸法).
             width: Theme.iconSm
             height: Theme.iconSm
         }
     }
-    // Rows whose name can be changed from here. A remote branch is one of
-    // them even though git has no rename over there — core builds the
-    // rename out of a push and a delete, and the bar asks before it runs.
-    // A folder is not: it is the shape of the names below it, not a name.
+    // Rows whose name can be changed from here. A remote branch is one of them even though git has no rename over there
+    // — core builds the rename out of a push and a delete, and the bar asks before it runs. A folder is not: it is the
+    // shape of the names below it, not a name.
     readonly property bool nameable: !navRow.folder
         && (navRow.kindHint === "branch" || navRow.kindHint === "tag"
             || navRow.kindHint === "stash" || navRow.kindHint === "remote")
-    // Long enough that the second click of a double-click falls inside
-    // it; the system's own setting, since it is the system that decides
-    // what counts as a double-click.
+    // Long enough that the second click of a double-click falls inside it; the system's own setting, since it is the
+    // system that decides what counts as a double-click.
     Timer {
         id: doubleGuard
         interval: Application.styleHints.mouseDoubleClickInterval
     }
-    // A second click on a row already clicked means the name, but only
-    // once a double-click can be ruled out — the same wait Explorer makes
-    // (デザイン規約 §左メニューの所作).
+    // A second click on a row already clicked means the name, but only once a double-click can be ruled out — the same
+    // wait Explorer makes (デザイン規約 §左メニューの所作).
     Timer {
         id: renameTimer
         interval: Application.styleHints.mouseDoubleClickInterval
         onTriggered: navRow.renameRequested()
     }
-    // The box has to carry the name into itself when it opens, and again
-    // when a scrolled-off row is built anew (the delegate is recycled; the
-    // text is not this row's to keep).
+    // The box has to carry the name into itself when it opens, and again when a scrolled-off row is built anew (the
+    // delegate is recycled; the text is not this row's to keep).
     onEditingChanged: navRow.takeEditFocus()
     Component.onCompleted: navRow.takeEditFocus()
     function takeEditFocus() {
@@ -311,8 +262,8 @@ Item {
             navRow.fileClicked(navRow.bucket, navRow.fullName, navRow.orig_path,
                                modifiers === undefined ? Qt.NoModifier : modifiers)
         } else if (navRow.kindHint === "worktree") {
-            // Another repository: nothing here to jump to, so a click only
-            // takes the row (the double-click opens it as a tab).
+            // Another repository: nothing here to jump to, so a click only takes the row (the double-click opens it as
+            // a tab).
         } else if (navRow.oid_hex !== "") {
             navRow.refClicked(navRow.oid_hex)
         }
@@ -324,9 +275,8 @@ Item {
         // While the box is open the row belongs to it.
         visible: !navRow.editing
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        // The row that carries the mark tells the model it is the one
-        // being read, so the sentence can be built for it alone. The row
-        // itself has no field left to hold it (`NavItem::eol_mark`).
+        // The row that carries the mark tells the model it is the one being read, so the sentence can be built for it
+        // alone. The row itself has no field left to hold it (`NavItem::eol_mark`).
         onContainsMouseChanged: {
             if (navRow.eol_mark)
                 navRow.eolPointed(navRow.fullName, itemMouse.containsMouse)
@@ -339,14 +289,13 @@ Item {
                             || navRow.kindHint === "remote"
                             || navRow.kindHint === "tag"
                             || navRow.kindHint === "stash"))
-                    navRow.refMenuRequested(navRow.name, navRow.fullName,
-                                            navRow.oid_hex)
+                    navRow.refMenuRequested(navRow.name, navRow.fullName, navRow.oid_hex)
                 else if (!navRow.folder && navRow.kindHint === "wt")
                     navRow.fileMenuRequested(navRow.bucket, navRow.fullName)
                 return
             }
-            // The second click of a double-click: the first one already
-            // did what a click does, and the gesture is the double.
+            // The second click of a double-click: the first one already did what a click does, and the gesture is the
+            // double.
             if (doubleGuard.running)
                 return
             const wasActive = navRow.activeKey === navRow.rowKey
@@ -366,89 +315,66 @@ Item {
     // Hover stage/unstage affordance.
     HoverToolButton {
         id: stageButton
-        visible: navRow.showStage && !navRow.folder
-                 && (itemMouse.containsMouse || hovered || navRow.stagePeer)
+        visible: navRow.showStage && !navRow.folder && (itemMouse.containsMouse || hovered || navRow.stagePeer)
         anchors.right: parent.right
         anchors.rightMargin: Theme.spaceXs
         anchors.verticalCenter: parent.verticalCenter
         padding: 0
         implicitWidth: Theme.iconLg
         implicitHeight: Theme.iconLg
-        // The list is told which row the pointer is on, so the rows that
-        // would go with it can put their own marks out.
+        // The list is told which row the pointer is on, so the rows that would go with it can put their own marks out.
         onHoveredChanged: navRow.stageHovered(
             navRow.bucket, navRow.full !== "" ? navRow.full : navRow.name,
             stageButton.hovered)
-        // On a conflicted row the same `git add` means something else:
-        // it does not move a change into the staging area, it tells git
-        // the conflict has been dealt with. The word says that rather
-        // than the command's other job (デザイン規約 §diff の中のステージ).
+        // On a conflicted row the same `git add` means something else: it does not move a change into the staging area,
+        // it tells git the conflict has been dealt with. The word says that rather than the command's other job (デザイン規約
+        // §diff の中のステージ).
         tip: navRow.bucket === "conflicts" ? qsTr("Mark resolved")
              : navRow.bucket === "staged" ? qsTr("Unstage file")
                                           : qsTr("Stage file")
-        onClicked: navRow.stageClicked(
-            navRow.bucket, navRow.full !== "" ? navRow.full : navRow.name)
+        onClicked: navRow.stageClicked(navRow.bucket, navRow.full !== "" ? navRow.full : navRow.name)
         contentItem: NavIcon {
             kind: navRow.bucket === "staged" ? "minus" : "plus"
-            tint: navRow.bucket === "staged" ? Theme.diffRemovedFg
-                                             : Theme.diffAddedFg
+            tint: navRow.bucket === "staged" ? Theme.diffRemovedFg : Theme.diffAddedFg
         }
     }
-    // Hover says where this row leads — the one thing the row itself
-    // cannot show (デザイン規約 §hover のツールチップ). Only the two
-    // sentences that name somewhere the row is not survive that bar:
-    // a remote branch spells the remote-qualified name, a worktree
-    // opens as another tab. The refs say nothing at all — the section
-    // names the kind, the gesture is the same on every row of it, and
-    // even the full name of a leaf folded into its folders only reads
-    // the tree back, the same path the pointer just came down through.
-    // A stash reaches the same answer its own way: the row *is* the
-    // message, the full name is the selector (`stash@{0}`), which
-    // nobody hovers to learn, and a message the row had to cut short
-    // is a click away, in the details pane that reads it anyway
-    // (§hover のツールチップ「足すものが 1 つも無い的には、何も出さない」).
+    // Hover says where this row leads — the one thing the row itself cannot show (デザイン規約 §hover のツールチップ). Only the two
+    // sentences that name somewhere the row is not survive that bar: a remote branch spells the remote-qualified name,
+    // a worktree opens as another tab. The refs say nothing at all — the section names the kind, the gesture is the
+    // same on every row of it, and even the full name of a leaf folded into its folders only reads the tree back, the
+    // same path the pointer just came down through. A stash reaches the same answer its own way: the row *is* the
+    // message, the full name is the selector (`stash@{0}`), which nobody hovers to learn, and a message the row had to
+    // cut short is a click away, in the details pane that reads it anyway (§hover のツールチップ「足すものが 1 つも無い的には、何も出さない」).
     readonly property string hoverText: {
         const full = navRow.fullName
-        // A folder in the working tree's list: the chained rows elide at
-        // pane width, and elision is the one thing that leaves the chain
-        // unsaid — the path rides in `orig_path` (`full` is the fold
-        // key). A ref folder stays silent either way: its full path only
-        // reads the tree back (デザイン規約 §hover のツールチップ).
+        // A folder in the working tree's list: the chained rows elide at pane width, and elision is the one thing that
+        // leaves the chain unsaid — the path rides in `orig_path` (`full` is the fold key). A ref folder stays silent
+        // either way: its full path only reads the tree back (デザイン規約 §hover のツールチップ).
         if (navRow.folder)
-            return navRow.kindHint === "wt" && nameCell.truncated
-                   ? navRow.orig_path : ""
+            return navRow.kindHint === "wt" && nameCell.truncated ? navRow.orig_path : ""
         if (navRow.kindHint === "remote")
             return qsTr("Switch to %1").arg(full)
         if (navRow.kindHint === "worktree")
             return qsTr("Open %1 in a new tab").arg(full)
-        if (navRow.kindHint === "branch" || navRow.kindHint === "tag"
-                || navRow.kindHint === "stash")
+        if (navRow.kindHint === "branch" || navRow.kindHint === "tag" || navRow.kindHint === "stash")
             return ""
-        // A row carrying the line-ending mark has a card of its own, which
-        // names the path as its first line — two things opening off one
-        // pointer would sit on top of each other.
+        // A row carrying the line-ending mark has a card of its own, which names the path as its first line — two
+        // things opening off one pointer would sit on top of each other.
         if (navRow.eolPointedAt)
             return ""
-        // What is left is a file row, whose leaf the tree cut to its
-        // last segment: the path is the one thing the row cannot show.
-        // A row the pane elided is the same case reached another way —
-        // the paths view's display name *is* the full path, so elision
-        // alone leaves it unsaid (the menu rows' own rule, デザイン規約
-        // §メニュー).
+        // What is left is a file row, whose leaf the tree cut to its last segment: the path is the one thing the row
+        // cannot show. A row the pane elided is the same case reached another way — the paths view's display name *is*
+        // the full path, so elision alone leaves it unsaid (the menu rows' own rule, デザイン規約 §メニュー).
         return full !== navRow.name || nameCell.truncated ? full : ""
     }
-    /// Whether the words on the model are this row's. Only one row can be
-    /// pointed at, so they are kept once there rather than on every row
-    /// (`NavSectionModel::point_eol`), and the row has to check that the
-    /// answer is its own before reading it.
-    readonly property bool eolPointedAt: navRow.eol_mark
-        && navRow.pointedEolPath === navRow.fullName
-    /// Whether the headless stand-in points at this row. The report
-    /// still reads the ToolTip's own visible — the output side, as
-    /// everywhere.
+    /// Whether the words on the model are this row's. Only one row can be pointed at, so they are kept once there
+    /// rather than on every row (`NavSectionModel::point_eol`), and the row has to check that the answer is its own
+    /// before reading it.
+    readonly property bool eolPointedAt: navRow.eol_mark && navRow.pointedEolPath === navRow.fullName
+    /// Whether the headless stand-in points at this row. The report still reads the ToolTip's own visible — the output
+    /// side, as everywhere.
     readonly property bool tipPointedAt: navRow.pointedTipRow === navRow.index
-    ToolTip.visible: (itemMouse.containsMouse || navRow.tipPointedAt)
-                     && !navRow.editing && navRow.hoverText !== ""
+    ToolTip.visible: (itemMouse.containsMouse || navRow.tipPointedAt) && !navRow.editing && navRow.hoverText !== ""
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: navRow.hoverText
 }

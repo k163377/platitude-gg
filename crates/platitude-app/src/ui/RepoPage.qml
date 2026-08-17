@@ -16,11 +16,9 @@ Item {
     signal openRepositoryPicker()
     /// A worktree row was clicked: open that path as a new tab.
     signal openRepositoryPathRequested(string path)
-    /// PG_AUTO_ACT=settings wants the window's settings dialog open
-    /// for the screenshot.
+    /// PG_AUTO_ACT=settings wants the window's settings dialog open for the screenshot.
     signal settingsDialogRequested()
-    /// The settings card, opened from an avatar and carrying whom it was
-    /// opened on.
+    /// The settings card, opened from an avatar and carrying whom it was opened on.
     signal avatarSettingsRequested(string name, string email)
     /// PG_AUTO_PERF completion after every requested measurement output.
     signal perfFinished()
@@ -28,8 +26,7 @@ Item {
     property string selectedOid: ""
 
     property bool sidebarCollapsed: false
-    /// The fold the diff put on: closing the diff takes back only that,
-    /// never a fold made by hand.
+    /// The fold the diff put on: closing the diff takes back only that, never a fold made by hand.
     property bool foldedByDiff: false
     function foldForDiff(open) {
         if (open) {
@@ -45,16 +42,14 @@ Item {
     function foldByHand(collapse) {
         page.sidebarCollapsed = collapse
         page.foldedByDiff = false
-        // Every way the list comes back arrives here — the band's block,
-        // a rail cell, the rename box (SidebarPane.startEdit) — so
-        // "unfolding closes the diff" has no exceptions elsewhere.
+        // Every way the list comes back arrives here — the band's block, a rail cell, the rename box
+        // (SidebarPane.startEdit) — so "unfolding closes the diff" has no exceptions elsewhere.
         if (!collapse && page.diffShown)
             page.closeDiff()
     }
 
     property bool wipShown: false
-    // The ask bar goes off screen with the pane, and nothing off screen
-    // may be answered.
+    // The ask bar goes off screen with the pane, and nothing off screen may be answered.
     onWipShownChanged: if (!page.wipShown) page.stopRowAsk()
     // Selected stash row's reflog selector ("" = not a stash).
     property string selectedStashRef: ""
@@ -79,18 +74,14 @@ Item {
     Connections {
         target: repoTab
         function onChanged() {
-            // One shared answer slot, so only the reply to the range
-            // this page asked about is read.
+            // One shared answer slot, so only the reply to the range this page asked about is read.
             if (repoTab.publishRange === page.headRange)
                 page.headPublished = repoTab.publishPublished > 0
-            if (commitMenuState.menuOid !== ""
-                    && repoTab.publishRange === commitMenuState.menuOid + "^!")
+            if (commitMenuState.menuOid !== "" && repoTab.publishRange === commitMenuState.menuOid + "^!")
                 commitMenuState.menuPublished = repoTab.publishPublished > 0
-            if (page.selectedOid !== ""
-                    && repoTab.publishRange === page.selectedOid + "^!")
+            if (page.selectedOid !== "" && repoTab.publishRange === page.selectedOid + "^!")
                 page.selectedPublished = repoTab.publishPublished > 0
-            if (refRowMenu.rebaseRange !== ""
-                    && repoTab.publishRange === refRowMenu.rebaseRange)
+            if (refRowMenu.rebaseRange !== "" && repoTab.publishRange === refRowMenu.rebaseRange)
                 refRowMenu.rebasePublished = repoTab.publishPublished > 0
             page.absorbHeadMessage()
             page.absorbMoveAsk()
@@ -98,8 +89,7 @@ Item {
             if (autoActLoader.item)
                 autoActLoader.item.runFetchFailures()
         }
-        // Only the first failure of a run: an offline machine would
-        // otherwise re-raise the panel every interval (デザイン規約
+        // Only the first failure of a run: an offline machine would otherwise re-raise the panel every interval (デザイン規約
         // §git が言ったことを読む場所).
         function onFetchFirstFailed() {
             page.commandsOpen = true
@@ -107,10 +97,9 @@ Item {
         }
     }
 
-    // A tab whose repository would not open. The screen sits where the
-    // panes do, not over the whole page, so the log stays reachable under
-    // it. The log is not raised on its own: the failed command is a
-    // background read, so the panel would come up empty (実測).
+    // A tab whose repository would not open. The screen sits where the panes do, not over the whole page, so the log
+    // stays reachable under it. The log is not raised on its own: the failed command is a background read, so the panel
+    // would come up empty (実測).
     readonly property bool openFailed: !page.blank && repoTab.state === "error"
 
     property int seenHeadCommitSeq: 0
@@ -137,26 +126,20 @@ Item {
         wipPane.clearMessage()
     }
 
-    // Not confirmed even when HEAD is already on a remote: amending
-    // rewrites nothing that a switch or a reset cannot bring back, and
-    // the push that would spread it is asked about on its own.
+    // Not confirmed even when HEAD is already on a remote: amending rewrites nothing that a switch or a reset cannot
+    // bring back, and the push that would spread it is asked about on its own.
     function commitNow() {
-        repoTab.commit(wipPane.subjectText, wipPane.bodyText,
-                       page.amending, wipPane.resetAuthor)
+        repoTab.commit(wipPane.subjectText, wipPane.bodyText, page.amending, wipPane.resetAuthor)
     }
 
     // ---- moving between branches and commits ----------------------
-    // Terminology is deliberate: git runs `switch` / `restore`, and
-    // the UI says "Switch to" (デザイン規約 §用語).
+    // Terminology is deliberate: git runs `switch` / `restore`, and the UI says "Switch to" (デザイン規約 §用語).
     //
-    // Uncommitted changes come along unasked; where git refuses, core
-    // goes round through a stash (デザイン規約 §未コミット変更がある
-    // 状態での移動).
+    // Uncommitted changes come along unasked; where git refuses, core goes round through a stash (デザイン規約
+    // §未コミット変更がある状態での移動).
     //
-    // kind is "branch" / "remote" / "force" (a local branch moved to
-    // `moveStart` before landing on it). Every one lands on a branch —
-    // nothing here moves onto a bare commit (デザイン規約
-    // §ブランチ・コミットへの移動).
+    // kind is "branch" / "remote" / "force" (a local branch moved to `moveStart` before landing on it). Every one lands
+    // on a branch — nothing here moves onto a bare commit (デザイン規約 §ブランチ・コミットへの移動).
     property string moveKind: ""
     property string moveTarget: ""
     property string moveLocal: ""
@@ -179,8 +162,7 @@ Item {
     }
 
     // ---- what a chip leads to --------------------------------------
-    // `record` is the chip as it is drawn — kind letter, four flags,
-    // then the name (see encode.rs).
+    // `record` is the chip as it is drawn — kind letter, four flags, then the name (see encode.rs).
     function activateRecord(record) {
         if (record !== "")
             page.switchToRef(record[0], record.substring(5).split("\u001E")[0])
@@ -193,23 +175,21 @@ Item {
                 page.switchTo("branch", name, name, "")
             return
         }
-        // The detached-HEAD marker names no branch, and moving onto a
-        // tag could only detach HEAD — a tag's row offers a branch at
-        // that commit instead (`startNaming`).
+        // The detached-HEAD marker names no branch, and moving onto a tag could only detach HEAD — a tag's row offers a
+        // branch at that commit instead (`startNaming`).
         if (kind !== "R")
             return
         const local = remotesModel.localNameFor(name)
         if (branchesModel.oidOfName(local) === "")
             page.switchTo("remote", name, local, "")
         else
-            // Whether to ask is git's to answer — a branch that only
-            // fell behind loses nothing by moving. The question comes
-            // back as `moveAskSeq` when something would be lost.
+            // Whether to ask is git's to answer — a branch that only fell behind loses nothing by moving. The question
+            // comes back as `moveAskSeq` when something would be lost.
             repoTab.checkoutMovingBranch(local, name)
     }
 
-    // Landing on the remote branch moves the existing local one onto it
-    // — the one move here that can leave commits unreachable.
+    // Landing on the remote branch moves the existing local one onto it — the one move here that can leave commits
+    // unreachable.
     function askMoveBranchOnto(local, remoteRef) {
         page.startRowAsk(
             remotesModel.oidOfName(remoteRef),
@@ -224,11 +204,9 @@ Item {
     }
 
     // ---- the standing question --------------------------------------
-    // One bar over the graph (デザイン規約 §可否・警告の出し場所);
-    // Escape, another ask or a click anywhere else walks away from it.
-    // Only questions about a ref reach it: everything that takes one
-    // named thing away is held down on the row or button that names it
-    // (デザイン規約 §長押し).
+    // One bar over the graph (デザイン規約 §可否・警告の出し場所); Escape, another ask or a click anywhere else walks away from it.
+    // Only questions about a ref reach it: everything that takes one named thing away is held down on the row or button
+    // that names it (デザイン規約 §長押し).
     /// Ctrl+F: the find bar belongs to the graph.
     function startFind() {
         graphPane.startFind()
@@ -238,8 +216,7 @@ Item {
     function startRowAsk(oidHex, label, detail, danger, acceptText, run,
                          hold = false, tip = "", form = null, code = "") {
         page.rowAskRun = run
-        graphPane.startAsking(oidHex, label, detail, acceptText, danger,
-                              hold, tip, form, code)
+        graphPane.startAsking(oidHex, label, detail, acceptText, danger, hold, tip, form, code)
     }
     function stopRowAsk() {
         page.rowAskRun = null
@@ -253,8 +230,8 @@ Item {
             run()
     }
 
-    // On its own counter: the same move can be asked about twice in a
-    // row, and only a fresh answer may raise the question.
+    // On its own counter: the same move can be asked about twice in a row, and only a fresh answer may raise the
+    // question.
     property int seenMoveAskSeq: 0
     function absorbMoveAsk() {
         if (repoTab.moveAskSeq === page.seenMoveAskSeq)
@@ -270,15 +247,12 @@ Item {
         workTree: workTree
         remotesModel: remotesModel
         graphPane: graphPane
-        // The first push asks where the branch goes, and it asks in the
-        // one bar every other question stands in.
+        // The first push asks where the branch goes, and it asks in the one bar every other question stands in.
         onAskRequested: (label, run, form, code) =>
-            page.startRowAsk("", label, "", false, "", run, false, "",
-                             form, code)
+            page.startRowAsk("", label, "", false, "", run, false, "", form, code)
     }
-    /// What the window's toolbar reads off the page it is showing: the
-    /// button lives up there, and the state machine behind it down here
-    /// (`TopBar`).
+    /// What the window's toolbar reads off the page it is showing: the button lives up there, and the state machine
+    /// behind it down here (`TopBar`).
     readonly property alias pushTargetLabel: publishFlow.pushTargetLabel
     readonly property alias pushState: publishFlow.pushState
     readonly property alias canPush: publishFlow.canPush
@@ -299,26 +273,21 @@ Item {
         workTree: workTree
         branchesModel: branchesModel
         onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
-        onDeleteRequested: (kind, id, name, oidHex) =>
-            page.deleteRow(kind, id, name, oidHex)
+        onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
         onDropStashRequested: selector => page.dropStashNow(selector)
-        // The settle re-run is for a menu that stood on the stacked
-        // list's row: the list stayed up under it, and whether it stays
-        // now is the pointer's to answer again.
+        // The settle re-run is for a menu that stood on the stacked list's row: the list stayed up under it, and
+        // whether it stays now is the pointer's to answer again.
         onDismissed: rowHost.settleRefList()
     }
-    /// The one door into that menu: the sidebar's rows, a chip, the
-    /// stacked list and the automation all come through here. Says
-    /// whether it opened.
+    /// The one door into that menu: the sidebar's rows, a chip, the stacked list and the automation all come through
+    /// here. Says whether it opened.
     function openRefMenu(kind, name, full, oidHex) {
         return refRowMenu.offerOn(kind, name, full, oidHex)
     }
 
-    /// A chip's right-click: the ref menu for the name the chip shows. A
-    /// chip that names nothing to act on — the detached-HEAD marker, a
-    /// stash, the current branch (whose ref menu has no rows) — falls
-    /// back to the row's commit menu. The stacked list's rows pass no
-    /// `oidHex` and have no row to fall back to (デザイン規約 §メニュー).
+    /// A chip's right-click: the ref menu for the name the chip shows. A chip that names nothing to act on — the
+    /// detached-HEAD marker, a stash, the current branch (whose ref menu has no rows) — falls back to the row's commit
+    /// menu. The stacked list's rows pass no `oidHex` and have no row to fall back to (デザイン規約 §メニュー).
     function openRecordMenu(record, oidHex) {
         const kind = record === "" ? ""
                    : record[0] === "L" ? "branch"
@@ -338,12 +307,12 @@ Item {
     }
 
     // ---- what the sidebar's rows ask for ---------------------------
-    /// Unconfirmed: a name is not history. A tag and a stash are re-made
-    /// under the new name by core — the only rename git has for them.
+    /// Unconfirmed: a name is not history. A tag and a stash are re-made under the new name by core — the only rename
+    /// git has for them.
     function renameRow(kind, id, name) {
         if (kind === "branch") {
-            // Which remote this branch speaks for has to be read before
-            // the rename: afterwards the row answers to the new name.
+            // Which remote this branch speaks for has to be read before the rename: afterwards the row answers to the
+            // new name.
             page.pendingRenameRemote = branchesModel.upstreamOf(id)
             page.pendingRenameTo = name
             repoTab.renameBranch(id, name, false)
@@ -356,26 +325,23 @@ Item {
         }
     }
 
-    /// The remote branch a just-renamed local one spoke for, and the name
-    /// it took — the question about carrying the name over waits until
-    /// git says the local rename landed.
+    /// The remote branch a just-renamed local one spoke for, and the name it took — the question about carrying the
+    /// name over waits until git says the local rename landed.
     property string pendingRenameRemote: ""
     property string pendingRenameTo: ""
 
-    /// Renaming a branch on a remote, which git has no command for: core
-    /// pushes the new name and deletes the old, so the question is asked
-    /// first and its answer is held down rather than clicked — this is
-    /// the one write here that another machine keeps (デザイン規約 §長押し).
+    /// Renaming a branch on a remote, which git has no command for: core pushes the new name and deletes the old, so
+    /// the question is asked first and its answer is held down rather than clicked — this is the one write here that
+    /// another machine keeps (デザイン規約 §長押し).
     function askRenameRemote(remoteRef, name) {
         const cut = remoteRef.indexOf("/")
         if (cut < 0)
             return
         const remote = remoteRef.substring(0, cut)
         const from = remoteRef.substring(cut + 1)
-        // A name already over there is not offered: a plain push to one
-        // that exists fast-forwards it and reports success, so somebody
-        // else's branch would move instead of ours being renamed. The
-        // box refuses it too; this catches the way in that has no box.
+        // A name already over there is not offered: a plain push to one that exists fast-forwards it and reports
+        // success, so somebody else's branch would move instead of ours being renamed. The box refuses it too; this
+        // catches the way in that has no box.
         if (name === from || remotesModel.oidOfName(remote + "/" + name) !== "")
             return
         page.startRowAsk(
@@ -391,24 +357,19 @@ Item {
             AppBackend.report("rename_remote_asked from=" + remoteRef + " to=" + name)
     }
 
-    /// A branch is deleted with `-d`, and git's refusal is the question —
-    /// asked when it arrives rather than guessed at beforehand
-    /// (デザイン規約 §左メニューの所作). A tag and a stash have no such
-    /// refusal in git, so they are asked about up front. A branch on a
-    /// remote never arrives here (`deleteRemoteNow`).
+    /// A branch is deleted with `-d`, and git's refusal is the question — asked when it arrives rather than guessed at
+    /// beforehand (デザイン規約 §左メニューの所作). A tag and a stash have no such refusal in git, so they are asked about up front.
+    /// A branch on a remote never arrives here (`deleteRemoteNow`).
     property string pendingDeleteBranch: ""
-    /// Refusals this page already has an answer for. The question bar
-    /// explains them, so the command log stays where it was rather than
-    /// raising itself over the same news (デザイン規約 §git が言ったこと
-    /// を読む場所). Counted rather than flagged because the refusal and
-    /// the write result arrive on separate paths, in no fixed order.
+    /// Refusals this page already has an answer for. The question bar explains them, so the command log stays where it
+    /// was rather than raising itself over the same news (デザイン規約 §git が言ったことを読む場所). Counted rather than flagged
+    /// because the refusal and the write result arrive on separate paths, in no fixed order.
     property int expectedRefusals: 0
     function deleteRow(kind, id, name, oidHex) {
         if (kind !== "branch")
             return
-        // The one row in any menu that outlives its own write (it stays
-        // open for git's answer), so it is also the one that can be
-        // clicked twice — the second click is the same request again.
+        // The one row in any menu that outlives its own write (it stays open for git's answer), so it is also the one
+        // that can be clicked twice — the second click is the same request again.
         if (repoTab.busyCount > 0)
             return
         page.pendingDeleteBranch = id
@@ -421,12 +382,10 @@ Item {
         if (page.selectedStashRef === ref)
             page.selectedStashRef = ""
     }
-    /// git refused the plain delete: the answer lands on the menu row that
-    /// asked, turning it into a held one (デザイン規約 §左メニューの所作).
-    /// A refusal does not mean the commits stop being reachable: git
-    /// measures the branch against its upstream when it has one, so a
-    /// branch merged into HEAD but not yet pushed is refused while nothing
-    /// at all would be lost (実測).
+    /// git refused the plain delete: the answer lands on the menu row that asked, turning it into a held one (デザイン規約
+    /// §左メニューの所作). A refusal does not mean the commits stop being reachable: git measures the branch against its
+    /// upstream when it has one, so a branch merged into HEAD but not yet pushed is refused while nothing at all would
+    /// be lost (実測).
     function noteForceDelete(name) {
         refRowMenu.forceDeleteBranch = name
         if (AppBackend.autoAct !== "")
@@ -435,8 +394,8 @@ Item {
 
     // ---- context menu on a working-tree file row --------------------
     function openFileMenu(bucket, path) {
-        // A right-click is a click: it walks away from a question that
-        // was standing, which may well be about another row.
+        // A right-click is a click: it walks away from a question that was standing, which may well be about another
+        // row.
         page.stopRowAsk()
         fileRowMenu.offer(bucket, path)
     }
@@ -450,8 +409,8 @@ Item {
     }
 
     // ---- context menu on a graph row -------------------------------
-    /// The one door into that menu: the graph's rows, a chip that names
-    /// nothing to act on, and the automation all come through here.
+    /// The one door into that menu: the graph's rows, a chip that names nothing to act on, and the automation all come
+    /// through here.
     function openRowMenu(oidHex) {
         commitMenuState.openRowMenu(oidHex)
     }
@@ -504,9 +463,8 @@ Item {
             graphPane.startNaming(oidHex)
     }
 
-    // What a resting pointer opens on a graph row: the row's own card, and
-    // the refs one chip had to stack. Owned here because rows are recycled
-    // out from under both of them.
+    // What a resting pointer opens on a graph row: the row's own card, and the refs one chip had to stack. Owned here
+    // because rows are recycled out from under both of them.
     RowHoverHost {
         id: rowHost
         graphPane: graphPane
@@ -517,17 +475,15 @@ Item {
     }
 
     // ---- rewriting one commit --------------------------------------
-    // Not confirmed even for a commit a remote already has: nothing
-    // here leaves the machine, and the push that would spread it is
-    // asked about on its own.
+    // Not confirmed even for a commit a remote already has: nothing here leaves the machine, and the push that would
+    // spread it is asked about on its own.
     function squashCommit(oidHex) {
         repoTab.squashIntoParent(oidHex)
     }
 
-    /// Leaves the commit out of the history. One place for both ways in:
-    /// the row is a hold or a click depending on whether anything else
-    /// still holds the branch tip, and what it runs must not depend on
-    /// which of the two the reader got (デザイン規約 §履歴を合流させる).
+    /// Leaves the commit out of the history. One place for both ways in: the row is a hold or a click depending on
+    /// whether anything else still holds the branch tip, and what it runs must not depend on which of the two the
+    /// reader got (デザイン規約 §履歴を合流させる).
     function dropCommit(oidHex) {
         repoTab.dropCommit(oidHex)
     }
@@ -538,36 +494,30 @@ Item {
     }
 
     // ---- editing the selected commit's message ---------------------
-    // No confirmation, even for a commit a remote already has: this
-    // rewrites nothing that a switch or a reset cannot bring back, and
-    // the push that would spread it is asked about on its own.
+    // No confirmation, even for a commit a remote already has: this rewrites nothing that a switch or a reset cannot
+    // bring back, and the push that would spread it is asked about on its own.
     function saveMessage(oidHex, subject, body) {
-        // Where the row sits now. A reword leaves the shape of the
-        // history alone, so the rewritten commit lands on the same row
-        // and the selection can follow it there.
+        // Where the row sits now. A reword leaves the shape of the history alone, so the rewritten commit lands on the
+        // same row and the selection can follow it there.
         page.rewordRow = graphModel.rowOf(oidHex)
         repoTab.rewordCommit(oidHex, subject, body)
     }
     // Row to re-select once the rewritten graph arrives (-1 = none).
     property int rewordRow: -1
 
-    // Whether the selected commit is one HEAD was built on. Only those
-    // can be amended or replayed from here, so the boxes stay read-only
-    // until this comes back for the commit on screen.
+    // Whether the selected commit is one HEAD was built on. Only those can be amended or replayed from here, so the
+    // boxes stay read-only until this comes back for the commit on screen.
     readonly property bool selectedInHistory:
-        detailsModel.shaHex !== ""
-        && repoTab.historyOid === detailsModel.shaHex && repoTab.historyIn
+        detailsModel.shaHex !== "" && repoTab.historyOid === detailsModel.shaHex && repoTab.historyIn
     function askInHistory(oidHex) {
         if (oidHex !== "" && repoTab.state === "open")
             repoTab.checkInHistory(oidHex)
     }
 
-    // What git makes of the selected commit's signature. Asked on every
-    // selection, like the history question beside it, and read only when
-    // the answer names the commit now on screen — verifying runs gpg or
-    // ssh-keygen, so the answer arrives well after the details do.
-    // A signature only changes when the commit does, and a changed commit
-    // is a different hash, so nothing has to ask twice.
+    // What git makes of the selected commit's signature. Asked on every selection, like the history question beside it,
+    // and read only when the answer names the commit now on screen — verifying runs gpg or ssh-keygen, so the answer
+    // arrives well after the details do. A signature only changes when the commit does, and a changed commit is a
+    // different hash, so nothing has to ask twice.
     function askSignature(oidHex) {
         if (oidHex !== "" && repoTab.state === "open")
             repoTab.checkSignature(oidHex)
@@ -581,10 +531,9 @@ Item {
     readonly property string selectedSignatureSigner:
         page.signatureIsForSelection ? repoTab.signatureSigner : ""
 
-    // Whether a remote already has the selected commit — what the save
-    // row's warning rests on. Asked only once its message is touched:
-    // that is the first moment the answer can matter, and it spares a
-    // rev-list on every selection click.
+    // Whether a remote already has the selected commit — what the save row's warning rests on. Asked only once its
+    // message is touched: that is the first moment the answer can matter, and it spares a rev-list on every selection
+    // click.
     property bool selectedPublished: false
     function askSelectedPublished() {
         if (page.selectedOid !== "" && repoTab.state === "open")
@@ -592,10 +541,9 @@ Item {
     }
     onSelectedOidChanged: page.selectedPublished = false
 
-    // Moving off a half-written message would drop it. Hold the move
-    // and let the editor ask — the question is about the text, so it is
-    // asked where the text is rather than over the whole window. The
-    // selection stays where it is while it stands: nothing has moved.
+    // Moving off a half-written message would drop it. Hold the move and let the editor ask — the question is about the
+    // text, so it is asked where the text is rather than over the whole window. The selection stays where it is while
+    // it stands: nothing has moved.
     property var pendingMove: null
     function guardEdits(targetOid, proceed) {
         // Landing where it already is takes nothing away.
@@ -616,8 +564,7 @@ Item {
     }
     Connections {
         target: detailsPane
-        // Reverted or saved by hand while the question stood: there is
-        // nothing left to lose, so it answers itself.
+        // Reverted or saved by hand while the question stood: there is nothing left to lose, so it answers itself.
         function onMessageDirtyChanged() {
             if (!detailsPane.messageDirty)
                 page.pendingMove = null
@@ -626,9 +573,8 @@ Item {
         }
     }
 
-    // An assignment is not something git knows about, so nothing here is
-    // waiting for a refresh to bring it: the rows and the card re-read
-    // the store themselves.
+    // An assignment is not something git knows about, so nothing here is waiting for a refresh to bring it: the rows
+    // and the card re-read the store themselves.
     Connections {
         target: AppBackend
         function onAvatarsChanged() {
@@ -638,11 +584,9 @@ Item {
     }
 
     // ---- smoke hook ------------------------------------------------
-    // The whole of this page's PG_AUTO_ACT harness, built only when a
-    // verb was given so an ordinary run carries none of it. A file of its
-    // own cannot see this one's ids, so everything the verbs act on is
-    // named here — an automation-only exposure, the same one
-    // `GraphPane.view` is (app-ui.md).
+    // The whole of this page's PG_AUTO_ACT harness, built only when a verb was given so an ordinary run carries none of
+    // it. A file of its own cannot see this one's ids, so everything the verbs act on is named here — an
+    // automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
     Loader {
         id: autoActLoader
         active: AppBackend.autoAct !== ""
@@ -681,34 +625,28 @@ Item {
         }
     }
 
-    // A finished write the editor asked for: clear it only once git
-    // says the commit landed, so a rejected one keeps its text.
+    // A finished write the editor asked for: clear it only once git says the commit landed, so a rejected one keeps its
+    // text.
     property int seenWriteSeq: 0
     function absorbWriteResult() {
         if (repoTab.writeSeq === page.seenWriteSeq)
             return
         page.seenWriteSeq = repoTab.writeSeq
-        // The press has its answer. What is left of the wait is the read,
-        // which says so itself (`diffSettling`).
+        // The press has its answer. What is left of the wait is the read, which says so itself (`diffSettling`).
         page.diffAwaits = false
-        // A push this button sent has come back; what it means for the
-        // toolbar's button is the flow's to work out.
+        // A push this button sent has come back; what it means for the toolbar's button is the flow's to work out.
         publishFlow.noteWriteAnswer(repoTab.lastWriteOp, repoTab.lastWriteError)
         if (repoTab.lastWriteError !== "") {
-            // A refused stage, unstage or discard says the rows on screen
-            // are not the file any more — drifted bytes are the one thing
-            // the fingerprint refuses on. The tally watch below cannot
-            // always catch the drift that caused it (an outside change
-            // that moves no bucket count moves no tally), so left alone
-            // the same press would be refused again for as long as the
-            // reader cared to try. The refusal's answer is the fresh file.
+            // A refused stage, unstage or discard says the rows on screen are not the file any more — drifted bytes are
+            // the one thing the fingerprint refuses on. The tally watch below cannot always catch the drift that caused
+            // it (an outside change that moves no bucket count moves no tally), so left alone the same press would be
+            // refused again for as long as the reader cared to try. The refusal's answer is the fresh file.
             if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage"
                     || repoTab.lastWriteOp === "discard") {
                 page.diffReadAt = repoTab.writeSeq
                 page.reloadDiff()
             }
-            // The one refusal this page has a second move for: a branch
-            // delete git would not do on its own.
+            // The one refusal this page has a second move for: a branch delete git would not do on its own.
             if (repoTab.lastWriteOp === "branch" && page.pendingDeleteBranch !== "") {
                 const refused = page.pendingDeleteBranch
                 page.pendingDeleteBranch = ""
@@ -717,12 +655,10 @@ Item {
                 page.pendingRenameTo = ""
                 return
             }
-            // Nothing else on screen says what git said, so the log comes
-            // up (デザイン規約 §git が言ったことを読む場所). Raised from
-            // the answer rather than from the commands, because the ones
-            // that answer by their exit code do not raise it themselves —
-            // and whether an operation built out of several of them failed
-            // is a question only its own answer can settle.
+            // Nothing else on screen says what git said, so the log comes up (デザイン規約 §git が言ったことを読む場所). Raised from the
+            // answer rather than from the commands, because the ones that answer by their exit code do not raise it
+            // themselves — and whether an operation built out of several of them failed is a question only its own
+            // answer can settle.
             page.commandsOpen = true
             commandsPane.showLatest()
             // A rename that did not happen has nothing to carry over.
@@ -730,16 +666,15 @@ Item {
             page.pendingRenameTo = ""
             return
         }
-        // Landed: no refusal is coming for it after all, so the menu left
-        // standing to catch one has nothing left to say.
+        // Landed: no refusal is coming for it after all, so the menu left standing to catch one has nothing left to
+        // say.
         if (page.pendingDeleteBranch !== "") {
             page.pendingDeleteBranch = ""
             page.expectedRefusals = Math.max(0, page.expectedRefusals - 1)
             refRowMenu.close()
         }
-        // The branch took its new name here; the remote it speaks for is
-        // still under the old one. Asked only now, and only because there
-        // is a remote to ask about (デザイン規約 §左メニューの所作).
+        // The branch took its new name here; the remote it speaks for is still under the old one. Asked only now, and
+        // only because there is a remote to ask about (デザイン規約 §左メニューの所作).
         if (repoTab.lastWriteOp === "branch" && page.pendingRenameRemote !== "") {
             const spokenFor = page.pendingRenameRemote
             const took = page.pendingRenameTo
@@ -752,35 +687,28 @@ Item {
             wipPane.setAmendChecked(false)
             page.amending = false
         }
-        // These three answer with a commit at the tip — the undo, the
-        // copy, the merge — and that commit is what was asked for here,
-        // not the row or the ref that was clicked. The selection goes to
-        // it and the viewport follows: what was clicked can be anywhere in
-        // the history, while the answer is always at the top.
+        // These three answer with a commit at the tip — the undo, the copy, the merge — and that commit is what was
+        // asked for here, not the row or the ref that was clicked. The selection goes to it and the viewport follows:
+        // what was clicked can be anywhere in the history, while the answer is always at the top.
         //
-        // A merge of something the branch already holds lands there too,
-        // and rightly: git says "Already up to date", and the tip is
-        // exactly where that merge would have put anyone.
+        // A merge of something the branch already holds lands there too, and rightly: git says "Already up to date",
+        // and the tip is exactly where that merge would have put anyone.
         if (repoTab.lastWriteOp === "revert" || repoTab.lastWriteOp === "cherry-pick"
                 || repoTab.lastWriteOp === "merge") {
             page.pendingHeadSelect = true
             page.pendingHeadAsked = true
         }
-        // Everything that moves what the two sides hold. A commit empties
-        // the index and a stash empties both, so a diff left open on
-        // either is a picture of a file as it was — the same staleness the
-        // file list's own `+` used to leave behind.
+        // Everything that moves what the two sides hold. A commit empties the index and a stash empties both, so a diff
+        // left open on either is a picture of a file as it was — the same staleness the file list's own `+` used to
+        // leave behind.
         //
-        // **Read here, where the answer is.** git has already moved the
-        // index by the time it answers, so the file's diff is the new one
-        // — what has not caught up yet is the *file list*, and that is a
-        // different question (`followEmptySide` asks it later). The status
-        // that follows would be the other place to read from, but it is
-        // published only when it has rows to change, so a second line
-        // staged out of the same file would never be read at all.
+        // **Read here, where the answer is.** git has already moved the index by the time it answers, so the file's
+        // diff is the new one — what has not caught up yet is the *file list*, and that is a different question
+        // (`followEmptySide` asks it later). The status that follows would be the other place to read from, but it is
+        // published only when it has rows to change, so a second line staged out of the same file would never be read
+        // at all.
         //
-        // Which write this was is remembered, so the status that follows
-        // does not read the same file over again.
+        // Which write this was is remembered, so the status that follows does not read the same file over again.
         if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage"
                 || repoTab.lastWriteOp === "discard"
                 || repoTab.lastWriteOp === "commit"
@@ -788,28 +716,23 @@ Item {
             page.diffReadAt = repoTab.writeSeq
             page.reloadDiff()
         }
-        // The message landed: the editor stops offering to save it, and
-        // keeps what was written until the selection catches up with
-        // the commit that now carries it.
+        // The message landed: the editor stops offering to save it, and keeps what was written until the selection
+        // catches up with the commit that now carries it.
         if (repoTab.lastWriteOp === "reword")
             detailsPane.noteMessageSaved()
-        // Moving HEAD rewrites the working tree under the diff pane:
-        // the file it holds may not even exist where the move landed,
-        // so the center goes back to the graph that was moved through.
-        // Taking the branch back does the same to the file, and to which
-        // side of the index it sits on.
-        if (repoTab.lastWriteOp === "checkout"
-                || repoTab.lastWriteOp === "reset")
+        // Moving HEAD rewrites the working tree under the diff pane: the file it holds may not even exist where the
+        // move landed, so the center goes back to the graph that was moved through. Taking the branch back does the
+        // same to the file, and to which side of the index it sits on.
+        if (repoTab.lastWriteOp === "checkout" || repoTab.lastWriteOp === "reset")
             page.closeDiff()
         page.refreshHeadPublished()
-        // HEAD may have moved: what the selected commit is to it — and
-        // so whether its message is ours to rewrite — is asked again.
+        // HEAD may have moved: what the selected commit is to it — and so whether its message is ours to rewrite — is
+        // asked again.
         page.askInHistory(page.selectedOid)
     }
 
-    // Center area switches between the graph and a file diff. The
-    // pieces are kept apart rather than parsed back out of the key:
-    // a path may contain anything, colons included.
+    // Center area switches between the graph and a file diff. The pieces are kept apart rather than parsed back out of
+    // the key: a path may contain anything, colons included.
     property bool diffShown: false
     onDiffShownChanged: page.foldForDiff(page.diffShown)
     property string diffKey: ""
@@ -819,29 +742,20 @@ Item {
     // Whether the shown diff is a working-tree file (stageable).
     property bool diffFromWt: false
     readonly property bool diffStaged: page.diffKind === "staged"
-    /// The two stage letters git reports for the file being shown, read
-    /// once when it is opened: the pane is handed a path, not the row the
-    /// path came from, and on a conflict git prints no patch for those
-    /// letters are all there is to say. A file stops being conflicted only
-    /// by a write, and every write reads the diff again.
+    /// The two stage letters git reports for the file being shown, read once when it is opened: the pane is handed a
+    /// path, not the row the path came from, and on a conflict git prints no patch for those letters are all there is
+    /// to say. A file stops being conflicted only by a write, and every write reads the diff again.
     property string diffChange: ""
-    /// The colour each side of a conflict is drawn in: the lane colour the
-    /// graph gives that branch where it has one, so the diff borrows an
-    /// answer rather than keeping a second set of its own.
+    /// The colour each side of a conflict is drawn in: the lane colour the graph gives that branch where it has one, so
+    /// the diff borrows an answer rather than keeping a second set of its own.
     ///
-    /// A binding, not a one-off read: the graph arrives in two passes (the
-    /// chips land after the rows), and it is rebuilt whenever refs move.
-    /// `finishCount` is read only to depend on it — every graph property
-    /// shares one notify signal, so touching any of them is what makes
-    /// this re-run when the rows change.
+    /// A binding, not a one-off read: the graph arrives in two passes (the chips land after the rows), and it is
+    /// rebuilt whenever refs move. `finishCount` is read only to depend on it — every graph property shares one notify
+    /// signal, so touching any of them is what makes this re-run when the rows change.
     readonly property int sideColorOurs:
-        graphModel.finishCount >= 0
-        ? graphModel.conflictColorOurs(workTree.sideOurs, workTree.sideTheirs)
-        : -1
+        graphModel.finishCount >= 0 ? graphModel.conflictColorOurs(workTree.sideOurs, workTree.sideTheirs) : -1
     readonly property int sideColorTheirs:
-        graphModel.finishCount >= 0
-        ? graphModel.conflictColorTheirs(workTree.sideOurs, workTree.sideTheirs)
-        : -1
+        graphModel.finishCount >= 0 ? graphModel.conflictColorTheirs(workTree.sideOurs, workTree.sideTheirs) : -1
     function toggleDiff(kind, path, origPath) {
         if (page.diffShown && page.diffKey === kind + ":" + path) {
             page.closeDiff()
@@ -849,12 +763,11 @@ Item {
         }
         page.openDiff(kind, path, origPath)
     }
-    /// Reads one file, whoever asked — a row that was clicked, or the pane
-    /// moving itself off a side that ran out (`followEmptySide`).
+    /// Reads one file, whoever asked — a row that was clicked, or the pane moving itself off a side that ran out
+    /// (`followEmptySide`).
     function openDiff(kind, path, origPath) {
-        // Whatever place a rebuild of the last diff was keeping is the
-        // last diff's: restored here it would put the new rows at the old
-        // file's scroll (規約 §diff を横へ送る「別のファイルは左端から」).
+        // Whatever place a rebuild of the last diff was keeping is the last diff's: restored here it would put the new
+        // rows at the old file's scroll (規約 §diff を横へ送る「別のファイルは左端から」).
         diffPane.dropScroll()
         page.diffKey = kind + ":" + path
         page.diffKind = kind
@@ -862,89 +775,70 @@ Item {
         page.diffOrigPath = origPath
         page.diffFromWt = kind !== "commit"
         page.diffChange = kind === "conflicts" ? worktreeModel.changeOf(path) : ""
-        // The list's light names the file being read. A click had already
-        // made this row the whole of the choice, so what this catches is the
-        // pane moving itself — the commit's list needs no such line, its
-        // light *is* the path being read (`DetailsPane.readPath`).
+        // The list's light names the file being read. A click had already made this row the whole of the choice, so
+        // what this catches is the pane moving itself — the commit's list needs no such line, its light *is* the path
+        // being read (`DetailsPane.readPath`).
         if (kind !== "commit")
             wipPane.readOne(kind, path)
         if (kind === "commit")
-            diffModel.requestCommitFile(detailsModel.shaHex, detailsModel.parentHex,
-                                        path, origPath)
+            diffModel.requestCommitFile(detailsModel.shaHex, detailsModel.parentHex, path, origPath)
         else
             diffModel.requestWorkTree(kind, path, origPath)
         page.diffShown = true
         page.diffNeighbour = ""
         page.noteDiffNeighbour()
     }
-    // Stages (or unstages) one hunk, or one line of it. The indices
-    // address the diff currently on screen, so the pane is reloaded
-    // afterwards: once the patch is applied the rows have moved.
+    // Stages (or unstages) one hunk, or one line of it. The indices address the diff currently on screen, so the pane
+    // is reloaded afterwards: once the patch is applied the rows have moved.
     function stageSelection(hunk, line) {
-        // The shown diff's fingerprint rides along: the write refuses to
-        // apply the indices to bytes that drifted since this was read.
+        // The shown diff's fingerprint rides along: the write refuses to apply the indices to bytes that drifted since
+        // this was read.
         //
-        // Said here rather than left to `busyCount`, which rises when the
-        // queue starts the write rather than when the press is made: two
-        // presses in a row both went out before the first had begun.
+        // Said here rather than left to `busyCount`, which rises when the queue starts the write rather than when the
+        // press is made: two presses in a row both went out before the first had begun.
         //
-        // Armed by the answer, not by the asking: the slot says whether a
-        // write actually went out, and a request it turned away — nothing
-        // selected, no fingerprint to address — has no answer coming, so
-        // a wait armed for it would hold the marks for good (the same
-        // wedge the tree-read wait had, through the request's own door).
-        page.diffAwaits = repoTab.stageSelection(page.diffKind, page.diffPath,
-                                                 page.diffOrigPath, hunk, line,
+        // Armed by the answer, not by the asking: the slot says whether a write actually went out, and a request it
+        // turned away — nothing selected, no fingerprint to address — has no answer coming, so a wait armed for it
+        // would hold the marks for good (the same wedge the tree-read wait had, through the request's own door).
+        page.diffAwaits = repoTab.stageSelection(page.diffKind, page.diffPath, page.diffOrigPath, hunk, line,
                                                  diffModel.fingerprint)
     }
-    /// Throwing one hunk of the shown diff away, with no question in front
-    /// of it: the button in that hunk's own heading was held down, which is
-    /// the whole of the asking (デザイン規約 §その他の操作). A line cannot
-    /// be thrown away on its own — the hunk is the smallest piece — though
-    /// it can still be staged on its own, which loses nothing.
+    /// Throwing one hunk of the shown diff away, with no question in front of it: the button in that hunk's own heading
+    /// was held down, which is the whole of the asking (デザイン規約 §その他の操作). A line cannot be thrown away on its own — the
+    /// hunk is the smallest piece — though it can still be staged on its own, which loses nothing.
     function discardHunkNow(hunk) {
         // Armed by the answer, for the reason `stageSelection` gives.
-        page.diffAwaits = repoTab.discardSelection(page.diffKind, page.diffPath,
-                                                   page.diffOrigPath, hunk, -1,
+        page.diffAwaits = repoTab.discardSelection(page.diffKind, page.diffPath, page.diffOrigPath, hunk, -1,
                                                    diffModel.fingerprint)
     }
     // ---- what the reader lands on when a side runs out ---------------
-    /// The row beside the open diff's file under the same heading, as
-    /// `<bucket>:<path>` — the file after it, or the one before it where
-    /// it is the last (`NavSectionModel.besidePath`).
+    /// The row beside the open diff's file under the same heading, as `<bucket>:<path>` — the file after it, or the one
+    /// before it where it is the last (`NavSectionModel.besidePath`).
     ///
-    /// Noted while the file is still there, because by the time the side
-    /// has run out the file has already moved to the other one and the
-    /// place it left is not in the list to be read.
+    /// Noted while the file is still there, because by the time the side has run out the file has already moved to the
+    /// other one and the place it left is not in the list to be read.
     property string diffNeighbour: ""
     function noteDiffNeighbour() {
-        if (!page.diffShown || page.diffKind === "commit"
-                || !worktreeModel.holdsPath(page.diffKind, page.diffPath))
+        if (!page.diffShown || page.diffKind === "commit" || !worktreeModel.holdsPath(page.diffKind, page.diffPath))
             return
         page.diffNeighbour = worktreeModel.besidePath(page.diffKind, page.diffPath)
     }
-    /// Everything the open diff's file had on the side being read has gone
-    /// over — staged, unstaged, thrown away, committed. The reader is left
-    /// standing on it, so the pane moves rather than closing
-    /// (デザイン規約 §diff の中のステージ):
+    /// Everything the open diff's file had on the side being read has gone over — staged, unstaged, thrown away,
+    /// committed. The reader is left standing on it, so the pane moves rather than closing (デザイン規約 §diff の中のステージ):
     ///
     ///  - the next file of the side that ran out, if it still has one;
     ///  - otherwise the same file, read from wherever it went — the whole
     ///    of it is on the other side now, which is the thing to look at;
     ///  - and only with nothing uncommitted left does the pane close.
     ///
-    /// **The file list is what says so** — this runs on its `changed` and
-    /// stands down while it still holds the file on the side being read.
-    /// The re-read's own emptiness cannot say it: the read runs beside the
-    /// status rather than after it (`load_diff` / `publish_status`), so an
-    /// empty answer could land first and ask a list that still held the
-    /// pre-write rows for a neighbour — and some sides never read empty at
-    /// all (an untracked file staged whole still renders as its whole
-    /// content, a picture has no rows either way). Asked here, the answers
-    /// below are read from the very change that said the file moved.
+    /// **The file list is what says so** — this runs on its `changed` and stands down while it still holds the file on
+    /// the side being read. The re-read's own emptiness cannot say it: the read runs beside the status rather than
+    /// after it (`load_diff` / `publish_status`), so an empty answer could land first and ask a list that still held
+    /// the pre-write rows for a neighbour — and some sides never read empty at all (an untracked file staged whole
+    /// still renders as its whole content, a picture has no rows either way). Asked here, the answers below are read
+    /// from the very change that said the file moved.
     function followEmptySide() {
-        if (!page.diffShown || page.diffKind === "commit"
-                || worktreeModel.holdsPath(page.diffKind, page.diffPath))
+        if (!page.diffShown || page.diffKind === "commit" || worktreeModel.holdsPath(page.diffKind, page.diffPath))
             return
         const cut = page.diffNeighbour.indexOf(":")
         if (cut > 0) {
@@ -964,46 +858,34 @@ Item {
     }
     /// Whether the diff on screen is still catching up with a write.
     ///
-    /// A press addresses the rows it was made on, and carries the
-    /// fingerprint of the bytes they were read from; git refuses it
-    /// against anything else. So from the moment a press goes out until
-    /// the rows it changed are back, the pane must not take another one —
-    /// pressed twice in a row, the second landed on the diff the first had
-    /// already replaced and came back with a refusal in the log
-    /// (2026-08-17 ユーザー報告).
+    /// A press addresses the rows it was made on, and carries the fingerprint of the bytes they were read from; git
+    /// refuses it against anything else. So from the moment a press goes out until the rows it changed are back, the
+    /// pane must not take another one — pressed twice in a row, the second landed on the diff the first had already
+    /// replaced and came back with a refusal in the log (2026-08-17 ユーザー報告).
     ///
-    /// Three parts, in the order they happen, and **every one of them ends
-    /// by itself**: the press is out and no answer has come (`diffAwaits`,
-    /// armed only when the tab says a write went out, put down by the
-    /// write's own answer), git is running (`busyCount`, which the session
-    /// balances), the file is being read again (`loading`, put down by the
+    /// Three parts, in the order they happen, and **every one of them ends by itself**: the press is out and no answer
+    /// has come (`diffAwaits`, armed only when the tab says a write went out, put down by the write's own answer), git
+    /// is running (`busyCount`, which the session balances), the file is being read again (`loading`, put down by the
     /// rows arriving).
     ///
-    /// **Nothing here waits on a signal that may not come.** Held on "the
-    /// tree has not been read yet" instead, it wedged for good the first
-    /// time a write moved no rows — staging a second line of a file
-    /// already on both sides — because the file list only says `changed`
-    /// when its rows differ, and then no `+` anywhere would go in again
+    /// **Nothing here waits on a signal that may not come.** Held on "the tree has not been read yet" instead, it
+    /// wedged for good the first time a write moved no rows — staging a second line of a file already on both sides —
+    /// because the file list only says `changed` when its rows differ, and then no `+` anywhere would go in again
     /// (2026-08-17 ユーザー報告).
     property bool diffAwaits: false
     readonly property bool diffSettling:
         page.diffAwaits || repoTab.busyCount > 0 || diffModel.loading
-    /// A write on the working tree has landed, so the open diff is a
-    /// picture of what the file used to be.
+    /// A write on the working tree has landed, so the open diff is a picture of what the file used to be.
     ///
-    /// **Whoever wrote it.** This was once asked for by the writes made
-    /// inside the diff itself, and the file list's own `+` and `−` moved
-    /// the same file out from under the pane without a word: a line staged
-    /// here and then unstaged there left the line missing from both sides
-    /// on screen (2026-08-17 ユーザー報告). The caller already knows the
-    /// write was one that moves the tree (`absorbWriteResult`), so being
-    /// open is the whole of the condition.
+    /// **Whoever wrote it.** This was once asked for by the writes made inside the diff itself, and the file list's own
+    /// `+` and `−` moved the same file out from under the pane without a word: a line staged here and then unstaged
+    /// there left the line missing from both sides on screen (2026-08-17 ユーザー報告). The caller already knows the write
+    /// was one that moves the tree (`absorbWriteResult`), so being open is the whole of the condition.
     function reloadDiff() {
         if (!page.diffShown || page.diffKind === "commit")
             return
-        // Held here rather than beside each write: the rows on screen do
-        // not move until the answer lands, so this is still the place the
-        // reader was at (`DiffScrollPlace`).
+        // Held here rather than beside each write: the rows on screen do not move until the answer lands, so this is
+        // still the place the reader was at (`DiffScrollPlace`).
         diffPane.holdScroll()
         diffModel.requestWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
     }
@@ -1023,27 +905,24 @@ Item {
     readonly property var pageTab: repoTab
     readonly property var pageWt: workTree
     readonly property var pageCommands: commandsModel
-    /// For the settings card's avatar entry, which offers the authors of
-    /// the repository being looked at.
+    /// For the settings card's avatar entry, which offers the authors of the repository being looked at.
     readonly property var pageGraph: graphModel
 
-    /// Whether the command log is up. Closed is the resting state: the
-    /// toolbar's `>_` opens it, and a failed command raises it.
+    /// Whether the command log is up. Closed is the resting state: the toolbar's `>_` opens it, and a failed command
+    /// raises it.
     property bool commandsOpen: false
     function toggleCommands() {
         page.commandsOpen = !page.commandsOpen
         if (page.commandsOpen)
             commandsPane.showLatest()
     }
-    /// What the panel is doing, rather than what was asked of it — the
-    /// automation reads this one, so a cut binding cannot pass.
+    /// What the panel is doing, rather than what was asked of it — the automation reads this one, so a cut binding
+    /// cannot pass.
     readonly property bool commandsShown: commandsPane.visible
-    /// Automation reads the laid-out width, not the preferred width it
-    /// requested, before persisting a state round trip.
+    /// Automation reads the laid-out width, not the preferred width it requested, before persisting a state round trip.
     readonly property real stateDetailsWidth: rightPane.width
-    /// Automation only: the header's `Clear`, pressed from outside the
-    /// pane. The answer to what it clears is on the band, which cannot
-    /// reach in here (`PG_AUTO_ACT=commands-clear`).
+    /// Automation only: the header's `Clear`, pressed from outside the pane. The answer to what it clears is on the
+    /// band, which cannot reach in here (`PG_AUTO_ACT=commands-clear`).
     function clearCommandLog() {
         commandsPane.clearPanel()
     }
@@ -1056,18 +935,15 @@ Item {
     DiffModel { id: diffModel }
     NavSectionModel { id: branchesModel }
     NavSectionModel { id: remotesModel }
-    // One letter apart, two different things: `worktreeModel` feeds the
-    // WIP pane (the "worktree" nav section = uncommitted files), while
-    // `worktreesModel` lists git worktrees (the sidebar's WORKTREES).
+    // One letter apart, two different things: `worktreeModel` feeds the WIP pane (the "worktree" nav section =
+    // uncommitted files), while `worktreesModel` lists git worktrees (the sidebar's WORKTREES).
     NavSectionModel { id: worktreeModel }
     NavSectionModel { id: worktreesModel }
     NavSectionModel { id: stashesModel }
     NavSectionModel { id: tagsModel }
 
-    /// True on the one page the window is showing. A tab restored from the
-    /// last session has no repository behind it until this turns true —
-    /// the session is what costs, and it is not spent on pages nobody has
-    /// looked at.
+    /// True on the one page the window is showing. A tab restored from the last session has no repository behind it
+    /// until this turns true — the session is what costs, and it is not spent on pages nobody has looked at.
     property bool pageCurrent: false
     onPageCurrentChanged: {
         if (page.pageCurrent && !page.blank)
@@ -1076,6 +952,7 @@ Item {
 
     // ---- what this page is laid out at ------------------------------
     // The saved sizes, the sections, and the floor the window is held to.
+
     PageLayout {
         id: pageLayout
         page: page
@@ -1090,16 +967,15 @@ Item {
         detailsModel: detailsModel
     }
 
-    /// What the window reads off the page it is showing: the floor it may
-    /// not be laid out under (`Main.floorWidth` / `floorHeight`) and the
-    /// two panes' own overflow, which the floor's own verb asks about.
+    /// What the window reads off the page it is showing: the floor it may not be laid out under (`Main.floorWidth` /
+    /// `floorHeight`) and the two panes' own overflow, which the floor's own verb asks about.
     readonly property real floorWidth: pageLayout.floorWidth
     readonly property real floorHeight: pageLayout.floorHeight
     readonly property bool wipBlockScrolls: pageLayout.wipBlockScrolls
     readonly property real detailsOverHeight: pageLayout.detailsOverHeight
 
-    /// …and what it calls: the layout is pulled on the window's timer, and
-    /// the two setters are the headless state check's (a person drags).
+    /// …and what it calls: the layout is pulled on the window's timer, and the two setters are the headless state
+    /// check's (a person drags).
     function reportLayout() {
         pageLayout.reportLayout()
     }
@@ -1135,36 +1011,32 @@ Item {
             autoActLoader.item.begin()
     }
 
-    /// The window's focus epoch (bumped when the window regains focus)
-    /// triggers a quick refresh of the visible page.
+    /// The window's focus epoch (bumped when the window regains focus) triggers a quick refresh of the visible page.
     property int focusEpoch: 0
     onFocusEpochChanged: {
         if (page.visible && repoTab.state === "open")
             repoTab.refreshQuick()
     }
 
-    /// True while the window is on screen (see Main.qml): the page shown
-    /// there re-reads its repository on a tick, so a commit made in a
-    /// terminal or by an agent turns up on its own.
+    /// True while the window is on screen (see Main.qml): the page shown there re-reads its repository on a tick, so a
+    /// commit made in a terminal or by an agent turns up on its own.
     property bool onScreen: false
     Timer {
         interval: Metrics.pollIntervalMs
         repeat: true
-        // Only the tab in front — the others catch up when switched to,
-        // and reading every open repository on every tick is what makes
-        // polling expensive elsewhere.
+        // Only the tab in front — the others catch up when switched to, and reading every open repository on every tick
+        // is what makes polling expensive elsewhere.
         running: page.onScreen && page.visible && repoTab.state === "open"
         onTriggered: repoTab.refreshPoll()
     }
 
-    // Where the selection stands, kept so a commit that disappears from
-    // under it can be followed to whatever took its place.
+    // Where the selection stands, kept so a commit that disappears from under it can be followed to whatever took its
+    // place.
     property int selectedRow: -1
 
-    // The commit the viewport is measured against between passes, so the
-    // rows a reader is on can be put back under them when new ones arrive
-    // above. The WIP row is no use for that — it comes and goes with the
-    // working tree — so the newest *real* commit carries the measurement.
+    // The commit the viewport is measured against between passes, so the rows a reader is on can be put back under them
+    // when new ones arrive above. The WIP row is no use for that — it comes and goes with the working tree — so the
+    // newest *real* commit carries the measurement.
     property string anchorOid: ""
     property int anchorRow: -1
     function rememberAnchor() {
@@ -1177,9 +1049,8 @@ Item {
         page.anchorOid = oidHex
         page.anchorRow = oidHex === "" ? -1 : row
     }
-    // How far the graph slid under the viewport. Zero when the anchor is
-    // gone: a rewrite deep in the history moves rows by different amounts
-    // and there is no single answer, so the view is left alone.
+    // How far the graph slid under the viewport. Zero when the anchor is gone: a rewrite deep in the history moves rows
+    // by different amounts and there is no single answer, so the view is left alone.
     function anchorShift() {
         if (page.anchorRow < 0 || page.anchorOid === "")
             return 0
@@ -1187,27 +1058,21 @@ Item {
         return now < 0 ? 0 : now - page.anchorRow
     }
 
-    // The row the selection stood on is gone and this page owes it a
-    // landing. Deliberately not resolved on the spot: the status of the
-    // working tree, the refs and the walk arrive as three separate
-    // messages, and the two that come first still describe the repository
-    // as it was — reading the branch out of them lands on the commit that
-    // was just replaced. Resolved once the graph holds where the branch
-    // points, which is only true of the refreshed pair.
+    // The row the selection stood on is gone and this page owes it a landing. Deliberately not resolved on the spot:
+    // the status of the working tree, the refs and the walk arrive as three separate messages, and the two that come
+    // first still describe the repository as it was — reading the branch out of them lands on the commit that was just
+    // replaced. Resolved once the graph holds where the branch points, which is only true of the refreshed pair.
     property bool pendingHeadSelect: false
-    // Whether the landing is one the person here asked for, in which case
-    // the viewport goes to it as well: a commit they meant to make is not
-    // an answer if it lands off screen. The other two ways this is set
-    // happen *to* the window — a commit made in a terminal, a rewrite that
-    // swept the selected commit away while the poll was watching — and a
-    // background pass that moves rows under a reader may not also move
-    // their view (§ListView.highlightFollowsCurrentItem).
+    // Whether the landing is one the person here asked for, in which case the viewport goes to it as well: a commit
+    // they meant to make is not an answer if it lands off screen. The other two ways this is set happen *to* the window
+    // — a commit made in a terminal, a rewrite that swept the selected commit away while the poll was watching — and a
+    // background pass that moves rows under a reader may not also move their view
+    // (§ListView.highlightFollowsCurrentItem).
     property bool pendingHeadAsked: false
     function tryPendingHeadSelect() {
         if (!page.pendingHeadSelect || !branchesModel.refsLoaded)
             return
-        const row = branchesModel.headOid !== ""
-                    ? graphModel.rowOf(branchesModel.headOid) : -1
+        const row = branchesModel.headOid !== "" ? graphModel.rowOf(branchesModel.headOid) : -1
         if (row < 0)
             return
         page.pendingHeadSelect = false
@@ -1215,17 +1080,15 @@ Item {
         page.pendingHeadAsked = false
         graphPane.setCurrentRow(row)
         page.activateRow(graphModel.oidAt(row))
-        // Held back by an unsaved message: the question put the highlight
-        // back where it was, so there is nowhere for the view to go yet.
+        // Held back by an unsaved message: the question put the highlight back where it was, so there is nowhere for
+        // the view to go yet.
         if (asked && page.pendingMove === null)
             graphPane.showRowSoon(row)
     }
 
-    // The selected commit is gone from the graph and this page did not
-    // rewrite it: an amend or a rebase run in a terminal replaced it while
-    // the poll was watching. Whatever now stands where it stood is the
-    // closest thing to what was being read; failing that, fall back to the
-    // branch's own commit, which is never nothing.
+    // The selected commit is gone from the graph and this page did not rewrite it: an amend or a rebase run in a
+    // terminal replaced it while the poll was watching. Whatever now stands where it stood is the closest thing to what
+    // was being read; failing that, fall back to the branch's own commit, which is never nothing.
     function followVanishedCommit() {
         const oidHex = graphModel.oidAt(page.selectedRow)
         if (oidHex !== "" && /[^0]/.test(oidHex)) {
@@ -1237,8 +1100,8 @@ Item {
         page.pendingHeadSelect = true
     }
 
-    // A reworded commit came back under a different hash: the one now
-    // standing where it stood is it, since only the message changed.
+    // A reworded commit came back under a different hash: the one now standing where it stood is it, since only the
+    // message changed.
     function followRewrittenCommit() {
         const row = page.rewordRow
         const oidHex = graphModel.oidAt(row)
@@ -1251,24 +1114,22 @@ Item {
         page.activateRow(oidHex)
     }
 
-    // What a row click means: the synthetic WIP row (all-zero id)
-    // opens the working-tree view, anything else selects the commit.
+    // What a row click means: the synthetic WIP row (all-zero id) opens the working-tree view, anything else selects
+    // the commit.
     function activateRow(oidHex) {
         page.guardEdits(oidHex, function () { page.selectRow(oidHex) })
     }
     function selectRow(oidHex) {
-        // Any new selection settles where the last rewrite left off, and
-        // answers any landing this page still owed.
+        // Any new selection settles where the last rewrite left off, and answers any landing this page still owed.
         page.rewordRow = -1
         page.pendingHeadSelect = false
         page.pendingHeadAsked = false
-        // Clicking anywhere is the way out of the name box and of a
-        // standing row question: both are offers, not work in progress.
+        // Clicking anywhere is the way out of the name box and of a standing row question: both are offers, not work in
+        // progress.
         graphPane.stopNaming()
         page.stopRowAsk()
-        // A click moves the highlight itself, but one held back by the
-        // unsaved-message question does not: the question put it back
-        // where it was, so the answer has to move it again.
+        // A click moves the highlight itself, but one held back by the unsaved-message question does not: the question
+        // put it back where it was, so the answer has to move it again.
         const row = graphModel.rowOf(oidHex)
         if (row >= 0) {
             graphPane.setCurrentRow(row)
@@ -1287,20 +1148,17 @@ Item {
         page.closeDiff()
     }
 
-    // Selection policy: restore across the tag-swap reset, and default
-    // to the current branch's newest commit on first load so the
-    // details pane always shows something.
+    // Selection policy: restore across the tag-swap reset, and default to the current branch's newest commit on first
+    // load so the details pane always shows something.
     function trySelectDefault() {
         if (page.selectedOid !== "" || page.wipShown || page.pendingHeadSelect
                 || AppBackend.autoSelect || AppBackend.autoWip
                 || graphModel.rowTotal === 0)
             return
-        // Refs decide which commit is "current" — wait for them
-        // instead of guessing the newest row too early.
+        // Refs decide which commit is "current" — wait for them instead of guessing the newest row too early.
         if (!branchesModel.refsLoaded)
             return
-        let row = branchesModel.headOid !== ""
-                  ? graphModel.rowOf(branchesModel.headOid) : -1
+        let row = branchesModel.headOid !== "" ? graphModel.rowOf(branchesModel.headOid) : -1
         if (row < 0) {
             if (graphModel.loading)
                 return // the head row may still be streaming in
@@ -1310,11 +1168,9 @@ Item {
         graphPane.anchorSoon()
         page.activateRow(graphModel.oidAt(row))
     }
-    // Each finished pass bumps finishCount: re-resolve the selection by
-    // oid, since row numbers may have shifted. Only a streaming restart
-    // bumps resetCount — that is the only case where the viewport lost
-    // its scroll position and needs re-anchoring. In-place replacements
-    // keep the position, and re-centering would yank the view around.
+    // Each finished pass bumps finishCount: re-resolve the selection by oid, since row numbers may have shifted. Only a
+    // streaming restart bumps resetCount — that is the only case where the viewport lost its scroll position and needs
+    // re-anchoring. In-place replacements keep the position, and re-centering would yank the view around.
     property int seenFinishCount: 0
     property int seenResetCount: 0
     Connections {
@@ -1324,8 +1180,8 @@ Item {
                 page.seenFinishCount = graphModel.finishCount
                 const resetHappened = graphModel.resetCount !== page.seenResetCount
                 page.seenResetCount = graphModel.resetCount
-                // A reset starts the viewport over anyway; only in-place
-                // replacements leave it pointing at rows that moved.
+                // A reset starts the viewport over anyway; only in-place replacements leave it pointing at rows that
+                // moved.
                 if (!resetHappened)
                     graphPane.shiftRows(page.anchorShift())
                 page.rememberAnchor()
@@ -1351,52 +1207,42 @@ Item {
     Connections {
         target: branchesModel
         function onChanged() {
-            // Refs can be the half that was missing, when the walk had
-            // already delivered the commit they now point at.
+            // Refs can be the half that was missing, when the walk had already delivered the commit they now point at.
             page.tryPendingHeadSelect()
             page.trySelectDefault()
         }
-        // Refs that settled without moving say nothing through `changed`
-        // (identical rows are deliberately quiet — see the model), and a
-        // write that recorded nothing leaves them exactly so: a
-        // cherry-pick of a commit this branch already has owes the same
-        // landing as one that wrote a commit, and this is the only word
-        // that it can be paid.
+        // Refs that settled without moving say nothing through `changed` (identical rows are deliberately quiet — see
+        // the model), and a write that recorded nothing leaves them exactly so: a cherry-pick of a commit this branch
+        // already has owes the same landing as one that wrote a commit, and this is the only word that it can be paid.
         function onRefsSettled() {
             page.tryPendingHeadSelect()
         }
     }
-    /// What the working tree looked like the last time the open diff was
-    /// read against it. Not a diff of the file — the counts of the four
-    /// buckets, which is what a stage or an unstage moves whoever made it.
+    /// What the working tree looked like the last time the open diff was read against it. Not a diff of the file — the
+    /// counts of the four buckets, which is what a stage or an unstage moves whoever made it.
     property string seenTreeTally: ""
-    /// The write whose answer already re-read the file, so that the status
-    /// arriving behind it does not read the same file over again. -1 once
-    /// that status has come and gone.
+    /// The write whose answer already re-read the file, so that the status arriving behind it does not read the same
+    /// file over again. -1 once that status has come and gone.
     property int diffReadAt: -1
     function treeTally() {
         return workTree.stagedCount + "/" + workTree.unstagedCount + "/"
              + workTree.untrackedCount + "/" + workTree.conflictCount
     }
-    // **The tree was read.** Said by the working-tree model rather than by
-    // the file list beside it: the list says `changed` only when its rows
-    // differ, and a status that moved no row is exactly the one this has
-    // to hear about (a second line staged out of a file already on both
-    // sides moves nothing).
+    // **The tree was read.** Said by the working-tree model rather than by the file list beside it: the list says
+    // `changed` only when its rows differ, and a status that moved no row is exactly the one this has to hear about (a
+    // second line staged out of a file already on both sides moves nothing).
     Connections {
         target: workTree
         function onChanged() {
             const tally = page.treeTally()
             const moved = tally !== page.seenTreeTally
             page.seenTreeTally = tally
-            // The status that follows this window's own write: the file
-            // was read when the write answered.
+            // The status that follows this window's own write: the file was read when the write answered.
             const ours = page.diffReadAt === repoTab.writeSeq
             page.diffReadAt = -1
-            // Something outside this window moved the tree, so the rows on
-            // screen — and the fingerprint the next `+` would be written
-            // against — are a picture of the file as it was. Pressing one
-            // then came back with git's refusal (2026-08-17 ユーザー報告).
+            // Something outside this window moved the tree, so the rows on screen — and the fingerprint the next `+`
+            // would be written against — are a picture of the file as it was. Pressing one then came back with git's
+            // refusal (2026-08-17 ユーザー報告).
             if (moved && !ours)
                 page.reloadDiff()
         }
@@ -1404,26 +1250,20 @@ Item {
     Connections {
         target: worktreeModel
         function onChanged() {
-            // The file the diff is on is still where it was, so this is
-            // the last moment its neighbour can be read (see
-            // `noteDiffNeighbour`) — and the change that takes it off the
-            // side being read is the one that moves the pane, with the
-            // neighbour noted by every change before it (`followEmptySide`).
+            // The file the diff is on is still where it was, so this is the last moment its neighbour can be read (see
+            // `noteDiffNeighbour`) — and the change that takes it off the side being read is the one that moves the
+            // pane, with the neighbour noted by every change before it (`followEmptySide`).
             page.noteDiffNeighbour()
             page.followEmptySide()
-            // The working tree emptied. After a commit of our own that is
-            // the end of the editor's job; when someone else committed
-            // these changes it happens with no warning, so a message being
-            // written stays on screen with its text — it is the one thing
-            // here that cannot be read back off disk. Otherwise land on the
-            // commit that now holds the changes rather than on nothing.
-            if (worktreeModel.total === 0 && page.wipShown
-                    && wipPane.subjectText === "" && wipPane.bodyText === "") {
+            // The working tree emptied. After a commit of our own that is the end of the editor's job; when someone
+            // else committed these changes it happens with no warning, so a message being written stays on screen with
+            // its text — it is the one thing here that cannot be read back off disk. Otherwise land on the commit that
+            // now holds the changes rather than on nothing.
+            if (worktreeModel.total === 0 && page.wipShown && wipPane.subjectText === "" && wipPane.bodyText === "") {
                 page.wipShown = false
                 page.pendingHeadSelect = true
             }
-            // Smoke hook (PG_AUTO_WIP=1): open the WIP view once
-            // uncommitted changes are known.
+            // Smoke hook (PG_AUTO_WIP=1): open the WIP view once uncommitted changes are known.
             if (AppBackend.autoWip && worktreeModel.total > 0 && !page.wipShown) {
                 graphPane.setCurrentRow(0)
                 page.showWip()
@@ -1431,12 +1271,10 @@ Item {
         }
     }
 
-    // Smoke hook (PG_SCROLL_TO=top|bottom|nav-bottom): jump the graph —
-    // or the sidebar's branch list — after the final pass settles, using
-    // the same clamped math as the wheel.
-    // Parks the view once and then stays out of the way: re-running on
-    // every pass would drag a background refresh back to the edge, which
-    // is the one thing a scrolled view must not do on its own.
+    // Smoke hook (PG_SCROLL_TO=top|bottom|nav-bottom): jump the graph — or the sidebar's branch list — after the final
+    // pass settles, using the same clamped math as the wheel. Parks the view once and then stays out of the way:
+    // re-running on every pass would drag a background refresh back to the edge, which is the one thing a scrolled view
+    // must not do on its own.
     property bool scrolledTo: false
     Timer {
         id: scrollToTimer
@@ -1447,8 +1285,7 @@ Item {
                 sidebarPane.scrollBranchesToEnd()
                 return
             }
-            graphPane.view.contentY = graphPane.view.clampY(
-                AppBackend.scrollTo === "bottom" ? 1e12 : -1e12)
+            graphPane.view.contentY = graphPane.view.clampY(AppBackend.scrollTo === "bottom" ? 1e12 : -1e12)
         }
     }
     Connections {
@@ -1474,9 +1311,8 @@ Item {
         }
     }
 
-    // Automation (PG_AUTO_SELECT=1): select the newest commit, then open
-    // the first changed file's diff — exercises the full pipeline for
-    // screenshot-based smoke tests.
+    // Automation (PG_AUTO_SELECT=1): select the newest commit, then open the first changed file's diff — exercises the
+    // full pipeline for screenshot-based smoke tests.
     property bool autoSelected: false
     Connections {
         target: graphModel
@@ -1484,12 +1320,10 @@ Item {
         function onStatsChanged() {
             if (page.autoSelected || graphModel.rowTotal === 0)
                 return
-            // **The newest commit, not the newest row.** A dirty working
-            // tree puts the WIP row on top, and selecting that one shows
-            // the pending changes instead of a commit — no details are
-            // asked for, so a measurement that reads the interaction
-            // budget off this hook measures nothing and says so
-            // (`xtask perf`'s `missing`). Every demo repository is dirty.
+            // **The newest commit, not the newest row.** A dirty working tree puts the WIP row on top, and selecting
+            // that one shows the pending changes instead of a commit — no details are asked for, so a measurement that
+            // reads the interaction budget off this hook measures nothing and says so (`xtask perf`'s `missing`). Every
+            // demo repository is dirty.
             for (let row = 0; row < graphModel.rowTotal; row++) {
                 const oid = graphModel.oidAt(row)
                 if (oid !== "" && /[^0]/.test(oid)) {
@@ -1505,10 +1339,8 @@ Item {
         target: detailsModel
         enabled: AppBackend.autoSelect
         function onChanged() {
-            if (detailsModel.shaHex !== "" && detailsModel.fileTotal > 0
-                    && diffModel.title === "")
-                page.toggleDiff("commit", detailsModel.filePathAt(0),
-                                detailsModel.fileOrigPathAt(0))
+            if (detailsModel.shaHex !== "" && detailsModel.fileTotal > 0 && diffModel.title === "")
+                page.toggleDiff("commit", detailsModel.filePathAt(0), detailsModel.fileOrigPathAt(0))
         }
     }
 
@@ -1519,9 +1351,8 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // The panes sit above the command log, which is closed until it
-        // is asked for. Splitting them vertically keeps the log's height
-        // in the reader's hands and out of the panes' business.
+        // The panes sit above the command log, which is closed until it is asked for. Splitting them vertically keeps
+        // the log's height in the reader's hands and out of the panes' business.
         SplitView {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -1543,8 +1374,8 @@ Item {
             }
 
             // ---- three-pane layout --------------------------------------
-            // (repository state / search / fetch / push live in the window
-            // toolbar, next to the tabs; Reload is the app menu and F5)
+            // (repository state / search / fetch / push live in the window toolbar, next to the tabs; Reload is the app
+            // menu and F5)
             SplitView {
                 visible: !page.openFailed
                 SplitView.fillHeight: true
@@ -1564,13 +1395,12 @@ Item {
                     stashesModel: stashesModel
                     tagsModel: tagsModel
                     collapsed: page.sidebarCollapsed
-                    // The menus the rows raise are the page's, so only the
-                    // page can say one is standing over the folded list.
+                    // The menus the rows raise are the page's, so only the page can say one is standing over the folded
+                    // list.
                     menuOpen: refRowMenu.showing
                     onFoldRequested: collapse => page.foldByHand(collapse)
                     onRefActivated: oidHex => page.jumpToRef(oidHex)
-                    onRefMenuRequested: (kind, name, full, oidHex) =>
-                        page.openRefMenu(kind, name, full, oidHex)
+                    onRefMenuRequested: (kind, name, full, oidHex) => page.openRefMenu(kind, name, full, oidHex)
                     onWorktreeActivated: path => page.openRepositoryPathRequested(path)
                     onRefSwitchRequested: (kind, name) => page.switchToRef(kind, name)
                     onBranchAtRequested: (oidHex, name) => {
@@ -1583,11 +1413,9 @@ Item {
                 // Center: commit graph ⇄ file diff
                 StackLayout {
                     SplitView.fillWidth: true
-                    // Not a number of its own: what the graph's own columns
-                    // come to once they have both given everything they can,
-                    // held up to a side pane's width so the middle never
-                    // reads as the thinnest of the three
-                    // (`PageLayout.centreMinWidth`).
+                    // Not a number of its own: what the graph's own columns come to once they have both given
+                    // everything they can, held up to a side pane's width so the middle never reads as the thinnest of
+                    // the three (`PageLayout.centreMinWidth`).
                     SplitView.minimumWidth: pageLayout.centreMinWidth
                     currentIndex: page.diffShown ? 1 : 0
 
@@ -1597,27 +1425,21 @@ Item {
                         workTree: workTree
                         blank: page.blank
                         chipListAnchor: rowHost.refListAnchor
-                        // A half-written message has put the move back
-                        // and a question up: until it is answered the
-                        // arrows stay still, or every press would be
-                        // pushed back by `guardEdits` and the two would
+                        // A half-written message has put the move back and a question up: until it is answered the
+                        // arrows stay still, or every press would be pushed back by `guardEdits` and the two would
                         // fight (規約 §矢印で履歴を辿る).
                         selectionHeld: page.pendingMove !== null
                         onRowActivated: oidHex => page.activateRow(oidHex)
-                        // The bar moves between matches, not between
-                        // commits — landing on the same row twice changes
+                        // The bar moves between matches, not between commits — landing on the same row twice changes
                         // nothing and costs no git.
                         onFindLanded: oidHex => {
                             if (oidHex !== "" && oidHex !== page.selectedOid)
                                 page.activateRow(oidHex)
                         }
                         onRowMenuOpenRequested: oidHex => page.openRowMenu(oidHex)
-                        onChipMenuOpenRequested: (oidHex, record) =>
-                            page.openRecordMenu(record, oidHex)
-                        onRowSwitchRequested: (oidHex, record) =>
-                            page.rowDoubleClicked(oidHex, record)
-                        onChipExpandRequested: (records, anchor) =>
-                            rowHost.openRefList(records, anchor)
+                        onChipMenuOpenRequested: (oidHex, record) => page.openRecordMenu(record, oidHex)
+                        onRowSwitchRequested: (oidHex, record) => page.rowDoubleClicked(oidHex, record)
+                        onChipExpandRequested: (records, anchor) => rowHost.openRefList(records, anchor)
                         onChipCollapseRequested: rowHost.closeRefListUnlessEntered()
                         onRowHoverRequested: (row, inside) => {
                             rowHost.rowCardWanted = inside
@@ -1626,8 +1448,7 @@ Item {
                             else
                                 rowHost.settleRowCard()
                         }
-                        onCreateBranchRequested: (oidHex, name) =>
-                            repoTab.createBranch(name, oidHex, true)
+                        onCreateBranchRequested: (oidHex, name) => repoTab.createBranch(name, oidHex, true)
                         onOpenRepositoryRequested: page.openRepositoryPicker()
                         onAskConfirmed: page.answerRowAsk()
                         onAskCancelled: page.stopRowAsk()
@@ -1640,8 +1461,7 @@ Item {
                         staged: page.diffStaged
                         conflicted: page.diffKind === "conflicts"
                         conflictChange: page.diffChange
-                        // The two swap over during a rebase; the model is
-                        // where that is already answered.
+                        // The two swap over during a rebase; the model is where that is already answered.
                         sideOurs: workTree.sideOurs
                         sideTheirs: workTree.sideTheirs
                         sideColorOurs: page.sideColorOurs
@@ -1662,24 +1482,20 @@ Item {
                 // Right side: working tree ⇄ commit details
                 Rectangle {
                     id: rightPane
-                    // Where it starts; `applySavedLayout` assigns over this
-                    // with the width the window is set to.
+                    // Where it starts; `applySavedLayout` assigns over this with the width the window is set to.
                     SplitView.preferredWidth: 400
                     SplitView.minimumWidth: pageLayout.rightMinWidth
                     color: Theme.bgSurface
 
                     GitVersionCorner {
                         id: gitCorner
-                        // Only one of the two panes is on screen at a
-                        // time, and each measures its own file list.
-                        roomLeft: page.wipShown ? wipPane.bottomRoom
-                                                : detailsPane.bottomRoom
+                        // Only one of the two panes is on screen at a time, and each measures its own file list.
+                        roomLeft: page.wipShown ? wipPane.bottomRoom : detailsPane.bottomRoom
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         anchors.rightMargin: Theme.spaceSm
                         anchors.bottomMargin: Theme.spaceXs
-                        // Declared before the panes it hangs over, so z
-                        // holds it in front of whatever they draw here.
+                        // Declared before the panes it hangs over, so z holds it in front of whatever they draw here.
                         z: 1
                     }
 
@@ -1696,14 +1512,11 @@ Item {
                         onCommitClicked: page.commitNow()
                         readBucket: page.diffFromWt ? page.diffKind : ""
                         readPath: page.diffFromWt ? page.diffPath : ""
-                        onFileActivated: (bucket, path, origPath) =>
-                            page.toggleDiff(bucket, path, origPath)
-                        onFileWalked: (bucket, path, origPath) =>
-                            page.openDiff(bucket, path, origPath)
+                        onFileActivated: (bucket, path, origPath) => page.toggleDiff(bucket, path, origPath)
+                        onFileWalked: (bucket, path, origPath) => page.openDiff(bucket, path, origPath)
                         onStashSubmitted: (message, untracked, keepIndex, stagedOnly) =>
                             repoTab.pushStash(message, untracked, keepIndex, stagedOnly)
-                        onFileMenuRequested: (bucket, path) =>
-                            page.openFileMenu(bucket, path)
+                        onFileMenuRequested: (bucket, path) => page.openFileMenu(bucket, path)
                     }
 
                     DetailsPane {
@@ -1712,9 +1525,8 @@ Item {
                         visible: !page.wipShown
                         details: detailsModel
                         stashRef: page.selectedStashRef
-                        // Only what the working tree stands on: a commit off
-                        // this line cannot be amended or replayed from here,
-                        // and a stash is a commit but never one of them.
+                        // Only what the working tree stands on: a commit off this line cannot be amended or replayed
+                        // from here, and a stash is a commit but never one of them.
                         editable: !page.blank && repoTab.state === "open"
                                   && page.selectedStashRef === ""
                                   && page.selectedInHistory
@@ -1729,22 +1541,16 @@ Item {
                         signatureKind: page.selectedSignatureKind
                         signatureCode: page.selectedSignatureCode
                         signatureSigner: page.selectedSignatureSigner
-                        // HEAD's own commit, not the current branch's tip:
-                        // detached, there is no branch to ask.
+                        // HEAD's own commit, not the current branch's tip: detached, there is no branch to ask.
                         headOid: workTree.headOid
                         readPath: page.diffKind === "commit" ? page.diffPath : ""
                         onLeaveResolved: discard => page.resolveLeave(discard)
-                        onMessageSubmitted: (oidHex, subject, body) =>
-                            page.saveMessage(oidHex, subject, body)
-                        onFileActivated: (path, origPath) =>
-                            page.toggleDiff("commit", path, origPath)
-                        onFileWalked: (path, origPath) =>
-                            page.openDiff("commit", path, origPath)
+                        onMessageSubmitted: (oidHex, subject, body) => page.saveMessage(oidHex, subject, body)
+                        onFileActivated: (path, origPath) => page.toggleDiff("commit", path, origPath)
+                        onFileWalked: (path, origPath) => page.openDiff("commit", path, origPath)
                         onParentClicked: oidHex => page.jumpToRef(oidHex)
-                        // The badge's press goes to the window, which owns
-                        // the settings card.
-                        onAvatarEditRequested: (name, email) =>
-                            page.avatarSettingsRequested(name, email)
+                        // The badge's press goes to the window, which owns the settings card.
+                        onAvatarEditRequested: (name, email) => page.avatarSettingsRequested(name, email)
                         onCopyRequested: text => clipboard.copy(text)
                         onApplyStashRequested: selector => repoTab.applyStash(selector)
                         onPopStashRequested: selector => {
@@ -1757,6 +1563,7 @@ Item {
 
             // ---- command log ------------------------------------------
             // Hidden until asked for, and raised by a failure.
+
             CommandsPane {
                 id: commandsPane
                 visible: page.commandsOpen
@@ -1771,12 +1578,10 @@ Item {
         }
     }
 
-    // A command the user asked for failed. Nothing else on screen says
-    // what git said, so the log comes up by itself and stays up — closing
-    // it is the reader's call, not the next success's. Unless this page
-    // asked for the refusal and turned it into a question: then the bar
-    // is already saying it, and the log would say it twice while pushing
-    // the graph out of the way.
+    // A command the user asked for failed. Nothing else on screen says what git said, so the log comes up by itself and
+    // stays up — closing it is the reader's call, not the next success's. Unless this page asked for the refusal and
+    // turned it into a question: then the bar is already saying it, and the log would say it twice while pushing the
+    // graph out of the way.
     Connections {
         target: commandsModel
         function onFailure() {
@@ -1789,19 +1594,17 @@ Item {
         }
     }
 
-    // The split bars' refusal — collection, settling, overlay and the
-    // divider-refuse report all live in the watcher (SplitBarWatch); the
-    // page keeps the source chain, since only it sees all four sources.
+    // The split bars' refusal — collection, settling, overlay and the divider-refuse report all live in the watcher
+    // (SplitBarWatch); the page keeps the source chain, since only it sees all four sources.
     SplitBarWatch {
         id: splitWatch
         refusalSource: page.refusalSource
         graphPane: graphPane
     }
 
-    /// Bars announce themselves once, at their own creation
-    /// (`SplitHandleBar.Component.onCompleted`) — which is before the
-    /// watcher above exists, so the page relays and holds the early
-    /// ones; the page's `Component.onCompleted` hands them over.
+    /// Bars announce themselves once, at their own creation (`SplitHandleBar.Component.onCompleted`) — which is before
+    /// the watcher above exists, so the page relays and holds the early ones; the page's `Component.onCompleted` hands
+    /// them over.
     property var earlyBars: []
     function holdSplitBar(bar, held) {
         if (!splitWatch) {
@@ -1811,16 +1614,14 @@ Item {
         splitWatch.holdSplitBar(bar, held)
     }
 
-    /// Automation: the drag and its answer for every boundary in the
-    /// window (`PG_AUTO_ACT=divider-refuse`; AutoActDriver calls through
-    /// the page).
+    /// Automation: the drag and its answer for every boundary in the window (`PG_AUTO_ACT=divider-refuse`;
+    /// AutoActDriver calls through the page).
     function reportDividerRefusal(which) {
         splitWatch.reportDividerRefusal(which)
     }
 
-    /// Whichever boundary is refusing, or null. One pointer, so the order
-    /// only decides which answers in the frame where two could — and two
-    /// cannot, since a hand is on one boundary at a time.
+    /// Whichever boundary is refusing, or null. One pointer, so the order only decides which answers in the frame where
+    /// two could — and two cannot, since a hand is on one boundary at a time.
     readonly property var refusalSource:
         graphPane.refused ? graphPane.refusedAt
         : detailsPane.descRefuses ? detailsPane.descPoint
@@ -1828,8 +1629,7 @@ Item {
         : splitWatch.refuses ? splitWatch.at
         : null
 
-    /// What is drawn, not what was asked for — the one badge's own
-    /// `shown` (`RefusalBadge`, on why not its `visible`).
+    /// What is drawn, not what was asked for — the one badge's own `shown` (`RefusalBadge`, on why not its `visible`).
     readonly property bool refusalShown: splitWatch.shown
 
     function jumpToRef(oidHex) {

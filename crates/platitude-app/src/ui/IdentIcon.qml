@@ -1,13 +1,12 @@
 import QtQuick
 import platitude.ui
 
-// The face beside an author: the picture they were given, or — far more
-// often — a 5x5 mirrored pattern generated from their name.
+// The face beside an author: the picture they were given, or — far more often — a 5x5 mirrored pattern generated from
+// their name.
 //
-// Both wear the same circle and the same ring, so a list of authors reads
-// as one column of faces whether or not anybody has been given a picture.
-// The pattern is what stands in for the avatar services this application
-// cannot use (CLAUDE.md 絶対制約: git is the only network there is).
+// Both wear the same circle and the same ring, so a list of authors reads as one column of faces whether or not anybody
+// has been given a picture. The pattern is what stands in for the avatar services this application cannot use
+// (CLAUDE.md 絶対制約: git is the only network there is).
 Item {
     id: ident
     property int code: 0
@@ -62,12 +61,10 @@ Item {
             ctx.stroke()
         }
     }
-    // A picture is cut to the circle by the canvas's own clip, so nothing
-    // outside it is painted: a node in the graph has lane curves running
-    // in behind it, and anything opaque in the corners would take bites
-    // out of them. The alternative, masking an Image with a shader, draws
-    // nothing at all on the offscreen platform (measured) — which would
-    // mean a feature that works but cannot be photographed.
+    // A picture is cut to the circle by the canvas's own clip, so nothing outside it is painted: a node in the graph
+    // has lane curves running in behind it, and anything opaque in the corners would take bites out of them. The
+    // alternative, masking an Image with a shader, draws nothing at all on the offscreen platform (measured) — which
+    // would mean a feature that works but cannot be photographed.
     Connections {
         target: ident
         function onCodeChanged() { pattern.requestPaint() }

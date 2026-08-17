@@ -2,9 +2,8 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The repository half of PG_AUTO_PERF.  Readiness, a real frame, and the
-/// requested output all form one causal chain; the twelve-second animation
-/// is deliberately the FPS sample window, never a readiness delay.
+/// The repository half of PG_AUTO_PERF.  Readiness, a real frame, and the requested output all form one causal chain;
+/// the twelve-second animation is deliberately the FPS sample window, never a readiness delay.
 Item {
     id: driver
 
@@ -38,8 +37,7 @@ Item {
                                                  && !diffModel.loading)))
 
     function requestStart() {
-        if (!AppBackend.autoPerf || driver.finished || driver.frameRequested
-                || !driver.ready || !driver.selected)
+        if (!AppBackend.autoPerf || driver.finished || driver.frameRequested || !driver.ready || !driver.selected)
             return
         driver.frameRequested = true
         driver.frameBefore = page.Window.window.frameCounter
@@ -47,8 +45,7 @@ Item {
     }
 
     function finishWhenReady() {
-        if (driver.finished || !driver.ready || !driver.frameSeen
-                || !driver.selected || !driver.scrollDone)
+        if (driver.finished || !driver.ready || !driver.frameSeen || !driver.selected || !driver.scrollDone)
             return
         driver.finished = true
         page.perfFinished()
@@ -110,8 +107,7 @@ Item {
         target: driver.graphPane.view
         property: "contentY"
         from: 0
-        to: Math.max(0, Math.min(3000, driver.graphModel.rowTotal - 40))
-            * Theme.graphRowHeight
+        to: Math.max(0, Math.min(3000, driver.graphModel.rowTotal - 40)) * Theme.graphRowHeight
         duration: 12000
         onStopped: {
             const seconds = (Date.now() - driver.startedAt) / 1000

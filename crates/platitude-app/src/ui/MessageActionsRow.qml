@@ -3,11 +3,9 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The details editor's action row. Nothing until something is actually
-// changed — until then the pane keeps its resting shape and nothing
-// invites a rewrite. While the leaving question stands the row turns
-// into it: the question belongs to the text, so it is asked where the
-// text is.
+// The details editor's action row. Nothing until something is actually changed — until then the pane keeps its resting
+// shape and nothing invites a rewrite. While the leaving question stands the row turns into it: the question belongs to
+// the text, so it is asked where the text is.
 ColumnLayout {
     id: actions
 
@@ -26,17 +24,14 @@ ColumnLayout {
 
     signal revertRequested()
     signal saveRequested()
-    /// The leaving question was answered: true drops the edits and lets
-    /// the move through, false stays on this commit.
+    /// The leaving question was answered: true drops the edits and lets the move through, false stays on this commit.
     signal leaveResolved(bool discard)
 
     visible: actions.dirty
     spacing: Theme.spaceXs
 
-    // The newest commit is amended in place and costs nothing;
-    // an older one is replayed, and everything built on it
-    // comes back as different commits. Only the second case is
-    // worth a line.
+    // The newest commit is amended in place and costs nothing; an older one is replayed, and everything built on it
+    // comes back as different commits. Only the second case is worth a line.
     Label {
         Layout.fillWidth: true
         visible: !actions.asking && actions.replays
@@ -45,8 +40,7 @@ ColumnLayout {
         color: Theme.textSecondary
         font.pixelSize: Theme.fontSm
     }
-    // Said, not asked, like the amend editor's tag: the save
-    // still goes ahead, and this line is the warning it gets.
+    // Said, not asked, like the amend editor's tag: the save still goes ahead, and this line is the warning it gets.
     Label {
         Layout.fillWidth: true
         visible: !actions.asking && actions.published
@@ -84,8 +78,7 @@ ColumnLayout {
             enabled: !actions.busy && actions.canSave
             onActivated: actions.saveRequested()
         }
-        // The two ways out of the question. Staying is the
-        // framed one: it is the answer that loses nothing.
+        // The two ways out of the question. Staying is the framed one: it is the answer that loses nothing.
         HoverToolButton {
             visible: actions.asking
             text: qsTr("Discard edits")

@@ -5,26 +5,22 @@ import platitude.ui
 
 /// The current branch's ahead / behind, drawn rather than typed.
 ///
-/// `↑` and `↓` are East Asian Ambiguous, so the CJK families this app
-/// names hold them in a full-width cell: the space between arrow and
-/// digit was that cell's leftover rather than a token of ours, and each
-/// family drew its own arrow inside it — Windows a thin long one, Ubuntu
-/// a heavy one with a small head (measured 2026-08-11). Same reason the
-/// parent link's `←` is drawn
-/// (デザイン規約 §寸法「印はフォントの字に任せない」).
+/// `↑` and `↓` are East Asian Ambiguous, so the CJK families this app names hold them in a full-width cell: the space
+/// between arrow and digit was that cell's leftover rather than a token of ours, and each family drew its own arrow
+/// inside it — Windows a thin long one, Ubuntu a heavy one with a small head (measured 2026-08-11). Same reason the
+/// parent link's `←` is drawn (デザイン規約 §寸法「印はフォントの字に任せない」).
 RowLayout {
     id: track
     property int ahead: 0
     property int behind: 0
     property color tint: Theme.textSecondary
 
-    /// The only gap that should be visible: the one between the two
-    /// legs. Inside a leg the mark and its number are one thing.
+    /// The only gap that should be visible: the one between the two legs. Inside a leg the mark and its number are one
+    /// thing.
     spacing: Theme.spaceXs
 
-    /// One arrow and the number it counts, cut the same way as the graph
-    /// row's tally (`GraphRowDelegate.Tally`) — no step between them and
-    /// a seat drawn to the ink rather than the box.
+    /// One arrow and the number it counts, cut the same way as the graph row's tally (`GraphRowDelegate.Tally`) — no
+    /// step between them and a seat drawn to the ink rather than the box.
     component Leg: RowLayout {
         id: leg
         required property int turn
@@ -40,13 +36,12 @@ RowLayout {
                 kind: "arrow"
                 rotation: leg.turn
                 tint: leg.hue
-                /// A step under `iconSm`: this mark stands beside a digit
-                /// of its own rather than beside a word (規約 §寸法).
+                /// A step under `iconSm`: this mark stands beside a digit of its own rather than beside a word (規約
+                /// §寸法).
                 width: Theme.iconXs
                 height: Theme.iconXs
-                /// The grid shrinks and the line has to shrink with it,
-                /// or the mark carries more weight than the digit beside
-                /// it (app-ui.md §語の隣に立つ印).
+                /// The grid shrinks and the line has to shrink with it, or the mark carries more weight than the digit
+                /// beside it (app-ui.md §語の隣に立つ印).
                 stroke: Metrics.iconStroke * Theme.iconXs / Theme.iconMd
             }
         }

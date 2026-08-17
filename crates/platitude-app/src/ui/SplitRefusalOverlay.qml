@@ -34,13 +34,11 @@ Item {
     /// Where the badge goes, given the refusing point: out of the scene
     /// and into this sheet, which is what `RefusalBadge.at` is in.
     function pointFor(scene) {
-        return scene === null ? Qt.point(0, 0)
-                              : overlay.mapFromItem(null, scene.x, scene.y)
+        return scene === null ? Qt.point(0, 0) : overlay.mapFromItem(null, scene.x, scene.y)
     }
 
     PointHandler {
-        onPointChanged: overlay.pointMoved(point.scenePosition.x,
-                                           point.scenePosition.y)
+        onPointChanged: overlay.pointMoved(point.scenePosition.x, point.scenePosition.y)
         // Letting go ends the ask, the same way the graph's dividers end
         // theirs — nothing to remember to take back down.
         onActiveChanged: if (!active) overlay.refuses = false

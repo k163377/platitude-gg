@@ -67,8 +67,7 @@ ColumnLayout {
     property string readPath: ""
     function avatarClicked() {
         if (detailsPane.details.authorEmail !== "")
-            detailsPane.avatarEditRequested(detailsPane.details.authorName,
-                                            detailsPane.details.authorEmail)
+            detailsPane.avatarEditRequested(detailsPane.details.authorName, detailsPane.details.authorEmail)
     }
     // ---- the author row's two cards ---------------------------------
     // The row itself (`CommitAuthorRow`) owns the hover state, the
@@ -175,10 +174,8 @@ ColumnLayout {
     property string baseOid: ""
     property string baseSubject: ""
     property string baseBody: ""
-    readonly property bool messageDirty:
-        detailsPane.editable
-        && (msgEditor.subjectText !== detailsPane.baseSubject
-            || msgEditor.bodyText !== detailsPane.baseBody)
+    readonly property bool messageDirty: detailsPane.editable
+        && (msgEditor.subjectText !== detailsPane.baseSubject || msgEditor.bodyText !== detailsPane.baseBody)
 
     /// Adopt the model's message whenever it moves to another commit.
     /// Nothing else can change a message in place — a different message
@@ -208,8 +205,7 @@ ColumnLayout {
     function submitMessage() {
         if (!detailsPane.editable || msgEditor.subjectText.trim() === "")
             return
-        detailsPane.messageSubmitted(detailsPane.details.shaHex,
-                                     msgEditor.subjectText, msgEditor.bodyText)
+        detailsPane.messageSubmitted(detailsPane.details.shaHex, msgEditor.subjectText, msgEditor.bodyText)
     }
     /// Smoke hook: type into the boxes the way a keystroke would —
     /// including not at all when they are read-only.
@@ -240,10 +236,8 @@ ColumnLayout {
     /// of it but the list's own band and the two rows that keep a list a
     /// list. Past this the block scrolls rather than running out of the
     /// pane's bottom (規約 §窓の床).
-    readonly property real blockRoom:
-        Math.max(0, detailsPane.height - paneHeader.height
-                    - (changesBand.visible ? changesBand.height : 0)
-                    - 2 * Theme.rowHeight)
+    readonly property real blockRoom: Math.max(0, detailsPane.height - paneHeader.height
+        - (changesBand.visible ? changesBand.height : 0) - 2 * Theme.rowHeight)
     /// Moves the block by a wheel a box on it could not use — the same
     /// pair the working-tree pane has, and for the same reason: the boxes
     /// cover most of the block, so a box that keeps the wheel at its own
@@ -253,8 +247,7 @@ ColumnLayout {
         // Taken away, not added — see WipPane: content travels against
         // `contentY`, and adding sent the block the other way from the
         // wheel that reached it.
-        blockScroll.contentY =
-            Math.max(0, Math.min(max, blockScroll.contentY - pixels))
+        blockScroll.contentY = Math.max(0, Math.min(max, blockScroll.contentY - pixels))
     }
     // -- smoke hooks and readouts, said under the pane's name because
     // the automation reads the panes (MessageEditor) --
@@ -278,11 +271,8 @@ ColumnLayout {
     /// The same measurement the working-tree pane makes, off this pane's
     /// own list: how much of the bottom edge is left bare for the corner
     /// text the page hangs there (see WipPane.bottomRoom).
-    readonly property real bottomRoom:
-        detailsPane.height - fileList.y
-        - Math.max(0, Math.min(fileList.height,
-                               fileList.originY + fileList.contentHeight
-                               - fileList.contentY))
+    readonly property real bottomRoom: detailsPane.height - fileList.y
+        - Math.max(0, Math.min(fileList.height, fileList.originY + fileList.contentHeight - fileList.contentY))
 
     Connections {
         target: detailsPane.details
@@ -300,8 +290,7 @@ ColumnLayout {
         model: detailsPane.details
         readBucket: ""
         readPath: detailsPane.readPath
-        onLanded: (bucket, path, origPath) =>
-            detailsPane.fileWalked(path, origPath)
+        onLanded: (bucket, path, origPath) => detailsPane.fileWalked(path, origPath)
     }
     /// Automation only: the walk itself, for a run that has to press the
     /// arrows and read where they landed — the same kind of exposure
@@ -318,14 +307,12 @@ ColumnLayout {
     /// window's edge with the glyphs cut in half. `fileList` fills and
     /// carries no margins, so its width *is* that laid-out width.
     /// Headless cannot see a cut glyph — this is the number instead.
-    readonly property real contentOverflow:
-        Math.max(0, fileList.width - detailsPane.width)
+    readonly property real contentOverflow: Math.max(0, fileList.width - detailsPane.width)
     /// The same question the other way up: how far the column runs past
     /// the pane's own bottom once the file list has given everything it
     /// has. Reported for `window-floor`, which is where the answer to
     /// "does this pane need a scroll of its own" comes from.
-    readonly property real contentOverHeight:
-        Math.max(0, detailsPane.implicitHeight - detailsPane.height)
+    readonly property real contentOverHeight: Math.max(0, detailsPane.implicitHeight - detailsPane.height)
 
     spacing: 0
 
@@ -344,8 +331,7 @@ ColumnLayout {
     Flickable {
         id: blockScroll
         Layout.fillWidth: true
-        Layout.preferredHeight: Math.min(blockCol.implicitHeight,
-                                         detailsPane.blockRoom)
+        Layout.preferredHeight: Math.min(blockCol.implicitHeight, detailsPane.blockRoom)
         contentWidth: width
         contentHeight: blockCol.implicitHeight
         clip: true

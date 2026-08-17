@@ -5,11 +5,9 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// Which branch each of the two colours is. The colours are the ones the
-// graph already gives those branches, so this line is the whole of what
-// has to be learned. The names swap over during a rebase and the model
-// has already sorted that out (デザイン規約 §conflict の ours / theirs),
-// so this says whatever it is handed.
+// Which branch each of the two colours is. The colours are the ones the graph already gives those branches, so this
+// line is the whole of what has to be learned. The names swap over during a rebase and the model has already sorted
+// that out (デザイン規約 §conflict の ours / theirs), so this says whatever it is handed.
 RowLayout {
     id: legend
 

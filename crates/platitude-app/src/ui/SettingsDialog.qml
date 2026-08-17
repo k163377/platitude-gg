@@ -13,12 +13,10 @@ AppDialog {
     /// The tab whose repository answers for the merge tool. The setting is
     /// global, but "what would git launch" is read where the person is.
     property var curPage: null
-    readonly property string mergeTool:
-        settingsDialog.curPage ? settingsDialog.curPage.pageWt.mergeTool : ""
+    readonly property string mergeTool: settingsDialog.curPage ? settingsDialog.curPage.pageWt.mergeTool : ""
     /// Names to offer, packed the way the graph's label records are.
     readonly property var toolChoices: {
-        const packed = settingsDialog.curPage
-                       ? settingsDialog.curPage.pageTab.mergeTools : ""
+        const packed = settingsDialog.curPage ? settingsDialog.curPage.pageTab.mergeTools : ""
         return packed === "" ? [] : packed.split(String.fromCharCode(31))
     }
     /// Stops a late answer from overwriting something already typed.
@@ -29,10 +27,8 @@ AppDialog {
     // until grabToImage has finished.
     property bool autoToolLoadingLatched: false
     readonly property bool autoToolsLoadingReady:
-        settingsDialog.opened && settingsDialog.autoToolLoadingLatched
-        && toolField.popup.opened
-    readonly property bool autoToolsSettledReady:
-        settingsDialog.opened && settingsDialog.curPage
+        settingsDialog.opened && settingsDialog.autoToolLoadingLatched && toolField.popup.opened
+    readonly property bool autoToolsSettledReady: settingsDialog.opened && settingsDialog.curPage
         && !settingsDialog.curPage.pageTab.mergeToolsLoading
         && settingsDialog.toolChoices.length > 0 && toolField.popup.opened
 
@@ -62,13 +58,11 @@ AppDialog {
     /// would be answering a question nobody asked.
     property var authorChoices: []
     function readAuthorChoices() {
-        const packed = settingsDialog.curPage
-                       ? settingsDialog.curPage.pageGraph.authorChoices() : ""
+        const packed = settingsDialog.curPage ? settingsDialog.curPage.pageGraph.authorChoices() : ""
         const seen = {}
         const out = []
         if (settingsDialog.prefillEmail !== "") {
-            out.push(settingsDialog.prefillName + " <"
-                     + settingsDialog.prefillEmail + ">")
+            out.push(settingsDialog.prefillName + " <" + settingsDialog.prefillEmail + ">")
             seen[settingsDialog.prefillEmail] = true
         }
         if (packed !== "") {
@@ -105,29 +99,23 @@ AppDialog {
     /// name in a third, so the value has three chances to be knocked out
     /// by something that is not a person — report it at each.
     function reportTool() {
-        if (AppBackend.autoAct === "settings-tools"
-                || AppBackend.autoAct === "settings-tools-loading")
-            AppBackend.report("merge_editor wanted=" + toolField.wanted
-                              + " shown=" + toolField.editText
-                              + " configured=" + settingsDialog.mergeTool
-                              + " settled=" + (settingsDialog.curPage
+        if (AppBackend.autoAct === "settings-tools" || AppBackend.autoAct === "settings-tools-loading")
+            AppBackend.report("merge_editor wanted=" + toolField.wanted + " shown=" + toolField.editText
+                              + " configured=" + settingsDialog.mergeTool + " settled=" + (settingsDialog.curPage
                                   && !settingsDialog.curPage.pageTab.mergeToolsLoading)
-                              + " loading=" + toolField.loading
-                              + " open=" + toolField.popup.opened
+                              + " loading=" + toolField.loading + " open=" + toolField.popup.opened
                               + " choices=" + settingsDialog.toolChoices.length)
     }
     onToolChoicesChanged: settingsDialog.reportTool()
 
     onOpened: {
-        fetchField.text = AppBackend.autoFetchMinutes > 0
-                          ? String(AppBackend.autoFetchMinutes) : ""
+        fetchField.text = AppBackend.autoFetchMinutes > 0 ? String(AppBackend.autoFetchMinutes) : ""
         toolField.wanted = settingsDialog.mergeTool
         settingsDialog.toolTouched = false
         settingsDialog.autoToolLoadingLatched = false
         // Headless has no pointer to put on a row, and the lit row is
         // what the dim/bright pair is photographed by.
-        settingsDialog.pointedAtRow =
-            AppBackend.autoAct === "avatar-row-lit" ? 0 : -1
+        settingsDialog.pointedAtRow = AppBackend.autoAct === "avatar-row-lit" ? 0 : -1
         settingsDialog.readAuthorChoices()
         if (settingsDialog.curPage) {
             // The status refresh only names the configured tool where
@@ -135,18 +123,15 @@ AppDialog {
             // a separate, far slower read — hence the turning indicator.
             settingsDialog.curPage.pageTab.askMergeTool()
             settingsDialog.curPage.pageTab.askMergeTools()
-            if (AppBackend.autoAct === "settings-tools-loading"
-                    && settingsDialog.curPage.pageTab.mergeToolsLoading)
+            if (AppBackend.autoAct === "settings-tools-loading" && settingsDialog.curPage.pageTab.mergeToolsLoading)
                 settingsDialog.autoToolLoadingLatched = true
         }
-        if (AppBackend.autoAct === "settings-tools"
-                || AppBackend.autoAct === "settings-tools-loading")
+        if (AppBackend.autoAct === "settings-tools" || AppBackend.autoAct === "settings-tools-loading")
             toolField.popup.open()
         // Opened from an avatar, the first thing left to do is name the
         // picture, so the focus goes there rather than to the top field.
         if (settingsDialog.prefillEmail !== "") {
-            const who = settingsDialog.prefillName + " <"
-                        + settingsDialog.prefillEmail + ">"
+            const who = settingsDialog.prefillName + " <" + settingsDialog.prefillEmail + ">"
             avatarWho.wanted = who
             avatarWho.editText = who
             chooseAvatar.forceActiveFocus()
@@ -173,8 +158,7 @@ AppDialog {
     Connections {
         target: settingsDialog.curPage ? settingsDialog.curPage.pageTab : null
         function onMergeToolsLoadingChanged() {
-            if (AppBackend.autoAct === "settings-tools-loading"
-                    && settingsDialog.curPage.pageTab.mergeToolsLoading)
+            if (AppBackend.autoAct === "settings-tools-loading" && settingsDialog.curPage.pageTab.mergeToolsLoading)
                 settingsDialog.autoToolLoadingLatched = true
         }
     }
@@ -186,8 +170,7 @@ AppDialog {
     // the truth about half of this card; the fields write as they are
     // finished with instead, and the one button left only dismisses it.
     function applyFields() {
-        AppBackend.setAutoFetchMinutes(fetchField.text === "" ? 0
-                                                              : Number(fetchField.text))
+        AppBackend.setAutoFetchMinutes(fetchField.text === "" ? 0 : Number(fetchField.text))
         if (settingsDialog.toolTouched && settingsDialog.curPage)
             settingsDialog.curPage.pageTab.setMergeTool(toolField.wanted)
     }
@@ -248,8 +231,7 @@ AppDialog {
                     // The popup is opened by the dialog's actual `opened`
                     // edge above. Loading stays latched only for the
                     // automation verb that deliberately photographs it.
-                    loading: settingsDialog.autoToolLoadingLatched
-                             || (settingsDialog.curPage
+                    loading: settingsDialog.autoToolLoadingLatched || (settingsDialog.curPage
                                  && settingsDialog.curPage.pageTab.mergeToolsLoading)
                     model: settingsDialog.toolChoices
                     onWantedChanged: settingsDialog.toolTouched = true
@@ -297,8 +279,7 @@ AppDialog {
                     /// focus (the hold's other hand — デザイン規約 §長押し,
                     /// and the row it is about is just as settled), or
                     /// headless having put it there for a shot.
-                    readonly property bool lit:
-                        rowHover.hovered || unsetButton.activeFocus
+                    readonly property bool lit: rowHover.hovered || unsetButton.activeFocus
                         || settingsDialog.pointedAtRow === index
                     // A handler, not a MouseArea: a MouseArea is an Item,
                     // so a layout gives it a seat of its own and every
@@ -356,16 +337,13 @@ AppDialog {
                         id: unsetButton
                         text: qsTr("Remove")
                         font.pixelSize: Theme.fontSm
-                        tone: avatarRow.lit ? Theme.danger
-                                            : Theme.textSecondary
-                        frameColor: avatarRow.lit ? Theme.dangerDim
-                                                  : Theme.borderSubtle
+                        tone: avatarRow.lit ? Theme.danger : Theme.textSecondary
+                        frameColor: avatarRow.lit ? Theme.dangerDim : Theme.borderSubtle
                         holdMs: Metrics.holdMs
                         holdTone: Theme.danger
                         onHeld: AppBackend.removeAvatar(modelData.email)
                         Timer {
-                            running: settingsDialog.opened
-                                     && AppBackend.autoAct === "avatar-remove"
+                            running: settingsDialog.opened && AppBackend.autoAct === "avatar-remove"
                                      && index === 0
                             interval: 500
                             onTriggered: unsetButton.completeHold()
@@ -382,8 +360,7 @@ AppDialog {
                     placeholder: qsTr("name or email")
                     model: settingsDialog.authorChoices
                     Timer {
-                        running: settingsDialog.opened
-                                 && AppBackend.autoAct === "avatar-combo"
+                        running: settingsDialog.opened && AppBackend.autoAct === "avatar-combo"
                         interval: 400
                         onTriggered: avatarWho.popup.open()
                     }
@@ -404,8 +381,7 @@ AppDialog {
                     // than going bare: bare is for the answer standing
                     // beside a framed one, read as the pair it is in, and
                     // this one stands in a form row next to a combo.
-                    frameColor: settingsDialog.prefillEmail !== "" && enabled
-                                ? Theme.accent : Theme.borderDefault
+                    frameColor: settingsDialog.prefillEmail !== "" && enabled ? Theme.accent : Theme.borderDefault
                     activeFocusOnTab: true
                     enabled: settingsDialog.chosenEmail !== ""
                     onActivated: avatarPicker.open()
@@ -439,8 +415,7 @@ AppDialog {
             // by that same section, so `avatar::EXTENSIONS` cannot grow one
             // this line does not know about without the rules moving first.
             nameFilters: [qsTr("PNG and JPEG (%1)").arg(AppBackend.avatarPatterns)]
-            onAccepted: AppBackend.assignAvatar(settingsDialog.chosenEmail,
-                                                settingsDialog.chosenName,
+            onAccepted: AppBackend.assignAvatar(settingsDialog.chosenEmail, settingsDialog.chosenName,
                                                 selectedFile.toString())
         }
         Label {

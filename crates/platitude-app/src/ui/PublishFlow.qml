@@ -4,15 +4,13 @@ import QtQuick
 import platitude
 import platitude.ui
 
-// Everything between the toolbar's push button and git's answer: what the
-// branch can do with its remote, the question the first push has to ask,
-// and what a refusal leaves behind (デザイン規約 §リモートへ送る).
+// Everything between the toolbar's push button and git's answer: what the branch can do with its remote, the question
+// the first push has to ask, and what a refusal leaves behind (デザイン規約 §リモートへ送る).
 //
-// The page keeps the toolbar's names — the band reads them through the
-// active page — and hands the answers to git's writes back here.
+// The page keeps the toolbar's names — the band reads them through the active page — and hands the answers to git's
+// writes back here.
 //
-// Sized to the page: the add-remote dialog centres itself in the item it
-// was declared under.
+// Sized to the page: the add-remote dialog centres itself in the item it was declared under.
 Item {
     id: publishFlow
 
@@ -20,12 +18,12 @@ Item {
     required property WorkTreeModel workTree
     /// Where a remote-tracking branch's commit is read from.
     required property NavSectionModel remotesModel
-    /// The one bar this question stands in, and whose pill it dresses
-    /// while it stands (`RepoPage.startRowAsk` raises it).
+    /// The one bar this question stands in, and whose pill it dresses while it stands (`RepoPage.startRowAsk` raises
+    /// it).
     required property GraphPane graphPane
 
-    /// Raise the standing question with this form in it. The page owns the
-    /// bar — every other question in the window goes up the same way.
+    /// Raise the standing question with this form in it. The page owns the bar — every other question in the window
+    /// goes up the same way.
     signal askRequested(string label, var run, var form, string code)
 
     /// The add-remote dialog, which the automation types into.
@@ -35,11 +33,9 @@ Item {
 
     // ---- push ------------------------------------------------------
     readonly property string pushTargetLabel:
-        publishFlow.workTree.upstream !== ""
-        ? publishFlow.workTree.upstream
+        publishFlow.workTree.upstream !== "" ? publishFlow.workTree.upstream
         : publishFlow.repoTab.defaultRemote + "/" + publishFlow.workTree.branch
-    /// What the branch can do with its remote, worked out before anything
-    /// is sent (デザイン規約 §リモートへ送る):
+    /// What the branch can do with its remote, worked out before anything is sent (デザイン規約 §リモートへ送る):
     ///
     /// - `closed`   — there is no branch here to send
     /// - `publish`  — the branch has never been sent, so where it goes is
@@ -51,13 +47,12 @@ Item {
     /// - `behind`   — the remote moved on; we have nothing to add
     /// - `diverged` — both moved; only an overwrite can land
     ///
-    /// The counts behind this come from the last fetch, so they prove the
-    /// negative only: a push may still be refused when they say it fits.
+    /// The counts behind this come from the last fetch, so they prove the negative only: a push may still be refused
+    /// when they say it fits.
     readonly property string pushState:
         publishFlow.repoTab.state !== "open" || publishFlow.workTree.detached
         || publishFlow.workTree.branch === "" ? "closed"
-        : publishFlow.workTree.upstream === ""
-          || !publishFlow.workTree.upstreamTracked ? "publish"
+        : publishFlow.workTree.upstream === "" || !publishFlow.workTree.upstreamTracked ? "publish"
         : publishFlow.workTree.behind > 0
           ? (publishFlow.workTree.ahead > 0 ? "diverged" : "behind")
         : publishFlow.workTree.ahead > 0 ? "ready" : "clean"
@@ -67,21 +62,16 @@ Item {
     readonly property bool canForcePush: (publishFlow.pushState === "ready"
                                           || publishFlow.pushState === "diverged")
                                          && publishFlow.repoTab.busyCount === 0
-    /// The branch a push of this button's is out for, from the send until
-    /// the answer. What comes back names the operation and not what it was
-    /// about, and `push` is also what a remote branch's rename and delete
-    /// report as — so this says both which branch the answer belongs to and
-    /// whether it belongs to this button at all.
+    /// The branch a push of this button's is out for, from the send until the answer. What comes back names the
+    /// operation and not what it was about, and `push` is also what a remote branch's rename and delete report as — so
+    /// this says both which branch the answer belongs to and whether it belongs to this button at all.
     property string pushSentBranch: ""
-    /// The branch whose last push git turned down, and what it said.
-    /// Remembered per branch: most refusals are about that branch's
-    /// standing with its remote and say nothing about the one beside it
-    /// (デザイン規約 §リモートへ送る).
+    /// The branch whose last push git turned down, and what it said. Remembered per branch: most refusals are about
+    /// that branch's standing with its remote and say nothing about the one beside it (デザイン規約 §リモートへ送る).
     property string pushFailBranch: ""
     property string pushFailReason: ""
     readonly property bool pushFailed:
-        publishFlow.pushFailBranch !== ""
-        && publishFlow.pushFailBranch === publishFlow.workTree.branch
+        publishFlow.pushFailBranch !== "" && publishFlow.pushFailBranch === publishFlow.workTree.branch
     function pushNow() {
         if (publishFlow.pushState === "publish") {
             publishFlow.startPublishAsk()
@@ -90,10 +80,9 @@ Item {
         publishFlow.pushSentBranch = publishFlow.workTree.branch
         publishFlow.repoTab.pushCurrent("", "")
     }
-    /// The lease is pinned to the commit this window has on screen rather
-    /// than left to compare against the tracking ref: a background fetch
-    /// must not turn this into a plain force. A remote that moved since is
-    /// refused, and the refusal is answered by a fetch (core).
+    /// The lease is pinned to the commit this window has on screen rather than left to compare against the tracking
+    /// ref: a background fetch must not turn this into a plain force. A remote that moved since is refused, and the
+    /// refusal is answered by a fetch (core).
     function forcePush() {
         publishFlow.pushSentBranch = publishFlow.workTree.branch
         publishFlow.repoTab.pushCurrent("lease", publishFlow.upstreamOid())
@@ -104,10 +93,9 @@ Item {
                ? publishFlow.remotesModel.oidOfName(publishFlow.workTree.upstream)
                : ""
     }
-    /// A push this button sent has come back. Nothing in the answer says
-    /// which branch it was for, and a remote branch's rename and delete
-    /// report under the same name — the slot filled at the send is what
-    /// makes this the toolbar button's news (デザイン規約 §リモートへ送る).
+    /// A push this button sent has come back. Nothing in the answer says which branch it was for, and a remote branch's
+    /// rename and delete report under the same name — the slot filled at the send is what makes this the toolbar
+    /// button's news (デザイン規約 §リモートへ送る).
     function noteWriteAnswer(op, error) {
         if (op !== "push" || publishFlow.pushSentBranch === "")
             return
@@ -117,29 +105,26 @@ Item {
             publishFlow.pushFailBranch = sent
             publishFlow.pushFailReason = error
         } else if (publishFlow.pushFailBranch === sent) {
-            // Landed. The button that went through must not go on saying
-            // that the go before it did not.
+            // Landed. The button that went through must not go on saying that the go before it did not.
             publishFlow.pushFailBranch = ""
             publishFlow.pushFailReason = ""
         }
     }
 
     // ---- the first push: where does this branch go? -----------------
-    // (デザイン規約 §はじめてリモートへ送る). Three things raise it —
-    // this button, a graph row, a REMOTES row — all through the one bar.
+    // (デザイン規約 §はじめてリモートへ送る). Three things raise it — this button, a graph row, a REMOTES row — all through the one bar.
     property bool publishAsking: false
     /// The remote the answer picks.
     property string publishRemote: ""
-    /// What the branch is to be called over there — its own name unless
-    /// the answer says otherwise.
+    /// What the branch is to be called over there — its own name unless the answer says otherwise.
     property string publishBranch: ""
 
     readonly property var publishRemotes: {
         const packed = publishFlow.repoTab.remoteNames
         return packed === "" ? [] : packed.split(String.fromCharCode(31))
     }
-    /// The chooser's last row: opens the add-remote dialog. The question
-    /// stays standing behind it and picks the new remote up when it lands.
+    /// The chooser's last row: opens the add-remote dialog. The question stays standing behind it and picks the new
+    /// remote up when it lands.
     readonly property string publishAddChoice: qsTr("Add remote…")
     readonly property var publishChoices:
         publishFlow.publishRemotes.concat([publishFlow.publishAddChoice])
@@ -152,56 +137,43 @@ Item {
         publishFlow.refreshPublishCheck()
     }
 
-    readonly property string publishTarget:
-        publishFlow.publishRemote + "/" + publishFlow.publishBranch
-    readonly property bool publishFilled:
-        publishFlow.publishBranch !== "" && publishFlow.publishRemote !== ""
+    readonly property string publishTarget: publishFlow.publishRemote + "/" + publishFlow.publishBranch
+    readonly property bool publishFilled: publishFlow.publishBranch !== "" && publishFlow.publishRemote !== ""
     /// The remote has answered for exactly what is typed now.
     readonly property bool publishChecked:
         publishFlow.repoTab.remoteBranchAsked === publishFlow.publishRemote
         + String.fromCharCode(31) + publishFlow.publishBranch
-    /// …and what that answer says a push under this name would meet
-    /// (`platitude_core::remote::RemoteBranchState`). Empty until the
-    /// answer for exactly this name is in.
+    /// …and what that answer says a push under this name would meet (`platitude_core::remote::RemoteBranchState`).
+    /// Empty until the answer for exactly this name is in.
     readonly property string publishState:
         publishFlow.publishChecked ? publishFlow.repoTab.remoteBranchState : ""
-    /// The far side cannot be settled from this end. Sending stays a
-    /// click — a plain push can only fast-forward, so nothing over there
-    /// can be lost by pressing — but the bar wears the frame and the mark
-    /// (デザイン規約 §リモートへ送る).
+    /// The far side cannot be settled from this end. Sending stays a click — a plain push can only fast-forward, so
+    /// nothing over there can be lost by pressing — but the bar wears the frame and the mark (デザイン規約 §リモートへ送る).
     readonly property bool publishUnsure:
-        publishFlow.publishState === "unknown"
-        || publishFlow.publishState === "unreachable"
-    /// The name is taken by commits this history does not have: a plain
-    /// push cannot land at all (実測), only an overwrite can, so the pill
-    /// becomes the diverged branch's `push -f` — held, warning-coloured
-    /// (デザイン規約 §リモートへ送る).
+        publishFlow.publishState === "unknown" || publishFlow.publishState === "unreachable"
+    /// The name is taken by commits this history does not have: a plain push cannot land at all (実測), only an overwrite
+    /// can, so the pill becomes the diverged branch's `push -f` — held, warning-coloured (デザイン規約 §リモートへ送る).
     readonly property bool publishRefused: publishFlow.publishState === "refused"
-    /// The commit the question showed on the far side, which is what an
-    /// overwrite leases against: a remote that moved since is refused by
-    /// git rather than flattened (§相手の履歴を置き換える).
+    /// The commit the question showed on the far side, which is what an overwrite leases against: a remote that moved
+    /// since is refused by git rather than flattened (§相手の履歴を置き換える).
     readonly property string publishLease:
         publishFlow.publishRefused ? publishFlow.repoTab.remoteBranchTip : ""
 
-    /// Asked once the typing settles, not per keystroke: the check is a
-    /// network round trip.
+    /// Asked once the typing settles, not per keystroke: the check is a network round trip.
     Timer {
         id: publishCheckTimer
         interval: 350
         onTriggered: {
-            if (publishFlow.publishAsking && publishFlow.publishRemote !== ""
-                    && publishFlow.publishBranch !== "")
-                publishFlow.repoTab.checkRemoteBranch(publishFlow.publishRemote,
-                                                      publishFlow.publishBranch)
+            if (publishFlow.publishAsking && publishFlow.publishRemote !== "" && publishFlow.publishBranch !== "")
+                publishFlow.repoTab.checkRemoteBranch(publishFlow.publishRemote, publishFlow.publishBranch)
         }
     }
     function refreshPublishCheck() {
         publishCheckTimer.restart()
     }
 
-    // The bar's own state follows what has been typed into it, which is
-    // why these are bindings rather than arguments: the question changes
-    // what it is asking while it stands.
+    // The bar's own state follows what has been typed into it, which is why these are bindings rather than arguments:
+    // the question changes what it is asking while it stands.
     Binding {
         target: publishFlow.graphPane
         property: "askAnswerable"
@@ -274,35 +246,30 @@ Item {
     function startPublishAsk() {
         publishFlow.publishRemote = publishFlow.repoTab.defaultRemote
         publishFlow.publishBranch = publishFlow.workTree.branch
-        // `push` goes untranslated — it is the command's spelling, not a
-        // word for it.
+        // `push` goes untranslated — it is the command's spelling, not a word for it.
         publishFlow.askRequested(
-            qsTr("%1 where?").arg(publishFlow.workTree.branch),
-            publishFlow.answerPublish, publishForm, "push")
-        // After the bar is up, never before: raising it resets the
-        // properties the `publishAsking` bindings above own, and a binding
-        // whose value has not changed does not push back.
+            qsTr("%1 where?").arg(publishFlow.workTree.branch), publishFlow.answerPublish, publishForm, "push")
+        // After the bar is up, never before: raising it resets the properties the `publishAsking` bindings above own,
+        // and a binding whose value has not changed does not push back.
         publishFlow.publishAsking = true
         publishFlow.refreshPublishCheck()
-        // No remote at all: the chooser holds nothing but its last row,
-        // so the dialog that row opens comes up unasked
+        // No remote at all: the chooser holds nothing but its last row, so the dialog that row opens comes up unasked
         // (デザイン規約 §はじめてリモートへ送る).
         if (publishFlow.publishRemotes.length === 0)
             publishFlow.choosePublishRemote(publishFlow.publishRemotes.length)
     }
-    /// Typing into the name box. The automation writes through here too,
-    /// since no injected key can reach the box on the offscreen platform.
+    /// Typing into the name box. The automation writes through here too, since no injected key can reach the box on the
+    /// offscreen platform.
     function setPublishBranch(name) {
         publishFlow.publishBranch = name
         publishFlow.refreshPublishCheck()
     }
-    /// Automation: the chooser's last row, and what gets typed into the
-    /// dialog it opens (`<name>|<url>`, either half may be empty).
+    /// Automation: the chooser's last row, and what gets typed into the dialog it opens (`<name>|<url>`, either half
+    /// may be empty).
     function startPublishAddRemote(spec) {
         const parts = spec === "" ? [] : spec.split("|")
         publishFlow.choosePublishRemote(publishFlow.publishRemotes.length)
-        remoteDialog.setFields(parts.length > 0 ? parts[0] : "",
-                               parts.length > 1 ? parts[1] : "")
+        remoteDialog.setFields(parts.length > 0 ? parts[0] : "", parts.length > 1 ? parts[1] : "")
     }
     /// Automation: the chooser's list, which no injected click can reach.
     function openPublishRemotes() {
@@ -312,8 +279,7 @@ Item {
         form.remotePick.popup.open()
         return form.remotePick.popup.visible
     }
-    /// Automation reads the popup itself, rather than assuming that the
-    /// call which requested it also put it on screen.
+    /// Automation reads the popup itself, rather than assuming that the call which requested it also put it on screen.
     function publishRemotesOpen() {
         const form = publishFlow.graphPane.askForm
         return Boolean(form && form.remotePick
@@ -321,8 +287,7 @@ Item {
     }
 
     function answerPublish() {
-        // The same slot a plain push fills: a refused first push is still
-        // this button's news (デザイン規約 §リモートへ送る).
+        // The same slot a plain push fills: a refused first push is still this button's news (デザイン規約 §リモートへ送る).
         publishFlow.pushSentBranch = publishFlow.workTree.branch
         publishFlow.repoTab.publishCurrent(publishFlow.publishRemote,
                                            publishFlow.publishBranch,

@@ -5,24 +5,20 @@ import platitude.ui
 
 // Where a remote is written down: a name and a URL.
 //
-// A window of its own rather than the standing question's bar, because
-// this is not a question about what is on screen — it is repository
-// configuration, the same kind of thing as identity, which
-// デザイン規約 §可否・警告の出し場所 keeps in a popup. Putting it in the
-// bar also put a remote's own name and URL on a second row while the
-// branch name stayed on the first, which grouped them backwards.
+// A window of its own rather than the standing question's bar, because this is not a question about what is on screen —
+// it is repository configuration, the same kind of thing as identity, which デザイン規約 §可否・警告の出し場所 keeps in a popup.
+// Putting it in the bar also put a remote's own name and URL on a second row while the branch name stayed on the first,
+// which grouped them backwards.
 //
-// The same form corrects a URL. Adding one and fixing one differ by which
-// half is filled in already, not by what has to be typed.
+// The same form corrects a URL. Adding one and fixing one differ by which half is filled in already, not by what has to
+// be typed.
 AppDialog {
     id: remoteDialog
 
     /// The remote being corrected; empty means one is being made.
     property string editing: ""
-    /// Names this repository already has. git refuses a duplicate itself
-    /// (`remote <name> already exists`, exit 3), but that refusal would
-    /// arrive after the dialog had closed, with nothing on screen left for
-    /// it to be about.
+    /// Names this repository already has. git refuses a duplicate itself (`remote <name> already exists`, exit 3), but
+    /// that refusal would arrive after the dialog had closed, with nothing on screen left for it to be about.
     property var taken: []
 
     readonly property string wantedName: nameField.text.trim()
@@ -31,34 +27,27 @@ AppDialog {
         remoteDialog.editing === "" && remoteDialog.wantedName !== ""
         && remoteDialog.taken.indexOf(remoteDialog.wantedName) >= 0
 
-    /// The remote was written down. The URL is not judged here: `git
-    /// remote add` contacts nothing, so only a push can find it wrong.
+    /// The remote was written down. The URL is not judged here: `git remote add` contacts nothing, so only a push can
+    /// find it wrong.
     signal submitted(string name, string url)
 
     function start(name, url, takenNames) {
         remoteDialog.editing = name
         remoteDialog.taken = takenNames
-        // `origin` is only offered while the repository has no remote at
-        // all: it is what a clone would have called its first one, and
-        // nothing standing there to clash with. Once anything exists the
-        // next name is not ours to guess — a prefill could only repeat a
-        // name that is taken or invent one. The word carries no standing
-        // of its own either way: whatever treats `origin` specially goes
-        // by the name a remote actually has, so editing the prefill away
-        // simply means no remote is called that.
-        nameField.text = name !== "" ? name
-                       : takenNames.length === 0 ? "origin" : ""
+        // `origin` is only offered while the repository has no remote at all: it is what a clone would have called its
+        // first one, and nothing standing there to clash with. Once anything exists the next name is not ours to guess
+        // — a prefill could only repeat a name that is taken or invent one. The word carries no standing of its own
+        // either way: whatever treats `origin` specially goes by the name a remote actually has, so editing the prefill
+        // away simply means no remote is called that.
+        nameField.text = name !== "" ? name : takenNames.length === 0 ? "origin" : ""
         urlField.text = url
         remoteDialog.open()
     }
-    // The URL is what there is to type once the name is settled — kept on
-    // a correction, prefilled on a first remote. Only a name this dialog
-    // could not guess puts the caret on the name instead.
-    onOpened: (remoteDialog.editing === "" && nameField.text === ""
-               ? nameField : urlField).forceActiveFocus()
+    // The URL is what there is to type once the name is settled — kept on a correction, prefilled on a first remote.
+    // Only a name this dialog could not guess puts the caret on the name instead.
+    onOpened: (remoteDialog.editing === "" && nameField.text === "" ? nameField : urlField).forceActiveFocus()
 
-    /// Automation: typing, which no injected key reaches offscreen. An
-    /// empty half leaves what `start` put there.
+    /// Automation: typing, which no injected key reaches offscreen. An empty half leaves what `start` put there.
     function setFields(name, url) {
         if (name !== "")
             nameField.text = name
@@ -69,8 +58,7 @@ AppDialog {
     function submit() {
         if (!actions.acceptEnabled)
             return
-        const name = remoteDialog.editing !== "" ? remoteDialog.editing
-                                                 : remoteDialog.wantedName
+        const name = remoteDialog.editing !== "" ? remoteDialog.editing : remoteDialog.wantedName
         const url = remoteDialog.wantedUrl
         remoteDialog.close()
         remoteDialog.submitted(name, url)
@@ -80,9 +68,7 @@ AppDialog {
         spacing: Theme.spaceLg
 
         Label {
-            text: remoteDialog.editing === ""
-                  ? qsTr("Add remote")
-                  : qsTr("Where %1 is").arg(remoteDialog.editing)
+            text: remoteDialog.editing === "" ? qsTr("Add remote") : qsTr("Where %1 is").arg(remoteDialog.editing)
             font.pixelSize: Theme.fontXl
             font.weight: Font.DemiBold
         }
@@ -90,32 +76,26 @@ AppDialog {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             color: Theme.textSecondary
-            // The one thing the fields cannot ask for: where the URL comes
-            // from. Not "make one first" — the definite article already
-            // puts the repository over there, and nothing here could make
-            // it anyway. That the URL is untouched until the push is left
-            // unsaid; the push says it, at the moment it can be acted on.
-            // The same line has to fit a correction, where the repository
-            // plainly exists.
+            // The one thing the fields cannot ask for: where the URL comes from. Not "make one first" — the definite
+            // article already puts the repository over there, and nothing here could make it anyway. That the URL is
+            // untouched until the push is left unsaid; the push says it, at the moment it can be acted on. The same
+            // line has to fit a correction, where the repository plainly exists.
             text: qsTr("Paste the URL of the repository on your host.")
         }
 
-        // A remote being corrected keeps its name: renaming one belongs to
-        // the left menu, and doing both here would make this two dialogs.
+        // A remote being corrected keeps its name: renaming one belongs to the left menu, and doing both here would
+        // make this two dialogs.
         LabeledField {
             visible: remoteDialog.editing === ""
             caption: qsTr("Name")
             FormField {
                 id: nameField
                 Layout.fillWidth: true
-                // Only while nothing is called that. The box is prefilled
-                // whenever the repository has no remote at all, so this
-                // shows in exactly the case a name already exists — and a
-                // greyed suggestion the Add button would refuse is worse
-                // than no suggestion. No second name is invented in its
-                // place: which one fits is the person's to know.
-                placeholderText: remoteDialog.taken.indexOf("origin") >= 0
-                                 ? "" : "origin"
+                // Only while nothing is called that. The box is prefilled whenever the repository has no remote at all,
+                // so this shows in exactly the case a name already exists — and a greyed suggestion the Add button
+                // would refuse is worse than no suggestion. No second name is invented in its place: which one fits is
+                // the person's to know.
+                placeholderText: remoteDialog.taken.indexOf("origin") >= 0 ? "" : "origin"
                 onAccepted: remoteDialog.submit()
             }
             Label {

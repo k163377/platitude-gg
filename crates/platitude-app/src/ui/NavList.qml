@@ -11,33 +11,27 @@ AppListView {
     property var sectionModel
     property bool expanded: true
     property string kindHint: "branch"
-    /// This list holds whatever height the panel it is in has over its
-    /// rows, instead of staying content-sized. Only the one section the
-    /// folded rail opens beside itself wants that — it is alone in its
-    /// panel, so the spare height has nowhere else to go. In the sidebar
-    /// proper the ground at the foot of the column takes it, and no
-    /// section stretches (SidebarPane).
+    /// This list holds whatever height the panel it is in has over its rows, instead of staying content-sized. Only the
+    /// one section the folded rail opens beside itself wants that — it is alone in its panel, so the spare height has
+    /// nowhere else to go. In the sidebar proper the ground at the foot of the column takes it, and no section
+    /// stretches (SidebarPane).
     property bool stretch: false
-    /// The current branch's ahead / behind (branches section only). Two
-    /// numbers and whether it has an upstream at all: the arrows are
-    /// drawn by the row, not spelled here.
+    /// The current branch's ahead / behind (branches section only). Two numbers and whether it has an upstream at all:
+    /// the arrows are drawn by the row, not spelled here.
     property bool headTracks: false
     property int headAhead: 0
     property int headBehind: 0
-    /// The sidebar, which owns the row gestures: which row was clicked
-    /// last and which is being typed into outlive both the delegates and
-    /// this list, and only one row at a time is either, whichever section
-    /// it sits in. A list with none (the WIP file list) simply has no
-    /// gestures — every call below is skipped.
+    /// The sidebar, which owns the row gestures: which row was clicked last and which is being typed into outlive both
+    /// the delegates and this list, and only one row at a time is either, whichever section it sits in. A list with
+    /// none (the WIP file list) simply has no gestures — every call below is skipped.
     property var gestures: null
 
     signal refActivated(string oidHex)
     signal fileActivated(string bucket, string path, string origPath)
     signal refMenuRequested(string kind, string name, string full, string oidHex)
 
-    /// What identifies a row across sections and rebuilds. A colon cannot
-    /// appear in a ref name, and the section prefix keeps two sections'
-    /// equal names apart.
+    /// What identifies a row across sections and rebuilds. A colon cannot appear in a ref name, and the section prefix
+    /// keeps two sections' equal names apart.
     function keyOf(full, name) {
         return navList.kindHint + ":" + (full !== "" ? full : name)
     }
@@ -45,9 +39,8 @@ AppListView {
     visible: expanded
     Layout.fillWidth: true
     Layout.fillHeight: expanded
-    // A section closes on a hairline of ground — just enough to keep its
-    // last row off the next header band. Anything thicker reads as a
-    // blank row belonging to the section.
+    // A section closes on a hairline of ground — just enough to keep its last row off the next header band. Anything
+    // thicker reads as a blank row belonging to the section.
     Layout.maximumHeight: !expanded ? 0
                           : stretch ? Number.POSITIVE_INFINITY
                           : count * Theme.rowHeight + Theme.borderWidth
@@ -69,24 +62,21 @@ AppListView {
         onRefClicked: oidHex => navList.refActivated(oidHex)
         onFileClicked: (bucket, path, origPath) => navList.fileActivated(bucket, path, origPath)
         onFolderClicked: key => navList.sectionModel.toggleFolder(key)
-        onRefMenuRequested: (name, full, oidHex) =>
-            navList.refMenuRequested(navList.kindHint, name, full, oidHex)
+        onRefMenuRequested: (name, full, oidHex) => navList.refMenuRequested(navList.kindHint, name, full, oidHex)
         onRowClicked: {
             if (navList.gestures)
                 navList.gestures.noteClick(row.rowKey)
         }
         onActivateRequested: {
             if (navList.gestures)
-                navList.gestures.activateRow(navList.kindHint, row.name,
-                                             row.full, row.oid_hex)
+                navList.gestures.activateRow(navList.kindHint, row.name, row.full, row.oid_hex)
         }
         onRenameRequested: {
             if (!navList.gestures)
                 return
-            // A stash is named by its message and known to git by its
-            // selector; everything else answers to the name it shows.
-            // A remote branch is typed without the remote it is on —
-            // `origin/` is where the branch lives, not part of its name.
+            // A stash is named by its message and known to git by its selector; everything else answers to the name it
+            // shows. A remote branch is typed without the remote it is on — `origin/` is where the branch lives, not
+            // part of its name.
             const id = row.full !== "" ? row.full : row.name
             navList.gestures.startEdit(
                 navList.kindHint, row.rowKey, "rename", id, row.oid_hex,

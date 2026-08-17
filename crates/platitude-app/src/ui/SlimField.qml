@@ -18,9 +18,7 @@ TextField {
     background: Rectangle {
         color: Theme.bgBase
         radius: Theme.radiusSm
-        border.color: slim.refused ? Theme.warning
-                      : slim.activeFocus ? Theme.borderFocus
-                                         : Theme.borderDefault
+        border.color: slim.refused ? Theme.warning : slim.activeFocus ? Theme.borderFocus : Theme.borderDefault
         border.width: Theme.borderWidth
     }
 }

@@ -5,31 +5,23 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The word, then what the file weighs. Both marks are drawn for
-// the same reason: as glyphs they sit in a full-width cell whose
-// leftover became the spacing, and each family drew its own
-// arrow (規約 §寸法「印はフォントの字に任せない」). The one
-// wording without a size keeps its dash — that is a sentence,
-// not a mark, and it measured the same on both OSes.
+// The word, then what the file weighs. Both marks are drawn for the same reason: as glyphs they sit in a full-width
+// cell whose leftover became the spacing, and each family drew its own arrow (規約 §寸法「印はフォントの字に任せない」). The one wording
+// without a size keeps its dash — that is a sentence, not a mark, and it measured the same on both OSes.
 RowLayout {
     id: binaryLine
 
     required property string oldSize
     required property string newSize
 
-    readonly property bool sized:
-        binaryLine.oldSize !== "" || binaryLine.newSize !== ""
-    readonly property bool bothSides:
-        binaryLine.oldSize !== "" && binaryLine.newSize !== ""
-    readonly property bool removed:
-        binaryLine.newSize === "" && binaryLine.oldSize !== ""
+    readonly property bool sized: binaryLine.oldSize !== "" || binaryLine.newSize !== ""
+    readonly property bool bothSides: binaryLine.oldSize !== "" && binaryLine.newSize !== ""
+    readonly property bool removed: binaryLine.newSize === "" && binaryLine.oldSize !== ""
 
     spacing: Theme.spaceXs
     Label {
-        text: !binaryLine.sized
-              ? qsTr("Binary file — no text diff")
-              : binaryLine.removed ? qsTr("Binary file removed")
-                                   : qsTr("Binary file")
+        text: !binaryLine.sized ? qsTr("Binary file — no text diff")
+              : binaryLine.removed ? qsTr("Binary file removed") : qsTr("Binary file")
         elide: Text.ElideRight
         color: Theme.textMuted
     }
@@ -39,10 +31,8 @@ RowLayout {
     }
     Label {
         visible: binaryLine.sized
-        text: binaryLine.removed
-              ? qsTr("was %1").arg(binaryLine.oldSize)
-              : binaryLine.bothSides ? binaryLine.oldSize
-                                     : binaryLine.newSize
+        text: binaryLine.removed ? qsTr("was %1").arg(binaryLine.oldSize)
+              : binaryLine.bothSides ? binaryLine.oldSize : binaryLine.newSize
         color: Theme.textMuted
     }
     Item {
@@ -65,7 +55,7 @@ RowLayout {
         text: binaryLine.newSize
         color: Theme.textMuted
     }
-    // Someone has to take the slack, or the engine centres what
-    // it cannot fill (FileRowDelegate learned this the hard way).
+    // Someone has to take the slack, or the engine centres what it cannot fill (FileRowDelegate learned this the hard
+    // way).
     Item { Layout.fillWidth: true }
 }

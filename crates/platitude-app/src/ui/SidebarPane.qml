@@ -60,10 +60,8 @@ Rectangle {
     /// to git: a plain push to a name that exists fast-forwards it and
     /// reports success, so somebody else's branch would move instead of
     /// this one being renamed.
-    readonly property bool editTaken: sidebar.editRemote !== ""
-        && sidebar.editText.trim() !== ""
-        && sidebar.remotesModel.oidOfName(
-               sidebar.editRemote + "/" + sidebar.editText.trim()) !== ""
+    readonly property bool editTaken: sidebar.editRemote !== "" && sidebar.editText.trim() !== ""
+        && sidebar.remotesModel.oidOfName(sidebar.editRemote + "/" + sidebar.editText.trim()) !== ""
     /// What is typed cannot be accepted. The rules are git's own, asked of
     /// core (a stash's label is free text, not a ref name).
     readonly property bool editRefused: sidebar.editKey !== ""
@@ -222,8 +220,7 @@ Rectangle {
     /// its end. The current branch's sticky row only changes edges
     /// under scroll, which a headless run cannot produce otherwise.
     function scrollBranchesToEnd() {
-        branchList.contentY = Math.max(
-            0, branchList.contentHeight - branchList.height)
+        branchList.contentY = Math.max(0, branchList.contentHeight - branchList.height)
     }
 
     // The width the list goes back to. Read off the pane as it folds
@@ -319,8 +316,7 @@ Rectangle {
             headAhead: sidebar.workTree.ahead
             headBehind: sidebar.workTree.behind
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
-            onRefMenuRequested: (kind, name, full, oidHex) =>
-                sidebar.refMenuRequested(kind, name, full, oidHex)
+            onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
 
             HeadPinRow {
                 // The list is a Flickable: children declared in one are
@@ -354,8 +350,7 @@ Rectangle {
             gestures: sidebar
             Layout.verticalStretchFactor: sidebar.sectionPull
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
-            onRefMenuRequested: (kind, name, full, oidHex) =>
-                sidebar.refMenuRequested(kind, name, full, oidHex)
+            onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
         }
 
         // git worktrees (checkouts); the changed-file lists live in the
@@ -395,8 +390,7 @@ Rectangle {
             // A stash is a commit: clicking shows its stashed changes
             // in the details pane.
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
-            onRefMenuRequested: (kind, name, full, oidHex) =>
-                sidebar.refMenuRequested(kind, name, full, oidHex)
+            onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
         }
 
         NavHeader {
@@ -418,8 +412,7 @@ Rectangle {
             gestures: sidebar
             Layout.verticalStretchFactor: sidebar.sectionPull
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
-            onRefMenuRequested: (kind, name, full, oidHex) =>
-                sidebar.refMenuRequested(kind, name, full, oidHex)
+            onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
         }
 
         // The ground under the last section. Nothing stands on it — it
@@ -485,7 +478,6 @@ Rectangle {
         listW: sidebar.openWidth
         pinned: sidebar.menuOpen
         onRefActivated: oidHex => sidebar.refActivated(oidHex)
-        onRefMenuRequested: (kind, name, full, oidHex) =>
-            sidebar.refMenuRequested(kind, name, full, oidHex)
+        onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
     }
 }

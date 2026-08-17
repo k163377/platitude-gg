@@ -61,16 +61,14 @@ Item {
         // The drawn ring, not Fusion's BusyIndicator
         // (規約 §進行中・長押しの定数).
         SpinnerIcon {
-            spinning: AppBackend.gitState === "checking"
-                      && !AppBackend.alreadyRunning
+            spinning: AppBackend.gitState === "checking" && !AppBackend.alreadyRunning
             width: Theme.iconLg
             height: Theme.iconLg
             anchors.horizontalCenter: parent.horizontalCenter
         }
         NoticeLine {
             visible: AppBackend.gitState === "missing"
-            text: qsTr("git was not found on PATH. Install git %1 or newer and restart.")
-                      .arg(AppBackend.minimumGit)
+            text: qsTr("git was not found on PATH. Install git %1 or newer and restart.").arg(AppBackend.minimumGit)
             width: parent.width
         }
         NoticeLine {

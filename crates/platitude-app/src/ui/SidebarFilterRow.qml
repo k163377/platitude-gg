@@ -50,7 +50,6 @@ Item {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: Theme.borderWidth
-        color: field.activeFocus ? Theme.borderFocus
-                                 : Theme.borderSubtle
+        color: field.activeFocus ? Theme.borderFocus : Theme.borderSubtle
     }
 }

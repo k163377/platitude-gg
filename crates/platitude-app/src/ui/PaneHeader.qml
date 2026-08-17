@@ -17,13 +17,10 @@ Rectangle {
         font.weight: Font.DemiBold
         color: Theme.textSecondary
     }
-    // The band closes with a hairline, the way the sidebar's own band
-    // always has. Without it a header sitting on another `bgElevated` row
-    // — a diff that opens on a hunk heading, the stash actions under
-    // COMMIT — has no edge at all: the two bands share one value
-    // (`bgElevated` and `diffHunkHeaderBg` are both #0F172A), so they read
-    // as a single 56px box holding both their words
-    // (デザイン規約 §diff の中のステージ).
+    // The band closes with a hairline, the way the sidebar's own band always has. Without it a header sitting on
+    // another `bgElevated` row — a diff that opens on a hunk heading, the stash actions under COMMIT — has no edge at
+    // all: the two bands share one value (`bgElevated` and `diffHunkHeaderBg` are both #0F172A), so they read as a
+    // single 56px box holding both their words (デザイン規約 §diff の中のステージ).
     Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right

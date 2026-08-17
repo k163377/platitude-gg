@@ -9,36 +9,30 @@ Rectangle {
     id: graphArea
 
     required property var graphModel
-    // The uncommitted row's tallies ride on the ListView for the delegate.
-    // They come off status rather than off the file list — the same status
-    // the list itself is built from, counted by kind (`status::Kinds`).
+    // The uncommitted row's tallies ride on the ListView for the delegate. They come off status rather than off the
+    // file list — the same status the list itself is built from, counted by kind (`status::Kinds`).
     required property var workTree
     // No repository behind this pane: the empty-window call to action.
     property bool blank: false
 
     signal rowActivated(string oidHex)
     signal rowMenuOpenRequested(string oidHex)
-    /// Right-click on the chip itself: the menu is the named ref's
-    /// rather than the row's — and the page still falls back to the
-    /// row's where the chip names nothing to act on. `record` is the
-    /// chip as drawn (kind + flags + name).
+    /// Right-click on the chip itself: the menu is the named ref's rather than the row's — and the page still falls
+    /// back to the row's where the chip names nothing to act on. `record` is the chip as drawn (kind + flags + name).
     signal chipMenuOpenRequested(string oidHex, string record)
-    /// A row was double-clicked. `record` is the chip it shows (kind +
-    /// flags + name); empty when the row shows no branch at all.
+    /// A row was double-clicked. `record` is the chip it shows (kind + flags + name); empty when the row shows no
+    /// branch at all.
     signal rowSwitchRequested(string oidHex, string record)
-    /// The chip whose stacked list the page has out (null when none).
-    /// Rows read it back through the view: a hand that walked down into
-    /// the list and comes back to this chip is not opening anything, so
-    /// it is not made to sit out the opening rest again.
+    /// The chip whose stacked list the page has out (null when none). Rows read it back through the view: a hand that
+    /// walked down into the list and comes back to this chip is not opening anything, so it is not made to sit out the
+    /// opening rest again.
     property var chipListAnchor: null
     /// A stacked chip was hovered: unstack it under the chip.
     signal chipExpandRequested(var records, var anchor)
-    /// The pointer settled on a row (or left it): open the commit card
-    /// under it. `row` is the delegate, which the page needs for its
-    /// position and its fields — it must not hold on to it.
+    /// The pointer settled on a row (or left it): open the commit card under it. `row` is the delegate, which the page
+    /// needs for its position and its fields — it must not hold on to it.
     signal rowHoverRequested(var row, bool inside)
-    /// The pointer left that chip — put it back, unless it went into the
-    /// list itself (only the owner can tell).
+    /// The pointer left that chip — put it back, unless it went into the list itself (only the owner can tell).
     signal chipCollapseRequested()
     signal createBranchRequested(string oidHex, string name)
     signal openRepositoryRequested()
@@ -56,12 +50,11 @@ Rectangle {
     }
 
     // ---- looking for a commit --------------------------------------
-    /// The find bar's state, and its box, for the headless run — the key
-    /// that opens it cannot be pressed from there.
+    /// The find bar's state, and its box, for the headless run — the key that opens it cannot be pressed from there.
     readonly property alias findOpen: findBar.open
     property alias findQuery: findBar.query
-    /// What the bar reports back, for the headless run and for whoever
-    /// wants to read the search without opening the card.
+    /// What the bar reports back, for the headless run and for whoever wants to read the search without opening the
+    /// card.
     readonly property alias findMatches: findBar.matches
     readonly property alias findAt: findBar.atMatch
     readonly property alias findWidth: findBar.width
@@ -73,34 +66,25 @@ Rectangle {
     function startFind() { findBar.startFind() }
     function findNext() { findBar.findNext() }
     function findPrevious() { findBar.findPrevious() }
-    /// Whether all of `row` is on screen — asked of the list, which is
-    /// where the viewport arithmetic lives.
+    /// Whether all of `row` is on screen — asked of the list, which is where the viewport arithmetic lives.
     function rowOnScreen(row) { return graphList.rowOnScreen(row) }
 
     // ---- a standing question ---------------------------------------
-    // The bar comes down from the top of the pane and pushes the history
-    // down (デザイン規約 §可否・警告の出し場所); the row it concerns is
-    // marked rather than worded, so the question is written exactly once.
+    // The bar comes down from the top of the pane and pushes the history down (デザイン規約 §可否・警告の出し場所); the row it
+    // concerns is marked rather than worded, so the question is written exactly once.
 
-    /// Raises the bar. `oidHex` is the row it is about ("" for none, and
-    /// a row outside the loaded window simply goes unmarked — the bar
-    /// stands either way).
-    /// `hold` takes the answer as a press held down instead of a click,
-    /// and `tip` is what the pill says on hover — the questions whose
-    /// write leaves this machine ask that way (デザイン規約 §長押し).
-    /// `form` is what the question needs in order to take an answer at all
-    /// — a chooser, a name box. Most questions have none: they are
-    /// answered by the pill and nothing else.
-    /// `code` is the git command the question is about, said at the head of
-    /// the question and on the pill both, where the act has one word of its
-    /// own (デザイン規約 §git 用語のコード表記); `accept` carries the
-    /// wording everywhere else.
-    function startAsking(oidHex, label, detail, accept, danger,
-                         hold = false, tip = "", form = null, code = "") {
+    /// Raises the bar. `oidHex` is the row it is about ("" for none, and a row outside the loaded window simply goes
+    /// unmarked — the bar stands either way). `hold` takes the answer as a press held down instead of a click, and
+    /// `tip` is what the pill says on hover — the questions whose write leaves this machine ask that way (デザイン規約 §長押し).
+    /// `form` is what the question needs in order to take an answer at all — a chooser, a name box. Most questions have
+    /// none: they are answered by the pill and nothing else. `code` is the git command the question is about, said at
+    /// the head of the question and on the pill both, where the act has one word of its own (デザイン規約 §git 用語のコード表記);
+    /// `accept` carries the wording everywhere else.
+    function startAsking(oidHex, label, detail, accept, danger, hold = false, tip = "", form = null, code = "") {
         graphList.namingOid = ""
         graphList.namingText = ""
-        // Before the label, which is what opens the bar: the form has to
-        // exist by the time opening decides where the focus goes.
+        // Before the label, which is what opens the bar: the form has to exist by the time opening decides where the
+        // focus goes.
         askBar.form = form
         askBar.answerable = true
         askBar.neutral = false
@@ -115,19 +99,16 @@ Rectangle {
         graphList.askDanger = danger
         graphList.askOid = oidHex === undefined ? "" : oidHex
     }
-    /// Whether the standing question can be answered yet. A question with
-    /// a form turns this off until the form has something to send.
+    /// Whether the standing question can be answered yet. A question with a form turns this off until the form has
+    /// something to send.
     property alias askAnswerable: askBar.answerable
-    /// Whether it is asking for information rather than for consent, how it
-    /// is answered, and what it says while it stands — these change under a
-    /// publish question as the remote answers what the typed name means.
-    /// The wording of the pill is not among them: the command it names is
-    /// settled when the question opens (デザイン規約 §はじめてリモートへ送る).
+    /// Whether it is asking for information rather than for consent, how it is answered, and what it says while it
+    /// stands — these change under a publish question as the remote answers what the typed name means. The wording of
+    /// the pill is not among them: the command it names is settled when the question opens (デザイン規約 §はじめてリモートへ送る).
     property alias askNeutral: askBar.neutral
     property alias askHold: askBar.hold
-    /// The command the pill answers with, and whether the far side could be
-    /// read at all — both move under a publish question as the remote
-    /// answers, because what would run depends on what is over there.
+    /// The command the pill answers with, and whether the far side could be read at all — both move under a publish
+    /// question as the remote answers, because what would run depends on what is over there.
     property alias askCode: askBar.code
     property alias askAlert: askBar.alert
     property alias askDetail: askBar.detail
@@ -138,16 +119,15 @@ Rectangle {
         askBar.label = ""
         graphList.askOid = ""
     }
-    /// Automation: answer a held question the way a person does, by
-    /// keeping the pill down to the end.
+    /// Automation: answer a held question the way a person does, by keeping the pill down to the end.
     function completeHold() {
         askBar.completeHold()
     }
     signal askConfirmed()
     signal askCancelled()
 
-    /// The list itself — for automation hooks (bench / scroll-to /
-    /// screenshot flows) only; app code goes through the functions.
+    /// The list itself — for automation hooks (bench / scroll-to / screenshot flows) only; app code goes through the
+    /// functions.
     readonly property alias view: graphList
 
     /// Moves the selection without scrolling.
@@ -172,10 +152,9 @@ Rectangle {
     function shiftRows(rows) { rowWalk.shiftRows(rows) }
     function showRowSoon(row) { rowWalk.showRowSoon(row) }
 
-    // The three columns' widths, and how far the lanes have been sent
-    // sideways. Worked out in GraphColumnMetrics; the pane's own name for
-    // each answer is the alias below it, so the rows, the dividers, the
-    // find bar and the page all keep reading them off this pane.
+    // The three columns' widths, and how far the lanes have been sent sideways. Worked out in GraphColumnMetrics; the
+    // pane's own name for each answer is the alias below it, so the rows, the dividers, the find bar and the page all
+    // keep reading them off this pane.
     GraphColumnMetrics {
         id: metrics
         paneW: graphArea.width
@@ -198,8 +177,7 @@ Rectangle {
 
     color: Theme.bgSurface
 
-    // Divider hover-lines live under the list so the message ticks and
-    // lane strokes stay in front.
+    // Divider hover-lines live under the list so the message ticks and lane strokes stay in front.
     Rectangle {
         id: labelDividerLine
         x: columnDividers.labelX + Theme.borderWidth
@@ -216,8 +194,7 @@ Rectangle {
         color: Theme.borderStrong
         visible: columnDividers.graphLineWanted
     }
-    // The list starts under the bar — the graph moves down rather than
-    // losing its top rows behind it.
+    // The list starts under the bar — the graph moves down rather than losing its top rows behind it.
     AskBar {
         id: askBar
         anchors.left: parent.left
@@ -227,11 +204,9 @@ Rectangle {
         onConfirmed: graphArea.askConfirmed()
         onCancelled: graphArea.askCancelled()
     }
-    // Hangs from the top-right corner, over the list rather than above it
-    // — declared here rather than inside the view because a Flickable
-    // adopts what is declared in it and scrolls it away. Only one of the
-    // two is ever up: a question already standing keeps the place, since
-    // it is one gesture from being over.
+    // Hangs from the top-right corner, over the list rather than above it — declared here rather than inside the view
+    // because a Flickable adopts what is declared in it and scrolls it away. Only one of the two is ever up: a question
+    // already standing keeps the place, since it is one gesture from being over.
     GraphFind {
         id: findBar
         anchors.top: parent.top
@@ -241,14 +216,10 @@ Rectangle {
         graphModel: graphArea.graphModel
         view: graphList
         asking: askBar.label !== ""
-        // How far left the card may reach: `spaceXs` past where a subject
-        // starts, which is about half of the first character
-        // (§コミットを探す). Measured from the columns rather than from
-        // the pane, so the cap follows the dividers when they are dragged
-        // — it is a distance from the tick the messages begin at, not a
-        // fraction of the window.
-        maxWidth: graphArea.width - graphArea.subjectTextX - Theme.spaceXs
-                  - anchors.rightMargin
+        // How far left the card may reach: `spaceXs` past where a subject starts, which is about half of the first
+        // character (§コミットを探す). Measured from the columns rather than from the pane, so the cap follows the dividers
+        // when they are dragged — it is a distance from the tick the messages begin at, not a fraction of the window.
+        maxWidth: graphArea.width - graphArea.subjectTextX - Theme.spaceXs - anchors.rightMargin
         onDismissed: {
             findBar.runFind()
             graphList.takeKeyboard()
@@ -261,61 +232,48 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.top: askBar.bottom
-        // The card hangs over the top rows rather than pushing them down
-        // — but when the newest commit is itself one of the answers, the
-        // graph steps down by the card's height so that answer is not
-        // the one thing the search covers. It goes back the moment the
-        // top row stops matching, so the band is not a place the eye
-        // learns to expect (規約 §コミットを探す).
+        // The card hangs over the top rows rather than pushing them down — but when the newest commit is itself one of
+        // the answers, the graph steps down by the card's height so that answer is not the one thing the search covers.
+        // It goes back the moment the top row stops matching, so the band is not a place the eye learns to expect (規約
+        // §コミットを探す).
         anchors.topMargin: graphArea.findClears ? findBar.height : 0
         Behavior on anchors.topMargin {
             NumberAnimation { duration: 200 }
         }
         model: graphArea.graphModel
-        // Nothing but this pane's own functions move the view — the chase
-        // is off in `AppListView`, and the arrow keys move it themselves
-        // by as little as will do (`revealStep`).
+        // Nothing but this pane's own functions move the view — the chase is off in `AppListView`, and the arrow keys
+        // move it themselves by as little as will do (`revealStep`).
         //
-        // Qt's own key navigation moves `currentIndex` and tells nobody:
-        // the highlight would walk off screen — the chase above is off —
-        // while the panes on the right went on showing the commit it set
-        // off from. The arrows are answered below instead, where the page
-        // hears about where they landed (規約 §矢印で履歴を辿る).
+        // Qt's own key navigation moves `currentIndex` and tells nobody: the highlight would walk off screen — the
+        // chase above is off — while the panes on the right went on showing the commit it set off from. The arrows are
+        // answered below instead, where the page hears about where they landed (規約 §矢印で履歴を辿る).
         keyNavigationEnabled: false
         Keys.onUpPressed: event => event.accepted = graphArea.stepRow(-1)
         Keys.onDownPressed: event => event.accepted = graphArea.stepRow(1)
-        /// Where the keyboard goes when a press lands in this pane. Every
-        /// way in comes through here — a row click, a press on the lanes,
-        /// the find card closing, the headless hook — so there is one
-        /// answer to "what does a press do to the keyboard".
+        /// Where the keyboard goes when a press lands in this pane. Every way in comes through here — a row click, a
+        /// press on the lanes, the find card closing, the headless hook — so there is one answer to "what does a press
+        /// do to the keyboard".
         function takeKeyboard() {
             graphList.forceActiveFocus()
         }
-        /// And gives it up when this pane is taken off the screen. Qt
-        /// leaves active focus on an item it has just made invisible, and
-        /// the keys go on arriving there (qmltestrunner で実測
-        /// 2026-08-11: a StackLayout child swapped away reports
-        /// `visible=false activeFocus=true`, and the next Down still
-        /// fires; `focus = false` is what lets go). Opening a diff over
-        /// the graph did exactly that: the arrows walked the selection
-        /// behind the diff, and moving the selection closes the diff — so
-        /// the screen was pulled back to the graph (2026-08-11 ユーザー報告).
+        /// And gives it up when this pane is taken off the screen. Qt leaves active focus on an item it has just made
+        /// invisible, and the keys go on arriving there (qmltestrunner で実測 2026-08-11: a StackLayout child swapped away
+        /// reports `visible=false activeFocus=true`, and the next Down still fires; `focus = false` is what lets go).
+        /// Opening a diff over the graph did exactly that: the arrows walked the selection behind the diff, and moving
+        /// the selection closes the diff — so the screen was pulled back to the graph (2026-08-11 ユーザー報告).
         onVisibleChanged: {
             if (!graphList.visible)
                 graphList.focus = false
         }
         flickDeceleration: 8000
         maximumFlickVelocity: 9000
-        // The graph is the one pane with no header band; this sliver of
-        // margin drops the first row so its bottom line meets the
-        // neighbouring bands' bottom edge when scrolled to the top.
+        // The graph is the one pane with no header band; this sliver of margin drops the first row so its bottom line
+        // meets the neighbouring bands' bottom edge when scrolled to the top.
         topMargin: Theme.headerHeight - Theme.graphRowHeight
-        // A sliver of run-out at the end: without it the oldest row
-        // sits flush on the pane edge and reads as clipped rather than
-        // as the end of what is loaded. Just enough to see the break.
+        // A sliver of run-out at the end: without it the oldest row sits flush on the pane edge and reads as clipped
+        // rather than as the end of what is loaded. Just enough to see the break.
         bottomMargin: Theme.spaceSm
-        // Bridge into the delegate (GraphRowDelegate reads its column
-        // geometry off ListView.view).
+        // Bridge into the delegate (GraphRowDelegate reads its column geometry off ListView.view).
         property real labelWidth: graphArea.labelW
         property real graphColWidth: graphArea.graphColW
         property real graphFullWidth: graphArea.graphFullW
@@ -326,18 +284,15 @@ Rectangle {
         property int wipRenamed: graphArea.workTree.wipRenamed
         property int wipCopied: graphArea.workTree.wipCopied
         property int wipConflicted: graphArea.workTree.conflictCount
-        // Which row's chip column is a name box, and what has been typed
-        // into it. Held here rather than in the delegate: the delegate is
-        // recycled the moment its row scrolls off.
+        // Which row's chip column is a name box, and what has been typed into it. Held here rather than in the
+        // delegate: the delegate is recycled the moment its row scrolls off.
         property string namingOid: ""
         property string namingText: ""
-        // Which row the standing question is about, and in which tone —
-        // held here for the same recycling reason. The words are on the
-        // bar; the row only marks itself.
+        // Which row the standing question is about, and in which tone — held here for the same recycling reason. The
+        // words are on the bar; the row only marks itself.
         property string askOid: ""
         property bool askDanger: false
-        // Mirrored for the delegates, which can only see the view: rows
-        // dim while a search is on.
+        // Mirrored for the delegates, which can only see the view: rows dim while a search is on.
         readonly property bool findOn: graphArea.findOn
         signal rowSelected(string oidHex)
         signal rowMenuRequested(string oidHex)
@@ -350,20 +305,15 @@ Rectangle {
         signal namingSubmitted(string oidHex, string name)
         signal namingCancelled()
         onRowMenuRequested: oidHex => graphArea.rowMenuOpenRequested(oidHex)
-        onChipMenuRequested: (oidHex, record) =>
-            graphArea.chipMenuOpenRequested(oidHex, record)
+        onChipMenuRequested: (oidHex, record) => graphArea.chipMenuOpenRequested(oidHex, record)
         onRowSelected: oidHex => graphArea.rowActivated(oidHex)
-        onRowSwitchRequested: (oidHex, record) =>
-            graphArea.rowSwitchRequested(oidHex, record)
-        onChipExpandRequested: (records, anchor) =>
-            graphArea.chipExpandRequested(records, anchor)
+        onRowSwitchRequested: (oidHex, record) => graphArea.rowSwitchRequested(oidHex, record)
+        onChipExpandRequested: (records, anchor) => graphArea.chipExpandRequested(records, anchor)
         onChipCollapseRequested: graphArea.chipCollapseRequested()
-        onRowHoverRequested: (row, inside) =>
-            graphArea.rowHoverRequested(row, inside)
+        onRowHoverRequested: (row, inside) => graphArea.rowHoverRequested(row, inside)
         onNamingSubmitted: (oidHex, name) => {
             graphArea.stopNaming()
-            // An empty box is the way out of the offer, not a branch
-            // called nothing.
+            // An empty box is the way out of the offer, not a branch called nothing.
             if (name !== "")
                 graphArea.createBranchRequested(oidHex, name)
         }
@@ -377,63 +327,50 @@ Rectangle {
             graphXOffset: graphList.graphXOffset
             graphFullWidth: graphList.graphFullWidth
         }
-        // Manual contentY math must respect originY: after
-        // positionViewAtIndex jumps, the ListView shifts its coordinate
-        // origin as item positions are fixed up, so
-        // [0, contentHeight-height] no longer matches the real scroll
-        // range (top rows become unreachable, the bottom overshoots the
-        // truncation footer).
+        // Manual contentY math must respect originY: after positionViewAtIndex jumps, the ListView shifts its
+        // coordinate origin as item positions are fixed up, so [0, contentHeight-height] no longer matches the real
+        // scroll range (top rows become unreachable, the bottom overshoots the truncation footer).
         function clampY(y) {
-            // topMargin lives above the content origin — forgetting it
-            // makes the top gap unreachable by wheel after any scroll.
+            // topMargin lives above the content origin — forgetting it makes the top gap unreachable by wheel after any
+            // scroll.
             const minY = graphList.originY - graphList.topMargin
-            const maxY = Math.max(minY, graphList.originY
-                                        + graphList.contentHeight
-                                        - graphList.height
-                                        + graphList.bottomMargin)
+            const maxY = Math.max(minY, graphList.originY + graphList.contentHeight
+                                        - graphList.height + graphList.bottomMargin)
             return Math.max(minY, Math.min(y, maxY))
         }
-        /// Topmost row with any of itself on screen; 0 while the view is
-        /// in its own top margin, where there is no row to be over.
+        /// Topmost row with any of itself on screen; 0 while the view is in its own top margin, where there is no row
+        /// to be over.
         function firstVisibleRow() {
             const row = graphList.indexAt(0, graphList.contentY + 1)
             return row >= 0 ? row : 0
         }
-        /// Whether all of `row` is on screen. A row below the last one
-        /// drawn reports no index at all, which is what a list shorter
-        /// than its viewport answers for its whole lower half — there,
-        /// nothing is out of sight.
+        /// Whether all of `row` is on screen. A row below the last one drawn reports no index at all, which is what a
+        /// list shorter than its viewport answers for its whole lower half — there, nothing is out of sight.
         function rowOnScreen(row) {
-            const bottom = graphList.indexAt(
-                0, graphList.contentY + graphList.height - Theme.graphRowHeight)
+            const bottom = graphList.indexAt(0, graphList.contentY + graphList.height - Theme.graphRowHeight)
             return row >= graphList.firstVisibleRow() && (bottom < 0 || row <= bottom)
         }
-        // Mouse wheels scroll a fixed number of rows per notch;
-        // touchpads keep native Flickable panning.
+        // Mouse wheels scroll a fixed number of rows per notch; touchpads keep native Flickable panning.
         WheelHandler {
             acceptedDevices: PointerDevice.Mouse
             onWheel: event => {
-                // Wheel input exits middle-click autoscroll
-                // (Chrome-like behavior).
+                // Wheel input exits middle-click autoscroll (Chrome-like behavior).
                 graphArea.autoScrolling = false
                 graphList.cancelFlick()
                 if (event.angleDelta.x !== 0)
-                    graphArea.graphX = Math.max(0, Math.min(
-                        graphArea.graphX - event.angleDelta.x / 2, graphArea.graphXMax))
-                const step = (event.angleDelta.y / 120)
-                           * Metrics.wheelRows * Theme.graphRowHeight
+                    graphArea.graphX = Math.max(0,
+                        Math.min(graphArea.graphX - event.angleDelta.x / 2, graphArea.graphXMax))
+                const step = (event.angleDelta.y / 120) * Metrics.wheelRows * Theme.graphRowHeight
                 graphList.contentY = graphList.clampY(graphList.contentY - step)
             }
         }
     }
-    /// Whether a middle-click autoscroll is under way, and whether it
-    /// carries the lanes sideways as well — read by the wheel, which ends
-    /// the gesture, and by the automation hook.
+    /// Whether a middle-click autoscroll is under way, and whether it carries the lanes sideways as well — read by the
+    /// wheel, which ends the gesture, and by the automation hook.
     property alias autoScrolling: autoScroll.scrolling
     readonly property alias autoPanning: autoScroll.panning
-    /// Starts autoscroll from a point in this pane's frame, and moves the
-    /// pointer of one already under way. The presses and the automation
-    /// hook both come through here.
+    /// Starts autoscroll from a point in this pane's frame, and moves the pointer of one already under way. The presses
+    /// and the automation hook both come through here.
     function startAutoScroll(x, y) {
         autoScroll.start(x, y)
     }
@@ -449,8 +386,7 @@ Rectangle {
         onDrifted: (dy, dx) => {
             graphList.contentY = graphList.clampY(graphList.contentY + dy)
             if (dx !== 0)
-                graphArea.graphX = Math.max(0, Math.min(graphArea.graphX + dx,
-                                                        graphArea.graphXMax))
+                graphArea.graphX = Math.max(0, Math.min(graphArea.graphX + dx, graphArea.graphXMax))
         }
     }
     GraphLanePan {
@@ -459,10 +395,8 @@ Rectangle {
         graphModel: graphArea.graphModel
     }
 
-    // Draggable column dividers (labels | graph | message). The hand is
-    // in there; the two lines it raises are drawn above, under the list.
-    // Same seat in the stack as the two dividers had: over the lane pan,
-    // under the lane bar.
+    // Draggable column dividers (labels | graph | message). The hand is in there; the two lines it raises are drawn
+    // above, under the list. Same seat in the stack as the two dividers had: over the lane pan, under the lane bar.
     GraphColumnDividers {
         id: columnDividers
         anchors.fill: parent
@@ -470,66 +404,55 @@ Rectangle {
         columns: metrics
         blank: graphArea.blank
     }
-    /// Whether either divider is refusing, and where the hand is while it
-    /// does (**scene coordinates**) — the page draws the one badge, since
-    /// a drag carries the hand out past this pane.
+    /// Whether either divider is refusing, and where the hand is while it does (**scene coordinates**) — the page draws
+    /// the one badge, since a drag carries the hand out past this pane.
     readonly property alias refused: columnDividers.refused
     readonly property alias refusedAt: columnDividers.refusedAt
-    /// Automation: the pointer resting on the graph divider, and a drag
-    /// carried out past one of the four bounds these two dividers have.
+    /// Automation: the pointer resting on the graph divider, and a drag carried out past one of the four bounds these
+    /// two dividers have.
     function restDividerPointer(inside) {
         columnDividers.restDividerPointer(inside)
     }
     function dragDividerPast(which) {
         columnDividers.dragDividerPast(which)
     }
-    /// What is drawn, not what was asked for: the automation hook reports
-    /// the line and the badge themselves, so a column that cannot be
-    /// resized but still promises a drag cannot pass.
+    /// What is drawn, not what was asked for: the automation hook reports the line and the badge themselves, so a
+    /// column that cannot be resized but still promises a drag cannot pass.
     readonly property alias graphDividerShown: columnDividers.graphDividerShown
     readonly property alias graphDividerLineShown: graphDividerLine.visible
     readonly property alias labelDividerLineShown: labelDividerLine.visible
-    /// Whether the badge the page draws for this pane is up. The page owns
-    /// it, so this is the pane's half of that answer.
+    /// Whether the badge the page draws for this pane is up. The page owns it, so this is the pane's half of that
+    /// answer.
     readonly property alias graphDividerRefuses: columnDividers.refused
-    /// The line of whichever divider has the hand. A refused drag has to
-    /// leave it drawn — the boundary still moves the other way — so this
-    /// is the half of the picture the badge does not hold, and it is the
-    /// pane that knows which of the two lines is being asked about.
-    readonly property bool refusedLineShown:
-        columnDividers.labelDragging ? labelDividerLine.visible
-                                     : graphDividerLine.visible
-    /// Whether the pointer is anywhere in this pane. A `HoverHandler`
-    /// rather than a `MouseArea`: handlers are passive, so the rows',
-    /// chips' and dividers' own hover does not take this one away. Real
-    /// hover and the automation hook write the same property — hover
-    /// cannot be injected (verify-ui).
+    /// The line of whichever divider has the hand. A refused drag has to leave it drawn — the boundary still moves the
+    /// other way — so this is the half of the picture the badge does not hold, and it is the pane that knows which of
+    /// the two lines is being asked about.
+    readonly property bool refusedLineShown: columnDividers.labelDragging ? labelDividerLine.visible
+        : graphDividerLine.visible
+    /// Whether the pointer is anywhere in this pane. A `HoverHandler` rather than a `MouseArea`: handlers are passive,
+    /// so the rows', chips' and dividers' own hover does not take this one away. Real hover and the automation hook
+    /// write the same property — hover cannot be injected (verify-ui).
     property bool pointerInside: false
     HoverHandler {
         onHoveredChanged: graphArea.pointerInside = hovered
     }
-    /// Automation: the pointer resting in the pane, which is the only
-    /// thing that puts the lane bar on screen (`PG_AUTO_ACT=graph-bar`).
+    /// Automation: the pointer resting in the pane, which is the only thing that puts the lane bar on screen
+    /// (`PG_AUTO_ACT=graph-bar`).
     function restPointer(inside) {
         graphArea.pointerInside = inside
     }
-    /// What is drawn, not what was asked for: the automation hook reports
-    /// the bar itself so a broken binding cannot pass.
+    /// What is drawn, not what was asked for: the automation hook reports the bar itself so a broken binding cannot
+    /// pass.
     readonly property alias laneBarShown: laneBar.visible
-    // Horizontal scroll of the lanes when the full graph is wider than
-    // its column. The bar lies over the lanes of the last row, so it
-    // comes out only while the pointer is in the pane — and stays out
-    // for as long as it is being dragged, wherever that has taken the
-    // pointer (デザイン規約 §グラフを横へ送る).
+    // Horizontal scroll of the lanes when the full graph is wider than its column. The bar lies over the lanes of the
+    // last row, so it comes out only while the pointer is in the pane — and stays out for as long as it is being
+    // dragged, wherever that has taken the pointer (デザイン規約 §グラフを横へ送る).
     ScrollBar {
         id: laneBar
-        visible: graphArea.graphXMax > 0
-                 && (graphArea.pointerInside || pressed)
-        // Fusion draws its handle only in the style's "active" state,
-        // which for a bar that is not attached to a Flickable means while
-        // the pointer is on the bar itself — a 6px strip on the pane's
-        // bottom edge that nobody would find. When the bar is out it is
-        // because this pane put it there, so the style stops deciding.
+        visible: graphArea.graphXMax > 0 && (graphArea.pointerInside || pressed)
+        // Fusion draws its handle only in the style's "active" state, which for a bar that is not attached to a
+        // Flickable means while the pointer is on the bar itself — a 6px strip on the pane's bottom edge that nobody
+        // would find. When the bar is out it is because this pane put it there, so the style stops deciding.
         policy: ScrollBar.AlwaysOn
         orientation: Qt.Horizontal
         x: graphArea.labelW
@@ -540,8 +463,7 @@ Rectangle {
         position: graphArea.graphFullW > 0 ? graphArea.graphX / graphArea.graphFullW : 0
         onPositionChanged: {
             if (pressed)
-                graphArea.graphX = Math.max(0, Math.min(
-                    position * graphArea.graphFullW, graphArea.graphXMax))
+                graphArea.graphX = Math.max(0, Math.min(position * graphArea.graphFullW, graphArea.graphXMax))
         }
     }
     // What stands in the middle while there is no history to draw.

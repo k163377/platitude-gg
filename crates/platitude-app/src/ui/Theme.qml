@@ -1,8 +1,6 @@
-// Design tokens — a verbatim mirror of internal-docs/デザイン規約.md.
-// Edit the document first, then reflect changes here. Never introduce
-// values that are not in the document's tables. The mirror is complete
-// on purpose: a token no code uses yet still belongs here — do not
-// prune it, and do not read its presence as "the default to pick".
+// Design tokens — a verbatim mirror of internal-docs/デザイン規約.md. Edit the document first, then reflect changes here.
+// Never introduce values that are not in the document's tables. The mirror is complete on purpose: a token no code uses
+// yet still belongs here — do not prune it, and do not read its presence as "the default to pick".
 pragma Singleton
 
 import QtQuick
@@ -36,25 +34,20 @@ QtObject {
     readonly property color accentMuted: "#172554"
 
     // ---- colors: states ----
-    // Told apart by "does it reach past me / is it stuck", not by whether
-    // it can be undone -- see デザイン規約 §状態.
+    // Told apart by "does it reach past me / is it stuck", not by whether it can be undone -- see デザイン規約 §状態.
     readonly property color success: "#16A34A"
     readonly property color warning: "#D97706"
     readonly property color danger: "#EF4444"
 
     // ---- colors: ref kinds ----
-    // A separate axis from the three above: a tag is a kind, not a
-    // severity. Local = accent, remote = textSecondary, detached HEAD =
-    // warning (that one really is a state).
+    // A separate axis from the three above: a tag is a kind, not a severity. Local = accent, remote = textSecondary,
+    // detached HEAD = warning (that one really is a state).
     readonly property color refTag: "#D946EF"
 
     // ---- colors: dimmed (state, hue kept) ----
-    // Two steps down the Tailwind ramp each source came from. For frames,
-    // icons and marks only -- dimming *text* is the disabled signal
-    // (§無効), and a second meaning for it cannot be read apart. Each is
-    // clear of its own source; they are NOT all clear of each other, so
-    // never put two of them where they have to be told apart
-    // (デザイン規約 §暗く落とした段).
+    // Two steps down the Tailwind ramp each source came from. For frames, icons and marks only -- dimming *text* is the
+    // disabled signal (§無効), and a second meaning for it cannot be read apart. Each is clear of its own source; they
+    // are NOT all clear of each other, so never put two of them where they have to be told apart (デザイン規約 §暗く落とした段).
     readonly property color accentDim: "#1D4ED8"
     readonly property color refTagDim: "#A21CAF"
     readonly property color successDim: "#166534"
@@ -74,8 +67,7 @@ QtObject {
     readonly property color statusConflict: "#EF4444"
 
     // ---- colors: commit graph lanes (cycled modulo length) ----
-    // Okabe-Ito color-universal-design palette (black swapped for a light
-    // gray that survives the dark background).
+    // Okabe-Ito color-universal-design palette (black swapped for a light gray that survives the dark background).
     readonly property var graphLane: [
         "#56B4E9", "#E69F00", "#009E73", "#CC79A7",
         "#F0E442", "#D55E00", "#0072B2", "#DDDDDD"
@@ -88,23 +80,20 @@ QtObject {
     readonly property int fontSmLine: 16
     readonly property int fontMd: 14
     readonly property int fontMdLine: 20
-    // Off the ramp on purpose: the size an editor puts source at, which
-    // is not a step in a UI scale. IntelliJ's default (JetBrains Mono 13)
-    // is what this matches.
+    // Off the ramp on purpose: the size an editor puts source at, which is not a step in a UI scale. IntelliJ's default
+    // (JetBrains Mono 13) is what this matches.
     readonly property int fontCode: 13
     readonly property int fontLg: 16
     readonly property int fontLgLine: 24
     readonly property int fontXl: 20
     readonly property int fontXlLine: 28
-    // Families each OS ships that also carry Japanese: a glyph missing
-    // from the named family falls back by OS locale, which is where
-    // kanji turn Chinese (デザイン規約 §タイポグラフィ, 2026-08-08).
+    // Families each OS ships that also carry Japanese: a glyph missing from the named family falls back by OS locale,
+    // which is where kanji turn Chinese (デザイン規約 §タイポグラフィ, 2026-08-08).
     readonly property var fontFamilyUi: ["Yu Gothic UI", "Hiragino Sans", "Noto Sans CJK JP", "Noto Sans JP", "Noto Sans", "DejaVu Sans"]
     readonly property var fontFamilyMono: ["Cascadia Mono", "Consolas", "Menlo", "Noto Sans Mono CJK JP", "Noto Sans Mono", "DejaVu Sans Mono"]
 
-    // The QML font value type has no `families` list, so the fallback
-    // chains above are resolved once against the installed fonts here.
-    // Empty string → Qt's default font.
+    // The QML font value type has no `families` list, so the fallback chains above are resolved once against the
+    // installed fonts here. Empty string → Qt's default font.
     readonly property string uiFamily: _pickFamily(fontFamilyUi)
     readonly property string monoFamily: _pickFamily(fontFamilyMono)
     function _pickFamily(preferred) {

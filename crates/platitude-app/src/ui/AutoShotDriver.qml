@@ -4,9 +4,8 @@ import QtQuick
 import QtQuick.Layouts
 import platitude
 
-/// Owns one automated run from completion through a rendered screenshot.
-/// The ordinary application constructs it too, but every timer stays idle
-/// unless the PG_AUTO_* harness variables were supplied.
+/// Owns one automated run from completion through a rendered screenshot. The ordinary application constructs it too,
+/// but every timer stays idle unless the PG_AUTO_* harness variables were supplied.
 Item {
     id: driver
 
@@ -18,16 +17,13 @@ Item {
     property bool pageActClaimed: false
     property bool shotPending: false
     property bool shotTaken: false
-    // A mirror that is not live still renders itself once when it is
-    // built, and announces that one the same way it announces an asked-for
-    // refresh. Only the refresh this driver asked for is the shot.
+    // A mirror that is not live still renders itself once when it is built, and announces that one the same way it
+    // announces an asked-for refresh. Only the refresh this driver asked for is the shot.
     property bool overlayAsked: false
     property bool overlayGrabbed: false
     property int shotParts: 0
-    // Every PG_AUTO_ACT run has one explicit completion edge. A verb that
-    // still relies on the old shot clock is a harness bug: the watchdog must
-    // expose it instead of taking a plausible picture of an intermediate
-    // state.
+    // Every PG_AUTO_ACT run has one explicit completion edge. A verb that still relies on the old shot clock is a
+    // harness bug: the watchdog must expose it instead of taking a plausible picture of an intermediate state.
     readonly property bool causal: AppBackend.autoAct !== ""
 
     function claimPageAct() {
@@ -52,9 +48,8 @@ Item {
         AppBackend.report("auto_act complete=" + AppBackend.autoAct)
         driver.shotPending = true
         window.requestUpdate()
-        // A quiet scene may not emit another frameSwapped even after an
-        // update request. The next event-loop turn is still causal to the
-        // completed driver state, and grabToImage owns the render callback.
+        // A quiet scene may not emit another frameSwapped even after an update request. The next event-loop turn is
+        // still causal to the completed driver state, and grabToImage owns the render callback.
         Qt.callLater(driver.scheduleShot)
     }
 
@@ -72,16 +67,12 @@ Item {
         }
     }
 
-    // The overlay's own render boundary, and the reason `Main.qml` builds
-    // the mirror with `live: false`. A live mirror leaves the shot nothing
-    // to wait on -- the grab reads whatever frame happened to have reached
-    // the texture, which for a popup opened in the turn that completed the
-    // verb is often none at all (2026-08-16: two of four concurrent
-    // `commit-menu` runs photographed a blank overlay and passed, while
-    // the same verb run one at a time never did). Asked for one refresh
-    // instead, this is the edge that says the refresh landed: from here
-    // the texture holds what the overlay held when the shot was called
-    // for.
+    // The overlay's own render boundary, and the reason `Main.qml` builds the mirror with `live: false`. A live mirror
+    // leaves the shot nothing to wait on -- the grab reads whatever frame happened to have reached the texture, which
+    // for a popup opened in the turn that completed the verb is often none at all (2026-08-16: two of four concurrent
+    // `commit-menu` runs photographed a blank overlay and passed, while the same verb run one at a time never did).
+    // Asked for one refresh instead, this is the edge that says the refresh landed: from here the texture holds what
+    // the overlay held when the shot was called for.
     Connections {
         target: driver.overlayMirror ? driver.overlayMirror.item : null
         ignoreUnknownSignals: true
@@ -104,9 +95,8 @@ Item {
             Qt.quit()
     }
 
-    /// Refreshed texture in hand, the picture of the popups. `popups=` is
-    /// the overlay's own count of what it was holding: a blank overlay.png
-    /// now means nothing was open, never a shot that outran the frame.
+    /// Refreshed texture in hand, the picture of the popups. `popups=` is the overlay's own count of what it was
+    /// holding: a blank overlay.png now means nothing was open, never a shot that outran the frame.
     function grabOverlay() {
         if (!driver.overlayAsked || driver.overlayGrabbed)
             return

@@ -4,9 +4,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// One git invocation in the command log: the clock, the command, and how
-// it went. A failure keeps git's own parting words under it — the whole
-// point of the panel is that nothing is rephrased.
+// One git invocation in the command log: the clock, the command, and how it went. A failure keeps git's own parting
+// words under it — the whole point of the panel is that nothing is rephrased.
 Rectangle {
     id: row
 
@@ -25,13 +24,11 @@ Rectangle {
     signal copyRequested(string text)
 
     // Width comes from the view; the height grows with the output block.
-    height: Theme.rowHeight + (row.showsOutput
-                               ? outputText.implicitHeight + 2 * Theme.spaceXs
-                               : 0)
+    height: Theme.rowHeight + (row.showsOutput ? outputText.implicitHeight + 2 * Theme.spaceXs : 0)
     color: row.failed || rowHover.containsMouse ? Theme.bgElevated : "transparent"
 
-    // What went wrong is carried by the edge as well as by the words, so
-    // a failure is findable while scrolling past at speed.
+    // What went wrong is carried by the edge as well as by the words, so a failure is findable while scrolling past at
+    // speed.
     Rectangle {
         anchors.left: parent.left
         anchors.top: parent.top
@@ -47,17 +44,14 @@ Rectangle {
         hoverEnabled: true
         acceptedButtons: Qt.RightButton
         onClicked: {
-            // Read as the menu opens and left alone while it stands: a
-            // command still running has nothing to copy yet, and its
-            // output arriving must not push a second row in under the
-            // pointer (デザイン規約 §メニュー).
+            // Read as the menu opens and left alone while it stands: a command still running has nothing to copy yet,
+            // and its output arriving must not push a second row in under the pointer (デザイン規約 §メニュー).
             rowMenu.hasOutput = row.output !== ""
             rowMenu.offer()
         }
         ToolTip.visible: containsMouse && row.state !== "running"
         ToolTip.delay: Metrics.tipDelayMs
-        // The reproducible form is long; it is here rather than in the
-        // row so the log stays one line per command.
+        // The reproducible form is long; it is here rather than in the row so the log stays one line per command.
         ToolTip.text: row.full
     }
 
@@ -93,8 +87,7 @@ Rectangle {
             font.family: Theme.monoFamily
             font.pixelSize: Theme.fontSm
         }
-        // The program never varies, so it is drawn rather than read: what
-        // changes from row to row is the part after it.
+        // The program never varies, so it is drawn rather than read: what changes from row to row is the part after it.
         Label {
             id: program
             anchors.left: clock.right
@@ -131,8 +124,8 @@ Rectangle {
                 font.pixelSize: Theme.fontSm
             }
             Label {
-                // Exit 0 says nothing that the absence of a complaint has
-                // not already said, so only the time it took is kept.
+                // Exit 0 says nothing that the absence of a complaint has not already said, so only the time it took is
+                // kept.
                 text: row.state === "running" ? qsTr("running…") : row.duration
                 color: row.state === "running" ? Theme.accent : Theme.textMuted
                 font.family: Theme.monoFamily
@@ -141,9 +134,8 @@ Rectangle {
         }
     }
 
-    // Indented to the command it belongs to. Positioned rather than
-    // anchored: the column it lines up with lives inside `line`, which
-    // makes it neither parent nor sibling of this.
+    // Indented to the command it belongs to. Positioned rather than anchored: the column it lines up with lives inside
+    // `line`, which makes it neither parent nor sibling of this.
     Label {
         id: outputText
         visible: row.showsOutput

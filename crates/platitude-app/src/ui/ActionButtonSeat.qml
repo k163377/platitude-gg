@@ -2,13 +2,11 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The seat a toolbar action's icon sits in. A button with no icon to name
-// it spends no width on one — the word is the whole of it (the hunk
-// header's buttons). A button that swaps between a named icon and the
-// mark keeps the wider of the two seats whichever it is wearing, so its
-// width does not change with its state and the toolbar does not slide
-// under a pointer already resting on it. One that only ever wears the
-// mark fits it, and its words sit as close to it as a menu row's do.
+// The seat a toolbar action's icon sits in. A button with no icon to name it spends no width on one — the word is the
+// whole of it (the hunk header's buttons). A button that swaps between a named icon and the mark keeps the wider of the
+// two seats whichever it is wearing, so its width does not change with its state and the toolbar does not slide under a
+// pointer already resting on it. One that only ever wears the mark fits it, and its words sit as close to it as a menu
+// row's do.
 Item {
     id: seat
 
@@ -16,46 +14,34 @@ Item {
     property string kind: ""
     /// How long the button has to be held; zero for an ordinary one.
     property int holdMs: 0
-    /// The icon is a mark standing next to the word, rather than an icon
-    /// at the head of a band (`ActionButton.besideWord`).
+    /// The icon is a mark standing next to the word, rather than an icon at the head of a band
+    /// (`ActionButton.besideWord`).
     property bool besideWord: false
     /// How far into the hold the press has got, 0 to 1.
     property real holdProgress: 0
     /// The colour both marks are drawn in — the button's own `fg`.
     property color tint: Theme.textPrimary
 
-    /// Both marks to wear at once: what the button does, and
-    /// that it is held rather than clicked.
-    readonly property bool paired: seat.kind !== ""
-                                   && seat.holdMs > 0
+    /// Both marks to wear at once: what the button does, and that it is held rather than clicked.
+    readonly property bool paired: seat.kind !== "" && seat.holdMs > 0
     /// How far the two are set apart across the slash.
     readonly property int spread: Theme.iconMd - Theme.spaceXs
-    /// The step this button's icon is drawn at (see
-    /// `besideWord`). A button that can pair keeps the band's
-    /// step whatever it is asked for: the fraction is built
-    /// out of two `iconSm` halves and has no room to give.
-    readonly property int step: seat.besideWord
-                                && seat.holdMs <= 0
-                                ? Theme.iconSm : Theme.iconMd
-    /// The air the mark keeps inside its own box, which the
-    /// seat gives back so that the padding on one side and
-    /// the row's spacing on the other land on the **ink**
-    /// (デザイン規約 §余白「印が自分で持っている余白は、隣の
-    /// 詰めに数える」). The icon overflows the seat by this
-    /// much either side.
+    /// The step this button's icon is drawn at (see `besideWord`). A button that can pair keeps the band's step
+    /// whatever it is asked for: the fraction is built out of two `iconSm` halves and has no room to give.
+    readonly property int step: seat.besideWord && seat.holdMs <= 0 ? Theme.iconSm : Theme.iconMd
+    /// The air the mark keeps inside its own box, which the seat gives back so that the padding on one side and the
+    /// row's spacing on the other land on the **ink** (デザイン規約 §余白「印が自分で持っている余白は、隣の 詰めに数える」). The icon overflows the
+    /// seat by this much either side.
     ///
-    /// One number for the family, from the widest of these
-    /// marks: 8–10px of ink inside the 12px box.
-    readonly property int markAir: seat.step === Theme.iconSm
-                                   ? Theme.spaceXs / 2 : 0
+    /// One number for the family, from the widest of these marks: 8–10px of ink inside the 12px box.
+    readonly property int markAir: seat.step === Theme.iconSm ? Theme.spaceXs / 2 : 0
 
     visible: seat.kind !== "" || seat.holdMs > 0
     implicitWidth: !visible ? 0
                    : seat.kind !== ""
                      ? (seat.step === Theme.iconSm
                         ? Theme.iconSm - 2 * seat.markAir
-                        : Math.max(Theme.iconMd,
-                                   Theme.iconSm + seat.spread))
+                        : Math.max(Theme.iconMd, Theme.iconSm + seat.spread))
                      : Theme.iconSm
     implicitHeight: seat.step + Theme.spaceXs
     NavIcon {
@@ -68,9 +54,7 @@ Item {
         stroke: Metrics.iconStroke * seat.step / 16
         visible: seat.holdMs <= 0
     }
-    // A held button with nothing to name it says only how it
-    // is worked, where the eye starts the row (デザイン規約
-    // §長押し).
+    // A held button with nothing to name it says only how it is worked, where the eye starts the row (デザイン規約 §長押し).
     HoldIcon {
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
@@ -79,12 +63,9 @@ Item {
         tint: seat.tint
         visible: seat.holdMs > 0 && !seat.paired
     }
-    // A held button that also has a name wears both, set as a
-    // fraction: each a size down, the slash between them, each
-    // pushed off the middle line. Letting the hold mark take
-    // the seat on its own would cost the button the one thing
-    // that says what it does — `push -f` would stop being a
-    // push at a glance (デザイン規約 §長押し).
+    // A held button that also has a name wears both, set as a fraction: each a size down, the slash between them, each
+    // pushed off the middle line. Letting the hold mark take the seat on its own would cost the button the one thing
+    // that says what it does — `push -f` would stop being a push at a glance (デザイン規約 §長押し).
     Item {
         anchors.fill: parent
         visible: seat.paired

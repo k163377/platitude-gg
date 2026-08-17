@@ -1,9 +1,8 @@
 import QtQuick
 import platitude
 
-/// Owns the process-level end of a PG_AUTO_PERF run.  The page supplies the
-/// repository half; without a repository, the next rendered frame is the
-/// measurement's only observable completion point.
+/// Owns the process-level end of a PG_AUTO_PERF run. The page supplies the repository half; without a repository, the
+/// next rendered frame is the measurement's only observable completion point.
 Item {
     id: driver
 
@@ -32,8 +31,7 @@ Item {
 
     Connections {
         target: driver.window
-        enabled: AppBackend.autoPerf && !driver.expectsPage && driver.page === null
-                 && !driver.finished
+        enabled: AppBackend.autoPerf && !driver.expectsPage && driver.page === null && !driver.finished
         function onFrameSwapped() {
             if (driver.window.frameCounter > driver.frameBefore)
                 driver.finish()
@@ -46,8 +44,8 @@ Item {
         function onPerfFinished() { driver.finish() }
     }
 
-    // The memory sampler belongs beside the process-level owner: it keeps
-    // covering the full run, while `perf-done` gives the last causal sample.
+    // The memory sampler belongs beside the process-level owner: it keeps covering the full run, while `perf-done`
+    // gives the last causal sample.
     Timer {
         interval: 500
         repeat: true

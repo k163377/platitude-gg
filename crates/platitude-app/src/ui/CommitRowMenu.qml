@@ -4,46 +4,38 @@ import QtQuick
 import platitude
 import platitude.ui
 
-// The right-click on a graph row: one menu for a commit, another for a
-// stash. A stash is a commit git keeps off to one side of every branch, so
-// none of the commit menu's rows land on it and it gets its own
-// (デザイン規約 §グラフ行の右クリック).
+// The right-click on a graph row: one menu for a commit, another for a stash. A stash is a commit git keeps off to one
+// side of every branch, so none of the commit menu's rows land on it and it gets its own (デザイン規約 §グラフ行の右クリック).
 //
-// What either of them offers is decided as it opens and handed in here —
-// the conditions are live (a timer fetch alone moves `busyCount`), and a
-// row that appears or vanishes under the pointer is a row clicked by
-// accident (デザイン規約 §メニュー).
+// What either of them offers is decided as it opens and handed in here — the conditions are live (a timer fetch alone
+// moves `busyCount`), and a row that appears or vanishes under the pointer is a row clicked by accident (デザイン規約 §メニュー).
 //
-// An `Item` because a menu measures the window through the item it was
-// declared under (`AppMenu.ownerItem`); it draws nothing itself.
+// An `Item` because a menu measures the window through the item it was declared under (`AppMenu.ownerItem`); it draws
+// nothing itself.
 Item {
     id: rowMenu
 
     required property RepoTab repoTab
-    /// The branch every one of these rows makes its sentence about
-    /// (規約 §履歴を合流させる).
+    /// The branch every one of these rows makes its sentence about (規約 §履歴を合流させる).
     required property string branch
 
-    /// The commit the menu was opened on, and the stash it is
-    /// ("" on an ordinary commit).
+    /// The commit the menu was opened on, and the stash it is ("" on an ordinary commit).
     required property string oid
     required property string stashRef
-    /// Whether a remote already has that commit. Rewriting it is not
-    /// asked about — nothing here leaves the machine — but デザイン規約
-    /// 「push 済みの範囲は尋ねずに言う」 wants it said, so the squash row
-    /// carries a tag the way the amend editor does. The answer lands a
-    /// frame after the menu opens.
+    /// Whether a remote already has that commit. Rewriting it is not asked about — nothing here leaves the machine —
+    /// but デザイン規約 「push 済みの範囲は尋ねずに言う」 wants it said, so the squash row carries a tag the way the amend editor does. The
+    /// answer lands a frame after the menu opens.
     required property bool published
-    /// What these menus offer. `canSequence` is the pair that only add a
-    /// commit, and so ask less of the repository than the rest.
+    /// What these menus offer. `canSequence` is the pair that only add a commit, and so ask less of the repository than
+    /// the rest.
     required property bool canSequence
     required property bool canIntegrate
     required property bool canEditHistory
     required property bool canMoveBranch
     required property bool stashCanWrite
 
-    /// The rows the page owns the answer to: they rewrite history or move
-    /// the selection, which is the page's to do (`RepoPage`).
+    /// The rows the page owns the answer to: they rewrite history or move the selection, which is the page's to do
+    /// (`RepoPage`).
     signal squashRequested(string oidHex)
     signal dropRequested(string oidHex)
     signal resetRequested(string mode)
@@ -51,8 +43,8 @@ Item {
     signal popStashRequested(string selector)
     signal dropStashRequested(string selector)
 
-    /// The automation's handles into these rows, an automation-only
-    /// exposure the same as `GraphPane.view` is (app-ui.md).
+    /// The automation's handles into these rows, an automation-only exposure the same as `GraphPane.view` is
+    /// (app-ui.md).
     readonly property alias menu: commitMenu
     readonly property alias dropItem: dropCommitItem
     readonly property alias stashDropItem: stashDeleteItem
@@ -101,8 +93,7 @@ Item {
             offered: rowMenu.canSequence
             onTriggered: rowMenu.repoTab.cherryPick(rowMenu.oid)
         }
-        // Both cherry-pick and revert only add a commit, so neither is
-        // asked about or held.
+        // Both cherry-pick and revert only add a commit, so neither is asked about or held.
         AppMenuItem {
             code: "revert"
             offered: rowMenu.canSequence
@@ -124,29 +115,25 @@ Item {
             offered: rowMenu.canIntegrate
             onTriggered: rowMenu.repoTab.rebase(rowMenu.oid, "", true)
         }
-        // No row for landing on the commit itself: that leaves HEAD on no
-        // branch (デザイン規約 §ブランチ・コミットへの移動) — the
+        // No row for landing on the commit itself: that leaves HEAD on no branch (デザイン規約 §ブランチ・コミットへの移動) — the
         // double-click already offers a branch at this commit.
         AppMenuSeparator {}
-        // No entry for editing the message: the click that opens this
-        // menu already puts the message in the details pane's boxes.
+        // No entry for editing the message: the click that opens this menu already puts the message in the details
+        // pane's boxes.
         AppMenuItem {
             code: "squash"
             //: Follows the `squash` chip: "squash into parent".
             text: qsTr("into parent")
-            // Said, not asked (要望: rewriting a pushed commit shows a
-            // warning): the squash goes ahead, and this tag is the warning.
+            // Said, not asked (要望: rewriting a pushed commit shows a warning): the squash goes ahead, and this tag is
+            // the warning.
             note: rowMenu.published ? qsTr("already pushed") : ""
             offered: rowMenu.canEditHistory
             onTriggered: rowMenu.squashRequested(rowMenu.oid)
         }
-        // Held while this branch is the only thing holding its tip; a
-        // plain click once something else does — then the replaced
-        // commits stay drawn and a cherry-pick brings any of them back
-        // (デザイン規約 §長押し). The answer is a property of the branch,
-        // not of the row, so it is already in hand when the menu opens: a
-        // mark appearing later would re-indent every row
-        // (`AppMenu.holdIndent`) with the hand already on its way.
+        // Held while this branch is the only thing holding its tip; a plain click once something else does — then the
+        // replaced commits stay drawn and a cherry-pick brings any of them back (デザイン規約 §長押し). The answer is a property
+        // of the branch, not of the row, so it is already in hand when the menu opens: a mark appearing later would
+        // re-indent every row (`AppMenu.holdIndent`) with the hand already on its way.
         AppMenuItem {
             id: dropCommitItem
             code: "drop"
@@ -163,9 +150,7 @@ Item {
             id: resetMenu
             titleCode: "reset"
             //: Follows the `reset` chip: "reset main here".
-            title: rowMenu.branch !== ""
-                   ? qsTr("%1 here").arg(rowMenu.branch)
-                   : qsTr("the branch here")
+            title: rowMenu.branch !== "" ? qsTr("%1 here").arg(rowMenu.branch) : qsTr("the branch here")
             applies: rowMenu.canMoveBranch
             AppMenuItem {
                 code: "--soft"

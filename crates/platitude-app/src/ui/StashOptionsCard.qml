@@ -45,9 +45,7 @@ Rectangle {
         // staged-only choice does not smuggle its old tick through
         // (git refuses --staged together with --include-untracked).
         const stagedOnly = stashStagedOnly.checked
-        card.submitted(stashName.text,
-                       !stagedOnly && stashUntracked.checked,
-                       !stagedOnly && stashKeepIndex.checked,
+        card.submitted(stashName.text, !stagedOnly && stashUntracked.checked, !stagedOnly && stashKeepIndex.checked,
                        stagedOnly)
         card.close()
     }

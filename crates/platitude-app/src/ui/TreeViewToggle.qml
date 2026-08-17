@@ -3,10 +3,9 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The tree ⇄ paths view toggle both file lists carry in their header
-// band. The one not in use is still the way to switch, so it keeps the
-// hue and drops a step rather than falling to the muted colour, which
-// would read as unavailable (デザイン規約 §暗く落とした段 / §無効).
+// The tree ⇄ paths view toggle both file lists carry in their header band. The one not in use is still the way to
+// switch, so it keeps the hue and drops a step rather than falling to the muted colour, which would read as unavailable
+// (デザイン規約 §暗く落とした段 / §無効).
 RowLayout {
     id: toggle
 

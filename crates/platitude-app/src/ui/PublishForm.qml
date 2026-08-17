@@ -3,10 +3,9 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// What the first push's question asks back: where the branch goes, and
-// what it is called when it gets there (デザイン規約 §はじめてリモートへ
-// 送る). It stands inside the question's bar, which is why it is built
-// from a `Component` rather than placed anywhere itself.
+// What the first push's question asks back: where the branch goes, and what it is called when it gets there (デザイン規約
+// §はじめてリモートへ送る). It stands inside the question's bar, which is why it is built from a `Component` rather than placed
+// anywhere itself.
 ColumnLayout {
     id: publishForm
 
@@ -19,8 +18,7 @@ ColumnLayout {
     signal remotePicked(int index)
     signal branchEdited(string name)
 
-    /// Automation only: the list cannot be opened by an injected click on
-    /// the offscreen platform.
+    /// Automation only: the list cannot be opened by an injected click on the offscreen platform.
     property alias remotePick: remotePick
 
     spacing: Theme.spaceXs
@@ -32,9 +30,7 @@ ColumnLayout {
             id: remotePick
             pickOnly: true
             lastRowActs: true
-            // The fixed-input width every boxed field shares
-            // (デザイン規約 §レイアウト初期値 160) — not a width of its
-            // own.
+            // The fixed-input width every boxed field shares (デザイン規約 §レイアウト初期値 160) — not a width of its own.
             Layout.preferredWidth: 160
             model: publishForm.choices
             wanted: publishForm.remote
@@ -46,8 +42,7 @@ ColumnLayout {
             color: Theme.textMuted
             font.pixelSize: Theme.fontMd
         }
-        // Never a placeholder: an empty box would read as though there
-        // were nothing to send.
+        // Never a placeholder: an empty box would read as though there were nothing to send.
         SlimField {
             id: publishBranchField
             Layout.preferredWidth: 160

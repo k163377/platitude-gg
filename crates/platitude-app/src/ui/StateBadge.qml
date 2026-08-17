@@ -24,9 +24,7 @@ Rectangle {
     width: Math.min(badge.naturalW, badge.cap)
     height: Theme.iconLg
     radius: Theme.radiusSm
-    color: badge.filled ? Theme.danger
-           : badge.pressable && badgeHover.hovered
-             ? Theme.bgHover : "transparent"
+    color: badge.filled ? Theme.danger : badge.pressable && badgeHover.hovered ? Theme.bgHover : "transparent"
     border.color: badge.filled ? "transparent" : Theme.warning
     border.width: badge.filled ? 0 : Theme.borderWidth
     RowLayout {

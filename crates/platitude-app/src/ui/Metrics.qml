@@ -1,10 +1,7 @@
-// Graph / interaction constants — a verbatim mirror of the
-// グラフ・インタラクション定数 and 進行中・長押しの定数 tables in
-// internal-docs/デザイン規約.md. Edit the document first, then reflect
-// changes here; never introduce values that are not in those tables
-// (same rule as Theme). `stateFlushMs` is the one value that lives here
-// alone: how often state is offered to disk is persistence timing, not
-// something drawn, so the design document has no seat for it.
+// Graph / interaction constants — a verbatim mirror of the グラフ・インタラクション定数 and 進行中・長押しの定数 tables in
+// internal-docs/デザイン規約.md. Edit the document first, then reflect changes here; never introduce values that are not in
+// those tables (same rule as Theme). `stateFlushMs` is the one value that lives here alone: how often state is offered
+// to disk is persistence timing, not something drawn, so the design document has no seat for it.
 pragma Singleton
 
 import QtQuick
@@ -33,13 +30,12 @@ QtObject {
     readonly property int opticalDrop: 1
     readonly property int menuMinW: 160
     readonly property var laneDash: [1, 1]
-    // The one opacity anything is dimmed to (デザイン規約 §暗く落とした段).
-    // Same 45% the `*Dim` colours already are — measured, not chosen.
+    // The one opacity anything is dimmed to (デザイン規約 §暗く落とした段). Same 45% the `*Dim` colours already are — measured, not
+    // chosen.
     readonly property real dimFade: 0.45
     readonly property int tipDelayMs: 600
     readonly property int hoverKeepMs: 150
-    // How often the window offers its shape to be written down. Nothing
-    // is written unless something moved, so this only has to be short
-    // enough that a crash loses a layout nobody would miss.
+    // How often the window offers its shape to be written down. Nothing is written unless something moved, so this only
+    // has to be short enough that a crash loses a layout nobody would miss.
     readonly property int stateFlushMs: 2000
 }

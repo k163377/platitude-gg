@@ -88,8 +88,7 @@ Item {
         // open-failed screen sits beside the panes), and one that is not
         // on screen is not one a hand could have grabbed — nor one with a
         // width and height to tell its direction from.
-        const wanted = watch.splitBars.filter(b =>
-            b.visible && (which === "log-min" ? !b.sideways : b.sideways))
+        const wanted = watch.splitBars.filter(b => b.visible && (which === "log-min" ? !b.sideways : b.sideways))
         if (wanted.length === 0)
             return false
         // Left to right, so the sidebar's bar is the first of the two the
@@ -115,8 +114,7 @@ Item {
     function reportDividerRefusal(which) {
         // The graph's own dividers know what was asked; a split bar is
         // read from where the pointer went instead.
-        const split = which === "sidebar-min" || which === "details-min"
-                      || which === "log-min"
+        const split = which === "sidebar-min" || which === "details-min" || which === "log-min"
         if (split)
             watch.dragSplitPast(which)
         else
@@ -130,8 +128,7 @@ Item {
                                         ? (watch.heldSplit ? watch.heldSplit.visible
                                                            : false)
                                         : watch.graphPane.refusedLineShown)
-                          + " case=" + which
-                          + " labelW=" + watch.graphPane.labelW
+                          + " case=" + which + " labelW=" + watch.graphPane.labelW
                           + " graphW=" + watch.graphPane.graphColW)
     }
 

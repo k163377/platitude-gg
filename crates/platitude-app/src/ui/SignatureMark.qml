@@ -32,10 +32,8 @@ RowLayout {
     readonly property bool tipShown: signatureMark.ToolTip.visible
 
     readonly property bool broken: signatureMark.kind === "bad"
-    readonly property color tone:
-        signatureMark.kind === "verified" ? Theme.success
-        : signatureMark.broken ? Theme.danger
-        : Theme.textSecondary
+    readonly property color tone: signatureMark.kind === "verified" ? Theme.success
+        : signatureMark.broken ? Theme.danger : Theme.textSecondary
     /// Conclusion first, one line (デザイン規約 §hover のツールチップ).
     readonly property string tip:
         signatureMark.code === "G"

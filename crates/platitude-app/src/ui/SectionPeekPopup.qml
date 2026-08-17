@@ -52,8 +52,7 @@ Popup {
     // came back in the meantime decides what happens now.
     onPinnedChanged: peek.settle()
 
-    readonly property var sectionModel:
-        peek.kind === "" ? null : peek.rail.modelOf(peek.kind)
+    readonly property var sectionModel: peek.kind === "" ? null : peek.rail.modelOf(peek.kind)
     // The section headers' own words, said again for the one section the
     // folded list shows: the rail has only an icon to name it with.
     readonly property string caption:
@@ -131,8 +130,7 @@ Popup {
     // As tall as it has rows, and never past the foot of the pane it
     // comes out of. It never opens with no rows at all — a cell
     // holding a zero does not open (NavRail).
-    height: Math.min(Theme.headerHeight + peekList.count * Theme.rowHeight
-                     + Theme.borderWidth,
+    height: Math.min(Theme.headerHeight + peekList.count * Theme.rowHeight + Theme.borderWidth,
                      Math.max(0, peek.paneH - peek.top))
     padding: 0
     margins: 0
@@ -181,13 +179,11 @@ Popup {
             kindHint: peek.kind
             gestures: peek.gestures
             stretch: true
-            headTracks: peek.kind === "branch"
-                        && peek.workTree.upstream !== ""
+            headTracks: peek.kind === "branch" && peek.workTree.upstream !== ""
             headAhead: peek.workTree.ahead
             headBehind: peek.workTree.behind
             onRefActivated: oidHex => peek.refActivated(oidHex)
-            onRefMenuRequested: (kind, name, full, oidHex) =>
-                peek.refMenuRequested(kind, name, full, oidHex)
+            onRefMenuRequested: (kind, name, full, oidHex) => peek.refMenuRequested(kind, name, full, oidHex)
         }
     }
 }
