@@ -695,6 +695,18 @@ Item {
         // toolbar's button is the flow's to work out.
         publishFlow.noteWriteAnswer(repoTab.lastWriteOp, repoTab.lastWriteError)
         if (repoTab.lastWriteError !== "") {
+            // A refused stage, unstage or discard says the rows on screen
+            // are not the file any more — drifted bytes are the one thing
+            // the fingerprint refuses on. The tally watch below cannot
+            // always catch the drift that caused it (an outside change
+            // that moves no bucket count moves no tally), so left alone
+            // the same press would be refused again for as long as the
+            // reader cared to try. The refusal's answer is the fresh file.
+            if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage"
+                    || repoTab.lastWriteOp === "discard") {
+                page.diffReadAt = repoTab.writeSeq
+                page.reloadDiff()
+            }
             // The one refusal this page has a second move for: a branch
             // delete git would not do on its own.
             if (repoTab.lastWriteOp === "branch" && page.pendingDeleteBranch !== "") {
@@ -869,9 +881,15 @@ Item {
         // Said here rather than left to `busyCount`, which rises when the
         // queue starts the write rather than when the press is made: two
         // presses in a row both went out before the first had begun.
-        page.diffAwaits = true
-        repoTab.stageSelection(page.diffKind, page.diffPath, page.diffOrigPath,
-                               hunk, line, diffModel.fingerprint)
+        //
+        // Armed by the answer, not by the asking: the slot says whether a
+        // write actually went out, and a request it turned away — nothing
+        // selected, no fingerprint to address — has no answer coming, so
+        // a wait armed for it would hold the marks for good (the same
+        // wedge the tree-read wait had, through the request's own door).
+        page.diffAwaits = repoTab.stageSelection(page.diffKind, page.diffPath,
+                                                 page.diffOrigPath, hunk, line,
+                                                 diffModel.fingerprint)
     }
     /// Throwing one hunk of the shown diff away, with no question in front
     /// of it: the button in that hunk's own heading was held down, which is
@@ -879,10 +897,10 @@ Item {
     /// be thrown away on its own — the hunk is the smallest piece — though
     /// it can still be staged on its own, which loses nothing.
     function discardHunkNow(hunk) {
-        page.diffAwaits = true
-        repoTab.discardSelection(page.diffKind, page.diffPath,
-                                 page.diffOrigPath, hunk, -1,
-                                 diffModel.fingerprint)
+        // Armed by the answer, for the reason `stageSelection` gives.
+        page.diffAwaits = repoTab.discardSelection(page.diffKind, page.diffPath,
+                                                   page.diffOrigPath, hunk, -1,
+                                                   diffModel.fingerprint)
     }
     // ---- what the reader lands on when a side runs out ---------------
     /// The row beside the open diff's file under the same heading, as
@@ -950,9 +968,10 @@ Item {
     ///
     /// Three parts, in the order they happen, and **every one of them ends
     /// by itself**: the press is out and no answer has come (`diffAwaits`,
-    /// put down by the write's own answer), git is running (`busyCount`,
-    /// which the session balances), the file is being read again
-    /// (`loading`, put down by the rows arriving).
+    /// armed only when the tab says a write went out, put down by the
+    /// write's own answer), git is running (`busyCount`, which the session
+    /// balances), the file is being read again (`loading`, put down by the
+    /// rows arriving).
     ///
     /// **Nothing here waits on a signal that may not come.** Held on "the
     /// tree has not been read yet" instead, it wedged for good the first
