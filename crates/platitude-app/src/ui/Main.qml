@@ -174,7 +174,7 @@ ApplicationWindow {
         button: Theme.bgElevated
         placeholderText: Theme.textMuted
         mid: Theme.borderDefault
-        dark: Theme.bgBase
+        dark: Theme.borderStrong // Fusion: a scroll bar's held handle
         light: Theme.borderDefault
 
         active {
