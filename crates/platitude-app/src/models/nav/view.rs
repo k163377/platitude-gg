@@ -194,6 +194,29 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
+    /// Which of the rows on show a ref sits on, by the name git knows it
+    /// by; -1 when it is on none.
+    ///
+    /// Asked of the rows as they stand, unlike `told`: what this answers
+    /// is where to scroll, and a row behind a filter or folded into a
+    /// closed folder is nowhere the view can go. The name is read the
+    /// way the rows are keyed (`NavList.keyOf`) — the full one, or what
+    /// the row shows where there is no full one.
+    pub(super) fn row_of(&self, name: &str) -> i32 {
+        (0..self.shown_rows())
+            .find(|at| {
+                self.row_at(*at).is_some_and(|row| {
+                    let full = self.field(row, Role::Full);
+                    if full.as_str().is_empty() {
+                        self.field(row, Role::Name).as_str() == name
+                    } else {
+                        full.as_str() == name
+                    }
+                })
+            })
+            .map_or(-1, |at| at as i32)
+    }
+
     /// Whether this section holds `path` in `bucket`. Both halves are
     /// needed: a file changed on both sides at once has a row under each,
     /// and asking by path alone always answers with the first.
@@ -365,4 +388,3 @@ impl NavSectionModel {
         );
     }
 }
-

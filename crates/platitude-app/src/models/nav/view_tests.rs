@@ -24,6 +24,41 @@ fn a_filtered_remote_row_shows_its_whole_name() {
     assert_eq!(says(&model, 0, Role::Full), "");
 }
 
+/// Where to scroll for a name, in the two shapes a row is keyed by:
+/// the full one a tree gives a leaf, and the shown one a tag has
+/// instead of a full name at all.
+#[test]
+fn a_row_is_found_by_the_name_it_is_keyed_by() {
+    let mut model = section(
+        "remotes",
+        Source::Remotes(snapshot(
+            vec![remote("origin/feature/one"), remote("origin/main")],
+            Vec::new(),
+        )),
+    );
+    // A remote root starts closed, and a row folded away is nowhere the
+    // view can scroll to.
+    model.arrange();
+    assert_eq!(model.row_of("origin/main"), -1);
+
+    model.folder_overrides.insert("origin".to_string(), true);
+    model.arrange();
+    // origin / feature / one / main.
+    assert_eq!(model.row_of("origin/feature/one"), 2);
+    assert_eq!(model.row_of("origin/main"), 3);
+    // The leaf answers to its whole name, never to what it shows.
+    assert_eq!(model.row_of("one"), -1);
+    assert_eq!(model.row_of("origin/feature/two"), -1);
+
+    // A tag carries no full name: it is keyed by what it shows.
+    let mut tags = section(
+        "tags",
+        Source::Tags(snapshot(Vec::new(), vec![tag("v1.0", false, true)])),
+    );
+    tags.arrange();
+    assert_eq!(tags.row_of("v1.0"), 0);
+}
+
 #[test]
 fn a_remote_row_derives_its_local_name_from_its_own_snapshot() {
     let model = section(

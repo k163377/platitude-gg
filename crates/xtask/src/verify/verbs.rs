@@ -84,11 +84,23 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // the click it was given, `collapsed=`/`box=` what came of it
         // (the box puts the whole list back over the diff the fold was
         // made for — 2026-08-18 ユーザー報告).
-        "nav-reclick" => Some("away=false armed=true collapsed=false box=true"),
+        "nav-reclick" => Some("away=false armed=true collapsed=true box=true focused=true"),
         "nav-reclick-away" => Some("away=true armed=false collapsed=true box=false"),
+        // The same claim by the other door — the menu's `beginRename` —
+        // and the rule it answers to: a box opens where its row is, so a
+        // peeked row keeps both the fold and whatever the fold was made
+        // for. `diff=` is the half that only the second one has a file
+        // to lose.
+        "nav-peek-rename" => Some("collapsed=true diff=false editing=branch:"),
+        "diff-fold-by-rename" => Some("collapsed=true diff=true editing=branch:"),
         // The two ways the box is walked away from with nothing typed
         // into it. Same blind spot: a pane with no box in it frames like
         // a pane that never opened one.
+        // And the row the box lands on, brought back from wherever the
+        // list had scrolled to. A picture cannot carry it either: a
+        // section showing its last rows and one showing its first frame
+        // the same, and 2,000 tags all read alike.
+        "nav-rename-far" => Some("shown=true box=true"),
         "nav-rename-drop" if arg == "fold" => Some("nav_drop how=fold collapsed=true box=false"),
         "nav-rename-drop" => Some("nav_drop how=away collapsed=false box=false"),
         // An emptied panel with a red mark over it and an emptied panel

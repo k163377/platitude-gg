@@ -83,13 +83,12 @@ Rectangle {
               : qsTr("git will not take this as a name")
 
     function startEdit(kind, key, mode, id, oid, text) {
-        // A name is typed in the list, not in a peek at it: walking away
-        // from a hovered list that has taken the keyboard would take the
-        // half-typed name with it. So the list comes back first, and the
-        // box opens on the same row in it (the key is the row's, not the
-        // list's).
-        if (sidebar.collapsed)
-            sidebar.foldRequested(false)
+        // The box opens where the row is — folded, that is the section
+        // standing beside the rail, and the list is not put back for it
+        // (デザイン規約 §左メニューを畳む: a click in a peek does not undo
+        // the fold, which would take the diff it was made for down). The
+        // hover that raised that section no longer decides how long it
+        // stands: the box holds it open, the way a menu does (`pinned`).
         sidebar.editKind = kind
         sidebar.editMode = mode
         sidebar.editId = id
@@ -491,7 +490,10 @@ Rectangle {
         paneW: sidebar.width
         paneH: sidebar.height
         listW: sidebar.openWidth
-        pinned: sidebar.menuOpen
+        // A box open on one of its rows holds it as firmly as a menu
+        // does: it has taken the keyboard, and a name half typed into a
+        // list the pointer walked away from is a name lost.
+        pinned: sidebar.menuOpen || sidebar.editKey !== ""
         onRefActivated: oidHex => sidebar.refActivated(oidHex)
         onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
     }

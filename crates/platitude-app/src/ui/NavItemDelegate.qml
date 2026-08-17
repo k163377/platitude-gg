@@ -261,6 +261,9 @@ Item {
     /// when a second click of its own counts as a second (app-ui.md §UI 自動化の因果性).
     readonly property bool renameArmed: renameTimer.running
     readonly property bool clickGuarded: doubleGuard.running
+    /// Whether the box on this row has the keyboard. The output side: a box drawn where nothing can be typed reads as
+    /// a box, and the folded list's section is a popup, which takes the keyboard only when something in it asks.
+    readonly property bool editFocused: editField.activeFocus
     /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
     /// the row itself rather than at a copy of what the row would have decided (PG_AUTO_ACT=nav-reclick).
     function leftClick(modifiers) {

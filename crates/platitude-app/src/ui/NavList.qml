@@ -36,6 +36,24 @@ AppListView {
         return navList.kindHint + ":" + (full !== "" ? full : name)
     }
 
+    /// The box has opened on a row: if it is one of this section's, bring it into view. A row can be typed into
+    /// without having been clicked — the current branch's sticky row raises the same menu while the real row is
+    /// scrolled off (`HeadPinRow`) — and a name changing itself somewhere off screen is a name nobody agreed to.
+    /// Watched rather than told: only the gestures know when a box opens, and every list they reach is one of these.
+    Connections {
+        target: navList.gestures
+        function onEditKeyChanged() {
+            const key = navList.gestures.editKey
+            const head = navList.kindHint + ":"
+            if (!key.startsWith(head))
+                return
+            // What is on show, so a row behind a filter or a closed folder answers -1 rather than a stranger's place.
+            const row = navList.sectionModel.rowOfName(key.substring(head.length))
+            if (row >= 0)
+                navList.positionViewAtIndex(row, ListView.Contain)
+        }
+    }
+
     /// Smoke hooks (PG_AUTO_ACT=nav-reclick): a left click on one row, and what that row made of it. Clicks cannot be
     /// injected (verify-ui スキル), so they go in at the row's own answer. `clickRow` says false when the view has not
     /// built that row yet — the delegate arrives on the layout after the model got the rows, and a run that counted
@@ -54,6 +72,20 @@ AppListView {
     function rowGuarded(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.clickGuarded : false
+    }
+    function rowFocused(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.editFocused : false
+    }
+    /// Where the list has actually scrolled to, and how a run puts a row out of sight to begin with. Read off
+    /// `contentY` rather than off a delegate: a row scrolled away has none, and "there is no delegate" is also what a
+    /// list that has not been built yet says.
+    function rowInView(index) {
+        const top = index * Theme.rowHeight
+        return top >= navList.contentY && top + Theme.rowHeight <= navList.contentY + navList.height
+    }
+    function scrollToEnd() {
+        navList.contentY = Math.max(0, navList.contentHeight - navList.height)
     }
 
     visible: expanded

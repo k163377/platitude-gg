@@ -115,7 +115,7 @@ Item {
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
-                "nav-filter", "nav-reclick", "nav-reclick-away",
+                "nav-filter", "nav-reclick", "nav-reclick-away", "nav-rename-far",
                 "delete-branch-refused", "chip-menu", "chip-menu-current",
                 "delete-blocked-tip", "delete-branch-early", "ref-list-card",
                 "signature", "signature-tip", "stash-tip", "path-tip", "row-card", "menu-hover",
@@ -780,7 +780,13 @@ Item {
                 return
             navRailTimer.stop()
             AppBackend.report(
+            // The three that are read together: what the centre holds, and what is being typed into. A box opens where
+            // its row is, and folded that is the section beside the rail — putting the list back would take an open
+            // file down with it (デザイン規約 §左メニューを畳む), so the three are neighbours or they cannot be judged in one
+            // substring.
             "nav_rail collapsed=" + page.sidebarCollapsed
+            + " diff=" + page.diffShown
+            + " editing=" + sidebarPane.editKey
             + " width=" + Math.round(sidebarPane.width)
             + " peek=" + sidebarPane.peekKind
             // Where the open section stands. `cell` is the top edge of the mark that opened it and `top` where the
@@ -790,10 +796,7 @@ Item {
             + " top=" + Math.round(sidebarPane.peekY)
             + " cell=" + Math.round(sidebarPane.peekTop)
             + " end=" + Math.round(sidebarPane.peekBottom)
-            + " pane=" + Math.round(sidebarPane.height)
-            + " editing=" + sidebarPane.editKey
-            // What the centre holds: the list coming back closes a file, so the two are read together or not at all.
-            + " diff=" + page.diffShown)
+            + " pane=" + Math.round(sidebarPane.height))
             driver.complete()
         }
     }
@@ -851,8 +854,8 @@ Item {
                 driver.reclickArmed = section.rowArmed(reclickTimer.row)
                 driver.reclickStep = 4
             } else if (driver.reclickStep === 4) {
-                // Armed, the box opens once that wait runs out, and it opens in the list — which has to come back
-                // first (SidebarPane.startEdit). Unarmed there is nothing further to wait for.
+                // Armed, the box opens once that wait runs out — on the row where it stands, which is in the section
+                // beside the rail (SidebarPane.startEdit). Unarmed there is nothing further to wait for.
                 if (driver.reclickArmed && sidebarPane.editKey === "")
                     return
                 reclickTimer.stop()
@@ -862,9 +865,50 @@ Item {
                 + " marked=" + sidebarPane.activeKey
                 + " away=" + driver.reclickAway
                 + " armed=" + driver.reclickArmed
+                // The fold is not undone for a box, the box is there, and it has the keyboard — the three that say the
+                // gesture landed where the hand was (デザイン規約 §左メニューを畳む).
                 + " collapsed=" + page.sidebarCollapsed
                 + " box=" + (sidebarPane.editKey !== "")
+                + " focused=" + section.rowFocused(reclickTimer.row)
                 + " peek=" + sidebarPane.peekKind
+                + " editing=" + sidebarPane.editKey)
+                driver.complete()
+            }
+        }
+    }
+    // PG_AUTO_ACT=nav-rename-far: the section is opened, scrolled until its first row is out of sight, and only then
+    // asked for a box on that row. Each step waits for the one before to have landed — a list still building has no
+    // height to scroll by, and a run that named the row before the scroll took would be watching the list stay put.
+    property int farStep: 0
+    Timer {
+        id: farTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            const section = sidebarPane.peekSection
+            if (driver.farStep === 0) {
+                if (sidebarPane.peekKind === "") {
+                    sidebarPane.peekAt("tag")
+                    return
+                }
+                section.scrollToEnd()
+                driver.farStep = 1
+            } else if (driver.farStep === 1) {
+                // The scroll is what puts the row out of sight; until it has, there is nothing to bring back.
+                if (section.rowInView(0))
+                    return
+                sidebarPane.beginRename("tag", tagsModel.nameAt(0),
+                                        tagsModel.nameAt(0))
+                driver.farStep = 2
+            } else if (driver.farStep === 2) {
+                if (sidebarPane.editKey === "")
+                    return
+                farTimer.stop()
+                AppBackend.report(
+                "nav_far row=" + tagsModel.nameAt(0)
+                + " shown=" + section.rowInView(0)
+                + " box=" + (sidebarPane.editKey !== "")
+                + " collapsed=" + page.sidebarCollapsed
                 + " editing=" + sidebarPane.editKey)
                 driver.complete()
             }
@@ -2037,8 +2081,8 @@ Item {
             } else if (act === "nav-unfold")
                 page.foldByHand(false)
             else if (act === "nav-peek-rename") {
-                // Typing a name into a peeked row: the list has to come back on its own and the box land on the same
-                // row in it with the keyboard (SidebarPane.startEdit).
+                // Typing a name into a peeked row: the box lands on that row, in the section standing beside the rail,
+                // and holds it open — the list is not put back for it (SidebarPane.startEdit).
                 sidebarPane.peekAt("branch")
                 sidebarPane.beginRename("branch", workTree.branch,
                                         workTree.branch)
@@ -2054,6 +2098,13 @@ Item {
             driver.reclickArmed = false
             driver.reclickStep = 0
             reclickTimer.start()
+        } else if (act === "nav-rename-far") {
+            // A box on a row the list had scrolled away from. The list has to bring it back (デザイン規約 §左メニューの所作)
+            // — a name changing itself off screen is a name nobody agreed to. Entered on the folded rail's section
+            // because that is the one list a run can scroll and read back through a single handle, and the row is
+            // named the way the menu names it (`beginRename`), not by clicking it.
+            page.foldByHand(true)
+            farTimer.start()
         } else if (act === "nav-rename-drop") {
             // The box, and the two ways it is walked away from without a word being typed: "fold" takes the list down
             // to the rail, "away" is the press that landed anywhere else (Main's `FocusRelease` enters here).
@@ -2550,8 +2601,9 @@ Item {
                    || act === "diff-fold-by-hand"
                    || act === "diff-fold-by-rename"
                    || act === "diff-keep-folded") {
-            // "-by-hand" and "-by-rename" both bring the list back and so take the diff down; "-keep-folded" had it
-            // folded before the diff arrived, so closing the diff leaves it folded.
+            // "-by-hand" brings the list back and so takes the diff down; "-by-rename" is the other side of that rule
+            // — a box opened from a peeked row stands in the peek, so neither the fold nor the file goes anywhere.
+            // "-keep-folded" had it folded before the diff arrived, so closing the diff leaves it folded.
             page.showWip()
             if (act === "diff-keep-folded")
                 page.foldByHand(true)

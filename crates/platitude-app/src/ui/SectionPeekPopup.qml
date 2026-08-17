@@ -129,6 +129,15 @@ Popup {
     function rowGuarded(index) {
         return peekList.rowGuarded(index)
     }
+    function rowFocused(index) {
+        return peekList.rowFocused(index)
+    }
+    function rowInView(index) {
+        return peekList.rowInView(index)
+    }
+    function scrollToEnd() {
+        peekList.scrollToEnd()
+    }
     Timer {
         id: peekSettle
         interval: Metrics.hoverKeepMs

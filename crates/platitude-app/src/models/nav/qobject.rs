@@ -234,6 +234,13 @@ impl NavSectionModel {
         self.told(Role::Name, &name, Role::OidHex)
     }
 
+    /// Which row on show this ref sits on; -1 when it is on none. What a
+    /// list asks before scrolling to a row nobody clicked on.
+    #[qslot]
+    fn row_of_name(&self, name: String) -> i32 {
+        self.row_of(&name)
+    }
+
     /// The remote branch this one speaks for (`origin/main`); empty when
     /// it speaks for none, and for every section but the branches.
     #[qslot]
