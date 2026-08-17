@@ -62,7 +62,6 @@ Item {
     // between its two names. The whole of this row is that part; what a click means is the only thing it keeps to
     // itself.
     NameCell {
-        id: nameCell
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceSm + (fileRow.model.depth ?? 0) * Theme.spaceMd
         anchors.rightMargin: Theme.spaceSm
@@ -82,15 +81,12 @@ Item {
                 fileRow.activated("", fileRow.pathText, fileRow.origPathText)
         }
     }
-    // Tree leaves show only their file name; hover reveals the path. A paths-view row the pane elided answers the same
-    // way — its display name is the full path, so elision is the one thing that leaves the whole name unsaid (デザイン規約
-    // §hover のツールチップ). A folder row is the elision case alone: the rows above it already spell its prefix, so only a
-    // chain the pane cut short has anything left to say.
+    // Hover says the path, whatever the row shows and however wide the pane is (デザイン規約 §hover のツールチップ). Asking
+    // whether the row had already said it — tree leaf against paths view, and either against what the pane elided —
+    // bought a repeat avoided at the price of a condition nobody could read off the screen.
     // Not behind a standing menu: the pointer is in the menu, and a tip that comes out now is drawn over the rows the
     // hand is reading (デザイン規約 §メニュー).
     ToolTip.visible: (fileMouse.containsMouse || fileRow.tipPointedAt) && !fileRow.menuStanding
-                     && (fileRow.isFolder ? nameCell.truncated
-                     : (fileRow.nameText !== fileRow.pathText || nameCell.truncated))
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: fileRow.pathText
 }

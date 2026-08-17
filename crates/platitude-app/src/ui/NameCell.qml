@@ -39,12 +39,6 @@ RowLayout {
     /// same way it gives it — `Layout.fillWidth` follows this.
     property bool showName: true
 
-    /// Whether the row had to cut the name short. This is the tooltip's trigger in both lists (デザイン規約 §hover のツールチップ):
-    /// a name the pane elided is the one thing the row leaves unsaid, and both panes were reading it off a label of
-    /// their own.
-    readonly property bool truncated:
-        nameCell.showName && (newName.truncated || (origName.visible && origName.truncated))
-
     spacing: Theme.spaceXs
 
     // The seat every row opens with.

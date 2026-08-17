@@ -151,7 +151,6 @@ Item {
         // after it. A ref row has nothing to put in the slot and it stays open all the same, which is what keeps every
         // name at a given depth beginning in one column.
         NameCell {
-            id: nameCell
             // The box below takes the row's slack while it is open, and the slot stays where it is: a name going into a
             // box must not walk the columns beside it sideways.
             Layout.fillWidth: !navRow.editing
@@ -349,11 +348,11 @@ Item {
     // cut short is a click away, in the details pane that reads it anyway (§hover のツールチップ「足すものが 1 つも無い的には、何も出さない」).
     readonly property string hoverText: {
         const full = navRow.fullName
-        // A folder in the working tree's list: the chained rows elide at pane width, and elision is the one thing that
-        // leaves the chain unsaid — the path rides in `orig_path` (`full` is the fold key). A ref folder stays silent
-        // either way: its full path only reads the tree back (デザイン規約 §hover のツールチップ).
+        // A folder in the working tree's list says its own path, the same as the file rows under it — the path rides
+        // in `orig_path` (`full` is the fold key). A ref folder stays silent: its full path only reads the tree back
+        // (デザイン規約 §hover のツールチップ).
         if (navRow.folder)
-            return navRow.kindHint === "wt" && nameCell.truncated ? navRow.orig_path : ""
+            return navRow.kindHint === "wt" ? navRow.orig_path : ""
         if (navRow.kindHint === "remote")
             return qsTr("Switch to %1").arg(full)
         if (navRow.kindHint === "worktree")
@@ -364,10 +363,9 @@ Item {
         // things opening off one pointer would sit on top of each other.
         if (navRow.eolPointedAt)
             return ""
-        // What is left is a file row, whose leaf the tree cut to its last segment: the path is the one thing the row
-        // cannot show. A row the pane elided is the same case reached another way — the paths view's display name *is*
-        // the full path, so elision alone leaves it unsaid (the menu rows' own rule, デザイン規約 §メニュー).
-        return full !== navRow.name || nameCell.truncated ? full : ""
+        // What is left is a file row: hover says the path, whatever the row shows and however wide the pane is
+        // (デザイン規約 §hover のツールチップ).
+        return full
     }
     /// Whether the words on the model are this row's. Only one row can be pointed at, so they are kept once there
     /// rather than on every row (`NavSectionModel::point_eol`), and the row has to check that the answer is its own
