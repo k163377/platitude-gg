@@ -80,7 +80,15 @@ impl Source {
 
     pub(super) fn files(status: platitude_core::status::WorkTreeStatus) -> Self {
         let mut order = Vec::new();
+        // The heading being filled, and where its rows began: buckets
+        // shown under one of them are one list (`Bucket::run`), and a
+        // list is put in order once it is whole.
+        let (mut run, mut from) = ("", 0);
         for bucket in Bucket::SHOWN {
+            if bucket.run() != run {
+                by_path(&mut order[from..], &status);
+                (run, from) = (bucket.run(), order.len());
+            }
             for (at, item) in status.items.iter().enumerate() {
                 if bucket.holds(item) {
                     order.push(FileAt {
@@ -90,8 +98,27 @@ impl Source {
                 }
             }
         }
+        by_path(&mut order[from..], &status);
         Self::Files { status, order }
     }
+}
+
+/// Puts one heading's rows in name order.
+///
+/// git answers with its tracked entries sorted and its untracked ones
+/// sorted after them, so the unstaged heading — which is both — arrives
+/// as two sorted lists one after the other. Left that way, every
+/// untracked file sits at the foot of the heading, and staging one moves
+/// it up among the others: the same files, listed two different ways on
+/// the two sides of the pane.
+fn by_path(rows: &mut [FileAt], status: &platitude_core::status::WorkTreeStatus) {
+    let path_of = |row: &FileAt| {
+        status
+            .items
+            .get(row.at as usize)
+            .map_or("", platitude_core::status::StatusItem::path)
+    };
+    rows.sort_by(|a, b| path_of(a).cmp(path_of(b)));
 }
 
 /// One file row: which of git's four answers it came out of, and the
@@ -112,7 +139,8 @@ pub(super) enum Bucket {
 
 impl Bucket {
     /// GitKraken display order, which is also the order the pane's group
-    /// runs come in.
+    /// runs come in. Buckets sharing a heading stand next to each other,
+    /// which is what lets `files` close one off the moment `run` changes.
     const SHOWN: [Self; 4] = [
         Self::Conflicts,
         Self::Unstaged,
@@ -249,5 +277,55 @@ mod tests {
                 bucket.routing(),
             );
         }
+    }
+
+    /// The unstaged heading is two of git's answers at once — the tracked
+    /// entries and the untracked files — and git hands each of them over
+    /// sorted, one list after the other. Left end to end, the same three
+    /// files read one way while one of them was untracked and another way
+    /// once all three were staged.
+    #[test]
+    fn a_heading_lists_its_files_by_name_whichever_bucket_they_came_from() {
+        use platitude_core::status::{StatusItem, WorkTreeStatus};
+        let under = |source: &Source, run: &str| -> Vec<String> {
+            (0..source.len())
+                .filter_map(|at| source.entry(at))
+                .filter_map(|of| match of {
+                    Entry::File { item, bucket } if bucket.run() == run => {
+                        Some(item.path().to_string())
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        let edited = WorkTreeStatus {
+            items: vec![
+                tracked('.', 'M', ".idea/gradle.xml"),
+                tracked('.', 'M', ".idea/misc.xml"),
+                StatusItem::Untracked {
+                    path: ".idea/kotlinc.xml".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+        let all_staged = WorkTreeStatus {
+            items: vec![
+                tracked('M', '.', ".idea/gradle.xml"),
+                tracked('A', '.', ".idea/kotlinc.xml"),
+                tracked('M', '.', ".idea/misc.xml"),
+            ],
+            ..Default::default()
+        };
+
+        let listed = under(&Source::files(edited), "unstaged");
+        assert_eq!(
+            listed,
+            [".idea/gradle.xml", ".idea/kotlinc.xml", ".idea/misc.xml"]
+        );
+        assert_eq!(
+            listed,
+            under(&Source::files(all_staged), "staged"),
+            "staging the untracked file must not move it in the list",
+        );
     }
 }

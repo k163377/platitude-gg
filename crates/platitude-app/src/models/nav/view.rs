@@ -414,10 +414,10 @@ mod tests {
         // list, and the band between them is something walking goes past.
         assert_eq!(
             model.step("unstaged", "src/b.txt", 1),
-            format!("2{FIELD_SEP}untracked{FIELD_SEP}c.txt")
+            format!("3{FIELD_SEP}staged{FIELD_SEP}d.txt")
         );
         assert_eq!(
-            model.step("unstaged", "src/b.txt", -1),
+            model.step("untracked", "c.txt", -1),
             format!("0{FIELD_SEP}conflicts{FIELD_SEP}a.txt")
         );
         // Only the sign is read: one press is one file.
@@ -428,10 +428,10 @@ mod tests {
         // Both ends, and the two rows of the file that is on both sides:
         // asked by bucket, each walks on from its own row.
         assert_eq!(model.step("conflicts", "a.txt", -1), "");
-        assert_eq!(model.step("staged", "d.txt", 1), "");
+        assert_eq!(model.step("staged", "src/b.txt", 1), "");
         assert_eq!(
-            model.step("staged", "src/b.txt", 1),
-            format!("4{FIELD_SEP}staged{FIELD_SEP}d.txt")
+            model.step("staged", "d.txt", 1),
+            format!("4{FIELD_SEP}staged{FIELD_SEP}src/b.txt")
         );
         // A path no row of this list holds has nowhere to walk from.
         assert_eq!(model.step("unstaged", "nowhere.txt", 1), "");

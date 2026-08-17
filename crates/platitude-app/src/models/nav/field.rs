@@ -184,19 +184,10 @@ mod tests {
                 "conflicts".into()
             )
         );
+        // Untracked routes as itself and shows in the unstaged run —
+        // among the unstaged files by name, not after them.
         assert_eq!(
             row(1),
-            (
-                "src/b.txt".into(),
-                "src/b.txt".into(),
-                "M".into(),
-                "unstaged".into(),
-                "unstaged".into()
-            )
-        );
-        // Untracked routes as itself and shows in the unstaged run.
-        assert_eq!(
-            row(2),
             (
                 "c.txt".into(),
                 "c.txt".into(),
@@ -206,7 +197,17 @@ mod tests {
             )
         );
         assert_eq!(
-            row(3),
+            row(2),
+            (
+                "src/b.txt".into(),
+                "src/b.txt".into(),
+                "M".into(),
+                "unstaged".into(),
+                "unstaged".into()
+            )
+        );
+        assert_eq!(
+            row(4),
             (
                 "src/b.txt".into(),
                 "src/b.txt".into(),
@@ -215,7 +216,7 @@ mod tests {
                 "staged".into()
             )
         );
-        assert_eq!(says(&model, 4, Role::OrigPath), "old.txt");
+        assert_eq!(says(&model, 3, Role::OrigPath), "old.txt");
         // The unstaged half is what a path asked for by name answers with,
         // as it did when the rows were built.
         assert_eq!(model.change_of("src/b.txt".to_string()), "M");

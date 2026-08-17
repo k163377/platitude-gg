@@ -80,7 +80,8 @@ pub(super) fn tracked(
 }
 
 /// One of each kind of pending change, in the order git reports them
-/// rather than the order the pane shows them.
+/// rather than the order the pane shows them: the entries git tracks
+/// sorted by name, and then the untracked ones sorted after all of them.
 pub(super) fn pending() -> platitude_core::status::WorkTreeStatus {
     use platitude_core::status::StatusItem;
     platitude_core::status::WorkTreeStatus {
@@ -90,16 +91,16 @@ pub(super) fn pending() -> platitude_core::status::WorkTreeStatus {
                 theirs: 'U',
                 path: "a.txt".to_string(),
             },
-            // Both halves changed: one row under each.
-            tracked('M', 'M', "src/b.txt"),
-            StatusItem::Untracked {
-                path: "c.txt".to_string(),
-            },
             StatusItem::Tracked {
                 staged: 'R',
                 unstaged: '.',
                 path: "d.txt".to_string(),
                 orig_path: Some("old.txt".to_string()),
+            },
+            // Both halves changed: one row under each.
+            tracked('M', 'M', "src/b.txt"),
+            StatusItem::Untracked {
+                path: "c.txt".to_string(),
             },
         ],
         ..Default::default()
