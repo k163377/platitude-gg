@@ -52,6 +52,7 @@ FileRowDelegate 1.0 FileRowDelegate.qml
 FileRowMenu 1.0 FileRowMenu.qml
 FileRowWalk 1.0 FileRowWalk.qml
 FindBar 1.0 FindBar.qml
+FocusRelease 1.0 FocusRelease.qml
 FoldBlock 1.0 FoldBlock.qml
 FormField 1.0 FormField.qml
 GitVersionCorner 1.0 GitVersionCorner.qml
@@ -105,6 +106,7 @@ RepoPage 1.0 RepoPage.qml
 RowHoverHost 1.0 RowHoverHost.qml
 SectionPeekPopup 1.0 SectionPeekPopup.qml
 SettingsDialog 1.0 SettingsDialog.qml
+SharedToolTip 1.0 SharedToolTip.qml
 SidebarFilterRow 1.0 SidebarFilterRow.qml
 SidebarPane 1.0 SidebarPane.qml
 SignatureMark 1.0 SignatureMark.qml
@@ -125,6 +127,7 @@ TreeViewToggle 1.0 TreeViewToggle.qml
 WindowAutoActDriver 1.0 WindowAutoActDriver.qml
 WindowPerfDriver 1.0 WindowPerfDriver.qml
 WindowButton 1.0 WindowButton.qml
+WindowShape 1.0 WindowShape.qml
 WipBucketBand 1.0 WipBucketBand.qml
 WipBucketHeader 1.0 WipBucketHeader.qml
 WipPane 1.0 WipPane.qml

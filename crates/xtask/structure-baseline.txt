@@ -12,7 +12,6 @@
 #
 # <physical lines> <path from the workspace root>
 710 crates/platitude-app/src/models/graph.rs
-656 crates/platitude-app/src/ui/Main.qml
 644 crates/platitude-core/src/conflict.rs
 528 crates/platitude-core/src/identity.rs
 586 crates/platitude-core/src/integrate.rs

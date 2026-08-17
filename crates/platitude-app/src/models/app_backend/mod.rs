@@ -101,7 +101,7 @@ pub struct AppBackend {
     /// (`Env::automated` — any `PG_*` knob but the three that say nothing
     /// about who is at the window). What reads it is the window: a run
     /// nobody is looking at keeps the size it was configured with instead
-    /// of being fitted to a screen (`Main.insideScreen`), and the screen
+    /// of being fitted to a screen (`WindowShape.insideScreen`), and the screen
     /// the headless platform reports is 800x800.
     automated: bool,
     /// Screenshot hook: `"<name>|<email>"` prefills the identity screen.

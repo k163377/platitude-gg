@@ -10,7 +10,7 @@ import platitude.ui
 //
 // A card rather than a `ToolTip`: a tooltip is a string laid out in one block, and it appears wherever the style
 // decides — which is what made the old one feel detached from the pointer (P3-確認事項 §B). The ground stopped being a
-// reason when the shared tip took the same card (`Main.dressToolTip`); the one-block shape is still one.
+// reason when the shared tip took the same card (`SharedToolTip`); the one-block shape is still one.
 //
 // It answers and offers nothing: nothing in it opens anything further. Whoever wants the addresses behind the credited
 // names, or the message as an editable field, has the details pane a click away — a preview that grows its own second

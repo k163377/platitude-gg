@@ -55,24 +55,18 @@ ApplicationWindow {
         + (root.floorPage !== null ? root.floorPage.floorHeight : 0)
     minimumWidth: Math.ceil(root.floorWidth)
     minimumHeight: Math.ceil(root.floorHeight)
-    /// Puts a window standing under its floor back on it — only in its own shape: maximised and minimised are the
-    /// platform's to size. The lifted size also goes into `asked*`, or the growth itself would read as frame slop and
-    /// every later launch would write the window down that much smaller (measured: lifted from a 320-wide file the
-    /// window stood at 704 and 510 went into the file).
-    function holdFloor() {
-        if (root.visibility !== Window.Windowed)
-            return
-        if (root.width < root.floorWidth) {
-            root.width = Math.ceil(root.floorWidth)
-            root.askedWidth = root.width
-        }
-        if (root.height < root.floorHeight) {
-            root.height = Math.ceil(root.floorHeight)
-            root.askedHeight = root.height
-        }
+    onFloorWidthChanged: windowShape.holdFloor()
+    onFloorHeightChanged: windowShape.holdFloor()
+
+    // The floor says how small the window may be; `WindowShape` says what it opens at, what its frame slop is, and
+    // what the next launch is told. The way in keeps its name here: the harness calls `reportState()` on the window.
+    WindowShape {
+        id: windowShape
+        window: root
     }
-    onFloorWidthChanged: root.holdFloor()
-    onFloorHeightChanged: root.holdFloor()
+    function reportState() {
+        windowShape.reportState()
+    }
 
     // ---- what a title bar does, now that this band is one ----------------
     /// The button and the band's double-click have to mean the same thing, so both go to the platform: Qt maximises
@@ -174,37 +168,8 @@ ApplicationWindow {
     readonly property bool onScreen: root.visible
                                      && root.visibility !== Window.Minimized && root.visibility !== Window.Hidden
 
-    // QML never drops a text input's focus on its own: a clicked filter or commit editor kept its caret until some
-    // other editor took focus. This watcher hands focus back to the window whenever a press lands outside the
-    // focused editor.
-    //
-    // It must sit *above* every pane: press delivery stops at the first item that accepts, so a handler on the
-    // window's content item never hears clicks a row's MouseArea takes (measured: focus survived a graph click). And
-    // it must be a PointHandler — the one handler specified to take only passive grabs and accept nothing, so
-    // everything below keeps working; a fronted TapHandler swallowed the press and the control underneath never
-    // received it (measured: the filter field stopped taking focus at all). Modal dialogs live in the window overlay
-    // above this item and are unaffected.
-    //
-    // The top margin reaches up over the safe-area inset the same way the chrome does, so presses on the band are
-    // heard too.
-    Item {
-        anchors.fill: parent
-        anchors.topMargin: -root.contentItem.y
-        z: 10000
-        PointHandler {
-            acceptedButtons: Qt.AllButtons
-            onActiveChanged: {
-                if (!active)
-                    return
-                const item = root.activeFocusItem
-                // Only text editors hold a caret worth releasing; list views and buttons manage their own focus.
-                if (!item || item.cursorPosition === undefined)
-                    return
-                const local = item.mapFromItem(null, point.scenePressPosition)
-                if (local.x < 0 || local.y < 0 || local.x >= item.width || local.y >= item.height)
-                    root.contentItem.forceActiveFocus()
-            }
-        }
+    FocusRelease {
+        window: root
     }
 
     // Identity dialog: opens on startup when git has no name and email to put on a commit, and on demand from the app
@@ -299,106 +264,6 @@ ApplicationWindow {
         if (AppBackend.autoAct !== "" && AppBackend.autoAct !== "open-picker")
             AppBackend.report("picker folder=" + folderDialog.currentFolder)
     }
-    // The size and place the window was left in. Assigned rather than bound: from here on the window manager and the
-    // person dragging it own these. An unsaved position stays unset so the platform places the window itself — a first
-    // run should not open at 0,0.
-    function applySavedWindow() {
-        // Over the floor on the way in, not after: what is assigned here is what `settleTimer` measures the frame slop
-        // from, and what a maximise would come back to.
-        const wantWidth = Math.max(
-            root.insideScreen(AppBackend.startWindowWidth(), Screen.width),
-            Math.ceil(root.floorWidth))
-        const wantHeight = Math.max(
-            root.insideScreen(AppBackend.startWindowHeight(), Screen.height),
-            Math.ceil(root.floorHeight))
-        root.width = wantWidth
-        root.height = wantHeight
-        root.askedWidth = wantWidth
-        root.askedHeight = wantHeight
-        const x = AppBackend.startWindowX()
-        const y = AppBackend.startWindowY()
-        if (x !== root.unplaced && y !== root.unplaced) {
-            root.x = x
-            root.y = y
-        }
-        // The *frame* has to fit, and it is wider than the window says it is (measured 2026-08-09: a remembered 1920
-        // came back as a 1936-wide frame at x=-5 on a 1920 screen). `insideScreen` sees neither number; the platform
-        // side moves the window back and says whether it had to. Before the maximise, not after: the shape standing
-        // when a window is maximised is the shape a restore comes back to.
-        const moved = AppBackend.fitWindowToScreen()
-        if (AppBackend.startWindowMaximized()) {
-            // Through the platform, so it holds the shape to come back to (`toggleMaximized`). Where there is no
-            // platform command, `visibility` still carries it.
-            if (root.captionMerged)
-                AppBackend.setWindowMaximized(true)
-            else
-                root.visibility = Window.Maximized
-        } else if (!moved) {
-            // A run that was moved or maximised measures nothing: the slop is the difference between the size the
-            // window was handed and the size it reports, and neither of those is that.
-            settleTimer.restart()
-        }
-    }
-    /// What the store sends for a coordinate it has never been told.
-    readonly property int unplaced: -2147483648
-
-    /// A remembered length, kept inside the screen the window comes up on. `Screen.width`, *not*
-    /// `Screen.desktopAvailableWidth` — that is the whole virtual desktop (measured on a three-monitor machine: 5760,
-    /// so nothing is ever wider). Automated runs are exempt: the offscreen platform reports an 800x800 screen that
-    /// would cut every screenshot to fit.
-    function insideScreen(saved, screen) {
-        return AppBackend.automated ? saved : Math.min(saved, screen)
-    }
-
-    /// What this window adds to a size on the way in. A size does not read back the way it was written (measured on
-    /// the merged chrome: asked for 1200 it calls itself 1206, so writing down what it says grew the window 6px every
-    /// launch). Qt takes the frame margins from one place when it sets the geometry and another when it reads it back,
-    /// so the difference is read off the window itself and taken away again on the way out.
-    property int widthSlop: 0
-    property int heightSlop: 0
-    /// The size the window was asked for, which the slop is measured from.
-    property int askedWidth: 0
-    property int askedHeight: 0
-
-    Timer {
-        id: settleTimer
-        // One beat, so the window has answered the size it was given: the answer arrives as a queued platform event,
-        // not inside the assignment.
-        interval: Metrics.anchorDelayMs
-        onTriggered: {
-            // Only against a size this window was just handed, and only while nothing else has resized it — a maximise
-            // or a snap resizes on the way, and a difference read off that is not a frame margin.
-            if (root.askedWidth <= 0 || root.visibility !== Window.Windowed)
-                return
-            root.widthSlop = root.width - root.askedWidth
-            root.heightSlop = root.height - root.askedHeight
-        }
-    }
-
-    /// Everything the next launch should come back to (rules-refs/core.md — settings.toml / state.toml).
-    function reportState() {
-        // A minimised window says nothing. Measured on Windows: while down it reports neither its windowed nor its
-        // maximised numbers and its visibility is no longer Maximized — a report from here wrote a window wider than
-        // the screen and cleared the flag that would have restored the maximised one.
-        if (root.visibility !== Window.Minimized)
-            AppBackend.saveWindow(root.x, root.y,
-                                  root.width - root.widthSlop,
-                                  root.height - root.heightSlop,
-                                  root.visibility === Window.Maximized)
-        if (root.curPage !== null)
-            root.curPage.reportLayout()
-        AppBackend.flushState()
-    }
-
-    Timer {
-        id: stateTimer
-        interval: Metrics.stateFlushMs
-        repeat: true
-        // A run that was turned away holds an empty store, so its reports would reach no file.
-        running: !AppBackend.alreadyRunning
-        onTriggered: root.reportState()
-    }
-
     // ---- smoke hooks -----------------------------------------------
     // The whole of the window's PG_AUTO_ACT harness, built only when a verb was given so an ordinary run carries none
     // of it. A file of its own cannot see this one's ids, so everything the verbs act on is handed over here — an
@@ -426,43 +291,18 @@ ApplicationWindow {
             root.reportState()
     }
 
-    /// The shared tooltip — the one popup in this app nobody declares. The attached property builds it from the style,
-    /// so it arrives in Fusion's own clothes: a pale yellow ground, a frame that reads the *text* role (so the palette
-    /// cannot separate the two), and a drawn shadow. Reaching it is the only way to dress it, and dressing it once
-    /// carries to every `ToolTip.text` in the tree.
-    readonly property var sharedTip: mainUi.ToolTip.toolTip
-    /// Puts the app's own card on it (デザイン規約 §背景 names `bgElevated` as the tooltip's ground).
-    function dressToolTip() {
-        root.sharedTip.background = tipGround.createObject(root.sharedTip)
-        root.sharedTip.contentItem = tipWord.createObject(root.sharedTip)
-        root.sharedTip.padding = Theme.spaceSm
-    }
-    Component {
-        id: tipGround
-        Rectangle {
-            color: Theme.bgElevated
-            radius: Theme.radiusMd
-            border.color: Theme.borderDefault
-            border.width: Theme.borderWidth
-        }
-    }
-    Component {
-        id: tipWord
-        Text {
-            text: root.sharedTip.text
-            font: root.sharedTip.font
-            color: Theme.textPrimary
-            wrapMode: Text.Wrap
-        }
+    SharedToolTip {
+        id: sharedToolTip
+        host: mainUi
     }
 
     Component.onCompleted: {
-        root.dressToolTip()
+        sharedToolTip.dressToolTip()
         root.decorateWindow()
         // A window that is only here to say another process has the files does none of the rest.
         if (!AppBackend.alreadyRunning) {
             AppBackend.initialize()
-            root.applySavedWindow()
+            windowShape.applySavedWindow()
             if (AppBackend.autoOpen !== "") {
                 // ';'-separated repositories open as tabs in order.
                 const paths = AppBackend.autoOpen.split(";")

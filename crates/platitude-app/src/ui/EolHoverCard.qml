@@ -10,7 +10,7 @@ import platitude.ui
 //
 // A card rather than a `ToolTip`, for the reason `CommitHoverCard` is one: a tooltip holds one string in one
 // colour, and this has two lines of which only the second is warning-coloured. The ground is no longer the reason —
-// tooltips stand on this same card now (`Main.dressToolTip`).
+// tooltips stand on this same card now (`SharedToolTip`).
 //
 // It answers and offers nothing. Whoever wants the lines themselves opens the diff, which is one click away on the row
 // the card came from.

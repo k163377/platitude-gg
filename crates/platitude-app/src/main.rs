@@ -116,6 +116,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/FileRowMenu.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FileRowWalk.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FindBar.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/FocusRelease.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FoldBlock.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/FormField.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GitVersionCorner.qml", "qt/qml/platitude");
@@ -169,6 +170,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/RowHoverHost.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SectionPeekPopup.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsDialog.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SharedToolTip.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SidebarFilterRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SidebarPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SignatureMark.qml", "qt/qml/platitude");
@@ -189,6 +191,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/WindowAutoActDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowPerfDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowButton.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/WindowShape.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipBucketBand.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipBucketHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipPane.qml", "qt/qml/platitude");

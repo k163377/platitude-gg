@@ -85,7 +85,7 @@ pub(crate) fn fit_to_work_area() -> bool {
 thread_local! {
     /// Whether the fit had anything to do, for the caller to pass on:
     /// a window that was just moved is not one to measure the frame
-    /// slop against (`Main.settleTimer`).
+    /// slop against (`WindowShape.settleTimer`).
     static MOVED: Cell<bool> = const { Cell::new(false) };
 }
 
