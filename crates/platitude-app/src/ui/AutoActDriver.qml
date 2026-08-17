@@ -2052,7 +2052,7 @@ Item {
             else
                 repoTab.popStash(commitMenuState.menuStashRef)
         } else if (act === "branch-at-tag") {
-            sidebarPane.beginBranchAt(tagsModel.nameAt(0),
+            sidebarPane.beginBranchAt("tag", tagsModel.nameAt(0),
                                       tagsModel.oidOfName(tagsModel.nameAt(0)))
             sidebarPane.submitEdit(arg)
         } else if (act === "dbl-local" || act === "dbl-remote") {

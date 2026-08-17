@@ -60,7 +60,11 @@ Rectangle {
     /// to git: a plain push to a name that exists fast-forwards it and
     /// reports success, so somebody else's branch would move instead of
     /// this one being renamed.
-    readonly property bool editTaken: sidebar.editRemote !== "" && sidebar.editText.trim() !== ""
+    /// Only ever a rename's rule: the box for a new branch's name opens on
+    /// a remote row too, and what it makes is a local branch — a name the
+    /// remote happens to carry is no answer to that.
+    readonly property bool editTaken: sidebar.editMode === "rename" && sidebar.editRemote !== ""
+        && sidebar.editText.trim() !== ""
         && sidebar.remotesModel.oidOfName(sidebar.editRemote + "/" + sidebar.editText.trim()) !== ""
     /// What is typed cannot be accepted. The rules are git's own, asked of
     /// core (a stash's label is free text, not a ref name).
@@ -140,8 +144,10 @@ Rectangle {
     function beginRename(kind, id, text) {
         sidebar.startEdit(kind, kind + ":" + id, "rename", id, "", text)
     }
-    function beginBranchAt(id, oidHex) {
-        sidebar.startEdit("tag", "tag:" + id, "branch", id, oidHex, "")
+    /// The same box on any row that names a commit, not just a tag's: a
+    /// branch is most often started where another one already stands.
+    function beginBranchAt(kind, id, oidHex) {
+        sidebar.startEdit(kind, kind + ":" + id, "branch", id, oidHex, "")
     }
 
     /// Smoke hook (PG_AUTO_ACT=nav-filter): type into the filter band.

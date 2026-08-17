@@ -33,6 +33,7 @@ QtObject {
     property bool menuCanIntegrate: false
     property bool menuCanEditHistory: false
     property bool menuCanMoveBranch: false
+    property bool menuCanBranchHere: false
     property bool menuStashCanWrite: false
     function openRowMenu(oidHex) {
         menuState.menuOid = oidHex
@@ -47,6 +48,7 @@ QtObject {
         menuState.menuCanIntegrate = menuState.canIntegrateHere
         menuState.menuCanEditHistory = menuState.canEditHistoryHere
         menuState.menuCanMoveBranch = menuState.canMoveBranchHere
+        menuState.menuCanBranchHere = menuState.canBranchHere
         if (menuState.repoTab.state === "open")
             menuState.repoTab.checkPublish(oidHex + "^!")
         menuState.menu.offerCommit()
@@ -69,4 +71,10 @@ QtObject {
         menuState.repoTab.state === "open" && menuState.repoTab.busyCount === 0 && !menuState.workTree.detached
         && menuState.workTree.branch !== "" && menuState.workTree.opText === "" && menuState.menuOid !== ""
         && menuState.menuOid !== menuState.workTree.headOid && menuState.menuStashRef === ""
+    /// Putting a new branch on this commit and standing on it. The one row here that asks nothing of where the working
+    /// tree is now: a detached HEAD may take it — it is the way back out (デザイン規約 §ブランチ・コミットへの移動) — and so may the
+    /// commit the tree is already standing on, which is where a branch is most often started.
+    readonly property bool canBranchHere:
+        menuState.repoTab.state === "open" && menuState.repoTab.busyCount === 0
+        && menuState.workTree.opText === "" && menuState.menuOid !== "" && menuState.menuStashRef === ""
 }

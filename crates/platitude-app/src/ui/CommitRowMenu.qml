@@ -32,10 +32,12 @@ Item {
     required property bool canIntegrate
     required property bool canEditHistory
     required property bool canMoveBranch
+    required property bool canBranchHere
     required property bool stashCanWrite
 
     /// The rows the page owns the answer to: they rewrite history or move the selection, which is the page's to do
     /// (`RepoPage`).
+    signal branchHereRequested(string oidHex)
     signal squashRequested(string oidHex)
     signal dropRequested(string oidHex)
     signal resetRequested(string mode)
@@ -46,6 +48,7 @@ Item {
     /// The automation's handles into these rows, an automation-only exposure the same as `GraphPane.view` is
     /// (app-ui.md).
     readonly property alias menu: commitMenu
+    readonly property alias branchHereItem: branchHereCommitItem
     readonly property alias dropItem: dropCommitItem
     readonly property alias stashDropItem: stashDeleteItem
     readonly property alias resetSubmenu: resetMenu
@@ -88,6 +91,20 @@ Item {
 
     AppMenu {
         id: commitMenu
+        // Where this row leads rather than what it brings here, so it stands ahead of the rest and apart from them —
+        // the same seat `switch` takes in the ref menu (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
+        //
+        // The chip is the command that eventually runs; the placeholder is the half of it nobody has typed yet, which
+        // is also why this row opens a box instead of doing anything (デザイン規約 §長さ の山括弧).
+        AppMenuItem {
+            id: branchHereCommitItem
+            code: "switch --create"
+            //: Follows the `switch --create` chip: the name the box this row opens will take.
+            text: qsTr("<name>")
+            offered: rowMenu.canBranchHere
+            onTriggered: rowMenu.branchHereRequested(rowMenu.oid)
+        }
+        AppMenuSeparator {}
         AppMenuItem {
             code: "cherry-pick"
             offered: rowMenu.canSequence
@@ -115,8 +132,8 @@ Item {
             offered: rowMenu.canIntegrate
             onTriggered: rowMenu.repoTab.rebase(rowMenu.oid, "", true)
         }
-        // No row for landing on the commit itself: that leaves HEAD on no branch (デザイン規約 §ブランチ・コミットへの移動) — the
-        // double-click already offers a branch at this commit.
+        // Still no row for landing on the commit itself: that leaves HEAD on no branch (デザイン規約 §ブランチ・コミットへの移動).
+        // The row at the top is the whole of what this menu offers towards standing here — with a branch under it.
         AppMenuSeparator {}
         // No entry for editing the message: the click that opens this menu already puts the message in the details
         // pane's boxes.

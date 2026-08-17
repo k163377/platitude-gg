@@ -273,16 +273,32 @@ Item {
         workTree: workTree
         branchesModel: branchesModel
         onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
+        onBranchHereRequested: oidHex => page.startBranchAt(oidHex)
         onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
         onDropStashRequested: selector => page.dropStashNow(selector)
         // The settle re-run is for a menu that stood on the stacked list's row: the list stayed up under it, and
         // whether it stays now is the pointer's to answer again.
         onDismissed: rowHost.settleRefList()
     }
+    /// Which surface raised the standing ref menu. Its branch row opens a box to type a name in, and that box belongs
+    /// on the row the hand is already on — the same reason the box is in the chip column and not over the window
+    /// (デザイン規約 §可否・警告の出し場所).
+    property bool refMenuInSidebar: false
     /// The one door into that menu: the sidebar's rows, a chip, the stacked list and the automation all come through
     /// here. Says whether it opened.
-    function openRefMenu(kind, name, full, oidHex) {
+    function openRefMenu(kind, name, full, oidHex, inSidebar) {
+        page.refMenuInSidebar = inSidebar === true
         return refRowMenu.offerOn(kind, name, full, oidHex)
+    }
+    /// A new branch on a commit, asked for from a menu: the name box opens where that menu was raised. Nothing is
+    /// created until it is submitted — walking away costs the typing and nothing else.
+    function startBranchAt(oidHex) {
+        if (oidHex === "")
+            return
+        if (page.refMenuInSidebar)
+            sidebarPane.beginBranchAt(refRowMenu.kind, refRowMenu.refId, oidHex)
+        else
+            graphPane.startNaming(oidHex)
     }
 
     /// A chip's right-click: the ref menu for the name the chip shows. A chip that names nothing to act on — the
@@ -302,7 +318,7 @@ Item {
         const oid = kind === "branch" ? branchesModel.oidOfName(name)
                   : kind === "remote" ? remotesModel.oidOfName(name)
                   : tagsModel.oidOfName(name)
-        if (!page.openRefMenu(kind, name, name, oid) && oidHex !== "")
+        if (!page.openRefMenu(kind, name, name, oid, false) && oidHex !== "")
             page.openRowMenu(oidHex)
     }
 
@@ -434,7 +450,10 @@ Item {
         canIntegrate: commitMenuState.menuCanIntegrate
         canEditHistory: commitMenuState.menuCanEditHistory
         canMoveBranch: commitMenuState.menuCanMoveBranch
+        canBranchHere: commitMenuState.menuCanBranchHere
         stashCanWrite: commitMenuState.menuStashCanWrite
+        // Straight to the graph row: this menu is only ever raised on one.
+        onBranchHereRequested: oidHex => graphPane.startNaming(oidHex)
         onSquashRequested: oidHex => page.squashCommit(oidHex)
         onDropRequested: oidHex => page.dropCommit(oidHex)
         onResetRequested: mode => page.moveBranchHere(mode)
@@ -1400,7 +1419,7 @@ Item {
                     menuOpen: refRowMenu.showing
                     onFoldRequested: collapse => page.foldByHand(collapse)
                     onRefActivated: oidHex => page.jumpToRef(oidHex)
-                    onRefMenuRequested: (kind, name, full, oidHex) => page.openRefMenu(kind, name, full, oidHex)
+                    onRefMenuRequested: (kind, name, full, oidHex) => page.openRefMenu(kind, name, full, oidHex, true)
                     onWorktreeActivated: path => page.openRepositoryPathRequested(path)
                     onRefSwitchRequested: (kind, name) => page.switchToRef(kind, name)
                     onBranchAtRequested: (oidHex, name) => {

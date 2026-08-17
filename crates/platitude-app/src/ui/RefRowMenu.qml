@@ -31,6 +31,7 @@ Item {
 
     /// What this menu offers, decided as it opens (see the note above).
     property bool canSwitch: false
+    property bool canBranchHere: false
     property bool canIntegrateFrom: false
     property bool canDelete: false
     /// The remote reading a branch row can also shed (`origin/main`), empty where it has none. What the remote-side
@@ -68,11 +69,15 @@ Item {
     /// The automation's handles into these rows, an automation-only exposure the same as `GraphPane.view` is
     /// (app-ui.md).
     readonly property alias menu: refMenu
+    readonly property alias branchHereItem: refBranchHereItem
     readonly property alias deleteItem: refDeleteItem
 
     /// What the page answers for: moving the working tree, the delete git may still refuse, and the stash drop that two
     /// menus share.
     signal switchRequested(string kindLetter, string name)
+    /// A new branch on whatever commit this row stands on — the page owns where the box for its name opens, which is
+    /// wherever the menu was opened from.
+    signal branchHereRequested(string oidHex)
     signal deleteRequested(string kind, string id, string name, string oidHex)
     signal dropStashRequested(string selector)
     /// The menu went away — with it goes a refused delete's offer, and the stacked list it may have been standing on is
@@ -91,6 +96,12 @@ Item {
         refRowMenu.forceDeleteBranch = ""
         refRowMenu.rebasePublished = false
         refRowMenu.canSwitch = (kind === "branch" || kind === "remote") && full !== refRowMenu.workTree.branch
+        // Every ref that names a commit can have a new branch started on it — the current branch included, which is
+        // where one is most often started. A stash is the exception: it is nobody's history to carry on from
+        // (デザイン規約 §グラフ行の右クリック).
+        refRowMenu.canBranchHere =
+            kind !== "stash" && oidHex !== "" && refRowMenu.repoTab.busyCount === 0
+            && refRowMenu.workTree.opText === ""
         refRowMenu.canIntegrateFrom = refRowMenu.integrateAllowed
         // git refuses to delete the branch the working tree is on; its remote reading can still be deleted.
         refRowMenu.canDelete =
@@ -135,6 +146,17 @@ Item {
             offered: refRowMenu.canSwitch
             // Through the chips' dispatcher: a remote branch whose local one already exists cannot simply be created.
             onTriggered: refRowMenu.switchRequested(refRowMenu.kind === "remote" ? "R" : "L", refRowMenu.refId)
+        }
+        // The other way to stand somewhere: on a branch of one's own, started where this row is. Next to `switch`
+        // because the two answer the same question, and worded the same wherever it is met — the commit menu carries
+        // the identical row (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
+        AppMenuItem {
+            id: refBranchHereItem
+            code: "switch --create"
+            //: Follows the `switch --create` chip: the name the box this row opens will take.
+            text: qsTr("<name>")
+            offered: refRowMenu.canBranchHere
+            onTriggered: refRowMenu.branchHereRequested(refRowMenu.refOid)
         }
         AppMenuItem {
             code: "merge"
