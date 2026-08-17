@@ -60,6 +60,9 @@ ColumnLayout {
     /// The same stand-in for a file row, so a cut-down paths-view row's
     /// tooltip can be photographed (path-tip). -1 points at no row.
     property int pointedTipRow: -1
+    /// A right-click menu of the page's is standing over this pane. The
+    /// menus are the page's, so only it can say (デザイン規約 §メニュー).
+    property bool menuStanding: false
     /// Which of the changed files the middle pane is reading, so its row can
     /// say so (デザイン規約 §diff のファイル一覧を矢印で送る). Empty while
     /// the graph is in the middle: then no file is being read, and a light
@@ -460,6 +463,7 @@ ColumnLayout {
         delegate: FileRowDelegate {
             listWidth: fileList.width
             pointedTipRow: detailsPane.pointedTipRow
+            menuStanding: detailsPane.menuStanding
             readPath: detailsPane.readPath
             // The press that opened the diff landed in this list, so this is
             // where the keyboard is (規約 §diff のファイル一覧). A folder

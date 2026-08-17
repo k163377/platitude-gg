@@ -23,6 +23,15 @@ Item {
     /// A ref menu is standing on one of the list's rows — see the settle
     /// timer below on why that keeps the list up.
     required property bool menuStanding
+    /// Any of the page's menus is standing, this pair's own included. The
+    /// row's card does not come out behind one: the hand is in the menu,
+    /// and a card opened now is drawn over it (the card opens last, so it
+    /// wins the overlay — 2026-08-17 ユーザー報告).
+    ///
+    /// The chip's list is the exception, and it is `menuStanding` above
+    /// that holds it: a ref menu raised from one of its rows is standing
+    /// *on* the list, not over it.
+    required property bool hoverBlocked
 
     /// The pointer is on the row, or on the chip whose list is up (or is
     /// about to be). The graph writes the first as the pointer comes and
@@ -53,8 +62,15 @@ Item {
 
     anchors.fill: parent
 
+    /// A menu went up over whatever was resting: the card goes now rather
+    /// than in a beat's time, the same as when the chip's list takes over.
+    onHoverBlockedChanged: {
+        if (host.hoverBlocked)
+            host.closeRowCard()
+    }
+
     function openRowCard(row) {
-        if (!row || host.refListUp)
+        if (!row || host.refListUp || host.hoverBlocked)
             return
         rowCard.subject = row.subject
         rowCard.body = row.body

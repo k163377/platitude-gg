@@ -55,6 +55,7 @@ AppListView {
         rowKey: navList.gestures ? navList.keyOf(full, name) : ""
         activeKey: navList.gestures ? navList.gestures.activeKey : ""
         editKey: navList.gestures ? navList.gestures.editKey : ""
+        menuStanding: navList.gestures ? navList.gestures.menuOpen : false
         editMode: navList.gestures ? navList.gestures.editMode : ""
         editText: navList.gestures ? navList.gestures.editText : ""
         editRefused: navList.gestures ? navList.gestures.editRefused : false

@@ -45,6 +45,10 @@ Item {
     signal popStashRequested(string selector)
     signal dropStashRequested(string selector)
 
+    /// Either card is on screen. A plain property rather than an alias — `visible` read from another file comes back
+    /// stale (`RefusalBadge`) — and what the page reads to know that hover is behind a menu now (デザイン規約 §メニュー).
+    readonly property bool showing: commitMenu.visible || stashMenu.visible
+
     /// The automation's handles into these rows, an automation-only exposure the same as `GraphPane.view` is
     /// (app-ui.md).
     readonly property alias menu: commitMenu

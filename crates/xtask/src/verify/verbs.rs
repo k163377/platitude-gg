@@ -67,6 +67,13 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // counts two because the submenu is a popup of its own.
         "commit-menu" => Some("overlay saved=true popups=1"),
         "reset-menu" => Some("overlay saved=true popups=2"),
+        // The card that must *not* come out. A picture cannot carry an
+        // absence on its own — an empty overlay would frame the same as a
+        // run whose hover request never arrived — so the menu is judged
+        // with it: `menu=true` says there was something for the card to be
+        // behind. Read as a pair with `row-card`, which proves that same
+        // input does open the card (2026-08-17 ユーザー報告).
+        "menu-hover" => Some("menu_hover menu=true card=false"),
         // An emptied panel with a red mark over it and an emptied panel
         // with a quiet one frame the same from the waist down: the panel
         // is the picture, and the mark is 12 pixels of it in a corner.

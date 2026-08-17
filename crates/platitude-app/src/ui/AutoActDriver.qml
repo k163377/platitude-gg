@@ -114,7 +114,7 @@ Item {
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
                 "nav-filter", "delete-branch-refused", "chip-menu", "chip-menu-current",
                 "delete-blocked-tip", "delete-branch-early", "ref-list-card",
-                "signature", "signature-tip", "stash-tip", "path-tip", "row-card",
+                "signature", "signature-tip", "stash-tip", "path-tip", "row-card", "menu-hover",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
                 "details-fit", "corner", "graph-step", "graph-step-edge", "graph-step-far",
@@ -1552,6 +1552,38 @@ Item {
             driver.complete()
         }
     }
+    // The row under a standing menu, asked for its card the way its own delay timer would ask (hover cannot be
+    // injected — verify-ui スキル §hover の絵の撮り方). Read as a pair with `row-card`, which proves that same input does
+    // open the card: on its own, a card that stayed shut says nothing about why.
+    //
+    // The request goes in only once the menu is actually up — before that there is nothing for the card to be behind —
+    // and the answer is read a sampler turn later, since a card that was going to open opens synchronously
+    // (`rowCardTimer`).
+    Timer {
+        id: menuHoverTimer
+        interval: 25
+        repeat: true
+        property string oidHex: ""
+        property bool asked: false
+        onTriggered: {
+            if (!commitMenu.opened)
+                return
+            if (!menuHoverTimer.asked) {
+                const row = graphPane.view.itemAtIndex(graphModel.rowOf(menuHoverTimer.oidHex))
+                // A row the view has not laid out yet is not a row that was asked: latching here would wait for an
+                // answer to a question nobody put (app-ui.md §UI 自動化の因果性).
+                if (!row)
+                    return
+                menuHoverTimer.asked = true
+                graphPane.view.rowHoverRequested(row, true)
+                return
+            }
+            menuHoverTimer.stop()
+            AppBackend.report("menu_hover menu=" + commitMenu.opened + " card=" + rowCard.opened
+                              + " list=" + refList.opened)
+            driver.complete()
+        }
+    }
     // The details have to arrive before the name can name anybody.
     Timer {
         id: authorCardTimer
@@ -2294,6 +2326,16 @@ Item {
                 resetMenu.offer()
             AppBackend.report("commit_menu rows=" + commitMenu.offeredRows
                               + " can_move=" + commitMenuState.menuCanMoveBranch)
+        } else if (act === "menu-hover") {
+            // Same row and same default as `commit-menu`: the menu goes up, and then the row it is standing on is
+            // asked for its hover card.
+            let hoverOid = arg
+            if (hoverOid === "")
+                hoverOid = graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
+            page.openRowMenu(hoverOid)
+            menuHoverTimer.oidHex = hoverOid
+            menuHoverTimer.asked = false
+            menuHoverTimer.start()
         } else if (act === "wip") {
             page.showWip()
         } else if (act === "wip-tally") {

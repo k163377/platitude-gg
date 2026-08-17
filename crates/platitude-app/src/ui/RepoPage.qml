@@ -266,6 +266,13 @@ Item {
         publishFlow.forcePush()
     }
 
+    /// One of this page's right-click menus is standing. What the pointer is over then is the menu; the row it was
+    /// opened on is behind it, and nothing behind a menu is being hovered — a card or a tip that comes out now is
+    /// drawn over the very rows the hand is reading (2026-08-17 ユーザー報告). The menus are all the page's, so this is
+    /// the one place that can see all of them.
+    readonly property bool menuStanding:
+        refRowMenu.showing || commitRowMenu.showing || fileRowMenu.showing
+
     // ---- context menu on a sidebar row ------------------------------
     RefRowMenu {
         id: refRowMenu
@@ -489,6 +496,7 @@ Item {
         graphPane: graphPane
         currentBranch: workTree.branch
         menuStanding: refRowMenu.opened
+        hoverBlocked: page.menuStanding
         onRecordActivated: record => page.activateRecord(record)
         onRecordMenuAsked: record => page.openRecordMenu(record, "")
     }
@@ -1416,7 +1424,7 @@ Item {
                     collapsed: page.sidebarCollapsed
                     // The menus the rows raise are the page's, so only the page can say one is standing over the folded
                     // list.
-                    menuOpen: refRowMenu.showing
+                    menuOpen: page.menuStanding
                     onFoldRequested: collapse => page.foldByHand(collapse)
                     onRefActivated: oidHex => page.jumpToRef(oidHex)
                     onRefMenuRequested: (kind, name, full, oidHex) => page.openRefMenu(kind, name, full, oidHex, true)
@@ -1527,6 +1535,7 @@ Item {
                         worktreeModel: worktreeModel
                         amending: page.amending
                         headPublished: page.headPublished
+                        menuStanding: page.menuStanding
                         onAmendToggled: on => page.amendToggled(on)
                         onCommitClicked: page.commitNow()
                         readBucket: page.diffFromWt ? page.diffKind : ""
@@ -1544,6 +1553,7 @@ Item {
                         visible: !page.wipShown
                         details: detailsModel
                         stashRef: page.selectedStashRef
+                        menuStanding: page.menuStanding
                         // Only what the working tree stands on: a commit off this line cannot be amended or replayed
                         // from here, and a stash is a commit but never one of them.
                         editable: !page.blank && repoTab.state === "open"

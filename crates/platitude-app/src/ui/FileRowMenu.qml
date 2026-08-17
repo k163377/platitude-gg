@@ -37,6 +37,10 @@ Item {
     signal mergeToolWanted()
     signal copyRequested(string text)
 
+    /// The card is on screen. A plain property rather than an alias — `visible` read from another file comes back
+    /// stale (`RefusalBadge`) — and what the page reads to know that hover is behind a menu now (デザイン規約 §メニュー).
+    readonly property bool showing: fileMenu.visible
+
     /// The automation's handles into these rows, an automation-only exposure the same as `GraphPane.view` is
     /// (app-ui.md).
     readonly property alias menu: fileMenu

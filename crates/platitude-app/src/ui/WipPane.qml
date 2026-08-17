@@ -21,6 +21,9 @@ ColumnLayout {
     /// Stands in for the pointer on a file row, so a cut-down paths-view row's tooltip can be photographed
     /// (PG_AUTO_ACT=path-tip). -1 points at no row.
     property int pointedTipRow: -1
+    /// A right-click menu of the page's is standing over this pane. The
+    /// menus are the page's, so only it can say (デザイン規約 §メニュー).
+    property bool menuStanding: false
     /// Which working-tree file the middle pane is reading, handed down by the page: what the arrows walk from, and
     /// empty while the graph is in the middle (規約 §diff のファイル一覧). The light that says so is this list's own choice —
     /// see `readOne`.
@@ -675,6 +678,7 @@ ColumnLayout {
             sideOurs: wipPane.workTree.sideOurs
             sideTheirs: wipPane.workTree.sideTheirs
             pointedTipRow: wipPane.pointedTipRow
+            menuStanding: wipPane.menuStanding
             pointedEolPath: wipPane.worktreeModel.pointedEolPath
             pointedEolKind: wipPane.worktreeModel.pointedEolKind
             pointedEolFrom: wipPane.worktreeModel.pointedEolFrom

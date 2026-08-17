@@ -142,6 +142,7 @@
 - `amend-author`(amend の著者引き継ぎ表示)
 - `stash-menu`(stash 行の右クリック)
 - `name-box`(グラフ行の名前入力欄を開いたまま止める。引数は行番号)
+- `menu-hover`(引数は行番号 — 省略時は `commit-menu` と同じ既定行。コミット行メニューを開いてから、**その行の hover カードを行の遅延タイマと同じ経路で頼む**。報告行 `menu_hover menu= card= list=`、must_say は `menu=true card=false`。**`row-card` と対で読む** — 同じ入力でカードが開く側の証拠が無いと「出なかった」は何も言えない。`menu=true` が「カードが裏に回る相手が居た」を言う)
 - `ref-list` / `ref-list-card`(チップ列の展開と、行カードとの対読み)
 - `fetch-ref-list`(fetch を撃ってから行のチップを展開 — タグの雲)
 - `signature`(詳細ペインの署名 1 語。`--preset signed`)

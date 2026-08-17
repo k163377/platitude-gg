@@ -40,6 +40,8 @@ Item {
     /// Stands in for the pointer where headless cannot put one, so a cut-down row's tooltip can be photographed
     /// (PG_AUTO_ACT=path-tip). -1 points at no row.
     property int pointedTipRow: -1
+    /// A right-click menu of the page's is standing over this list.
+    property bool menuStanding: false
     property string kindHint: "branch"
     /// The current branch's ahead / behind. What travels is the two numbers — the row draws the arrows itself
     /// (`HeadTrack`).
@@ -374,7 +376,10 @@ Item {
     /// Whether the headless stand-in points at this row. The report still reads the ToolTip's own visible — the output
     /// side, as everywhere.
     readonly property bool tipPointedAt: navRow.pointedTipRow === navRow.index
-    ToolTip.visible: (itemMouse.containsMouse || navRow.tipPointedAt) && !navRow.editing && navRow.hoverText !== ""
+    // Not behind a standing menu: the pointer is in the menu, and a tip that comes out now is drawn over the rows the
+    // hand is reading (デザイン規約 §メニュー).
+    ToolTip.visible: (itemMouse.containsMouse || navRow.tipPointedAt) && !navRow.editing && !navRow.menuStanding
+                     && navRow.hoverText !== ""
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: navRow.hoverText
 }

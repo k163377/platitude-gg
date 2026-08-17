@@ -35,6 +35,8 @@ Item {
     /// (PG_AUTO_ACT=path-tip). -1 points at no row.
     property int pointedTipRow: -1
     readonly property bool tipPointedAt: fileRow.pointedTipRow === fileRow.model.index
+    /// A right-click menu of the page's is standing over this list.
+    property bool menuStanding: false
 
     signal activated(string bucket, string path, string origPath)
     signal folderToggled(string key)
@@ -84,7 +86,10 @@ Item {
     // way — its display name is the full path, so elision is the one thing that leaves the whole name unsaid (デザイン規約
     // §hover のツールチップ). A folder row is the elision case alone: the rows above it already spell its prefix, so only a
     // chain the pane cut short has anything left to say.
-    ToolTip.visible: (fileMouse.containsMouse || fileRow.tipPointedAt) && (fileRow.isFolder ? nameCell.truncated
+    // Not behind a standing menu: the pointer is in the menu, and a tip that comes out now is drawn over the rows the
+    // hand is reading (デザイン規約 §メニュー).
+    ToolTip.visible: (fileMouse.containsMouse || fileRow.tipPointedAt) && !fileRow.menuStanding
+                     && (fileRow.isFolder ? nameCell.truncated
                      : (fileRow.nameText !== fileRow.pathText || nameCell.truncated))
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: fileRow.pathText
