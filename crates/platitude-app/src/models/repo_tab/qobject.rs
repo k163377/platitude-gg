@@ -289,6 +289,8 @@ impl RepoTab {
     /// Stages (or unstages) part of one file's diff, addressed by the row
     /// the user clicked. `kind` is the diff-key prefix (`unstaged` /
     /// `staged` / `untracked`); a negative `line` takes the whole hunk.
+    /// Answers whether a write went out (see [`Self::stage_chosen`]) —
+    /// the caller's wait is armed by this answer, not by the asking.
     ///
     /// A staged diff is unstaged by the same call — the direction follows
     /// from which side the file is being looked at.
@@ -301,13 +303,14 @@ impl RepoTab {
         hunk: i32,
         line: i32,
         fingerprint: String,
-    ) {
+    ) -> bool {
         self.stage_chosen(kind, path, orig_path, hunk, line, fingerprint)
     }
 
     /// Throws away part of one file's unstaged diff, addressed the same way
-    /// (destructive). Only the unstaged side has a piece to throw away:
-    /// what is staged is unstaged first, by the affordance beside this one.
+    /// (destructive), answering the same way. Only the unstaged side has a
+    /// piece to throw away: what is staged is unstaged first, by the
+    /// affordance beside this one.
     #[qslot]
     fn discard_selection(
         &mut self,
@@ -317,7 +320,7 @@ impl RepoTab {
         hunk: i32,
         line: i32,
         fingerprint: String,
-    ) {
+    ) -> bool {
         self.discard_chosen(kind, path, orig_path, hunk, line, fingerprint)
     }
 
