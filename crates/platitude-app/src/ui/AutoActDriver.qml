@@ -953,7 +953,13 @@ Item {
         interval: 25
         repeat: true
         onTriggered: {
-            if (refDeleteItem.code === "")
+            // The row's `code` is never empty on a branch, so it cannot
+            // tell "git has not answered yet" from "answered merged" —
+            // both wear `branch --delete`. What readiness there is comes
+            // from the echo of the branch asked about, which the asking
+            // clears before the question goes out (app-ui.md
+            // §UI 自動化の因果性).
+            if (repoTab.branchDeleteAsked !== AppBackend.autoActArg)
                 return
             earlyDeleteTimer.stop()
             AppBackend.report("delete_early asked="
