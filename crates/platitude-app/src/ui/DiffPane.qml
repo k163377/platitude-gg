@@ -150,57 +150,20 @@ Rectangle {
         interval: Metrics.anchorDelayMs
         onTriggered: diffPane.settlePointedRow()
     }
-    // ---- the keyboard -----------------------------------------------
-    /// Where the keyboard goes when this pane comes on screen. Unlike the
-    /// graph, which waits to be clicked because a window has several
-    /// places worth typing into, the diff arrives *because* a hand pressed
-    /// a file in CHANGES — that press already said "read here", so the
-    /// pane takes the keyboard by arriving (デザイン規約 §diff を上下に送る).
-    ///
-    /// Refused to a list that is not on screen: an image-only preview
-    /// hands its space to the picture and draws no rows. Focus on
-    /// something invisible is the hole the graph closed from the other
-    /// side — Qt keeps active focus there and the keys go on arriving.
-    function takeKeyboard() {
-        if (diffList.visible)
-            diffList.forceActiveFocus()
+    // ---- the keyboard, and where the reading position stands ----------
+    // Both live in `DiffRowWalk`; the pane's own names for them are the
+    // three lines under it, so the page, the keys and the headless runs
+    // keep reading them off this pane.
+    DiffRowWalk {
+        id: rowWalk
+        view: diffList
     }
-    /// Sends the view `delta` rows (∓1 per press) and answers whether it
-    /// moved. The keys and the automation hook both come through here — a
-    /// headless run cannot inject a keystroke, so the step has to be
-    /// callable as well as pressable (verify-ui).
-    ///
-    /// The view is what moves, not a selection: nothing in this pane
-    /// follows a lit row, and the "selection" it does own is the set of
-    /// lines the next write carries, which the arrows must not touch
-    /// (デザイン規約 §diff を上下に送る). Answering `false` at either end
-    /// is how it stops rather than wraps — the key goes unaccepted there.
-    function stepRows(delta) {
-        if (!diffPane.visible || !diffList.visible || diffList.count === 0)
-            return false
-        const was = diffList.contentY
-        diffList.cancelFlick()
-        diffList.contentY = diffList.clampY(was + delta * Theme.rowHeight)
-        return diffList.contentY !== was
-    }
-    /// Whether the view is as far down as it goes — the end the arrows
-    /// stop at, which a picture of a diff cannot be told from a short one.
-    /// A diff with nothing to scroll reads as at its end, because it is.
-    readonly property bool atEnd: diffList.contentY >= diffList.maxY - 0.5
+    function takeKeyboard() { rowWalk.takeKeyboard() }
+    function stepRows(delta) { return rowWalk.stepRows(delta) }
+    readonly property alias atEnd: rowWalk.atEnd
     /// Automation only: the list itself, for a run that has to read where
     /// the view stands (`GraphPane.view` is the same exposure).
     readonly property alias view: diffList
-
-    // Taken on the way in, let go on the way out. The second half is the
-    // rule the graph is already keeping (規約 §矢印で履歴を辿る「画面から
-    // 退いたペインはキーボードを手放す」): a pane swapped off the screen
-    // that keeps focus goes on answering arrows nobody can see.
-    onVisibleChanged: {
-        if (diffPane.visible)
-            diffPane.takeKeyboard()
-        else
-            diffList.focus = false
-    }
 
     /// Throw one hunk away. Offered on the unstaged side only — the
     /// staged side unstages first. No question comes before it: the

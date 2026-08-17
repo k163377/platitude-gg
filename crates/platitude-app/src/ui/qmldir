@@ -44,6 +44,7 @@ DiffFileNotices 1.0 DiffFileNotices.qml
 DiffPane 1.0 DiffPane.qml
 DiffPaneHeader 1.0 DiffPaneHeader.qml
 DiffRowDelegate 1.0 DiffRowDelegate.qml
+DiffRowWalk 1.0 DiffRowWalk.qml
 DiffScrollPlace 1.0 DiffScrollPlace.qml
 DialogActions 1.0 DialogActions.qml
 DotMark 1.0 DotMark.qml
