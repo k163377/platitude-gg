@@ -60,6 +60,11 @@ ColumnLayout {
     /// The same stand-in for a file row, so a cut-down paths-view row's
     /// tooltip can be photographed (path-tip). -1 points at no row.
     property int pointedTipRow: -1
+    /// Which of the changed files the middle pane is reading, so its row can
+    /// say so (デザイン規約 §diff のファイル一覧を矢印で送る). Empty while
+    /// the graph is in the middle: then no file is being read, and a light
+    /// left standing would name one.
+    property string readPath: ""
     function avatarClicked() {
         if (detailsPane.details.authorEmail !== "")
             detailsPane.avatarEditRequested(detailsPane.details.authorName,
@@ -441,6 +446,7 @@ ColumnLayout {
         delegate: FileRowDelegate {
             listWidth: fileList.width
             pointedTipRow: detailsPane.pointedTipRow
+            readPath: detailsPane.readPath
             onActivated: (bucket, path, origPath) =>
                 detailsPane.fileActivated(path, origPath)
             onFolderToggled: key => detailsPane.details.toggleFolder(key)

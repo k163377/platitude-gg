@@ -95,6 +95,10 @@ Item {
                                     && navRow.editKey === navRow.rowKey
     /// The name git knows this row by.
     readonly property string fullName: navRow.full !== "" ? navRow.full : navRow.name
+    /// Whether this row is painted as one of the chosen — what a headless
+    /// run reports, since reading `chosen` back would go green with the
+    /// rectangle unwired.
+    readonly property bool lit: chosenBox.visible
 
     signal refClicked(string oidHex)
     /// A working-tree file row was clicked. `modifiers` carries Ctrl and
@@ -139,6 +143,7 @@ Item {
     // rename gesture would be aimed at nothing, and a click on a worktree
     // row — which has nowhere to jump to — would look like it missed.
     Rectangle {
+        id: chosenBox
         anchors.fill: parent
         color: Theme.bgSelected
         visible: !navRow.folder

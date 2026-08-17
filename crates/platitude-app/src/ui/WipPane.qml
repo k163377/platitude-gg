@@ -66,6 +66,19 @@ ColumnLayout {
     function chooseOnly(bucket, path) {
         wipPane.applyClick(bucket, path, Qt.NoModifier)
     }
+    /// One file is being read now, and it is not a click that said so: the
+    /// side under the reader ran out and the pane went on to the next file
+    /// (`RepoPage.followEmptySide`), or an arrow key walked there. The
+    /// choice comes too — the lit row is the file being read, and a light
+    /// left behind names one nobody is looking at (デザイン規約 §diff の
+    /// ファイル一覧を矢印で送る).
+    ///
+    /// Nothing to do where it is already the whole of the choice, which is
+    /// every ordinary click: that walk over the rows has just been made.
+    function readOne(bucket, path) {
+        if (wipPane.chosenCount !== 1 || !wipPane.isChosen(bucket, path))
+            wipPane.chooseOnly(bucket, path)
+    }
     function clearChoice() {
         wipPane.chosenKeys = ({})
         wipPane.chosenCount = 0

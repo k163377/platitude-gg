@@ -21,6 +21,16 @@ Item {
     /// row shows. The one above stays whole: that one addresses a diff.
     readonly property string origNameText: model.orig_name ?? ""
     readonly property bool isFolder: (model.folder ?? false) === true
+    /// The path the middle pane is reading, handed down by the pane — one
+    /// copy there rather than one per row. A folder is never it: a folder
+    /// has no diff, and its own path is the fold key.
+    property string readPath: ""
+    readonly property bool selected:
+        !fileRow.isFolder && fileRow.pathText === fileRow.readPath
+    /// Whether this row is painted as the one being read — what a headless
+    /// run reports, since reading the condition back would go green with the
+    /// rectangle unwired.
+    readonly property bool lit: selectedBox.visible
 
     /// Stands in for the pointer where headless cannot put one, so a
     /// cut-down row's tooltip can be photographed (PG_AUTO_ACT=path-tip).
@@ -35,6 +45,16 @@ Item {
     width: listWidth
     height: Theme.rowHeight
 
+    // The row whose diff is on screen, lit the way every other list lights
+    // the row it is standing on (デザイン規約 §色「選択行」). Under the
+    // hover wash, which is an overlay colour: the two read together on the
+    // row the pointer is already on.
+    Rectangle {
+        id: selectedBox
+        anchors.fill: parent
+        color: Theme.bgSelected
+        visible: fileRow.selected
+    }
     Rectangle {
         anchors.fill: parent
         color: Theme.bgHover

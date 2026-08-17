@@ -862,6 +862,12 @@ Item {
         page.diffOrigPath = origPath
         page.diffFromWt = kind !== "commit"
         page.diffChange = kind === "conflicts" ? worktreeModel.changeOf(path) : ""
+        // The list's light names the file being read. A click had already
+        // made this row the whole of the choice, so what this catches is the
+        // pane moving itself — the commit's list needs no such line, its
+        // light *is* the path being read (`DetailsPane.readPath`).
+        if (kind !== "commit")
+            wipPane.readOne(kind, path)
         if (kind === "commit")
             diffModel.requestCommitFile(detailsModel.shaHex, detailsModel.parentHex,
                                         path, origPath)
@@ -1722,6 +1728,7 @@ Item {
                         // HEAD's own commit, not the current branch's tip:
                         // detached, there is no branch to ask.
                         headOid: workTree.headOid
+                        readPath: page.diffKind === "commit" ? page.diffPath : ""
                         onLeaveResolved: discard => page.resolveLeave(discard)
                         onMessageSubmitted: (oidHex, subject, body) =>
                             page.saveMessage(oidHex, subject, body)
