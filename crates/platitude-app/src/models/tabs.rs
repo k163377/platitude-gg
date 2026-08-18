@@ -6,7 +6,7 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 use crate::hub::{Feed, Hub, PickMsg};
 use crate::urlpath::file_url_to_path;
 
-use super::qml_register;
+use super::{impl_move_notified, qml_register};
 
 // ---------------------------------------------------------------------------
 // TabsModel: open repositories (the tab strip)
@@ -61,6 +61,8 @@ impl QListModel for TabsModel {
         self.items.push(value);
     }
 }
+
+impl_move_notified!(TabsModel, items);
 
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
 impl TabsModel {
@@ -255,6 +257,34 @@ impl TabsModel {
         }
     }
 
+    /// Takes the tab at `from` out of the strip and puts it down at `to`,
+    /// where a hand carried it (デザイン規約 §タブの所作).
+    ///
+    /// The strip settles the order one neighbour at a time, so the two
+    /// are next to each other every time a drag asks — but the whole
+    /// distance is one call away, and that is the road the headless run
+    /// carries a tab across the strip on.
+    #[qslot]
+    fn move_tab(&mut self, from: i32, to: i32) {
+        let (Ok(from), Ok(to)) = (usize::try_from(from), usize::try_from(to)) else {
+            return;
+        };
+        if from == to || from >= self.items.len() || to >= self.items.len() {
+            return;
+        }
+        self.move_notified(from, to);
+        // The tab being carried is the one in front (the press moves to
+        // it before the drag begins), but the rows it was carried across
+        // moved too, and each of them has to keep showing the repository
+        // it was showing.
+        let landed = index_after_move(self.current_index, from, to);
+        if landed != self.current_index {
+            self.current_index = landed;
+            self.current_index_changed();
+        }
+        self.report();
+    }
+
     #[qslot]
     fn set_current_index(&mut self, index: i32) {
         if index != self.current_index && index >= -1 && index < self.items.len() as i32 {
@@ -312,4 +342,61 @@ fn title_of(path: &std::path::Path, whole: &str) -> String {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| whole.to_string())
 }
+
+/// Where the row at `current` ends up once the row at `from` has been
+/// taken out and put down at `to`.
+///
+/// Everything between the two shifts by one, towards the place the moved
+/// row left. `current` is a position rather than a tab: a strip with
+/// nothing in front of it says -1, and no move gives it a tab.
+fn index_after_move(current: i32, from: usize, to: usize) -> i32 {
+    let Ok(at) = usize::try_from(current) else {
+        return current;
+    };
+    let landed = if at == from {
+        to
+    } else if from < at && at <= to {
+        at - 1
+    } else if to <= at && at < from {
+        at + 1
+    } else {
+        at
+    };
+    i32::try_from(landed).unwrap_or(current)
+}
+
 qml_register!(TabsModel, "TabsModel", singleton = false);
+
+#[cfg(test)]
+mod tests {
+    use super::index_after_move;
+
+    #[test]
+    fn the_tab_being_carried_lands_where_it_was_put_down() {
+        assert_eq!(index_after_move(0, 0, 3), 3);
+        assert_eq!(index_after_move(3, 3, 0), 0);
+    }
+
+    #[test]
+    fn a_tab_carried_past_the_one_in_front_pushes_it_the_other_way() {
+        // Carried rightwards from its left: everything it passed shifts
+        // left to fill the gap.
+        assert_eq!(index_after_move(1, 0, 3), 0);
+        assert_eq!(index_after_move(3, 0, 3), 2);
+        // And leftwards from its right: they shift right.
+        assert_eq!(index_after_move(1, 3, 0), 2);
+        assert_eq!(index_after_move(0, 3, 0), 1);
+    }
+
+    #[test]
+    fn a_move_that_stayed_on_one_side_leaves_the_front_tab_where_it_is() {
+        assert_eq!(index_after_move(5, 0, 3), 5);
+        assert_eq!(index_after_move(0, 1, 3), 0);
+        assert_eq!(index_after_move(5, 3, 1), 5);
+    }
+
+    #[test]
+    fn a_strip_with_no_tab_in_front_gains_none_from_a_move() {
+        assert_eq!(index_after_move(-1, 0, 2), -1);
+    }
+}
