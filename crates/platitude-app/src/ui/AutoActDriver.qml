@@ -2609,6 +2609,19 @@ Item {
             // is clicked, and a run that opened the destination alone would photograph a file git thinks appeared out
             // of nowhere.
             const wtPath = named ? arg.substring(cut + 1) : arg
+            // A diff is of a file, and every way to open one on screen carries its name — so an argument that carries
+            // none is the run's own mistake, and it has to read as one. **git will not call it an error**: an empty
+            // pathspec matches the whole tree, so the pane fills with a diff that reads exactly like the file's, and a
+            // fixture with one changed file in it renders down to the same rows. It parts company at the first write:
+            // the tree moves, the list is asked about a path it never held, and the pane closes — correctly — on a
+            // reader who was never on a file. What that leaves is a verb reporting rows it never owned, hours after
+            // the argument it wanted was left off (2026-08-18 実測: `line-run` staged one line of nothing and read
+            // `rows=0`, `line-back` waited out the watchdog).
+            if (wtPath === "") {
+                AppBackend.report("diff_arg act=" + act + " named=false")
+                renderedBarrier.begin()
+                return
+            }
             page.toggleDiff(named ? head : "unstaged", wtPath,
                             worktreeModel.origOf(wtPath))
             stageRowTimer.begin()
