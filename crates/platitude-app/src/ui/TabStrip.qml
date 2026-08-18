@@ -53,6 +53,11 @@ Item {
     property int heldId: -1
     property real heldGrabX: 0
     property real heldX: 0
+    /// Where the hand last reported in the scene, and how far past the run it is asking for. A hand that has run out of
+    /// strip is still asking, and the distance it asks by is what the strip travels at (デザイン規約 §タブの所作 —— the
+    /// sensitivity is the one the app's other autoscroll reads, §グラフを横へ送る).
+    property real heldSceneX: 0
+    property real heldPush: 0
 
     signal openRepositoryRequested()
     signal identityEditRequested()
@@ -84,8 +89,46 @@ Item {
 
     /// The hand, moved to `sceneX` with a tab in it. Scene coordinates in, the strip's own out: the tab is drawn where
     /// the hand is rather than where the row sits, so its own coordinates cannot say where the pointer got to.
+    ///
+    /// The run — what is on screen — is as far as a tab can be put. Past either end of it the tab stays at the edge and
+    /// the strip travels underneath instead (`driftRun`), which is the only way a tab reaches a place that is not on
+    /// screen when the carry starts.
     function carryTab(index, sceneX) {
-        tabStrip.carryTo(index, tabs.contentItem.mapFromItem(null, sceneX, 0).x - tabStrip.heldGrabX)
+        const tab = tabs.itemAtIndex(index)
+        if (!tab)
+            return
+        tabStrip.heldSceneX = sceneX
+        const want = tabs.contentItem.mapFromItem(null, sceneX, 0).x - tabStrip.heldGrabX
+        const runFrom = tabs.contentX
+        const runTo = tabs.contentX + tabs.width - tab.width
+        tabStrip.heldPush = want < runFrom ? want - runFrom : Math.max(0, want - runTo)
+        tabStrip.carryTo(index, Math.max(runFrom, Math.min(want, runTo)))
+    }
+
+    /// One tick of the strip travelling under a tab held against its end, at the speed the hand is asking for.
+    function driftRun() {
+        const at = tabStrip.heldIndex()
+        if (at < 0)
+            return
+        const room = tabs.contentWidth - tabs.width
+        const asked = tabs.contentX + tabStrip.heldPush * Metrics.middleScrollGain
+        const settled = Math.max(0, Math.min(asked, room))
+        if (settled === tabs.contentX)
+            return
+        tabs.contentX = settled
+        // The hand has not moved; what it is pointing into the strip at has.
+        tabStrip.carryTab(at, tabStrip.heldSceneX)
+    }
+
+    /// Where the tab in hand sits right now, or -1 with nothing in hand. Walked rather than remembered: the carry is
+    /// what changes it.
+    function heldIndex() {
+        for (let i = 0; i < tabs.count; i++) {
+            const tab = tabs.itemAtIndex(i)
+            if (tab && tab.tab_id === tabStrip.heldId)
+                return i
+        }
+        return -1
     }
 
     /// The one place a carried tab is put anywhere: where it is drawn, and — for as long as it keeps passing them —
@@ -135,9 +178,11 @@ Item {
         return at
     }
 
-    /// Set down. The order is already what it is going to be — the tab only stops being drawn away from its own row.
+    /// Set down. The order is already what it is going to be — the tab only stops being drawn away from its own row,
+    /// and the strip stops travelling with it.
     function dropTab() {
         tabStrip.heldId = -1
+        tabStrip.heldPush = 0
     }
 
     /// Automation: the tab at `index`, carried to `to` and set down (`PG_AUTO_ACT=tab-drag`). The carrying is a
@@ -179,12 +224,31 @@ Item {
     /// Automation: how far the tab in hand is actually drawn from its own row (`tab-hold`). Read off that tab, so a
     /// transform that came apart answers 0 — which is also what nothing being held answers.
     function heldTabShift() {
-        for (let i = 0; i < tabs.count; i++) {
-            const tab = tabs.itemAtIndex(i)
-            if (tab && tab.tab_id === tabStrip.heldId)
-                return Math.round(tab.shiftShown)
-        }
-        return 0
+        const at = tabStrip.heldIndex()
+        const tab = at < 0 ? null : tabs.itemAtIndex(at)
+        return tab ? Math.round(tab.shiftShown) : 0
+    }
+
+    /// Automation: the tab at `index`, carried against the far end of the run and left there (`PG_AUTO_ACT=tab-edge`).
+    /// Held one and a half tab widths past the run — the distance is the speed, so the hook names it in the strip's own
+    /// terms rather than in pixels.
+    function carryTabPastEnd(index) {
+        const tab = tabs.itemAtIndex(index)
+        if (!tab)
+            return false
+        tabStrip.pressTab(index, tab.tab_id, Qt.LeftButton)
+        tabStrip.takeTab(index, tab.width / 2)
+        tabStrip.carryTab(index, tabs.mapToItem(null, tabs.width + tab.width, 0).x)
+        return true
+    }
+
+    /// Automation: whether the strip has travelled to its far end, and how far it has travelled (`tab-edge`). A strip
+    /// with nothing to scroll answers false — there is no end to reach.
+    function runAtEnd() {
+        return tabs.contentWidth > tabs.width && tabs.contentX >= tabs.contentWidth - tabs.width - 1
+    }
+    function runOffset() {
+        return Math.round(tabs.contentX)
     }
 
     /// Automation: the middle click, landed on the tab at `index` (`PG_AUTO_ACT=middle-close`). Answers whether there
@@ -453,6 +517,15 @@ Item {
             onTabDragged: sceneX => tabStrip.carryTab(tabItem.index, sceneX)
             onTabDropped: tabStrip.dropTab()
         }
+    }
+    // The strip travels while a tab is held past the end of the run. One frame a tick and the sensitivity the app's
+    // other autoscroll reads (`MiddleAutoScroll`, デザイン規約 §グラフを横へ送る): the two are the same gesture seen
+    // from different ends — a hand asking for somewhere it cannot reach, and the distance saying how badly.
+    Timer {
+        interval: 16
+        repeat: true
+        running: tabStrip.heldId >= 0 && tabStrip.heldPush !== 0 && tabs.contentWidth > tabs.width
+        onTriggered: tabStrip.driftRun()
     }
     HoverToolButton {
         id: plusButton

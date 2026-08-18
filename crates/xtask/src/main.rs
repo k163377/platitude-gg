@@ -161,7 +161,9 @@ commands:
       order the tabs came up in. `tab-hold` opens the same four and takes
       one up without setting it down (argument: which tab, default 0),
       because a tab drawn away from its own row is what the settled strip
-      cannot show.
+      cannot show. `tab-edge` opens eight, puts the window down on its
+      floor so the strip has to overflow, and holds a tab past the end of
+      it until the strip has travelled the whole way.
       `identity` and `identity-half` are read as a pair, and are the only
       verbs whose write would land outside a demo repository — so they are
       handed a git configuration of their own (GIT_CONFIG_GLOBAL in the

@@ -105,6 +105,11 @@ Rectangle {
     function dragTabTo(from, to) { return tabStrip.dragTabTo(from, to) }
     function holdTabAt(index) { return tabStrip.holdTabAt(index) }
     function heldTabShift() { return tabStrip.heldTabShift() }
+    function carryTabPastEnd(index) { return tabStrip.carryTabPastEnd(index) }
+    function heldTabIndex() { return tabStrip.heldIndex() }
+    function dropCarriedTab() { tabStrip.dropTab() }
+    function runAtEnd() { return tabStrip.runAtEnd() }
+    function runOffset() { return tabStrip.runOffset() }
     function tabPaths() { return tabStrip.tabPaths() }
     function tabItemCount() { return tabStrip.tabItemCount() }
     function hasTabPath(path) { return tabStrip.hasTabPath(path) }

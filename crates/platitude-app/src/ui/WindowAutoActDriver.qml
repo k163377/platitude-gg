@@ -227,6 +227,55 @@ Item {
         }
     }
 
+    // The strip travelling under a tab held past the end of it — the half of the carry that reaches a place which was
+    // not on screen when the hand took hold. The window goes down on its floor first: whether a given number of tabs
+    // overflows at all is a question about the installed fonts and the band's own furniture (`tab-widths` answers it
+    // differently on each OS), and this verb needs a strip that overflows on every machine.
+    Timer {
+        id: tabEdgeTimer
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "tab-edge"
+        property bool sized: false
+        property bool requested: false
+        property int from: 0
+        onTriggered: {
+            if (!tabEdgeTimer.requested) {
+                if (pageRepeater.count < 2 || topBar.tabItemCount() !== pageRepeater.count)
+                    return
+                const front = window.curPage
+                if (front === null || front.pageTab.state !== "open"
+                        || !front.pageWt.loaded || front.pageGraph.finishCount === 0)
+                    return
+                if (!tabEdgeTimer.sized) {
+                    window.width = Math.ceil(window.floorWidth)
+                    tabEdgeTimer.sized = true
+                    return
+                }
+                // A strip that fits has no end to travel to. The resize is what makes one, and the strip itself says
+                // when that has taken — no width of its own is waited on, because which width crowds a strip is the
+                // thing this cannot assume.
+                if (!topBar.bandTabScrolls)
+                    return
+                tabEdgeTimer.from = Number(AppBackend.autoActArg || 0)
+                tabEdgeTimer.requested = topBar.carryTabPastEnd(tabEdgeTimer.from)
+                return
+            }
+            // Travelled to its far end, carrying the tab to the end of the order: the strip stops on its own bound,
+            // and the tab passes every neighbour that slides under it on the way there.
+            if (!topBar.runAtEnd() || topBar.heldTabIndex() !== pageRepeater.count - 1)
+                return
+            stop()
+            topBar.dropCarriedTab()
+            AppBackend.report("tab_edge landed=true from=" + tabEdgeTimer.from
+                              + " run=" + topBar.runOffset()
+                              + " tabs=" + pageRepeater.count
+                              + " active=" + tabsModel.currentIndex
+                              + " open=" + topBar.tabPaths())
+            window.finishAutoAct()
+        }
+    }
+
     // Reopening an existing path must select its tab without adding one.
     Timer {
         id: openAgainTimer

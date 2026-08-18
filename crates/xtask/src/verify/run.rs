@@ -41,6 +41,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // is about, and four differently named tabs say an order a
         // picture can be read for. The argument names two of them.
         tab_width_repos("4")?
+    } else if opts.verb == "tab-edge" {
+        // A strip that has to overflow: eight of them, against a window
+        // the verb puts down on its floor.
+        tab_width_repos("8")?
     } else {
         let presets: Vec<String> = if opts.preset.is_empty() {
             vec!["basic".into()]

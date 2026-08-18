@@ -187,6 +187,12 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // jumped. `lifted=` is the offset the transform is carrying, read
         // off the tab rather than off what was asked of it.
         "tab-hold" => Some("tab_hold lifted=true"),
+        // And the strip travelling under a tab held past its end. The
+        // picture is a scrolled strip either way — the one that travelled
+        // and the one that was already there frame alike — so what is
+        // judged is that the tab reached the far end of an order it could
+        // not see when the hand took hold.
+        "tab-edge" => Some("tab_edge landed=true"),
         // The three states themselves. A run where one of them never stood
         // photographs a band that was never crowded, and that picture
         // cannot be told from a band that gave the crowd room — so the
