@@ -107,7 +107,7 @@ Item {
     function defersCompletion(act) {
         return ["publish", "publish-taken", "publish-remotes", "publish-add",
                 "publish-go", "publish-new-go", "amend-reset-author",
-                "eol-commit", "eol-hover",
+                "eol-commit", "eol-hover", "commit-face",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "line-tools", "hunk-tools",
                 "code-send", "line-back", "diff-follow", "line-run",
@@ -126,8 +126,7 @@ Item {
                 "diff-step-edge", "changes-step", "changes-step-edge", "wip-step",
                 "graph-bar", "graph-bar-away", "middle-scroll",
                 "graph-tail", "divider-refuse", "cherry-pick", "reword", "edit-message",
-                "edit-message-leave", "edit-message-discard", "edit-message-focus",
-                "eol-commit", "eol-hover",
+                "edit-message-leave", "edit-message-focus",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
                 "avatar-settings", "avatar-combo", "avatar-row-lit", "avatar-remove",
                 "find", "find-next", "find-prev",
@@ -253,6 +252,20 @@ Item {
             AppBackend.report("eol_commit staged=" + workTree.stagedCount
                               + " warned=" + workTree.eolStagedCount
                               + " card=" + wipPane.eolCardOpen)
+            driver.complete()
+        }
+    }
+    // The tick's line comes out on the shared delay, so the setting being on is not yet the line being up.
+    Timer {
+        id: commitFaceTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!wipPane.signingTipShown)
+                return
+            commitFaceTimer.stop()
+            AppBackend.report("commit_face signs=" + repoTab.signsCommits
+                              + " tip=" + wipPane.signingTipShown)
             driver.complete()
         }
     }
@@ -1130,10 +1143,12 @@ Item {
         repeat: true
         /// How many rows, and which way. The refusing runs fix their own.
         property int steps: 1
-        /// The two grounds a step is refused on that a run can stand up: a name box open on the row, and a half-written
-        /// message the move is already being asked about. (The third — a question standing on the bar — is refused by
-        /// the same expression, and its pill holds the keyboard anyway.)
+        /// The one ground a step is refused on that a run can stand up: a name box open on the row. (The other — a
+        /// question standing on the bar — is refused by the same expression, and its pill holds the keyboard anyway.)
         property bool named: false
+        /// A half-written message in the details pane, which refuses **nothing** — the arrows walk off it and the
+        /// draft goes, the same as a click (デザイン規約 §コミットメッセージの 2 つの枠). Here so a hold cannot come
+        /// back unnoticed.
         property bool dirty: false
         /// The view sent away from the selection before the step, so the row stepped onto has no reading position to
         /// preserve.
@@ -1206,7 +1221,6 @@ Item {
                 + " row=" + row
                 + " steps=" + graphStepTimer.steps
                 + " landing=" + graphPane.stepLanding(row, graphStepReport.wasY)
-                + " held=" + (page.pendingMove !== null)
                 + " back=" + (row === graphStepReport.from)
                 + " refused=" + graphStepReport.refused
                 + " focused=" + graphPane.view.activeFocus
@@ -1455,14 +1469,10 @@ Item {
             }
             if (AppBackend.autoAct === "reword")
                 detailsPane.submitMessage()
-            // "edit-message-leave" walks away from the unsaved text, which is what raises the question about dropping
-            // it; "-discard" then answers it, which lets the move through.
-            else if (AppBackend.autoAct === "edit-message-leave"
-                     || AppBackend.autoAct === "edit-message-discard") {
+            // "edit-message-leave" walks away from the unsaved text. Nothing asks any more — the draft goes and the
+            // next commit's own message arrives, which is what the shot is of.
+            else if (AppBackend.autoAct === "edit-message-leave")
                 page.activateRow(graphModel.oidAt(graphModel.rowOf(page.selectedOid) + 1))
-                if (AppBackend.autoAct === "edit-message-discard")
-                    detailsPane.leaveResolved(true)
-            }
             if (AppBackend.autoAct === "reword")
                 writeBarrier.start()
             else
@@ -2338,10 +2348,10 @@ Item {
                    || act === "graph-step-dirty" || act === "graph-step-diff") {
             // Keystrokes cannot be injected, so the run enters at the same `stepRow` the key handler enters — and takes
             // the keyboard first through the same call a row click makes, since a graph nobody has pressed hears no
-            // arrows at all (規約 §矢印で履歴を辿る). `-dirty` takes two steps: the first raises the half-written-message
-            // question, the second must not tug against it. `-edge` walks off the bottom; `-far` sends the view away
-            // first so the stepped-off row is off screen. `-diff` opens a file over the graph: the pane swapped off
-            // screen has to let the keyboard go, or the arrows walk the selection behind the diff.
+            // arrows at all (規約 §矢印で履歴を辿る). `-dirty` writes a half-written message and then walks anyway —
+            // nothing holds the selection for a draft. `-edge` walks off the bottom; `-far` sends the view away first
+            // so the stepped-off row is off screen. `-diff` opens a file over the graph: the pane swapped off screen
+            // has to let the keyboard go, or the arrows walk the selection behind the diff.
             page.activateRow(branchesModel.headOid !== "" ? branchesModel.headOid : graphModel.oidAt(0))
             graphStepTimer.named = act === "graph-step-named"
             graphStepTimer.dirty = act === "graph-step-dirty"
@@ -2436,7 +2446,6 @@ Item {
             page.squashCommit(branchesModel.headOid)
         } else if (act === "reword" || act === "edit-message"
                    || act === "edit-message-leave"
-                   || act === "edit-message-discard"
                    || act === "edit-message-focus") {
             // Detached there is no branch tip to name, so the newest row stands in — a commit other than HEAD.
             page.jumpToRef(branchesModel.headOid !== "" ? branchesModel.headOid : graphModel.oidAt(0))
@@ -2565,6 +2574,13 @@ Item {
             }
             wipPane.setMessage(arg === "" || arg === "amend" ? "feat: something" : arg, "")
             eolCommitTimer.start()
+        } else if (act === "commit-face") {
+            // The signing tick on the face at the end of the commit button, with its one line out. Hover cannot be
+            // injected, so this writes the one property a real pointer writes (`AvatarButton`).
+            page.showWip()
+            wipPane.setMessage("feat: something", "")
+            wipPane.signingPointedAt = true
+            commitFaceTimer.start()
         } else if (act === "eol-hover") {
             // Hover cannot be injected; this writes the one property a real pointer writes. The tip lands in
             // overlay.png.

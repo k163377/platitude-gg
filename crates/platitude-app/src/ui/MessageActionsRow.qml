@@ -3,16 +3,19 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The details editor's action row. Nothing until something is actually changed — until then the pane keeps its resting
-// shape and nothing invites a rewrite. While the leaving question stands the row turns into it: the question belongs to
-// the text, so it is asked where the text is.
+// The details editor's action row: the one button that writes the message back, and the lines that say what writing it
+// costs. It stands from the moment a caret enters either box rather than from the moment the text differs — a button
+// that appears under the hand as the first character lands moves everything below it at the worst moment, and the way
+// out of the editor should be on screen for as long as the editor is open.
+//
+// **There is no Cancel.** Throwing away a draft has two ways out that the reader takes on purpose — Escape, and
+// reading another commit — and neither of them asks (デザイン規約 §コミットメッセージの 2 つの枠). A button whose
+// whole job is to undo typing would be the one place in the app where a single click throws text away.
 ColumnLayout {
     id: actions
 
     /// The boxes differ from the commit's own message.
     property bool dirty: false
-    /// The leaving question is standing.
-    property bool asking: false
     /// Saving replays instead of amending (not HEAD's own commit).
     property bool replays: false
     /// A remote already has this commit.
@@ -21,20 +24,28 @@ ColumnLayout {
     property bool busy: false
     /// The summary box holds something to save.
     property bool canSave: false
+    /// A caret is in one of the boxes.
+    property bool editing: false
+    /// Who will be recorded as having made this commit once it is written back — **not** who wrote it. git keeps the
+    /// author and replaces the committer with whoever runs the rewrite (measured: Alice's commit amended by Bob comes
+    /// back `A=Alice C=Bob`), which is the one thing about this button a reader cannot see anywhere else on the pane —
+    /// the row above names the author.
+    property int committerFace: -1
+    property string committerFaceUrl: ""
+    /// Whether that commit will be signed, and with what (`SignatureMark` / `AvatarButton`).
+    property string signature: ""
+    property string signatureTip: ""
 
-    signal revertRequested()
     signal saveRequested()
-    /// The leaving question was answered: true drops the edits and lets the move through, false stays on this commit.
-    signal leaveResolved(bool discard)
 
-    visible: actions.dirty
+    visible: actions.dirty || actions.editing
     spacing: Theme.spaceXs
 
     // The newest commit is amended in place and costs nothing; an older one is replayed, and everything built on it
     // comes back as different commits. Only the second case is worth a line.
     Label {
         Layout.fillWidth: true
-        visible: !actions.asking && actions.replays
+        visible: actions.replays
         wrapMode: Text.Wrap
         text: qsTr("Saving replays this commit, so every commit after it gets a new identity.")
         color: Theme.textSecondary
@@ -43,57 +54,34 @@ ColumnLayout {
     // Said, not asked, like the amend editor's tag: the save still goes ahead, and this line is the warning it gets.
     Label {
         Layout.fillWidth: true
-        visible: !actions.asking && actions.published
+        visible: actions.published
         wrapMode: Text.Wrap
         text: qsTr("This commit is on a remote. Rewriting it leaves anyone who already has it out of step.")
         color: Theme.warning
         font.pixelSize: Theme.fontSm
     }
-    Label {
+    // The same button the commit editor ends with, and for the same reason: it names the command it runs and whom the
+    // result will be attributed to. `commit --amend` where git really does amend, `reword` where the commit is older
+    // and the app replays it — the todo verb git gave that operation (デザイン規約 §git 用語のコード表記).
+    ActionButton {
+        id: saveButton
         Layout.fillWidth: true
-        visible: actions.asking
-        wrapMode: Text.Wrap
-        text: qsTr("Moving to another commit leaves this text behind.")
-        color: Theme.warning
-        font.pixelSize: Theme.fontSm
-    }
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: Theme.spaceSm
-        Item { Layout.fillWidth: true }
-        HoverToolButton {
-            visible: !actions.asking
-            text: qsTr("Cancel")
-            font.pixelSize: Theme.fontSm
-            onClicked: actions.revertRequested()
-        }
-        ActionButton {
-            visible: !actions.asking
-            implicitHeight: Theme.controlHeight
-            kind: "check"
-            besideWord: true
-            frameColor: enabled ? Theme.accent : Theme.borderDefault
-            activeFocusOnTab: true
-            text: qsTr("Save message")
-            enabled: !actions.busy && actions.canSave
-            onActivated: actions.saveRequested()
-        }
-        // The two ways out of the question. Staying is the framed one: it is the answer that loses nothing.
-        HoverToolButton {
-            visible: actions.asking
-            text: qsTr("Discard edits")
-            font.pixelSize: Theme.fontSm
-            onClicked: actions.leaveResolved(true)
-        }
-        ActionButton {
-            visible: actions.asking
-            implicitHeight: Theme.controlHeight
-            kind: "pen"
-            besideWord: true
-            frameColor: Theme.accent
-            activeFocusOnTab: true
-            text: qsTr("Keep editing")
-            onActivated: actions.leaveResolved(false)
-        }
+        font.pixelSize: Theme.fontLg
+        implicitHeight: Theme.toolbarHeight
+        centred: true
+        tone: Theme.textPrimary
+        frameColor: saveButton.enabled ? Theme.accent : Theme.borderDefault
+        activeFocusOnTab: true
+        phraseHead: actions.replays ? "reword" : "commit --amend"
+        text: qsTr("the message")
+        phraseFace: actions.committerFace
+        phraseFaceUrl: actions.committerFaceUrl
+        phraseSignature: actions.signature
+        phraseSignatureTip: actions.signatureTip
+        // Live whenever there is a message to save. **Not `dirty`** — a button that greys out the moment the text
+        // matches again answers "did I change anything" with its own state, which is a question nobody asked; pressing
+        // it with nothing changed simply does nothing (`DetailsPane.submitMessage`).
+        enabled: !actions.busy && actions.canSave
+        onActivated: actions.saveRequested()
     }
 }

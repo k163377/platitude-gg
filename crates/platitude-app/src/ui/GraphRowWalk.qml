@@ -17,11 +17,6 @@ Item {
     required property var graphModel
     /// A question is standing over a row, waiting to be answered.
     required property bool asking
-    /// The page is holding the selection where it is: a half-written message has put a question up and the highlight
-    /// back, and it stands until it is answered. The keys must not tug against it — each press would be pushed back and
-    /// the pair would fight.
-    property bool selectionHeld: false
-
     /// A step came to rest on a row and it is time to read it.
     signal activated(string oidHex)
 
@@ -29,14 +24,13 @@ Item {
     /// automation hook both come through here — a headless run cannot inject a keystroke, so the step has to be
     /// callable as well as pressable (verify-ui).
     ///
-    /// Refused while something stands over a row: a question waiting to be answered, a name box being typed into, or
-    /// the page holding the selection back. The name box is the one that has to be named here rather than left to the
-    /// focus: it lives inside a row, and a single-line box does not consume Up and Down — they come up through the
-    /// delegate to the list.
+    /// Refused while something stands over a row: a question waiting to be answered, or a name box being typed into.
+    /// The name box is the one that has to be named here rather than left to the focus: it lives inside a row, and a
+    /// single-line box does not consume Up and Down — they come up through the delegate to the list.
     ///
     /// Refused as well while the pane is off screen: this item is inside it, so its own visibility is the pane's.
     function stepRow(delta) {
-        if (!walk.visible || walk.selectionHeld || walk.asking
+        if (!walk.visible || walk.asking
                 || walk.view.namingOid !== "" || walk.view.count === 0)
             return false
         const from = walk.view.currentIndex

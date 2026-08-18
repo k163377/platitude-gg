@@ -25,10 +25,6 @@ ColumnLayout {
     /// Why they refuse, in one line ("" when they do not). A box that refuses typing without saying why reads as
     /// broken.
     property string blockedTip: ""
-    /// Something wants to move off this text while it is half-written. The question belongs to the text, so the boxes
-    /// it is about carry the warning colour while it stands: the click that asked it happened over on the graph, and
-    /// nothing else would draw the eye back here.
-    property bool asking: false
     /// Stands in for the pointer on the summary box, so its read-only tooltip can be photographed — hover cannot be
     /// injected (verify-ui スキル).
     property bool summaryPointedAt: false
@@ -55,6 +51,9 @@ ColumnLayout {
     /// (app-ui.md).
     readonly property color descriptionColor: descBox.textColor
     readonly property bool descriptionFocused: descBox.focused
+    /// Whether a caret is in either box — the pane reads it as "somebody is in here writing", which is when the row
+    /// that saves has to be on screen (規約 §コミットメッセージの 2 つの枠).
+    readonly property bool anyFocused: summaryArea.activeFocus || descBox.focused
 
     // -- the message pair is one block of one height --
     /// What the summary box needs for its own lines, capped — nothing in git bounds a summary, and one pasted paragraph
@@ -135,15 +134,45 @@ ColumnLayout {
         summaryArea.text = subject
         descBox.text = description
         summaryArea.cursorPosition = 0
+        editor.summaryPinned = true
         editor.summaryToTop()
-        Qt.callLater(editor.summaryToTop)
         descBox.resetForNewMessage()
+    }
+    /// Held at its first line until the reader moves it, the way the description box is held
+    /// (`DescriptionBox.pinnedTop`) and for the same reason: assigning `text` leaves the caret at the end, and a
+    /// `TextArea` scrolls the flickable under it to keep the caret in view — so a subject longer than the box opens on
+    /// its **last** line. A single assignment races that scroll and loses when the layout settles late (measured on a
+    /// 2,000-character subject: the box opened on `終端`). Pinning states the intent instead of racing it.
+    property bool summaryPinned: false
+    function unpinSummary() {
+        editor.summaryPinned = false
+    }
+    Connections {
+        target: summaryView.contentItem
+        enabled: editor.summaryPinned
+        function onContentYChanged() {
+            if (editor.summaryPinned && summaryView.contentItem.contentY !== 0)
+                summaryView.contentItem.contentY = 0
+        }
+        function onContentHeightChanged() {
+            if (editor.summaryPinned)
+                summaryView.contentItem.contentY = 0
+        }
     }
     /// Write the texts alone — a revert, or the smoke hook that types into the boxes — moving neither the caret, the
     /// scroll nor the pull.
     function setTexts(subject, description) {
         summaryArea.text = subject
         descBox.text = description
+    }
+    /// Escape was pressed in one of the boxes. **The draft goes**, and nothing asks (デザイン規約 §コミットメッセージ
+    /// の 2 つの枠): Escape is the reader saying so, and the text it drops was never committed. The caret goes with it,
+    /// so the row that saves comes down too.
+    signal escaped()
+    function leaveBoxes() {
+        summaryArea.focus = false
+        descBox.dropCaret()
+        editor.escaped()
     }
     function summaryToTop() {
         if (summaryView.contentItem)
@@ -152,6 +181,8 @@ ColumnLayout {
     /// The same two steps for the summary as the description box makes on its own text (`DescriptionBox.rollBy`): its
     /// own scroll while a pasted paragraph past the shared cap leaves text to move, the block once there is not.
     function rollSummary(dy) {
+        // A wheel over the box is the reader moving it: whatever the pin was holding, they have taken over.
+        editor.unpinSummary()
         const flick = summaryView.contentItem
         const pixels = dy / 120 * (Metrics.wheelRows * Theme.fontMdLine)
         const max = Math.max(0, flick.contentHeight - flick.height)
@@ -177,7 +208,7 @@ ColumnLayout {
         Layout.preferredHeight: editor.summaryNeed
         color: Theme.bgBase
         radius: Theme.radiusMd
-        border.color: editor.asking ? Theme.warning : Theme.borderDefault
+        border.color: Theme.borderDefault
         border.width: Theme.borderWidth
         ScrollView {
             id: summaryView
@@ -193,6 +224,12 @@ ColumnLayout {
                 id: summaryArea
                 readOnly: editor.readOnly
                 placeholderText: editor.readOnly ? "" : qsTr("Commit summary")
+                // A caret put in the box is the other way the reader takes it over (`DescriptionBox` does the same).
+                onActiveFocusChanged: if (summaryArea.activeFocus) editor.unpinSummary()
+                Keys.onEscapePressed: event => {
+                    editor.leaveBoxes()
+                    event.accepted = true
+                }
                 ToolTip.visible: (hovered || editor.summaryPointedAt) && editor.blockedTip !== ""
                 ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: editor.blockedTip
@@ -208,10 +245,11 @@ ColumnLayout {
         id: descBox
         readOnly: editor.readOnly
         placeholderText: editor.readOnly ? "" : qsTr("Description")
-        border.color: editor.asking ? Theme.warning : Theme.borderSubtle
+        border.color: Theme.borderSubtle
         restHeight: editor.descRest
         room: editor.descRoom
         owed: editor.descOwed
         onWheelPastEnd: pixels => editor.wheelPastEnd(pixels)
+        onEscaped: editor.leaveBoxes()
     }
 }

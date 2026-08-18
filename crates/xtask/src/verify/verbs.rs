@@ -217,21 +217,26 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // onto. A walk that moved nothing frames as a graph sitting still,
         // which is what a graph does most of the time.
         "graph-step" => Some(
-            "landing=in held=false back=false refused=0 focused=true diff=false onscreen=true selected=true",
+            "landing=in back=false refused=0 focused=true diff=false onscreen=true selected=true",
         ),
         // The other two landings, which no picture holds: a row brought in
         // flush against the bottom one step at a time, and a row centered
         // because the one it stepped off was nowhere on screen. Both frame
         // as a graph with a lit row somewhere in it.
-        "graph-step-edge" => Some("landing=edge held=false back=false refused=0 focused=true"),
-        "graph-step-far" => Some("landing=center held=false back=false refused=0 focused=true"),
-        // The refusing halves. `back=true` is the whole of them — nothing
+        "graph-step-edge" => Some("landing=edge back=false refused=0 focused=true"),
+        "graph-step-far" => Some("landing=center back=false refused=0 focused=true"),
+        // The refusing half. `back=true` is the whole of it — nothing
         // moved — and it is worth nothing without `refused=`, since a walk
-        // that was never attempted leaves the same row lit. Read them
-        // beside a plain `graph-step`: a step that always refuses passes
-        // these two on its own.
-        "graph-step-named" => Some("held=false back=true refused=1"),
-        "graph-step-dirty" => Some("held=true back=true refused=1"),
+        // that was never attempted leaves the same row lit. Read it beside
+        // a plain `graph-step`: a step that always refuses passes it on
+        // its own.
+        "graph-step-named" => Some("back=true refused=1"),
+        // And the one that must *not* refuse: a half-written message is a
+        // draft, and the arrows walk off it the way a click does — so
+        // what it has to say is a plain step's answer, word for word.
+        "graph-step-dirty" => Some(
+            "landing=in back=false refused=0 focused=true diff=false onscreen=true selected=true",
+        ),
         // A diff opened over the graph. `focused=false` is the mechanism —
         // Qt leaves active focus on a pane it has just swapped away, and
         // the keys go on arriving there — and `diff=true` is what the

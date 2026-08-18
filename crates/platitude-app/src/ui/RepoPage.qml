@@ -573,34 +573,16 @@ Item {
     }
     onSelectedOidChanged: page.selectedPublished = false
 
-    // Moving off a half-written message would drop it. Hold the move and let the editor ask — the question is about the
-    // text, so it is asked where the text is rather than over the whole window. The selection stays where it is while
-    // it stands: nothing has moved.
-    property var pendingMove: null
-    function guardEdits(targetOid, proceed) {
-        // Landing where it already is takes nothing away.
-        if (!detailsPane.messageDirty || targetOid === page.selectedOid) {
-            proceed()
-            return
-        }
-        const back = graphModel.rowOf(page.selectedOid)
-        if (back >= 0)
-            graphPane.setCurrentRow(back)
-        page.pendingMove = proceed
-    }
-    function resolveLeave(discard) {
-        const go = page.pendingMove
-        page.pendingMove = null
-        if (discard && go)
-            go()
-    }
+    // **Moving off a half-written message drops it, and nothing asks** (デザイン規約 §コミットメッセージの 2 つの枠).
+    // A message that has not been saved is a draft of somebody else's commit; the way to keep it is to press the
+    // button, and the two ways to drop it — Escape, and reading another commit — are both things the reader did on
+    // purpose. So nothing stands between a click in the graph and the commit it lands on.
     Connections {
         target: detailsPane
-        // Reverted or saved by hand while the question stood: there is nothing left to lose, so it answers itself.
+        // The first keystroke is the first moment "is this on a remote" can matter, and it spares a rev-list on every
+        // selection click.
         function onMessageDirtyChanged() {
-            if (!detailsPane.messageDirty)
-                page.pendingMove = null
-            else
+            if (detailsPane.messageDirty)
                 page.askSelectedPublished()
         }
     }
@@ -612,6 +594,8 @@ Item {
         function onAvatarsChanged() {
             graphModel.refreshAvatars()
             detailsModel.refreshAvatar()
+            // The commit editor wears the identity's own face, which is reached by the same badge.
+            repoTab.refreshAvatar()
         }
     }
 
@@ -1114,7 +1098,7 @@ Item {
         page.activateRow(graphModel.oidAt(row))
         // Held back by an unsaved message: the question put the highlight back where it was, so there is nowhere for
         // the view to go yet.
-        if (asked && page.pendingMove === null)
+        if (asked)
             graphPane.showRowSoon(row)
     }
 
@@ -1149,9 +1133,6 @@ Item {
     // What a row click means: the synthetic WIP row (all-zero id) opens the working-tree view, anything else selects
     // the commit.
     function activateRow(oidHex) {
-        page.guardEdits(oidHex, function () { page.selectRow(oidHex) })
-    }
-    function selectRow(oidHex) {
         // Any new selection settles where the last rewrite left off, and answers any landing this page still owed.
         page.rewordRow = -1
         page.pendingHeadSelect = false
@@ -1160,8 +1141,6 @@ Item {
         // progress.
         graphPane.stopNaming()
         page.stopRowAsk()
-        // A click moves the highlight itself, but one held back by the unsaved-message question does not: the question
-        // put it back where it was, so the answer has to move it again.
         const row = graphModel.rowOf(oidHex)
         if (row >= 0) {
             graphPane.setCurrentRow(row)
@@ -1457,10 +1436,6 @@ Item {
                         workTree: workTree
                         blank: page.blank
                         chipListAnchor: rowHost.refListAnchor
-                        // A half-written message has put the move back and a question up: until it is answered the
-                        // arrows stay still, or every press would be pushed back by `guardEdits` and the two would
-                        // fight (規約 §矢印で履歴を辿る).
-                        selectionHeld: page.pendingMove !== null
                         onRowActivated: oidHex => page.activateRow(oidHex)
                         // The bar moves between matches, not between commits — landing on the same row twice changes
                         // nothing and costs no git.
@@ -1570,15 +1545,23 @@ Item {
                                ? qsTr("Not in the current history — switch to a branch that has it")
                                : "")
                         busy: repoTab.busyCount > 0
-                        asking: page.pendingMove !== null
                         published: page.selectedPublished
                         signatureKind: page.selectedSignatureKind
                         signatureCode: page.selectedSignatureCode
                         signatureSigner: page.selectedSignatureSigner
+                        // Whom a rewrite would be attributed to: git keeps the author and puts the reader in as
+                        // committer, so the save button wears the reader's face rather than the row's.
+                        committerFace: repoTab.authorAvatar
+                        committerFaceUrl: repoTab.authorAvatarUrl
+                        signsCommits: repoTab.signsCommits
+                        signingTip: repoTab.signingFormat === "ssh"
+                                    ? qsTr("Signed with your ssh key")
+                                    : repoTab.signingFormat === "x509"
+                                      ? qsTr("Signed with your x509 certificate")
+                                      : qsTr("Signed with your gpg key")
                         // HEAD's own commit, not the current branch's tip: detached, there is no branch to ask.
                         headOid: workTree.headOid
                         readPath: page.diffKind === "commit" ? page.diffPath : ""
-                        onLeaveResolved: discard => page.resolveLeave(discard)
                         onMessageSubmitted: (oidHex, subject, body) => page.saveMessage(oidHex, subject, body)
                         onFileActivated: (path, origPath) => page.toggleDiff("commit", path, origPath)
                         onFileWalked: (path, origPath) => page.openDiff("commit", path, origPath)
@@ -1667,19 +1650,17 @@ Item {
     readonly property bool refusalShown: splitWatch.shown
 
     function jumpToRef(oidHex) {
-        page.guardEdits(oidHex, function () {
-            const row = graphModel.rowOf(oidHex)
-            if (row >= 0)
-                graphPane.jumpToRow(row)
-            // Details resolve even outside the window.
-            page.rewordRow = -1
-            page.wipShown = false
-            page.selectedOid = oidHex
-            page.selectedStashRef = graphModel.stashRefOf(oidHex)
-            detailsModel.request(oidHex)
-            page.askInHistory(oidHex)
-            page.askSignature(oidHex)
-            page.closeDiff()
-        })
+        const row = graphModel.rowOf(oidHex)
+        if (row >= 0)
+            graphPane.jumpToRow(row)
+        // Details resolve even outside the window.
+        page.rewordRow = -1
+        page.wipShown = false
+        page.selectedOid = oidHex
+        page.selectedStashRef = graphModel.stashRefOf(oidHex)
+        detailsModel.request(oidHex)
+        page.askInHistory(oidHex)
+        page.askSignature(oidHex)
+        page.closeDiff()
     }
 }

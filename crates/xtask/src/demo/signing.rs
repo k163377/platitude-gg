@@ -40,8 +40,8 @@ pub(super) fn signed(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["config", "user.signingkey", &config_path(&trusted_key)])?;
     repo.commit("c.txt", "v1\n", "feat: signed and verified")?;
 
-    // Something to commit, so the editor that says "will be signed" has
-    // a reason to be reachable and its button is live.
+    // Something to commit, so the commit button — which is where the
+    // signing tick rides — is live and reachable.
     repo.write("a.txt", "v1\nabout to be committed\n")?;
     repo.git(&["add", "--", "a.txt"])?;
     Ok(())

@@ -144,7 +144,6 @@ Rectangle {
         asking: askBar.label !== ""
         onActivated: oidHex => graphArea.rowActivated(oidHex)
     }
-    property alias selectionHeld: rowWalk.selectionHeld
     function stepRow(delta) { return rowWalk.stepRow(delta) }
     function stepLanding(row, wasY) { return rowWalk.stepLanding(row, wasY) }
     function jumpToRow(row) { rowWalk.jumpToRow(row) }

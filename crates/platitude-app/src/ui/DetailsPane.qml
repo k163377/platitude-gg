@@ -27,10 +27,6 @@ ColumnLayout {
     // Why the boxes are read-only, in one line ("" when they are not).
     // A box that refuses typing without saying why reads as broken.
     property string editBlocked: ""
-    // Something wants to move off this commit while the message is
-    // half-written. The question belongs to the text, so it is asked
-    // where the text is: the row under the boxes turns into it.
-    property bool asking: false
     // A remote already has this commit. Rewriting is not asked about,
     // but デザイン規約「push 済みの範囲は尋ねずに言う」 wants it said, so the
     // save row carries the warning.
@@ -43,6 +39,12 @@ ColumnLayout {
     property string signatureKind: ""
     property string signatureCode: ""
     property string signatureSigner: ""
+    /// Who the rewrite would be attributed to — the reader's own identity, since git keeps the author and replaces the
+    /// committer (measured). The save button wears it the way the commit editor's button does.
+    property int committerFace: -1
+    property string committerFaceUrl: ""
+    property bool signsCommits: false
+    property string signingTip: ""
     /// The badge was pressed: the settings card opens already knowing whom
     /// it is about.
     signal avatarEditRequested(string name, string email)
@@ -166,9 +168,6 @@ ColumnLayout {
     signal popStashRequested(string selector)
     /// Save was pressed.
     signal messageSubmitted(string oidHex, string subject, string body)
-    /// The leaving question was answered: true drops the edits and lets
-    /// the move through, false stays on this commit.
-    signal leaveResolved(bool discard)
 
     // ---- message editor state --------------------------------------
     // The boxes are filled by hand rather than bound: typing would
@@ -206,7 +205,10 @@ ColumnLayout {
         detailsPane.baseBody = msgEditor.bodyText
     }
     function submitMessage() {
-        if (!detailsPane.editable || msgEditor.subjectText.trim() === "")
+        // Nothing changed is nothing to do. The button stands from the moment someone is writing rather than from the
+        // moment the text differs (`MessageActionsRow.editing`), so this is the ordinary press, not a mistake —
+        // and rewriting a commit into the same message would still replay everything after it.
+        if (!detailsPane.editable || !detailsPane.messageDirty || msgEditor.subjectText.trim() === "")
             return
         detailsPane.messageSubmitted(detailsPane.details.shaHex, msgEditor.subjectText, msgEditor.bodyText)
     }
@@ -239,7 +241,7 @@ ColumnLayout {
     /// of it but the list's own band and the two rows that keep a list a
     /// list. Past this the block scrolls rather than running out of the
     /// pane's bottom (規約 §窓の床).
-    readonly property real blockRoom: Math.max(0, detailsPane.height - paneHeader.height
+    readonly property real blockRoom: Math.max(0, detailsPane.height - Theme.headerHeight
         - (changesBand.visible ? changesBand.height : 0) - 2 * Theme.rowHeight)
     /// Moves the block by a wheel a box on it could not use — the same
     /// pair the working-tree pane has, and for the same reason: the boxes
@@ -319,9 +321,19 @@ ColumnLayout {
 
     spacing: 0
 
+    // The pane's band: `COMMIT`, or — while the selected row is a stash — what that stash is and what can be done with
+    // it, in place of the word rather than under it (`StashActionsBand`). Exactly one of the two stands, and both are
+    // `headerHeight`, which is why `blockRoom` above reads the token rather than either of them: a layout gives a
+    // hidden child no height at all, so whichever is down would answer 0 for the one that is up.
     PaneHeader {
-        id: paneHeader
+        visible: detailsPane.stashRef === ""
         text: qsTr("COMMIT")
+    }
+    StashActionsBand {
+        Layout.fillWidth: true
+        stashRef: detailsPane.stashRef
+        onApplyRequested: selector => detailsPane.applyStashRequested(selector)
+        onPopRequested: selector => detailsPane.popStashRequested(selector)
     }
     // Everything between the two bands, in a surface of its own that
     // scrolls when the pane is too short to hold it — the same shape the
@@ -347,13 +359,6 @@ ColumnLayout {
             width: blockScroll.width
             spacing: 0
 
-            // Stash actions when the selected row is a stash.
-            StashActionsBand {
-                Layout.fillWidth: true
-                stashRef: detailsPane.stashRef
-                onApplyRequested: selector => detailsPane.applyStashRequested(selector)
-                onPopRequested: selector => detailsPane.popStashRequested(selector)
-            }
             // Inset on all four sides — the message box carries its own frame,
             // and flush against the header band the two borders read as one
             // welded block. Vertically the inset is the same step the rows
@@ -368,38 +373,10 @@ ColumnLayout {
                 spacing: Theme.spaceXs
                 visible: detailsPane.details.shaHex !== ""
 
-                // -- message first, like the commit editor: the same pair,
-                // in the same component, one block of one height (デザイン
-                // 規約 §コミットメッセージの 2 つの枠) --
-                MessageEditor {
-                    id: msgEditor
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: msgEditor.pairHeight
-                    readOnly: !detailsPane.editable
-                    blockedTip: detailsPane.editBlocked
-                    asking: detailsPane.asking
-                    summaryPointedAt: detailsPane.summaryPointedAt
-                    listHeight: fileList.height
-                    blockRoom: detailsPane.blockRoom
-                    blockHeight: blockCol.implicitHeight
-                    onWheelPastEnd: pixels => detailsPane.rollBlock(pixels)
-                }
-                // Only once something is actually changed: until then the
-                // pane keeps its resting shape (`MessageActionsRow`).
-                MessageActionsRow {
-                    Layout.fillWidth: true
-                    dirty: detailsPane.messageDirty
-                    asking: detailsPane.asking
-                    replays: detailsPane.details.shaHex !== detailsPane.headOid
-                    published: detailsPane.published
-                    busy: detailsPane.busy
-                    canSave: msgEditor.subjectText.trim() !== ""
-                    onRevertRequested: detailsPane.revertMessage()
-                    onSaveRequested: detailsPane.submitMessage()
-                    onLeaveResolved: discard => detailsPane.leaveResolved(discard)
-                }
-                // -- author card: avatar + name/date on the left, own hash over
-                // parent hash on the right (rows aligned) --
+                // -- who wrote it, first: avatar + name/date on the left,
+                // own hash over parent hash on the right (rows aligned).
+                // The pane reads top to bottom the way the commit itself
+                // does — whose it is, what it says, what it touched --
                 CommitAuthorRow {
                     id: authorRow
                     details: detailsPane.details
@@ -418,6 +395,42 @@ ColumnLayout {
                     onSettleMateRequested: mateKeep.settle()
                     onOpenAuthorRequested: at => detailsPane.openAuthorCard(at)
                     onSettleAuthorRequested: authorKeep.settle()
+                }
+                // -- then the message: the same pair, in the same
+                // component the commit editor writes in, one block of one
+                // height (デザイン規約 §コミットメッセージの 2 つの枠) --
+                MessageEditor {
+                    id: msgEditor
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: msgEditor.pairHeight
+                    readOnly: !detailsPane.editable
+                    blockedTip: detailsPane.editBlocked
+                    summaryPointedAt: detailsPane.summaryPointedAt
+                    listHeight: fileList.height
+                    blockRoom: detailsPane.blockRoom
+                    blockHeight: blockCol.implicitHeight
+                    onWheelPastEnd: pixels => detailsPane.rollBlock(pixels)
+                    // Escape drops the draft and puts the commit's own message back. Nothing asks: the reader said so
+                    // (デザイン規約 §コミットメッセージの 2 つの枠).
+                    onEscaped: detailsPane.revertMessage()
+                }
+                // Only once something is actually changed: until then the
+                // pane keeps its resting shape (`MessageActionsRow`).
+                MessageActionsRow {
+                    Layout.fillWidth: true
+                    dirty: detailsPane.messageDirty
+                    editing: detailsPane.editable && msgEditor.anyFocused
+                    replays: detailsPane.details.shaHex !== detailsPane.headOid
+                    published: detailsPane.published
+                    busy: detailsPane.busy
+                    canSave: msgEditor.subjectText.trim() !== ""
+                    // The identity git would record as committer, which is the reader's own — the author on the row
+                    // above stays whoever wrote it.
+                    committerFace: detailsPane.committerFace
+                    committerFaceUrl: detailsPane.committerFaceUrl
+                    signature: detailsPane.signsCommits ? "signed" : ""
+                    signatureTip: detailsPane.signingTip
+                    onSaveRequested: detailsPane.submitMessage()
                 }
             }
         }

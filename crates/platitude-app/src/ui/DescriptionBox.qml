@@ -166,6 +166,9 @@ Rectangle {
     /// and the box covers most of what it stands on, so the surface underneath cannot be reached by wheel at all
     /// (2026-08-09 ユーザー報告).
     signal wheelPastEnd(real pixels)
+    /// Escape was pressed while the caret was in here. What that costs is the text's, not the box's, so whoever owns
+    /// the text decides (`MessageEditor`).
+    signal escaped()
     /// The wheel is taken here rather than left to the flickable under the text, because a flickable at its end keeps
     /// the event and says nothing. One notch is the same `wheelRows` every list in this application moves by, counted
     /// in lines instead of rows.
@@ -188,6 +191,10 @@ Rectangle {
     function takeCaret() {
         box.unpin()
         area.forceActiveFocus()
+    }
+    /// The other way round: the caret leaves, and this box stops being the thing being written in (Escape).
+    function dropCaret() {
+        area.focus = false
     }
     // The pane gives its room back rather than letting its own column run under its edge — the accident the shared cap
     // was put there to stop, and one no screenshot shows.
@@ -236,6 +243,11 @@ Rectangle {
             id: area
             wrapMode: TextArea.Wrap
             font.pixelSize: Theme.fontMd
+            // Escape leaves the box, and whoever owns the text decides what that means (`MessageEditor.escaped`).
+            Keys.onEscapePressed: event => {
+                box.escaped()
+                event.accepted = true
+            }
             // Dimmer than the summary while it is being read -- that pair is the message's own hierarchy -- but never
             // while it is being written: text under a caret is what the eye is on, and secondary is the shade this
             // theme spends on what the eye is not on. Read-only does not count as writing it: a stash and a commit off
