@@ -40,6 +40,13 @@ use source::{Bucket, Entry, Source, letters_of, pr_key};
 #[derive(Default)]
 pub struct NavSectionModel {
     section: String,
+    /// Worktree sections only: the one bucket run this list shows —
+    /// `conflicts` / `unstaged` / `staged`. Each run is a list of its own
+    /// in the WIP pane, and every one of them holds the whole status, so
+    /// this narrows what is **shown** and nothing else: the answers a page
+    /// asks about a file (`told` / `holds` / `beside`) come out of the
+    /// source and are the whole tree's, whichever list is asked.
+    run: String,
     all: Source,
     /// The rows as shown — indented, folded, filtered — or `None` when
     /// they are the source's rows in its own order.
@@ -56,6 +63,11 @@ pub struct NavSectionModel {
     tree_named: bool,
     filter: String,
     total: i32,
+    /// Rows on screen — what filtering, folding and the run leave shown.
+    /// A property rather than the slot beside it because the pane's share
+    /// of room is worked out from it, and a binding follows properties
+    /// (app-ui.md 「QML バインディングはプロパティにしか反応しない」).
+    shown_total: i32,
     /// Current branch (branches section only) — feeds the sticky row
     /// that stands in for it while its own row is scrolled off.
     head_name: String,

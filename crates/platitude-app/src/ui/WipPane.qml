@@ -13,7 +13,12 @@ ColumnLayout {
 
     required property var repoTab
     required property var workTree
+    /// One model per bucket run, each showing its own run and answering about the whole tree
+    /// (`NavSectionModel::attach_worktree`). `worktreeModel` is the unstaged one and is also the pane's way of asking
+    /// the tree a question — any of the three would answer the same.
     required property var worktreeModel
+    required property var conflictsModel
+    required property var stagedModel
     // Mirrored page state: whether the editor is in amend mode and whether HEAD is already on a remote (shows the
     // warning tag).
     property bool amending: false
@@ -61,9 +66,68 @@ ColumnLayout {
     /// Right-click on a file row; the page owns the menu because delegates are recycled out from under an open popup.
     signal fileMenuRequested(string bucket, string path)
 
+    /// Tree or flat paths, for the whole pane. One choice, three lists: the toggle in the header band is about how the
+    /// working tree is shown, not about one bucket of it.
+    function setTreeView(tree) {
+        wipPane.conflictsModel.setTreeView(tree)
+        wipPane.worktreeModel.setTreeView(tree)
+        wipPane.stagedModel.setTreeView(tree)
+    }
+
     /// Automation: run one of the stopped operation's held rows to its end, named by its flag (`OpExitCard`).
     function completeOpExit(code) {
         return opExitCard.completeOpExit(code)
+    }
+
+    // ---- how the buckets share the pane ------------------------------
+    // **Even shares, and a share a bucket cannot fill goes to the ones that can** (デザイン規約 §その他の操作). Three files
+    // against three and three against six both come out even — in neither is there room going spare. One against six
+    // does not: five of the six can be shown without taking anything the other bucket had a use for.
+
+    /// The buckets that are standing, top to bottom. The conflicted one is not there most of the time, and everything
+    /// that reaches across the buckets — the choice, the walk, the automation — reads them from here.
+    readonly property var bucketPanes:
+        conflictsBucket.visible ? [conflictsBucket, unstagedBucket, stagedBucket]
+                                : [unstagedBucket, stagedBucket]
+    /// Rows above the unstaged bucket, which is what turns a row number spanning the pane into one of a bucket's own.
+    readonly property int conflictRows: conflictsBucket.visible ? conflictsBucket.rows : 0
+    /// What the buckets take before a single file row is shown: a heading each, and the hairline of ground between one
+    /// bucket and the next. Neither is a bucket's to give up, so neither is in the room they share.
+    readonly property real bucketFrame:
+        wipPane.bucketPanes.length * Theme.rowHeight
+        + (wipPane.bucketPanes.length - 1) * Theme.borderWidth
+    /// The room the buckets have between them.
+    readonly property real bucketRoom: Math.max(0, buckets.height - wipPane.bucketFrame)
+    /// What each bucket's rows get, conflicted / unstaged / staged, whether or not it is standing.
+    readonly property var bucketSeats: wipPane.shareOut(wipPane.bucketRoom, [
+        conflictsBucket.visible ? conflictsBucket.wants : -1,
+        unstagedBucket.wants,
+        stagedBucket.wants])
+    /// Shares `room` out between the buckets. `wants` is what each would take with nothing in its way, in the order
+    /// they stand, and **-1 for a bucket that is not standing**; the answer is what each one gets, in the same order.
+    ///
+    /// Smallest want first: a bucket asking for less than an even share settles for what it asked, and what it did not
+    /// take is shared out again among the ones still asking. Whatever is left once every bucket is satisfied goes to
+    /// the last one standing, so the bare ground is at the foot of the pane — where one list would have left it.
+    function shareOut(room, wants) {
+        const out = []
+        const standing = []
+        for (let i = 0; i < wants.length; i++) {
+            out.push(0)
+            if (wants[i] >= 0)
+                standing.push(i)
+        }
+        if (standing.length === 0)
+            return out
+        const asked = standing.slice().sort((a, b) => wants[a] - wants[b])
+        let left = room
+        for (let i = 0; i < asked.length; i++) {
+            const at = asked[i]
+            out[at] = Math.min(wants[at], left / (asked.length - i))
+            left -= out[at]
+        }
+        out[standing[standing.length - 1]] += left
+        return out
     }
 
     // ---- which rows are chosen -------------------------------------
@@ -76,15 +140,36 @@ ColumnLayout {
     function isChosen(bucket, path) {
         return wipPane.chosenKeys[bucket + ":" + path] === true
     }
-    /// Rows in list order, so a caller can act on what was chosen.
+    /// Rows in the order they stand, so a caller can act on what was chosen. The buckets are separate lists and one
+    /// choice: a Ctrl-click reaches from one into the next, so every walk over the rows walks the lot of them.
     function chosenRows() {
         const out = []
-        for (let i = 0; i < wipList.count; i++) {
-            const row = wipList.itemAtIndex(i)
+        for (let i = 0; i < wipPane.rowCount(); i++) {
+            const row = wipPane.rowAt(i)
             if (row && !row.folder && wipPane.isChosen(row.bucket, row.fullName))
                 out.push(row)
         }
         return out
+    }
+    /// Rows across every standing bucket, and the one at a place in them — the numbering the choice is anchored and
+    /// reached by, and the one a headless run names a row with.
+    function rowCount() {
+        const standing = wipPane.bucketPanes
+        let out = 0
+        for (let i = 0; i < standing.length; i++)
+            out += standing[i].list.count
+        return out
+    }
+    function rowAt(index) {
+        const standing = wipPane.bucketPanes
+        let at = index
+        for (let i = 0; i < standing.length; i++) {
+            const list = standing[i].list
+            if (at < list.count)
+                return list.itemAtIndex(at)
+            at -= list.count
+        }
+        return null
     }
     /// Makes one row the whole of the choice — what a plain click does, and what a right-click outside the choice does
     /// before opening the menu (the menu acts on what is highlighted).
@@ -108,8 +193,15 @@ ColumnLayout {
     // §diff のファイル一覧).
     FileRowWalk {
         id: fileWalk
-        view: wipList
-        model: wipPane.worktreeModel
+        // The buckets standing, in the order they stand: the arrows cross out of one list and into the next, so the
+        // walk is over the lot of them (規約 §diff のファイル一覧).
+        sides: {
+            const standing = wipPane.bucketPanes
+            const out = []
+            for (let i = 0; i < standing.length; i++)
+                out.push({ view: standing[i].list, model: standing[i].model })
+            return out
+        }
         readBucket: wipPane.readBucket
         readPath: wipPane.readPath
         onStepped: (bucket, path) => wipPane.chooseOnly(bucket, path)
@@ -155,8 +247,8 @@ ColumnLayout {
         return true
     }
     function rowIndexOf(key) {
-        for (let i = 0; i < wipList.count; i++) {
-            const row = wipList.itemAtIndex(i)
+        for (let i = 0; i < wipPane.rowCount(); i++) {
+            const row = wipPane.rowAt(i)
             if (row && !row.folder && row.bucket + ":" + row.fullName === key)
                 return i
         }
@@ -169,7 +261,7 @@ ColumnLayout {
         const hi = Math.max(from, to)
         const next = ({})
         for (let i = lo; i <= hi; i++) {
-            const row = wipList.itemAtIndex(i)
+            const row = wipPane.rowAt(i)
             if (row && !row.folder)
                 next[row.bucket + ":" + row.fullName] = true
         }
@@ -250,16 +342,20 @@ ColumnLayout {
     /// The card itself is up. Read by the headless runs — reporting what asked for it would go green with the wiring
     /// cut.
     readonly property bool eolCardOpen: eolCard.opened
-    /// What the named row is saying, for the headless report to read.
+    /// What the named row is saying — for the headless report to read, and for the rows themselves, which are in three
+    /// lists and read the one answer. Asked of the unstaged model because the pointer is written there: the marks
+    /// arrived on all three and the words come out of the path, so any of them would say the same.
     readonly property string pointedEolPath: wipPane.worktreeModel.pointedEolPath
+    readonly property string pointedEolKind: wipPane.worktreeModel.pointedEolKind
+    readonly property string pointedEolFrom: wipPane.worktreeModel.pointedEolFrom
+    readonly property string pointedEolTo: wipPane.worktreeModel.pointedEolTo
+    readonly property int pointedEolLines: wipPane.worktreeModel.pointedEolLines
+    readonly property string pointedEolScope: wipPane.worktreeModel.pointedEolScope
+    readonly property string pointedEolExt: wipPane.worktreeModel.pointedEolExt
     readonly property string pointedEolText:
-        wipPane.worktreeModel.pointedEolKind !== ""
-        ? Words.lineEndings(wipPane.worktreeModel.pointedEolKind,
-                            wipPane.worktreeModel.pointedEolFrom,
-                            wipPane.worktreeModel.pointedEolTo,
-                            wipPane.worktreeModel.pointedEolLines,
-                            wipPane.worktreeModel.pointedEolScope,
-                            wipPane.worktreeModel.pointedEolExt)
+        wipPane.pointedEolKind !== ""
+        ? Words.lineEndings(wipPane.pointedEolKind, wipPane.pointedEolFrom, wipPane.pointedEolTo,
+                            wipPane.pointedEolLines, wipPane.pointedEolScope, wipPane.pointedEolExt)
         : ""
     /// Whether a row should put its mark out because the pointer is on the mark of another row that would move with it.
     /// Only rows on the same side answer: `+` stages what is not staged, `−` takes back what is.
@@ -291,46 +387,51 @@ ColumnLayout {
                 out.push(rows[i].fullName)
         return out.length > 0 ? out : [path]
     }
+    /// A press on a row's `+` / `−`: every highlighted row that can go the same way moves with it, and one git command
+    /// carries the lot, whatever the count (デザイン規約 §その他の操作). The buckets are separate lists, so the press
+    /// comes in from whichever of them the row is in.
+    function moveStage(bucket, path) {
+        const paths = wipPane.stageTargets(bucket, path)
+        if (paths.length === 1) {
+            if (bucket === "staged")
+                wipPane.repoTab.unstagePath(paths[0])
+            else
+                wipPane.repoTab.stagePath(paths[0])
+            return
+        }
+        wipPane.repoTab.beginPaths()
+        for (let i = 0; i < paths.length; i++)
+            wipPane.repoTab.addPath(paths[i])
+        if (bucket === "staged")
+            wipPane.repoTab.unstagePaths()
+        else
+            wipPane.repoTab.stagePaths()
+    }
 
-    /// The row at an index — automation, like `rowFor` below.
-    function rowAt(index) {
-        return wipList.itemAtIndex(index)
-    }
     // ---- the bucket headings, as the scene has them ------------------
-    // Read off the list's own children rather than off the conditions that put them there: an empty bucket keeps its
-    // heading, and the whole of that claim is whether the heading is in the scene (app-ui.md §UI 自動化の因果性). The footer
-    // is a band too and is not among the children, so it is asked separately.
-    function bands() {
-        const out = []
-        const kids = wipList.contentItem.children
-        for (let i = 0; i < kids.length; i++)
-            if (kids[i] && kids[i].headsStaged !== undefined)
-                out.push(kids[i])
-        if (wipList.footerItem && wipList.footerItem.headsStaged !== undefined)
-            out.push(wipList.footerItem)
-        return out
-    }
+    // Read off the headings themselves rather than off the conditions that put them there: an emptied bucket keeps its
+    // heading, and the whole of that claim is whether the heading is in the scene (app-ui.md §UI 自動化の因果性).
     /// Whether a bucket has a heading on screen at all.
     function bucketHeaded(section) {
-        const all = wipPane.bands()
-        for (let i = 0; i < all.length; i++)
-            if (section === "staged" ? all[i].headsStaged : all[i].headsUnstaged)
-                return true
+        const standing = wipPane.bucketPanes
+        for (let i = 0; i < standing.length; i++)
+            if (standing[i].section === section)
+                return standing[i].headed
         return false
     }
-    /// Automation: press a bucket heading's whole-bucket button, wherever in the list that heading turned out to be.
+    /// Automation: press a bucket heading's whole-bucket button, where a hand presses it.
     function moveBucket(section) {
-        const all = wipPane.bands()
-        for (let i = 0; i < all.length; i++)
-            if (all[i].moveAll(section))
-                return true
+        const standing = wipPane.bucketPanes
+        for (let i = 0; i < standing.length; i++)
+            if (standing[i].section === section)
+                return standing[i].moveAll()
         return false
     }
     /// The row a path is on — for the automation hooks, which enter a click where the row itself enters it. App code
     /// goes through the signals.
     function rowFor(path) {
-        for (let i = 0; i < wipList.count; i++) {
-            const row = wipList.itemAtIndex(i)
+        for (let i = 0; i < wipPane.rowCount(); i++) {
+            const row = wipPane.rowAt(i)
             if (row && row.fullName === path)
                 return row
         }
@@ -373,8 +474,12 @@ ColumnLayout {
     /// same bound the grip stops at (デザイン規約 §コミットメッセージの 2 つの枠). Past this the block scrolls rather than running out of
     /// the pane's bottom. The stash card is out of it as the header band is: it stands above the list, keeps its own
     /// height and answers nobody's pull, so what it takes is gone before the block is asked what it may have.
+    ///
+    /// The buckets' own frame comes off first: a heading is not one of the two rows, and left in, a pane squeezed to
+    /// the window's floor would keep nothing but headings — two places named and no file under either of them.
     readonly property real blockRoom:
-        Math.max(0, wipPane.height - headerBand.height - wipPane.stashSeat - 2 * Theme.rowHeight)
+        Math.max(0, wipPane.height - headerBand.height - wipPane.stashSeat
+                    - wipPane.bucketFrame - 2 * Theme.rowHeight)
     /// What the stash card is taking while it is out, its own inset included (0 when it is not).
     readonly property real stashSeat: stashCard.visible ? stashCard.height + Theme.spaceXs : 0
     /// Moves the block by a wheel a box on it could not use. The boxes cover most of the block, so without this the
@@ -461,7 +566,7 @@ ColumnLayout {
             }
             TreeViewToggle {
                 treeView: wipPane.worktreeModel.treeView
-                onChosen: tree => wipPane.worktreeModel.setTreeView(tree)
+                onChosen: tree => wipPane.setTreeView(tree)
             }
         }
     }
@@ -485,97 +590,64 @@ ColumnLayout {
     // The files first, and the editor under them (デザイン規約 §コミットメッセージの 2 つの枠): what is being
     // committed is read before what it will be called, and the button that does it is the last thing on the way down.
     //
-    // No question bar over this list: what a file row throws away is held down on the menu row that names it, where the
-    // hand already is (デザイン規約 §長押し).
-    AppListView {
-        id: wipList
+    // **One list per bucket, not one list of every bucket** (デザイン規約 §その他の操作): stacked end to end, a working
+    // tree with seventy unstaged files pushes the staged ones off the bottom of the pane, and the side a commit is
+    // actually made of is the side nobody can see. Each bucket scrolls inside a share of its own, and the shares are
+    // the pane's to hand out (`bucketSeats`).
+    //
+    // No question bar over these lists: what a file row throws away is held down on the menu row that names it, where
+    // the hand already is (デザイン規約 §長押し).
+    //
+    // Placed rather than laid out: what each bucket gets is worked out from the room they stand in, and a layout that
+    // sized itself from its children would be reading that answer back out of its own question.
+    Item {
+        id: buckets
         Layout.fillWidth: true
         Layout.fillHeight: true
-        model: wipPane.worktreeModel
-        // GitKraken grouping: unstaged (incl. untracked) above, staged below.
-        section.property: "group"
-        // Both headings stand even with nothing under them: a section with no rows has no heading of its own, so the
-        // pane would otherwise stop naming the place its files go the moment the last one left — and the band would
-        // grow back in under the hand at the next `+` (デザイン規約 §その他の操作). An empty unstaged bucket rides above the staged
-        // heading, which is its seat in the order (`WipBucketBand`); an empty staged one rides in the footer, since
-        // staged is the last bucket and the seat an empty one would take is exactly the end of the list.
-        //
-        // Only while something is uncommitted: on a clean tree the whole list is empty and a lone `(0)` heads nothing.
-        section.delegate: WipBucketBand {
-            listWidth: wipList.width
+        // On a clean tree there is nothing to head: a lone `(0)` above `(0)` heads nothing (デザイン規約 §その他の操作).
+        visible: wipPane.worktreeModel.total > 0
+
+        WipBucketPane {
+            id: conflictsBucket
+            section: "conflicts"
+            // The one bucket that comes and goes: git is not in the middle of anything most of the time, and a heading
+            // for a state the tree is not in is a place nothing can ever land (デザイン規約 §その他の操作).
+            visible: wipPane.workTree.conflictCount > 0
+            pane: wipPane
             repoTab: wipPane.repoTab
             workTree: wipPane.workTree
-            total: wipPane.worktreeModel.total
+            model: wipPane.conflictsModel
+            tipRow: wipPane.pointedTipRow
+            width: buckets.width
+            y: 0
+            height: conflictsBucket.headHeight + wipPane.bucketSeats[0]
         }
-        footer: WipBucketBand {
+        WipBucketPane {
+            id: unstagedBucket
+            section: "unstaged"
+            pane: wipPane
+            repoTab: wipPane.repoTab
+            workTree: wipPane.workTree
+            model: wipPane.worktreeModel
+            tipRow: wipPane.pointedTipRow - wipPane.conflictRows
+            width: buckets.width
+            // The hairline of the pane's own ground between one bucket and the next (2026-08-17 ユーザー指示): both
+            // headings wear `bgElevated`, so an emptied bucket stacked straight onto the one below reads as one band
+            // with two lines of text in it rather than as two buckets, one of which is empty.
+            y: conflictsBucket.visible ? conflictsBucket.height + Theme.borderWidth : 0
+            height: unstagedBucket.headHeight + wipPane.bucketSeats[1]
+        }
+        WipBucketPane {
+            id: stagedBucket
             section: "staged"
-            listWidth: wipList.width
+            pane: wipPane
             repoTab: wipPane.repoTab
             workTree: wipPane.workTree
-            total: wipPane.worktreeModel.total
-            visible: wipPane.workTree.stagedCount === 0 && wipPane.worktreeModel.total > 0
-        }
-        // Qt's own key navigation moves `currentIndex` and tells nobody; the arrows are answered here instead, where
-        // they move the file being read (規約 §diff のファイル一覧).
-        keyNavigationEnabled: false
-        Keys.onUpPressed: event => event.accepted = fileWalk.stepFile(-1)
-        Keys.onDownPressed: event => event.accepted = fileWalk.stepFile(1)
-        delegate: NavItemDelegate {
-            listWidth: wipList.width
-            kindHint: "wt"
-            showStage: true
-            chosen: wipPane.isChosen(bucket, fullName)
-            sideOurs: wipPane.workTree.sideOurs
-            sideTheirs: wipPane.workTree.sideTheirs
-            pointedTipRow: wipPane.pointedTipRow
-            menuStanding: wipPane.menuStanding
-            pointedEolPath: wipPane.worktreeModel.pointedEolPath
-            pointedEolKind: wipPane.worktreeModel.pointedEolKind
-            pointedEolFrom: wipPane.worktreeModel.pointedEolFrom
-            pointedEolTo: wipPane.worktreeModel.pointedEolTo
-            pointedEolLines: wipPane.worktreeModel.pointedEolLines
-            pointedEolScope: wipPane.worktreeModel.pointedEolScope
-            pointedEolExt: wipPane.worktreeModel.pointedEolExt
-            onEolPointed: (path, on) => wipPane.pointEol(on ? path : "")
-            onFileClicked: (bucket, path, origPath, modifiers) => {
-                // Choosing rows is not reading one: only a plain click moves the diff. Either way the press landed in
-                // this list, so this is where the keyboard is (規約 §diff のファイル 一覧).
-                wipList.forceActiveFocus()
-                if (wipPane.applyClick(bucket, path, modifiers))
-                    wipPane.fileActivated(bucket, path, origPath)
-            }
-            onFileMenuRequested: (bucket, path) => {
-                if (!wipPane.isChosen(bucket, path))
-                    wipPane.chooseOnly(bucket, path)
-                wipPane.fileMenuRequested(bucket, path)
-            }
-            onFolderClicked: key => wipPane.worktreeModel.toggleFolder(key)
-            stagePeer: wipPane.stagePeerOf(bucket, fullName)
-            onStageHovered: (bucket, path, on) => {
-                if (on)
-                    wipPane.showStageTools(bucket, path)
-                else if (wipPane.stageHotKey === bucket + ":" + path)
-                    wipPane.stageHotKey = ""
-            }
-            // One press, every highlighted row that can go the same way — and one git command for the lot, whatever the
-            // count (デザイン規約 §その他の操作).
-            onStageClicked: (bucket, path) => {
-                const paths = wipPane.stageTargets(bucket, path)
-                if (paths.length === 1) {
-                    if (bucket === "staged")
-                        wipPane.repoTab.unstagePath(paths[0])
-                    else
-                        wipPane.repoTab.stagePath(paths[0])
-                    return
-                }
-                wipPane.repoTab.beginPaths()
-                for (let i = 0; i < paths.length; i++)
-                    wipPane.repoTab.addPath(paths[i])
-                if (bucket === "staged")
-                    wipPane.repoTab.unstagePaths()
-                else
-                    wipPane.repoTab.stagePaths()
-            }
+            model: wipPane.stagedModel
+            tipRow: wipPane.pointedTipRow - wipPane.conflictRows - unstagedBucket.rows
+            width: buckets.width
+            y: unstagedBucket.y + unstagedBucket.height + Theme.borderWidth
+            height: stagedBucket.headHeight + wipPane.bucketSeats[2]
         }
     }
 
@@ -629,7 +701,7 @@ ColumnLayout {
                     id: msgEditor
                     Layout.fillWidth: true
                     Layout.preferredHeight: msgEditor.pairHeight
-                    listHeight: wipList.height
+                    listHeight: buckets.height
                     blockRoom: wipPane.blockRoom
                     blockHeight: blockCol.implicitHeight
                     onWheelPastEnd: pixels => wipPane.rollBlock(pixels)

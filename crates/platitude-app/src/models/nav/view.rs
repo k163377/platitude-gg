@@ -68,9 +68,13 @@ impl NavSectionModel {
         self.arranged = if needle.is_empty() {
             match self.section.as_str() {
                 "branches" | "remotes" => Some(self.build_tree()),
-                // The worktree keeps its group runs (conflicts → unstaged →
-                // staged) and trees each run independently.
-                "worktree" if self.tree_view => {
+                // The worktree holds every bucket run (conflicts → unstaged
+                // → staged) and shows one of them: the run this list is the
+                // list of, or all of them where none was named (the tests,
+                // which read the source's own order). Trees are built a run
+                // at a time, so a folder of the same name under two of them
+                // folds apart.
+                "worktree" => {
                     let mut out = Vec::new();
                     let mut at = 0;
                     while at < self.all.len() {
@@ -79,7 +83,17 @@ impl NavSectionModel {
                         while end < self.all.len() && self.run_of(end) == run {
                             end += 1;
                         }
-                        self.wt_tree_into(at..end, run, &mut out);
+                        if self.run.is_empty() || run == self.run {
+                            if self.tree_view {
+                                self.wt_tree_into(at..end, run, &mut out);
+                            } else {
+                                out.extend((at..end).map(|at| Arranged::At {
+                                    at: at as u32,
+                                    depth: 0,
+                                    from: 0,
+                                }));
+                            }
+                        }
                         at = end;
                     }
                     Some(out)
@@ -90,6 +104,7 @@ impl NavSectionModel {
             // Filtering shows flat full names (folders would hide context).
             Some(
                 (0..self.all.len())
+                    .filter(|at| self.in_run(*at))
                     .filter(|at| {
                         self.all
                             .entry(*at)
@@ -110,6 +125,24 @@ impl NavSectionModel {
                 })
             })
             .map_or(-1, |row| row as i32);
+        self.shown_total = self.shown_rows() as i32;
+    }
+
+    /// Whether a source row belongs to the run this list shows. Every row
+    /// does where no run was named — every section but the worktree.
+    fn in_run(&self, at: usize) -> bool {
+        self.run.is_empty() || self.run_of(at) == self.run
+    }
+
+    /// What the memory report files this list under. The worktree is three
+    /// lists, one per bucket run, and three lines under one name would be
+    /// read as one list that grew.
+    fn named(&self) -> String {
+        if self.run.is_empty() {
+            self.section.clone()
+        } else {
+            format!("{}-{}", self.section, self.run)
+        }
     }
 
     /// Shapes the rows again and tells the view its whole list changed.
@@ -264,18 +297,13 @@ impl NavSectionModel {
     /// **The rows on screen, not the source.** A folder the reader closed is
     /// a folder the walk does not enter, and a file a filter hid is hidden
     /// from the arrows too. Folder rows themselves are stepped over, since a
-    /// folder has no diff to move to. The buckets *are* crossed: this is one
-    /// list, and the heading below the last unstaged file is something
-    /// walking down goes past rather than stops at.
-    ///
-    /// The path comes last because it is the only field git lets hold the
-    /// separator.
+    /// folder has no diff to move to. **One bucket run, because a list is
+    /// one run**: the answer runs out at this list's own end, and crossing
+    /// into the next bucket's list is the pane's step (`FileRowWalk`), which
+    /// asks that list for the row at its near end ([`Self::edge`]).
     pub(super) fn step(&self, bucket: &str, path: &str, way: i32) -> String {
         let shown = self.shown_rows();
-        let Some(from) = (0..shown).find(|at| {
-            self.row_at(*at)
-                .is_some_and(|row| self.is(row, bucket, path))
-        }) else {
+        let Ok(from) = usize::try_from(self.row_of_file(bucket, path)) else {
             return String::new();
         };
         let file = |at: &usize| {
@@ -287,8 +315,53 @@ impl NavSectionModel {
         } else {
             (from + 1..shown).find(file)
         };
-        landed
-            .and_then(|at| self.row_at(at).map(|row| (at, row)))
+        self.landing(landed)
+    }
+
+    /// Which row on screen holds `path` in `bucket`; -1 when none does.
+    /// Both halves are read for the reason [`Self::holds`] gives, and the
+    /// rows on screen rather than the source for the reason [`Self::step`]
+    /// gives — this is where a walk sets off from, and a row folded away is
+    /// nowhere it can stand.
+    pub(super) fn row_of_file(&self, bucket: &str, path: &str) -> i32 {
+        (0..self.shown_rows())
+            .find(|at| {
+                self.row_at(*at)
+                    .is_some_and(|row| self.is(row, bucket, path))
+            })
+            .map_or(-1, |at| at as i32)
+    }
+
+    /// The file row at one end of this list — the first when `way` reads
+    /// forwards, the last when it reads back — in [`Self::step`]'s own
+    /// shape. Empty where the list holds no file row at all, which is how
+    /// a walk goes past an empty bucket instead of stopping in it.
+    ///
+    /// This is the other half of crossing a bucket: `step` runs out at the
+    /// end of its own run, and the list the walk carries on into is asked
+    /// for the row nearest the edge it comes in by.
+    pub(super) fn edge(&self, way: i32) -> String {
+        let shown = self.shown_rows();
+        let file = |at: &usize| {
+            self.row_at(*at)
+                .is_some_and(|row| !self.field(row, Role::Folder).flag())
+        };
+        let landed = if way < 0 {
+            (0..shown).rev().find(file)
+        } else {
+            (0..shown).find(file)
+        };
+        self.landing(landed)
+    }
+
+    /// Where a walk landed, as `<row>\u{1e}<bucket>\u{1e}<path>` — the one
+    /// spelling of it, so the two ways to land (a step, and coming in at a
+    /// list's edge) cannot drift apart. Empty for no row.
+    ///
+    /// The path comes last because it is the only field git lets hold the
+    /// separator.
+    fn landing(&self, at: Option<usize>) -> String {
+        at.and_then(|at| self.row_at(at).map(|row| (at, row)))
             .map(|(at, row)| {
                 format!(
                     "{at}{sep}{bucket}{sep}{path}",
@@ -373,13 +446,13 @@ impl NavSectionModel {
     /// would hide the day that stops being true.
     pub(super) fn note_footprint(&self) {
         crate::memprobe::note_bytes(
-            &format!("nav-{}-all", self.section),
+            &format!("nav-{}-all", self.named()),
             self.tab_id,
             platitude_core::mem::Footprint::heap_bytes(&self.all),
             self.all.len(),
         );
         crate::memprobe::note_bytes(
-            &format!("nav-{}-arranged", self.section),
+            &format!("nav-{}-arranged", self.named()),
             self.tab_id,
             self.arranged
                 .as_ref()

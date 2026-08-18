@@ -85,7 +85,7 @@ impl<T> Feed<T> {
 
 /// All feeds of one tab. Each feed is independently `Arc`-shared with the
 /// QML object that consumes it (one consumer per feed; status fans out to
-/// two consumers via a second feed).
+/// the headline and to one list per bucket run).
 #[derive(Default)]
 pub struct Feeds {
     pub tab: Arc<Feed<TabMsg>>,
@@ -98,9 +98,14 @@ pub struct Feeds {
     pub refs_tags: Arc<Feed<Arc<RefsSnapshot>>>,
     /// Status headline consumer (WorkTreeModel: header props/counts).
     pub status: Arc<Feed<StatusMsg>>,
-    /// Status list consumer (the `worktree` NavSectionModel — the changed
-    /// files the right pane's WIP view lists).
-    pub status_nav: Arc<Feed<StatusMsg>>,
+    /// Status list consumers — one `worktree` NavSectionModel per bucket
+    /// run of the changed files the right pane's WIP view lists. Each run
+    /// is a list of its own with a share of the pane of its own, and a feed
+    /// is drained by whoever gets there first, so each run needs a feed of
+    /// its own (the refs fan out per sidebar section the same way).
+    pub status_nav_conflicts: Arc<Feed<StatusMsg>>,
+    pub status_nav_unstaged: Arc<Feed<StatusMsg>>,
+    pub status_nav_staged: Arc<Feed<StatusMsg>>,
     pub stash: Arc<Feed<Vec<StashEntry>>>,
     pub worktrees: Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>,
     pub details: Arc<Feed<platitude_core::details::CommitDetails>>,

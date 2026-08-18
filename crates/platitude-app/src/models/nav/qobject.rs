@@ -3,6 +3,7 @@ use super::*;
 #[qobject(Base = QAbstractItemModel, ConvertToCamelCase, NoQmlElement)]
 impl NavSectionModel {
     qproperty!("total", Member = total, Notify = changed);
+    qproperty!("shownRows", Member = shown_total, Notify = changed);
     qproperty!("headName", Member = head_name, Notify = changed);
     qproperty!("headOid", Member = head_oid, Notify = changed);
     qproperty!("headHasRemote", Member = head_has_remote, Notify = changed);
@@ -87,8 +88,9 @@ impl NavSectionModel {
     fn refs_settled(&mut self);
 
     /// Wires this instance to one section's data feed. `section`:
-    /// `branches` / `remotes` / `worktree` / `worktrees` / `stashes` /
-    /// `tags`.
+    /// `branches` / `remotes` / `worktrees` / `stashes` / `tags`. The
+    /// working tree's changed files come through [`Self::attach_worktree`]
+    /// instead — that section is a list per bucket run, not one list.
     #[qslot]
     fn attach_section(&mut self, tab_id: i32, section: String) {
         self.tab_id = tab_id;
@@ -102,11 +104,39 @@ impl NavSectionModel {
             "branches" => self.refs_feed = Some(attached(&feeds.refs_branches, invoker)),
             "remotes" => self.refs_feed = Some(attached(&feeds.refs_remotes, invoker)),
             "tags" => self.refs_feed = Some(attached(&feeds.refs_tags, invoker)),
-            "worktree" => self.status_feed = Some(attached(&feeds.status_nav, invoker)),
             "stashes" => self.stash_feed = Some(attached(&feeds.stash, invoker)),
             "worktrees" => self.worktrees_feed = Some(attached(&feeds.worktrees, invoker)),
             other => tracing::warn!(section = other, "unknown sidebar section"),
         }
+    }
+
+    /// Wires this instance to one bucket run of the working tree's changed
+    /// files — `conflicts` / `unstaged` / `staged`. Each run is a list of
+    /// its own in the WIP pane, with a share of the pane and a scroll of
+    /// its own, so each takes an instance and a feed of its own.
+    ///
+    /// Only what is **shown** is one run's: every instance holds the whole
+    /// status, so a page can ask any of them about any file.
+    #[qslot]
+    fn attach_worktree(&mut self, tab_id: i32, run: String) {
+        self.tab_id = tab_id;
+        self.section = "worktree".to_string();
+        self.run = run;
+        self.tree_view = true;
+        let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) else {
+            return;
+        };
+        let invoker = self.get_qml_method_invoker();
+        let feed = match self.run.as_str() {
+            "conflicts" => &feeds.status_nav_conflicts,
+            "staged" => &feeds.status_nav_staged,
+            "unstaged" => &feeds.status_nav_unstaged,
+            other => {
+                tracing::warn!(run = other, "unknown worktree bucket run");
+                return;
+            }
+        };
+        self.status_feed = Some(attached(feed, invoker));
     }
 
     #[qslot]
@@ -307,6 +337,22 @@ impl NavSectionModel {
     #[qslot]
     fn step_file(&self, bucket: String, path: String, way: i32) -> String {
         self.step(&bucket, &path, way)
+    }
+
+    /// Which row on screen this list is showing `path` in `bucket` on; -1
+    /// when it is showing it on none (see [`Self::row_of_file`]). How the
+    /// pane's walk tells which of its bucket lists it is standing in.
+    #[qslot]
+    fn row_of_file_in(&self, bucket: String, path: String) -> i32 {
+        self.row_of_file(&bucket, &path)
+    }
+
+    /// The file row at the end of this list a walk going `way` comes in by
+    /// (see [`Self::edge`]). What the arrows land on when they cross out of
+    /// the bucket above or below.
+    #[qslot]
+    fn edge_file(&self, way: i32) -> String {
+        self.edge(way)
     }
 
     /// Where a renamed file came from, by path — whole, the way a diff

@@ -291,8 +291,7 @@ ColumnLayout {
     // reading on from there (規約 §diff のファイル一覧).
     FileRowWalk {
         id: fileWalk
-        view: fileList
-        model: detailsPane.details
+        sides: [{ view: fileList, model: detailsPane.details }]
         readBucket: ""
         readPath: detailsPane.readPath
         onLanded: (bucket, path, origPath) => detailsPane.fileWalked(path, origPath)

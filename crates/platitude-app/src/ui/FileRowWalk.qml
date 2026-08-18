@@ -12,9 +12,23 @@ import platitude.ui
 Item {
     id: walk
 
-    /// The list being walked, and the model behind it.
-    required property var view
-    required property var model
+    /// The lists being walked, top to bottom, each `{ view, model }`. One for a commit's changed files; one per bucket
+    /// for the working tree's, which are three lists the arrows cross between (規約 §diff のファイル一覧).
+    required property var sides
+    /// The one list a walk of one is over — everything that is not the step itself reads the lot of them.
+    readonly property var view: walk.sides[0].view
+    readonly property var model: walk.sides[0].model
+    /// Which of the lists is showing the file the walk is standing on; -1 while none is. Asked of the rows on screen,
+    /// because those are what a walk moves over. A walk over one list is over the list it was given — telling them
+    /// apart is a question only the working tree's three raise.
+    function sideHolding() {
+        if (walk.sides.length === 1)
+            return 0
+        for (let i = 0; i < walk.sides.length; i++)
+            if (walk.sides[i].model.rowOfFileIn(walk.atBucket, walk.atPath) >= 0)
+                return i
+        return -1
+    }
 
     /// The file the middle pane is reading, handed down by the pane. Whoever moved the diff there, this is where the
     /// next walk sets off from — and empty means nothing is being read. The bucket is empty for a commit's changed
@@ -52,9 +66,18 @@ Item {
     function stepFile(way) {
         if (!walk.visible || !walk.view.visible || walk.atPath === "")
             return false
-        const record = walk.model.stepFile(walk.atBucket, walk.atPath, way)
-        if (record === "")
+        let side = walk.sideHolding()
+        if (side < 0)
             return false
+        let record = walk.sides[side].model.stepFile(walk.atBucket, walk.atPath, way)
+        // Out of this bucket's list and into the next one's: the heading between them is something walking goes past
+        // rather than stops at (規約 §diff のファイル一覧), and so is a bucket holding no files at all.
+        while (record === "") {
+            side += way < 0 ? -1 : 1
+            if (side < 0 || side >= walk.sides.length)
+                return false
+            record = walk.sides[side].model.edgeFile(way)
+        }
         // `<row>\u{1e}<bucket>\u{1e}<path>`, the path last because it is the one field git lets hold the separator.
         const sep = String.fromCharCode(30)
         const first = record.indexOf(sep)
@@ -62,11 +85,11 @@ Item {
         walk.atBucket = record.substring(first + 1, second)
         walk.atPath = record.substring(second + 1)
         // As little as will do — the row stepped onto is brought inside the viewport and nothing else moves. Asked of
-        // the view rather than worked out from a row height: the working tree's list has bucket headings between its
-        // rows, so the arithmetic the graph's walk does would land on the wrong pixel there. No centring case either: a
-        // file list holds no reading position of its own to protect, and the lit row is where the hand just pressed (規約
+        // the view rather than worked out from a row height: a file list has folder rows in it that a walk goes past,
+        // so the arithmetic the graph's walk does would land on the wrong pixel here. No centring case either: a file
+        // list holds no reading position of its own to protect, and the lit row is where the hand just pressed (規約
         // §diff のファイル一覧).
-        walk.view.positionViewAtIndex(Number(record.substring(0, first)), ListView.Contain)
+        walk.sides[side].view.positionViewAtIndex(Number(record.substring(0, first)), ListView.Contain)
         walk.stepped(walk.atBucket, walk.atPath)
         walk.noteStep()
         return true
@@ -75,10 +98,13 @@ Item {
     /// condition behind it (verify-ui). The first of them where several are lit — a walk stands on one, but the working
     /// tree's list can have a whole Ctrl-clicked choice up.
     function litPath() {
-        for (let i = 0; i < walk.view.count; i++) {
-            const row = walk.view.itemAtIndex(i)
-            if (row && row.litKey !== undefined && row.litKey !== "")
-                return row.litKey
+        for (let side = 0; side < walk.sides.length; side++) {
+            const view = walk.sides[side].view
+            for (let i = 0; i < view.count; i++) {
+                const row = view.itemAtIndex(i)
+                if (row && row.litKey !== undefined && row.litKey !== "")
+                    return row.litKey
+            }
         }
         return ""
     }
@@ -86,10 +112,13 @@ Item {
     /// click aimed at nothing latches a wait that never ends (app-ui.md §UI 自動化の因果性). The bucket tells apart the two
     /// rows of a file changed on both sides; empty matches either, which is every row of a commit's list.
     function rowFor(bucket, path) {
-        for (let i = 0; i < walk.view.count; i++) {
-            const row = walk.view.itemAtIndex(i)
-            if (row && row.walkKey === path && (bucket === "" || row.bucket === bucket))
-                return row
+        for (let side = 0; side < walk.sides.length; side++) {
+            const view = walk.sides[side].view
+            for (let i = 0; i < view.count; i++) {
+                const row = view.itemAtIndex(i)
+                if (row && row.walkKey === path && (bucket === "" || row.bucket === bucket))
+                    return row
+            }
         }
         return null
     }
@@ -98,8 +127,10 @@ Item {
     // invisible and the keys go on arriving there (規約 §矢印で履歴を辿る, and the hole `DiffRowWalk` closes on the other side of
     // the same swap).
     onVisibleChanged: {
-        if (!walk.visible)
-            walk.view.focus = false
+        if (walk.visible)
+            return
+        for (let side = 0; side < walk.sides.length; side++)
+            walk.sides[side].view.focus = false
     }
 
     /// Books the reading of the file stepped onto. The first step of a run is read at once — a single press has to

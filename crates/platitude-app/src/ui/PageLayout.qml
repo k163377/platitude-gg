@@ -54,7 +54,7 @@ QtObject {
         if (layout.page.blank)
             return
         layout.repoTab.setTagsShown(AppBackend.startTagsShown())
-        layout.worktreeModel.setTreeView(AppBackend.startWipTree())
+        layout.wipPane.setTreeView(AppBackend.startWipTree())
         layout.detailsModel.setTreeView(AppBackend.startDetailsTree())
     }
 

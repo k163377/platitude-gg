@@ -951,9 +951,15 @@ Item {
     DiffModel { id: diffModel }
     NavSectionModel { id: branchesModel }
     NavSectionModel { id: remotesModel }
-    // One letter apart, two different things: `worktreeModel` feeds the WIP pane (the "worktree" nav section =
+    // One letter apart, two different things: the three `*Model`s below feed the WIP pane (the "worktree" nav section =
     // uncommitted files), while `worktreesModel` lists git worktrees (the sidebar's WORKTREES).
+    //
+    // **One per bucket**, because the pane is a list per bucket (`WipPane`). Each shows its own run and holds the whole
+    // status, so a question about a file — which bucket has it, what is beside it, where it came from — is asked of
+    // `worktreeModel` whichever bucket the file is in.
+    NavSectionModel { id: conflictsModel }
     NavSectionModel { id: worktreeModel }
+    NavSectionModel { id: stagedModel }
     NavSectionModel { id: worktreesModel }
     NavSectionModel { id: stashesModel }
     NavSectionModel { id: tagsModel }
@@ -1019,7 +1025,9 @@ Item {
         diffModel.attach(page.tab_id)
         branchesModel.attachSection(page.tab_id, "branches")
         remotesModel.attachSection(page.tab_id, "remotes")
-        worktreeModel.attachSection(page.tab_id, "worktree")
+        conflictsModel.attachWorktree(page.tab_id, "conflicts")
+        worktreeModel.attachWorktree(page.tab_id, "unstaged")
+        stagedModel.attachWorktree(page.tab_id, "staged")
         worktreesModel.attachSection(page.tab_id, "worktrees")
         stashesModel.attachSection(page.tab_id, "stashes")
         tagsModel.attachSection(page.tab_id, "tags")
@@ -1513,6 +1521,8 @@ Item {
                         repoTab: repoTab
                         workTree: workTree
                         worktreeModel: worktreeModel
+                        conflictsModel: conflictsModel
+                        stagedModel: stagedModel
                         amending: page.amending
                         headPublished: page.headPublished
                         menuStanding: page.menuStanding

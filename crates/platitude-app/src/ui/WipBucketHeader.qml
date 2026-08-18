@@ -9,16 +9,13 @@ import platitude.ui
 // One bucket heading in the working-tree file list: what the bucket is called, how many files are in it, and the
 // affordance that moves the whole bucket at once.
 //
-// The list's section delegate builds one per bucket that has rows. The staged one is also built by the list's footer
-// when nothing is staged (デザイン規約 §その他の操作) — a section with no rows has no heading of its own, and without this the pane
-// never says where a staged file goes.
+// One per bucket list, pinned above its rows (`WipBucketPane`) — so it stands whether or not the bucket has anything
+// in it, and stays put when the bucket is scrolled (デザイン規約 §その他の操作).
 Rectangle {
     id: bucketHeader
 
-    /// Which bucket this heads: `conflicts` / `unstaged` / `staged`. Named `section` because that is what the list
-    /// injects.
+    /// Which bucket this heads: `conflicts` / `unstaged` / `staged`.
     required property string section
-    required property real listWidth
     required property var repoTab
     required property var workTree
     /// Files in this bucket. Untracked ones are shown as unstaged (`NavItem.group`), so they are counted there.
@@ -43,10 +40,7 @@ Rectangle {
         return true
     }
 
-    width: bucketHeader.listWidth
-    // A heading the list is not showing takes no room: the footer keeps its instance alive so the bindings stay live,
-    // and a hidden item with a height would leave a band of ground behind the last row.
-    height: bucketHeader.visible ? Theme.rowHeight : 0
+    implicitHeight: Theme.rowHeight
     color: Theme.bgElevated
     RowLayout {
         anchors.fill: parent

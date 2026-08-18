@@ -92,14 +92,23 @@ impl SessionSink for BridgeSink {
                 merge_tool,
                 eol_marks,
             } => {
-                self.feeds.status_nav.push_replace(StatusMsg {
-                    status: status.clone(),
-                    op_state,
-                    progress,
-                    sides: sides.clone(),
-                    merge_tool: merge_tool.clone(),
-                    eol_marks: Arc::clone(&eol_marks),
-                });
+                // One copy per bucket run: each of the WIP pane's lists
+                // shows a run of its own and answers about the whole tree
+                // (`NavSectionModel::told`), so each holds the status.
+                for run in [
+                    &self.feeds.status_nav_conflicts,
+                    &self.feeds.status_nav_unstaged,
+                    &self.feeds.status_nav_staged,
+                ] {
+                    run.push_replace(StatusMsg {
+                        status: status.clone(),
+                        op_state,
+                        progress,
+                        sides: sides.clone(),
+                        merge_tool: merge_tool.clone(),
+                        eol_marks: Arc::clone(&eol_marks),
+                    });
+                }
                 self.feeds.status.push_replace(StatusMsg {
                     status,
                     op_state,

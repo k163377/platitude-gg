@@ -46,6 +46,14 @@ pub(super) fn section(kind: &str, all: Source) -> NavSectionModel {
     model
 }
 
+/// One of the working tree's bucket lists: the whole status, and the one
+/// run of it this list shows (`NavSectionModel::run`).
+pub(super) fn worktree(run: &str, all: Source) -> NavSectionModel {
+    let mut model = section("worktree", all);
+    model.run = run.to_string();
+    model
+}
+
 pub(super) fn says(model: &NavSectionModel, row: usize, role: Role) -> String {
     model
         .row_at(row)
