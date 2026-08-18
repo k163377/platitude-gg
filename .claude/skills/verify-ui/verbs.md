@@ -127,6 +127,8 @@
 
 - `tab-widths`(タブ N 個の幅の譲り合い。引数は個数 1..=16)
 - `tab-mark`(タブの hover と `✕` の出方)
+- `tab-drag`(タブを掴んで並べ替えた後の順。引数 `<from>:<to>`)
+- `tab-hold`(掴んだまま = 席から外れて描かれているタブ。引数はどのタブか)
 - `corner`(右下の git バージョン表示の譲り方。報告行 `git_corner`)
 - `open-again`(開いているリポジトリをもう一度開く — 訊かれず既存タブへ)
 - `identity`(identity 未設定の質問ダイアログ)
@@ -169,6 +171,8 @@
 **先端に答えが立つ 3 つ(`merge-branch` / `cherry-pick` / `revert-commit`)は 1 本の報告行を共有する** — `tip_landed follows= onscreen= op= head= selected= row=` で、**`follows=` / `onscreen=` の対が合格条件**(`Outcome::must_say`)。選択が新しい先端のコミットへ移り、その行が画面に在ることを言う(規約 §履歴を合流させる)。**merge / cherry-pick は `--preset diverged` の `origin/main`** — 木がきれいで、取り込むものが向こうにあり、着地が非早送りの本物のコミットになる(**`--preset basic` は木が汚れていて `git cherry-pick` が `your local changes would be overwritten` で落ちる**)。**選択は撃つ前に先端から動かす**(グラフ行から入る 2 つは `jumpToRow` してから撃つ)— 動かさないと「元から先端に居た」だけで `follows=true` になる。`merge-branch` は ref 行から入るので選択は起動時の先端のまま = **書き込みが先端を動かすことがそのまま試験になる**。**取り込み済みの merge も先端に着くのが正**(`merge-branch v0.1 --preset basic` = `Already up to date` でも `follows=true`)。
 
 **タブの幅と `✕` は `tab-widths` / `tab-mark`** — どちらも**xtask が長さの違う名前でリポジトリを建てる**(デモの作業ツリーは全部 `repo` なので、同名の並びでは「どのタブが譲ったか」を言えない。最後の 1 つだけ `basic` = 絵の中でページを持つのは前に出るそれ)。`tab-widths` の引数はタブ数(1..=16・既定 8)で、報告行 `tab_widths tabs= run= cap= floor= max= content= view= scrolls= widths=` の **`widths=` が本体**(実測 Windows: **8 タブ** = 長い 2 枚だけ cap 167 で揃い短い側は自然幅 / **12 タブ** = cap が下限の 1 つ上 / **16 タブ** = `cap=floor` で `scrolls=true`)。**何タブで縮み始めるかは OS で違う**ので、両 OS で同じ数字を期待しない — Linux は merged chrome を持たない = 掴み代 88 も窓ボタンも要らないぶん run が広く(実測 1133 対 896)、8 タブでは 1 枚も縮まず 16 タブでもまだ収まる。**読むのは数字の一致ではなく形**(短い側が据え置き / 譲った側が同じ幅 / `content` ≤ `view`)。`tab-mark` の引数は手を置くタブ(既定 1)で、報告行 `tab_marks tabs= current= pointed= marks=` の `marks=` は**印自身の opacity**(前に居るタブと手の下のタブだけ 1)。**`✕` の hover 半分はこの動詞にしか無い**(hover は注入できないので `TopBar.pointAtTab` が実 hover と同じ `pointed` へ書く)。
+
+**タブの並べ替えは `tab-drag` / `tab-hold` の対** — どちらも xtask が同じ名前のはしごから **4 つ**建てる(`tab-widths` と同じ理由で、同名のタブが並んだ帯では順が読めない。最後の 1 つだけ `basic`)。`tab-drag` の引数は `<from>:<to>`(既定 `3:1`)で、報告行 `tab_drag moved= from= to= tabs= active= open=` の **`moved=` が本体** = 掴んだタブのパスが頼んだ席に居ること(`must_say`)。**`active=` は `to` と同じになるのが正** — 手は運ぶ前にそのタブへ移るので、運ばれた先が前に出る。**両向き撃つ**(既定の `3:1` が左へ・`0:3` が右へ)= 判定は 1 つでも縁と中央の比べ方が向きで別々に書かれている。`tab-hold` の引数は掴むタブ(既定 0)で、報告行 `tab_hold lifted= at= shift= active= open=` の **`shift=` はタブ自身の `Translate.x`**(頼んだ側 = `heldX` を報告するとバインディングが切れていても緑になる)。**この 2 つは対でしか意味を成さない** — `tab-drag` の絵は「並び替わった帯」で、席が飛ぶだけの実装(タブが手の下に描かれない)と区別が付かない。**`tab-hold` の絵ではページが空**なのが正 — 掴む前にそのタブへ移るので、既定の 0 番は履歴を持たないリポジトリ(主題は帯の側)。**末尾のタブは右へ運べない**(運べる先は `contentWidth - width` で止まる)ので、フックは端のタブだけ内側へ運ぶ。
 
 **右下の git バージョンが隅を譲るかは `corner`** — 引数はペイン(`wip` = 作業ツリー / 行番号 = そのコミットの詳細。省略は `wip`)。**`--preset basic`(一覧が隅まで届かない)と `--preset long`(一覧がペインを超える)を対で読む** — 片側だけでは「常に出る」「常に出ない」と見分けが付かない。報告行 `git_corner pane= shown= room= needs=` の **`shown=` はラベル自身の可視性**(頼んだ側 = 空き寸法を報告するとバインディングが切れていても緑になる)。**PNG でも読める** — 隅の淡い文字が在るか無いかがそのまま答え。**`wip` はどの preset でも `shown=false room=0`** — 底には commit ボタンが張り付いていて隅そのものが無い(規約 §コミットメッセージの 2 つの枠)ので、譲る / 譲らないの対が読めるのは**詳細ペイン側だけ**。実測 Windows: `1 basic room=547` = 出る、`1 long` は `room=0` = 退く(`needs=21` = ラベルの箱そのもの)。
 

@@ -36,6 +36,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // Same strip; the argument here names a tab in it rather than
         // how many there are.
         tab_width_repos("")?
+    } else if opts.verb == "tab-drag" || opts.verb == "tab-hold" {
+        // Same ladder of names, four of them: the order is what this one
+        // is about, and four differently named tabs say an order a
+        // picture can be read for. The argument names two of them.
+        tab_width_repos("4")?
     } else {
         let presets: Vec<String> = if opts.preset.is_empty() {
             vec!["basic".into()]

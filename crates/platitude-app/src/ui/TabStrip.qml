@@ -47,6 +47,13 @@ Item {
     readonly property int tabStripFloorW:
         menuButton.width + plusButton.width + tabs.grabRun + 2 * (tabs.tabFixedW + tabStrip.tabTitleMinW)
 
+    /// The tab in hand: which one it is, where inside it the hand took hold, and where its left edge has been carried
+    /// to in the strip's own coordinates. Held by id rather than by position — the order changes under a drag, and the
+    /// row the hand is on is the one thing about it that does not (デザイン規約 §タブの所作).
+    property int heldId: -1
+    property real heldGrabX: 0
+    property real heldX: 0
+
     signal openRepositoryRequested()
     signal identityEditRequested()
     signal settingsRequested()
@@ -54,13 +61,130 @@ Item {
     /// from here (the maximised inset, the window resizing) and reports the strip on.
     signal captionStripMoved()
 
-    /// The left button picks the tab up, the middle one closes it (デザイン規約 §タブの所作). The real press and the smoke hook
-    /// both come through here.
+    /// The left button moves to the tab — and leaves a hand on it that may go on to carry it (`takeTab`) — the middle
+    /// one closes it (デザイン規約 §タブの所作). The real press and the smoke hook both come through here.
     function pressTab(index, id, button) {
         if (button === Qt.MiddleButton)
             tabStrip.tabsModel.closeTab(id)
         else
             tabStrip.tabsModel.setCurrentIndex(index)
+    }
+
+    /// The tab at `index`, taken up: the hand has carried it past the platform's threshold and is now holding it.
+    /// `grabX` is where inside the tab it took hold, which is what keeps that same point of the tab under the hand
+    /// however far it travels.
+    function takeTab(index, grabX) {
+        const tab = tabs.itemAtIndex(index)
+        if (!tab)
+            return
+        tabStrip.heldId = tab.tab_id
+        tabStrip.heldGrabX = grabX
+        tabStrip.heldX = tab.x
+    }
+
+    /// The hand, moved to `sceneX` with a tab in it. Scene coordinates in, the strip's own out: the tab is drawn where
+    /// the hand is rather than where the row sits, so its own coordinates cannot say where the pointer got to.
+    function carryTab(index, sceneX) {
+        tabStrip.carryTo(index, tabs.contentItem.mapFromItem(null, sceneX, 0).x - tabStrip.heldGrabX)
+    }
+
+    /// The one place a carried tab is put anywhere: where it is drawn, and — for as long as it keeps passing them —
+    /// which neighbours it has changed places with. The hand comes through `carryTab` and the smoke hook through
+    /// `dragTabTo`, so neither can reach an order the other cannot.
+    function carryTo(index, left) {
+        const tab = tabs.itemAtIndex(index)
+        if (!tab)
+            return index
+        // The strip is the whole of the run: a tab carried past either end stops there, the way everything else that
+        // scrolls here stops (デザイン規約 §QML 実装ルール). Nothing is torn off into a window of its own.
+        tabStrip.heldX = Math.max(0, Math.min(left, tabs.contentWidth - tab.width))
+        let at = index
+        // Bounded by the strip itself: each step passes one tab, so nothing can be passed more often than there are
+        // tabs to pass.
+        for (let step = 0; step < tabs.count; step++) {
+            const next = tabStrip.stepOrder(at)
+            if (next === at)
+                break
+            at = next
+            // That step changed the order, so the places the next comparison reads have to be the ones the view has
+            // just given the tabs rather than the ones they are leaving.
+            tabs.forceLayout()
+        }
+        return at
+    }
+
+    /// One neighbour, passed or not: the carried tab changes places with whichever side it has taken half of.
+    ///
+    /// The leading edge against the neighbour's middle, rather than middle against middle. Tabs are of different widths
+    /// — middles agree only where they are of one width, and a wide tab held against the end of the strip never reaches
+    /// a narrow last tab's middle at all, which would leave the last place unreachable by hand.
+    function stepOrder(at) {
+        const tab = tabs.itemAtIndex(at)
+        if (!tab)
+            return at
+        const left = at > 0 ? tabs.itemAtIndex(at - 1) : null
+        if (left && tabStrip.heldX < left.x + left.width / 2) {
+            tabStrip.tabsModel.moveTab(at, at - 1)
+            return at - 1
+        }
+        const right = at + 1 < tabs.count ? tabs.itemAtIndex(at + 1) : null
+        if (right && tabStrip.heldX + tab.width > right.x + right.width / 2) {
+            tabStrip.tabsModel.moveTab(at, at + 1)
+            return at + 1
+        }
+        return at
+    }
+
+    /// Set down. The order is already what it is going to be — the tab only stops being drawn away from its own row.
+    function dropTab() {
+        tabStrip.heldId = -1
+    }
+
+    /// Automation: the tab at `index`, carried to `to` and set down (`PG_AUTO_ACT=tab-drag`). The carrying is a
+    /// pointer's, which no headless run has; everything after it — the settling, the order, the tab that comes out in
+    /// front — is the same road a hand takes.
+    ///
+    /// Carried to exactly where it comes to rest: its trailing edge on the far edge of the tab it is going to, or its
+    /// leading edge on the near one. Anywhere in that place passes every tab in between and none beyond it.
+    function dragTabTo(from, to) {
+        const tab = tabs.itemAtIndex(from)
+        const dest = tabs.itemAtIndex(to)
+        if (!tab || !dest || from === to)
+            return false
+        // A hand presses before it carries, and the press is what moves to the tab. A hook that let itself skip that
+        // would be proving a gesture nobody can make.
+        tabStrip.pressTab(from, tab.tab_id, Qt.LeftButton)
+        tabStrip.takeTab(from, tab.width / 2)
+        tabStrip.carryTo(from, to > from ? dest.x + dest.width - tab.width : dest.x)
+        tabStrip.dropTab()
+        return true
+    }
+
+    /// Automation: the tab at `index`, taken up and carried half its own width without being set down
+    /// (`PG_AUTO_ACT=tab-hold`). The one thing a settled strip cannot show: a tab drawn away from its own row, with
+    /// the hand still on it.
+    function holdTabAt(index) {
+        const tab = tabs.itemAtIndex(index)
+        if (!tab)
+            return false
+        tabStrip.pressTab(index, tab.tab_id, Qt.LeftButton)
+        tabStrip.takeTab(index, tab.width / 2)
+        // Towards the middle of the strip: the ends are where a carry stops, and the last tab carried further right
+        // is drawn exactly where it already was.
+        const toward = index + 1 < tabs.count ? tab.width / 2 : -tab.width / 2
+        tabStrip.carryTo(index, tab.x + toward)
+        return true
+    }
+
+    /// Automation: how far the tab in hand is actually drawn from its own row (`tab-hold`). Read off that tab, so a
+    /// transform that came apart answers 0 — which is also what nothing being held answers.
+    function heldTabShift() {
+        for (let i = 0; i < tabs.count; i++) {
+            const tab = tabs.itemAtIndex(i)
+            if (tab && tab.tab_id === tabStrip.heldId)
+                return Math.round(tab.shiftShown)
+        }
+        return 0
     }
 
     /// Automation: the middle click, landed on the tab at `index` (`PG_AUTO_ACT=middle-close`). Answers whether there
@@ -320,7 +444,14 @@ Item {
             padW: tabs.tabPadW
             markAir: tabs.markAir
             stripHeight: tabs.height
+            held: tabStrip.heldId === tabItem.tab_id
+            heldX: tabStrip.heldX
             onTabPressed: button => tabStrip.pressTab(tabItem.index, tabItem.tab_id, button)
+            // `index` is read at the moment the hand reports, not at the one it took hold: the row this tab sits in is
+            // what the drag has been changing all along.
+            onTabTaken: grabX => tabStrip.takeTab(tabItem.index, grabX)
+            onTabDragged: sceneX => tabStrip.carryTab(tabItem.index, sceneX)
+            onTabDropped: tabStrip.dropTab()
         }
     }
     HoverToolButton {

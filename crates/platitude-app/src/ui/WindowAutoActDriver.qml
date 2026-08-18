@@ -139,6 +139,94 @@ Item {
         }
     }
 
+    // What the strip is holding after a tab was carried across it. The order is the output, and it is read off the
+    // items rather than the model: the drag settles itself against where the tabs actually sit, so the walk is what
+    // says the two agree. The tabs it needs are a precondition of the carry and are read in that branch alone —
+    // afterwards, "the order is not the one it started as" is this verb's own answer.
+    Timer {
+        id: tabDragTimer
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "tab-drag"
+        property bool requested: false
+        property string before: ""
+        property int from: 0
+        property int to: 0
+        onTriggered: {
+            if (!tabDragTimer.requested) {
+                // Every row standing in the strip, not merely open: the carry measures against the tabs' own places,
+                // and a row the model has only just gained has none until the next layout.
+                if (pageRepeater.count < 2 || topBar.tabItemCount() !== pageRepeater.count)
+                    return
+                // And the page under the strip settled, so that what is photographed underneath is a repository rather
+                // than one still opening. A precondition of the carry and read nowhere else: the carry moves to the tab
+                // it takes up, and a page that then has to open would turn this into a wait for something the verb
+                // itself caused.
+                const front = window.curPage
+                if (front === null || front.pageTab.state !== "open"
+                        || !front.pageWt.loaded || front.pageGraph.finishCount === 0)
+                    return
+                const asked = (AppBackend.autoActArg || "3:1").split(":")
+                tabDragTimer.from = Number(asked[0])
+                tabDragTimer.to = Number(asked[1])
+                tabDragTimer.before = topBar.tabPaths()
+                // Latched on the strip's answer, the way the middle click is: a carry that found no tab to take up
+                // never happened, and reporting it as one would leave the wait to the watchdog.
+                tabDragTimer.requested = topBar.dragTabTo(tabDragTimer.from, tabDragTimer.to)
+                return
+            }
+            const paths = topBar.tabPaths()
+            if (paths === tabDragTimer.before || topBar.tabItemCount() !== pageRepeater.count)
+                return
+            stop()
+            // The verdict leads, and it is about the tab that was carried: an order that merely changed would pass
+            // with any two tabs swapped, and every demo working tree is called the same thing in the picture.
+            const was = tabDragTimer.before.split(",")
+            AppBackend.report("tab_drag moved="
+                              + (paths.split(",")[tabDragTimer.to] === was[tabDragTimer.from])
+                              + " from=" + tabDragTimer.from
+                              + " to=" + tabDragTimer.to
+                              + " tabs=" + pageRepeater.count
+                              + " active=" + tabsModel.currentIndex
+                              + " open=" + paths)
+            window.finishAutoAct()
+        }
+    }
+
+    // And the half of the carry that ends in no order at all: a tab drawn away from its own row while the hand is
+    // still on it. The settled strip photographs the same whether it was ever drawn under the hand or only ever
+    // jumped between rows, so the offset the transform is carrying says itself.
+    Timer {
+        id: tabHoldTimer
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "tab-hold"
+        property bool requested: false
+        onTriggered: {
+            if (!tabHoldTimer.requested) {
+                if (pageRepeater.count < 2 || topBar.tabItemCount() !== pageRepeater.count)
+                    return
+                const front = window.curPage
+                if (front === null || front.pageTab.state !== "open"
+                        || !front.pageWt.loaded || front.pageGraph.finishCount === 0)
+                    return
+                tabHoldTimer.requested = topBar.holdTabAt(Number(AppBackend.autoActArg || 0))
+                return
+            }
+            // The tab has to be drawn off its row before there is a picture worth taking; nothing is waited for
+            // afterwards, because a hand that has not let go is the whole state.
+            const shift = topBar.heldTabShift()
+            if (shift === 0)
+                return
+            stop()
+            AppBackend.report("tab_hold lifted=true at=" + (AppBackend.autoActArg || 0)
+                              + " shift=" + shift
+                              + " active=" + tabsModel.currentIndex
+                              + " open=" + topBar.tabPaths())
+            window.finishAutoAct()
+        }
+    }
+
     // Reopening an existing path must select its tab without adding one.
     Timer {
         id: openAgainTimer

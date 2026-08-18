@@ -31,9 +31,23 @@ Rectangle {
     /// Automation: whether the mark is out on this tab. Read off the mark itself — reporting what was asked of it would
     /// go on passing after the binding that draws it had come apart.
     readonly property real markShown: closeMark.opacity
+    /// Automation: how far this tab is drawn from the row it belongs to, read off the transform that carries it rather
+    /// than off what was asked of it — the same reason `markShown` is read off the mark (`PG_AUTO_ACT=tab-hold`).
+    readonly property real shiftShown: heldShift.x
+    /// Whether this is the tab in hand, and where the hand has carried its left edge to. Both settled by the strip
+    /// (`TabStrip.carryTo`): the order changes underneath a drag, so which row is being carried is not something a row
+    /// can remember about itself.
+    property bool held: false
+    property real heldX: 0
     /// Pressed with a button the tab answers. Which button means what is the strip's to say, since the same rule is
     /// what the middle-click hook comes through (`TabStrip.pressTab`).
     signal tabPressed(int button)
+    /// Taken up to be carried, `grabX` being where inside the tab the hand took hold, and set down again. Between the
+    /// two the hand reports where it has got to, in **scene** coordinates: by then the tab is drawn somewhere its own
+    /// place does not say, and mapping out through this item's transform is what makes the answer the pointer's.
+    signal tabTaken(real grabX)
+    signal tabDragged(real sceneX)
+    signal tabDropped()
 
     // The mark's seat is given only the air it has not already taken (`spaceSm − markAir`) — otherwise both are spent
     // twice and the gap inside the tab reads wider than the tab's own margins (実測 13px between name and mark against
@@ -42,7 +56,17 @@ Rectangle {
     // they disagree about.
     width: Math.ceil(tabContent.implicitWidth) + tabItem.padW
     height: tabItem.stripHeight
+    // Over the tabs it is being carried past: between one neighbour's half and the next one's, the tab in hand covers
+    // the tab it has not displaced yet.
+    z: tabItem.held ? 1 : 0
     color: tabItem.current ? Theme.bgSelected : "transparent"
+    // Drawn where the hand has it rather than where the strip put it. A transform rather than an `x` of its own: the
+    // view owns a delegate's place and writes it back at every layout, and this way the two never argue — the offset is
+    // read from whatever place the row was given, so the tab stays under the hand across the very moves it is causing.
+    transform: Translate {
+        id: heldShift
+        x: tabItem.held ? tabItem.heldX - tabItem.x : 0
+    }
     // The whole tab answers the middle button; the `✕` does not accept it, so a press on the mark falls through to the
     // same gesture.
     MouseArea {
@@ -50,7 +74,52 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-        onClicked: mouse => tabItem.tabPressed(mouse.button)
+        /// Where the press landed in the scene, and whether the hand has since carried the tab off. Both the threshold
+        /// and the carrying are measured from the scene: this item moves under the hand, so its own coordinates say
+        /// less the further the drag goes.
+        property real pressSceneX: 0
+        property bool carrying: false
+        /// Where inside the tab the hand took hold. Taken at the press rather than at the threshold, so the tab travels
+        /// exactly as far as the hand did and not four pixels less.
+        property real grabX: 0
+        function letGo() {
+            if (!tabMouse.carrying)
+                return
+            tabMouse.carrying = false
+            tabItem.tabDropped()
+        }
+        // Moving to the tab is what a press means: the drag that may follow carries the tab it is about, and a strip
+        // that waited for the release would be carrying a tab it had not moved to (デザイン規約 §タブの所作).
+        onPressed: mouse => {
+            if (mouse.button !== Qt.LeftButton)
+                return
+            tabItem.tabPressed(mouse.button)
+            tabMouse.pressSceneX = tabMouse.mapToItem(null, mouse.x, 0).x
+            tabMouse.grabX = mouse.x
+            tabMouse.carrying = false
+        }
+        onPositionChanged: mouse => {
+            // Hover comes through here too, and a hand with nothing in it is not carrying anything.
+            if (!(mouse.buttons & Qt.LeftButton))
+                return
+            const sceneX = tabMouse.mapToItem(null, mouse.x, 0).x
+            if (!tabMouse.carrying) {
+                // The platform's own threshold, the one the view would have stolen the press at (`TabStrip`). Below it
+                // the hand is holding still, and a tab that jumped at the first stray pixel would be answering a
+                // gesture nobody made.
+                if (Math.abs(sceneX - tabMouse.pressSceneX) < tabMouse.drag.threshold)
+                    return
+                tabMouse.carrying = true
+                tabItem.tabTaken(tabMouse.grabX)
+            }
+            tabItem.tabDragged(sceneX)
+        }
+        onReleased: tabMouse.letGo()
+        onCanceled: tabMouse.letGo()
+        onClicked: mouse => {
+            if (mouse.button === Qt.MiddleButton)
+                tabItem.tabPressed(mouse.button)
+        }
         onContainsMouseChanged: tabItem.pointed = containsMouse
     }
     Rectangle {

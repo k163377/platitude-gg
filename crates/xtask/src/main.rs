@@ -155,6 +155,13 @@ commands:
       `tab-mark` opens the same strip and puts the pointer on the tab its
       argument names (default 1), which is the only way a headless run
       reaches the half of the `✕` rule that hover answers.
+      `tab-drag` opens four of them and carries one across the strip,
+      which is the other gesture no headless run has a pointer for. Its
+      argument is `<from>:<to>` (default `3:1`), the two places by the
+      order the tabs came up in. `tab-hold` opens the same four and takes
+      one up without setting it down (argument: which tab, default 0),
+      because a tab drawn away from its own row is what the settled strip
+      cannot show.
       `identity` and `identity-half` are read as a pair, and are the only
       verbs whose write would land outside a demo repository — so they are
       handed a git configuration of their own (GIT_CONFIG_GLOBAL in the

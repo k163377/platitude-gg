@@ -174,6 +174,19 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // is caught by nothing else. How many are left is not judged: the
         // verb takes as many repositories as it is given.
         "middle-close" => Some("middle_close gone=true"),
+        // Which tab was carried and where it came to rest. A strip whose
+        // order merely changed passes with any two tabs swapped, and one
+        // where the carry never took hold photographs the order it
+        // started in — which is a strip that looks like every other one.
+        // `moved=` is the carried tab's own path, found at the place it
+        // was asked for.
+        "tab-drag" => Some("tab_drag moved=true"),
+        // The other half of the same gesture, and the one the settled
+        // strip cannot hold: a strip whose tab was never drawn away from
+        // its own row photographs exactly like one whose rows only ever
+        // jumped. `lifted=` is the offset the transform is carrying, read
+        // off the tab rather than off what was asked of it.
+        "tab-hold" => Some("tab_hold lifted=true"),
         // The three states themselves. A run where one of them never stood
         // photographs a band that was never crowded, and that picture
         // cannot be told from a band that gave the crowd room — so the
