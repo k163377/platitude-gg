@@ -243,9 +243,8 @@ Item {
         interval: 25
         repeat: true
         onTriggered: {
-            if (workTree.stagedCount === 0)
-                return
-            wipPane.pointAtCommit = true
+            // Only the card is waited for. The pointer is already on the button, so the tree settling is what is being
+            // watched, and the card coming out is that — asking after the count first would be reading the input side.
             if (!wipPane.eolCardOpen)
                 return
             eolCommitTimer.stop()
@@ -2573,6 +2572,10 @@ Item {
                 page.amending = true
             }
             wipPane.setMessage(arg === "" || arg === "amend" ? "feat: something" : arg, "")
+            // **The pointer goes on before the tree has settled**, which is what a real one does — the hand reaches the
+            // button while the index is still being written. Waiting for the warning first and pointing after would
+            // photograph the same card while leaving the ordering that actually broke it untested (2026-08-18).
+            wipPane.pointAtCommit = true
             eolCommitTimer.start()
         } else if (act === "commit-face") {
             // The signing tick on the face at the end of the commit button, with its one line out. Hover cannot be

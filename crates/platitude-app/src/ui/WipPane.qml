@@ -302,6 +302,17 @@ ColumnLayout {
     /// Puts the commit button's card out without a pointer, the way the rows' is put out — hover cannot be injected.
     property bool pointAtCommit: false
     onPointAtCommitChanged: wipPane.settleCommitCard()
+    /// **The pointer is not the only thing that moves.** This is placed by a function rather than by a binding — a card
+    /// above its anchor needs a measured height, so it cannot be one — and a function only runs when something calls
+    /// it. Called on the pointer's edges alone, it answers for the state the pane was in when the pointer arrived, and
+    /// a pointer that arrives first is the ordinary case: someone presses `Stage all` and moves to the button while the
+    /// index is still being written, so the button is disabled — and therefore not warning — for the whole of the only
+    /// moment it would have been asked (2026-08-18 実測: the card never came). So the warning re-asks too, from both
+    /// sides it can change on: whether it is warning at all, and how many files it is warning about.
+    Connections {
+        target: wipPane.workTree
+        function onEolStagedCountChanged() { wipPane.settleCommitCard() }
+    }
     function settleCommitCard() {
         if (!commitButton.eolWarned || !(commitHover.containsMouse || wipPane.pointAtCommit)) {
             if (eolCard.path === "")
@@ -772,6 +783,9 @@ ColumnLayout {
                     /// (`session::EolMark::staged`).
                     readonly property bool eolWarned:
                         wipPane.workTree.eolStagedCount > 0 && commitButton.enabled
+                    // The other side a resting pointer's card can change under: the frame and the `!` are bindings and
+                    // follow this on their own, the card has to be asked (`settleCommitCard`).
+                    onEolWarnedChanged: wipPane.settleCommitCard()
                     // **No mark beside the word.** The label already names the command and the branch it lands on,
                     // which is two things to read; a tick in front of them says nothing a reader did not already
                     // have, and the one mark this button does need — the `!` — has to stand out from it
