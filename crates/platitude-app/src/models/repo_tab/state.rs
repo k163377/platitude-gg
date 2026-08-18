@@ -34,6 +34,8 @@ impl Default for RepoTab {
             head_reached_elsewhere: false,
             author_name: String::new(),
             author_email: String::new(),
+            author_avatar: 0,
+            author_avatar_url: String::new(),
             // Assumed fine until the check says otherwise, so nothing
             // flashes a warning during startup.
             identity_ready: true,
@@ -108,6 +110,23 @@ impl RepoTab {
         // has nothing suspended, and nothing to be told about it.
         self.auto_fetch_suspended =
             crate::hub::from_session(self.tab_id, |s| s.suspend_auto_fetch()).unwrap_or(false);
+    }
+
+    /// Re-reads the face the configured identity wears: the identicon
+    /// its name packs to, and the picture assigned to its address if
+    /// there is one. Answers whether either moved, so the caller decides
+    /// whether anyone has to be told — the feed says so once at the end
+    /// of its own drain, an assignment arriving on its own has to say so
+    /// itself.
+    pub(super) fn read_author_avatar(&mut self) -> bool {
+        let code = crate::encode::avatar_code(&self.author_name);
+        let url = Hub::with(|hub| hub.avatar_url(&self.author_email)).unwrap_or_default();
+        if code == self.author_avatar && url == self.author_avatar_url {
+            return false;
+        }
+        self.author_avatar = code;
+        self.author_avatar_url = url;
+        true
     }
 
     /// Whether HEAD carries someone else's name — the only case where an

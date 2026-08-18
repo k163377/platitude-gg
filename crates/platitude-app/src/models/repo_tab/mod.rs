@@ -104,6 +104,13 @@ pub struct RepoTab {
     author_name: String,
     author_email: String,
     identity_ready: bool,
+    /// The same face the identity wears everywhere else: the identicon
+    /// its name packs to, and the picture assigned to its address if
+    /// there is one (デザイン規約 §アバターを与える). Held here rather
+    /// than asked for on demand because the commit editor's badge is a
+    /// binding, and a binding only re-reads a property.
+    author_avatar: i32,
+    author_avatar_url: String,
     /// Whether new commits here get signed, and with what kind of key.
     signs_commits: bool,
     signing_format: String,

@@ -39,6 +39,7 @@ impl RepoTab {
                 } => {
                     self.author_name = name;
                     self.author_email = email;
+                    self.read_author_avatar();
                     self.identity_ready = complete;
                     self.signs_commits = sign_commits;
                     self.signing_format = signing_format;

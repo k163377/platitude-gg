@@ -70,6 +70,12 @@ impl RepoTab {
     );
     qproperty!("authorName", Member = author_name, Notify = changed);
     qproperty!("authorEmail", Member = author_email, Notify = changed);
+    qproperty!("authorAvatar", Member = author_avatar, Notify = changed);
+    qproperty!(
+        "authorAvatarUrl",
+        Member = author_avatar_url,
+        Notify = changed
+    );
     qproperty!("identityReady", Member = identity_ready, Notify = changed);
     qproperty!("signsCommits", Member = signs_commits, Notify = changed);
     qproperty!("signingFormat", Member = signing_format, Notify = changed);
@@ -142,6 +148,29 @@ impl RepoTab {
     #[qslot]
     fn resume_auto_fetch(&mut self) {
         self.restart_auto_fetch()
+    }
+
+    /// Re-reads the identity's assigned picture. Called when an
+    /// assignment changes: the identity did not, so there is nothing to
+    /// ask git for (the same shape `Details::refresh_avatar` has).
+    #[qslot]
+    fn refresh_avatar(&mut self) {
+        if self.read_author_avatar() {
+            self.changed();
+        }
+    }
+
+    /// Whoever a message being typed credits, packed the way a commit's
+    /// own trailers are packed for the details pane
+    /// (`encode::encode_co_authors`).
+    ///
+    /// A slot rather than a property: the message is the editor's, not
+    /// this tab's, and what a binding follows is the box's own text.
+    /// Whether a line counts is `platitude_core::trailers` — the one
+    /// place that rule is written.
+    #[qslot]
+    fn co_authors_of(&self, body: String) -> String {
+        crate::encode::encode_co_authors(&platitude_core::trailers::co_authors_in(&body))
     }
 
     /// Name of one remote (a list property would need a model of its own
