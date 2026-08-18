@@ -1,9 +1,14 @@
-//! The `Co-authored-by` lines a commit message carries.
+//! The `Co-authored-by` lines a commit message carries, and how they are
+//! read out of one.
 //!
-//! Split out of `details`, which is what asks git for them
-//! (`%(trailers:key=Co-authored-by,…)`) and hands the packed field here.
+//! Two callers, two starting points. A commit that exists is asked of git
+//! (`%(trailers:key=Co-authored-by,…)` — `details`), which hands back a
+//! packed field for [`parse_co_authors`]. A message still being typed has
+//! no object to ask about, so [`co_authors_in`] reads the text itself.
 
-/// Separates one trailer value from the next inside that field.
+/// What git is told to put between trailer values, and so what a packed
+/// field is split on. A record separator: it cannot appear in a name or
+/// an address, and it does not end a NUL-delimited record.
 const TRAILER_SEP: char = '\u{1f}';
 
 /// Someone the message credits alongside the author.
@@ -17,6 +22,57 @@ pub struct CoAuthor {
     pub name: String,
     /// Without the angle brackets; empty when the trailer had none.
     pub email: String,
+}
+
+/// The `Co-authored-by` trailers a message body carries, read the way
+/// git reads them.
+///
+/// Nothing can be asked of git here: the commit editor's message is not
+/// a commit yet, so there is no object to run `%(trailers)` against, and
+/// the answer has to follow the box while it is being typed. So the rule
+/// is written out — **the trailer block is the last paragraph, and only
+/// if every line of it is a `key: value`**. That is what keeps a body
+/// that says "I dropped the Co-authored-by: line" from crediting anyone:
+/// a paragraph with prose in it is prose.
+///
+/// Continuation lines (indented) belong to the trailer above them, which
+/// is why they do not disqualify the block.
+pub fn co_authors_in(body: &str) -> Vec<CoAuthor> {
+    let lines: Vec<&str> = body.trim_end().lines().collect();
+    let start = lines
+        .iter()
+        .rposition(|line| line.trim().is_empty())
+        .map_or(0, |blank| blank + 1);
+    let block = &lines[start.min(lines.len())..];
+    if block.is_empty() || !block.iter().all(|line| is_trailer_line(line)) {
+        return Vec::new();
+    }
+    block
+        .iter()
+        .filter_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            key.trim()
+                .eq_ignore_ascii_case("co-authored-by")
+                .then(|| value.trim())
+        })
+        .flat_map(parse_co_authors)
+        .collect()
+}
+
+/// Whether one line of the last paragraph can stand in a trailer block:
+/// a `key: value` whose key is a word, or a continuation indented under
+/// the one before it.
+fn is_trailer_line(line: &str) -> bool {
+    if line.starts_with(' ') || line.starts_with('\t') {
+        return true;
+    }
+    let Some((key, _)) = line.split_once(':') else {
+        return false;
+    };
+    !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 /// Splits the trailer field into one entry per credited person.
@@ -95,5 +151,41 @@ mod tests {
     fn no_trailer_yields_no_co_authors() {
         assert!(parse_co_authors("").is_empty());
         assert!(parse_co_authors("\u{1f}").is_empty());
+    }
+
+    #[test]
+    fn a_body_credits_whoever_its_last_paragraph_names() {
+        let got = co_authors_in(
+            "Why this change.\n\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>\n\
+             Signed-off-by: Demo <demo@example.com>\n",
+        );
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].name, "Claude Opus 5");
+        assert_eq!(got[0].email, "noreply@anthropic.com");
+    }
+
+    #[test]
+    fn a_paragraph_with_prose_in_it_credits_nobody() {
+        // git's own rule, and the reason this is not a search for the
+        // word: a body that talks *about* the trailer has no trailers.
+        assert!(
+            co_authors_in("I dropped the Co-authored-by: Claude line by mistake.").is_empty(),
+            "prose in the last paragraph is prose"
+        );
+    }
+
+    #[test]
+    fn a_body_that_is_only_trailers_still_credits() {
+        // The subject is not part of what this reads, so a message whose
+        // whole body is the trailer block has no blank line to look for.
+        let got = co_authors_in("Co-authored-by: Bob <b@e.com>");
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].name, "Bob");
+    }
+
+    #[test]
+    fn an_empty_body_credits_nobody() {
+        assert!(co_authors_in("").is_empty());
+        assert!(co_authors_in("\n\n").is_empty());
     }
 }
