@@ -40,6 +40,7 @@ pub mod stage;
 pub mod stash;
 pub mod status;
 pub mod tag;
+pub mod trailers;
 pub mod version;
 pub mod worktrees;
 
