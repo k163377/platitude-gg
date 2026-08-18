@@ -49,6 +49,22 @@ HoverToolButton {
     /// faint ground (デザイン規約 §git 用語のコード表記). The command is the whole label, so `text` itself is what the chip is drawn
     /// around — and that text is never translated: it is the command, not a phrase about it.
     property bool code: false
+    /// The label is a phrase with a command at each end — a chip, `text` between them, and a second chip in a colour
+    /// of its own (`ActionButtonLabel.phraseHead`). Empty is the ordinary single-wording button.
+    property string phraseHead: ""
+    property string phraseCount: ""
+    property string phraseTail: ""
+    property color phraseTailTint: actionBtn.fg
+    /// Whom the action will be attributed to, at the end of the phrase, and how many more it credits
+    /// (`ActionButtonLabel.phraseFace`).
+    property int phraseFace: -1
+    property string phraseFaceUrl: ""
+    property int phraseMates: 0
+    property string phraseSignature: ""
+    property string phraseSignatureTip: ""
+    /// Stands in for the pointer on that tick, so its one line can be photographed — hover cannot be injected.
+    property bool phraseSignaturePointedAt: false
+    readonly property bool phraseSignatureTipShown: btnLabel.phraseSignatureTipShown
     /// The icon is a mark standing next to the word, rather than an icon at the head of a band.
     ///
     /// The step goes with the role (デザイン規約 §寸法「段は役割で選ぶ」 — `iconSm` is the mark beside a word, `iconMd` the icon a row
@@ -85,8 +101,14 @@ HoverToolButton {
     ///
     /// Only where a frame is drawn. A bare button is a word among words — the hunk heading's two, a dialog's `Cancel` —
     /// and a floor there would stretch the hover wash and the hold's fill well past what the button names.
+    ///
+    /// **A phrase has no floor.** The floor exists so a short word does not draw a box the eye reads as a chip, and a
+    /// button told to fill a pane is already far past it. It cannot be measured here either: a phrased cell asks for
+    /// no width at all (`ActionButtonLabel.phraseRoom`), so the row reads as a tiny button and the floor would charge
+    /// the padding a whole `buttonMinWidth` — straight out of the room the phrase then has to elide itself into.
     readonly property real floorSlack:
-        actionBtn.framed ? Theme.buttonMinWidth - btnRow.implicitWidth - 2 * actionBtn.padding : 0
+        actionBtn.framed && !btnLabel.phrased
+        ? Theme.buttonMinWidth - btnRow.implicitWidth - 2 * actionBtn.padding : 0
     /// The air each end is already holding before the slack is shared out (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」): a lone
     /// mark sits centred in the two-mark seat, and a command's chip reaches half a gap past its last letter. Taken off
     /// before the halves are cut, so what comes out even is the **ink** at the two ends rather than the row between
@@ -233,7 +255,10 @@ HoverToolButton {
             opacity: actionBtn.busy ? 0 : 1
             Item {
                 Layout.fillWidth: true
-                visible: actionBtn.centred
+                // A phrased label fills the row on its own and centres its phrase inside itself. A spacer either side
+                // would split the slack three ways instead, leaving the phrase off the button's centre by an amount
+                // its own parts change (the `+N` alone moves it).
+                visible: actionBtn.centred && !btnLabel.phrased
             }
             ActionButtonSeat {
                 id: seat
@@ -255,10 +280,20 @@ HoverToolButton {
                 alertTone: actionBtn.alertTone
                 alertTight: actionBtn.alertTight
                 fontSize: actionBtn.font.pixelSize
+                phraseHead: actionBtn.phraseHead
+                phraseCount: actionBtn.phraseCount
+                phraseTail: actionBtn.phraseTail
+                phraseTailTint: actionBtn.phraseTailTint
+                phraseFace: actionBtn.phraseFace
+                phraseFaceUrl: actionBtn.phraseFaceUrl
+                phraseMates: actionBtn.phraseMates
+                phraseSignature: actionBtn.phraseSignature
+                phraseSignatureTip: actionBtn.phraseSignatureTip
+                phraseSignaturePointedAt: actionBtn.phraseSignaturePointedAt
             }
             Item {
                 Layout.fillWidth: true
-                visible: actionBtn.centred
+                visible: actionBtn.centred && !btnLabel.phrased
             }
         }
         // Its own item rather than a rotation on the icon above: an animator leaves the angle where it stopped, and the
