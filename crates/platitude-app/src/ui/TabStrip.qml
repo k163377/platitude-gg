@@ -47,18 +47,6 @@ Item {
     readonly property int tabStripFloorW:
         menuButton.width + plusButton.width + tabs.grabRun + 2 * (tabs.tabFixedW + tabStrip.tabTitleMinW)
 
-    /// The tab in hand: which one it is, where inside it the hand took hold, and where its left edge has been carried
-    /// to in the strip's own coordinates. Held by id rather than by position — the order changes under a drag, and the
-    /// row the hand is on is the one thing about it that does not (デザイン規約 §タブの所作).
-    property int heldId: -1
-    property real heldGrabX: 0
-    property real heldX: 0
-    /// Where the hand last reported in the scene, and how far past the run it is asking for. A hand that has run out of
-    /// strip is still asking, and the distance it asks by is what the strip travels at (デザイン規約 §タブの所作 —— the
-    /// sensitivity is the one the app's other autoscroll reads, §グラフを横へ送る).
-    property real heldSceneX: 0
-    property real heldPush: 0
-
     signal openRepositoryRequested()
     signal identityEditRequested()
     signal settingsRequested()
@@ -75,116 +63,6 @@ Item {
             tabStrip.tabsModel.setCurrentIndex(index)
     }
 
-    /// The tab at `index`, taken up: the hand has carried it past the platform's threshold and is now holding it.
-    /// `grabX` is where inside the tab it took hold, which is what keeps that same point of the tab under the hand
-    /// however far it travels.
-    function takeTab(index, grabX) {
-        const tab = tabs.itemAtIndex(index)
-        if (!tab)
-            return
-        tabStrip.heldId = tab.tab_id
-        tabStrip.heldGrabX = grabX
-        tabStrip.heldX = tab.x
-    }
-
-    /// The hand, moved to `sceneX` with a tab in it. Scene coordinates in, the strip's own out: the tab is drawn where
-    /// the hand is rather than where the row sits, so its own coordinates cannot say where the pointer got to.
-    ///
-    /// The run — what is on screen — is as far as a tab can be put. Past either end of it the tab stays at the edge and
-    /// the strip travels underneath instead (`driftRun`), which is the only way a tab reaches a place that is not on
-    /// screen when the carry starts.
-    function carryTab(index, sceneX) {
-        const tab = tabs.itemAtIndex(index)
-        if (!tab)
-            return
-        tabStrip.heldSceneX = sceneX
-        const want = tabs.contentItem.mapFromItem(null, sceneX, 0).x - tabStrip.heldGrabX
-        const runFrom = tabs.contentX
-        const runTo = tabs.contentX + tabs.width - tab.width
-        tabStrip.heldPush = want < runFrom ? want - runFrom : Math.max(0, want - runTo)
-        tabStrip.carryTo(index, Math.max(runFrom, Math.min(want, runTo)))
-    }
-
-    /// One tick of the strip travelling under a tab held against its end, at the speed the hand is asking for.
-    function driftRun() {
-        const at = tabStrip.heldIndex()
-        if (at < 0)
-            return
-        const room = tabs.contentWidth - tabs.width
-        const asked = tabs.contentX + tabStrip.heldPush * Metrics.middleScrollGain
-        const settled = Math.max(0, Math.min(asked, room))
-        if (settled === tabs.contentX)
-            return
-        tabs.contentX = settled
-        // The hand has not moved; what it is pointing into the strip at has.
-        tabStrip.carryTab(at, tabStrip.heldSceneX)
-    }
-
-    /// Where the tab in hand sits right now, or -1 with nothing in hand. Walked rather than remembered: the carry is
-    /// what changes it.
-    function heldIndex() {
-        for (let i = 0; i < tabs.count; i++) {
-            const tab = tabs.itemAtIndex(i)
-            if (tab && tab.tab_id === tabStrip.heldId)
-                return i
-        }
-        return -1
-    }
-
-    /// The one place a carried tab is put anywhere: where it is drawn, and — for as long as it keeps passing them —
-    /// which neighbours it has changed places with. The hand comes through `carryTab` and the smoke hook through
-    /// `dragTabTo`, so neither can reach an order the other cannot.
-    function carryTo(index, left) {
-        const tab = tabs.itemAtIndex(index)
-        if (!tab)
-            return index
-        // The strip is the whole of the run: a tab carried past either end stops there, the way everything else that
-        // scrolls here stops (デザイン規約 §QML 実装ルール). Nothing is torn off into a window of its own.
-        tabStrip.heldX = Math.max(0, Math.min(left, tabs.contentWidth - tab.width))
-        let at = index
-        // Bounded by the strip itself: each step passes one tab, so nothing can be passed more often than there are
-        // tabs to pass.
-        for (let step = 0; step < tabs.count; step++) {
-            const next = tabStrip.stepOrder(at)
-            if (next === at)
-                break
-            at = next
-            // That step changed the order, so the places the next comparison reads have to be the ones the view has
-            // just given the tabs rather than the ones they are leaving.
-            tabs.forceLayout()
-        }
-        return at
-    }
-
-    /// One neighbour, passed or not: the carried tab changes places with whichever side it has taken half of.
-    ///
-    /// The leading edge against the neighbour's middle, rather than middle against middle. Tabs are of different widths
-    /// — middles agree only where they are of one width, and a wide tab held against the end of the strip never reaches
-    /// a narrow last tab's middle at all, which would leave the last place unreachable by hand.
-    function stepOrder(at) {
-        const tab = tabs.itemAtIndex(at)
-        if (!tab)
-            return at
-        const left = at > 0 ? tabs.itemAtIndex(at - 1) : null
-        if (left && tabStrip.heldX < left.x + left.width / 2) {
-            tabStrip.tabsModel.moveTab(at, at - 1)
-            return at - 1
-        }
-        const right = at + 1 < tabs.count ? tabs.itemAtIndex(at + 1) : null
-        if (right && tabStrip.heldX + tab.width > right.x + right.width / 2) {
-            tabStrip.tabsModel.moveTab(at, at + 1)
-            return at + 1
-        }
-        return at
-    }
-
-    /// Set down. The order is already what it is going to be — the tab only stops being drawn away from its own row,
-    /// and the strip stops travelling with it.
-    function dropTab() {
-        tabStrip.heldId = -1
-        tabStrip.heldPush = 0
-    }
-
     /// Automation: the tab at `index`, carried to `to` and set down (`PG_AUTO_ACT=tab-drag`). The carrying is a
     /// pointer's, which no headless run has; everything after it — the settling, the order, the tab that comes out in
     /// front — is the same road a hand takes.
@@ -199,9 +77,9 @@ Item {
         // A hand presses before it carries, and the press is what moves to the tab. A hook that let itself skip that
         // would be proving a gesture nobody can make.
         tabStrip.pressTab(from, tab.tab_id, Qt.LeftButton)
-        tabStrip.takeTab(from, tab.width / 2)
-        tabStrip.carryTo(from, to > from ? dest.x + dest.width - tab.width : dest.x)
-        tabStrip.dropTab()
+        tabCarry.takeTab(from, tab.width / 2)
+        tabCarry.carryTo(from, to > from ? dest.x + dest.width - tab.width : dest.x)
+        tabCarry.dropTab()
         return true
     }
 
@@ -213,18 +91,18 @@ Item {
         if (!tab)
             return false
         tabStrip.pressTab(index, tab.tab_id, Qt.LeftButton)
-        tabStrip.takeTab(index, tab.width / 2)
+        tabCarry.takeTab(index, tab.width / 2)
         // Towards the middle of the strip: the ends are where a carry stops, and the last tab carried further right
         // is drawn exactly where it already was.
         const toward = index + 1 < tabs.count ? tab.width / 2 : -tab.width / 2
-        tabStrip.carryTo(index, tab.x + toward)
+        tabCarry.carryTo(index, tab.x + toward)
         return true
     }
 
     /// Automation: how far the tab in hand is actually drawn from its own row (`tab-hold`). Read off that tab, so a
     /// transform that came apart answers 0 — which is also what nothing being held answers.
     function heldTabShift() {
-        const at = tabStrip.heldIndex()
+        const at = tabCarry.heldIndex()
         const tab = at < 0 ? null : tabs.itemAtIndex(at)
         return tab ? Math.round(tab.shiftShown) : 0
     }
@@ -237,9 +115,17 @@ Item {
         if (!tab)
             return false
         tabStrip.pressTab(index, tab.tab_id, Qt.LeftButton)
-        tabStrip.takeTab(index, tab.width / 2)
-        tabStrip.carryTab(index, tabs.mapToItem(null, tabs.width + tab.width, 0).x)
+        tabCarry.takeTab(index, tab.width / 2)
+        tabCarry.carryTab(index, tabs.mapToItem(null, tabs.width + tab.width, 0).x)
         return true
+    }
+
+    /// Automation: where the tab in hand sits, and letting go of it — both asked of the hand that has it (`tab-edge`).
+    function heldIndex() {
+        return tabCarry.heldIndex()
+    }
+    function dropTab() {
+        tabCarry.dropTab()
     }
 
     /// Automation: whether the strip has travelled to its far end, and how far it has travelled (`tab-edge`). A strip
@@ -508,24 +394,22 @@ Item {
             padW: tabs.tabPadW
             markAir: tabs.markAir
             stripHeight: tabs.height
-            held: tabStrip.heldId === tabItem.tab_id
-            heldX: tabStrip.heldX
+            held: tabCarry.heldId === tabItem.tab_id
+            heldX: tabCarry.heldX
             onTabPressed: button => tabStrip.pressTab(tabItem.index, tabItem.tab_id, button)
             // `index` is read at the moment the hand reports, not at the one it took hold: the row this tab sits in is
             // what the drag has been changing all along.
-            onTabTaken: grabX => tabStrip.takeTab(tabItem.index, grabX)
-            onTabDragged: sceneX => tabStrip.carryTab(tabItem.index, sceneX)
-            onTabDropped: tabStrip.dropTab()
+            onTabTaken: grabX => tabCarry.takeTab(tabItem.index, grabX)
+            onTabDragged: sceneX => tabCarry.carryTab(tabItem.index, sceneX)
+            onTabDropped: tabCarry.dropTab()
         }
     }
-    // The strip travels while a tab is held past the end of the run. One frame a tick and the sensitivity the app's
-    // other autoscroll reads (`MiddleAutoScroll`, デザイン規約 §グラフを横へ送る): the two are the same gesture seen
-    // from different ends — a hand asking for somewhere it cannot reach, and the distance saying how badly.
-    Timer {
-        interval: 16
-        repeat: true
-        running: tabStrip.heldId >= 0 && tabStrip.heldPush !== 0 && tabs.contentWidth > tabs.width
-        onTriggered: tabStrip.driftRun()
+    // The hand between the taking up and the setting down. Declared after the list it reads: what a carry measures
+    // against is where the tabs sit, and the order it changes is the model's.
+    TabCarry {
+        id: tabCarry
+        view: tabs
+        tabsModel: tabStrip.tabsModel
     }
     HoverToolButton {
         id: plusButton
