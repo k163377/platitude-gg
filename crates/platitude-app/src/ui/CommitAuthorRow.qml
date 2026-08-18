@@ -45,7 +45,7 @@ RowLayout {
     readonly property bool authorLit: authorRow.authorPointed || authorRow.authorCardInside
 
     /// The verdict tooltip is up (`SignatureMark.tipShown` — the output side, so a cut binding cannot read as green).
-    readonly property bool signatureTipShown: sigMark.tipShown
+    readonly property bool signatureTipShown: avatarBadge.signatureTipShown
 
     signal avatarClicked()
     signal copyRequested(string text)
@@ -84,11 +84,22 @@ RowLayout {
 
     spacing: Theme.spaceSm
 
+    // The face carries the signature in its top-right corner (デザイン規約 §署名の表示): the mark is about the person
+    // whose commit this is, and the corner is where the editor's own face carries the same thing.
     AvatarButton {
+        id: avatarBadge
         face: authorRow.details.avatar
         faceUrl: authorRow.details.avatarUrl
         email: authorRow.details.authorEmail
         pointedAt: authorRow.avatarPointedAt
+        signatureKind: authorRow.signatureKind
+        signatureCode: authorRow.signatureCode
+        signatureSigner: authorRow.signatureSigner
+        signaturePointedAt: authorRow.signaturePointedAt
+        // Out of the round face's empty corner and onto the pane's ground, as far as the air above the row allows: one
+        // pixel short of the band's own hairline (§署名の表示).
+        badgeTopOut: Theme.spaceXs - Theme.borderWidth
+        badgeRightOut: Theme.spaceXs - Theme.borderWidth
         Layout.preferredWidth: Metrics.detailsAvatar
         Layout.preferredHeight: Metrics.detailsAvatar
         onClicked: authorRow.avatarClicked()
@@ -96,10 +107,9 @@ RowLayout {
     ColumnLayout {
         spacing: 0
         Layout.fillWidth: true
-        // Name, and beside it what git makes of the signature. An unsigned commit gets nothing: the ordinary case
-        // carries no mark, the same rule the graph's state badges follow. The verdict rides up here rather than sitting
-        // with the date because the date's row is where the co-authors go, and a signed commit with one would have had
-        // three things in ~230px (デザイン規約 §co-author).
+        // Name, and beside it the one word a signature ever spends. The verdict itself is a mark on the face
+        // (デザイン規約 §署名の表示) — but a broken one reads as the error message it is, and an error nobody can
+        // find without hovering is not one, so that single case keeps a word out here beside the name it contradicts.
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceXs
@@ -133,15 +143,14 @@ RowLayout {
                     onHoveredChanged: authorRow.showAuthor(authorHover.hovered)
                 }
             }
-            SignatureMark {
-                id: sigMark
-                kind: authorRow.signatureKind
-                code: authorRow.signatureCode
-                signer: authorRow.signatureSigner
-                pointedAt: authorRow.signaturePointedAt
+            Label {
+                visible: avatarBadge.signatureBroken
+                text: qsTr("Bad signature")
+                color: avatarBadge.signatureTone
+                font.pixelSize: Theme.fontSm
                 Layout.alignment: Qt.AlignVCenter
             }
-            // The slack lives here, past both of them, so the mark stays against the name.
+            // The slack lives here, past both of them, so the word stays against the name.
             Item { Layout.fillWidth: true }
         }
         // Date, and beside it whoever the message credits along with the author. A commit with no trailer shows only

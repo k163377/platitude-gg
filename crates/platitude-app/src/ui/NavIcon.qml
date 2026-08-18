@@ -44,6 +44,24 @@ Canvas {
         default: return icon.inkGrid
         }
     }
+    /// Where that ink stands in the grid, rather than how much of it there is: the far edge going right, and the near
+    /// edge going down. A mark centred in a row never needs these; one set against a corner does, and it is the same
+    /// per-kind knowledge as `inkGrid` — the caller cannot have it (`SignatureMark`).
+    readonly property real inkRightGrid: {
+        switch (icon.kind) {
+        // The tick's high end, and the dot the stem hangs over (8 ± its own radius).
+        case "check": return 12.5
+        case "bang": return 9
+        default: return 16
+        }
+    }
+    readonly property real inkTopGrid: {
+        switch (icon.kind) {
+        case "check": return 4.5
+        case "bang": return 3.5
+        default: return 0
+        }
+    }
     /// The same in the item's own pixels, with the line that hangs off either end of it. A quarter turn swaps which
     /// axis the caller is asking about; a half turn does not.
     readonly property real inkWidth:
