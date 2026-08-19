@@ -34,7 +34,11 @@ Item {
     /// Stands in for the pointer where headless cannot put one, so a cut-down row's tooltip can be photographed
     /// (PG_AUTO_ACT=path-tip). -1 points at no row.
     property int pointedTipRow: -1
-    readonly property bool tipPointedAt: fileRow.pointedTipRow === fileRow.model.index
+    /// **`>= 0` first**: a delegate the view has put back in its reuse pool reports `index` -1, and -1 is also "the
+    /// pointer is on no row" — without the guard every pooled row claims the shared tooltip, and the one row actually
+    /// pointed at never gets it (the instance is one per window).
+    readonly property bool tipPointedAt: fileRow.pointedTipRow >= 0
+                                         && fileRow.pointedTipRow === fileRow.model.index
     /// A right-click menu of the page's is standing over this list.
     property bool menuStanding: false
 

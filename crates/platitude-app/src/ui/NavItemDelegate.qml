@@ -385,7 +385,10 @@ Item {
     readonly property bool eolPointedAt: navRow.eol_mark && navRow.pointedEolPath === navRow.fullName
     /// Whether the headless stand-in points at this row. The report still reads the ToolTip's own visible — the output
     /// side, as everywhere.
-    readonly property bool tipPointedAt: navRow.pointedTipRow === navRow.index
+    /// **`>= 0` first**: a delegate the view has put back in its reuse pool reports `index` -1, and -1 is also "the
+    /// pointer is on no row" — without the guard every pooled row claims the shared tooltip, and the one row actually
+    /// pointed at never gets it (the instance is one per window).
+    readonly property bool tipPointedAt: navRow.pointedTipRow >= 0 && navRow.pointedTipRow === navRow.index
     // Not behind a standing menu: the pointer is in the menu, and a tip that comes out now is drawn over the rows the
     // hand is reading (デザイン規約 §メニュー).
     ToolTip.visible: (itemMouse.containsMouse || navRow.tipPointedAt) && !navRow.editing && !navRow.menuStanding
