@@ -91,8 +91,6 @@ Item {
             page.absorbHeadMessage()
             page.absorbMoveAsk()
             page.absorbWriteResult()
-            if (autoActLoader.item)
-                autoActLoader.item.runFetchFailures()
         }
         // Only the first failure of a run: an offline machine would otherwise re-raise the panel every interval (デザイン規約
         // §git が言ったことを読む場所).

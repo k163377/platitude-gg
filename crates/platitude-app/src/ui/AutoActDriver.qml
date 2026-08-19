@@ -143,8 +143,8 @@ Item {
                 "window-fill", "solo", "window-floor",
                 "badges", "badges-hover", "old-git", "old-git-card",
                 "old-git-fold", "state", "middle-close", "open-again",
-                "force-push-hold", "fetch-busy", "settings-tools",
-                "settings-tools-loading"].indexOf(act) >= 0
+                "force-push-hold", "fetch-busy", "fetch-fail", "fetch-resume",
+                "settings-tools", "settings-tools-loading"].indexOf(act) >= 0
     }
 
     function prepareCompletion(act) {
@@ -1902,21 +1902,74 @@ Item {
     /// once it is there.
     property int fetchFailRuns: 0
     property bool fetchResumeAfter: false
-    /// The count this already answered. `changed` fires on every message the tab drains, and without this every one of
-    /// them would queue another fetch behind the one still running.
-    property int fetchFailSeen: -1
-    function runFetchFailures() {
-        if (driver.fetchFailRuns <= 0 || repoTab.fetchFailures === driver.fetchFailSeen)
-            return
-        driver.fetchFailSeen = repoTab.fetchFailures
-        if (repoTab.fetchFailures < driver.fetchFailRuns) {
-            repoTab.fetch("")
-            return
-        }
-        driver.fetchFailRuns = 0
-        if (driver.fetchResumeAfter) {
-            driver.fetchResumeAfter = false
-            repoTab.resumeAutoFetch()
+    /// The run reached the length it was asked for. Kept apart from the length itself because resuming clears the
+    /// count the tab keeps, and a run that read the length again would start a second one over the resumed button.
+    property bool fetchRunDone: false
+    /// The write this verb's last fetch was asked at, and the run of failures standing when it was asked.
+    ///
+    /// **A fetch is not admitted the moment it is asked for**: the process is entered a drain later. So between the
+    /// drain that finishes one fetch and the drain that admits the next, `busyCount` is 0 and `writeSeq` has already
+    /// moved — which reads exactly like a run that has come to rest. `writeBarrier` completed inside that window and
+    /// photographed a single failure for every length asked for (実測 2026-08-19: `fetch-fail 3`, `fetch-fail 4` and
+    /// `fetch-resume` all came back with the warning shape). What is waited for is the answer to the ask, never the
+    /// process alone.
+    property int fetchAskSeq: -1
+    property int fetchAskFails: -1
+    /// The stopped button, read at the moment the hold's slot is fired. Resuming takes it down, and what
+    /// `fetch-resume` ends on is the button that came back — so the red half is kept here or it is lost.
+    property bool fetchStopped: false
+    /// The whole of a run of failed fetches and the resume on the end of it. Asking for the next fetch and judging
+    /// that the run is over are the same owner, so the two cannot disagree about whether it is.
+    Timer {
+        id: fetchFailTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            // Nothing is read while git is out — the fetch an opening fires comes through `autoFetchRunning`, the
+            // rest through `busyCount` — and nothing is read off an ask still waiting for its answer (`fetchAskSeq`).
+            if (repoTab.busyCount !== 0 || repoTab.autoFetchRunning)
+                return
+            if (driver.fetchAskSeq >= 0 && repoTab.writeSeq <= driver.fetchAskSeq)
+                return
+            if (!driver.fetchRunDone && repoTab.fetchFailures < driver.fetchFailRuns) {
+                // A fetch that came back clean is this verb's premise falling over — the remote is reachable — and
+                // asking again cannot make it fail. Say so once and let the watchdog end the run: completing here
+                // would hand back a picture of a button that never failed (verbs.md §ヘッドレスで色を確かめる時は
+                // デモリモートの URL を疑う).
+                if (driver.fetchAskFails >= 0 && repoTab.fetchFailures <= driver.fetchAskFails) {
+                    fetchFailTimer.stop()
+                    AppBackend.report("fetch_fail reachable=true fails=" + repoTab.fetchFailures)
+                    return
+                }
+                driver.fetchAskFails = repoTab.fetchFailures
+                driver.fetchAskSeq = repoTab.writeSeq
+                repoTab.fetch("")
+                return
+            }
+            driver.fetchRunDone = true
+            if (driver.fetchResumeAfter) {
+                driver.fetchResumeAfter = false
+                driver.fetchStopped = repoTab.autoFetchSuspended
+                driver.fetchAskSeq = repoTab.writeSeq
+                // The slot a hold on the stopped button fires (`TopBar` `onHeld`). It clears the run and fetches
+                // again by itself, so the ticks after this one wait for that fetch the way they waited for the rest.
+                repoTab.resumeAutoFetch()
+                return
+            }
+            fetchFailTimer.stop()
+            if (AppBackend.autoAct === "fetch-resume")
+                // What the picture cannot hold: the button was stopped when the hold came down, and a fetch ran
+                // again after it. The one it ends on is a button back at work, which is the warning shape — the same
+                // picture `fetch-fail 1` takes.
+                AppBackend.report("fetch_resume stopped=" + driver.fetchStopped
+                                  + " fetched=" + (repoTab.fetchFailures > 0)
+                                  + " fails=" + repoTab.fetchFailures
+                                  + " suspended=" + repoTab.autoFetchSuspended)
+            else
+                AppBackend.report("fetch_fail stopped=" + repoTab.autoFetchSuspended
+                                  + " fails=" + repoTab.fetchFailures
+                                  + " wanted=" + driver.fetchFailRuns)
+            driver.complete()
         }
     }
     // The commit an automation argument names: an object name as it stands, "row:<n>" read off the graph the way the
@@ -2763,17 +2816,18 @@ Item {
             repoTab.fetch("pg-no-such-remote")
         } else if (act === "fetch-fail") {
             // The argument is how many failed fetches to run, so one verb reaches the warning shape and the stopped one
-            // alike.
+            // alike. The fetches are asked for by `fetchFailTimer`, which is also what ends the run.
             driver.fetchFailRuns = Math.max(1, Number(arg))
             AppBackend.setAutoFetchMinutes(0)
             AppBackend.setAutoFetchMinutes(5)
-            repoTab.fetch("")
+            fetchFailTimer.start()
         } else if (act === "fetch-resume") {
+            // Long enough a run to stop the timer, so the hold has a stopped button to come down on.
             driver.fetchFailRuns = 3
             driver.fetchResumeAfter = true
             AppBackend.setAutoFetchMinutes(0)
             AppBackend.setAutoFetchMinutes(5)
-            repoTab.fetch("")
+            fetchFailTimer.start()
         } else if (act === "open-fetches") {
             // Nothing is pressed here: the fetch the opening fires is the whole verb, and the argument is how many rows
             // the graph holds once it has landed.
