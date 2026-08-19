@@ -143,7 +143,7 @@ Item {
                 "window-fill", "solo", "window-floor",
                 "badges", "badges-hover", "old-git", "old-git-card",
                 "old-git-fold", "state", "middle-close", "open-again",
-                "force-push-hold", "fetch-busy", "fetch-fail", "fetch-resume",
+                "force-push-hold", "fetch-busy", "fetch-fail", "fetch-resume", "fetch-tip",
                 "settings-tools", "settings-tools-loading"].indexOf(act) >= 0
     }
 

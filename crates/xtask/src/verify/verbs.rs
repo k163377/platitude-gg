@@ -152,6 +152,12 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // in the picture, but a frame that did not grow is nothing at
         // all, and nothing is what a correct run looks like too.
         "fetch-busy" => Some("fetch_busy busy=true fails=0 framed=false"),
+        // Both halves are absences on the picture: a dim button says
+        // nothing about why it is dim, and a tooltip that stays away
+        // frames exactly like one that was never asked for. The argument
+        // names which side of the pair the run is.
+        "fetch-tip" if arg == "off" => Some("fetch_tip enabled=false tip=false remotes=0"),
+        "fetch-tip" => Some("fetch_tip enabled=true tip=true"),
         // The same popup has a real loading and a causally settled form;
         // neither is selected by a millisecond window.
         "settings-tools-loading" => Some("settled=false loading=true open=true"),

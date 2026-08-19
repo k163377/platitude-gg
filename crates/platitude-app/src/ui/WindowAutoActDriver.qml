@@ -370,6 +370,39 @@ Item {
         }
     }
 
+    // PG_AUTO_ACT=fetch-tip: what the fetch button offers a pointer, on each side of the one thing that decides it.
+    // The argument names which side this run is — `off` is the repository with no remote (`--preset noremote`), where
+    // the button is dim and says nothing, and `on` is any repository that has one. Neither run proves anything alone.
+    //
+    // The two wait for different things because "not pressable" has two reasons and only one of them is the subject:
+    // the live side waits for the button itself, the dim side for a repository that has finished landing with nothing
+    // running on it, so a band read before the remotes arrived cannot pass for either.
+    Timer {
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "fetch-tip"
+        onTriggered: {
+            // The graph as well as the refs, for the picture rather than for the answer: the band settles first, and a
+            // half-drawn page under a settled band is a worse photograph of it.
+            if (window.curPage === null
+                    || !window.curPage.pageRefsLoaded
+                    || window.curPage.pageGraph.rowTotal < 1)
+                return
+            const tab = window.curPage.pageTab
+            if (tab.busyCount !== 0 || tab.autoFetchRunning)
+                return
+            if (AppBackend.autoActArg === "off") {
+                if (tab.remoteCount !== 0)
+                    return
+            } else if (!topBar.fetchLive) {
+                return
+            }
+            stop()
+            topBar.reportFetchTip()
+            window.finishAutoAct()
+        }
+    }
+
     // Smoke hooks (PG_AUTO_ACT=open-not-a-repo / open-bare and the two ways back out). The picker is the platform's own
     // window, so the run enters where its answer lands — the path it accepted.
     readonly property bool pickAct: AppBackend.autoAct === "open-not-a-repo"

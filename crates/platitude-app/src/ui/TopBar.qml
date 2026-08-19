@@ -62,6 +62,9 @@ Rectangle {
     /// `identity-tip`). The real hover writes this same one property — hover is the input that cannot be injected, so
     /// the card has to be answering a single question or the headless run proves nothing about it.
     property bool statePointedAt: false
+    /// Whether the fetch button can be pressed at all — the edge `fetch-tip` waits on, since what it reads is only
+    /// worth anything once the band has settled on an answer.
+    readonly property bool fetchLive: fetchButton.enabled
 
     signal openRepositoryRequested()
     signal identityEditRequested()
@@ -98,6 +101,16 @@ Rectangle {
     function reportFetchBusy() {
         AppBackend.report("fetch_busy busy=" + topBar.autoFetchBusyLatched
                           + " fails=" + fetchButton.fails + " framed=" + fetchButton.framed)
+    }
+    /// PG_AUTO_ACT=fetch-tip: whether the fetch button has anything to say under a pointer.
+    ///
+    /// `tip=` is the string the button would open rather than a ToolTip caught open: a pointer cannot be injected,
+    /// and a disabled control takes hover and opens its attached ToolTip like any other one (実測 —
+    /// rules-refs/app-ui.md §hover), so the binding that decides is the whole of what a run can read here.
+    function reportFetchTip() {
+        AppBackend.report("fetch_tip enabled=" + fetchButton.enabled
+                          + " tip=" + (fetchButton.tip !== "")
+                          + " remotes=" + (topBar.curPage !== null ? topBar.curPage.pageTab.remoteCount : -1))
     }
     Connections {
         target: topBar.curPage ? topBar.curPage.pageTab : null
@@ -311,6 +324,13 @@ Rectangle {
                      && (fetchButton.stopped || topBar.curPage.pageTab.busyCount === 0)
             tip: {
                 if (topBar.curPage === null)
+                    return ""
+                // Nothing under a pointer that cannot press this. What the button would do is not news while it cannot
+                // be done, and both states that grey it out are already said elsewhere on screen: REMOTES counts 0 in
+                // the left menu, and another git command running is on this band (デザイン規約 §無効 — ボタンの無効は
+                // ツールチップを持たない). Said out loud because a disabled control still takes hover and still opens its
+                // attached ToolTip (実測: rules-refs/app-ui.md §hover).
+                if (!fetchButton.enabled)
                     return ""
                 const what = fetchButton.stopped
                              ? qsTr("Automatic fetching stopped after %n failure(s). Hold to start it again.", "",

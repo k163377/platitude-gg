@@ -921,6 +921,9 @@ Item {
     readonly property var pageCommands: commandsModel
     /// For the settings card's avatar entry, which offers the authors of the repository being looked at.
     readonly property var pageGraph: graphModel
+    /// Whether the refs listing has landed — the read that also settles how many remotes this repository has, and so
+    /// what the band's fetch button is allowed to be (`fetch-tip`).
+    readonly property bool pageRefsLoaded: branchesModel.refsLoaded
 
     /// Whether the command log is up. Closed is the resting state: the toolbar's `>_` opens it, and a failed command
     /// raises it.
