@@ -117,6 +117,11 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "fetch-recover" => {
             Some("fetch_recover was=true hadline=true wrong=false line=false failures=0")
         }
+        // Nothing is pressed in this one, so the picture on its own is a
+        // graph — and a graph that fetched and one that did not frame the
+        // same way. `fails=0` is the other half: a run whose opening fetch
+        // came back with something to say reached its rows some other way.
+        "open-fetches" => Some("open_fetch fails=0"),
         // Intermediate communication is valid only after the real busy
         // edge was observed and latched for the asynchronous image grab.
         "force-push-hold" => Some("push_hold mode=diverged busy=true"),

@@ -133,6 +133,7 @@ Item {
                 // These flows are completed by Main/WindowAutoActDriver. Some still begin here (picker, command
                 // failure, recovery), but the page must never photograph their intermediate state before the
                 // window-level predicate has answered.
+                "open-fetches",
                 "open-picker", "commands-clear", "fetch-recover",
                 "open-not-a-repo", "open-bare", "open-not-a-repo-retry",
                 "open-not-a-repo-cancel", "open-fail-tab",
@@ -1873,6 +1874,30 @@ Item {
             driver.complete()
         }
     }
+    /// Automation: how many rows the graph holds once the fetch the opening fired has landed. Its commit is one only
+    /// the remote had (`--preset behind`), so a graph that reaches this many rows without anything being pressed is
+    /// the fetch itself, said in the only place a headless run can read it.
+    property int openFetchRows: 0
+    Timer {
+        id: openFetchTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            // A state to sample, not a length of time to wait: rows only reach the count after the fetch has landed and
+            // the graph has been rebuilt over it, and a run where that never happens has nothing to report.
+            //
+            // The tab's own word for "the fetch is over" is waited for as well, so the count read below is the settled
+            // one and the picture holds a button at rest rather than one caught mid-absorption. Never having seen it
+            // turn is allowed: the fetch can be over before this page exists (§通信中(リング)と起動直後の狙い方).
+            if (graphModel.rowTotal < driver.openFetchRows || repoTab.autoFetchRunning)
+                return
+            openFetchTimer.stop()
+            AppBackend.report("open_fetch fails=" + repoTab.fetchFailures
+                              + " rows=" + graphModel.rowTotal
+                              + " wanted=" + driver.openFetchRows)
+            driver.complete()
+        }
+    }
     /// Automation: how long a run of failed fetches the verb asked for, and whether to hold the button that resumes
     /// once it is there.
     property int fetchFailRuns: 0
@@ -2749,6 +2774,11 @@ Item {
             AppBackend.setAutoFetchMinutes(0)
             AppBackend.setAutoFetchMinutes(5)
             repoTab.fetch("")
+        } else if (act === "open-fetches") {
+            // Nothing is pressed here: the fetch the opening fires is the whole verb, and the argument is how many rows
+            // the graph holds once it has landed.
+            driver.openFetchRows = Math.max(1, Number(arg))
+            openFetchTimer.start()
         }
         AppBackend.report("auto_act ran=" + act)
         driver.dispatchFinished()
