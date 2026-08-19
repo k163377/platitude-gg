@@ -141,6 +141,8 @@ pub struct RepoSession {
     /// so a tick that arrives meanwhile is skipped instead of stacking up.
     /// A permit moved into a dropped request is released with it.
     pub(super) auto_fetch_slot: Arc<tokio::sync::Semaphore>,
+    /// Where the opening's own fetch stands (see [`OpenFetchState`]).
+    pub(super) open_fetch: Mutex<OpenFetchState>,
     pub(super) refs_gate: OpGate,
     pub(super) status_gate: OpGate,
     pub(super) stash_gate: OpGate,
@@ -203,6 +205,7 @@ impl RepoSession {
             auto_fetch: Mutex::new(None),
             auto_fetch_interval: Mutex::new(None),
             auto_fetch_slot: Arc::new(tokio::sync::Semaphore::new(1)),
+            open_fetch: Mutex::new(OpenFetchState::Unasked),
             refs_gate: OpGate::default(),
             status_gate: OpGate::default(),
             stash_gate: OpGate::default(),
@@ -217,18 +220,32 @@ impl RepoSession {
                 Ok(info) => {
                     s.set_info(info.clone());
                     s.sink.event(SessionEvent::Opened { info });
+                    // The network before the reads: a round trip is the
+                    // longest thing an opening starts, and starting it
+                    // first is what lets the reads below run inside it
+                    // rather than in front of it. It holds nothing up —
+                    // the reads do not wait on the write queue, and what
+                    // the fetch brings down is published by its own
+                    // refresh rather than read a second time
+                    // (`AfterWrite::Graph`).
+                    let fetching = s.take_open_fetch();
                     // Before anything else: a missing identity turns the
                     // first commit into a wall of git text, and the UI can
                     // ask for one instead.
                     s.refresh_author();
                     s.restart_log();
                     s.refresh_quick();
-                    // Not from `set_auto_fetch`, which the application
-                    // calls the instant this session is handed over —
-                    // there is no workdir to read from until the line
-                    // above, and the interval it installs is what grants
-                    // permission to look at all.
-                    s.catch_up_remote_tags();
+                    // A fetch reads what the remotes carry under
+                    // `refs/tags/` on its way out, so only an opening
+                    // without one has anything left to ask. Not from
+                    // `set_auto_fetch`, which the application calls the
+                    // instant this session is handed over — there is no
+                    // workdir to read from until the lines above, and the
+                    // interval it installs is what grants permission to
+                    // look at all.
+                    if !fetching {
+                        s.catch_up_remote_tags();
+                    }
                 }
                 Err(error) => {
                     if !error.is_cancelled() {

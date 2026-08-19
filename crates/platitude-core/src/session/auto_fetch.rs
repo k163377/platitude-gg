@@ -1,7 +1,26 @@
 //! The interval-driven `git fetch --prune`: timer install, suspend and
-//! resume, hand-stepped ticks, and the remote-tag catch-up it permits.
+//! resume, hand-stepped ticks, the fetch an opening fires, and the
+//! remote-tag catch-up they permit.
 
 use super::*;
+
+/// What [`RepoSession::fetch_on_open`] did with the ask.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpenFetch {
+    /// On the write queue: the repository is open and the interval is on.
+    Started,
+    /// Kept until the repository finishes opening, which is what fires it.
+    Held,
+    /// Declined: with automatic fetching off, the owner has said not to
+    /// reach the network unasked, and an opening is not the thing to
+    /// break that for.
+    Disabled,
+    /// An automatic fetch was already running, which is what this asks
+    /// for — nothing more to start.
+    Busy,
+    /// This session has already had its opening fetch.
+    Spent,
+}
 
 impl RepoSession {
     /// Starts, restarts or stops the periodic `git fetch --prune`.
@@ -45,6 +64,93 @@ impl RepoSession {
     pub fn resume_auto_fetch(self: &Arc<Self>) {
         let wanted = *self.lock_auto_fetch_interval();
         self.install_auto_fetch(wanted);
+    }
+
+    /// Fetches once, as soon as the repository is open — the first thing
+    /// a session reaches the network for.
+    ///
+    /// The permission is the interval, as it is everywhere else here: a
+    /// repository whose owner turned automatic fetching off has said not
+    /// to reach the network unasked. The application asks the instant it
+    /// has handed the session its settings, so the answer is already
+    /// there to read.
+    ///
+    /// Either end can arrive first — this call, or the opening that
+    /// learns where the repository is — so whichever arrives second
+    /// fires it and the other one gets [`OpenFetch::Held`]. Neither is
+    /// timed against the other, which is what keeps the fetch from being
+    /// lost to a slow `git rev-parse` or a main thread that was held up.
+    ///
+    /// Carries an op name of its own: nobody asked for this one, so it
+    /// stays out of the command log, and a machine that opens a tab
+    /// offline is not to have the panel thrown up at it
+    /// (デザイン規約 §リモートから取り込む).
+    pub fn fetch_on_open(self: &Arc<Self>) -> OpenFetch {
+        let open = self.workdir().is_some();
+        let mut state = self.lock_open_fetch();
+        match *state {
+            OpenFetchState::Settled => return OpenFetch::Spent,
+            _ if !open => {
+                *state = OpenFetchState::Held;
+                return OpenFetch::Held;
+            }
+            _ => *state = OpenFetchState::Settled,
+        }
+        drop(state);
+        self.start_open_fetch()
+    }
+
+    /// Fires the fetch that was asked for before the repository was open,
+    /// and answers whether one started — which is the opening's reason to
+    /// skip the remote-tag catch-up, a fetch having read them on its way
+    /// out.
+    pub(super) fn take_open_fetch(self: &Arc<Self>) -> bool {
+        {
+            let mut state = self.lock_open_fetch();
+            if *state != OpenFetchState::Held {
+                return false;
+            }
+            *state = OpenFetchState::Settled;
+        }
+        self.start_open_fetch() == OpenFetch::Started
+    }
+
+    fn start_open_fetch(self: &Arc<Self>) -> OpenFetch {
+        if !self.auto_fetch_is_on() {
+            return OpenFetch::Disabled;
+        }
+        let Ok(permit) = Arc::clone(&self.auto_fetch_slot).try_acquire_owned() else {
+            tracing::debug!("opening fetch skipped: an automatic fetch is already running");
+            return OpenFetch::Busy;
+        };
+        let timeout = self.network_timeout();
+        let s = Arc::clone(self);
+        self.write(
+            OPEN_FETCH_OP,
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                let _permit = permit;
+                s.fetch_and_read_tags(&exec, &repo.workdir, None, timeout, &cancel)
+                    .await
+            },
+        );
+        OpenFetch::Started
+    }
+
+    fn lock_open_fetch(&self) -> std::sync::MutexGuard<'_, OpenFetchState> {
+        match self.open_fetch.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        }
+    }
+
+    /// Whether the interval is installed — the permission that every
+    /// unasked reach for the network is measured against.
+    fn auto_fetch_is_on(&self) -> bool {
+        match self.auto_fetch.lock() {
+            Ok(g) => g.is_some(),
+            Err(e) => e.into_inner().is_some(),
+        }
     }
 
     fn lock_auto_fetch_interval(&self) -> std::sync::MutexGuard<'_, Option<std::time::Duration>> {
@@ -123,9 +229,9 @@ impl RepoSession {
     /// plain background read instead, on the handle that keeps it out of
     /// the command log, and only republishes if the answer moved.
     ///
-    /// Entered twice: once the repository is open (the interval is already
-    /// installed by then — the application sets it the moment the session
-    /// is handed over), and from [`Self::set_auto_fetch`] afterwards, so
+    /// Entered twice: from an opening that fired no fetch of its own
+    /// ([`Self::fetch_on_open`] — one that did has read the remotes on
+    /// its way out), and from [`Self::set_auto_fetch`] afterwards, so
     /// granting the permission in settings is itself a reason to look.
     pub(super) fn catch_up_remote_tags(self: &Arc<Self>) {
         drop(self.start_remote_tag_refresh());
@@ -142,11 +248,7 @@ impl RepoSession {
     }
 
     fn start_remote_tag_refresh(self: &Arc<Self>) -> RemoteTagRefreshTask {
-        let interval_is_on = match self.auto_fetch.lock() {
-            Ok(g) => g.is_some(),
-            Err(e) => e.into_inner().is_some(),
-        };
-        if !interval_is_on {
+        if !self.auto_fetch_is_on() {
             return RemoteTagRefreshTask::ready(RemoteTagRefreshOutcome::Disabled);
         }
         if !self.log_options().include_tags {

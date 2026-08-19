@@ -57,11 +57,11 @@ impl RepoSession {
         };
         let cancel = self.root_cancel.clone();
         self.sink.event(SessionEvent::WriteStarted { op });
-        // Auto fetch travels this queue too, but nobody asked for it: it
-        // stays out of the command log unless background reads are on,
-        // and so cannot make an offline laptop raise the panel every
-        // interval.
-        let exec = if op == AUTO_FETCH_OP {
+        // The fetches nobody asked for travel this queue too — the
+        // interval's and the one an opening fires — and stay out of the
+        // command log unless background reads are on, so neither can make
+        // an offline laptop raise the panel.
+        let exec = if op == AUTO_FETCH_OP || op == OPEN_FETCH_OP {
             self.executor.clone()
         } else {
             self.exec_user.clone()

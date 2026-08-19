@@ -28,6 +28,22 @@ pub(super) struct AutoFetch {
     pub(super) ticks: tokio::sync::mpsc::UnboundedSender<AutoFetchTick>,
 }
 
+/// Where the fetch that opening a repository fires stands.
+///
+/// Two ends reach for it and either can arrive first: the application asks
+/// once it has handed the session its settings, and the opening is what
+/// learns where the repository is. Held under one lock, so whichever
+/// arrives second fires it and it is fired exactly once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum OpenFetchState {
+    /// Nobody has asked for one.
+    Unasked,
+    /// Asked for before the repository was open; the opening redeems it.
+    Held,
+    /// Started, declined, or already spent — this session asks no more.
+    Settled,
+}
+
 /// Steps one auto-fetch timer by hand, in place of waiting out its
 /// interval.
 ///

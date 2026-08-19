@@ -75,6 +75,7 @@ mod snapshot;
 mod state;
 mod write;
 
+pub use auto_fetch::OpenFetch;
 pub use event::SessionEvent;
 use feed::CommandFeed;
 pub use graph_refresh::{
@@ -88,7 +89,10 @@ pub(crate) use remote_tags::RemoteTagIndex;
 pub use repo_session::RepoSession;
 pub use snapshot::{BranchItem, RefsSnapshot, TagItem};
 pub use state::AutoFetchTicker;
-use state::{AutoFetch, Derived, EndingContext, Footer, HeadHold, OpGate, Shared, WriteRequest};
+use state::{
+    AutoFetch, Derived, EndingContext, Footer, HeadHold, OpGate, OpenFetchState, Shared,
+    WriteRequest,
+};
 
 /// First chunk is small so the first paint happens as early as possible.
 const FIRST_CHUNK_ROWS: usize = 512;
@@ -97,6 +101,13 @@ const CHUNK_ROWS: usize = 4096;
 /// Op name of the interval-driven fetch. The UI keeps this one off the
 /// shared error surface, so both sides have to agree on the spelling.
 pub const AUTO_FETCH_OP: &str = "auto-fetch";
+
+/// Op name of the fetch an opening fires. Told apart from the interval's
+/// because the UI answers it differently: the button turns for both, and
+/// only this one leaves the command log where it was — a tab opened on a
+/// machine that is offline must not throw the panel up
+/// (デザイン規約 §リモートから取り込む).
+pub const OPEN_FETCH_OP: &str = "open-fetch";
 
 /// Longest auto-fetch interval the UI offers, in minutes.
 pub const AUTO_FETCH_MAX_MINUTES: u32 = 60;

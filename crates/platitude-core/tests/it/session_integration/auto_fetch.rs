@@ -1,10 +1,11 @@
-//! The auto-fetch timer, and the fetch a refused push asks for.
+//! The auto-fetch timer, the fetch an opening fires, and the fetch a
+//! refused push asks for.
 
 use std::time::Duration;
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, opened};
-use platitude_core::session::SessionEvent;
+use crate::support::session::{CaptureSink, opened, write_result};
+use platitude_core::session::{OPEN_FETCH_OP, OpenFetch, RepoSession, SessionEvent};
 
 /// Waits for the `nth` automatic fetch to finish and returns git's error,
 /// if any. Telling them apart is the point: only the second one can be laid
@@ -188,6 +189,116 @@ async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
         origin.git(&["log", "-1", "--format=%s", "main"]),
         "their work",
         "nothing was retried: the remote still holds only their commit"
+    );
+    session.close();
+}
+
+/// Opening a repository reaches the network itself: what a tab shows a
+/// moment after it opens is what the remote holds, rather than what was
+/// left behind the last time somebody looked.
+#[tokio::test(flavor = "multi_thread")]
+async fn opening_a_repository_fetches_without_being_asked() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("f.txt", "0\n", "root");
+    let mut clone = TestRepo::init();
+    clone.git(&["remote", "add", "origin", &origin.file_url()]);
+
+    let (sink, session) = opened(&clone).await;
+    // The interval is the permission, and the application sets it before
+    // it asks. An hour out, so nothing here can be the clock's doing.
+    session.set_auto_fetch(Some(Duration::from_secs(3600)));
+    assert_eq!(session.fetch_on_open(), OpenFetch::Started);
+    assert_eq!(
+        write_result(&sink, OPEN_FETCH_OP).await,
+        None,
+        "the file:// remote fetched cleanly"
+    );
+    assert_eq!(
+        clone.git(&["rev-parse", "origin/main"]),
+        origin.git(&["rev-parse", "main"]),
+        "and what it brought down is in the repository"
+    );
+    assert_eq!(
+        session.fetch_on_open(),
+        OpenFetch::Spent,
+        "one to a session: a second ask fires nothing"
+    );
+    session.close();
+}
+
+/// The ask can arrive before the repository is open — the application
+/// makes it the instant it has handed the session its settings, and the
+/// opening runs on the runtime — so the session keeps it until there is
+/// something to fetch into. Which of the two arrives second is a
+/// scheduling accident; that the fetch happens is not.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ask_that_beats_the_opening_is_kept_for_it() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("f.txt", "0\n", "root");
+    let mut clone = TestRepo::init();
+    clone.git(&["remote", "add", "origin", &origin.file_url()]);
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        crate::support::exec::isolated(),
+        tokio::runtime::Handle::current(),
+        clone.path.clone(),
+        sink.clone(),
+    );
+    session.set_auto_fetch(Some(Duration::from_secs(3600)));
+    assert!(
+        matches!(
+            session.fetch_on_open(),
+            OpenFetch::Held | OpenFetch::Started
+        ),
+        "held where the repository is not open yet, fired where it is"
+    );
+    assert_eq!(write_result(&sink, OPEN_FETCH_OP).await, None);
+    assert_eq!(
+        clone.git(&["rev-parse", "origin/main"]),
+        origin.git(&["rev-parse", "main"]),
+        "the opening redeemed the ask it was holding"
+    );
+    session.close();
+}
+
+/// With automatic fetching off, the owner has said not to reach the
+/// network unasked, and opening a tab is not the thing to break that for.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_opening_reaches_nothing_where_automatic_fetching_is_off() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("f.txt", "0\n", "root");
+    let mut clone = TestRepo::init();
+    clone.git(&["remote", "add", "origin", &origin.file_url()]);
+
+    let (_sink, session) = opened(&clone).await;
+    session.set_auto_fetch(None);
+    // A synchronous refusal, so there is nothing queued to wait out.
+    assert_eq!(session.fetch_on_open(), OpenFetch::Disabled);
+    assert_eq!(
+        clone.git(&["for-each-ref", "refs/remotes"]),
+        "",
+        "nothing came down: the remote was never reached"
+    );
+    session.close();
+}
+
+/// A repository with no remote configured has nothing to fetch and
+/// nothing to complain about — `fetch --prune --all` there exits clean
+/// (実測 git 2.55) — so opening a local-only repository does not put a
+/// warning on its fetch button.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_repository_with_no_remote_opens_without_a_failed_fetch() {
+    let mut only = TestRepo::init();
+    only.commit_file("f.txt", "0\n", "root");
+
+    let (sink, session) = opened(&only).await;
+    session.set_auto_fetch(Some(Duration::from_secs(3600)));
+    assert_eq!(session.fetch_on_open(), OpenFetch::Started);
+    assert_eq!(
+        write_result(&sink, OPEN_FETCH_OP).await,
+        None,
+        "nothing to fetch is not a failure"
     );
     session.close();
 }
