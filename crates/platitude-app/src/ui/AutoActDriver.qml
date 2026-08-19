@@ -115,7 +115,7 @@ Item {
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
-                "nav-filter", "nav-reclick", "nav-reclick-away", "nav-rename-far",
+                "nav-filter", "nav-tip", "nav-reclick", "nav-reclick-away", "nav-rename-far",
                 "delete-branch-refused", "chip-menu", "chip-menu-current",
                 "delete-blocked-tip", "delete-branch-early", "ref-list-card",
                 "signature", "signature-tip", "stash-tip", "path-tip", "row-card", "menu-hover",
@@ -1588,6 +1588,78 @@ Item {
             driver.complete()
         }
     }
+    // The sidebar's row tooltips, and the rows that answer with none. Every run lights a control row first — the
+    // WORKTREES row always says where it leads — so a run that photographs an empty overlay has said in the same line
+    // that the pointer and the shared instance were both working. Without that, "nothing came out" and "nothing was
+    // pointed at" are one picture.
+    Timer {
+        id: navTipTimer
+        property string kind: "branch"
+        property int row: 0
+        property bool head: false
+        /// What the stand-in is put on screen by: a filter its own branch does not answer to. No section overflows its
+        /// rows in the sidebar proper (`NavList.Layout.maximumHeight`), so scrolling cannot take the current branch's
+        /// row off — the two ways it has no row are a filter and a folded folder (`HeadPinRow`).
+        property string hide: ""
+        property bool lit: false
+        interval: 25
+        repeat: true
+        function begin(arg) {
+            const parts = ("" + arg).split(":")
+            navTipTimer.head = parts[0] === "head"
+            navTipTimer.kind = navTipTimer.head || parts[0] === "" ? "branch" : parts[0]
+            // A filter, typed once the control has answered: the way the stand-in's own row is taken out of the list,
+            // and the way a leaf under a folded folder is brought into it (a filtered row leaves the tree and stands
+            // under its full name — `SidebarFilterRow`).
+            navTipTimer.hide = navTipTimer.head ? (parts.length > 1 ? parts[1] : "")
+                             : (parts.length > 2 ? parts[2] : "")
+            navTipTimer.row = !navTipTimer.head && parts.length > 1 ? Number(parts[1]) : 0
+            navTipTimer.lit = false
+            navTipTimer.start()
+        }
+        onTriggered: {
+            const tip = page.ToolTip.toolTip
+            if (!navTipTimer.lit) {
+                // Re-applied every beat: the delegate arrives on a later layout than the rows the model got, and a
+                // miss reads exactly like a row that wants no tooltip (`NavList.clickRow`).
+                sidebarPane.pointTipAt("worktree", 0)
+                if (!tip.visible)
+                    return
+                navTipTimer.lit = true
+                sidebarPane.pointTipAt("worktree", -1)
+                // The stand-in stands while its own branch has no row of its own — and the filter that takes that row
+                // away would take the control row with it, so it goes in only once the control has answered.
+                if (navTipTimer.hide !== "")
+                    sidebarPane.typeFilter(navTipTimer.hide)
+                if (navTipTimer.head)
+                    sidebarPane.headPinPointed = true
+                return
+            }
+            const target = navTipTimer.head ? branchesModel.headRow : navTipTimer.row
+            if (!navTipTimer.head)
+                sidebarPane.pointTipAt(navTipTimer.kind, target)
+            // Nothing is attached to the stand-in, so what is read there is that the pointer is on it and the
+            // instance went back down.
+            const name = navTipTimer.head ? branchesModel.headName
+                       : sidebarPane.tipNameAt(navTipTimer.kind, target)
+            if (name === "" || (navTipTimer.head && !sidebarPane.headPinLit))
+                return
+            const words = navTipTimer.head ? sidebarPane.headPinWords
+                        : sidebarPane.tipWordsAt(navTipTimer.kind, target)
+            // A row with something to say is not photographed until the instance is up; one with nothing to say is not
+            // photographed until the control's own tip has left the screen.
+            if ((words !== "") !== tip.visible)
+                return
+            navTipTimer.stop()
+            AppBackend.report("nav_tip section=" + (navTipTimer.head ? "head" : navTipTimer.kind)
+                + " row=" + target + " name=" + name
+                + " lit=" + navTipTimer.lit + " wants=" + (words !== "")
+                + " tip=" + tip.visible + " text=" + (tip.visible ? tip.text : "")
+                // Last, and after a text that may carry anything: the judged trio above has to stay one substring.
+                + (navTipTimer.head ? " pin=" + sidebarPane.headPinLit : ""))
+            driver.complete()
+        }
+    }
     // Automation: the details have to land before the author card can be worked, since it is that author the picture is
     // filed against.
     Timer {
@@ -2214,6 +2286,10 @@ Item {
         } else if (act === "nav-filter") {
             sidebarPane.typeFilter(arg)
             navFilterTimer.start()
+        } else if (act === "nav-tip") {
+            // `<section>:<row>`, or `head` for the current branch's sticky stand-in. The pointer goes in at the row's
+            // own `pointedTipRow`, the same one the file lists carry.
+            navTipTimer.begin(arg)
         } else if (act === "nav-rename" || act === "rename-branch"
                    || act === "rename-tag" || act === "rename-stash") {
             // Which row: the current branch, the first tag, the first stash. "nav-rename" leaves the box standing for

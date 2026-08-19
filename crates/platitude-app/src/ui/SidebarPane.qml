@@ -141,6 +141,40 @@ Rectangle {
     readonly property real peekY: peek.y
     readonly property real peekBottom: peek.y + peek.height
 
+    /// Smoke hooks (PG_AUTO_ACT=nav-tip): rest the pointer on one
+    /// section's row, and read back what that row answers about a
+    /// tooltip. Hover cannot be injected (verify-ui スキル), so it goes in
+    /// at the same `pointedTipRow` the file lists carry, and what comes
+    /// out is the row's own attached ToolTip and the shared instance.
+    function listOf(kind) {
+        return kind === "branch" ? branchList
+            : kind === "remote" ? remoteList
+            : kind === "worktree" ? worktreeList
+            : kind === "stash" ? stashList
+            : kind === "tag" ? tagList : null
+    }
+    function pointTipAt(kind, row) {
+        const list = sidebar.listOf(kind)
+        if (list)
+            list.pointedTipRow = row
+    }
+    function tipWordsAt(kind, row) {
+        const list = sidebar.listOf(kind)
+        return list ? list.rowTipWords(row) : ""
+    }
+    function tipNameAt(kind, row) {
+        const list = sidebar.listOf(kind)
+        return list ? list.rowNameAt(row) : ""
+    }
+    /// The current branch's sticky stand-in, under the same pointer: it
+    /// rides the edge its own row went out of, so resting on that row is
+    /// resting on this (`HeadPinRow`). Named separately as well, since the
+    /// row it stands for has no place in the list at all while a filter
+    /// hides it — which is one of the two ways the stand-in is on screen.
+    property bool headPinPointed: false
+    readonly property bool headPinLit: headPin.visible && headPin.pointed
+    readonly property string headPinWords: headPin.tipWords
+
     /// Smoke hook (PG_SCROLL_TO=nav-bottom): jump the branches list to
     /// its end. The current branch's sticky row only changes edges
     /// under scroll, which a headless run cannot produce otherwise.
@@ -249,12 +283,16 @@ Rectangle {
             onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
 
             HeadPinRow {
+                id: headPin
                 // The list is a Flickable: children declared in one are
                 // adopted by its content item and scroll away with it.
                 // Parenting to the list itself is what keeps this still,
                 // so the adoption is written here rather than inside the
                 // component (app-ui.md).
                 parent: branchList
+                pointed: sidebar.headPinPointed
+                         || (branchList.pointedTipRow >= 0
+                             && branchList.pointedTipRow === sidebar.branchesModel.headRow)
                 branchesModel: sidebar.branchesModel
                 workTree: sidebar.workTree
                 contentY: branchList.contentY
@@ -274,6 +312,7 @@ Rectangle {
             onToggled: sidebar.expRemotes = !sidebar.expRemotes
         }
         NavList {
+            id: remoteList
             sectionModel: sidebar.remotesModel
             expanded: sidebar.expRemotes || refFilter.text !== ""
             kindHint: "remote"
@@ -295,6 +334,7 @@ Rectangle {
             onToggled: sidebar.expWorktree = !sidebar.expWorktree
         }
         NavList {
+            id: worktreeList
             sectionModel: sidebar.worktreesModel
             expanded: sidebar.expWorktree || refFilter.text !== ""
             kindHint: "worktree"
@@ -312,6 +352,7 @@ Rectangle {
             onToggled: sidebar.expStashes = !sidebar.expStashes
         }
         NavList {
+            id: stashList
             sectionModel: sidebar.stashesModel
             expanded: sidebar.expStashes || refFilter.text !== ""
             kindHint: "stash"
@@ -336,6 +377,7 @@ Rectangle {
             onTagsToggled: shown => sidebar.repoTab.setTagsShown(shown)
         }
         NavList {
+            id: tagList
             sectionModel: sidebar.tagsModel
             expanded: sidebar.expTags || refFilter.text !== ""
             kindHint: "tag"

@@ -137,7 +137,9 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: Theme.bgHover
-        visible: itemMouse.containsMouse
+        // The stand-in lights the row as the pointer does, so a picture taken of a row that says nothing still shows
+        // where the pointer was standing (`tipPointedAt`).
+        visible: itemMouse.containsMouse || navRow.tipPointedAt
     }
     // No mark: nothing asks a question about a row in this list any more. What one of these rows takes away is held
     // down on the menu row that names it, and that menu is standing over the row while it is held (デザイン規約 §長押し).
@@ -352,26 +354,23 @@ Item {
             tint: navRow.bucket === "staged" ? Theme.diffRemovedFg : Theme.diffAddedFg
         }
     }
-    // Hover says where this row leads — the one thing the row itself cannot show (デザイン規約 §hover のツールチップ). Only the two
-    // sentences that name somewhere the row is not survive that bar: a remote branch spells the remote-qualified name,
-    // a worktree opens as another tab. The refs say nothing at all — the section names the kind, the gesture is the
-    // same on every row of it, and even the full name of a leaf folded into its folders only reads the tree back, the
-    // same path the pointer just came down through. A stash reaches the same answer its own way: the row *is* the
-    // message, the full name is the selector (`stash@{0}`), which nobody hovers to learn, and a message the row had to
-    // cut short is a click away, in the details pane that reads it anyway (§hover のツールチップ「足すものが 1 つも無い的には、何も出さない」).
+    // Hover says the name in full — the one thing the row itself cannot show (デザイン規約 §hover のツールチップ). What a row
+    // shows is a part of it: a leaf folded into its folders shows the last segment, and a name wider than the pane
+    // shows a middle-elided one. Nothing is added to the name — where the row leads is what the section and the
+    // gesture already say. A stash is the same rule read on what it is named by: the row *is* the message, so the
+    // message in full is its name, and the selector (`stash@{0}`) is not something anybody hovers to learn.
     readonly property string hoverText: {
         const full = navRow.fullName
         // A folder in the working tree's list says its own path, the same as the file rows under it — the path rides
-        // in `orig_path` (`full` is the fold key). A ref folder stays silent: its full path only reads the tree back
-        // (デザイン規約 §hover のツールチップ).
+        // in `orig_path` (`full` is the fold key, and a ref folder's fold key is its own path).
         if (navRow.folder)
-            return navRow.kindHint === "wt" ? navRow.orig_path : ""
-        if (navRow.kindHint === "remote")
-            return qsTr("Switch to %1").arg(full)
+            return navRow.kindHint === "wt" ? navRow.orig_path : full
         if (navRow.kindHint === "worktree")
             return qsTr("Open %1 in a new tab").arg(full)
-        if (navRow.kindHint === "branch" || navRow.kindHint === "tag" || navRow.kindHint === "stash")
-            return ""
+        if (navRow.kindHint === "stash")
+            return navRow.name
+        if (navRow.kindHint === "branch" || navRow.kindHint === "tag" || navRow.kindHint === "remote")
+            return full
         // A row carrying the line-ending mark has a card of its own, which names the path as its first line — two
         // things opening off one pointer would sit on top of each other.
         if (navRow.eolPointedAt)

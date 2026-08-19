@@ -74,6 +74,13 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // behind. Read as a pair with `row-card`, which proves that same
         // input does open the card (2026-08-17 ユーザー報告).
         "menu-hover" => Some("menu_hover menu=true card=false"),
+        // A row's tooltip. `lit=` is the control — the tip that came up
+        // under the same pointer on the way in, so a run that photographs
+        // an empty overlay is showing the row's answer and not a pointer
+        // that never landed. `wants=` is the row's own words and `tip=`
+        // the shared instance carrying them: every row of the sidebar
+        // spells its name in full, so both are judged.
+        "nav-tip" => Some("lit=true wants=true tip=true"),
         // The left menu's rename gesture, and the absence that is the
         // whole of its bug: a click landing in the folded list's section
         // after that section went away and came back is an ordinary

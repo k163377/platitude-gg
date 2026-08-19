@@ -25,6 +25,10 @@ AppListView {
     /// the delegates and this list, and only one row at a time is either, whichever section it sits in. A list with
     /// none (the WIP file list) simply has no gestures — every call below is skipped.
     property var gestures: null
+    /// Stands in for the pointer where headless cannot put one, so a row's tooltip — or the absence of one — can be
+    /// photographed (PG_AUTO_ACT=nav-tip). -1 points at no row. The file lists carry the same property on their own
+    /// panes (`WipPane` / `DetailsPane`).
+    property int pointedTipRow: -1
 
     signal refActivated(string oidHex)
     signal fileActivated(string bucket, string path, string origPath)
@@ -77,6 +81,19 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.editFocused : false
     }
+    /// What the pointed row itself would say, and what it is called (PG_AUTO_ACT=nav-tip). The row decides and the
+    /// shared instance shows, so the two are read apart: a row with nothing to say never reaches the instance. Read off
+    /// `hoverText` and not the attached `ToolTip.visible` — **that one reads back the instance's own state**, so during
+    /// the delay a row that does speak answers false. An empty name says the view has not built that row yet — the same
+    /// miss `clickRow` reports as false.
+    function rowTipWords(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.hoverText : ""
+    }
+    function rowNameAt(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.name : ""
+    }
     /// Where the list has actually scrolled to, and how a run puts a row out of sight to begin with. Read off
     /// `contentY` rather than off a delegate: a row scrolled away has none, and "there is no delegate" is also what a
     /// list that has not been built yet says.
@@ -101,6 +118,7 @@ AppListView {
         id: row
         listWidth: navList.width
         kindHint: navList.kindHint
+        pointedTipRow: navList.pointedTipRow
         headTracks: navList.headTracks
         headAhead: navList.headAhead
         headBehind: navList.headBehind

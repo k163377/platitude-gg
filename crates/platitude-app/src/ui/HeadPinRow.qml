@@ -21,6 +21,12 @@ Rectangle {
     required property real contentY
     required property real viewHeight
 
+    /// The pointer stand-in the rows carry, for the row this one stands
+    /// for (PG_AUTO_ACT=nav-tip head): hover cannot be injected, so what
+    /// the pointer would light is written in the same one place the
+    /// pointer's own arrival writes.
+    property bool pointed: false
+
     signal activated(string oidHex)
 
     readonly property real rowTop: headPin.branchesModel.headRow * Theme.rowHeight
@@ -36,7 +42,7 @@ Rectangle {
     Rectangle {
         anchors.fill: parent
         color: Theme.bgHover
-        visible: headRowMouse.containsMouse
+        visible: headRowMouse.containsMouse || headPin.pointed
     }
     RowLayout {
         anchors.fill: parent
@@ -73,6 +79,13 @@ Rectangle {
             height: Theme.iconSm
         }
     }
+    /// The name in full, as the row this one stands for would say it (デザイン規約 §hover のツールチップ). A detached HEAD has no
+    /// name to spell, and the words standing in for one are not a name.
+    readonly property string tipWords: headPin.workTree.detached ? "" : headPin.branchesModel.headName
+    ToolTip.visible: (headRowMouse.containsMouse || headPin.pointed) && headPin.tipWords !== ""
+    ToolTip.delay: Metrics.tipDelayMs
+    ToolTip.text: headPin.tipWords
+
     // Hairline on the side the scrolled rows pass under.
     Rectangle {
         anchors.left: parent.left
