@@ -123,12 +123,18 @@ pub enum TabMsg {
         author_name: String,
         author_email: String,
     },
-    /// Auto fetch started or ended. Kept off the shared error surface: a
-    /// laptop that is simply offline must not raise a fresh banner every
+    /// A fetch nobody asked for started or ended — the interval's, or the
+    /// one an opening fires. Kept off the shared error surface: a laptop
+    /// that is simply offline must not raise a fresh banner every
     /// interval, so the toolbar indicator carries this state instead.
     AutoFetch {
         running: bool,
         error: String,
+        /// Whether a failure here may raise the command log. The fetch an
+        /// opening fires says no: opening a tab is not a request to reach
+        /// the network, and a machine that is offline would have the
+        /// panel thrown up at it every time it opened one.
+        announce: bool,
     },
 }
 

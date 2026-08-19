@@ -151,6 +151,10 @@ impl Hub {
         let sink = Arc::new(BridgeSink { feeds });
         let session = RepoSession::open(executor, handle, path, sink);
         apply_repo_settings(&session, &applied);
+        // Straight after the settings, because they are the permission:
+        // the session holds this until it knows where the repository is,
+        // and fetches before it reads anything (`fetch_on_open`).
+        session.fetch_on_open();
         if let Some(tab) = self.tabs.get_mut(&id) {
             tab.session = Some(session);
         }

@@ -165,6 +165,10 @@ pub struct RepoTab {
     /// Fetches that came back with something to say, in a row, whoever
     /// asked for them. Any fetch that comes back clean puts it to zero.
     fetch_failures: i32,
+    /// The run has already had the command log raised over it. Held apart
+    /// from the count, so a failure that may not speak — the fetch an
+    /// opening fires — counts without using the run's one telling up.
+    fetch_log_raised: bool,
     /// The timer was stopped because of those. Nothing but the button
     /// that says so starts it again — an automatic resume would happen
     /// behind the reader's back.

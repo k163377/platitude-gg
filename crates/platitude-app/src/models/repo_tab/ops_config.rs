@@ -6,6 +6,7 @@ impl RepoTab {
     pub(super) fn restart_auto_fetch(&mut self) {
         self.auto_fetch_suspended = false;
         self.fetch_failures = 0;
+        self.fetch_log_raised = false;
         self.auto_fetch_error = String::new();
         // Only the line fetch wrote: a background read's news is not
         // this button's to take down.

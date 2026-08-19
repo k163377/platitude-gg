@@ -98,11 +98,15 @@ impl RepoTab {
                     self.compare_head_author();
                     self.head_commit_seq += 1;
                 }
-                TabMsg::AutoFetch { running, error } => {
+                TabMsg::AutoFetch {
+                    running,
+                    error,
+                    announce,
+                } => {
                     self.auto_fetch_running = running;
                     if !running {
                         self.auto_fetch_error = error.clone();
-                        self.fetch_settled(&error);
+                        self.fetch_settled(&error, announce);
                     }
                 }
                 TabMsg::Publish {
@@ -147,7 +151,7 @@ impl RepoTab {
                         // the timer's do: what the button says is about
                         // fetching, not about who started it.
                         if op == "fetch" {
-                            self.fetch_settled(&error.clone());
+                            self.fetch_settled(&error.clone(), true);
                         }
                         self.last_write_op = op;
                         self.last_write_error = error;

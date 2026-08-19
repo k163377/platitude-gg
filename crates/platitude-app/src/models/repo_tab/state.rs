@@ -64,6 +64,7 @@ impl Default for RepoTab {
             auto_fetch_running: false,
             auto_fetch_error: String::new(),
             fetch_failures: 0,
+            fetch_log_raised: false,
             auto_fetch_suspended: false,
             feed: None,
         }
@@ -79,9 +80,16 @@ impl RepoTab {
     /// and stops the timer once there have been enough of them, so a
     /// machine that has lost the network stops reaching for it every
     /// interval. Anything that comes back clean clears the run.
-    pub(super) fn fetch_settled(&mut self, error: &str) {
+    ///
+    /// `announce` is whether this one may raise the command log. The
+    /// fetch an opening fires may not: it still counts — the button
+    /// speaks for fetching, not for who asked — but a machine that is
+    /// offline would otherwise have the panel thrown up at it every time
+    /// a tab opened (デザイン規約 §リモートから取り込む).
+    pub(super) fn fetch_settled(&mut self, error: &str, announce: bool) {
         if error.is_empty() {
             self.fetch_failures = 0;
+            self.fetch_log_raised = false;
             self.auto_fetch_error = String::new();
             // The header line is state, not history: a fetch that has
             // just landed makes "fetch cannot reach the remote" untrue,
@@ -96,8 +104,12 @@ impl RepoTab {
             return;
         }
         self.fetch_failures += 1;
-        if self.fetch_failures == 1 {
+        if announce && !self.fetch_log_raised {
             // The panel reads this; the ones after it are the same news.
+            // Counted from the first failure that may speak rather than
+            // from the first failure outright, so a quiet opening fetch
+            // does not use up the run's one telling.
+            self.fetch_log_raised = true;
             self.last_error = error.to_string();
             self.last_error_from_fetch = true;
             self.fetch_first_failed();
@@ -207,7 +219,7 @@ mod tests {
         tab.fetch_failures = 2;
         tab.last_error = "fatal: unable to access".into();
         tab.last_error_from_fetch = true;
-        tab.fetch_settled("");
+        tab.fetch_settled("", true);
         assert_eq!(tab.fetch_failures, 0);
         assert_eq!(tab.last_error, "");
         assert!(!tab.last_error_from_fetch);
@@ -218,9 +230,26 @@ mod tests {
         let mut tab = RepoTab::default();
         tab.last_error = "fatal: bad revision".into();
         tab.last_error_from_fetch = false;
-        tab.fetch_settled("");
+        tab.fetch_settled("", true);
         assert_eq!(tab.fetch_failures, 0);
         assert_eq!(tab.last_error, "fatal: bad revision");
+    }
+
+    #[test]
+    fn the_fetch_an_opening_fires_fails_without_a_word_to_the_panel() {
+        let mut tab = RepoTab::default();
+        // Offline, and the tab has only just opened.
+        tab.fetch_settled("fatal: unable to access", false);
+        assert_eq!(tab.fetch_failures, 1, "it is a failed fetch like any other");
+        assert_eq!(
+            tab.last_error, "",
+            "and the button is the only thing that says so"
+        );
+        assert!(!tab.last_error_from_fetch);
+        assert!(
+            !tab.fetch_log_raised,
+            "the run's one telling is still there for a failure that may speak"
+        );
     }
 
     #[test]
@@ -229,16 +258,17 @@ mod tests {
         // The first failure's line has been dismissed, and a background
         // read has written its own news since.
         tab.fetch_failures = 1;
+        tab.fetch_log_raised = true;
         tab.last_error = "fatal: bad revision".into();
         tab.last_error_from_fetch = false;
-        tab.fetch_settled("fatal: unable to access");
+        tab.fetch_settled("fatal: unable to access", true);
         assert_eq!(tab.fetch_failures, 2);
         // The second failure is the same news as the first: it does not
         // touch the line, so it cannot claim it either.
         assert_eq!(tab.last_error, "fatal: bad revision");
         assert!(!tab.last_error_from_fetch);
         // And the recovery that follows respects the standing owner.
-        tab.fetch_settled("");
+        tab.fetch_settled("", true);
         assert_eq!(tab.last_error, "fatal: bad revision");
     }
 }

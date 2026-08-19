@@ -257,16 +257,20 @@ impl SessionSink for BridgeSink {
                     author_email: head.author_email,
                 });
             }
-            SessionEvent::WriteStarted { op } if op == AUTO_FETCH_OP => {
+            SessionEvent::WriteStarted { op } if op == AUTO_FETCH_OP || op == OPEN_FETCH_OP => {
                 self.feeds.tab.push(TabMsg::AutoFetch {
                     running: true,
                     error: String::new(),
+                    announce: op == AUTO_FETCH_OP,
                 });
             }
-            SessionEvent::WriteFinished { op, error } if op == AUTO_FETCH_OP => {
+            SessionEvent::WriteFinished { op, error }
+                if op == AUTO_FETCH_OP || op == OPEN_FETCH_OP =>
+            {
                 self.feeds.tab.push(TabMsg::AutoFetch {
                     running: false,
                     error: error.unwrap_or_default(),
+                    announce: op == AUTO_FETCH_OP,
                 });
             }
             SessionEvent::WriteStarted { op } => self.feeds.tab.push(TabMsg::WriteState {
