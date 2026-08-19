@@ -19,7 +19,11 @@ Item {
     property bool besideWord: false
     /// How far into the hold the press has got, 0 to 1.
     property real holdProgress: 0
-    /// The colour both marks are drawn in — the button's own `fg`.
+    /// git is out on the network for this button. The seat is the one place on it already measured for a mark, so the
+    /// ring turns here and whatever the seat was wearing steps aside for it — the word beside it stays and says which
+    /// action is out (デザイン規約 §進行中・長押しの定数). A button that can wait therefore needs a seat to wait in.
+    property bool busy: false
+    /// The colour both marks are drawn in — the button's own `markFg`.
     property color tint: Theme.textPrimary
 
     /// Both marks to wear at once: what the button does, and that it is held rather than clicked.
@@ -52,7 +56,20 @@ Item {
         tint: seat.tint
         // Whole at `iconMd`, and the grid ratio under it.
         stroke: Metrics.iconStroke * seat.step / 16
-        visible: seat.holdMs <= 0
+        visible: seat.holdMs <= 0 && !seat.busy
+    }
+    // The wait, in the seat the shape kept warm. Drawn at the seat's own step so the button's width does not move, and
+    // never beside the hold mark: the press is over by the time git is out, so the ring and the mark swap rather than
+    // share (デザイン規約 §進行中・長押しの定数「回るリングと長押しの印は同じボタンの上で入れ替わり、同時には出ない」).
+    //
+    // Its own item rather than a rotation on the icon above: an animator leaves the angle where it stopped, and the
+    // icon that comes back when the wait is over must not come back tilted.
+    SpinnerIcon {
+        width: seat.step
+        height: seat.step
+        anchors.centerIn: parent
+        tint: seat.tint
+        spinning: seat.busy
     }
     // A held button with nothing to name it says only how it is worked, where the eye starts the row (デザイン規約 §長押し).
     HoldIcon {
@@ -61,14 +78,14 @@ Item {
         anchors.verticalCenterOffset: Metrics.opticalDrop
         progress: seat.holdProgress
         tint: seat.tint
-        visible: seat.holdMs > 0 && !seat.paired
+        visible: seat.holdMs > 0 && !seat.paired && !seat.busy
     }
     // A held button that also has a name wears both, set as a fraction: each a size down, the slash between them, each
     // pushed off the middle line. Letting the hold mark take the seat on its own would cost the button the one thing
     // that says what it does — `push -f` would stop being a push at a glance (デザイン規約 §長押し).
     Item {
         anchors.fill: parent
-        visible: seat.paired
+        visible: seat.paired && !seat.busy
         NavIcon {
             kind: seat.kind
             tint: seat.tint

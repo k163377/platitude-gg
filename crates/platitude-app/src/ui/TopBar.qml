@@ -84,6 +84,10 @@ Rectangle {
     /// reports that push started; this makes an intentionally intermediate screenshot causal even when the subprocess
     /// completes before grabToImage runs.
     property bool autoPushBusyLatched: false
+    /// Automation: the same latch for the button the wait was designed on — the bare one. `framed` rides along in the
+    /// report because "a button that never wore a frame grows none while it waits" (デザイン規約 §進行中・長押しの定数) is a
+    /// claim about a line that is not there, and a picture cannot be judged on the absence of one.
+    property bool autoFetchBusyLatched: false
     readonly property string pushMode: pushButton.mode
     function completePushHold() {
         pushButton.completeHold()
@@ -91,11 +95,18 @@ Rectangle {
     function reportPushBusy() {
         AppBackend.report("push_hold mode=" + pushButton.mode + " busy=" + topBar.autoPushBusyLatched)
     }
+    function reportFetchBusy() {
+        AppBackend.report("fetch_busy busy=" + topBar.autoFetchBusyLatched
+                          + " fails=" + fetchButton.fails + " framed=" + fetchButton.framed)
+    }
     Connections {
         target: topBar.curPage ? topBar.curPage.pageTab : null
         function onBusyOpChanged() {
-            if (AppBackend.autoAct === "force-push-hold" && topBar.curPage.pageTab.busyOp === "push")
+            const op = topBar.curPage.pageTab.busyOp
+            if (AppBackend.autoAct === "force-push-hold" && op === "push")
                 topBar.autoPushBusyLatched = true
+            if (AppBackend.autoAct === "fetch-busy" && op === "fetch")
+                topBar.autoFetchBusyLatched = true
         }
     }
 
@@ -277,8 +288,9 @@ Rectangle {
             // Only the stopped step takes a colour for its word: a run of failures is said by the frame and the mark
             // while the word stays plain (デザイン規約 §長押し — 警告の色は語ではなく 枠と印が持つ).
             tone: fetchButton.stopped ? Theme.danger : Theme.textPrimary
-            // Read off the state rather than off `tone`: what the ring stands in for during the wait is the frame, not
-            // the word (デザイン規約 §暗く落とした段).
+            // Read off the state rather than off `tone`: through the wait the word takes the disabled step like any
+            // word that cannot be pressed, and the frame, the ring and the mark are what still say this is the fetch
+            // that has been failing (デザイン規約 §暗く落とした段).
             toneDim: fetchButton.stopped ? Theme.dangerDim
                      : fetchButton.fails > 0 ? Theme.warningDim
                      : Theme.textMuted
@@ -291,8 +303,9 @@ Rectangle {
             holdMs: fetchButton.stopped ? Metrics.holdMs : 0
             // Whoever asked for it, the network shows here: a fetch on the timer turns the button the way a clicked one
             // does.
-            busy: topBar.curPage !== null
-                  && (topBar.curPage.pageTab.busyOp === "fetch" || topBar.curPage.pageTab.autoFetchRunning)
+            busy: topBar.autoFetchBusyLatched
+                  || (topBar.curPage !== null
+                      && (topBar.curPage.pageTab.busyOp === "fetch" || topBar.curPage.pageTab.autoFetchRunning))
             enabled: topBar.curPage !== null
                      && topBar.curPage.pageTab.remoteCount > 0
                      && (fetchButton.stopped || topBar.curPage.pageTab.busyCount === 0)
@@ -337,8 +350,8 @@ Rectangle {
             // The overwrite colours its word; the refusal does not — only one of them changes what the press costs
             // (デザイン規約 §長押し — 警告の色は語ではなく枠と印が持つ).
             tone: pushButton.mode === "diverged" ? Theme.warning : Theme.textPrimary
-            // The ring and the frame keep the warning through the wait, a step down; while the wait lasts there is no
-            // word to read, so what the ring stands in for is the frame (デザイン規約 §暗く落とした段).
+            // The ring and the frame keep the warning through the wait, a step down. The word does not follow them: it
+            // takes the disabled step, which is the one way a word says "not now" (デザイン規約 §暗く落とした段 / §無効).
             toneDim: pushButton.warned ? Theme.warningDim : Theme.textMuted
             frameColor: pushButton.warned ? Theme.warning : "transparent"
             // The frame's colour is worn by the diverged shape as well, so on its own it would not tell "cannot land

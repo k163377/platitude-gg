@@ -142,7 +142,7 @@ Item {
                 "window-fill", "solo", "window-floor",
                 "badges", "badges-hover", "old-git", "old-git-card",
                 "old-git-fold", "state", "middle-close", "open-again",
-                "force-push-hold", "settings-tools",
+                "force-push-hold", "fetch-busy", "settings-tools",
                 "settings-tools-loading"].indexOf(act) >= 0
     }
 
@@ -2659,7 +2659,9 @@ Item {
             // that clears it.
             page.pushNow()
             pushRetryTimer.start()
-        } else if (act === "fetch") {
+        } else if (act === "fetch" || act === "fetch-busy") {
+            // `-busy` is the same fetch; what differs is who says the run is over — the band, once it has latched the
+            // ring (`WindowAutoActDriver`).
             repoTab.fetch("")
         } else if (act === "fetch-ref-list") {
             // What a tag says about the remote only exists after a fetch (`ls-remote --tags` carries it), so the two

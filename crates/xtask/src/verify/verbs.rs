@@ -120,6 +120,11 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // Intermediate communication is valid only after the real busy
         // edge was observed and latched for the asynchronous image grab.
         "force-push-hold" => Some("push_hold mode=diverged busy=true"),
+        // The bare button's wait. `framed=false` is judged rather than
+        // looked at: a frame that grew while git was out would be a line
+        // in the picture, but a frame that did not grow is nothing at
+        // all, and nothing is what a correct run looks like too.
+        "fetch-busy" => Some("fetch_busy busy=true fails=0 framed=false"),
         // The same popup has a real loading and a causally settled form;
         // neither is selected by a millisecond window.
         "settings-tools-loading" => Some("settled=false loading=true open=true"),

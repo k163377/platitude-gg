@@ -16,8 +16,13 @@ HoverToolButton {
     /// The state's, not `tone`'s: where the word stays plain and only the frame and the mark carry a warning, this
     /// follows the frame. A plain button has no darker step of its own and takes `textMuted`.
     property color toneDim: Theme.textMuted
-    /// git is on the network for this button: the words step aside for a turning ring in the middle of the button, and
-    /// the whole of it goes as dim and as deaf as a disabled one (デザイン規約 §長押し).
+    /// git is on the network for this button: the ring takes the icon's seat, the word stays and steps down to the
+    /// disabled colour, and the whole of it goes as dim and as deaf as a disabled one (デザイン規約 §進行中・長押しの定数).
+    ///
+    /// The word stays rather than stepping aside: what a button is waiting on is the thing the button names, and a
+    /// ring alone in a bare button leaves nothing on the band to say which action is out. The seat is where the ring
+    /// goes because it is the one place already measured for a mark of exactly this size, so the button's width does
+    /// not move (2026-08-19 ユーザー選択).
     ///
     /// Dimmed rather than actually disabled: `enabled` would take the focus away, and the press that started the
     /// network call is the very one that may have come from the keyboard.
@@ -122,8 +127,15 @@ HoverToolButton {
     /// A hold button never emits this: neither the release that completes a hold nor the one that gives up on it part
     /// way may fall through to what this button does when it is not a hold button.
     signal activated()
-    readonly property color fg: actionBtn.busy ? actionBtn.toneDim
+    readonly property color fg: actionBtn.busy ? Theme.textMuted
                                 : holdProgress > 0 ? Theme.textOnAccent : enabled ? tone : Theme.textMuted
+    /// What the marks on this button wear while the word wears the disabled step: the state a step down, the same one
+    /// the ring and the frame take (デザイン規約 §進行中・長押しの定数「リングと枠は 1 段下」).
+    ///
+    /// A separate colour from `fg` because the two paths mean different things: dimming a **word** is the disabled
+    /// signal and has one colour only (§無効 — `textMuted`), while a mark keeps its hue and drops a step (§暗く落とした段).
+    /// Read off the state rather than the word, so a wait says which button is waiting.
+    readonly property color markFg: actionBtn.busy ? actionBtn.toneDim : actionBtn.fg
     /// Nothing here answers a press while git is on the network for it.
     readonly property bool live: actionBtn.enabled && !actionBtn.busy
 
@@ -242,8 +254,8 @@ HoverToolButton {
     rightPadding: actionBtn.padding + (actionBtn.slack - actionBtn.headAir)
 
     // The row keeps its size while the network call runs — the toolbar must not shuffle under a pointer that is still
-    // resting on the button — so the words step aside by going transparent rather than by leaving the layout, and the
-    // ring turns over the middle of what they left.
+    // resting on the button — so nothing here leaves the layout: the word stays where it is and only its colour steps
+    // down, and the ring turns inside the seat the icon was already measured into.
     contentItem: Item {
         implicitWidth: btnRow.implicitWidth
         implicitHeight: btnRow.implicitHeight
@@ -252,7 +264,6 @@ HoverToolButton {
             id: btnRow
             anchors.fill: parent
             spacing: Theme.spaceXs
-            opacity: actionBtn.busy ? 0 : 1
             Item {
                 Layout.fillWidth: true
                 // A phrased label fills the row on its own and centres its phrase inside itself. A spacer either side
@@ -266,7 +277,8 @@ HoverToolButton {
                 holdMs: actionBtn.holdMs
                 besideWord: actionBtn.besideWord
                 holdProgress: actionBtn.holdProgress
-                tint: actionBtn.fg
+                busy: actionBtn.busy
+                tint: actionBtn.markFg
                 Layout.alignment: Qt.AlignVCenter
             }
             ActionButtonLabel {
@@ -277,7 +289,9 @@ HoverToolButton {
                 widestCode: actionBtn.widestCode
                 tint: actionBtn.fg
                 alert: actionBtn.alert
-                alertTone: actionBtn.alertTone
+                // The mark goes a step down with the frame while the wait lasts, like every other mark on the button:
+                // left at its own colour it would be the brightest thing on one that has just been made untouchable.
+                alertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
                 alertTight: actionBtn.alertTight
                 fontSize: actionBtn.font.pixelSize
                 phraseHead: actionBtn.phraseHead
@@ -295,15 +309,6 @@ HoverToolButton {
                 Layout.fillWidth: true
                 visible: actionBtn.centred && !btnLabel.phrased
             }
-        }
-        // Its own item rather than a rotation on the icon above: an animator leaves the angle where it stopped, and the
-        // icon that returns must not come back tilted.
-        SpinnerIcon {
-            anchors.centerIn: parent
-            width: Theme.iconMd
-            height: Theme.iconMd
-            tint: actionBtn.toneDim
-            spinning: actionBtn.busy
         }
     }
 }

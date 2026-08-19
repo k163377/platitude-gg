@@ -355,6 +355,21 @@ Item {
         }
     }
 
+    // The same edge on the button the wait is drawn for: bare, unframed, and the one a timer can start on its own. The
+    // fetch itself is fired by the page's driver; all this waits for is the band's latch.
+    Timer {
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "fetch-busy"
+        onTriggered: {
+            if (!topBar.autoFetchBusyLatched)
+                return
+            stop()
+            topBar.reportFetchBusy()
+            window.finishAutoAct()
+        }
+    }
+
     // Smoke hooks (PG_AUTO_ACT=open-not-a-repo / open-bare and the two ways back out). The picker is the platform's own
     // window, so the run enters where its answer lands — the path it accepted.
     readonly property bool pickAct: AppBackend.autoAct === "open-not-a-repo"
