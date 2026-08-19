@@ -18,6 +18,8 @@ pub enum OpenFetch {
     /// An automatic fetch was already running, which is what this asks
     /// for — nothing more to start.
     Busy,
+    /// The repository has no remote, so there is nothing to fetch from.
+    NoRemote,
     /// This session has already had its opening fetch.
     Spent,
 }
@@ -104,7 +106,13 @@ impl RepoSession {
     /// and answers whether one started — which is the opening's reason to
     /// skip the remote-tag catch-up, a fetch having read them on its way
     /// out.
-    pub(super) fn take_open_fetch(self: &Arc<Self>) -> bool {
+    ///
+    /// Reads the remote list on the way, which is the one thing the
+    /// decision needs and the opening has not asked for yet. It costs a
+    /// `git config` in front of the fetch, and nothing beyond it: the refs
+    /// listing that follows wanted the same answer and now finds it read
+    /// (`RepoSession::remotes`).
+    pub(super) async fn take_open_fetch(self: &Arc<Self>, workdir: &Path) -> bool {
         {
             let mut state = self.lock_open_fetch();
             if *state != OpenFetchState::Held {
@@ -112,12 +120,17 @@ impl RepoSession {
             }
             *state = OpenFetchState::Settled;
         }
+        let cancel = self.root_cancel.clone();
+        drop(self.remotes(workdir, &cancel).await);
         self.start_open_fetch() == OpenFetch::Started
     }
 
     fn start_open_fetch(self: &Arc<Self>) -> OpenFetch {
         if !self.auto_fetch_is_on() {
             return OpenFetch::Disabled;
+        }
+        if self.known_to_have_no_remote() {
+            return OpenFetch::NoRemote;
         }
         let Ok(permit) = Arc::clone(&self.auto_fetch_slot).try_acquire_owned() else {
             tracing::debug!("opening fetch skipped: an automatic fetch is already running");
@@ -142,6 +155,21 @@ impl RepoSession {
             Ok(g) => g,
             Err(e) => e.into_inner(),
         }
+    }
+
+    /// Whether the repository is known to have no remote at all, in which
+    /// case an unasked fetch has nowhere to go: `fetch --prune --all`
+    /// there exits clean without reaching anything (実測 git 2.55), so
+    /// what it costs is a process an interval and a button that spins
+    /// while it says it cannot be pressed.
+    ///
+    /// Read off the list the refs listing already keeps, so this asks git
+    /// nothing — and the same list is what greys the fetch button out, so
+    /// the two cannot disagree. An answer that is not in yet is not a
+    /// "no": it fetches, which is the way round that can only cost a
+    /// process.
+    fn known_to_have_no_remote(&self) -> bool {
+        self.remotes.peek(|list| list.is_empty()).unwrap_or(false)
     }
 
     /// Whether the interval is installed — the permission that every
@@ -318,6 +346,10 @@ impl RepoSession {
         };
         if cancel.is_cancelled() {
             return false;
+        }
+        if self.known_to_have_no_remote() {
+            tracing::debug!("auto fetch skipped: the repository has no remote");
+            return true;
         }
         let Ok(permit) = Arc::clone(&self.auto_fetch_slot).try_acquire_owned() else {
             tracing::debug!("auto fetch skipped: the previous one has not finished");

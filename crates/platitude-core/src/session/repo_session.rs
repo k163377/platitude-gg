@@ -53,6 +53,10 @@ pub struct RepoSession {
     /// this, which is a process per poll tick for an answer that only a
     /// write moves.
     pub(super) remotes: Derived<Vec<remote::Remote>>,
+    /// How the config file looked when the remotes above were last read
+    /// (see [`RepoSession::forget_remotes_if_config_moved`]). `None`
+    /// until the first look.
+    pub(super) config_stamp: Mutex<Option<ConfigStamp>>,
     /// Pending paths whose change has something to say about line endings,
     /// repeated by every status read until something asks for them again.
     pub(super) eol_marks: Mutex<Arc<Vec<EolMark>>>,
@@ -194,6 +198,7 @@ impl RepoSession {
             worktrees_read: ReadSlot::default(),
             write_tx,
             network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
+            config_stamp: Mutex::new(None),
             remote_tag_index: Mutex::new(Arc::new(RemoteTagIndex::default())),
             remote_tag_gen: AtomicU64::new(0),
             remote_tags_slot: Arc::new(tokio::sync::Semaphore::new(1)),
@@ -218,6 +223,7 @@ impl RepoSession {
             let cancel = s.root_cancel.clone();
             match repo::open(&s.executor, &path, &cancel).await {
                 Ok(info) => {
+                    let workdir = info.workdir.clone();
                     s.set_info(info.clone());
                     s.sink.event(SessionEvent::Opened { info });
                     // The network before the reads: a round trip is the
@@ -228,7 +234,7 @@ impl RepoSession {
                     // the fetch brings down is published by its own
                     // refresh rather than read a second time
                     // (`AfterWrite::Graph`).
-                    let fetching = s.take_open_fetch();
+                    let fetching = s.take_open_fetch(&workdir).await;
                     // Before anything else: a missing identity turns the
                     // first commit into a wall of git text, and the UI can
                     // ask for one instead.
@@ -260,6 +266,14 @@ impl RepoSession {
     /// Workdir of the opened repository (None until `Opened`).
     pub fn workdir(&self) -> Option<PathBuf> {
         self.lock_info().as_ref().map(|i| i.workdir.clone())
+    }
+
+    /// Config file of the opened repository (None until `Opened`).
+    ///
+    /// Its own path rather than the whole of [`RepoInfo`]: this is read on
+    /// every poll tick.
+    pub(super) fn config_path(&self) -> Option<PathBuf> {
+        self.lock_info().as_ref().map(|i| i.config_path.clone())
     }
 
     /// Resolved repository paths (None until `Opened`).

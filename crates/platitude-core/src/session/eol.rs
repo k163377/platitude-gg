@@ -68,18 +68,48 @@ impl RepoSession {
     ///
     /// Every refs listing wanted them and every refs listing spawned a
     /// `git config` to ask — a process per poll tick for a list that only
-    /// a write moves. A remote added in a terminal and then left alone is
-    /// the one thing this does not see until the next write or ref move;
-    /// fetching from it moves refs, so the window is narrower than it
-    /// looks.
+    /// a write moves. A config file that has been written since is looked
+    /// for first, so a remote added in a terminal is seen by the poll
+    /// (below) rather than waiting for a write or a ref move.
     pub(super) async fn remotes(
         &self,
         workdir: &Path,
         cancel: &CancellationToken,
     ) -> Result<Vec<remote::Remote>, GitError> {
+        self.forget_remotes_if_config_moved();
         self.remotes
             .get_or_try_init(|| remote::list(&self.executor, workdir, cancel))
             .await
+    }
+
+    /// Drops the remote list when the file it was read from has been
+    /// written since — `git remote add` in a terminal moves no ref and
+    /// lands no write, so nothing else here would notice it.
+    ///
+    /// A stat rather than a `git config`: this runs on every poll tick,
+    /// and the reason the list is kept at all is that a process per tick
+    /// was too much to pay for it. What it watches is the repository's
+    /// own config (a linked worktree shares the common one, which is what
+    /// `--git-path config` answers) — a remote written into the user's
+    /// global config is still only seen on the next write or ref move.
+    fn forget_remotes_if_config_moved(&self) {
+        let Some(path) = self.config_path() else {
+            return;
+        };
+        let stamp = ConfigStamp::of(&path);
+        let mut seen = match self.config_stamp.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        if seen.as_ref() == Some(&stamp) {
+            return;
+        }
+        // Not on the first look: there is no answer being kept yet, and
+        // the read below is about to take the current one anyway.
+        if seen.is_some() {
+            self.remotes.forget();
+        }
+        *seen = Some(stamp);
     }
 
     /// The cached baseline for a path's (directory, extension), sampling it

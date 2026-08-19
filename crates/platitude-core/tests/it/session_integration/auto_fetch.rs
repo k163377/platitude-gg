@@ -283,22 +283,144 @@ async fn an_opening_reaches_nothing_where_automatic_fetching_is_off() {
     session.close();
 }
 
-/// A repository with no remote configured has nothing to fetch and
-/// nothing to complain about — `fetch --prune --all` there exits clean
-/// (実測 git 2.55) — so opening a local-only repository does not put a
-/// warning on its fetch button.
+/// A repository with no remote is not fetched from at all.
+///
+/// Nothing there fails — `fetch --prune --all` with no remote configured
+/// exits clean (実測 git 2.55) — so what an unasked one costs is a process
+/// an interval, and a fetch button that spins while it is saying it cannot
+/// be pressed. The list this reads is the one the refs listing keeps, which
+/// is also what greys that button out, so the two cannot disagree.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_repository_with_no_remote_opens_without_a_failed_fetch() {
+async fn a_repository_with_no_remote_is_not_fetched_from() {
     let mut only = TestRepo::init();
     only.commit_file("f.txt", "0\n", "root");
 
     let (sink, session) = opened(&only).await;
+    // The refs listing reads the remote list before it publishes, so this
+    // is where the answer below stops being a matter of timing.
+    sink.opening_snapshots().await;
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
-    assert_eq!(session.fetch_on_open(), OpenFetch::Started);
+    assert_eq!(session.fetch_on_open(), OpenFetch::NoRemote);
+    session.close();
+}
+
+/// The same where the ask beats the opening, which is the shape the
+/// application makes: it asks the instant it has handed the session its
+/// settings, so the answer is read by the opening rather than by the ask.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ask_held_for_a_local_only_repository_fires_nothing() {
+    let mut only = TestRepo::init();
+    only.commit_file("f.txt", "0\n", "root");
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        crate::support::exec::isolated(),
+        tokio::runtime::Handle::current(),
+        only.path.clone(),
+        sink.clone(),
+    );
+    session.set_auto_fetch(Some(Duration::from_secs(3600)));
+    assert!(
+        matches!(
+            session.fetch_on_open(),
+            OpenFetch::Held | OpenFetch::NoRemote
+        ),
+        "held where the repository is not open yet, refused where it is"
+    );
+    // The opening settles the ask before it publishes anything, so a fetch
+    // pressed after this point is behind whatever it queued.
+    sink.opening_snapshots().await;
+    session.fetch(None);
+    assert_eq!(write_result(&sink, "fetch").await, None);
     assert_eq!(
-        write_result(&sink, OPEN_FETCH_OP).await,
-        None,
-        "nothing to fetch is not a failure"
+        sink.count(|e| matches!(e, SessionEvent::WriteStarted { op } if *op == OPEN_FETCH_OP)),
+        0,
+        "the opening reached for nothing"
+    );
+    session.close();
+}
+
+/// And the timer says the same thing every interval without queueing a
+/// write to find it out.
+///
+/// Read off the queue rather than off a stretch of quiet clock: the tick is
+/// answered only once it has been acted on, and the queue is first in first
+/// out, so a fetch pressed by hand afterwards can only finish behind
+/// anything that tick queued.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_timer_queues_nothing_where_there_is_no_remote() {
+    let mut only = TestRepo::init();
+    only.commit_file("f.txt", "0\n", "root");
+
+    let (sink, session) = opened(&only).await;
+    sink.opening_snapshots().await;
+    session.set_auto_fetch(Some(Duration::from_secs(3600)));
+    let hourly = session.auto_fetch_ticker().expect("auto fetch is on");
+    assert!(hourly.tick().await, "the timer took the tick and stayed on");
+
+    // Asked for by hand, the same fetch runs: the gate is on what nobody
+    // asked for, not on the button.
+    session.fetch(None);
+    assert_eq!(write_result(&sink, "fetch").await, None);
+    assert_eq!(
+        sink.count(|e| matches!(
+            e,
+            SessionEvent::WriteStarted { op } if *op == platitude_core::session::AUTO_FETCH_OP
+        )),
+        0,
+        "the tick in front of it queued nothing"
+    );
+    session.close();
+}
+
+/// A remote added in a terminal is picked up by the poll, and the timer
+/// starts fetching from it.
+///
+/// `git remote add` moves no ref and lands no write in here, so nothing the
+/// session watches would have noticed it; what does is the config file
+/// having been written since the list was read (`RepoSession::remotes`).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_remote_added_outside_the_app_is_picked_up_by_a_poll() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("f.txt", "0\n", "root");
+    let mut only = TestRepo::init();
+    only.commit_file("g.txt", "0\n", "root");
+
+    let (sink, session) = opened(&only).await;
+    sink.opening_snapshots().await;
+    session.set_auto_fetch(Some(Duration::from_secs(3600)));
+
+    only.git(&["remote", "add", "origin", &origin.file_url()]);
+    // A poll that was refused (busy, or a write in front of it) would
+    // prove nothing about what it reads.
+    let polled = session.refresh_poll_tracked().outcome().await;
+    assert!(
+        matches!(
+            polled,
+            platitude_core::session::RefreshOutcome::Changed
+                | platitude_core::session::RefreshOutcome::Unchanged
+        ),
+        "the poll ran: {polled:?}"
+    );
+    sink.wait_for("the remote in the snapshot", |evs| {
+        evs.iter()
+            .any(|e| match e {
+                SessionEvent::RefsLoaded { snapshot } => {
+                    snapshot.remote_names.iter().any(|n| n == "origin")
+                }
+                _ => false,
+            })
+            .then_some(())
+    })
+    .await;
+
+    let hourly = session.auto_fetch_ticker().expect("auto fetch is on");
+    assert!(hourly.tick().await, "the running timer took the tick");
+    assert_eq!(auto_fetch_done(&sink, 1).await, None);
+    assert_eq!(
+        only.git(&["rev-parse", "origin/main"]),
+        origin.git(&["rev-parse", "main"]),
+        "the timer fetched from the remote that appeared under it"
     );
     session.close();
 }

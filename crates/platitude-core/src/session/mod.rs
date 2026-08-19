@@ -90,8 +90,8 @@ pub use repo_session::RepoSession;
 pub use snapshot::{BranchItem, RefsSnapshot, TagItem};
 pub use state::AutoFetchTicker;
 use state::{
-    AutoFetch, Derived, EndingContext, Footer, HeadHold, OpGate, OpenFetchState, Shared,
-    WriteRequest,
+    AutoFetch, ConfigStamp, Derived, EndingContext, Footer, HeadHold, OpGate, OpenFetchState,
+    Shared, WriteRequest,
 };
 
 /// First chunk is small so the first paint happens as early as possible.

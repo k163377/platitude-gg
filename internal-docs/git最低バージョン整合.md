@@ -70,7 +70,7 @@
 | `reset` | `--quiet` / `--soft` `--mixed` `--hard` | 古参。**`--end-of-options` は付けられない**(下記) |
 | `restore` | `--staged` / `--worktree`(併用) | 2.43.0 ✓(2.23 導入。2.43 時点 EXPERIMENTAL 表記 — 存在と記載は確認済) |
 | `rev-list` | `--count` / `--merges` / `--not` / `--remotes` / `--max-count=` / `--branches` / `--exclude=` / `--glob=` | 古参(`--count` 1.7.2 / `--exclude` 1.9 / `--glob` 1.7.0)。`--exclude` / `--glob` の効き方の罠は rules-refs/core.md |
-| `rev-parse` | `--verify` / `-q` / `--git-path` / `--show-toplevel` / `--absolute-git-dir` / `--show-object-format` / `--end-of-options` / `<rev>^{commit}` | 2.43.0 ✓ |
+| `rev-parse` | `--verify` / `-q` / `--git-path` / `--path-format=absolute` / `--show-toplevel` / `--absolute-git-dir` / `--show-object-format` / `--end-of-options` / `<rev>^{commit}` | 2.43.0 ✓(`--path-format` は 2.31) |
 | `revert` | `--no-edit` | 2.43.0 ✓ |
 | `rm` | `--cached` / `-r` / `-f` / `--quiet` | 古参 |
 | `show` | `-z` / `-r` / `--name-status` / `--find-renames` / `--diff-merges=first-parent` / `--format=` / `--format=%(trailers:key=,valueonly,unfold,separator=)` | 古参 + `--diff-merges=` は **2.31**(`first-parent` は導入時からの値)。diff 系オプションは `diff-tree` の行と同じ出処(diff-options)。**trailers の 4 オプションとも 2.43.0 ✓**(pretty-formats に `key=<key>`「Matching is done case-insensitively」= `Co-Authored-By` も拾う・`valueonly`・`unfold`・`separator=<sep>`「may contain the literal formatting codes described above」= `%x1F` が書ける、を確認)。**最低バージョンのコンテナで実測**(`cargo xtask linux test -p platitude-core` の `details_diff` = マージ・root・rename・空コミット) |

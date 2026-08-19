@@ -17,6 +17,32 @@ pub(super) struct HeadHold {
     pub(super) on_a_ref: bool,
 }
 
+/// How a config file looked, closely enough to tell "somebody wrote this"
+/// from "nobody has touched it".
+///
+/// A missing file has a stamp of its own, so one that appears later reads
+/// as the change it is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ConfigStamp {
+    modified: Option<std::time::SystemTime>,
+    len: u64,
+}
+
+impl ConfigStamp {
+    pub(super) fn of(path: &Path) -> Self {
+        match std::fs::metadata(path) {
+            Ok(meta) => Self {
+                modified: meta.modified().ok(),
+                len: meta.len(),
+            },
+            Err(_) => Self {
+                modified: None,
+                len: 0,
+            },
+        }
+    }
+}
+
 /// One tick handed to the timer by hand rather than by the clock; the
 /// timer answers on it once it has acted (see [`AutoFetchTicker`]).
 pub(super) type AutoFetchTick = tokio::sync::oneshot::Sender<()>;
@@ -223,6 +249,13 @@ impl<T: Clone> Derived<T> {
         let mut state = self.lock_state();
         state.generation = state.generation.wrapping_add(1);
         state.value = None;
+    }
+
+    /// Reads the answer as it stands, without asking git for one. `None`
+    /// where nothing has been read yet or the last answer was dropped —
+    /// which a caller must not read as an answer of its own.
+    pub(super) fn peek<R>(&self, read: impl FnOnce(&T) -> R) -> Option<R> {
+        self.lock_state().value.as_ref().map(read)
     }
 
     fn lock_state(&self) -> std::sync::MutexGuard<'_, DerivedState<T>> {

@@ -23,6 +23,12 @@ pub struct RepoInfo {
     /// Absolute path of the `.git` directory (may live elsewhere for
     /// worktrees).
     pub git_dir: PathBuf,
+    /// Absolute path of the repository's own config file — the one
+    /// `git remote add` writes. A linked worktree shares the common
+    /// repository's, which is why this is asked for rather than joined
+    /// onto `git_dir` (実測 2.55: `--git-path config` in a worktree
+    /// answers the common `.git/config`).
+    pub config_path: PathBuf,
     pub object_format: ObjectFormat,
 }
 
@@ -50,9 +56,18 @@ pub async fn open(
             "--show-toplevel",
             "--absolute-git-dir",
             "--show-object-format",
+            // Said before the path below and after everything else: it
+            // decides how paths come out, and the two above are absolute
+            // already. Without it `--git-path` answers relative to the
+            // working directory, which is the folder the user picked and
+            // not necessarily the repository root.
+            "--path-format=absolute",
+            "--git-path",
+            "config",
         ])
         .timeout(Duration::from_secs(10));
-    let described = "git rev-parse --show-toplevel --absolute-git-dir --show-object-format";
+    let described = "git rev-parse --show-toplevel --absolute-git-dir --show-object-format \
+         --path-format=absolute --git-path config";
 
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code != 0 {
@@ -71,7 +86,8 @@ pub async fn open(
 
     let text = out.stdout_utf8();
     let mut lines = text.lines();
-    let (Some(toplevel), Some(git_dir), Some(format)) = (lines.next(), lines.next(), lines.next())
+    let (Some(toplevel), Some(git_dir), Some(format), Some(config_path)) =
+        (lines.next(), lines.next(), lines.next(), lines.next())
     else {
         return Err(GitError::UnexpectedOutput {
             command: described.to_string(),
@@ -93,6 +109,7 @@ pub async fn open(
     Ok(RepoInfo {
         workdir: PathBuf::from(toplevel.trim_end()),
         git_dir: PathBuf::from(git_dir.trim_end()),
+        config_path: PathBuf::from(config_path.trim_end()),
         object_format,
     })
 }
