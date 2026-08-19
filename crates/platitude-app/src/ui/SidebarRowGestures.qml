@@ -1,0 +1,115 @@
+import QtQuick
+import platitude
+import platitude.ui
+
+// The sidebar's row gestures: which row was clicked last, and which one has a name box open in it. Held beside the
+// lists rather than inside one — only one row at a time is either, whichever section it sits in, and both have to
+// outlive the delegates that show them (デザイン規約 §左メニューの所作).
+QtObject {
+    id: gestures
+
+    /// The pane these gestures belong to. Where a gesture leads is the pane's to raise: it is the pane the page
+    /// listens to, and a second emitter would be a second answer.
+    required property Item host
+    required property RepoTab repoTab
+    required property NavSectionModel remotesModel
+
+    /// A menu raised from one of the folded list's rows is standing over it. The page's to set — the menus are its.
+    property bool menuOpen: false
+
+    property string activeKey: ""
+    property string editKey: ""
+    property string editKind: ""
+    property string editMode: ""
+    property string editId: ""
+    property string editOid: ""
+    property string editText: ""
+    /// The remote a row being renamed lives on (`origin`), empty for every other kind of row.
+    readonly property string editRemote: gestures.editKind !== "remote" ? ""
+        : gestures.editId.substring(0, gestures.editId.indexOf("/"))
+    /// A name the remote already carries. Refused here rather than left to git: a plain push to a name that exists
+    /// fast-forwards it and reports success, so somebody else's branch would move instead of this one being renamed.
+    /// Only ever a rename's rule: the box for a new branch's name opens on a remote row too, and what it makes is a
+    /// local branch — a name the remote happens to carry is no answer to that.
+    readonly property bool editTaken: gestures.editMode === "rename" && gestures.editRemote !== ""
+        && gestures.editText.trim() !== ""
+        && gestures.remotesModel.oidOfName(gestures.editRemote + "/" + gestures.editText.trim()) !== ""
+    /// What is typed cannot be accepted. The rules are git's own, asked of core (a stash's label is free text, not a
+    /// ref name).
+    readonly property bool editRefused: gestures.editKey !== ""
+        && (gestures.editTaken
+            || !(gestures.editKind === "stash"
+                 ? gestures.repoTab.validStashMessage(gestures.editText)
+                 : gestures.repoTab.validRefName(gestures.editText)))
+    readonly property string editRefusedWhy: !gestures.editRefused ? ""
+        : gestures.editText.trim() === ""
+          ? qsTr("A name is needed")
+          : gestures.editTaken
+            ? qsTr("%1 already has a branch called that").arg(gestures.editRemote)
+            : gestures.editKind === "stash"
+              ? qsTr("One line, and nothing invisible in it")
+              : qsTr("git will not take this as a name")
+
+    function startEdit(kind, key, mode, id, oid, text) {
+        // The box opens where the row is — folded, that is the section standing beside the rail, and the list is not
+        // put back for it (デザイン規約 §左メニューを畳む: a click in a peek does not undo the fold, which would take the
+        // diff it was made for down). The hover that raised that section no longer decides how long it stands: the box
+        // holds it open, the way a menu does (`pinned`).
+        gestures.editKind = kind
+        gestures.editMode = mode
+        gestures.editId = id
+        gestures.editOid = oid
+        gestures.editText = text
+        gestures.editKey = key
+    }
+    function stopEdit() {
+        gestures.editKey = ""
+        gestures.editText = ""
+        gestures.editMode = ""
+    }
+    function submitEdit(text) {
+        const kind = gestures.editKind
+        const id = gestures.editId
+        const oid = gestures.editOid
+        const mode = gestures.editMode
+        // What the box opened with: a remote branch is typed without the remote it is on, so the name it answers to is
+        // not what it shows.
+        const was = kind === "remote" ? id.substring(id.indexOf("/") + 1) : id
+        gestures.stopEdit()
+        if (mode === "branch")
+            gestures.host.branchAtRequested(oid, text.trim())
+        else if (text.trim() !== was)
+            gestures.host.renameSubmitted(kind, id, text.trim())
+    }
+    /// A click landed somewhere: the row it landed on becomes the one a second click would name, and any box open
+    /// elsewhere is walked away from (nothing is asked — what it costs is the typing).
+    function noteClick(key) {
+        if (gestures.editKey !== "" && gestures.editKey !== key)
+            gestures.stopEdit()
+        gestures.activeKey = key
+    }
+    /// Double-click: where the row leads (デザイン規約 §左メニューの所作).
+    function activateRow(kind, name, full, oidHex) {
+        const id = full !== "" ? full : name
+        if (kind === "branch")
+            gestures.host.refSwitchRequested("L", id)
+        else if (kind === "remote")
+            gestures.host.refSwitchRequested("R", id)
+        else if (kind === "worktree")
+            gestures.host.worktreeActivated(full)
+        else if (kind === "tag")
+            // A tag is a mark, not somewhere to carry on from: the row offers the one thing that would make it one.
+            gestures.startEdit(kind, "tag:" + id, "branch", id, oidHex, "")
+        // A stash is not a place to stand, and a folder is not a row.
+    }
+    /// The menu's way into the same box, for anyone who does not know the gesture or cannot aim two separate clicks at
+    /// one row.
+    function beginRename(kind, id, text) {
+        gestures.startEdit(kind, kind + ":" + id, "rename", id, "", text)
+    }
+    /// The same box on any row that names a commit, not just a tag's: a branch is most often started where another one
+    /// already stands.
+    function beginBranchAt(kind, id, oidHex) {
+        gestures.startEdit(kind, kind + ":" + id, "branch", id, oidHex, "")
+    }
+}

@@ -21,9 +21,6 @@ Rectangle {
     /// Folded down to the rail. Held by the page: what folds it is going
     /// to include opening a diff, and that is the page's to know.
     required property bool collapsed
-    /// A menu raised from one of the folded list's rows is standing over
-    /// it. Also the page's to know — the menus are its.
-    property bool menuOpen: false
 
     signal refActivated(string oidHex)
     /// Right-click on a row. `kind` is the section it came from, `name`
@@ -41,112 +38,35 @@ Rectangle {
     signal foldRequested(bool collapse)
 
     // ---- the row gestures ------------------------------------------
-    // Held here rather than in a list or a delegate: only one row at a
-    // time is the clicked one or the one being typed into, and both have
-    // to outlive the delegates that show them (デザイン規約 §左メニューの
-    // 所作).
-    property string activeKey: ""
-    property string editKey: ""
-    property string editKind: ""
-    property string editMode: ""
-    property string editId: ""
-    property string editOid: ""
-    property string editText: ""
-    /// The remote a row being renamed lives on (`origin`), empty for
-    /// every other kind of row.
-    readonly property string editRemote: sidebar.editKind !== "remote" ? ""
-        : sidebar.editId.substring(0, sidebar.editId.indexOf("/"))
-    /// A name the remote already carries. Refused here rather than left
-    /// to git: a plain push to a name that exists fast-forwards it and
-    /// reports success, so somebody else's branch would move instead of
-    /// this one being renamed.
-    /// Only ever a rename's rule: the box for a new branch's name opens on
-    /// a remote row too, and what it makes is a local branch — a name the
-    /// remote happens to carry is no answer to that.
-    readonly property bool editTaken: sidebar.editMode === "rename" && sidebar.editRemote !== ""
-        && sidebar.editText.trim() !== ""
-        && sidebar.remotesModel.oidOfName(sidebar.editRemote + "/" + sidebar.editText.trim()) !== ""
-    /// What is typed cannot be accepted. The rules are git's own, asked of
-    /// core (a stash's label is free text, not a ref name).
-    readonly property bool editRefused: sidebar.editKey !== ""
-        && (sidebar.editTaken
-            || !(sidebar.editKind === "stash"
-                 ? sidebar.repoTab.validStashMessage(sidebar.editText)
-                 : sidebar.repoTab.validRefName(sidebar.editText)))
-    readonly property string editRefusedWhy: !sidebar.editRefused ? ""
-        : sidebar.editText.trim() === ""
-          ? qsTr("A name is needed")
-          : sidebar.editTaken
-            ? qsTr("%1 already has a branch called that").arg(sidebar.editRemote)
-            : sidebar.editKind === "stash"
-              ? qsTr("One line, and nothing invisible in it")
-              : qsTr("git will not take this as a name")
-
-    function startEdit(kind, key, mode, id, oid, text) {
-        // The box opens where the row is — folded, that is the section
-        // standing beside the rail, and the list is not put back for it
-        // (デザイン規約 §左メニューを畳む: a click in a peek does not undo
-        // the fold, which would take the diff it was made for down). The
-        // hover that raised that section no longer decides how long it
-        // stands: the box holds it open, the way a menu does (`pinned`).
-        sidebar.editKind = kind
-        sidebar.editMode = mode
-        sidebar.editId = id
-        sidebar.editOid = oid
-        sidebar.editText = text
-        sidebar.editKey = key
+    // Held beside the lists rather than in one (`SidebarRowGestures`).
+    // The pane keeps the names its own callers already reach for: the
+    // page opens the box from the row menu, and the smoke hooks read
+    // which row has one.
+    SidebarRowGestures {
+        id: rowGestures
+        host: sidebar
+        repoTab: sidebar.repoTab
+        remotesModel: sidebar.remotesModel
     }
+    property alias activeKey: rowGestures.activeKey
+    property alias editKey: rowGestures.editKey
+    /// A menu raised from one of the folded list's rows is standing over
+    /// it. The page's to set — the menus are its.
+    property alias menuOpen: rowGestures.menuOpen
     function stopEdit() {
-        sidebar.editKey = ""
-        sidebar.editText = ""
-        sidebar.editMode = ""
+        rowGestures.stopEdit()
     }
     function submitEdit(text) {
-        const kind = sidebar.editKind
-        const id = sidebar.editId
-        const oid = sidebar.editOid
-        const mode = sidebar.editMode
-        // What the box opened with: a remote branch is typed without the
-        // remote it is on, so the name it answers to is not what it shows.
-        const was = kind === "remote" ? id.substring(id.indexOf("/") + 1) : id
-        sidebar.stopEdit()
-        if (mode === "branch")
-            sidebar.branchAtRequested(oid, text.trim())
-        else if (text.trim() !== was)
-            sidebar.renameSubmitted(kind, id, text.trim())
+        rowGestures.submitEdit(text)
     }
-    /// A click landed somewhere: the row it landed on becomes the one a
-    /// second click would name, and any box open elsewhere is walked away
-    /// from (nothing is asked — what it costs is the typing).
-    function noteClick(key) {
-        if (sidebar.editKey !== "" && sidebar.editKey !== key)
-            sidebar.stopEdit()
-        sidebar.activeKey = key
-    }
-    /// Double-click: where the row leads (デザイン規約 §左メニューの所作).
-    function activateRow(kind, name, full, oidHex) {
-        const id = full !== "" ? full : name
-        if (kind === "branch")
-            sidebar.refSwitchRequested("L", id)
-        else if (kind === "remote")
-            sidebar.refSwitchRequested("R", id)
-        else if (kind === "worktree")
-            sidebar.worktreeActivated(full)
-        else if (kind === "tag")
-            // A tag is a mark, not somewhere to carry on from: the row
-            // offers the one thing that would make it one.
-            sidebar.startEdit(kind, "tag:" + id, "branch", id, oidHex, "")
-        // A stash is not a place to stand, and a folder is not a row.
-    }
-    /// The menu's way into the same box, for anyone who does not know the
-    /// gesture or cannot aim two separate clicks at one row.
     function beginRename(kind, id, text) {
-        sidebar.startEdit(kind, kind + ":" + id, "rename", id, "", text)
+        rowGestures.beginRename(kind, id, text)
     }
-    /// The same box on any row that names a commit, not just a tag's: a
-    /// branch is most often started where another one already stands.
     function beginBranchAt(kind, id, oidHex) {
-        sidebar.startEdit(kind, kind + ":" + id, "branch", id, oidHex, "")
+        rowGestures.beginBranchAt(kind, id, oidHex)
+    }
+    function activateRow(kind, name, full, oidHex) {
+        rowGestures.activateRow(kind, name, full, oidHex)
     }
 
     /// Smoke hook (PG_AUTO_ACT=nav-filter): type into the filter band.
@@ -320,7 +240,7 @@ Rectangle {
             sectionModel: sidebar.branchesModel
             expanded: sidebar.expBranches || refFilter.text !== ""
             kindHint: "branch"
-            gestures: sidebar
+            gestures: rowGestures
             Layout.verticalStretchFactor: sidebar.sectionPull
             headTracks: sidebar.workTree.upstream !== ""
             headAhead: sidebar.workTree.ahead
@@ -357,7 +277,7 @@ Rectangle {
             sectionModel: sidebar.remotesModel
             expanded: sidebar.expRemotes || refFilter.text !== ""
             kindHint: "remote"
-            gestures: sidebar
+            gestures: rowGestures
             Layout.verticalStretchFactor: sidebar.sectionPull
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
             onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
@@ -378,7 +298,7 @@ Rectangle {
             sectionModel: sidebar.worktreesModel
             expanded: sidebar.expWorktree || refFilter.text !== ""
             kindHint: "worktree"
-            gestures: sidebar
+            gestures: rowGestures
             Layout.verticalStretchFactor: sidebar.sectionPull
         }
 
@@ -395,7 +315,7 @@ Rectangle {
             sectionModel: sidebar.stashesModel
             expanded: sidebar.expStashes || refFilter.text !== ""
             kindHint: "stash"
-            gestures: sidebar
+            gestures: rowGestures
             Layout.verticalStretchFactor: sidebar.sectionPull
             // A stash is a commit: clicking shows its stashed changes
             // in the details pane.
@@ -419,7 +339,7 @@ Rectangle {
             sectionModel: sidebar.tagsModel
             expanded: sidebar.expTags || refFilter.text !== ""
             kindHint: "tag"
-            gestures: sidebar
+            gestures: rowGestures
             Layout.verticalStretchFactor: sidebar.sectionPull
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
             onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
@@ -486,7 +406,7 @@ Rectangle {
         repoTab: sidebar.repoTab
         workTree: sidebar.workTree
         rail: rail
-        gestures: sidebar
+        gestures: rowGestures
         paneW: sidebar.width
         paneH: sidebar.height
         listW: sidebar.openWidth

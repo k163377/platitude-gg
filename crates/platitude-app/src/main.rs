@@ -173,6 +173,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/SharedToolTip.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SidebarFilterRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SidebarPane.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SidebarRowGestures.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SignatureMark.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SlimField.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SpinnerIcon.qml", "qt/qml/platitude");
