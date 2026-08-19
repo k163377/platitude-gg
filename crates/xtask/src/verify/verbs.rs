@@ -117,6 +117,21 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "fetch-recover" => {
             Some("fetch_recover was=true hadline=true wrong=false line=false failures=0")
         }
+        // A run of failures cut short photographs the warning shape,
+        // which is a real state and the one the short arguments are for
+        // — so which shape the run came to rest in is said out loud.
+        // `stopped=` is the tab's own suspension, the thing that puts
+        // the word `Resume` on the button. The counts ride after it
+        // unjudged: the fetch an opening fires lands its own failure
+        // inside the run, and where it lands moves with the machine.
+        "fetch-fail" if arg.is_empty() || arg == "1" || arg == "2" => {
+            Some("fetch_fail stopped=false")
+        }
+        "fetch-fail" => Some("fetch_fail stopped=true"),
+        // The resume on the end of such a run, whose whole show is over
+        // before the picture is taken: what it ends on is a button back
+        // at work, and that frames exactly like `fetch-fail 1`.
+        "fetch-resume" => Some("fetch_resume stopped=true fetched=true"),
         // Nothing is pressed in this one, so the picture on its own is a
         // graph — and a graph that fetched and one that did not frame the
         // same way. `fails=0` is the other half: a run whose opening fetch
