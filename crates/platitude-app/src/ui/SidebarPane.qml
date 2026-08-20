@@ -435,6 +435,7 @@ Rectangle {
         onPeekLeft: kind => sidebar.leavePeek(kind)
         onPeekToggled: (kind, top) => sidebar.togglePeek(kind, top)
         onUnfoldRequested: sidebar.foldRequested(false)
+        onAddRemoteRequested: sidebar.addRemoteRequested()
     }
 
     // ---- the folded list's one open section --------------------------

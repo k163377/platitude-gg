@@ -113,7 +113,12 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // The `+` on a REMOTES band that has gone unavailable around it.
         // The picture holds the band; it cannot hold whether the mark
         // still answers, and a `+` wired to nothing frames exactly like
-        // one that opened the form.
+        // one that opened the form. Folded, `collapsed=` is the second
+        // half: the rail's own cell must reach the dialog without
+        // putting the list back over whatever the fold was made for.
+        "nav-add-remote" if arg == "folded" => {
+            Some("nav_add_remote dialog=true collapsed=true")
+        }
         "nav-add-remote" => Some("nav_add_remote dialog=true"),
         // An emptied panel with a red mark over it and an emptied panel
         // with a quiet one frame the same from the waist down: the panel

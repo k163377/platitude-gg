@@ -38,6 +38,10 @@ Rectangle {
     signal peekToggled(string kind, real top)
     /// Put the list back, with whatever was open in it still open.
     signal unfoldRequested()
+    /// The REMOTES cell with nothing in it was clicked: a remote is to be written down. That cell has no section to
+    /// open, and writing the first remote down is what a repository with none is for — a local `init` that now wants
+    /// what is on the far side. The open band carries the same `+` at the end of it (NavHeader).
+    signal addRemoteRequested()
 
     // The sections in the order the open sidebar stacks them, wearing the tints their headers wear (NavHeader).
     readonly property var sections: [
@@ -93,8 +97,17 @@ Rectangle {
         rail.peekLeft(kind)
     }
     function tapAt(kind) {
-        if (rail.countOf(kind) > 0)
+        // The one cell that answers a click with no rows behind it. Everywhere else an empty cell is unavailable —
+        // there is nothing to open and nothing to do — but this one has the operation that fills it (`addable`).
+        if (rail.addableAt(kind))
+            rail.addRemoteRequested()
+        else if (rail.countOf(kind) > 0)
             rail.peekToggled(kind, rail.topOf(kind))
+    }
+    /// Whether a cell's whole answer is "write a remote down": REMOTES, and only while it is empty. With rows in it
+    /// the click belongs to the section, and the `+` is on the band the hover opens.
+    function addableAt(kind) {
+        return kind === "remote" && rail.countOf(kind) === 0
     }
 
     /// Where a section's cell sits, for anything that has to line up with it without the pointer having been there (the
@@ -149,13 +162,23 @@ Rectangle {
                 /// under the mark has already said as much. The cell keeps its place — what is countable is worth
                 /// counting at zero — and goes unavailable (規約 §無効).
                 readonly property bool empty: cell.sectionCount === 0
+                /// Except this one. An empty REMOTES cell has an operation after all — writing the first remote down —
+                /// so it answers the pointer and the click, and wears the `+` that says which (`rail.addableAt`).
+                readonly property bool addable: rail.addableAt(cell.modelData.kind)
 
                 width: Theme.railWidth
                 height: Theme.railWidth
                 // The open section keeps the hover wash while the pointer is away in its list: what is on screen has to
                 // say which cell put it there. An empty one washes for nobody — unavailable does not answer the pointer
-                // (規約 §無効).
-                color: (cellHover.hovered && !cell.empty) || cell.open ? Theme.bgHover : "transparent"
+                // (規約 §無効) — unless it is the one with something to press.
+                color: (cellHover.hovered && (!cell.empty || cell.addable)) || cell.open
+                       ? Theme.bgHover : "transparent"
+                // The `+` is the cell's only name while it is standing in for the whole band, and a mark with no word
+                // beside it has nowhere else to carry one (規約 §hover のツールチップ). The wording is the band's own, so
+                // the two doors into the dialog do not name it differently (デザイン規約 §リモートを書き留める).
+                ToolTip.visible: cell.addable && cellHover.hovered
+                ToolTip.delay: Metrics.tipDelayMs
+                ToolTip.text: qsTr("Add remote…")
 
                 Column {
                     anchors.centerIn: parent
@@ -172,7 +195,9 @@ Rectangle {
                         kind: cell.modelData.icon
                         // Off the graph is a state, and a state is said by dropping the mark a step, not by greying it
                         // — grey text is what unavailable looks like (デザイン規約 §暗く落とした段). Which is what an empty one is,
-                        // so grey is exactly what it wears.
+                        // so grey is exactly what it wears. An empty REMOTES cell greys too: what is unavailable there
+                        // is the section, and the mark and the number are what report it — the `+` beside them is the
+                        // part that can be pressed, and it keeps its colour.
                         tint: cell.empty ? Theme.textMuted : cell.offGraph ? Theme.refTagDim : cell.modelData.tint
                         // The cell's whole height above the number, with no padding written around the box: the mark
                         // carries its own air inside it (デザイン規約 §余白 — a mark's own margin counts towards the gap
@@ -199,6 +224,19 @@ Rectangle {
                             // downwards it starts at the box's own top, because the box now reaches the top of the
                             // cell. Centred on that corner, half the badge would stand in the cell above — beside a
                             // number that counts a different section.
+                            anchors.horizontalCenter: parent.right
+                            anchors.top: parent.top
+                        }
+                        // The `+` the open band carries at the end of it (NavHeader), worn on the same corner as the
+                        // eye and only while the section is empty: with rows in it the band is a hover away and
+                        // carries its own. It keeps the section's colour against the greyed mark it sits on — what
+                        // cannot be pressed is the section, not this (規約 §無効).
+                        NavIcon {
+                            visible: cell.addable
+                            kind: "plus"
+                            tint: cell.modelData.tint
+                            width: Theme.iconSm
+                            height: Theme.iconSm
                             anchors.horizontalCenter: parent.right
                             anchors.top: parent.top
                         }

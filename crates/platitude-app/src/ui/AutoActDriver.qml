@@ -931,7 +931,8 @@ Item {
     }
     /// PG_AUTO_ACT=nav-add-remote: the run stops with the real dialog on screen. `remotes=` is the section the `+` was
     /// pressed on — at 0 the band around it is unavailable, and that the form still came up is the half of this a
-    /// picture of an empty section cannot hold either way.
+    /// picture of an empty section cannot hold either way. `collapsed=` says which of the two doors it came through,
+    /// and that the folded one did not put the list back on its way (デザイン規約 §左メニューを畳む).
     Timer {
         id: navAddRemoteTimer
         interval: 25
@@ -941,6 +942,7 @@ Item {
                 return
             navAddRemoteTimer.stop()
             AppBackend.report("nav_add_remote dialog=" + remoteDialog.visible
+                              + " collapsed=" + page.sidebarCollapsed
                               + " remotes=" + remotesModel.total
                               + " name=" + remoteDialog.wantedName)
             driver.complete()
@@ -2301,7 +2303,16 @@ Item {
             // (デザイン規約 §左メニューの所作). Put in at the band's own signal — clicks cannot be injected (verify-ui スキル) —
             // so what answers is the page's own wiring. `--preset noremote` is the half worth reading: a section of no
             // rows is where this is worth pressing.
-            sidebarPane.tapAddRemote()
+            //
+            // "folded" is the other door onto the same dialog: the rail's own REMOTES cell, which at zero has no
+            // section to open and answers the click with this instead. It goes in at `NavRail.tapAt`, the one answer
+            // the cells give (`peekTap`), so the routing being tested is the cell's.
+            if (arg === "folded") {
+                page.foldByHand(true)
+                sidebarPane.peekTap("remote")
+            } else {
+                sidebarPane.tapAddRemote()
+            }
             navAddRemoteTimer.start()
         } else if (act === "nav-close") {
             // The pane keeps sections packed against the top; what is read is where the closed header came to rest — at
