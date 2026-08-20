@@ -181,12 +181,17 @@ Rectangle {
                         width: Theme.iconXl
                         height: Theme.iconXl
                         // The eye the TAGS header carries, worn as a mark on the corner: folded, this is the only place
-                        // "are tags in the graph" can be answered. It is open or it is not there — a mark that is
-                        // always up says nothing, and two steps of colour is not a state anyone reads at this size.
+                        // "are tags in the graph" can be answered. Up in both states, and struck through once they are
+                        // out — the same pair the open header wears (NavHeader), so folding does not change the mark
+                        // that says it. A badge that is only there in one state leaves the other reading as a cell that
+                        // never carried one, and two steps of colour is not a state anyone reads at this size: the
+                        // colour is what the stroke is read against, not the answer on its own.
+                        // An empty section is the exception — with no tags to keep out of the graph the switch has
+                        // nothing to answer for, and the cell is unavailable anyway (規約 §無効).
                         // Smaller than the section's own mark, because it is about the mark rather than beside it.
                         NavIcon {
-                            visible: cell.taggable && rail.tagsShown
-                            kind: "eye"
+                            visible: cell.taggable && !cell.empty
+                            kind: rail.tagsShown ? "eye" : "eye-off"
                             tint: sectionIcon.tint
                             width: Theme.iconSm
                             height: Theme.iconSm
