@@ -27,6 +27,12 @@ Rectangle {
     /// Whether the pointer is on this tab. The real hover and the smoke hook write this one property — hover is the
     /// input that cannot be injected, so the wash and the mark have to be answering a single question or the headless
     /// run proves nothing about either.
+    ///
+    /// Written by the handler below rather than by the MouseArea that fills the tab: hover goes to the topmost item
+    /// that takes it, and the `✕` is a Control that takes its own, so the tab stopped being "under the hand" exactly
+    /// when the hand arrived at the mark — which dropped the mark out from under it (rules-refs/app-ui.md 「行の
+    /// hover を `MouseArea` で取らない」; 実測 qmltestrunner: `pointed=false mark=0` with the pointer in the middle
+    /// of the `✕`).
     property bool pointed: false
     /// Automation: whether the mark is out on this tab. Read off the mark itself — reporting what was asked of it would
     /// go on passing after the binding that draws it had come apart.
@@ -67,12 +73,18 @@ Rectangle {
         id: heldShift
         x: tabItem.held ? tabItem.heldX - tabItem.x : 0
     }
+    // Which tab the hand is on (デザイン規約 §タブの所作「`✕` が出るのは前に居るタブと、手の下のタブだけ」). A handler
+    // because handlers are passive: the mark, the wash and the tab go on answering the one pointer however many
+    // children of this tab take hover of their own.
+    HoverHandler {
+        id: tabHover
+        onHoveredChanged: tabItem.pointed = tabHover.hovered
+    }
     // The whole tab answers the middle button; the `✕` does not accept it, so a press on the mark falls through to the
     // same gesture.
     MouseArea {
         id: tabMouse
         anchors.fill: parent
-        hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
         /// Where the press landed in the scene, and whether the hand has since carried the tab off. Both the threshold
         /// and the carrying are measured from the scene: this item moves under the hand, so its own coordinates say
@@ -120,7 +132,6 @@ Rectangle {
             if (mouse.button === Qt.MiddleButton)
                 tabItem.tabPressed(mouse.button)
         }
-        onContainsMouseChanged: tabItem.pointed = containsMouse
     }
     Rectangle {
         anchors.fill: parent
