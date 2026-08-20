@@ -118,7 +118,15 @@ Rectangle {
         // it cannot be pressed, and at zero remotes it is the only thing here that can (規約 §無効).
         HoverToolButton {
             visible: header.showAddRemote
-            padding: 0
+            // The seat stays the one every icon button in the window sits in; the mark inside it is one step down, so
+            // it is drawn on the same grid as the mark at the head of this band (`iconMd` — デザイン規約 §寸法). A `Control`
+            // stretches its `contentItem` over whatever the padding leaves, so the step is written as that padding and
+            // not on the icon: a width put on the icon is overwritten on the next layout.
+            //
+            // Undropped, the cross was the only mark in the window drawn on the full `iconLg` grid — and the only one
+            // that fills its box in both axes, so it carried a good half again the ink of the `+` on a WIP row
+            // (measured: 14 against 12, against 8 on a diff line).
+            padding: (Theme.iconLg - Theme.iconMd) / 2
             implicitWidth: Theme.iconLg
             implicitHeight: Theme.iconLg
             contentItem: NavIcon {
