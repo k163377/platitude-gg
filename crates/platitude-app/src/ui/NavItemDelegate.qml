@@ -40,6 +40,12 @@ Item {
     /// Stands in for the pointer where headless cannot put one, so a cut-down row's tooltip can be photographed
     /// (PG_AUTO_ACT=path-tip). -1 points at no row.
     property int pointedTipRow: -1
+    /// Whether the pointer is on this row. Written by the handler below rather than by the `MouseArea` that fills the
+    /// row: hover goes to the topmost item that takes it, and the stage `+` is a `Control` that takes its own, so the
+    /// row stopped being "under the hand" exactly when the hand arrived at the mark (rules-refs/app-ui.md 「行の hover
+    /// を `MouseArea` で取らない」; 実測 qmltestrunner: `containsMouse=false` with the pointer in the middle of the `+`,
+    /// which took the row's wash out from under the hand reaching for it and closed its line-ending card).
+    property bool pointed: false
     /// A right-click menu of the page's is standing over this list.
     property bool menuStanding: false
     property string kindHint: "branch"
@@ -139,7 +145,7 @@ Item {
         color: Theme.bgHover
         // The stand-in lights the row as the pointer does, so a picture taken of a row that says nothing still shows
         // where the pointer was standing (`tipPointedAt`).
-        visible: itemMouse.containsMouse || navRow.tipPointedAt
+        visible: navRow.pointed || navRow.tipPointedAt
     }
     // No mark: nothing asks a question about a row in this list any more. What one of these rows takes away is held
     // down on the menu row that names it, and that menu is standing over the row while it is held (デザイン規約 §長押し).
@@ -293,19 +299,24 @@ Item {
             navRow.refClicked(navRow.oid_hex)
         }
     }
+    // Which row the hand is on. A handler because handlers are passive: the wash, the mark and the row's own card go
+    // on answering the one pointer however many children of this row take hover of their own — and one of them,
+    // `stageButton`, is a `Control` that takes its own. Gated the way the area below is: while the box is open the row
+    // belongs to it.
+    HoverHandler {
+        id: rowHover
+        enabled: !navRow.editing
+        onHoveredChanged: navRow.pointed = rowHover.hovered
+    }
+    // The row that carries the mark tells the model it is the one being read, so the sentence can be built for it
+    // alone. The row itself has no field left to hold it (`NavItem::eol_mark`).
+    onPointedChanged: if (navRow.eol_mark) navRow.eolPointed(navRow.fullName, navRow.pointed)
     MouseArea {
         id: itemMouse
         anchors.fill: parent
-        hoverEnabled: true
         // While the box is open the row belongs to it.
         visible: !navRow.editing
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        // The row that carries the mark tells the model it is the one being read, so the sentence can be built for it
-        // alone. The row itself has no field left to hold it (`NavItem::eol_mark`).
-        onContainsMouseChanged: {
-            if (navRow.eol_mark)
-                navRow.eolPointed(navRow.fullName, itemMouse.containsMouse)
-        }
         onClicked: mouse => {
             if (mouse.button === Qt.RightButton) {
                 // Only rows with operations behind them open a menu.
@@ -331,7 +342,7 @@ Item {
     // Hover stage/unstage affordance.
     HoverToolButton {
         id: stageButton
-        visible: navRow.showStage && !navRow.folder && (itemMouse.containsMouse || hovered || navRow.stagePeer)
+        visible: navRow.showStage && !navRow.folder && (navRow.pointed || navRow.stagePeer)
         anchors.right: parent.right
         anchors.rightMargin: Theme.spaceXs
         anchors.verticalCenter: parent.verticalCenter
@@ -391,7 +402,7 @@ Item {
     readonly property bool tipPointedAt: navRow.pointedTipRow >= 0 && navRow.pointedTipRow === navRow.index
     // Not behind a standing menu: the pointer is in the menu, and a tip that comes out now is drawn over the rows the
     // hand is reading (デザイン規約 §メニュー).
-    ToolTip.visible: (itemMouse.containsMouse || navRow.tipPointedAt) && !navRow.editing && !navRow.menuStanding
+    ToolTip.visible: (navRow.pointed || navRow.tipPointedAt) && !navRow.editing && !navRow.menuStanding
                      && navRow.hoverText !== ""
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: navRow.hoverText
