@@ -936,6 +936,12 @@ Item {
             "window_floor fits="
             + (window.width >= floorW && window.height >= floorH)
             + " floorW=" + floorW + " floorH=" + floorH
+            // The two `floorW` is the larger of (`Main.floorWidth`), so which of them set it is read here rather than
+            // worked back out of the number: folding the list lowers `pageW` and leaves `bandW` where it is, and on an
+            // OS whose band carries the window buttons and the grab runs that is where the two change places.
+            + " bandW=" + Math.ceil(topBar.floorWidth)
+            + " pageW=" + (window.floorPage !== null
+                           ? Math.ceil(window.floorPage.floorWidth) : 0)
             + " w=" + window.width + " h=" + window.height
             + " from=" + (driver.floorStoodAt === "" ? "-" : driver.floorStoodAt)
             // The page the floor was read off, which with no tab open is the blank one — `tabs=0` is the run that
