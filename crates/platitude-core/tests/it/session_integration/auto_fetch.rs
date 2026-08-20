@@ -229,9 +229,20 @@ async fn opening_a_repository_fetches_without_being_asked() {
 /// The ask can arrive before the repository is open — the application
 /// makes it the instant it has handed the session its settings, and the
 /// opening runs on the runtime — so the session keeps it until there is
-/// something to fetch into. Which of the two arrives second is a
-/// scheduling accident; that the fetch happens is not.
-#[tokio::test(flavor = "multi_thread")]
+/// something to fetch into.
+///
+/// Which of the two arrives first is the scheduler's business in the
+/// application, and this test's to settle: the single-threaded runtime
+/// polls a spawned task only once the task that spawned it awaits, so
+/// the opening cannot have run by the line below however loaded the
+/// machine is, and the ask is the one that waits. Left to the
+/// multi-threaded runtime it is a race — a busy machine fits the whole
+/// opening into the two calls after `open` — and what is under test
+/// becomes the ask that arrives second, which
+/// `opening_a_repository_fetches_without_being_asked` owns already
+/// (実測 2026-08-20: that is how the local-only sibling below failed, in
+/// a Linux container running beside a host build).
+#[tokio::test]
 async fn an_ask_that_beats_the_opening_is_kept_for_it() {
     let mut origin = TestRepo::init();
     origin.commit_file("f.txt", "0\n", "root");
@@ -246,12 +257,10 @@ async fn an_ask_that_beats_the_opening_is_kept_for_it() {
         sink.clone(),
     );
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
-    assert!(
-        matches!(
-            session.fetch_on_open(),
-            OpenFetch::Held | OpenFetch::Started
-        ),
-        "held where the repository is not open yet, fired where it is"
+    assert_eq!(
+        session.fetch_on_open(),
+        OpenFetch::Held,
+        "the repository is not open yet, so the session keeps the ask"
     );
     assert_eq!(write_result(&sink, OPEN_FETCH_OP).await, None);
     assert_eq!(
@@ -307,7 +316,13 @@ async fn a_repository_with_no_remote_is_not_fetched_from() {
 /// The same where the ask beats the opening, which is the shape the
 /// application makes: it asks the instant it has handed the session its
 /// settings, so the answer is read by the opening rather than by the ask.
-#[tokio::test(flavor = "multi_thread")]
+///
+/// On the single-threaded runtime for the reason
+/// `an_ask_that_beats_the_opening_is_kept_for_it` gives, and here it is
+/// the whole test: an ask that arrives after the opening instead reads a
+/// remote list that has not been read yet, which is deliberately not a
+/// "no" (`known_to_have_no_remote`), and fetches.
+#[tokio::test]
 async fn an_ask_held_for_a_local_only_repository_fires_nothing() {
     let mut only = TestRepo::init();
     only.commit_file("f.txt", "0\n", "root");
@@ -320,16 +335,19 @@ async fn an_ask_held_for_a_local_only_repository_fires_nothing() {
         sink.clone(),
     );
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
-    assert!(
-        matches!(
-            session.fetch_on_open(),
-            OpenFetch::Held | OpenFetch::NoRemote
-        ),
-        "held where the repository is not open yet, refused where it is"
+    assert_eq!(
+        session.fetch_on_open(),
+        OpenFetch::Held,
+        "the repository is not open yet, so the session keeps the ask"
     );
     // The opening settles the ask before it publishes anything, so a fetch
     // pressed after this point is behind whatever it queued.
     sink.opening_snapshots().await;
+    assert_eq!(
+        session.fetch_on_open(),
+        OpenFetch::Spent,
+        "the opening redeemed the ask rather than leaving it held"
+    );
     session.fetch(None);
     assert_eq!(write_result(&sink, "fetch").await, None);
     assert_eq!(
