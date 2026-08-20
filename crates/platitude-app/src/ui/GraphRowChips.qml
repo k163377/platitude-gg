@@ -25,7 +25,7 @@ Item {
 
     /// Which stacked chip a point in this column's frame is over, if it is over one that has something to unstack.
     ///
-    /// A chip is `fontSmLine` tall — sixteen pixels in a row of twenty-eight — and a hand that has just arrived is
+    /// A chip is the node's own height — twenty pixels in a row of twenty-eight — and a hand that has just arrived is
     /// still settling. Landing takes the chip itself, but once the list is out (`held`) the whole chip column holds it:
     /// drifting a dozen pixels inside the column the chips live in is not leaving them (2026-08-09 trace).
     function chipAt(px, py, held) {
@@ -66,7 +66,11 @@ Item {
         anchors.rightMargin: Theme.spaceXs
         anchors.verticalCenter: parent.verticalCenter
         width: chipColumn.columnWidth - 2 * Theme.spaceXs
-        font.pixelSize: Theme.fontSm
+        // Left at the slim field's own size, which is the chip's: what is typed here becomes the chip that stands in
+        // this column, so it is read at the size it will be read at. **The placeholder does not fit a column at
+        // `labelColW`** — it elides to `Create branch he…`, which asks nothing — but the column is a width a hand can
+        // drag, so that is a question about the wording and the floor rather than about this size (2026-08-20 ユーザー判断:
+        // 別セッションで直す).
         placeholderText: qsTr("Create branch here?")
         onAccepted: chipColumn.namingSubmitted(nameField.text.trim())
         // Held on the view, not here: this delegate is recycled the moment the row scrolls off, and half a name is

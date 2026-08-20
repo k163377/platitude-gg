@@ -20,7 +20,11 @@ Rectangle {
     property bool muted: false
 
     visible: records.length > 0
-    height: Theme.fontSmLine
+    // As tall as the commit it names — the node itself, not a size that happens to equal it today, so the two cannot
+    // drift apart (2026-08-20 ユーザー判断). A row then carries one band instead of two heights. It is also exactly one
+    // `fontMdLine`, which is what lets the name inside be the row's own text size: a branch name is what the row is
+    // read for, not meta about it (規約 §タイポグラフィ: `fontMd` = 一覧 / グラフ行の本文).
+    height: Metrics.nodeIcon
     width: Math.min(chipContent.implicitWidth + 2 * Theme.spaceXs, maxWidth)
     radius: Theme.radiusSm
     clip: true
@@ -62,16 +66,54 @@ Rectangle {
     border.color: kindColor
     border.width: Theme.borderWidth
 
+    /// Where the ink starts inside the frame, in whole pixels off the top of the chip: the room the border leaves,
+    /// halved, **with the odd pixel going up**.
+    ///
+    /// The frame is the commit's height rather than the type's, so what stands in it is placed by its ink and not by
+    /// the line box the family hands out: a family keeps more room above its ascender than below its descender, and
+    /// centring the box spent that room inside it and sat the descenders of `g` and `/` on the border (2026-08-20
+    /// ユーザー報告). The amount is the family's own, so a fixed lift squares one and opens a gap under the other: this asks.
+    /// Three of the eighteen pixels inside are left over (both families put fifteen of ink in it), and three will not
+    /// halve; the pixel goes above, where every ascender is, rather than below the one descender a name may not even
+    /// have (実測: 2/1 both on screen with Yu Gothic UI and in the Ubuntu container with Noto Sans CJK JP — and **not off
+    /// the headless picture**, which is drawn in neither, see the verify-ui skill).
+    function inkTop(ink) {
+        const room = chip.height - 2 * Theme.borderWidth - ink.tightBoundingRect.height
+        return Theme.borderWidth + Math.ceil(room / 2)
+    }
+    /// Where a label goes to put its ink there. Whole pixels: a label laid out on a half one spreads its antialiasing
+    /// into a row it does not own, and that row is the margin. **Each label asks for itself** — the two here are
+    /// different sizes, and one offset for the row hung the smaller from the taller one's top edge (2026-08-20 ユーザー報告).
+    function inkY(label, ink) {
+        return Math.round(chip.inkTop(ink) - label.baselineOffset - ink.tightBoundingRect.y)
+    }
+
+    // Measured off a probe reaching every extreme Latin ink has, rather than off the name itself, so a chip does not
+    // stand differently from its neighbour because the name it carries happens to have no descender in it.
+    TextMetrics {
+        id: nameInk
+        font: nameLabel.font
+        text: "Hbxp"
+    }
+    TextMetrics {
+        id: countInk
+        font: countLabel.font
+        text: "Hbxp"
+    }
+
     Row {
         id: chipContent
-        anchors.verticalCenter: parent.verticalCenter
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.leftMargin: Theme.spaceXs
         spacing: Theme.spaceXs
         Label {
+            id: nameLabel
+            y: chip.inkY(nameLabel, nameInk)
             text: chip.recName
             color: chip.nameColor
-            font.pixelSize: Theme.fontSm
+            font.pixelSize: Theme.fontMd
             font.weight: chip.recHead ? Font.DemiBold : Font.Normal
             elide: Text.ElideRight
             width: Math.min(implicitWidth,
@@ -81,6 +123,8 @@ Rectangle {
         // How many more names the card has, which is meta about the row rather than one of the names — the colour the
         // row's other meta (author, date) is written in.
         Label {
+            id: countLabel
+            y: chip.inkY(countLabel, countInk)
             visible: chip.records.length > 1
             text: "+" + (chip.records.length - 1)
             color: chip.muted ? Theme.textMuted : Theme.textSecondary
