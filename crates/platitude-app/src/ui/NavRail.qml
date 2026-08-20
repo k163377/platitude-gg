@@ -159,7 +159,13 @@ Rectangle {
 
                 Column {
                     anchors.centerIn: parent
-                    spacing: 0
+                    // Taken back, not written: the box keeps half its unused grid as air under the mark's ink, and the
+                    // number's line box keeps its own leading above the digit, so a zero here still reads as a gap.
+                    // Once the mark filled the cell that gap grew to the width of the one between two cells, and the
+                    // pair stopped reading as a pair (measured on Windows: 7px from ink to digit against 8px from the
+                    // digit to the next cell's mark; 4 against 9 with this). Subtracting the air a mark holds is what
+                    // デザイン規約 §余白 says to do beside a word — under one it is the same sum.
+                    spacing: -Theme.spaceXs
                     NavIcon {
                         id: sectionIcon
                         anchors.horizontalCenter: parent.horizontalCenter
