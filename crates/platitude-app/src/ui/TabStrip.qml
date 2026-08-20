@@ -411,12 +411,34 @@ Item {
         view: tabs
         tabsModel: tabStrip.tabsModel
     }
+    // Opening one more. Drawn rather than typed: a `+` is in every family the chain names, so nothing here ever looked
+    // broken — but its shape and the weight of its line were whatever the platform resolved, where every other mark in
+    // the window holds `Metrics.iconStroke` wherever it stands (デザイン規約 §寸法「印はフォントの字に任せない」).
+    //
+    // The mark is a step below its seat. The band's own marks are its two ends — the ☰ and the window buttons, each a
+    // `railWidth` cell the full height of it (§ウィンドウの縁) — and this is not one of those: it follows the last tab, so
+    // what it is level with is the `✕` standing in the tabs beside it. That is the ink the typed `+` carried anyway
+    // (measured on Windows, offscreen: 8px against `iconSm`'s 8.25), so the band reads as it did. A `Control`
+    // stretches its `contentItem` over whatever the padding leaves, which is why the step is written as that padding
+    // and not as a width on the icon: a width there is gone on the next layout.
     HoverToolButton {
         id: plusButton
         x: tabs.x + tabs.width
         anchors.verticalCenter: parent.verticalCenter
-        text: "+"
-        font.pixelSize: Theme.fontLg
+        padding: (Theme.iconLg - Theme.iconSm) / 2
+        // The seat every icon button in the window sits in. The typed `+` came out a pixel wider than that (Fusion's
+        // own padding around a glyph — 21 measured), and three of this strip's width expressions read `plusButton`, so
+        // the run the tabs share out gains that pixel back.
+        implicitWidth: Theme.iconLg
+        implicitHeight: Theme.iconLg
+        // What the label was saying for it: a ToolButton names itself by its text, and this one no longer has any. The
+        // words the menu's own row uses, since it raises the same request — the mark is idiomatic and the answer comes
+        // straight out, so it gets a name and no tip, like the ☰ and the three at the far end (デザイン規約 §hover のツールチップ).
+        Accessible.name: qsTr("Open repository…")
+        contentItem: NavIcon {
+            kind: "plus"
+            tint: Theme.textPrimary
+        }
         onClicked: tabStrip.openRepositoryRequested()
     }
     // The run of empty band past the last tab. The hit test answers HTCAPTION for this rectangle

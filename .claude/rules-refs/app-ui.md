@@ -218,6 +218,7 @@
 - cap は `floor`・タブ幅は `ceil` の整数で計算(`tabs.runAvail`)— 端数のまま配ると溢れていないのに 1px スクロールする strip になる(実測 content=897 対 run=896)
 - `✕` は前に居るタブと手の下のタブにだけ出す(規約 §タブの所作)。`visible` ではなく `opacity` — レイアウトから消えると席ごと消え、閉じに来た手の下でタブが縮む。報告 `markShown` は印自身の `opacity`(入力側を報告するとバインディングが切れていても緑になる)
 - 閉じる印はどこでも 1 段下(`iconSm` + `textSecondary`。規約 §寸法)。`NavIcon.stroke` は既定のまま — `ActionButton.besideWord` の縮小は語の隣に立つ印の話で、単独の印は画素単位の同形を優先。`TopBar` の `WindowButton` は OS の chrome の席なので当たらない
+- 新規タブの `+` も `NavIcon`(規約 §タブの所作)。**席は `iconLg` の箱ちょうどに固定する** — 字で組むと Fusion が glyph の周りに持つ padding で 21px になり、`plusButton.width` は `tabStripFloorW` / `tabsWantWidth` / `tabs.runAvail` の 3 式と `grabArea.x` が読むので、席が 1px 動くだけでタブの配り分と掴み代がまとめてずれる(実測 `tab-widths`: run 908 → 909・cap 173 → 174・譲った 2 枚が 201 → 202)。段の落とし方は帯末の道具と同じ padding 形(上記 REMOTES の行)。字を外すと `Accessible.name` も消えるので、`AppMenu` の同じ行の語を書く(印は慣用なのでツールチップは出さない = 規約 §hover のツールチップ)
 - タブの検証は `tab-widths` / `tab-mark`(verbs.md)。demo repo は全部 `repo` という名前で、同名の並びでは「どれが譲ったか」を言えない — xtask が長さの違う名前で建てる(`verify::TAB_NAMES`)
 - タブの中クリックはそのタブを閉じる(規約 §タブの所作)。`✕` の上で押しても同じ — `HoverToolButton` は左ボタンしか受け取らず、中ボタンの press は印を素通りして下の `MouseArea` に落ちる。ヘッドレスは `middle-close`(verbs.md)
 - 既に開いているリポジトリはそのタブへ移る(規約 §タブの所作。`TabsModel::position_of`)。比較は `repo::open_key`(= `canonicalize`)— 同じフォルダが入口ごとに違う綴りで届く(WORKTREES 行は git の綴り・ピッカーは 8.3 短縮名)ので `repo_key` だけでは自分自身の行が素通りする(実測: 押した回数だけタブが増えた)。`open_key` の答えは `\\?\` 前置が付くので保存しない(`state.toml` は `repo_key` のまま)。サブフォルダは別鍵で 2 枚開く(同一判定は `rev-parse` 待ち = 同期スロットの中。P3-確認事項)。ヘッドレスは `open-again`(verbs.md)
