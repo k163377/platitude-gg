@@ -125,6 +125,7 @@ QtObject {
     readonly property int iconSm: 12
     readonly property int iconMd: 16
     readonly property int iconLg: 20
+    readonly property int iconXl: 28
     readonly property int borderWidth: 1
     readonly property int radiusSm: 2
     readonly property int radiusMd: 4

@@ -168,8 +168,12 @@ Rectangle {
                         // — grey text is what unavailable looks like (デザイン規約 §暗く落とした段). Which is what an empty one is,
                         // so grey is exactly what it wears.
                         tint: cell.empty ? Theme.textMuted : cell.offGraph ? Theme.refTagDim : cell.modelData.tint
-                        width: Theme.iconLg
-                        height: Theme.iconLg
+                        // The cell's whole height above the number, with no padding written around the box: the mark
+                        // carries its own air inside it (デザイン規約 §余白 — a mark's own margin counts towards the gap
+                        // beside it), and these marks draw some 11 of their 16 grid. A `spaceXs` written on either
+                        // side of the box was that air twice over, and what the eye measures is the ink.
+                        width: Theme.iconXl
+                        height: Theme.iconXl
                         // The eye the TAGS header carries, worn as a mark on the corner: folded, this is the only place
                         // "are tags in the graph" can be answered. It is open or it is not there — a mark that is
                         // always up says nothing, and two steps of colour is not a state anyone reads at this size.
@@ -180,8 +184,12 @@ Rectangle {
                             tint: sectionIcon.tint
                             width: Theme.iconSm
                             height: Theme.iconSm
+                            // Sideways it hangs off the box, into the air the cell keeps either side of the mark;
+                            // downwards it starts at the box's own top, because the box now reaches the top of the
+                            // cell. Centred on that corner, half the badge would stand in the cell above — beside a
+                            // number that counts a different section.
                             anchors.horizontalCenter: parent.right
-                            anchors.verticalCenter: parent.top
+                            anchors.top: parent.top
                         }
                     }
                     // How many are in there. It stands in for the caption as well as the count, so it takes the
