@@ -20,11 +20,11 @@ Rectangle {
     property bool muted: false
 
     visible: records.length > 0
-    // As tall as the commit it names — the node itself, not a size that happens to equal it today, so the two cannot
-    // drift apart (2026-08-20 ユーザー判断). A row then carries one band instead of two heights. It is also exactly one
-    // `fontMdLine`, which is what lets the name inside be the row's own text size: a branch name is what the row is
-    // read for, not meta about it (規約 §タイポグラフィ: `fontMd` = 一覧 / グラフ行の本文).
-    height: Metrics.nodeIcon
+    // The name's own line box, and the frame drawn around it — nothing else is in the box, so nothing else sets its
+    // height. That comes to eighteen, two under the commit node it stands beside: near enough that the row reads as one
+    // band, low enough that the chip is not the loudest thing on it (2026-08-21 ユーザー判断 — the frame was the node's own
+    // twenty for a day, and against a subject at `fontMd` the chip won the row).
+    height: Theme.fontChipLine + 2 * Theme.borderWidth
     width: Math.min(chipContent.implicitWidth + 2 * Theme.spaceXs, maxWidth)
     radius: Theme.radiusSm
     clip: true
@@ -69,14 +69,12 @@ Rectangle {
     /// Where the ink starts inside the frame, in whole pixels off the top of the chip: the room the border leaves,
     /// halved, **with the odd pixel going up**.
     ///
-    /// The frame is the commit's height rather than the type's, so what stands in it is placed by its ink and not by
-    /// the line box the family hands out: a family keeps more room above its ascender than below its descender, and
-    /// centring the box spent that room inside it and sat the descenders of `g` and `/` on the border (2026-08-20
-    /// ユーザー報告). The amount is the family's own, so a fixed lift squares one and opens a gap under the other: this asks.
-    /// Three of the eighteen pixels inside are left over (both families put fifteen of ink in it), and three will not
-    /// halve; the pixel goes above, where every ascender is, rather than below the one descender a name may not even
-    /// have (実測: 2/1 both on screen with Yu Gothic UI and in the Ubuntu container with Noto Sans CJK JP — and **not off
-    /// the headless picture**, which is drawn in neither, see the verify-ui skill).
+    /// A line box is not where a family puts its ink: it keeps more room above its ascender than below its descender,
+    /// so centring the box inside the frame spent that room there and sat the descenders of `g` and `/` on the border
+    /// (2026-08-20 ユーザー報告). How much room is the family's own — a fixed lift squares one family and opens a gap under
+    /// the other — so this asks the family instead. When what is left over will not halve, the pixel goes above, where
+    /// every ascender is, rather than below the one descender a name may not even have. **Not to be measured off the
+    /// headless picture**, which is drawn in a family neither OS uses (verify-ui スキル §Windows での実行・デバッグの罠).
     function inkTop(ink) {
         const room = chip.height - 2 * Theme.borderWidth - ink.tightBoundingRect.height
         return Theme.borderWidth + Math.ceil(room / 2)
@@ -113,7 +111,7 @@ Rectangle {
             y: chip.inkY(nameLabel, nameInk)
             text: chip.recName
             color: chip.nameColor
-            font.pixelSize: Theme.fontMd
+            font.pixelSize: Theme.fontChip
             font.weight: chip.recHead ? Font.DemiBold : Font.Normal
             elide: Text.ElideRight
             width: Math.min(implicitWidth,

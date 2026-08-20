@@ -83,6 +83,11 @@ QtObject {
     // Off the ramp on purpose: the size an editor puts source at, which is not a step in a UI scale. IntelliJ's default
     // (JetBrains Mono 13) is what this matches.
     readonly property int fontCode: 13
+    // Also off the ramp, and for one place: the name in a graph row's ref chip (デザイン規約 §タイポグラフィ). A branch name is
+    // not meta about the row, so it does not go down to `fontSm`; it is not what the row is read for either, so at
+    // `fontMd` it stood level with the subject and read as loud as the message (2026-08-21 ユーザー判断).
+    readonly property int fontChip: 13
+    readonly property int fontChipLine: 16
     readonly property int fontLg: 16
     readonly property int fontLgLine: 24
     readonly property int fontXl: 20

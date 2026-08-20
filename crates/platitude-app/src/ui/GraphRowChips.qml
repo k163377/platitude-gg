@@ -25,7 +25,7 @@ Item {
 
     /// Which stacked chip a point in this column's frame is over, if it is over one that has something to unstack.
     ///
-    /// A chip is the node's own height — twenty pixels in a row of twenty-eight — and a hand that has just arrived is
+    /// A chip is a line box and a border — eighteen pixels in a row of twenty-eight — and a hand just arrived is
     /// still settling. Landing takes the chip itself, but once the list is out (`held`) the whole chip column holds it:
     /// drifting a dozen pixels inside the column the chips live in is not leaving them (2026-08-09 trace).
     function chipAt(px, py, held) {
