@@ -95,10 +95,14 @@ Canvas {
                 ctx.stroke()
             }
         } else if (icon.kind === "remote") {
+            // Three lobes, drawn to the same share of the grid its siblings take. The cloud used to stand 8.4 of the
+            // sixteen tall where the tag takes 10.2 and the archive box 9, and beside a name at `fontMd` — fifteen
+            // pixels of ink — that read as a mark somebody had shrunk (2026-08-20 ユーザー報告・実測). The lobes are the old
+            // ones about the middle of the grid, so the shape is unchanged; only how much of its seat it uses is.
             ctx.beginPath()
-            ctx.arc(6 * s, 9 * s, 3 * s, Math.PI * 0.5, Math.PI * 1.5)
-            ctx.arc(8.5 * s, 6.8 * s, 3.2 * s, Math.PI * 0.95, Math.PI * 0.02, false)
-            ctx.arc(11 * s, 9.4 * s, 2.6 * s, Math.PI * 1.55, Math.PI * 0.5)
+            ctx.arc(5.6 * s, 9.2 * s, 3.6 * s, Math.PI * 0.5, Math.PI * 1.5)
+            ctx.arc(8.6 * s, 6.56 * s, 3.84 * s, Math.PI * 0.95, Math.PI * 0.02, false)
+            ctx.arc(11.6 * s, 9.68 * s, 3.12 * s, Math.PI * 1.55, Math.PI * 0.5)
             ctx.closePath()
             ctx.stroke()
         } else if (icon.kind === "tag") {
