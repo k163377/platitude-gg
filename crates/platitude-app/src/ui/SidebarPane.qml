@@ -36,6 +36,10 @@ Rectangle {
     /// "stash"), `id` what git knows the row by.
     signal renameSubmitted(string kind, string id, string name)
     signal foldRequested(bool collapse)
+    /// The `+` on the REMOTES band was pressed: a remote is to be written
+    /// down. Raised from the open list and from the section the folded
+    /// rail opens alike — one band, wherever it is standing.
+    signal addRemoteRequested()
 
     // ---- the row gestures ------------------------------------------
     // Held beside the lists rather than in one (`SidebarRowGestures`).
@@ -109,27 +113,33 @@ Rectangle {
         sidebar.peekEntered = false
     }
 
-    /// Smoke hook (PG_AUTO_ACT=nav-close): close one section by raising
-    /// the signal its header band raises under a click — a hook that set
-    /// `expTags` itself would be a second answer.
+    /// Smoke hook (PG_AUTO_ACT=nav-close): close one section by putting a
+    /// click in where the header band takes one — a hook that set
+    /// `expTags` itself would be a second answer, and would open a
+    /// section the band itself refuses to (`NavHeader.tap`).
     function closeSection(kind) {
-        const head = kind === "branch" ? branchHead
+        const head = sidebar.headOf(kind)
+        if (head)
+            head.tap()
+    }
+    function headOf(kind) {
+        return kind === "branch" ? branchHead
             : kind === "remote" ? remoteHead
             : kind === "worktree" ? worktreeHead
             : kind === "stash" ? stashHead
             : kind === "tag" ? tagHead : null
-        if (head)
-            head.toggled()
+    }
+    /// Smoke hook (PG_AUTO_ACT=nav-add-remote): press the `+` at the end
+    /// of the REMOTES band. It goes in at the band's own signal, so what
+    /// answers is the page's wiring and not a second way in.
+    function tapAddRemote() {
+        remoteHead.addRemoteRequested()
     }
     /// Where a section's header band has come to rest, and where the
     /// ground under the last section begins — what PG_AUTO_ACT=nav-close
     /// reads to see the sections packed against the top.
     function headerTopOf(kind) {
-        const head = kind === "branch" ? branchHead
-            : kind === "remote" ? remoteHead
-            : kind === "worktree" ? worktreeHead
-            : kind === "stash" ? stashHead
-            : kind === "tag" ? tagHead : null
+        const head = sidebar.headOf(kind)
         return head ? head.y : -1
     }
     readonly property real groundTop: ground.y
@@ -226,7 +236,12 @@ Rectangle {
         }
     }
 
-    // Section expansion (filter reveals collapsed sections).
+    // Section expansion (filter reveals collapsed sections). What a
+    // section is actually showing is its own band's answer
+    // (`NavHeader.showsRows`) — one with no rows stays folded whatever
+    // is written here, and the fold survives that: a repository with no
+    // remotes leaves this alone, so the next one that has some opens the
+    // way this reader left it.
     property bool expBranches: true
     property bool expRemotes: true
     property bool expWorktree: true
@@ -272,7 +287,7 @@ Rectangle {
         NavList {
             id: branchList
             sectionModel: sidebar.branchesModel
-            expanded: sidebar.expBranches || refFilter.text !== ""
+            expanded: branchHead.showsRows
             kindHint: "branch"
             gestures: rowGestures
             Layout.verticalStretchFactor: sidebar.sectionPull
@@ -310,11 +325,16 @@ Rectangle {
             count: sidebar.remotesModel.total
             expanded: sidebar.expRemotes || refFilter.text !== ""
             onToggled: sidebar.expRemotes = !sidebar.expRemotes
+            // The only band that carries a way to make its own rows, and
+            // the only one whose control outlives the section going
+            // unavailable (デザイン規約 §左メニューの所作).
+            showAddRemote: true
+            onAddRemoteRequested: sidebar.addRemoteRequested()
         }
         NavList {
             id: remoteList
             sectionModel: sidebar.remotesModel
-            expanded: sidebar.expRemotes || refFilter.text !== ""
+            expanded: remoteHead.showsRows
             kindHint: "remote"
             gestures: rowGestures
             Layout.verticalStretchFactor: sidebar.sectionPull
@@ -336,7 +356,7 @@ Rectangle {
         NavList {
             id: worktreeList
             sectionModel: sidebar.worktreesModel
-            expanded: sidebar.expWorktree || refFilter.text !== ""
+            expanded: worktreeHead.showsRows
             kindHint: "worktree"
             gestures: rowGestures
             Layout.verticalStretchFactor: sidebar.sectionPull
@@ -354,7 +374,7 @@ Rectangle {
         NavList {
             id: stashList
             sectionModel: sidebar.stashesModel
-            expanded: sidebar.expStashes || refFilter.text !== ""
+            expanded: stashHead.showsRows
             kindHint: "stash"
             gestures: rowGestures
             Layout.verticalStretchFactor: sidebar.sectionPull
@@ -379,7 +399,7 @@ Rectangle {
         NavList {
             id: tagList
             sectionModel: sidebar.tagsModel
-            expanded: sidebar.expTags || refFilter.text !== ""
+            expanded: tagHead.showsRows
             kindHint: "tag"
             gestures: rowGestures
             Layout.verticalStretchFactor: sidebar.sectionPull
@@ -458,5 +478,6 @@ Rectangle {
         pinned: sidebar.menuOpen || sidebar.editKey !== ""
         onRefActivated: oidHex => sidebar.refActivated(oidHex)
         onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
+        onAddRemoteRequested: sidebar.addRemoteRequested()
     }
 }

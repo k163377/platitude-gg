@@ -43,6 +43,7 @@ Popup {
 
     signal refActivated(string oidHex)
     signal refMenuRequested(string kind, string name, string full, string oidHex)
+    signal addRemoteRequested()
 
     onEnteredChanged: {
         if (!peek.entered)
@@ -190,17 +191,23 @@ Popup {
             // about, and without this it raises no event at all.
             onHoveredChanged: peek.entered = peekHover.hovered
         }
+        // The open list's own band, carrying what that section carries
+        // wherever it stands — the tags eye, the `+` that writes a remote
+        // down. The one thing it drops is the fold arrow: this list is
+        // the only thing on screen, so there is nothing to fold away to,
+        // and a mark that answers nothing is worse than no mark
+        // (デザイン規約 §長押し).
         NavHeader {
             caption: peek.caption
             iconKind: peek.rail.sectionOf(peek.kind).icon
             iconTint: peek.rail.sectionOf(peek.kind).tint
             count: peek.sectionModel ? peek.sectionModel.total : 0
-            // Nothing to fold away to: this list is the only thing on
-            // screen. What closes it is the pointer leaving.
             foldable: false
             showTagToggle: peek.kind === "tag"
             tagsShown: peek.repoTab.tagsShown
             onTagsToggled: shown => peek.repoTab.setTagsShown(shown)
+            showAddRemote: peek.kind === "remote"
+            onAddRemoteRequested: peek.addRemoteRequested()
         }
         NavList {
             id: peekList

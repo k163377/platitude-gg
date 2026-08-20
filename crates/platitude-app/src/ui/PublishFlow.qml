@@ -128,9 +128,16 @@ Item {
     readonly property string publishAddChoice: qsTr("Add remote…")
     readonly property var publishChoices:
         publishFlow.publishRemotes.concat([publishFlow.publishAddChoice])
+    /// The `+` on the left menu's REMOTES band, with no question
+    /// standing behind it. The same dialog the chooser's last row opens
+    /// (規約 §リモートを書き留める) — a second way in would be a second form,
+    /// and this one already knows which names are taken.
+    function startAddRemote() {
+        remoteDialog.start("", "", publishFlow.publishRemotes)
+    }
     function choosePublishRemote(index) {
         if (index >= publishFlow.publishRemotes.length) {
-            remoteDialog.start("", "", publishFlow.publishRemotes)
+            publishFlow.startAddRemote()
             return
         }
         publishFlow.publishRemote = publishFlow.publishRemotes[index]

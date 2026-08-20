@@ -1428,6 +1428,7 @@ Item {
                             repoTab.createBranch(name, oidHex, true)
                     }
                     onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
+                    onAddRemoteRequested: publishFlow.startAddRemote()
                 }
 
                 // Center: commit graph ⇄ file diff

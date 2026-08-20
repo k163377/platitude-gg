@@ -110,6 +110,11 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "nav-rename-far" => Some("shown=true box=true"),
         "nav-rename-drop" if arg == "fold" => Some("nav_drop how=fold collapsed=true box=false"),
         "nav-rename-drop" => Some("nav_drop how=away collapsed=false box=false"),
+        // The `+` on a REMOTES band that has gone unavailable around it.
+        // The picture holds the band; it cannot hold whether the mark
+        // still answers, and a `+` wired to nothing frames exactly like
+        // one that opened the form.
+        "nav-add-remote" => Some("nav_add_remote dialog=true"),
         // An emptied panel with a red mark over it and an emptied panel
         // with a quiet one frame the same from the waist down: the panel
         // is the picture, and the mark is 12 pixels of it in a corner.
