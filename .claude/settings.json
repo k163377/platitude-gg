@@ -38,6 +38,15 @@
             "command": "cargo xtask hook post-write"
           }
         ]
+      },
+      {
+        "matcher": "EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo xtask hook post-worktree"
+          }
+        ]
       }
     ],
     "SessionStart": [

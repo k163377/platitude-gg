@@ -119,12 +119,17 @@ fn seat_report(cwd: &str) -> Option<String> {
     if let Some(pick) = spread_pick(&buckets.takeable) {
         report.push_str(&format!(
             " Take seat {pick} this session — the recommendation is \
-             randomized so sessions started in one burst spread out. Seats \
-             are first come, first served: if creating or entering {pick} \
-             fails because another session already has it, take a different \
-             free letter instead of retrying this one. A seat's standing \
-             here is from this session's start — `cargo xtask seats` is the \
-             live check before entering."
+             randomized so sessions started in one burst spread out. \
+             Sitting down *is* the check: enter {pick} straight away and \
+             let the claim answer, because the hook takes `git worktree \
+             lock` on the way in and denies the call when somebody already \
+             holds it. A denial is that answer, not a failure — move to \
+             another free letter and enter it the same way. Do not survey \
+             first: this listing is from the session's start and `cargo \
+             xtask seats` is only ever a snapshot, so a seat either one \
+             calls free can be gone by the time you act on it. `seats` is \
+             for reading how the seats stand, never for deciding whether \
+             to sit."
         ));
     }
     Some(report)

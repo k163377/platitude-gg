@@ -47,13 +47,49 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
             "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
              \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
              \"This seat is already claimed (locked: {}). Seats are first \
-             come, first served — run `cargo xtask seats` and take a free \
-             letter instead of retrying this one (CLAUDE.md \
-             ビルド・テスト).\"}}}}",
+             come, first served and this refusal is the roster answering, \
+             not an error to work around: take a different letter and \
+             enter it the same way. There is nothing to survey first — \
+             the claim is the check (CLAUDE.md ビルド・テスト).\"}}}}",
             printable(&reason)
         );
     }
     Ok(())
+}
+
+/// PostToolUse(EnterWorktree): the claim itself took in `pre_worktree`.
+/// This is the line that makes the session say so out loud.
+pub(super) fn post_worktree(input: &str) -> Result<(), String> {
+    // The tool input's `path` is the seat the session just settled in;
+    // `cwd` is the fallback for an entry by name, where the roster letter
+    // is the only thing the payload carries.
+    let where_ = string_field(input, "path").or_else(|| string_field(input, "cwd"));
+    let Some(seat) = where_.as_deref().and_then(roster_seat) else {
+        return Ok(());
+    };
+    println!(
+        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PostToolUse\",\
+         \"additionalContext\":\"{}\"}}}}",
+        announce(seat)
+    );
+    Ok(())
+}
+
+/// What a session owes the user the moment a seat becomes its own.
+///
+/// Sessions settle into a seat and never name it — often enough that the
+/// user asked for it to be made certain rather than left to habit. The
+/// letter is what everything downstream is read against: which tree a
+/// change is in, which tree a build came out of, which tree took a
+/// screenshot, which branch there is to land. A session that never says
+/// it leaves the user guessing at all four.
+fn announce(seat: &str) -> String {
+    format!(
+        "Seat {seat} is this session's now. Name it to the user in your very next \
+         reply, in Japanese and by its letter (「席 {seat} を取った」) — a session \
+         that never says which seat it took leaves the user unable to tell which \
+         tree a change, a build or a screenshot came from (CLAUDE.md ビルド・テスト)."
+    )
 }
 
 /// The roster letter `path` points into, if it is a seat's tree at all.
@@ -184,7 +220,8 @@ pub(super) fn reclaim(input: &str, path: &str) -> Option<String> {
                         "Seat {name} stood unclaimed and this edit re-claimed it \
                      for the session (a landed seat comes unlocked; further \
                      work claims it back at its first edit — CLAUDE.md \
-                     ビルド・テスト)."
+                     ビルド・テスト). {}",
+                        announce(&name)
                     )
                 }),
         },

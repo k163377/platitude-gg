@@ -39,6 +39,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "post-write" => write::post_write(&input),
         "pre-shell" => pre_shell(&input),
         "pre-worktree" => seat::pre_worktree(&input),
+        "post-worktree" => seat::post_worktree(&input),
         "session-start" => greeting::session_start(&input),
         "session-end" => seat::session_end(&input),
         other => Err(format!("unknown hook event: {other:?}")),
