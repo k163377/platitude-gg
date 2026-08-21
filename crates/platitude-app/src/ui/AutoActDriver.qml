@@ -129,7 +129,7 @@ Item {
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
                 "nav-filter", "nav-tip", "nav-reclick", "nav-reclick-away", "nav-rename-far",
-                "nav-add-remote",
+                "nav-add-remote", "tags-eye",
                 "delete-branch-refused", "chip-menu", "chip-menu-current",
                 "delete-blocked-tip", "delete-branch-early", "ref-list-card",
                 "signature", "signature-tip", "stash-tip", "path-tip", "row-card", "menu-hover",
@@ -859,6 +859,62 @@ Item {
             + " cell=" + Math.round(sidebarPane.peekTop)
             + " end=" + Math.round(sidebarPane.peekBottom)
             + " pane=" + Math.round(sidebarPane.height))
+            driver.complete()
+        }
+    }
+    // PG_AUTO_ACT=tags-eye: the eye at the end of the TAGS band, and the graph on the other side of it. What the
+    // switch moves is the walk, so the commit the named tag stands on is the one thing that answers it — a tag on a
+    // commit a branch also reaches keeps both its row and its chip, and a picture of that frames exactly like a
+    // picture of a switch that did nothing.
+    //
+    // **The graph is emptied before it is rebuilt**, so neither the row's absence nor the row count is an edge on its
+    // own — a reset shows both a beat after the press, with the walk still to run. `finishCount` is what says a pass
+    // landed, and the row is read only after it moves. Turning the tags back on lands twice (a tag-less pass paints
+    // first — core.md §2 段ストリーミング), and the row being back is what tells the second pass from the first.
+    //
+    // The press waits for that same row too, and reads it in the arming step alone: a page is current as soon as the
+    // *first* pass finishes, and the first pass is the tag-less one, so a run that pressed at dispatch would be
+    // taking the tags out of a graph that never had them in (規約 §前提条件を完了判定に混ぜない).
+    property string tagEyeOid: ""
+    property int tagEyeFinish: 0
+    property bool tagEyeBack: false
+    /// 0 = waiting for the tags to be in the graph to take out, 1 = for the row to go, 2 = for it to come back.
+    property int tagEyeStep: 0
+    Timer {
+        id: tagEyeTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            const there = graphModel.rowOf(driver.tagEyeOid) >= 0
+            if (driver.tagEyeStep === 0) {
+                if (!there)
+                    return
+                driver.tagEyeStep = 1
+                driver.tagEyeFinish = graphModel.finishCount
+                sidebarPane.tapTagEye()
+                return
+            }
+            if (graphModel.finishCount === driver.tagEyeFinish)
+                return
+            if (driver.tagEyeStep === 1) {
+                if (there)
+                    return
+                if (driver.tagEyeBack) {
+                    driver.tagEyeStep = 2
+                    driver.tagEyeFinish = graphModel.finishCount
+                    sidebarPane.tapTagEye()
+                    return
+                }
+            } else if (!there)
+                return
+            tagEyeTimer.stop()
+            // `there` is the half a picture cannot carry on its own, and `shown=` is the switch's own answer: a run
+            // whose press never reached the band photographs the state it started in, which is a real state.
+            AppBackend.report("tags_eye shown=" + repoTab.tagsShown
+                              + " there=" + there
+                              + " tag=" + AppBackend.autoActArg
+                              + " rows=" + graphModel.rowTotal
+                              + " tags=" + tagsModel.total)
             driver.complete()
         }
     }
@@ -2336,6 +2392,17 @@ Item {
                                         workTree.branch)
             }
             navRailTimer.start()
+        } else if (act === "tags-eye") {
+            // The eye pressed at the band itself, with the list left standing beside the graph: what the switch is
+            // about is the graph, and TAGS keeping its count while the graph loses a row is half of what the picture
+            // says. The argument names the tag whose commit is the subject — `<tag>` presses once, `<tag>:back`
+            // presses again afterwards so the round trip is read rather than one half of it.
+            const backing = arg.endsWith(":back")
+            const tagName = backing ? arg.substring(0, arg.length - ":back".length) : arg
+            driver.tagEyeOid = tagsModel.oidOfName(tagName)
+            driver.tagEyeBack = backing
+            driver.tagEyeStep = 0
+            tagEyeTimer.start()
         } else if (act === "nav-reclick" || act === "nav-reclick-away") {
             // The rename gesture, on the section the folded rail has open. The plain verb clicks the same row twice
             // with that section standing; "-away" lets the pointer leave in between, so the two clicks land in a list

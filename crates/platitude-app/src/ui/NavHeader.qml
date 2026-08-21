@@ -46,6 +46,18 @@ Rectangle {
             header.toggled()
     }
 
+    /// The eye at the end of the band, pressed (PG_AUTO_ACT=tags-eye). Put in at the button rather than at this
+    /// component's own signal, so what answers is the band's real wiring and not a second way in written for the run.
+    /// **`toggle()` flips the tick without raising `toggled`** — the same seam `StashOptionsCard.clickStagedOnly`
+    /// names, and a run that only flips it photographs a graph nobody asked to change. Refused where a pointer would
+    /// find nothing to press: at zero tags the switch is not on the band at all.
+    function tapTags() {
+        if (header.showTagToggle && !header.empty) {
+            tagEye.toggle()
+            tagEye.toggled()
+        }
+    }
+
     Layout.fillWidth: true
     implicitHeight: Theme.rowHeight
     color: Theme.bgElevated
@@ -98,6 +110,7 @@ Rectangle {
         // tag already is — what this switches is whether they are looked at. Told apart by the tint, the way the panes'
         // tree/flat switches are, not by fading the whole control (§暗く落とした段).
         HoverToolButton {
+            id: tagEye
             // With no tags there is nothing to keep out of the graph, so the switch has nothing to answer for — the
             // same seat the folded rail's TAGS cell leaves empty at zero (NavRail).
             visible: header.showTagToggle && !header.empty

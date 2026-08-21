@@ -135,6 +135,11 @@ Rectangle {
     function tapAddRemote() {
         remoteHead.addRemoteRequested()
     }
+    /// Smoke hook (PG_AUTO_ACT=tags-eye): press the eye at the end of the
+    /// TAGS band, at the button's own press (`NavHeader.tapTags`).
+    function tapTagEye() {
+        tagHead.tapTags()
+    }
     /// Where a section's header band has come to rest, and where the
     /// ground under the last section begins — what PG_AUTO_ACT=nav-close
     /// reads to see the sections packed against the top.
