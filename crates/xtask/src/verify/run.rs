@@ -352,7 +352,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             opts.label.clone()
         };
         match crate::shots::record(&label, &opts.verb, &shots) {
-            Ok(page) => println!("board: {}", page.display()),
+            Ok(page) => println!("board: {}", crate::shots::shown(&page)),
             // The board is not what this run is judging. Say the reason
             // and let the verdict stand on the pictures themselves.
             Err(message) => println!("board: not updated ({message})"),

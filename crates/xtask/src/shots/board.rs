@@ -40,7 +40,7 @@ pub(super) fn board_dir() -> Result<PathBuf, String> {
 /// both reads half one way and half the other; one convention is the
 /// whole fix, and forward slashes are the one the rest of xtask already
 /// speaks.
-pub(super) fn shown(path: &Path) -> String {
+pub(crate) fn shown(path: &Path) -> String {
     path.display().to_string().replace('\\', "/")
 }
 
@@ -116,6 +116,23 @@ pub(crate) fn record(label: &str, verb: &str, pngs: &[PathBuf]) -> Result<PathBu
     std::fs::write(&page, page::render(&load_runs(&runs)))
         .map_err(|e| format!("could not write {}: {e}", page.display()))?;
     Ok(page)
+}
+
+/// Every picture in a directory, onto the board under one name.
+///
+/// How a run that happened somewhere else reaches the board: a container
+/// leaves its pictures in a bridged host directory, and the seat they
+/// belong to is the one out here, not the working directory they were
+/// taken in.
+pub(crate) fn record_dir(dir: &Path, label: &str, verb: &str) -> Result<PathBuf, String> {
+    let mut shots: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map_err(|e| format!("could not read {}: {e}", dir.display()))?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|kind| kind == "png"))
+        .collect();
+    shots.sort();
+    record(label, verb, &shots)
 }
 
 /// Every run on the board, newest first. A run file that cannot be read

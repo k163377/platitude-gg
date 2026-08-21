@@ -17,7 +17,7 @@ mod board;
 mod cli;
 mod page;
 
-pub(crate) use board::record;
+pub(crate) use board::{record, record_dir, shown};
 pub(crate) use cli::run;
 
 /// One `add`: the pictures taken for one thing, under the name that says

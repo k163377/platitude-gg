@@ -4,14 +4,66 @@
 //! anything meant to be read afterwards goes to a host directory bridged
 //! in over /out (`linux`).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// The arguments that send a run's pictures out to `mount`, and where
+/// they land on this side. None when the command leaves nothing.
+///
+/// `--no-board` rides along: the board is the host's. /work is mounted
+/// read-only in there, so the container could not write one, and the
+/// seat these pictures belong to is the one out here — which is what
+/// `onto_the_board` is for, once the run is done.
+pub(crate) fn bridge(command: &mut Vec<String>, mount: &str) -> Result<Option<PathBuf>, String> {
+    let Some(out) = keepsakes(command)? else {
+        return Ok(None);
+    };
+    command.push("--shot-dir".to_string());
+    command.push(mount.to_string());
+    command.push("--no-board".to_string());
+    println!("screenshots and settings: {}", out.display());
+    Ok(Some(out))
+}
+
+/// Whatever the run left behind, onto the host's board. Nothing left is
+/// nothing to do — the caller hands over what `bridge` answered and is
+/// not made to ask again.
+///
+/// Marked `— linux` because Done is both OSes photographed for the same
+/// verb (CLAUDE.md ビルド・テスト): a board holding two pictures that do
+/// not say which side each came from cannot show that.
+pub(crate) fn onto_the_board(out: Option<&Path>, command: &[String]) {
+    let Some(out) = out else {
+        return;
+    };
+    let (label, verb) = naming(command);
+    match crate::shots::record_dir(out, &label, &verb) {
+        Ok(page) => println!("board: {}", crate::shots::shown(&page)),
+        // The board is not what a container run is judging.
+        Err(message) => println!("board: not updated ({message})"),
+    }
+}
+
+/// What to call the run on the board, out of the command line it was.
+/// Pure so the tests can ask.
+fn naming(command: &[String]) -> (String, String) {
+    let word_after = |flag: &str| {
+        command
+            .iter()
+            .position(|word| word == flag)
+            .and_then(|at| command.get(at + 1))
+            .cloned()
+    };
+    let verb = word_after("verify-ui").unwrap_or_default();
+    let label = word_after("--label").unwrap_or_else(|| verb.clone());
+    (format!("{label} — linux"), verb)
+}
 
 /// A host directory for what a run means to be looked at afterwards, or
 /// None when the command leaves nothing. verify-ui writes its screenshot
 /// and the settings it ran with into --shot-dir; inside a container that is
 /// a place nobody can open, and the whole verdict is a PNG.
-pub(crate) fn keepsakes(command: &[String]) -> Result<Option<PathBuf>, String> {
+fn keepsakes(command: &[String]) -> Result<Option<PathBuf>, String> {
     if !command.iter().any(|word| word == "verify-ui") {
         return Ok(None);
     }
@@ -36,10 +88,36 @@ pub(crate) fn keepsake_dir(kind: &str) -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::keepsakes;
+    use super::{keepsakes, naming};
 
     fn words(line: &str) -> Vec<String> {
         line.split_whitespace().map(String::from).collect()
+    }
+
+    /// The verb names the run when nobody named it, and either way the
+    /// board says which side of Done this picture is.
+    #[test]
+    fn a_container_run_is_named_after_its_verb_and_its_side() {
+        assert_eq!(
+            naming(&words("cargo xtask verify-ui commit-menu")),
+            ("commit-menu — linux".to_string(), "commit-menu".to_string())
+        );
+        let told = [
+            "cargo",
+            "xtask",
+            "verify-ui",
+            "row-card",
+            "--label",
+            "the chip's badge",
+        ]
+        .map(String::from);
+        assert_eq!(
+            naming(&told),
+            (
+                "the chip's badge — linux".to_string(),
+                "row-card".to_string()
+            )
+        );
     }
 
     #[test]

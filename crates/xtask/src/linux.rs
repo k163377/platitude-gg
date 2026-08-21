@@ -46,7 +46,7 @@ use std::io::IsTerminal;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-use crate::keepsakes::{keepsake_dir, keepsakes};
+use crate::keepsakes::{self, keepsake_dir};
 
 /// The image. Its tag names the stage and fingerprints what built it.
 const IMAGE: &str = "pg-linux";
@@ -474,12 +474,10 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
         .arg(WORK);
 
     let mut command = command.to_vec();
-    if let Some(out) = keepsakes(&command)? {
+    let keepsake = keepsakes::bridge(&mut command, OUT_MOUNT)?;
+    if let Some(out) = &keepsake {
         cmd.arg("--volume")
-            .arg(format!("{}:{OUT_MOUNT}", mount_path(&out)));
-        command.push("--shot-dir".to_string());
-        command.push(OUT_MOUNT.to_string());
-        println!("screenshots and settings: {}", out.display());
+            .arg(format!("{}:{OUT_MOUNT}", mount_path(out)));
     }
 
     cmd.arg(tag);
@@ -492,6 +490,7 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
         .status()
         .map_err(|e| format!("failed to run docker: {e}"))?;
     if status.success() {
+        keepsakes::onto_the_board(keepsake.as_deref(), &command);
         return Ok(());
     }
     Err(match status.code() {
