@@ -69,7 +69,7 @@ Rectangle {
 
                 Label {
                     text: qsTr("GIT COMMANDS")
-                    font.pixelSize: Theme.fontSm
+                    font.pixelSize: Theme.fontMd
                     font.weight: Font.DemiBold
                     color: Theme.textSecondary
                 }
@@ -102,7 +102,7 @@ Rectangle {
 
                 CheckBox {
                     text: qsTr("Background reads")
-                    font.pixelSize: Theme.fontSm
+                    font.pixelSize: Theme.fontMd
                     implicitHeight: Theme.iconLg
                     checked: pane.commandsModel.backgroundReads
                     // The reads a repository page makes on a timer are nobody's doing and would bury the rest, so they
@@ -114,7 +114,7 @@ Rectangle {
                 }
                 HoverToolButton {
                     text: qsTr("Clear")
-                    font.pixelSize: Theme.fontSm
+                    font.pixelSize: Theme.fontMd
                     onClicked: pane.clearPanel()
                 }
                 HoverToolButton {

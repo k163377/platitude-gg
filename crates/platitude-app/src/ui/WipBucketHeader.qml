@@ -49,13 +49,24 @@ Rectangle {
         spacing: Theme.spaceXs
         Label {
             text: bucketHeader.section === "staged"
-                  ? qsTr("STAGED FILES (%1)").arg(bucketHeader.count)
+                  ? qsTr("STAGED FILES")
                   : bucketHeader.section === "unstaged"
-                  ? qsTr("UNSTAGED FILES (%1)").arg(bucketHeader.count)
+                  ? qsTr("UNSTAGED FILES")
                   : qsTr("CONFLICTS")
-            font.pixelSize: Theme.fontSm
+            font.pixelSize: Theme.fontMd
             font.weight: Font.DemiBold
             color: bucketHeader.section === "conflicts" ? Theme.danger : Theme.textSecondary
+        }
+        // How many, in its own label at the small step — the seat every heading band in the window keeps its count in
+        // (NavHeader, CommandsPane). Inside the caption it was set at the caption's step, and a band this size has no
+        // room for what that puts under the baseline: the band is `rowHeight`, and the brackets of a 14px count run a
+        // pixel past its floor into the list below (measured). The conflicted bucket has no count — the rows under it
+        // are the number.
+        Label {
+            visible: bucketHeader.section !== "conflicts"
+            text: "(" + bucketHeader.count + ")"
+            font.pixelSize: Theme.fontSm
+            color: Theme.textMuted
         }
         Item { Layout.fillWidth: true }
         // The seat `Stage all` takes on the other two buckets. The words stay — nothing else in view names the tool
@@ -66,7 +77,7 @@ Rectangle {
         Label {
             visible: bucketHeader.waitingForTool
             text: qsTr("Waiting for %1").arg(bucketHeader.workTree.mergeTool)
-            font.pixelSize: Theme.fontSm
+            font.pixelSize: Theme.fontMd
             color: Theme.textSecondary
         }
         SpinnerIcon {
@@ -81,7 +92,7 @@ Rectangle {
             // so where it stands, rather than leaving its seat).
             enabled: bucketHeader.count > 0
             text: bucketHeader.section === "staged" ? qsTr("Unstage all") : qsTr("Stage all")
-            font.pixelSize: Theme.fontSm
+            font.pixelSize: Theme.fontMd
             tip: bucketHeader.section === "staged"
                  ? qsTr("Unstage everything") : qsTr("Stage everything, untracked included")
             onClicked: {

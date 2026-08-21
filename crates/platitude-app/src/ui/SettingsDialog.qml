@@ -384,7 +384,7 @@ AppDialog {
                     ActionButton {
                         id: unsetButton
                         text: qsTr("Remove")
-                        font.pixelSize: Theme.fontSm
+                        font.pixelSize: Theme.fontMd
                         tone: avatarRow.lit ? Theme.danger : Theme.textSecondary
                         frameColor: avatarRow.lit ? Theme.dangerDim : Theme.borderSubtle
                         holdMs: Metrics.holdMs

@@ -74,8 +74,6 @@ QtObject {
     ]
 
     // ---- typography ----
-    readonly property int fontXs: 11
-    readonly property int fontXsLine: 16
     readonly property int fontSm: 12
     readonly property int fontSmLine: 16
     readonly property int fontMd: 14

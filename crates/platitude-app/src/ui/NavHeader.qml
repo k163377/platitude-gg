@@ -97,7 +97,7 @@ Rectangle {
         Label {
             text: header.caption
             color: header.empty ? Theme.textMuted : Theme.textSecondary
-            font.pixelSize: Theme.fontSm
+            font.pixelSize: Theme.fontMd
             font.weight: Font.DemiBold
         }
         Label {

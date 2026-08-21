@@ -74,21 +74,21 @@ Rectangle {
             // most often reported to other git GUIs, so this starts
             // on — the same choice the switch dialog makes.
             text: qsTr("Include files git is not tracking yet")
-            font.pixelSize: Theme.fontSm
+            font.pixelSize: Theme.fontMd
             implicitHeight: Theme.controlHeight
             enabled: !stashStagedOnly.checked
         }
         CheckBox {
             id: stashKeepIndex
             text: qsTr("Leave the staged changes staged")
-            font.pixelSize: Theme.fontSm
+            font.pixelSize: Theme.fontMd
             implicitHeight: Theme.controlHeight
             enabled: !stashStagedOnly.checked
         }
         CheckBox {
             id: stashStagedOnly
             text: qsTr("Only the staged changes")
-            font.pixelSize: Theme.fontSm
+            font.pixelSize: Theme.fontMd
             implicitHeight: Theme.controlHeight
             // git refuses it together with untracked files, and
             // cannot do it at all for a file changed on both sides:

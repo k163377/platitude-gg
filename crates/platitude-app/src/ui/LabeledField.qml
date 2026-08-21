@@ -5,9 +5,11 @@ import platitude.ui
 
 // A word above whatever answers it, and the air between the two. The dialogs' forms are stacks of these.
 //
-// The word is the quiet one: it names the box rather than saying anything, so it takes the secondary colour and the
-// small step (デザイン規約 §タイポグラフィ). Whatever a caller declares here follows it down the column — a field, a field and a
-// mark, a whole list — which is why the shape stops at the caption.
+// The word is the quiet one: it names the box rather than saying anything, so it takes the secondary colour — but not
+// a smaller step. It is part of the control it stands over, and the step is chosen by what a thing is for rather than
+// by how loud it should be (デザイン規約 §タイポグラフィ); the colour is what says which of the two is being read. Whatever a
+// caller declares here follows it down the column — a field, a field and a mark, a whole list — which is why the shape
+// stops at the caption.
 ColumnLayout {
     id: field
 
@@ -20,6 +22,6 @@ ColumnLayout {
     Label {
         text: field.caption
         color: Theme.textSecondary
-        font.pixelSize: Theme.fontSm
+        font.pixelSize: Theme.fontMd
     }
 }

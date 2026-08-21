@@ -555,17 +555,24 @@ ColumnLayout {
             anchors.rightMargin: Theme.spaceXs
             spacing: Theme.spaceXs
             Label {
-                text: qsTr("UNCOMMITTED CHANGES (%1)").arg(wipPane.worktreeModel.total)
-                font.pixelSize: Theme.fontSm
+                text: qsTr("UNCOMMITTED CHANGES")
+                font.pixelSize: Theme.fontMd
                 font.weight: Font.DemiBold
                 color: Theme.textSecondary
+            }
+            // The count keeps the small step, the way every heading band in the window carries its own (NavHeader,
+            // CommandsPane, WipBucketHeader).
+            Label {
+                text: "(" + wipPane.worktreeModel.total + ")"
+                font.pixelSize: Theme.fontSm
+                color: Theme.textMuted
             }
             Item { Layout.fillWidth: true }
             // Everything uncommitted, set aside in one entry. Opens the options card below; nothing is thrown away, so
             // nothing asks beyond the card itself.
             HoverToolButton {
                 text: qsTr("Stash…")
-                font.pixelSize: Theme.fontSm
+                font.pixelSize: Theme.fontMd
                 enabled: wipPane.repoTab.busyCount === 0 && wipPane.worktreeModel.total > 0
                 tip: qsTr("Set these changes aside for later")
                 onClicked: {

@@ -45,7 +45,7 @@ Rectangle {
             spacing: Theme.spaceXs
             Label {
                 text: qsTr("DIFF")
-                font.pixelSize: Theme.fontSm
+                font.pixelSize: Theme.fontMd
                 font.weight: Font.DemiBold
                 color: Theme.textSecondary
             }
@@ -58,7 +58,7 @@ Rectangle {
                 // Takes the slack, so the pair above stays put (FileRowDelegate learned this the hard way).
                 Layout.fillWidth: true
                 text: header.title
-                font.pixelSize: Theme.fontSm
+                font.pixelSize: Theme.fontMd
                 font.weight: Font.DemiBold
                 color: Theme.textSecondary
                 elide: Text.ElideMiddle

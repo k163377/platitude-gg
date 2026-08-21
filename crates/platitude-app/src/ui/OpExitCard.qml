@@ -72,7 +72,7 @@ Rectangle {
             spacing: Theme.spaceXs
             Label {
                 text: opExitCard.workTree.opText
-                font.pixelSize: Theme.fontSm
+                font.pixelSize: Theme.fontMd
                 font.weight: Font.DemiBold
                 color: Theme.warning
             }
@@ -85,7 +85,7 @@ Rectangle {
             Label {
                 visible: opExitCard.workTree.opAlso !== ""
                 text: opExitCard.workTree.opAlso
-                font.pixelSize: Theme.fontSm
+                font.pixelSize: Theme.fontMd
                 font.weight: Font.DemiBold
                 color: Theme.warning
             }
