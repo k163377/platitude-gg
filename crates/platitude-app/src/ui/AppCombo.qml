@@ -162,7 +162,13 @@ ComboBox {
         // Redundant under a real press — the input takes the caret itself — and the whole of what "was pressed" can
         // mean to the automation verb, which has no pointer to put anywhere.
         input.forceActiveFocus()
-        combo.offer()
+        // After the release, not inside it. The input owns the exclusive grab of a press this handler is only a passive
+        // witness to, and a list opened while that grab is still being unwound is taken straight back down: it reads
+        // `opened` true on the next line and false a frame later, so the field answers a press by flickering and
+        // staying shut. One turn of the loop later it stands (2026-08-21 ユーザー報告, measured with an injected click —
+        // qmltestrunner, since a press cannot be put into the app itself). The chooser above wants none of this: its
+        // MouseArea holds the grab itself, so there is nothing to unwind under the list.
+        Qt.callLater(combo.offer)
     }
 
     /// Whether a letter typed right now would land in the field. The list coming down must not take the caret with it,
