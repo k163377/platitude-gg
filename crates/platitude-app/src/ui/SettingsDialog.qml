@@ -32,7 +32,7 @@ AppDialog {
         && !settingsDialog.curPage.pageTab.mergeToolsLoading
         && settingsDialog.toolChoices.length > 0 && toolField.popup.opened
 
-    /// Stands in for the pointer on one row, which headless cannot inject.
+    /// Stands in for the pointer on one row's Remove, which headless cannot inject.
     property int pointedAtRow: -1
 
     /// What the avatar verbs wait on, and the two moves they have no hand to make. The card is the window's, so those
@@ -143,8 +143,8 @@ AppDialog {
         toolField.wanted = settingsDialog.mergeTool
         settingsDialog.toolTouched = false
         settingsDialog.autoToolLoadingLatched = false
-        // Headless has no pointer to put on a row, and the lit row is
-        // what the dim/bright pair is photographed by.
+        // Headless has no pointer to put on a row's Remove, and the lit
+        // button is what the dim/bright pair is photographed by.
         settingsDialog.pointedAtRow = AppBackend.autoAct === "avatar-row-lit" ? 0 : -1
         settingsDialog.readAuthorChoices()
         if (settingsDialog.curPage) {
@@ -317,11 +317,17 @@ AppDialog {
                     id: avatarRow
                     Layout.fillWidth: true
                     spacing: Theme.spaceSm
-                    /// The hand is on this row: the pointer, the keyboard's
-                    /// focus (the hold's other hand — デザイン規約 §長押し,
-                    /// and the row it is about is just as settled), or
-                    /// headless having put it there for a shot.
-                    readonly property bool lit: rowHover.hovered || unsetButton.activeFocus
+                    /// The hand is on this row's Remove: the pointer on the
+                    /// button itself, the keyboard's focus (the hold's other
+                    /// hand — デザイン規約 §長押し), or headless having put it
+                    /// there for a shot.
+                    ///
+                    /// The button rather than the row it sits in: red says
+                    /// what the hand is about to lose, and a word that
+                    /// reddens while the pointer is still three columns of
+                    /// data away is about none of them (2026-08-21 ユーザー
+                    /// 選択).
+                    readonly property bool lit: unsetButton.hovered || unsetButton.activeFocus
                         || settingsDialog.pointedAtRow === index
                     /// Automation reads and works the row through these two rather than reaching inside it: the
                     /// picture the list is photographed for, and the hold it has no hand to make.
@@ -330,15 +336,6 @@ AppDialog {
                     }
                     function holdRemove() {
                         unsetButton.completeHold()
-                    }
-                    // A handler, not a MouseArea: a MouseArea is an Item,
-                    // so a layout gives it a seat of its own and every
-                    // column after it starts a gap further right — 
-                    // anchoring it over the row only turns that into
-                    // undefined behaviour (the engine says so out loud).
-                    // A handler is not an Item and takes no seat.
-                    HoverHandler {
-                        id: rowHover
                     }
                     IdentIcon {
                         id: rowFace
