@@ -37,6 +37,8 @@ pub(super) fn snapshot(
         tags,
         head: None,
         remote_names: Vec::new(),
+        remote_urls: Vec::new(),
+        push_default: None,
     })
 }
 

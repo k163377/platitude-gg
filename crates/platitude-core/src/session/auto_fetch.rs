@@ -169,7 +169,9 @@ impl RepoSession {
     /// "no": it fetches, which is the way round that can only cost a
     /// process.
     fn known_to_have_no_remote(&self) -> bool {
-        self.remotes.peek(|list| list.is_empty()).unwrap_or(false)
+        self.remotes
+            .peek(|read| read.list.is_empty())
+            .unwrap_or(false)
     }
 
     /// Whether the interval is installed — the permission that every

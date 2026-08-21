@@ -374,6 +374,8 @@ mod tests {
             tags: Vec::new(),
             head: None,
             remote_names: Vec::new(),
+            remote_urls: Vec::new(),
+            push_default: None,
         };
         snap.locals.sort_by(|a, b| a.short.cmp(&b.short));
         let mut model = section("branches", Source::Locals(std::sync::Arc::new(snap)));

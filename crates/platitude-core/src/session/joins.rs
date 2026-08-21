@@ -212,7 +212,7 @@ pub(super) fn join_key(
     refs: u64,
     remote_tags_gen: u64,
     worktrees_gen: u64,
-    remotes: &[remote::Remote],
+    remotes: &remote::Remotes,
 ) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -222,7 +222,12 @@ pub(super) fn join_key(
     // here would notice it — and the mark it decides is on rows the
     // joins build.
     worktrees_gen.hash(&mut hasher);
-    for r in remotes {
+    // Which remote a push goes to is the same kind of thing: it moves no
+    // ref, it rides in the snapshot, and the sidebar reads it from there.
+    // Left out, moving it republishes the held snapshot and the mark stays
+    // on the row it was on.
+    remotes.push_default.hash(&mut hasher);
+    for r in &remotes.list {
         r.name.hash(&mut hasher);
     }
     hasher.finish()

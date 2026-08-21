@@ -65,6 +65,7 @@ fn a_remote_row_derives_its_local_name_from_its_own_snapshot() {
         "remotes",
         Source::Remotes(Arc::new(platitude_core::session::RefsSnapshot {
             remote_names: vec!["my".into(), "my/fork".into()],
+            remote_urls: Vec::new(),
             ..Default::default()
         })),
     );

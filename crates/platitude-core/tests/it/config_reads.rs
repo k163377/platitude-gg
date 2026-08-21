@@ -105,8 +105,8 @@ async fn reading_the_tracking_branches_answers_by_code() {
     assert_answered(&config_reads(&log), "the tracking-branch read");
 }
 
-/// Where a push would go, for a branch that tracks nothing: two keys asked
-/// for, neither of them there.
+/// Where a push would go, for a branch that tracks nothing: the four keys
+/// git resolves a destination from, none of them there.
 #[tokio::test]
 async fn planning_a_push_answers_by_code() {
     let mut repo = TestRepo::init();
@@ -123,7 +123,16 @@ async fn planning_a_push_answers_by_code() {
     );
     assert_eq!(
         config_reads(&log),
-        vec![CommandEnd::Answered(1), CommandEnd::Answered(1)]
+        // `branch.<name>.remote`, `branch.<name>.merge`,
+        // `branch.<name>.pushRemote`, `remote.pushDefault` — every one of
+        // them unset, and every one of them an answer rather than a
+        // failure the command log would raise itself over.
+        vec![
+            CommandEnd::Answered(1),
+            CommandEnd::Answered(1),
+            CommandEnd::Answered(1),
+            CommandEnd::Answered(1)
+        ]
     );
 }
 

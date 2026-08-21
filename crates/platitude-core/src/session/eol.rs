@@ -64,7 +64,7 @@ impl RepoSession {
             .await
     }
 
-    /// The remotes this repository has, read once.
+    /// The remotes this repository has and where a push goes, read once.
     ///
     /// Every refs listing wanted them and every refs listing spawned a
     /// `git config` to ask — a process per poll tick for a list that only
@@ -75,10 +75,10 @@ impl RepoSession {
         &self,
         workdir: &Path,
         cancel: &CancellationToken,
-    ) -> Result<Vec<remote::Remote>, GitError> {
+    ) -> Result<remote::Remotes, GitError> {
         self.forget_remotes_if_config_moved();
         self.remotes
-            .get_or_try_init(|| remote::list(&self.executor, workdir, cancel))
+            .get_or_try_init(|| remote::read(&self.executor, workdir, cancel))
             .await
     }
 

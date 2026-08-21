@@ -13,6 +13,14 @@ pub struct RefsSnapshot {
     /// Names of the configured remotes, sorted. A branch with no upstream
     /// has to be told where to go, and this is the list to offer.
     pub remote_names: Vec<String>,
+    /// Their fetch URLs, in the same order — what the form that corrects
+    /// one opens with already filled in.
+    pub remote_urls: Vec<String>,
+    /// Which of them a push goes to when no branch says otherwise, and
+    /// whether this repository's own config is what says so. `None` where
+    /// nothing is marked — then a branch's own upstream decides, and a
+    /// branch with none falls back to whichever remote is called `origin`.
+    pub push_default: Option<crate::remote::PushDefault>,
 }
 
 /// One sidebar branch row.

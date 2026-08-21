@@ -49,10 +49,14 @@ pub struct RepoSession {
     pub(super) eol_baselines: Mutex<HashMap<(String, String), Option<crate::eol::Baseline>>>,
     /// Whether git normalises line endings here (`core.autocrlf`).
     pub(super) eol_normalises: Derived<bool>,
-    /// What remotes are configured. Read on every refs listing before
-    /// this, which is a process per poll tick for an answer that only a
-    /// write moves.
-    pub(super) remotes: Derived<Vec<remote::Remote>>,
+    /// What remotes are configured, and which of them a push goes to. Read
+    /// on every refs listing before this, which is a process per poll tick
+    /// for an answer that only a write moves.
+    ///
+    /// The two travel together because one file holds both and one stat of
+    /// it drops both — two cells would be two things to remember to
+    /// forget.
+    pub(super) remotes: Derived<remote::Remotes>,
     /// How the config file looked when the remotes above were last read
     /// (see [`RepoSession::forget_remotes_if_config_moved`]). `None`
     /// until the first look.

@@ -56,7 +56,7 @@ impl RepoSession {
         cancel: &CancellationToken,
     ) -> bool {
         let remotes = match self.remotes(workdir, cancel).await {
-            Ok(list) => list,
+            Ok(read) => read.list,
             Err(error) => {
                 tracing::debug!(%error, "remote tags: the remotes could not be listed");
                 return false;
@@ -237,6 +237,32 @@ impl RepoSession {
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 remote::add(&exec, &repo.workdir, &name, &url, &cancel).await
+            },
+        );
+    }
+
+    /// Marks where a push goes when no branch says otherwise, or clears the
+    /// mark (`remote.pushDefault`).
+    ///
+    /// An empty name clears it. **That reaches the repository's own config
+    /// only** — a value set globally stays, and git has no local spelling
+    /// for "not set" that would shadow it (実測: an empty local value is
+    /// "no destination", not "unset"). Moving the mark to another remote is
+    /// what a repository has against a global one, and that is a set rather
+    /// than a clear.
+    ///
+    /// Goes through the write queue for the refresh behind it: the mark is
+    /// in the refs snapshot, and the sidebar reads it from there.
+    pub fn set_push_default(self: &Arc<Self>, name: String) {
+        self.write(
+            "remote",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                if name.is_empty() {
+                    remote::clear_push_default(&exec, &repo.workdir, &cancel).await
+                } else {
+                    remote::set_push_default(&exec, &repo.workdir, &name, &cancel).await
+                }
             },
         );
     }

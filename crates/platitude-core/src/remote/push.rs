@@ -9,7 +9,7 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-use super::list::{config_value, current_branch};
+use super::list::{config_value, current_branch, push_default};
 
 /// How hard a push may overwrite the remote.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,10 +40,20 @@ pub struct PushSpec {
 
 /// Works out where the branch that is checked out should be pushed.
 ///
-/// A branch that already tracks something goes back to exactly that. One
-/// that tracks nothing goes to `fallback_remote` under its own name and
-/// records the upstream, so the next push needs no decision. A detached
-/// HEAD has no branch to push, and says so rather than guessing.
+/// **Where a push goes is not where a branch fetches from.** git decides it
+/// in this order (git-config(5)): the branch's own `pushRemote`, then the
+/// repository's `remote.pushDefault`, then whatever the branch tracks —
+/// and only if none of those is set does `fallback_remote` come into it.
+/// Reading just the last of the three sends a fork workflow's pushes to the
+/// repository it forked from, while the same `git push` in a terminal goes
+/// to the fork (実測 2.55).
+///
+/// The branch is pushed under **its own name** wherever it is not going to
+/// the remote it tracks: an upstream names a branch on one remote and says
+/// nothing about any other (実測: the refspec git builds for a triangular
+/// push is `<branch>:<branch>`).
+///
+/// A detached HEAD has no branch to push, and says so rather than guessing.
 ///
 /// The upstream is read from configuration rather than parsed out of
 /// `origin/main`: a remote may be named `my/fork`, and a branch name may
@@ -56,7 +66,7 @@ pub async fn plan_current_push(
     cancel: &CancellationToken,
 ) -> Result<PushSpec, GitError> {
     let branch = current_branch(executor, workdir, cancel).await?;
-    let remote = config_value(
+    let tracks = config_value(
         executor,
         workdir,
         &format!("branch.{branch}.remote"),
@@ -65,33 +75,58 @@ pub async fn plan_current_push(
     .await?;
     let merge = config_value(executor, workdir, &format!("branch.{branch}.merge"), cancel).await?;
 
-    match (remote, merge) {
-        (Some(remote), Some(merge)) => Ok(PushSpec {
-            remote,
-            remote_branch: merge
-                .strip_prefix("refs/heads/")
-                .unwrap_or(&merge)
-                .to_string(),
-            local: branch,
-            set_upstream: false,
-            force,
-        }),
-        _ => {
-            if fallback_remote.is_empty() {
-                return Err(GitError::UnexpectedOutput {
-                    command: "git push".to_string(),
-                    message: "this repository has no remote to push to".to_string(),
-                });
-            }
-            Ok(PushSpec {
-                remote: fallback_remote.to_string(),
-                remote_branch: branch.clone(),
-                local: branch,
-                set_upstream: true,
-                force,
-            })
+    // Read here rather than handed in: a push must go where git would send
+    // it now, and the mark can be moved from a terminal between two of this
+    // application's reads. Two short local `git config` calls in front of a
+    // command that reaches the network.
+    let pushes_to = match config_value(
+        executor,
+        workdir,
+        &format!("branch.{branch}.pushRemote"),
+        cancel,
+    )
+    .await?
+    {
+        Some(name) => Some(name),
+        None => push_default(executor, workdir, cancel)
+            .await?
+            .map(|marked| marked.remote),
+    };
+
+    let remote = match pushes_to.or_else(|| tracks.clone()) {
+        Some(remote) => remote,
+        None if fallback_remote.is_empty() => {
+            return Err(GitError::UnexpectedOutput {
+                command: "git push".to_string(),
+                message: "this repository has no remote to push to".to_string(),
+            });
         }
-    }
+        None => fallback_remote.to_string(),
+    };
+
+    let remote_branch = match (&tracks, &merge) {
+        (Some(tracks), Some(merge)) if *tracks == remote => merge
+            .strip_prefix("refs/heads/")
+            .unwrap_or(merge)
+            .to_string(),
+        _ => branch.clone(),
+    };
+
+    // Recorded only where the branch tracks nothing at all, which is what
+    // makes the *next* push need no decision. A branch that already tracks
+    // something keeps tracking it: `--set-upstream` to another remote
+    // rewrites `branch.<name>.remote`, and that is where the branch fetches
+    // from (実測 — it is the whole of what a mark on a second remote is
+    // for).
+    let set_upstream = tracks.is_none() || merge.is_none();
+
+    Ok(PushSpec {
+        remote,
+        local: branch,
+        remote_branch,
+        set_upstream,
+        force,
+    })
 }
 
 /// Where the branch that is checked out should go when the user has just

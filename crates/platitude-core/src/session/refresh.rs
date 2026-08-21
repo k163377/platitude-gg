@@ -206,7 +206,12 @@ impl RepoSession {
                 let held = self.worktree_holders();
                 let joins = RefJoins::new(&refs, &held);
                 let mut snapshot = build_snapshot(&refs, &head, &remote_tags, &joins);
-                snapshot.remote_names = remotes.into_iter().map(|r| r.name).collect();
+                (snapshot.remote_names, snapshot.remote_urls) = remotes
+                    .list
+                    .into_iter()
+                    .map(|r| (r.name, r.fetch_url))
+                    .unzip();
+                snapshot.push_default = remotes.push_default;
                 let label_map = build_label_map(&refs, &head, &remote_tags, &joins);
                 self.sink.event(SessionEvent::RefsLoaded {
                     snapshot: self.share_snapshot(snapshot),

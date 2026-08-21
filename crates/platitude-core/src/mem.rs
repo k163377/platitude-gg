@@ -273,6 +273,14 @@ impl Footprint for crate::session::RefsSnapshot {
             + self.tags.heap_bytes()
             + self.head.heap_bytes()
             + self.remote_names.heap_bytes()
+            + self.remote_urls.heap_bytes()
+            + self.push_default.heap_bytes()
+    }
+}
+
+impl Footprint for crate::remote::PushDefault {
+    fn heap_bytes(&self) -> usize {
+        self.remote.heap_bytes()
     }
 }
 
