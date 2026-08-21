@@ -33,9 +33,15 @@ Rectangle {
     /// What `Clear` empties: the rows and the line in the header both. The toolbar's mark is red for either of them, so
     /// a Clear that left the line standing left the mark red over an empty panel, with nothing on screen left to
     /// explain it (2026-08-10 報告).
+    ///
+    /// And then the panel goes down with them (2026-08-21 ユーザー報告). A panel raised by a failure is read once; the
+    /// press that says "I am done with this" is the same press that empties it, and what stays behind otherwise is a
+    /// panel saying `Nothing yet` over the graph it pushed out of the way. Reopening is the toolbar's `>_`, where it
+    /// always was.
     function clearPanel() {
         pane.commandsModel.clear()
         pane.errorCleared()
+        pane.closeRequested()
     }
 
     ColumnLayout {

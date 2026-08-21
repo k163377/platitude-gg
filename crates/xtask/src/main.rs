@@ -109,8 +109,9 @@ commands:
       like one that fits, so the picture cannot answer it. So is
       `window-fill`: a maximised window fills the screen, leaving no
       desktop beside it for an unpainted edge to show against. And so is
-      `commands-clear`, where the panel the reader emptied is the whole
-      picture and the mark it is judged on is a corner of the band.
+      `commands-clear`, where the panel the reader emptied goes down with
+      the press and what is judged is what it left behind: a window with
+      no panel in it, and a quiet mark in a corner of the band.
       `details-grow` and `wip-grow` (each with a `-squeeze` twin) pull the
       description box's grip past everything and are judged the same way,
       on what sits under the box still being inside the pane. The details

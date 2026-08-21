@@ -137,12 +137,13 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // putting the list back over whatever the fold was made for.
         "nav-add-remote" if arg == "folded" => Some("nav_add_remote dialog=true collapsed=true"),
         "nav-add-remote" => Some("nav_add_remote dialog=true"),
-        // An emptied panel with a red mark over it and an emptied panel
-        // with a quiet one frame the same from the waist down: the panel
-        // is the picture, and the mark is 12 pixels of it in a corner.
-        // `was=` is judged with it — a refusal that never landed leaves
-        // a mark that was never red, and clearing nothing would pass.
-        "commands-clear" => Some("commands_clear was=true wrong=false"),
+        // A window whose panel the press took down and a window that
+        // never raised one frame the same, and the mark the press also
+        // quiets is 12 pixels of it in a corner. `was=` is judged with
+        // both — a refusal that never landed leaves a mark that was
+        // never red and a panel that was never up, and clearing nothing
+        // would pass.
+        "commands-clear" => Some("commands_clear was=true wrong=false open=false"),
         // Recovery is the show, and the picture can only hold its quiet
         // half: a band that failed and healed ends the run looking like
         // one that never failed at all. `was=`/`hadline=` are the red

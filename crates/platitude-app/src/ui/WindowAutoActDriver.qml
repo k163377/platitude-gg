@@ -589,6 +589,10 @@ Item {
     // PG_AUTO_ACT=commands-clear. The band is where the answer is — the rows and the line both feed one mark, and
     // clearing only the rows left it red over an empty panel (2026-08-10 報告), which is why this verb lives up here. The
     // same mark is read on both sides of the press: `was=` is the half the picture cannot hold.
+    //
+    // The panel the press takes down with them is the other half. Which is why the standing-panel half of the
+    // preconditions is read in the branch that presses and nowhere else (規約 §UI 自動化の因果性): every tick, it would be
+    // this verb's own answer — the panel gone — barring the way to the report.
     Timer {
         id: commandsClearActTimer
         interval: 25
@@ -597,25 +601,26 @@ Item {
         property bool clearRequested: false
         property bool was: false
         onTriggered: {
-            if (window.curPage === null || !driver.commandsWrongSeen
-                    || window.curPage.pageCommands.running
-                    || !window.curPage.commandsShown)
+            if (window.curPage === null)
                 return
             if (!commandsClearActTimer.clearRequested) {
+                if (!driver.commandsWrongSeen
+                        || window.curPage.pageCommands.running
+                        || !window.curPage.commandsShown)
+                    return
                 commandsClearActTimer.was = driver.commandsWrongSeen
                 commandsClearActTimer.clearRequested = true
                 window.curPage.clearCommandLog()
                 return
             }
-            if (topBar.commandsWrong)
+            if (topBar.commandsWrong || window.curPage.commandsShown)
                 return
             stop()
             AppBackend.report(
                 "commands_clear was=" + commandsClearActTimer.was
                 + " wrong=" + topBar.commandsWrong
-                + " mark=" + topBar.commandsMarkColor
-                + " open=" + (window.curPage !== null
-                              && window.curPage.commandsShown))
+                + " open=" + window.curPage.commandsShown
+                + " mark=" + topBar.commandsMarkColor)
             window.finishAutoAct()
         }
     }
