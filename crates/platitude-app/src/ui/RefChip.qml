@@ -18,14 +18,36 @@ Rectangle {
     // Nowhere to go from here (the branch already under the working tree): §無効 — the words drop to the muted colour,
     // frame included, since the frame is how a branch chip is read at all.
     property bool muted: false
+    /// Whether a name too long for `maxWidth` runs on to another line instead of being cut. Off everywhere the chip
+    /// stands in a row of its own size — the graph row, the menus — and on in the list a chip unstacks into, which is
+    /// the one place the name is shown *in order to be read* (規約 §hover のツールチップ). **One frame either way**: the
+    /// lines are a single label inside a single border, so a wrapped name is one chip that got taller, not two chips.
+    property bool wrapped: false
 
     visible: records.length > 0
     // The name's own line box, and the frame drawn around it — nothing else is in the box, so nothing else sets its
     // height. That comes to eighteen, two under the commit node it stands beside: near enough that the row reads as one
     // band, low enough that the chip is not the loudest thing on it (2026-08-21 ユーザー判断 — the frame was the node's own
     // twenty for a day, and against a subject at `fontMd` the chip won the row).
-    height: Theme.fontChipLine + 2 * Theme.borderWidth
+    //
+    // A wrapped name adds the family's own line spacing per extra line rather than another `fontChipLine`: the first
+    // line keeps the box the token names, and the lines under it are spaced the way the family spaces them, so nothing
+    // is clipped in a family whose lines are taller than the box (the CJK ones are). **A one-line chip is the same
+    // eighteen it always was** — the term is zero.
+    height: Theme.fontChipLine + Math.max(0, chip.nameLines - 1) * chipFont.lineSpacing + 2 * Theme.borderWidth
     width: Math.min(chipContent.implicitWidth + 2 * Theme.spaceXs, maxWidth)
+    /// How many lines the name came out on. Only a wrapped chip can answer more than one.
+    readonly property int nameLines: chip.wrapped ? Math.max(1, nameLabel.lineCount) : 1
+    /// What the chip would take if nothing capped it — the name on one line, plus everything it stands beside.
+    ///
+    /// **Not `implicitWidth`**, which is the answer after `maxWidth` has already been applied: an owner sizing itself
+    /// from that would settle on whatever it happened to hand over first (rules-refs: `ActionButtonLabel.wantWidth`).
+    readonly property real wantWidth: nameLabel.implicitWidth + 2 * Theme.spaceXs + chip.furnitureW
+    /// Everything in the chip that is not the name: the `+N` seat and the badge with its gap.
+    readonly property real furnitureW: (chip.records.length > 1 ? Theme.spaceLg : 0)
+                                       + (chip.hasBadge ? Theme.iconSm + Theme.spaceXs : 0)
+    /// What is left for the name inside `maxWidth`.
+    readonly property real nameRoom: chip.maxWidth - 2 * Theme.spaceXs - chip.furnitureW
     radius: Theme.radiusSm
     clip: true
 
@@ -66,8 +88,11 @@ Rectangle {
     border.color: kindColor
     border.width: Theme.borderWidth
 
-    /// Where the ink starts inside the frame, in whole pixels off the top of the chip: the room the border leaves,
-    /// halved, **with the odd pixel going up**.
+    /// Where the ink starts inside the frame, in whole pixels off the top of the chip: the room the **first line's**
+    /// box leaves, halved, **with the odd pixel going up**.
+    ///
+    /// The line box rather than the frame's own height, which are the same thing until a name wraps: measured off the
+    /// frame, a two-line chip would centre its first line halfway down the box and leave the last one on the border.
     ///
     /// A line box is not where a family puts its ink: it keeps more room above its ascender than below its descender,
     /// so centring the box inside the frame spent that room there and sat the descenders of `g` and `/` on the border
@@ -76,7 +101,7 @@ Rectangle {
     /// every ascender is, rather than below the one descender a name may not even have. **Not to be measured off the
     /// headless picture**, which is drawn in a family neither OS uses (verify-ui スキル §Windows での実行・デバッグの罠).
     function inkTop(ink) {
-        const room = chip.height - 2 * Theme.borderWidth - ink.tightBoundingRect.height
+        const room = Theme.fontChipLine - ink.tightBoundingRect.height
         return Theme.borderWidth + Math.ceil(room / 2)
     }
     /// Where a label goes to put its ink there. Whole pixels: a label laid out on a half one spreads its antialiasing
@@ -98,6 +123,12 @@ Rectangle {
         font: countLabel.font
         text: "Hbxp"
     }
+    // How far apart the family sets its lines, for the height a wrapped name takes. `TextMetrics` cannot answer this
+    // one — it measures a string, and line spacing is the family's.
+    FontMetrics {
+        id: chipFont
+        font: nameLabel.font
+    }
 
     Row {
         id: chipContent
@@ -113,10 +144,14 @@ Rectangle {
             color: chip.nameColor
             font.pixelSize: Theme.fontChip
             font.weight: chip.recHead ? Font.DemiBold : Font.Normal
-            elide: Text.ElideRight
-            width: Math.min(implicitWidth,
-                            chip.maxWidth - 2 * Theme.spaceXs - (chip.records.length > 1 ? Theme.spaceLg : 0)
-                            - (chip.hasBadge ? Theme.iconSm + Theme.spaceXs : 0))
+            // Cut, or carried on to the next line — never both, and which one is the owner's to say (`wrapped`).
+            elide: chip.wrapped ? Text.ElideNone : Text.ElideRight
+            // A ref name has no spaces to break at, so the break has to be allowed anywhere; `Text.Wrap` takes the word
+            // boundary when there is one and breaks anywhere when there is not.
+            wrapMode: chip.wrapped ? Text.Wrap : Text.NoWrap
+            // The narrower of what the name wants and what it is given. **The same expression either way**: a wrapped
+            // label handed its whole room would make every chip in a list as wide as the widest name.
+            width: Math.min(implicitWidth, chip.nameRoom)
         }
         // How many more names the card has, which is meta about the row rather than one of the names — the colour the
         // row's other meta (author, date) is written in.
@@ -131,7 +166,9 @@ Rectangle {
         // Remote / PR badge: reserved width above, so it survives any elision.
         NavIcon {
             visible: chip.hasBadge
-            anchors.verticalCenter: parent.verticalCenter
+            // On the first line's box, not on the middle of the frame — the two are the same height until a name wraps,
+            // and a badge that centres itself on a three-line chip has left the name it belongs to.
+            y: Theme.borderWidth + Math.round((Theme.fontChipLine - Theme.iconSm) / 2)
             kind: chip.recPr ? "pr" : "remote"
             tint: chip.muted ? Theme.textMuted : chip.recPr ? Theme.success : Theme.textSecondary
             width: Theme.iconSm
