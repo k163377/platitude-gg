@@ -161,7 +161,7 @@
 - `file-menu` / `file-menu-untracked` / `file-menu-staged` / `file-menu-conflict`(ファイル行の右クリック、バケツ別)
 - `amend-author`(amend の著者引き継ぎ表示)
 - `stash-menu`(stash 行の右クリック)
-- `name-box`(グラフ行の名前入力欄を開いたまま止める。引数は行番号)
+- `name-box`(グラフ行の名前入力欄を開いたまま止める。引数は `<行番号>[:<チップ列の幅>]` — 幅は手が仕切りをドラッグした先で、**`0` は列の床**(metrics が clamp する)。省略すれば既定幅。報告行 `name_box row= label_w= box_w=` の **`box_w` − (`label_w` − 2×`spaceXs`) が箱が列からグラフ側へはみ出した分** = 箱の床(プレースホルダ全文)が効いた証拠。`box_w=-1` はその行のデリゲートが居なかった run なので絵も当てにならない)
 - `menu-hover`(引数は行番号 — 省略時は `commit-menu` と同じ既定行。コミット行メニューを開いてから、**その行の hover カードを行の遅延タイマと同じ経路で頼む**。報告行 `menu_hover menu= card= list=`、must_say は `menu=true card=false`。**`row-card` と対で読む** — 同じ入力でカードが開く側の証拠が無いと「出なかった」は何も言えない。`menu=true` が「カードが裏に回る相手が居た」を言う)
 - `ref-list` / `ref-list-card`(チップ列の展開と、行カードとの対読み)
 - `row-part`(引数は `<行番号>:<行に沿った x>:<chip|row>`。**グラフ行がどこで分かれるかを 1 点で訊く** — 行の `pointerRowX`(実ポインタが書く 1 つのプロパティ)へ x を書き、あとの判断は全部行に任せる。`ref-list` / `row-card` は `chipExpandRequested` / `rowHoverRequested` を直に呼ぶので**境界を 1px も通らない** = この動詞と対で読む。報告行 `row_part x= want= got= list= card= agrees=`、must_say は **`agrees=true`**(期待と一致 + もう片方が閉じている)。サンプラは**どちらかのカードが開いたら**答える(期待した方だけを待つと、境界がずれた run が watchdog まで無言になる)。境界は列幅なのでフォントに依らない — `--preset tags` の実測は `0:150:chip`(列の右端 2px 内 = 名前枠の外の余白)/ `0:160:row`(仕切りの外)/ `0:10:chip`(列の左端・チップの無い所)/ `2:10:row`(チップを持たない行))

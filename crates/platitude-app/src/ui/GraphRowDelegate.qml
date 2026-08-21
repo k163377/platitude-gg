@@ -59,6 +59,8 @@ Item {
         rowItem.movable && rowItem.branchRecords.length > 0 ? rowItem.branchRecords[0] : ""
     // The chip itself — what a stacked one is unstacked under.
     readonly property alias chipItem: chipColumn.chipItem
+    // What the name box on this row came out to (see the column — a headless run reads it off here).
+    readonly property alias nameBoxWidth: chipColumn.nameBoxWidth
     // This row's chip column is a branch-name box right now.
     readonly property bool naming: rowItem.ListView.view ? rowItem.ListView.view.namingOid === rowItem.oid_hex : false
     // The standing question is about this row. Its words are on the bar above the graph; the row answers "which one"

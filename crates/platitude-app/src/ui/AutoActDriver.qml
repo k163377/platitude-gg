@@ -2795,7 +2795,18 @@ Item {
             diffStepTimer.steps = act === "diff-step-edge" ? 20 : 1
             diffStepTimer.start()
         } else if (act === "name-box") {
-            graphPane.startNaming(graphModel.oidAt(Number(arg)))
+            // The argument is `<行>[:<列幅>]`. The width is what a hand would drag the chip column's divider to, and
+            // the box is drawn against it — `0` asks for the column's own floor, since the metrics clamp what a drag
+            // asks for. Without one the column is left wherever it was, which is the default width.
+            const boxCut = arg.indexOf(":")
+            const boxRow = Number(boxCut < 0 ? arg : arg.substring(0, boxCut))
+            if (boxCut >= 0)
+                page.setGraphColumns(Number(arg.substring(boxCut + 1)), graphPane.graphColWManual)
+            graphPane.startNaming(graphModel.oidAt(boxRow))
+            const boxItem = graphPane.view.itemAtIndex(boxRow)
+            AppBackend.report("name_box row=" + boxRow
+                              + " label_w=" + Math.round(graphPane.labelW)
+                              + " box_w=" + (boxItem ? Math.round(boxItem.nameBoxWidth) : -1))
         } else if (act === "name-box-drop") {
             // The same box, and the press that lands somewhere else while it stands. The argument is `<行>[:<打つ名前>]`
             // — with nothing typed the box goes with the press, with a name in it it stays. What is typed goes in the
