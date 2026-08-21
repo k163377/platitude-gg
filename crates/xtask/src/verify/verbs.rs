@@ -92,6 +92,14 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // behind. Read as a pair with `row-card`, which proves that same
         // input does open the card (2026-08-17 ユーザー報告).
         "menu-hover" => Some("menu_hover menu=true card=false"),
+        // Where a graph row divides into the chip's half and the commit's,
+        // asked at one point along the row. The picture shows which card
+        // came out, but not which point was asked for or whether that is
+        // the one the reader would have called it, so the run carries the
+        // question with the answer and is judged on the two agreeing —
+        // and on the other card being shut, since only one of the two is
+        // ever meant to be out.
+        "row-part" => Some("agrees=true"),
         // A row's tooltip. `lit=` is the control — the tip that came up
         // under the same pointer on the way in, so a run that photographs
         // an empty overlay is showing the row's answer and not a pointer

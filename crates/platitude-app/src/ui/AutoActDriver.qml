@@ -131,7 +131,7 @@ Item {
                 "nav-filter", "nav-tip", "nav-reclick", "nav-reclick-away", "nav-rename-far",
                 "nav-add-remote", "tags-eye",
                 "delete-branch-refused", "chip-menu", "chip-menu-current",
-                "delete-blocked-tip", "delete-branch-early", "ref-list-card",
+                "delete-blocked-tip", "delete-branch-early", "ref-list-card", "row-part",
                 "signature", "signature-tip", "stash-tip", "path-tip", "row-card", "menu-hover",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
@@ -1895,6 +1895,36 @@ Item {
             driver.complete()
         }
     }
+    // What the row was asked and what it answered, kept for the report — the ask is a point along the row and the
+    // answer is which of the two cards came out of it.
+    QtObject {
+        id: rowPartReport
+        property string want: ""
+        property real x: 0
+    }
+    // Waits for either card rather than for the one that was expected: a boundary that moved opens the other one, and
+    // waiting for the right answer would spend the whole watchdog finding that out. The rest is a real `tipDelayMs`,
+    // which this samples through — the verb is judged on `agrees`, not on how long it took.
+    Timer {
+        id: rowPartTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!refList.opened && !rowCard.opened)
+                return
+            rowPartTimer.stop()
+            const got = refList.opened ? "chip" : "row"
+            AppBackend.report(
+            "row_part x=" + rowPartReport.x
+            + " want=" + rowPartReport.want
+            + " got=" + got
+            + " list=" + refList.opened
+            + " card=" + rowCard.opened
+            + " agrees=" + (got === rowPartReport.want
+                            && refList.opened !== rowCard.opened))
+            driver.complete()
+        }
+    }
     // The row under a standing menu, asked for its card the way its own delay timer would ask (hover cannot be
     // injected — verify-ui スキル §hover の絵の撮り方). Read as a pair with `row-card`, which proves that same input does
     // open the card: on its own, a card that stayed shut says nothing about why.
@@ -2588,6 +2618,19 @@ Item {
                           repoTab.localNameFor(arg), arg)
         } else if (act === "name-branch") {
             graphPane.view.namingSubmitted(graphModel.oidAt(0), arg)
+        } else if (act === "row-part") {
+            // Where the row divides, asked at a point along it. Hover cannot be injected, so this writes the one
+            // property a real pointer writes (`GraphRowDelegate.pointerRowX`) and leaves every decision after that to
+            // the row — **the point of the verb is the decision**, so reaching past it to `chipExpandRequested` (which
+            // is what `ref-list` does) would prove nothing about the boundary.
+            const parts = arg.split(":")
+            const probed = graphPane.view.itemAtIndex(Number(parts[0]))
+            if (probed) {
+                rowPartReport.want = parts[2]
+                rowPartReport.x = Number(parts[1])
+                probed.pointerRowX = rowPartReport.x
+                rowPartTimer.start()
+            }
         } else if (act === "ref-list" || act === "ref-list-card") {
             // Hover cannot be injected, so this enters where the hover timer would. `-card` walks row → card → chip →
             // asked again from under the list: both card closes have to hold, and either failing leaves `open=true`.
