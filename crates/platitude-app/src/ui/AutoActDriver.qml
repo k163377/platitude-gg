@@ -90,6 +90,10 @@ Item {
     /// so a shot taken the moment the graph settles frames a sidebar still counting the old entries — which is not a
     /// state the application ever rests in, and the run is judged by eye.
     property int stashTotalBefore: -1
+    /// What HEAD was before that write, for the run whose picture is of the commit that replaces it. The same
+    /// `AfterWrite::Graph` ordering applies: at the write barrier the panes still frame the commit that was replaced,
+    /// wearing the author it was replaced for — which is the whole subject of `amend-reset-author`.
+    property string headOidBefore: ""
 
     function isWriteAct(act) {
         return ["publish", "publish-taken", "publish-add", "publish-go",
@@ -286,7 +290,45 @@ Item {
                               + " name=" + repoTab.headAuthorName)
             wipPane.setResetAuthorChecked(true)
             wipPane.setMessage(AppBackend.autoActArg, "")
+            // The run is deferred, so nothing raises a barrier for it on the way out: the commit is sent from here and
+            // waited out from here. Both marks are re-read on the spot rather than carried over from
+            // `prepareCompletion` — the page's own opening fetch can have answered in between.
+            driver.writeSeqBefore = repoTab.writeSeq
+            driver.headOidBefore = branchesModel.headOid
             page.commitNow()
+            resetAuthorLandedTimer.start()
+        }
+    }
+    // The write barrier's two edges, and then the one this run is actually about: the amend answers before the rebuild
+    // it asks for is started, so stopping at the write frames the commit that was replaced — still under the name the
+    // amend was sent to take over (2026-08-21: `--preset authorship` photographed "Yuki Tanaka" on a green run).
+    //
+    // Refs answer ahead of the rebuild, so the new tip being named is not the graph holding it — the graph taking the
+    // commit in is the edge, and it is read the positive way round. The replaced one going is not the same statement
+    // and is not always true: a stash made on top of it keeps it drawn as its own parent, so `--preset basic` comes
+    // back from an amend one row *longer* than it went in, with the commit that was amended still on screen.
+    //
+    // That is also why the pane is waited for by the selection rather than by the tip. Where the page puts the reader
+    // afterwards is its own business and it differs by repository — onto the new tip where the amended row led, back
+    // onto the same commit where the graph still holds it — but either way the shot must not be taken while the pane
+    // is still fetching, and `shown=` is then what says whose name the author line in the picture is.
+    Timer {
+        id: resetAuthorLandedTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
+                    || branchesModel.headOid === driver.headOidBefore
+                    || graphModel.rowOf(branchesModel.headOid) < 0
+                    || detailsModel.shaHex !== page.selectedOid)
+                return
+            resetAuthorLandedTimer.stop()
+            AppBackend.report("reset_author was=" + driver.headOidBefore.substring(0, 8)
+                              + " head=" + branchesModel.headOid.substring(0, 8)
+                              + " shown=" + detailsModel.shaHex.substring(0, 8)
+                              + " author=" + detailsModel.authorName
+                              + " committer=" + detailsModel.committerName)
+            driver.complete()
         }
     }
     // Staging has to land before the button can know what it carries.
