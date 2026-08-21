@@ -66,9 +66,9 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "path-tip" if arg.ends_with("-tree") => Some("tree=true tip=true"),
         "path-tip" => Some("tree=false tip=true"),
         // The eye at the end of the TAGS band. Both sides of it frame as
-        // a graph with tags in the list beside it — the difference is one
-        // row, and which row that is depends on the repository, so the
-        // picture cannot say on its own whether the switch answered.
+        // a graph with the same tags listed beside it, and what separates
+        // them — a row, and every tag chip — depends on the repository, so
+        // the picture cannot say on its own whether the switch answered.
         // `there=` is the named tag's commit, held against `shown=`: off
         // takes the commits nothing but a tag reaches out of the walk, and
         // pressing again brings them back.

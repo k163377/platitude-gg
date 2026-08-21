@@ -3,7 +3,7 @@
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, pass_of};
-use platitude_core::session::{RepoSession, SessionEvent};
+use platitude_core::session::{LabelKind, RepoSession, SessionEvent};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn tag_only_commits_follow_the_include_tags_option() {
@@ -14,6 +14,10 @@ async fn tag_only_commits_follow_the_include_tags_option() {
     repo.commit_file("g.txt", "t\n", "tag only work");
     repo.git(&["tag", "islet"]);
     repo.git(&["checkout", "main"]);
+    // And one the walk cannot take away: main reaches this commit with or
+    // without the tags, so its chip is the half the option has to answer
+    // for on its own.
+    repo.git(&["tag", "onmain"]);
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
@@ -26,16 +30,20 @@ async fn tag_only_commits_follow_the_include_tags_option() {
     // Tags are walked by default → the tag-only commit has a row. The
     // tag-inclusive pass differs from the fast pass here, so it arrives
     // as an atomic replacement.
-    let first_gen = sink
+    let (first_gen, drawn) = sink
         .wait_for("tags-on LogReplaced", |evs| {
             evs.iter().find_map(|e| match e {
                 SessionEvent::LogReplaced {
                     generation, rows, ..
-                } if rows.len() == 2 => Some(*generation),
+                } if rows.len() == 2 => Some((*generation, chips_of(rows))),
                 _ => None,
             })
         })
         .await;
+    assert!(
+        drawn.contains(&LabelKind::Tag),
+        "the tags are drawn while they are in the graph: {drawn:?}"
+    );
 
     // Two-phase streaming: a fast tag-less pass must have painted first.
     {
@@ -55,8 +63,39 @@ async fn tag_only_commits_follow_the_include_tags_option() {
     session.set_include_tags(false);
     let off = sink.pass_after("the tag-less graph", first_gen).await;
     assert_eq!(off.total, 1, "the tag-only commit left the walk");
+    // The row main still holds keeps its branch chip and loses its tag:
+    // taking the tags out of the walk is not the whole of taking them out
+    // of the graph, and this is the row where the difference shows.
+    {
+        let events = sink.events.lock().unwrap();
+        let left: Vec<LabelKind> = events
+            .iter()
+            .filter_map(|e| match e {
+                SessionEvent::LogChunk { generation, rows } if *generation == off.generation => {
+                    Some(chips_of(rows))
+                }
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        assert!(
+            left.contains(&LabelKind::LocalBranch),
+            "the branch is still drawn: {left:?}"
+        );
+        assert!(
+            !left.contains(&LabelKind::Tag),
+            "no tag is drawn with the tags out of the graph: {left:?}"
+        );
+    }
 
     session.close();
+}
+
+/// Every chip a batch of rows carries, by kind.
+fn chips_of(rows: &[platitude_core::session::LogRow]) -> Vec<LabelKind> {
+    rows.iter()
+        .flat_map(|row| row.labels.iter().map(|label| label.kind))
+        .collect()
 }
 
 #[tokio::test(flavor = "multi_thread")]

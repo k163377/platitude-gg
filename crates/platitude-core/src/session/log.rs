@@ -9,6 +9,18 @@ impl RepoSession {
         *self.lock_log_options()
     }
 
+    /// Whether the graph is drawing tags — the TAGS band's eye, and what
+    /// every row's chips are cut against (`LabelIndex::labels_of`).
+    ///
+    /// Read from the session and **not from the pass's own `LogOptions`**:
+    /// the first of a restart's two passes runs with the tags taken out of
+    /// the walk to get a picture up (see `restart_log`), and a chip cut to
+    /// match that would take every tag off the screen for the length of
+    /// that pass and then put it back.
+    pub(super) fn tags_shown(&self) -> bool {
+        self.lock_log_options().include_tags
+    }
+
     /// Toggles tags in the graph walk and restarts the stream.
     pub fn set_include_tags(self: &Arc<Self>, include_tags: bool) {
         {
@@ -200,6 +212,7 @@ impl RepoSession {
         };
 
         let total = rows.len() as u32;
+        let tags = self.tags_shown();
         {
             let mut shared = self.lock_shared();
             // Superseded: someone asked for a graph after this pass was
@@ -214,7 +227,7 @@ impl RepoSession {
             let mut applied: HashMap<u32, Vec<RefLabel>> = HashMap::new();
             for row in &mut rows {
                 if let Ok(oid) = Oid::from_hex_str(&row.oid_hex) {
-                    let labels = shared.label_map.labels_of(&oid);
+                    let labels = shared.label_map.labels_of(&oid, tags);
                     if !labels.is_empty() {
                         row.labels = labels.to_vec();
                         applied.insert(row.row, labels.to_vec());
@@ -461,6 +474,7 @@ impl RepoSession {
     /// it moves for passes that never reach anybody, and a stream still
     /// on screen would stop delivering halfway through.
     fn emit_rows(&self, generation: u64, batch: &[StreamItem], pool: &crate::model::StrPool) {
+        let tags = self.tags_shown();
         let mut guard = self.lock_shared();
         if guard.generation != generation {
             return;
@@ -469,7 +483,7 @@ impl RepoSession {
         let mut rows = Vec::with_capacity(batch.len());
         for item in batch {
             let mut row = item.row(pool, &mut shared.builder);
-            let labels = shared.label_map.labels_of(&item.meta.oid).to_vec();
+            let labels = shared.label_map.labels_of(&item.meta.oid, tags).to_vec();
             if !labels.is_empty() {
                 row.labels = labels.clone();
                 shared.applied.insert(row.row, labels);
@@ -522,11 +536,12 @@ impl RepoSession {
     /// consumer already dropped, and its row numbers point at other
     /// commits there.
     pub(super) fn apply_refs(&self, label_map: LabelIndex) {
+        let tags = self.tags_shown();
         let mut shared = self.lock_shared();
         shared.label_map = label_map;
 
         let mut fresh: HashMap<u32, Vec<RefLabel>> = HashMap::new();
-        for (oid, labels) in shared.label_map.commits() {
+        for (oid, labels) in shared.label_map.commits(tags) {
             if let Some(row) = shared.builder.row_of(&oid) {
                 fresh.insert(row, labels.to_vec());
             }
