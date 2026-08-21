@@ -93,6 +93,11 @@ Rectangle {
             enabled: bucketHeader.count > 0
             text: bucketHeader.section === "staged" ? qsTr("Unstage all") : qsTr("Stage all")
             font.pixelSize: Theme.fontMd
+            // The seat every button in a `rowHeight` band takes (NavHeader's do the same). A `ToolButton` asks for its
+            // word plus its own padding, and at the body step that came to more than the band it stands in — the
+            // layout then placed the whole row against a height nobody could see, and the words went down with it
+            // until the count's brackets were through the floor (measured, both OSes).
+            implicitHeight: Theme.iconLg
             tip: bucketHeader.section === "staged"
                  ? qsTr("Unstage everything") : qsTr("Stage everything, untracked included")
             onClicked: {
