@@ -43,9 +43,10 @@
 //! not in a container anyway.
 
 use std::io::IsTerminal;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
-use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::keepsakes::{keepsake_dir, keepsakes};
 
 /// The image. Its tag names the stage and fingerprints what built it.
 const IMAGE: &str = "pg-linux";
@@ -499,33 +500,6 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
     })
 }
 
-/// A host directory for what a run means to be looked at afterwards, or
-/// None when the command leaves nothing. verify-ui writes its screenshot
-/// and the settings it ran with into --shot-dir; inside a container that is
-/// a place nobody can open, and the whole verdict is a PNG.
-fn keepsakes(command: &[String]) -> Result<Option<PathBuf>, String> {
-    if !command.iter().any(|word| word == "verify-ui") {
-        return Ok(None);
-    }
-    if command.iter().any(|word| word == "--shot-dir") {
-        // Named by the caller, who then owns where it lands.
-        return Ok(None);
-    }
-    keepsake_dir("shots").map(Some)
-}
-
-fn keepsake_dir(kind: &str) -> Result<PathBuf, String> {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_nanos();
-    let dir = std::env::temp_dir()
-        .join("pg-linux")
-        .join(format!("{kind}-{nanos}"));
-    std::fs::create_dir_all(&dir).map_err(|e| format!("failed to make {}: {e}", dir.display()))?;
-    Ok(dir)
-}
-
 fn here(root: &Path, command: &[String]) -> Result<(), String> {
     let (program, arguments) = command.split_first().ok_or("nothing to run")?;
     let status = Command::new(program)
@@ -603,23 +577,6 @@ mod tests {
         assert_eq!(
             command_line(&words("test -p platitude-core")),
             words("cargo test -p platitude-core")
-        );
-    }
-
-    #[test]
-    fn only_a_verify_run_without_a_directory_of_its_own_gets_one() {
-        assert!(
-            keepsakes(&words("cargo xtask verify-ui commit"))
-                .expect("temp dir")
-                .is_some()
-        );
-        assert_eq!(
-            keepsakes(&words("cargo xtask verify-ui commit --shot-dir /somewhere")).expect("none"),
-            None
-        );
-        assert_eq!(
-            keepsakes(&words("cargo test -p platitude-core")).expect("none"),
-            None
         );
     }
 

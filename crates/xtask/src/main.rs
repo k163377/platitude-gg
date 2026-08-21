@@ -9,6 +9,7 @@ mod check;
 mod demo;
 mod gui;
 mod hook;
+mod keepsakes;
 mod land;
 mod linux;
 mod perf;
