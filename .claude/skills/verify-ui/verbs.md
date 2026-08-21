@@ -10,7 +10,8 @@
 
 - `commit`(引数はメッセージ。**省略時は `chore: commit from the headless run`** — 空のまま撃つと git が拒み、コミットの積まれていない絵が撮れる)
 - `amend`(同じく引数はメッセージだが、**省略時は `--no-edit`** = HEAD の文言をそのまま持ち上げるので既定でも書き込みは成立する)
-- `amend-reset-author` / `stash` / `stash-staged` / `stash-file` / `switch` / `switch-remote` / `squash` / `edit-message` / `edit-message-leave`
+- `amend-reset-author` / `stash-staged` / `stash-file` / `switch` / `switch-remote` / `squash` / `edit-message` / `edit-message-leave`
+- `stash`(木ごと退避する = 作業ツリーの行がグラフから消え、出来た stash が先頭に立つ。**完了はその行が消えたこと + STASHES の本数が動いたこと**で、書き込みの答えでは止まらない — **書き込みは自分が呼ぶ再構築より先に答える**ので(core `AfterWrite::Graph`)、書き込み境界で撮ると**再構築前のグラフ**が写り、行が着ける印の誤りが緑のまま通る(2026-08-21 の 2 件がこれ)。報告行 `graph_settled gone= top= rows= stashes=` の **`gone=true top=stash` が must_say**。半分だけ退避する `stash-staged` / `stash-file` は作業ツリーの行が残るので素の書き込み境界のまま)
 - `reword`(**引数(新しい subject)が要る** — `commit` / `amend` と違って既定を持たないので、省くと空の subject を書き込もうとして何も起きず、**書き込み待ちのまま 120s の watchdog で落ちる**。`check --verb` は空白で割るので、そこへ渡す subject は 1 語にする)
 - `edit-message-focus`(description 枠に caret を入れる = 打っている間の色。**何も打たない**ので **body を持つコミットが要る** — `--preset co-authors` の行 0 = HEAD。**休息側は同じ preset・同じ行の `co-authors 0`** で、対で読む。報告行は `message_focus pane= focused= color=` で、読むのは **`color=`**(`textPrimary` `#e2e8f0` / `textSecondary` `#94a3b8`)。`forceActiveFocus()` は offscreen でも効く = フォーカスは hover と違って注入できる)
 - `cherry-pick`(引数は ref 名 / 完全な oid / `row:<n>`。グラフ行にある commit なら先にそこへスクロールして選ぶ。下の `tip_landed` を読む)
@@ -59,8 +60,8 @@
 - `chip-menu-current`(引数なし。現在ブランチのチップ — **削除の表が常に開く**(`ref=true commit=false` が正)。ローカルは無効表示。リモートの読み(upstream か同名リモート)があればリモートの 2 行も並び、押せるのは `push --delete` だけ・両方は無効(`--preset basic` の main はこちら)。読みが無ければローカル無効 1 行だけ。コミット行メニューへのフォールスルーは HEAD マーカー等、名前の無いチップだけに残る)
 - `delete-tag` / `delete-stash`(`delete-remote` / `-go` は下のリモートブランチの並びの行が正 — 重複掲載しない)
 - `delete-stash-row`(**質問は無く**メニューが開いたまま止まり、`-go`(delete-stash-row は引数 `go`)が行の長押しを走らせる)
-- `stash-apply-row`
-- `stash-pop-row`(グラフ行の Apply / Pop)
+- `stash-apply-row`(グラフ行の Apply — stash は残るので素の書き込み境界のまま)
+- `stash-pop-row`(グラフ行の Pop。**完了は pop した stash の行がグラフから消えたこと + STASHES の本数が動いたこと** — 理由は `stash` の項と同じ。報告行も同じ `graph_settled` で、**`gone=true top=wip` が must_say**(戻した変更で木が汚れるので作業ツリーの行が先頭に立つ)。**`--preset stashes` が本題**: 消える行が先頭なので、その 1 行が印を着け替えるかどうかが絵に出る)
 - `delete-force` / `delete-tag-go` / `delete-stash-go` / `discard-file` / `delete-file`
 - `discard-staged`(引数はパス。同じ 1 行を unstaged / 未追跡 / staged の行から入る。メニューを出したまま止まり、行の文言を報告する)
 - `discard-file-go` / `delete-file-go`

@@ -48,6 +48,14 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "identity-tip" => Some("identity_tip unsaved=true badge=true tip=true"),
         "signature-tip" => Some("signature_tip code=E tip=true"),
         "stash-tip" => Some("stash_tip blocked=true tip=true"),
+        // The two whose subject is the mark the leading row wears once the
+        // rebuild a write asks for has landed — an archive box where a
+        // stash was just made, the working tree's dashed ring where one
+        // was just popped back. `gone=` is the row the write took away,
+        // and it is what the run waited on; without the line the shot was
+        // taken at the write barrier, which is the graph as it was.
+        "stash" => Some("graph_settled gone=true top=stash"),
+        "stash-pop-row" => Some("graph_settled gone=true top=wip"),
         // The fourth: an elided row whose hover says the whole name.
         // One verb serves both panes (the argument picks one), so the
         // wanted line names neither — `tree=` echoes which view the

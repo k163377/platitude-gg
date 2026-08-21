@@ -76,6 +76,19 @@ Item {
     /// ends between two looks at it — which the container did and the host did not, and which taking work out of the
     /// post-write refresh made likelier still (2026-08-17 実測: `line-back`, then `keep-place`).
     property int writeSeqBefore: 0
+    /// The graph row this run's write takes off the graph, or "" for the verbs the write barrier alone answers for.
+    ///
+    /// A write answers before the rebuild it asks for is even started (core's `AfterWrite::Graph`), so a shot taken at
+    /// the write barrier is a shot of the graph as it was. That is how two rows wearing the wrong mark went out under
+    /// green runs: a stash popped off the top left its archive box on the working-tree row, and a stash just made wore
+    /// the working tree's dashed ring (2026-08-21 ユーザー報告). Waiting on the row itself — gone from the model —
+    /// rather than on a pass counter keeps the wait about this write: the counter also moves for passes nobody here
+    /// asked for.
+    property string graphGoneOid: ""
+    /// How many entries the stash list held before that write. The list is read after the rebuild rather than with it,
+    /// so a shot taken the moment the graph settles frames a sidebar still counting the old entries — which is not a
+    /// state the application ever rests in, and the run is judged by eye.
+    property int stashTotalBefore: -1
 
     function isWriteAct(act) {
         return ["publish", "publish-taken", "publish-add", "publish-go",
@@ -152,6 +165,19 @@ Item {
         driver.completionDeferred = driver.defersCompletion(act)
         driver.writeExpected = driver.isWriteAct(act)
         driver.writeSeqBefore = repoTab.writeSeq
+        driver.graphGoneOid = ""
+        driver.stashTotalBefore = stashesModel.total
+    }
+
+    /// What the graph's leading row is, for the runs that are about the mark it wears.
+    function graphTopKind() {
+        const oid = graphModel.oidAt(0)
+        if (oid === "")
+            return "none"
+        // The same reading the row delegate makes of the synthetic working-tree row: an oid of nothing but zeroes.
+        if (!/[^0]/.test(oid))
+            return "wip"
+        return graphModel.stashRefOf(oid) !== "" ? "stash" : "commit"
     }
 
     function dispatchFinished() {
@@ -198,6 +224,27 @@ Item {
             if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
                 return
             writeBarrier.stop()
+            if (driver.graphGoneOid === "")
+                renderedBarrier.begin()
+            else
+                graphBarrier.start()
+        }
+    }
+    // The rebuild that follows a write, read off the graph rather than off the clock: the row the write took away is
+    // still in the model until the rebuilt one lands, so its absence is the edge — and the marks the rows wear are
+    // only right once that has happened (see `graphGoneOid`).
+    Timer {
+        id: graphBarrier
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (graphModel.rowOf(driver.graphGoneOid) >= 0
+                    || stashesModel.total === driver.stashTotalBefore)
+                return
+            graphBarrier.stop()
+            AppBackend.report("graph_settled gone=true top=" + driver.graphTopKind()
+                              + " rows=" + graphModel.rowTotal
+                              + " stashes=" + stashesModel.total)
             renderedBarrier.begin()
         }
     }
@@ -2131,6 +2178,11 @@ Item {
         } else if (act === "stash" || act === "stash-staged") {
             // Through the pane's card, like the button: it decides which options the stash is made with.
             page.showWip()
+            // Everything goes, so the working-tree row goes with it and the new stash takes the lead — the row whose
+            // absence says the rebuild has landed. The half-tree verbs leave the row where it is and keep the plain
+            // write barrier.
+            if (act === "stash")
+                driver.graphGoneOid = graphModel.oidAt(0)
             wipPane.openStashPanel()
             if (act === "stash-staged")
                 wipPane.stashClickStagedOnly()
@@ -2429,11 +2481,16 @@ Item {
             if (act === "delete-stash-row" && arg === "go")
                 stashDeleteItem.completeHold()
         } else if (act === "stash-apply-row" || act === "stash-pop-row") {
-            page.openRowMenu(stashesModel.oidOfName(stashesModel.nameAt(0)))
-            if (act === "stash-apply-row")
+            const stashOid = stashesModel.oidOfName(stashesModel.nameAt(0))
+            page.openRowMenu(stashOid)
+            if (act === "stash-apply-row") {
                 repoTab.applyStash(commitMenuState.menuStashRef)
-            else
+            } else {
+                // A pop drops the entry, so its row leaves the graph — the edge that says the rebuild has landed.
+                // An apply keeps it, and keeps the plain write barrier.
+                driver.graphGoneOid = stashOid
                 repoTab.popStash(commitMenuState.menuStashRef)
+            }
         } else if (act === "branch-at-tag") {
             sidebarPane.beginBranchAt("tag", tagsModel.nameAt(0),
                                       tagsModel.oidOfName(tagsModel.nameAt(0)))

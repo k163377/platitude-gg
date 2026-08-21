@@ -52,6 +52,13 @@ Item {
     // Assigning a picture changes no history, so this role moves on rows that are otherwise untouched — and a canvas
     // repaints only when it is asked to.
     onAvatarUrlChanged: laneCell.loadFace()
+    // What the row *is* decides which mark stands on its node — the dashed ring of the working tree, the stash's
+    // archive box, or the author's face — and a rebuild writes a different row over the same delegate rather than
+    // building a new one (`GraphModel::splice_notified`). Without these two the mark of the row that was there stays:
+    // a stash popped off the top left its box on the working-tree row, and a stash just made wore the dashed ring
+    // (2026-08-21 ユーザー報告).
+    onIsWipChanged: laneCell.repaintNode()
+    onStashRefChanged: laneCell.repaintNode()
     function repaintLanes() {
         laneCanvas.requestPaint()
     }
