@@ -139,8 +139,8 @@ pub struct GitCommand {
     /// Applied after [`FIXED_ENV`], so a command can override a default
     /// or add its own (interactive rebase adds `GIT_SEQUENCE_EDITOR`).
     env: Vec<(OsString, OsString)>,
-    /// This command answers by exit code, so a non-zero one is data.
-    answers_by_code: bool,
+    /// The non-zero exit code this command answers by, where it has one.
+    answer_code: Option<i32>,
 }
 
 impl GitCommand {
@@ -150,15 +150,16 @@ impl GitCommand {
             cwd: None,
             timeout: Some(DEFAULT_TIMEOUT),
             env: Vec::new(),
-            answers_by_code: false,
+            answer_code: None,
         }
     }
 
-    /// Marks a command whose non-zero exit is the answer rather than a
-    /// failure, so the command log keeps the row without raising itself
-    /// over it (デザイン規約 §git が言ったことを読む場所).
-    pub fn answers_by_code(mut self) -> Self {
-        self.answers_by_code = true;
+    /// Marks the exit code this command answers with rather than fails on,
+    /// so the command log keeps the row without raising itself over it
+    /// (デザイン規約 §git が言ったことを読む場所). Named per command: a code
+    /// means what the command that returned it says it means.
+    pub fn answers_by_code(mut self, code: i32) -> Self {
+        self.answer_code = Some(code);
         self
     }
 
@@ -494,10 +495,9 @@ impl GitExecutor {
                     "git finished"
                 );
                 report(
-                    // Only 0 and 1 are answers ("yes" / "no"); a 128 from
-                    // a command marked answers_by_code is still a failure
-                    // and must look like one in the log.
-                    if cmd.answers_by_code && (code == 0 || code == 1) {
+                    // Only the code this command named is an answer: a 128
+                    // from one that named 1 is still a failure.
+                    if cmd.answer_code.is_some_and(|a| code == 0 || code == a) {
                         CommandEnd::Answered(code)
                     } else {
                         CommandEnd::Exited(code)

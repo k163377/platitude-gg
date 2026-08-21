@@ -128,7 +128,7 @@ async fn is_bare(executor: &GitExecutor, path: &Path, cancel: &CancellationToken
         .timeout(Duration::from_secs(10))
         // Outside a repository this exits 128, which is the answer here
         // and not a failure worth raising the command log over.
-        .answers_by_code();
+        .answers_by_code(1);
     match executor.run_unchecked(cmd, cancel).await {
         Ok(out) => out.code == 0 && out.stdout_utf8().trim() == "true",
         Err(_) => false,

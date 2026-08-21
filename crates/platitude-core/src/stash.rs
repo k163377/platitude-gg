@@ -112,7 +112,7 @@ pub async fn tip(
     // Exit 1 is the answer "there is no stash here", which every
     // repository that has never had one gives. Left unmarked it reads as
     // a failed command and raises the log over a question nobody asked.
-    let cmd = GitCommand::new().cwd(workdir).answers_by_code().args([
+    let cmd = GitCommand::new().cwd(workdir).answers_by_code(1).args([
         "rev-parse",
         "--verify",
         "--quiet",
@@ -171,7 +171,7 @@ pub async fn pop(
 ) -> Result<(), GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .answers_by_code()
+        .answers_by_code(1)
         .args(["stash", "pop", selector]);
     executor.run(cmd, cancel).await.map(|_| ())
 }
@@ -192,7 +192,7 @@ pub async fn pop_with_index(
 ) -> Result<(), GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .answers_by_code()
+        .answers_by_code(1)
         .args(["stash", "pop", "--index", selector]);
     executor.run(cmd, cancel).await.map(|_| ())
 }
@@ -285,7 +285,7 @@ pub async fn rename(
     let at = GitCommand::new()
         .cwd(workdir)
         // Exit 1 is the answer "no such entry" — the mismatch arm below.
-        .answers_by_code()
+        .answers_by_code(1)
         .args(["rev-parse", "--verify", "--quiet", &shifted]);
     let found = executor.run_unchecked(at, cancel).await?;
     if found.stdout_utf8().trim() != entry.oid {

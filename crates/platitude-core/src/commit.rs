@@ -195,7 +195,7 @@ pub async fn is_in_head_history(
         .args(["merge-base", "--is-ancestor"])
         .arg(oid.to_hex())
         .arg("HEAD")
-        .answers_by_code();
+        .answers_by_code(1);
     let out = executor.run_unchecked(cmd, cancel).await?;
     match out.code {
         0 => Ok(true),

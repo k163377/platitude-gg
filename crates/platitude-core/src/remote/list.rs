@@ -131,7 +131,7 @@ pub(super) async fn current_branch(
         .cwd(workdir)
         // Exit 1 is the answer "detached" — reported to the caller as the
         // error below, not raised again by the command log.
-        .answers_by_code()
+        .answers_by_code(1)
         .args(["symbolic-ref", "-q", "--short", "HEAD"]);
     let out = executor.run_unchecked(cmd, cancel).await?;
     let name = out.stdout_utf8().trim().to_string();
@@ -154,7 +154,7 @@ pub(super) async fn config_value(
     let cmd = GitCommand::new()
         .cwd(workdir)
         // The key not being set answers with code 1, which is an answer.
-        .answers_by_code()
+        .answers_by_code(1)
         .args(["config", "--get", "--", key]);
     let out = executor.run_unchecked(cmd, cancel).await?;
     match out.code {

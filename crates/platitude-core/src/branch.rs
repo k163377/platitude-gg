@@ -92,7 +92,7 @@ pub async fn checkout(
     // not know exits with still reads as the failure it is.
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .answers_by_code()
+        .answers_by_code(1)
         .arg("switch");
     let cmd = match target {
         CheckoutTarget::Branch { name } => cmd.args(["--", name.as_str()]),
@@ -281,7 +281,7 @@ pub async fn is_merged_into(
         // Exit 1 here means "no", which is half of what this asks. Left
         // unmarked, the command log would read it as a failure and raise
         // itself over an answer.
-        .answers_by_code();
+        .answers_by_code(1);
     let out = executor.run_unchecked(cmd, cancel).await?;
     match out.code {
         0 => Ok(true),

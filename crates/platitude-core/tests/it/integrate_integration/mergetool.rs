@@ -1,9 +1,10 @@
 //! Handing a stopped merge to the configured mergetool.
 
 use crate::support::TestRepo;
-use crate::support::exec::env;
+use crate::support::exec::{env, logged_global};
 use crate::support::integrate::conflicting_branches;
 use platitude_core::integrate::{self, MergeOptions};
+use platitude_core::process::CommandEnd;
 use platitude_core::{conflict, status};
 
 /// `side` merged into `main`, stopped on the conflict in `f.txt`.
@@ -145,4 +146,54 @@ async fn a_tool_that_saves_nothing_fails_and_leaves_the_markers() {
 
     let f = std::fs::read_to_string(repo.path.join("f.txt")).unwrap();
     assert!(f.contains("<<<<<<<"), "the conflict is still there: {f}");
+}
+
+/// What the settings card writes lands on `merge.guitool`, and an empty
+/// field takes the key back out.
+#[tokio::test]
+async fn setting_the_tool_writes_the_gui_key_and_an_empty_one_clears_it() {
+    let repo = TestRepo::init();
+    let (exec, log, cancel) = logged_global(repo.global_config());
+
+    conflict::set_merge_tool(&exec, &repo.path, "pgtool", &cancel)
+        .await
+        .expect("write the choice");
+    assert_eq!(
+        conflict::configured_tool(&exec, &repo.path, &cancel)
+            .await
+            .expect("read it back"),
+        Some("pgtool".to_string()),
+    );
+
+    conflict::set_merge_tool(&exec, &repo.path, "", &cancel)
+        .await
+        .expect("clear the choice");
+    assert_eq!(
+        conflict::configured_tool(&exec, &repo.path, &cancel)
+            .await
+            .expect("read it back"),
+        None,
+    );
+    assert_eq!(
+        log.ends_of(&["--unset"]),
+        vec![CommandEnd::Answered(0)],
+        "the key was there to be taken out"
+    );
+}
+
+/// Clearing a tool nothing had set is the outcome that was asked for
+/// rather than a failure: `git config --unset` says "there was nothing to
+/// unset" with exit 5. Unmarked, that code is a failed row and the command
+/// panel opens itself over it — which is what closing the settings card
+/// did on a machine with no merge tool configured (2026-08-21 ユーザー報告).
+#[tokio::test]
+async fn clearing_a_tool_that_was_never_set_answers_by_code() {
+    let repo = TestRepo::init();
+    let (exec, log, cancel) = logged_global(repo.global_config());
+
+    conflict::set_merge_tool(&exec, &repo.path, "", &cancel)
+        .await
+        .expect("nothing to unset is not a failure");
+
+    assert_eq!(log.ends_of(&["--unset"]), vec![CommandEnd::Answered(5)]);
 }

@@ -88,6 +88,14 @@ impl TestRepo {
         repo
     }
 
+    /// The file this repository's git reads and writes `--global` in. A
+    /// test of a `--global` write needs a file of its own: the one the
+    /// executor under test is isolated with is shared by the whole suite,
+    /// and the suite runs in parallel (`support::exec::logged_global`).
+    pub fn global_config(&self) -> &Path {
+        &self.global_config
+    }
+
     /// Runs git in the repo and panics on failure. Returns trimmed stdout.
     pub fn git(&mut self, args: &[&str]) -> String {
         let dir = self.path.clone();

@@ -30,7 +30,7 @@ paths:
   - **承認済みの例外は `crate::Name`(`compact_str::CompactString`)1 つだけ**。**条件は「app が型を名指ししないこと」**(`as_str` / `&str` との `==` / `to_string` で読める範囲に限る)。**app に `compact_str` を依存として足さねばならなくなったら例外の前提が崩れている**(理由と実測は rules-refs/core.md の同項)
 - 書き込みは `RepoSession` のキュー経由で直列化され、成功・失敗いずれでも refresh する。失敗は git の文言のまま `WriteFinished{error}` → 既存のエラー表示へ流れる
 - **コマンドログは executor の observer 1 本で取る**(`process::CommandObserver`)。セッションは利用者用と背景用の 2 ハンドル(`GitExecutor::observed`)を挿し、書き込みキューだけが利用者用 = 分類はキューの分岐 1 箇所で決まる。**auto fetch はキューを通るが背景扱い**(オフラインで毎分パネルが開くのを防ぐ)。記録しない時は `records()` で早期に降り、コピー用の完全形(`-c` 群 + 環境変数)を組み立てない
-- **終了コードで答える問い合わせはコマンドログの失敗にしない**(`GitCommand::answers_by_code()`。例: `merge-base --is-ancestor` の exit 1 は答え)。**`run_unchecked` で非ゼロを分岐に使っている箇所は全部これが要る** — 付け忘れるとその exit 1 のたびにパネルが開く(対象コマンドの一覧は rules-refs/core.md の `answers_by_code` 項)
+- **終了コードで答える問い合わせはコマンドログの失敗にしない**(`GitCommand::answers_by_code(<答えのコード>)`。例: `merge-base --is-ancestor` の exit 1 は答え)。**答えのコードはコマンドごとに名指す** — 同じ数字が別のコマンドでは本物の失敗を意味する。**`run_unchecked` で非ゼロを分岐に使っている箇所は全部これが要る** — 付け忘れるとその答えのたびにパネルが開く(対象コマンドと答えのコードは rules-refs/core.md の `answers_by_code` 項)
 - **統合テストは 1 バイナリ** — 新しい統合テストは `tests/it/` にモジュールとして足し `main.rs` へ登録する(`tests/` 直下に .rs を置かない — 理由は違反時に pre-write hook が届ける)。部分実行は `cargo test -p platitude-core --test it <モジュール名>`
 
 ## 非同期・並行テストの実装方針

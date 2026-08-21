@@ -184,7 +184,7 @@ async fn answers_by_code_reports_only_zero_and_one_as_answers() {
             .args(["merge-base", "--is-ancestor"])
             .arg(a)
             .arg(b)
-            .answers_by_code()
+            .answers_by_code(1)
     };
 
     for cmd in [

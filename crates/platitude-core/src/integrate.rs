@@ -103,7 +103,7 @@ pub async fn rebase(
     // Exit 1 is this command answering rather than failing. Only 0 and 1
     // are answers, so the 128 a name git does not know exits with still
     // reads as the failure it is (規約 §終了コードで答える問い合わせ).
-    let cmd = rebase_command(workdir, upstream, options, None).answers_by_code();
+    let cmd = rebase_command(workdir, upstream, options, None).answers_by_code(1);
     refusal_or(executor.run(cmd, cancel).await.map(drop))
 }
 
@@ -199,7 +199,7 @@ pub async fn cherry_pick(
         .cwd(workdir)
         .args(["cherry-pick", "--no-edit", "--allow-empty", "--"])
         .args(revs.iter().map(String::as_str))
-        .answers_by_code();
+        .answers_by_code(1);
     skip_past_empty_commits(
         executor,
         workdir,
@@ -229,7 +229,7 @@ pub async fn revert(
         .cwd(workdir)
         .args(["revert", "--no-edit", "--"])
         .args(revs.iter().map(String::as_str))
-        .answers_by_code();
+        .answers_by_code(1);
     skip_past_empty_commits(
         executor,
         workdir,
@@ -283,7 +283,7 @@ async fn skip_past_empty_commits(
         let skip = GitCommand::new()
             .cwd(workdir)
             .args([op.command(), "--skip"])
-            .answers_by_code();
+            .answers_by_code(1);
         outcome = executor.run(skip, cancel).await.map(drop);
     }
     outcome

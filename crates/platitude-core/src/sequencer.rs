@@ -329,7 +329,7 @@ async fn resolve(
         // told there is none. Left unmarked it counts as a failed command
         // and the command log throws its panel open over a perfectly good
         // squash or drop near the root (.claude/rules/core.md).
-        .answers_by_code();
+        .answers_by_code(1);
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code != 0 {
         return Ok(None);
@@ -469,7 +469,7 @@ pub async fn rebase_interactive(
     // stopped part-way raises the badge and the exit card. Only 0 and 1
     // are answers, so the 128 a name git does not know exits with still
     // reads as the failure it is (規約 §終了コードで答える問い合わせ).
-    let cmd = rebase_command(&repo.workdir, upstream, options, Some(&editor)).answers_by_code();
+    let cmd = rebase_command(&repo.workdir, upstream, options, Some(&editor)).answers_by_code(1);
     let result = executor.run(cmd, cancel).await;
     // Keep both sets of scratch files alive until git is done with them.
     drop(plan);

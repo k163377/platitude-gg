@@ -226,7 +226,7 @@ async fn blob_is_there(
 ) -> bool {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .answers_by_code()
+        .answers_by_code(1)
         .args(["rev-parse", "--verify", "-q"])
         .arg(spec);
     matches!(executor.run_unchecked(cmd, cancel).await, Ok(out) if out.code == 0)

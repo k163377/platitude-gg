@@ -32,7 +32,7 @@ pub async fn get_regexp(
     named: &str,
     cancel: &CancellationToken,
 ) -> Result<Vec<u8>, GitError> {
-    let cmd = GitCommand::new().cwd(workdir).answers_by_code().args([
+    let cmd = GitCommand::new().cwd(workdir).answers_by_code(1).args([
         "config",
         "-z",
         "--get-regexp",

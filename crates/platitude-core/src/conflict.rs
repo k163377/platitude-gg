@@ -342,7 +342,7 @@ pub async fn configured_tool(
             // Neither key being set answers with code 1, which is an
             // answer — and is what a machine that configured no merge tool
             // says to both of them.
-            .answers_by_code()
+            .answers_by_code(1)
             .args(["config", "--get", key]);
         let out = executor.run_unchecked(cmd, cancel).await?;
         if out.code == 0 {
@@ -498,7 +498,7 @@ pub async fn set_merge_tool(
             .cwd(workdir)
             // "nothing was set" comes back as code 5, which is the same
             // outcome as clearing rather than a failure to report.
-            .answers_by_code()
+            .answers_by_code(5)
             .args(["config", "--global", "--unset", "merge.guitool"]);
         let out = executor.run_unchecked(cmd, cancel).await?;
         return match out.code {
