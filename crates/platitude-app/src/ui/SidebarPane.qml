@@ -40,6 +40,8 @@ Rectangle {
     /// down. Raised from the open list and from the section the folded
     /// rail opens alike — one band, wherever it is standing.
     signal addRemoteRequested()
+    /// Right-click on the row a remote itself stands on: what to do with that remote, rather than with a ref.
+    signal remoteMenuRequested(string name)
 
     // ---- the row gestures ------------------------------------------
     // Held beside the lists rather than in one (`SidebarRowGestures`).
@@ -342,9 +344,12 @@ Rectangle {
             expanded: remoteHead.showsRows
             kindHint: "remote"
             gestures: rowGestures
+            remotesPacked: sidebar.repoTab.remoteNames
+            markedRemote: sidebar.repoTab.pushDefault
             Layout.verticalStretchFactor: sidebar.sectionPull
             onRefActivated: oidHex => sidebar.refActivated(oidHex)
             onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
+            onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name)
         }
 
         // git worktrees (checkouts); the changed-file lists live in the
@@ -484,6 +489,7 @@ Rectangle {
         pinned: sidebar.menuOpen || sidebar.editKey !== ""
         onRefActivated: oidHex => sidebar.refActivated(oidHex)
         onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
+        onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name)
         onAddRemoteRequested: sidebar.addRemoteRequested()
     }
 }

@@ -287,7 +287,7 @@ Item {
     /// drawn over the very rows the hand is reading (2026-08-17 ユーザー報告). The menus are all the page's, so this is
     /// the one place that can see all of them.
     readonly property bool menuStanding:
-        refRowMenu.showing || commitRowMenu.showing || fileRowMenu.showing
+        refRowMenu.showing || commitRowMenu.showing || fileRowMenu.showing || remoteRowMenu.showing
 
     // ---- context menu on a sidebar row ------------------------------
     RefRowMenu {
@@ -304,6 +304,19 @@ Item {
         // whether it stays now is the pointer's to answer again.
         onDismissed: rowHost.settleRefList()
     }
+    // What a remote itself offers. Its own menu rather than rows added to the one above: a remote is repository
+    // configuration, and the ref menu is about refs (デザイン規約 §左メニューの所作).
+    RemoteRowMenu {
+        id: remoteRowMenu
+        repoTab: repoTab
+        onUrlRequested: name => publishFlow.startEditRemote(name)
+        onDismissed: rowHost.settleRefList()
+    }
+    /// The one door into that menu. Says whether it opened.
+    function openRemoteMenu(name) {
+        return remoteRowMenu.offerOn(name)
+    }
+
     /// Which surface raised the standing ref menu. Its branch row opens a box to type a name in, and that box belongs
     /// on the row the hand is already on — the same reason the box is in the chip column and not over the window
     /// (デザイン規約 §可否・警告の出し場所).
@@ -649,6 +662,7 @@ Item {
             hardResetItem: commitRowMenu.hardResetRow
             publishFlow: publishFlow
             remoteDialog: publishFlow.dialog
+            remoteMenu: remoteRowMenu.menu
             refList: rowHost.listPopup
             rowCard: rowHost.hoverCard
         }
@@ -1436,6 +1450,7 @@ Item {
                     onFoldRequested: collapse => page.foldByHand(collapse)
                     onRefActivated: oidHex => page.jumpToRef(oidHex)
                     onRefMenuRequested: (kind, name, full, oidHex) => page.openRefMenu(kind, name, full, oidHex, true)
+                    onRemoteMenuRequested: name => page.openRemoteMenu(name)
                     onWorktreeActivated: path => page.openRepositoryPathRequested(path)
                     onRefSwitchRequested: (kind, name) => page.switchToRef(kind, name)
                     onBranchAtRequested: (oidHex, name) => {

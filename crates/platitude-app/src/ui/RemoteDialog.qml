@@ -20,6 +20,11 @@ AppDialog {
     /// Names this repository already has. git refuses a duplicate itself (`remote <name> already exists`, exit 3), but
     /// that refusal would arrive after the dialog had closed, with nothing on screen left for it to be about.
     property var taken: []
+    /// Whether this remote is the one pushes go to, and whether that is this repository's own to change. A mark set
+    /// for every repository cannot be cleared from here — git has no local spelling for "not set" (実測), and the only
+    /// move against it is marking another remote.
+    property bool marked: false
+    property bool markLocal: true
 
     readonly property string wantedName: nameField.text.trim()
     readonly property string wantedUrl: urlField.text.trim()
@@ -30,10 +35,17 @@ AppDialog {
     /// The remote was written down. The URL is not judged here: `git remote add` contacts nothing, so only a push can
     /// find it wrong.
     signal submitted(string name, string url)
+    /// The box was left in a different state than it opened in. Its own signal, not part of `submitted`: what it
+    /// changes is one config key and not the remote, and a form that reported both would have the caller work out
+    /// which of the two it was being told about.
+    signal markChanged(string name, bool marked)
 
-    function start(name, url, takenNames) {
+    function start(name, url, takenNames, marked, markLocal) {
         remoteDialog.editing = name
         remoteDialog.taken = takenNames
+        remoteDialog.marked = marked === true
+        remoteDialog.markLocal = markLocal !== false
+        markBox.checked = remoteDialog.marked
         // `origin` is only offered while the repository has no remote at all: it is what a clone would have called its
         // first one, and nothing standing there to clash with. Once anything exists the next name is not ours to guess
         // — a prefill could only repeat a name that is taken or invent one. The word carries no standing of its own
@@ -60,8 +72,13 @@ AppDialog {
             return
         const name = remoteDialog.editing !== "" ? remoteDialog.editing : remoteDialog.wantedName
         const url = remoteDialog.wantedUrl
+        const marked = markBox.checked
         remoteDialog.close()
         remoteDialog.submitted(name, url)
+        // After the remote itself: on the add form the remote being marked does not exist until the line above has
+        // run, and the two go through one write queue in the order they are asked for.
+        if (markBox.offered && marked !== remoteDialog.marked)
+            remoteDialog.markChanged(name, marked)
     }
 
     contentItem: ColumnLayout {
@@ -112,6 +129,42 @@ AppDialog {
                 Layout.fillWidth: true
                 placeholderText: "git@github.com:you/your-repo.git"
                 onAccepted: remoteDialog.submit()
+            }
+        }
+
+        // Where pushes go. The word is the role and `origin` is what git calls it — the name of the remote actually
+        // holding it is this form's own heading (デザイン規約 §リモートを書き留める). The same words as the row on the left menu's
+        // menu: two ways into one operation say one sentence (§メニュー).
+        //
+        // Not offered on the first remote of a repository, which is where every push goes anyway — the line is about
+        // taking the destination from somewhere else, and there is nowhere else yet.
+        ColumnLayout {
+            id: markRow
+            Layout.fillWidth: true
+            spacing: 0
+            visible: markBox.offered
+            CheckBox {
+                id: markBox
+                /// Whether this form is asking the question at all.
+                readonly property bool offered: remoteDialog.editing !== "" || remoteDialog.taken.length > 0
+                text: qsTr("Mark as default remote (origin)")
+                enabled: remoteDialog.markLocal || !remoteDialog.marked
+                font.pixelSize: Theme.fontMd
+                implicitHeight: Theme.controlHeight
+            }
+            // What checking it costs, and what unchecking it gives back (デザイン規約 §長さ: 見出し 1 行 + 失うもの 1 行). The third
+            // line is not about this box at all: it says the one move a repository has against a mark it cannot clear.
+            Label {
+                Layout.fillWidth: true
+                leftPadding: Theme.spaceXl
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSm
+                color: markBox.enabled ? Theme.textSecondary : Theme.warning
+                text: !markBox.enabled
+                      ? qsTr("Set for every repository — marking another remote is what moves it.")
+                      : markBox.checked
+                        ? qsTr("Each branch goes back to pushing where it tracks.")
+                        : qsTr("Every branch pushes here, whatever it tracks.")
             }
         }
 

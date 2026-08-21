@@ -79,6 +79,16 @@ impl SessionSink for BridgeSink {
             SessionEvent::RefsLoaded { snapshot } => {
                 self.feeds.tab.push(TabMsg::Remotes {
                     names: snapshot.remote_names.clone(),
+                    urls: snapshot.remote_urls.clone(),
+                    push_default: snapshot
+                        .push_default
+                        .as_ref()
+                        .map(|marked| marked.remote.clone())
+                        .unwrap_or_default(),
+                    push_default_local: snapshot
+                        .push_default
+                        .as_ref()
+                        .is_some_and(|marked| marked.local),
                 });
                 self.feeds.refs_branches.push_replace(Arc::clone(&snapshot));
                 self.feeds.refs_remotes.push_replace(Arc::clone(&snapshot));

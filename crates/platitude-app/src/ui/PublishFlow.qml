@@ -32,8 +32,13 @@ Item {
     anchors.fill: parent
 
     // ---- push ------------------------------------------------------
+    /// Where the button would send this branch. **A marked remote takes the push from the upstream** — every branch
+    /// goes there under its own name, whatever it tracks (デザイン規約 §リモートを書き留める; git's own order, 実測). Only where
+    /// nothing is marked does the upstream answer.
     readonly property string pushTargetLabel:
-        publishFlow.workTree.upstream !== "" ? publishFlow.workTree.upstream
+        publishFlow.repoTab.pushDefault !== ""
+        ? publishFlow.repoTab.pushDefault + "/" + publishFlow.workTree.branch
+        : publishFlow.workTree.upstream !== "" ? publishFlow.workTree.upstream
         : publishFlow.repoTab.defaultRemote + "/" + publishFlow.workTree.branch
     /// What the branch can do with its remote, worked out before anything is sent (デザイン規約 §リモートへ送る):
     ///
@@ -42,6 +47,9 @@ Item {
     ///                a question rather than something to look up. A
     ///                repository with no remote at all lands here too: the
     ///                question can make one
+    /// - `elsewhere`— the push goes to the marked remote, which is not the
+    ///                one this branch tracks, so the counts are about
+    ///                somewhere else and say nothing at all
     /// - `ready`    — commits of ours to add, and nothing in the way
     /// - `clean`    — the remote already has them all
     /// - `behind`   — the remote moved on; we have nothing to add
@@ -53,10 +61,19 @@ Item {
         publishFlow.repoTab.state !== "open" || publishFlow.workTree.detached
         || publishFlow.workTree.branch === "" ? "closed"
         : publishFlow.workTree.upstream === "" || !publishFlow.workTree.upstreamTracked ? "publish"
+        : publishFlow.marksAnother ? "elsewhere"
         : publishFlow.workTree.behind > 0
           ? (publishFlow.workTree.ahead > 0 ? "diverged" : "behind")
         : publishFlow.workTree.ahead > 0 ? "ready" : "clean"
+    /// Whether the push is going somewhere the counts do not speak for: git's `ahead` / `behind` are the branch's
+    /// standing with the remote it *tracks*, and a marked remote takes the push away from that one (デザイン規約 §リモートへ送る).
+    /// Tested against the mark's own name rather than by cutting the upstream at a slash — the name is known, so the
+    /// prefix is exact (the general `remoteOf` this still wants is P3-確認事項).
+    readonly property bool marksAnother:
+        publishFlow.repoTab.pushDefault !== "" && publishFlow.workTree.upstream !== ""
+        && !publishFlow.workTree.upstream.startsWith(publishFlow.repoTab.pushDefault + "/")
     readonly property bool canPush: (publishFlow.pushState === "publish"
+                                     || publishFlow.pushState === "elsewhere"
                                      || publishFlow.pushState === "ready")
                                     && publishFlow.repoTab.busyCount === 0
     readonly property bool canForcePush: (publishFlow.pushState === "ready"
@@ -133,7 +150,14 @@ Item {
     /// (規約 §リモートを書き留める) — a second way in would be a second form,
     /// and this one already knows which names are taken.
     function startAddRemote() {
-        remoteDialog.start("", "", publishFlow.publishRemotes)
+        remoteDialog.start("", "", publishFlow.publishRemotes, false, true)
+    }
+    /// The same form with the half that is already known filled in: this remote's URL, and whether it is the one
+    /// pushes go to. Raised from the remote's own row on the left menu (デザイン規約 §リモートを書き留める).
+    function startEditRemote(name) {
+        remoteDialog.start(name, publishFlow.repoTab.remoteUrl(name), publishFlow.publishRemotes,
+                           name === publishFlow.repoTab.pushDefault,
+                           publishFlow.repoTab.pushDefaultLocal)
     }
     function choosePublishRemote(index) {
         if (index >= publishFlow.publishRemotes.length) {
@@ -286,6 +310,12 @@ Item {
         form.remotePick.popup.open()
         return form.remotePick.popup.visible
     }
+    /// Whether the list has a row to put the mark on — the field its rows read, not a row of its own. A picture of a
+    /// list with no mark in it and a picture of a list whose mark was never plumbed frame the same way.
+    function publishRemotesMarked() {
+        const form = publishFlow.graphPane.askForm
+        return Boolean(form && form.remotePick && form.remotePick.markedRow !== "")
+    }
     /// Automation reads the popup itself, rather than assuming that the call which requested it also put it on screen.
     function publishRemotesOpen() {
         const form = publishFlow.graphPane.askForm
@@ -313,12 +343,16 @@ Item {
                 publishFlow.refreshPublishCheck()
             }
         }
+        // Clearing goes through the same slot with nothing to point at. It reaches this repository's config only —
+        // the box says so itself where the mark came from somewhere else, and is not offered there.
+        onMarkChanged: (name, marked) => publishFlow.repoTab.setPushDefault(marked ? name : "")
     }
 
     Component {
         id: publishForm
         PublishForm {
             choices: publishFlow.publishChoices
+            markedRemote: publishFlow.repoTab.pushDefault
             remote: publishFlow.publishRemote
             branch: publishFlow.publishBranch
             onRemotePicked: index => publishFlow.choosePublishRemote(index)

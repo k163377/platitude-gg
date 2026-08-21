@@ -43,6 +43,8 @@ Popup {
 
     signal refActivated(string oidHex)
     signal refMenuRequested(string kind, string name, string full, string oidHex)
+    /// Right-click on the row a remote itself stands on — the same menu the open list raises.
+    signal remoteMenuRequested(string name)
     signal addRemoteRequested()
 
     onEnteredChanged: {
@@ -219,8 +221,11 @@ Popup {
             headTracks: peek.kind === "branch" && peek.workTree.upstream !== ""
             headAhead: peek.workTree.ahead
             headBehind: peek.workTree.behind
+            remotesPacked: peek.repoTab.remoteNames
+            markedRemote: peek.repoTab.pushDefault
             onRefActivated: oidHex => peek.refActivated(oidHex)
             onRefMenuRequested: (kind, name, full, oidHex) => peek.refMenuRequested(kind, name, full, oidHex)
+            onRemoteMenuRequested: name => peek.remoteMenuRequested(name)
         }
     }
 }

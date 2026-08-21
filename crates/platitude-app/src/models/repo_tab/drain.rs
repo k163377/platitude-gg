@@ -56,18 +56,31 @@ impl RepoTab {
                     self.signature_code = code;
                     self.signature_signer = signer;
                 }
-                TabMsg::Remotes { names } => {
-                    // A push with no upstream goes to `origin` when there
-                    // is one, otherwise to whichever remote comes first.
-                    self.default_remote = names
-                        .iter()
-                        .find(|r| *r == "origin")
+                TabMsg::Remotes {
+                    names,
+                    urls,
+                    push_default,
+                    push_default_local,
+                } => {
+                    // The marked remote is where pushes go. Only where
+                    // nothing is marked does the old guess stand: `origin`
+                    // when there is one, otherwise whichever remote comes
+                    // first. A mark naming a remote this repository does
+                    // not have is left out of it — git would take that
+                    // name for a URL, and this application has nothing to
+                    // point at.
+                    let marked = names.iter().find(|r| **r == push_default);
+                    self.default_remote = marked
+                        .or_else(|| names.iter().find(|r| *r == "origin"))
                         .or_else(|| names.first())
                         .cloned()
                         .unwrap_or_default();
+                    self.push_default = marked.cloned().unwrap_or_default();
+                    self.push_default_local = push_default_local;
                     self.remote_count = names.len() as i32;
                     self.remote_names = names.join("\u{1f}");
                     self.remotes = names;
+                    self.remote_urls = urls;
                 }
                 TabMsg::RemoteBranch {
                     remote,

@@ -89,6 +89,12 @@ impl RepoTab {
     );
     qproperty!("remoteCount", Member = remote_count, Notify = changed);
     qproperty!("defaultRemote", Member = default_remote, Notify = changed);
+    qproperty!("pushDefault", Member = push_default, Notify = changed);
+    qproperty!(
+        "pushDefaultLocal",
+        Member = push_default_local,
+        Notify = changed
+    );
     qproperty!("headSubject", Member = head_subject, Notify = changed);
     qproperty!("headBody", Member = head_body, Notify = changed);
     qproperty!(
@@ -531,6 +537,28 @@ impl RepoTab {
     #[qslot]
     fn add_remote(&mut self, name: String, url: String) {
         self.with_session(|s| s.add_remote(name.clone(), url.clone()));
+    }
+
+    /// The fetch URL a remote is written down with, empty for a name this
+    /// repository does not have. What the form that corrects one opens
+    /// with already filled in.
+    #[qslot]
+    fn remote_url(&self, name: String) -> String {
+        self.remotes
+            .iter()
+            .position(|r| *r == name)
+            .and_then(|at| self.remote_urls.get(at))
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Marks the remote a push goes to (`remote.pushDefault`); an empty
+    /// name clears the mark. Clearing reaches this repository's config
+    /// only — a mark set for every repository stays, and marking another
+    /// remote is what moves it.
+    #[qslot]
+    fn set_push_default(&mut self, name: String) {
+        self.with_session(|s| s.set_push_default(name.clone()));
     }
 
     /// `git remote set-url <name> <url>` — the way back from a typo.

@@ -32,6 +32,11 @@ ComboBox {
     /// both are plain text on one ground, and the list is read before it is clicked.
     property bool lastRowActs: false
 
+    /// A row that wears the push mark, empty for a list with nothing to mark. The wash says which row is picked now
+    /// and the mark says which one the repository sends pushes to: two questions, two answers, one row (デザイン規約
+    /// §リモートを書き留める).
+    property string markedRow: ""
+
     /// What the field should say, and the value to read back.
     ///
     /// **Not `editText`.** A model arriving makes ComboBox snap its `currentIndex` to the first row and drag the text
@@ -292,13 +297,29 @@ ComboBox {
                 color: row.highlighted ? Theme.bgHover : "transparent"
             }
         }
-        contentItem: Label {
-            text: row.modelData
-            color: Theme.textPrimary
-            font.pixelSize: Theme.fontMd
-            leftPadding: Theme.spaceXs
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
+        contentItem: Item {
+            Label {
+                anchors.fill: parent
+                anchors.rightMargin: mark.visible ? Theme.iconSm + Theme.spaceXs : 0
+                text: row.modelData
+                color: Theme.textPrimary
+                font.pixelSize: Theme.fontMd
+                leftPadding: Theme.spaceXs
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
+            // The same mark the left menu puts on that remote's own row, at the same step and in the same colour.
+            NavIcon {
+                id: mark
+                visible: !row.acts && row.modelData !== "" && row.modelData === combo.markedRow
+                kind: "push"
+                tint: Theme.accent
+                width: Theme.iconSm
+                height: Theme.iconSm
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.spaceXs
+                anchors.verticalCenter: parent.verticalCenter
+            }
         }
     }
 }

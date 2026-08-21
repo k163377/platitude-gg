@@ -49,6 +49,19 @@ Item {
     /// A right-click menu of the page's is standing over this list.
     property bool menuStanding: false
     property string kindHint: "branch"
+    /// The remote this repository sends pushes to, empty where none is marked (`RepoTab.pushDefault`). Handed down
+    /// rather than read here: one answer for the whole list, and a delegate is recycled row to row.
+    property string markedRemote: ""
+    /// The configured remote names, so a folder row can tell whether it stands for a remote or only for the shape of
+    /// the names below it. Both exist in this section: a remote called `my/fork` puts a plain `my` folder above its
+    /// own row, and only the second of the two is a remote.
+    property var remoteNames: []
+    /// Whether this row is a remote itself. Its fold key is the remote's whole name, which is what makes the test
+    /// above work on a name with a slash in it.
+    readonly property bool isRemoteRow:
+        navRow.kindHint === "remote" && navRow.folder && navRow.remoteNames.indexOf(navRow.fullName) >= 0
+    /// Whether this row is the marked one.
+    readonly property bool pushesHere: navRow.isRemoteRow && navRow.fullName === navRow.markedRemote
     /// The current branch's ahead / behind. What travels is the two numbers — the row draws the arrows itself
     /// (`HeadTrack`).
     property bool headTracks: false
@@ -118,6 +131,9 @@ Item {
     /// Right-click on a ref row; the page owns the menu because delegates are recycled out from under an open popup.
     /// `name` is what the row shows, `full` what git knows it by (a stash shows a message and answers to a selector).
     signal refMenuRequested(string name, string full, string oidHex)
+    /// Right-click on the row a remote itself stands on — the only folder row in this list that has anything behind it
+    /// (デザイン規約 §左メニューの所作). Its own signal because what opens is a different menu: a remote is configuration, not a ref.
+    signal remoteMenuRequested(string name)
     /// Right-click on a working-tree file row, for the same reason. Undoing a rename takes both of its names, but the
     /// menu reads them off the chosen rows (`orig_path`), so the row itself is enough.
     signal fileMenuRequested(string bucket, string path)
@@ -245,6 +261,16 @@ Item {
             width: Theme.iconSm
             height: Theme.iconSm
         }
+        // The remote this repository sends pushes to. The toolbar's own push mark, in the seat the badge above holds
+        // on every other row — one question, one mark, one size. `accent` because what it answers is which of the rows
+        // is the one in effect (デザイン規約 §色 アクセント: 選択インジケータ), not what kind of ref the row is.
+        NavIcon {
+            visible: navRow.pushesHere
+            kind: "push"
+            tint: Theme.accent
+            width: Theme.iconSm
+            height: Theme.iconSm
+        }
     }
     // Rows whose name can be changed from here. A remote branch is one of them even though git has no rename over there
     // — core builds the rename out of a push and a delete, and the bar asks before it runs. A folder is not: it is the
@@ -340,6 +366,8 @@ Item {
                     navRow.refMenuRequested(navRow.name, navRow.fullName, navRow.oid_hex)
                 else if (!navRow.folder && navRow.kindHint === "wt")
                     navRow.fileMenuRequested(navRow.bucket, navRow.fullName)
+                else if (navRow.isRemoteRow)
+                    navRow.remoteMenuRequested(navRow.fullName)
                 return
             }
             navRow.leftClick(mouse.modifiers)
@@ -384,6 +412,11 @@ Item {
     // message in full is its name, and the selector (`stash@{0}`) is not something anybody hovers to learn.
     readonly property string hoverText: {
         const full = navRow.fullName
+        // The one folder row that is a thing rather than a shape says what it is for when it holds the mark. The role
+        // leads and the name follows it (デザイン規約 §hover のツールチップ: 結論から 1 行 — the same shape a working copy's row
+        // says its state in), and `origin` is the word git gives the role (§リモートを書き留める).
+        if (navRow.pushesHere)
+            return qsTr("Default remote (origin) — %1").arg(full)
         // A folder in the working tree's list says its own path, the same as the file rows under it — the path rides
         // in `orig_path` (`full` is the fold key, and a ref folder's fold key is its own path).
         if (navRow.folder)

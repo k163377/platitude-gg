@@ -55,6 +55,11 @@ Item {
     property AppMenuItem hardResetItem
     property PublishFlow publishFlow
     property RemoteDialog remoteDialog
+    property AppMenu remoteMenu
+    /// The remote the push-default verbs act on, and the mark they wait for before they photograph anything — empty
+    /// where the run is not asking for one to move.
+    property string remoteTarget: ""
+    property string markWanted: ""
     property RefListPopup refList
     property CommitHoverCard rowCard
 
@@ -134,7 +139,8 @@ Item {
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
                 "nav-filter", "nav-tip", "nav-reclick", "nav-reclick-away", "nav-rename-far",
-                "nav-add-remote", "tags-eye",
+                "nav-add-remote", "push-default", "remote-menu", "remote-url",
+                "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "chip-menu", "chip-menu-current",
                 "delete-blocked-tip", "switch-blocked-tip", "delete-branch-early",
                 "ref-list-card", "row-part",
@@ -1105,6 +1111,93 @@ Item {
                               + " collapsed=" + page.sidebarCollapsed
                               + " remotes=" + remotesModel.total
                               + " name=" + remoteDialog.wantedName)
+            driver.complete()
+        }
+    }
+    /// PG_AUTO_ACT=push-default: the mark lands on a remote and the run stops with the sidebar showing it. The write
+    /// is the barrier — `pushDefault` only says the name once `git config` has run and the refresh behind it has
+    /// republished the snapshot, so a picture taken here is of a repository that really is marked.
+    Timer {
+        id: pushDefaultTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (repoTab.pushDefault !== driver.markWanted || repoTab.busyCount > 0)
+                return
+            pushDefaultTimer.stop()
+            // The judged fields lead, and together: `must_say` reads one run of the line, not a set of words in it.
+            AppBackend.report("push_default local=" + repoTab.pushDefaultLocal
+                              + " marked=" + repoTab.pushDefault
+                              + " target=" + repoTab.defaultRemote
+                              + " remotes=" + repoTab.remoteCount)
+            driver.complete()
+        }
+    }
+    /// PG_AUTO_ACT=publish-remotes-marked: the first push's destination list with the mark in it. The mark is put on
+    /// first and waited for — the question reads the marked remote as it opens, so a list opened before the write
+    /// landed would be the one from before.
+    Timer {
+        id: publishMarkedTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (repoTab.pushDefault !== driver.markWanted || repoTab.busyCount > 0)
+                return
+            if (!publishFlow.publishAsking) {
+                page.pushNow()
+                return
+            }
+            if (!publishFlow.publishRemotesOpen()) {
+                publishFlow.openPublishRemotes()
+                return
+            }
+            publishMarkedTimer.stop()
+            AppBackend.report("publish_remotes open=" + publishFlow.publishRemotesOpen()
+                              + " marked=" + publishFlow.publishRemotesMarked()
+                              + " name=" + repoTab.pushDefault)
+            driver.complete()
+        }
+    }
+    /// PG_AUTO_ACT=remote-menu: the menu a remote's own row raises, left standing (overlay.png). `rows=` is what it is
+    /// offering — two on a remote that is not the destination, one on the remote that already is, since a row with
+    /// nothing to do is gone rather than greyed (デザイン規約 §メニュー).
+    Timer {
+        id: remoteMenuTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (repoTab.pushDefault !== driver.markWanted || repoTab.busyCount > 0)
+                return
+            if (!driver.remoteMenu.opened && !page.openRemoteMenu(driver.remoteTarget))
+                return
+            if (!driver.remoteMenu.opened)
+                return
+            remoteMenuTimer.stop()
+            AppBackend.report("remote_menu open=" + driver.remoteMenu.opened
+                              + " rows=" + driver.remoteMenu.offeredRows
+                              + " remote=" + driver.remoteTarget
+                              + " marked=" + repoTab.pushDefault)
+            driver.complete()
+        }
+    }
+    /// PG_AUTO_ACT=remote-url: the form that holds a remote's URL, left standing (overlay.png) — the other way to the
+    /// mark. `box=` is whether the line is checked, which is the half a picture of a form cannot be trusted for.
+    Timer {
+        id: remoteUrlTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (repoTab.pushDefault !== driver.markWanted || repoTab.busyCount > 0)
+                return
+            if (!driver.remoteDialog.visible) {
+                driver.publishFlow.startEditRemote(driver.remoteTarget)
+                return
+            }
+            remoteUrlTimer.stop()
+            AppBackend.report("remote_url dialog=" + driver.remoteDialog.visible
+                              + " box=" + driver.remoteDialog.marked
+                              + " remote=" + driver.remoteDialog.editing
+                              + " local=" + driver.remoteDialog.markLocal)
             driver.complete()
         }
     }
@@ -2542,6 +2635,28 @@ Item {
                 sidebarPane.tapAddRemote()
             }
             navAddRemoteTimer.start()
+        } else if (act === "push-default" || act === "remote-menu" || act === "remote-url"
+                   || act === "publish-remotes-marked") {
+            // `<remote>`, or `<remote>:marked` to put the mark on it first. All three go in at the same doors a hand
+            // uses — the slot the menu row calls, the page's one way into the menu, the flow's one way into the form —
+            // so what answers is the wiring rather than a second route written for the run.
+            const marked = arg.endsWith(":marked")
+            // The destination list has no remote of its own to name, so it takes whichever one this repository would
+            // send to — the only name a preset-agnostic run can be sure exists.
+            driver.remoteTarget = act === "publish-remotes-marked" ? repoTab.defaultRemote
+                                : marked ? arg.substring(0, arg.length - ":marked".length) : arg
+            driver.markWanted = marked || act !== "remote-menu" && act !== "remote-url"
+                                ? driver.remoteTarget : repoTab.pushDefault
+            if (repoTab.pushDefault !== driver.markWanted)
+                repoTab.setPushDefault(driver.markWanted)
+            if (act === "push-default")
+                pushDefaultTimer.start()
+            else if (act === "remote-menu")
+                remoteMenuTimer.start()
+            else if (act === "publish-remotes-marked")
+                publishMarkedTimer.start()
+            else
+                remoteUrlTimer.start()
         } else if (act === "nav-close") {
             // The pane keeps sections packed against the top; what is read is where the closed header came to rest — at
             // the foot of the pane is the failure this watches for.

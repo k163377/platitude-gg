@@ -11,6 +11,13 @@ AppListView {
     property var sectionModel
     property bool expanded: true
     property string kindHint: "branch"
+    /// REMOTES only: the configured remotes as the model packs them, and which of them this repository sends pushes
+    /// to. Unpacked once here rather than by each caller — the rows are recycled, so neither answer can be theirs to
+    /// keep, and one list is one split (デザイン規約 §その他の操作).
+    property string remotesPacked: ""
+    property string markedRemote: ""
+    readonly property var remoteNames:
+        navList.remotesPacked === "" ? [] : navList.remotesPacked.split(String.fromCharCode(31))
     /// This list holds whatever height the panel it is in has over its rows, instead of staying content-sized. Only the
     /// one section the folded rail opens beside itself wants that — it is alone in its panel, so the spare height has
     /// nowhere else to go. In the sidebar proper the ground at the foot of the column takes it, and no section
@@ -33,6 +40,8 @@ AppListView {
     signal refActivated(string oidHex)
     signal fileActivated(string bucket, string path, string origPath)
     signal refMenuRequested(string kind, string name, string full, string oidHex)
+    /// Right-click on the row a remote itself stands on.
+    signal remoteMenuRequested(string name)
 
     /// What identifies a row across sections and rebuilds. A colon cannot appear in a ref name, and the section prefix
     /// keeps two sections' equal names apart.
@@ -118,6 +127,8 @@ AppListView {
         id: row
         listWidth: navList.width
         kindHint: navList.kindHint
+        remoteNames: navList.remoteNames
+        markedRemote: navList.markedRemote
         pointedTipRow: navList.pointedTipRow
         headTracks: navList.headTracks
         headAhead: navList.headAhead
@@ -134,6 +145,7 @@ AppListView {
         onFileClicked: (bucket, path, origPath) => navList.fileActivated(bucket, path, origPath)
         onFolderClicked: key => navList.sectionModel.toggleFolder(key)
         onRefMenuRequested: (name, full, oidHex) => navList.refMenuRequested(navList.kindHint, name, full, oidHex)
+        onRemoteMenuRequested: name => navList.remoteMenuRequested(name)
         onRowClicked: {
             if (navList.gestures)
                 navList.gestures.noteClick(row.rowKey)

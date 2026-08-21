@@ -126,13 +126,24 @@ pub struct RepoTab {
     /// (デザイン規約 §その他の操作). Emptied by whichever write consumes it, so a set
     /// left behind by an abandoned question cannot be spent later.
     pending_paths: Vec<String>,
-    /// Configured remote names — where a branch with no upstream can go.
+    /// Configured remote names — where a branch with no upstream can go —
+    /// and their fetch URLs in the same order, which is what the form that
+    /// corrects one opens with.
     remotes: Vec<String>,
+    remote_urls: Vec<String>,
     /// Derived from `remotes` on arrival rather than computed on demand:
     /// QML bindings only re-evaluate on a property change, so anything a
     /// binding reads has to be a property.
     remote_count: i32,
     default_remote: String,
+    /// The remote this repository sends pushes to (`remote.pushDefault`),
+    /// empty where none is marked, and whether the mark is this
+    /// repository's own to clear. `default_remote` is what actually
+    /// decides a destination and falls back to a remote called `origin`;
+    /// this is the mark itself, which is what the sidebar draws and the
+    /// dialog's box reads.
+    push_default: String,
+    push_default_local: bool,
     /// HEAD's message split into the editor's two fields, filled on
     /// request so an amend starts from it.
     head_subject: String,

@@ -113,9 +113,18 @@ pub enum TabMsg {
         code: String,
         signer: String,
     },
-    /// Configured remote names — where a branch with no upstream can go.
+    /// Configured remote names — where a branch with no upstream can go —
+    /// and which of them this repository sends pushes to. `push_default` is
+    /// empty where none is marked; `push_default_local` says whether this
+    /// repository's own config is what marked it, since a mark from
+    /// anywhere else cannot be cleared here.
     Remotes {
         names: Vec<String>,
+        /// Their fetch URLs, in the same order — what the form that
+        /// corrects one opens with already filled in.
+        urls: Vec<String>,
+        push_default: String,
+        push_default_local: bool,
     },
     /// HEAD's message and author, for prefilling an amend.
     HeadCommit {

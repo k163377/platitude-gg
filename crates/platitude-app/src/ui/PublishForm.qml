@@ -11,6 +11,9 @@ ColumnLayout {
 
     /// The remotes to choose from, with the add-remote row last.
     required property var choices
+    /// The one this repository sends pushes to, empty where none is marked — where the question opens, and what the
+    /// list says about it.
+    property string markedRemote: ""
     /// What is chosen now, and what the branch is to be called over there.
     required property string remote
     required property string branch
@@ -33,6 +36,7 @@ ColumnLayout {
             // The fixed-input width every boxed field shares (デザイン規約 §レイアウト初期値 160) — not a width of its own.
             Layout.preferredWidth: 160
             model: publishForm.choices
+            markedRow: publishForm.markedRemote
             wanted: publishForm.remote
             onActivated: index => publishForm.remotePicked(index)
         }

@@ -388,6 +388,10 @@ Rectangle {
                 const to = topBar.curPage.pushTargetLabel
                 const what = pushButton.mode === "publish"
                              ? qsTr("This branch has not been sent anywhere yet — asks where it goes")
+                           // No count: the marked remote is not the one this branch tracks, so `ahead` is the
+                           // standing with somewhere else (デザイン規約 §リモートへ送る).
+                           : pushButton.mode === "elsewhere"
+                             ? qsTr("Push to %1").arg(to)
                            : pushButton.mode === "ready"
                              ? qsTr("Push %n commit(s) to %1", "", topBar.curPage.pageWt.ahead).arg(to)
                            : pushButton.mode === "clean"
