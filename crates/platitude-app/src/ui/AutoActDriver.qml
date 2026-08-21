@@ -94,7 +94,7 @@ Item {
     function isWriteAct(act) {
         return ["publish", "publish-taken", "publish-add", "publish-go",
                 "publish-new-go", "commit", "amend", "amend-reset-author",
-                "stash", "stash-staged", "stash-file", "stage-many-go",
+                "stash", "stash-file", "stage-many-go",
                 "discard-many-go", "take-side-ours", "take-side-theirs",
                 "open-mergetool", "discard-file-go", "delete-file-go",
                 "discard-staged-go", "switch", "switch-remote", "nav-dbl",
@@ -625,6 +625,19 @@ Item {
                               + " was=" + followTimer.was
                               + " landed=" + followTimer.landed)
             renderedBarrier.begin()
+        }
+    }
+    // The band's Stash button, offered until it takes. The button is down while the tab is busy, and the fetch a
+    // repository does on the way open outlives the baseline the verb starts on — so a single shot lands on nothing and
+    // the run waits out its watchdog on a graph nobody asked to change. What follows the press is the graph barrier
+    // (`graphGoneOid`), which is why nothing else is read here.
+    Timer {
+        id: stashPressTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (wipPane.stashNow())
+                stashPressTimer.stop()
         }
     }
     // Emptying one whole bucket from its own heading, and reading back which headings the list is left with. The two
@@ -2294,18 +2307,14 @@ Item {
             wipPane.setAmendChecked(true)
             page.amendToggled(true)
             resetAuthorTimer.start()
-        } else if (act === "stash" || act === "stash-staged") {
-            // Through the pane's card, like the button: it decides which options the stash is made with.
+        } else if (act === "stash") {
+            // Through the band's button, which is the whole of it now: nothing is asked before the write.
             page.showWip()
             // Everything goes, so the working-tree row goes with it and the new stash takes the lead — the row whose
-            // absence says the rebuild has landed. The half-tree verbs leave the row where it is and keep the plain
+            // absence says the rebuild has landed. The one-path verb leaves the row where it is and keeps the plain
             // write barrier.
-            if (act === "stash")
-                driver.graphGoneOid = graphModel.oidAt(0)
-            wipPane.openStashPanel()
-            if (act === "stash-staged")
-                wipPane.stashClickStagedOnly()
-            wipPane.stashApply()
+            driver.graphGoneOid = graphModel.oidAt(0)
+            stashPressTimer.start()
         } else if (act === "stash-file") {
             wipPane.chooseOnly("unstaged", arg)
             page.openFileMenu("unstaged", arg, "")
@@ -2344,11 +2353,6 @@ Item {
             AppBackend.report("discard_row " + fileDiscardItem.text)
             if (act.endsWith("-go"))
                 fileDiscardItem.completeHold()
-        } else if (act === "stash-dialog") {
-            page.showWip()
-            wipPane.openStashPanel()
-            if (arg === "staged-only")
-                wipPane.stashClickStagedOnly()
         } else if (act === "file-menu" || act === "file-menu-untracked"
                    || act === "file-menu-staged" || act === "file-menu-conflict") {
             const menuBucket = act === "file-menu" ? "unstaged" : act === "file-menu-staged" ? "staged"

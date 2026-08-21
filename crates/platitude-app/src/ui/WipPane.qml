@@ -61,8 +61,9 @@ ColumnLayout {
     /// The arrows walked onto another file. Not the signal a click raises: a click on the file already open closes the
     /// diff, and holding Down must not (規約 §diff のファイル一覧).
     signal fileWalked(string bucket, string path, string origPath)
-    /// The stash card's Stash button: message / include untracked / keep index / staged only.
-    signal stashSubmitted(string message, bool untracked, bool keepIndex, bool stagedOnly)
+    /// The Stash button. It carries nothing: the button does the whole thing, on the one set of options a stash is
+    /// made with (デザイン規約 §変更を退避する).
+    signal stashRequested()
     /// Right-click on a file row; the page owns the menu because delegates are recycled out from under an open popup.
     signal fileMenuRequested(string bucket, string path)
 
@@ -483,16 +484,13 @@ ColumnLayout {
     // construction, so two rows of list is the whole of the bound (デザイン規約 §コミットメッセージの 2 つの枠).
     /// How much of the pane the block under the list may take: all of it but the two rows that keep a list a list — the
     /// same bound the grip stops at (デザイン規約 §コミットメッセージの 2 つの枠). Past this the block scrolls rather than running out of
-    /// the pane's bottom. The stash card is out of it as the header band is: it stands above the list, keeps its own
-    /// height and answers nobody's pull, so what it takes is gone before the block is asked what it may have.
+    /// the pane's bottom.
     ///
     /// The buckets' own frame comes off first: a heading is not one of the two rows, and left in, a pane squeezed to
     /// the window's floor would keep nothing but headings — two places named and no file under either of them.
     readonly property real blockRoom:
-        Math.max(0, wipPane.height - headerBand.height - wipPane.stashSeat
+        Math.max(0, wipPane.height - headerBand.height
                     - wipPane.bucketFrame - 2 * Theme.rowHeight)
-    /// What the stash card is taking while it is out, its own inset included (0 when it is not).
-    readonly property real stashSeat: stashCard.visible ? stashCard.height + Theme.spaceXs : 0
     /// Moves the block by a wheel a box on it could not use. The boxes cover most of the block, so without this the
     /// surface they stand on has no way to be reached by wheel at all (2026-08-09 ユーザー報告: the description box's own
     /// scrolling swallowed it and the block would not go down).
@@ -524,14 +522,18 @@ ColumnLayout {
     /// the commit-details pane instead (`DetailsPane.bottomRoom`).
     readonly property real bottomRoom: 0
 
-    // The stash options card is a mode of this pane (`StashOptionsCard`); the automation enters through these names, so
-    // the pane keeps them and forwards into the card.
-    function openStashPanel() { stashCard.open() }
-    function closeStashPanel() { stashCard.close() }
-    /// The click path onto "Only the staged changes" (the page's smoke hook) — a click, not a `checked` write
-    /// (`StashOptionsCard`).
-    function stashClickStagedOnly() { stashCard.clickStagedOnly() }
-    function stashApply() { stashCard.apply() }
+    /// The Stash button, pressed (`PG_AUTO_ACT=stash`). Put in at the button rather than at this pane's own signal, so
+    /// what answers is the band's real wiring and not a second way in written for the run.
+    ///
+    /// **Answers whether the press went in.** The band refuses it while the tab is busy — the fetch a repository does
+    /// on the way open is one — and a shot fired at nothing is not one to latch: the caller keeps offering it, the way
+    /// a hand waits for the button to come alive.
+    function stashNow() {
+        if (!stashButton.enabled)
+            return false
+        stashButton.clicked()
+        return true
+    }
 
     spacing: 0
 
@@ -568,41 +570,24 @@ ColumnLayout {
                 color: Theme.textMuted
             }
             Item { Layout.fillWidth: true }
-            // Everything uncommitted, set aside in one entry. Opens the options card below; nothing is thrown away, so
-            // nothing asks beyond the card itself.
+            // Everything uncommitted, set aside in one entry, on the press (デザイン規約 §変更を退避する). No
+            // ellipsis and nothing asked: a stash destroys nothing, the entry it makes is named afterwards in the
+            // STASHES list, and what a card would have collected is one fixed set of options.
             HoverToolButton {
-                text: qsTr("Stash…")
+                id: stashButton
+                text: qsTr("Stash")
                 font.pixelSize: Theme.fontMd
                 enabled: wipPane.repoTab.busyCount === 0 && wipPane.worktreeModel.total > 0
-                tip: qsTr("Set these changes aside for later")
-                onClicked: {
-                    if (stashCard.shown)
-                        wipPane.closeStashPanel()
-                    else
-                        wipPane.openStashPanel()
-                }
+                // The breadth is what the label has no room for, and with no card to read it is the only place it is
+                // said (規約 §hover のツールチップ).
+                tip: qsTr("Set these changes aside, files git is not tracking yet included")
+                onClicked: wipPane.stashRequested()
             }
             TreeViewToggle {
                 treeView: wipPane.worktreeModel.treeView
                 onChosen: tree => wipPane.setTreeView(tree)
             }
         }
-    }
-
-    // Stash options card, under the button that opened it (デザイン規約 §変更を退避する). Above the list rather than
-    // in the block below: the button is up here, and a card that opened at the far end of the pane would be a mode
-    // nothing on screen connects to what was pressed. What it takes comes out of the block's room (`stashSeat`), so
-    // the editor gives way to it the way the list does.
-    StashOptionsCard {
-        id: stashCard
-        Layout.fillWidth: true
-        Layout.leftMargin: Theme.spaceSm
-        Layout.rightMargin: Theme.spaceSm
-        Layout.topMargin: Theme.spaceXs
-        repoTab: wipPane.repoTab
-        workTree: wipPane.workTree
-        onSubmitted: (message, untracked, keepIndex, stagedOnly) =>
-            wipPane.stashSubmitted(message, untracked, keepIndex, stagedOnly)
     }
 
     // The files first, and the editor under them (デザイン規約 §コミットメッセージの 2 つの枠): what is being
@@ -762,8 +747,8 @@ ColumnLayout {
                 // **On its own line, under the box it depends on.** Beside it there is no room: the three words the
                 // amend row can be carrying at once want about 392px between them, which is past the 400 this pane
                 // opens at and well past the 300 it can be dragged to — and none of the three elides, so what went
-                // over came off the tag at the end. Stacking is also how a dependent option reads: the stash card
-                // already piles its boxes this way, at this spacing and with no indent (`StashOptionsCard`).
+                // over came off the tag at the end. Stacking is also how a dependent option reads: one under the box
+                // it hangs off, at this spacing and with no indent.
                 CheckBox {
                     id: authorBox
                     visible: wipPane.amending && wipPane.repoTab.headAuthorDiffers

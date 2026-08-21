@@ -40,9 +40,6 @@ pub struct WorkTreeModel {
     unstaged_count: i32,
     untracked_count: i32,
     conflict_count: i32,
-    /// Files changed on both sides at once. `git stash push --staged`
-    /// cannot separate those, so the option is withheld while any exist.
-    partially_staged_count: i32,
     /// Rebase progress; both zero when nothing is stepping. Only a rebase
     /// keeps a count — `op_stepping` is what says whether the operation
     /// steps at all.
@@ -105,11 +102,6 @@ impl WorkTreeModel {
     qproperty!("unstagedCount", Member = unstaged_count, Notify = changed);
     qproperty!("untrackedCount", Member = untracked_count, Notify = changed);
     qproperty!("conflictCount", Member = conflict_count, Notify = changed);
-    qproperty!(
-        "partiallyStagedCount",
-        Member = partially_staged_count,
-        Notify = changed
-    );
     qproperty!("opStep", Member = op_step, Notify = changed);
     qproperty!("opSteps", Member = op_steps, Notify = changed);
     qproperty!("opStepping", Member = op_stepping, Notify = changed);
@@ -216,7 +208,6 @@ impl WorkTreeModel {
         self.unstaged_count = counts.unstaged as i32;
         self.untracked_count = counts.untracked as i32;
         self.conflict_count = counts.conflicted as i32;
-        self.partially_staged_count = counts.partially_staged as i32;
         (self.op_step, self.op_steps) = match progress {
             Some(p) => (p.current as i32, p.total as i32),
             None => (0, 0),

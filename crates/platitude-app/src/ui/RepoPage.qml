@@ -1549,8 +1549,7 @@ Item {
                         readPath: page.diffFromWt ? page.diffPath : ""
                         onFileActivated: (bucket, path, origPath) => page.toggleDiff(bucket, path, origPath)
                         onFileWalked: (bucket, path, origPath) => page.openDiff(bucket, path, origPath)
-                        onStashSubmitted: (message, untracked, keepIndex, stagedOnly) =>
-                            repoTab.pushStash(message, untracked, keepIndex, stagedOnly)
+                        onStashRequested: repoTab.pushStash()
                         onFileMenuRequested: (bucket, path) => page.openFileMenu(bucket, path)
                     }
 

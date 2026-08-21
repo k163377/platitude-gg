@@ -100,9 +100,9 @@ Item {
         //
         // Words rather than a chip, alone in a menu that is otherwise a column of commands: no one command is what this
         // row runs. It opens a box, and what git is finally spawned with depends on what is typed into it — the ellipsis
-        // is that (`Stash…` / `Open repository…`). The one command that would fit, `switch --create`, is the spelling
-        // the row above the ref menu's own `switch` would then share, and switching is precisely what this row does not
-        // do until a name exists (2026-08-17 ユーザー判断).
+        // is that (`Add remote…` / `Open repository…`). The one command that would fit, `switch --create`, is the
+        // spelling the row above the ref menu's own `switch` would then share, and switching is precisely what this
+        // row does not do until a name exists (2026-08-17 ユーザー判断).
         AppMenuItem {
             id: branchHereCommitItem
             text: qsTr("Create branch here…")

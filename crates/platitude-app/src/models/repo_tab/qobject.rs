@@ -463,21 +463,11 @@ impl RepoTab {
         platitude_core::stash::is_valid_message(&message)
     }
 
-    /// `git stash push` over the whole working tree.
-    ///
-    /// `staged_only` takes the index alone. It is not offered while a file
-    /// is changed on both sides — git writes the stash entry and then
-    /// fails to clear the tree, leaving an entry behind with nothing else
-    /// done — so the caller checks `partiallyStagedCount` first.
+    /// `git stash push -u` over the whole working tree, on the press —
+    /// the button asks nothing first (デザイン規約 §変更を退避する).
     #[qslot]
-    fn push_stash(
-        &mut self,
-        message: String,
-        include_untracked: bool,
-        keep_index: bool,
-        staged_only: bool,
-    ) {
-        self.stash_push(message, include_untracked, keep_index, staged_only)
+    fn push_stash(&mut self) {
+        self.stash_push()
     }
 
     /// `git stash push -- <paths>`: puts the gathered files' changes away
