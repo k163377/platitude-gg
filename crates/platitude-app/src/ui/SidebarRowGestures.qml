@@ -34,9 +34,15 @@ QtObject {
     readonly property bool editTaken: gestures.editMode === "rename" && gestures.editRemote !== ""
         && gestures.editText.trim() !== ""
         && gestures.remotesModel.oidOfName(gestures.editRemote + "/" + gestures.editText.trim()) !== ""
+    /// A box that opened empty and is still empty: the one for a new branch's name, before a word has been put in it.
+    /// **Not a refusal.** The frame answers for what was typed (デザイン規約 §可否・警告の出し場所), and nothing has been —
+    /// a box that comes up already turned down is turning down the reader's arrival. A rename rubbed out to nothing is
+    /// the other thing: a name was there and has been taken away, which git would refuse.
+    readonly property bool editUnanswered:
+        gestures.editMode === "branch" && gestures.editText.trim() === ""
     /// What is typed cannot be accepted. The rules are git's own, asked of core (a stash's label is free text, not a
     /// ref name).
-    readonly property bool editRefused: gestures.editKey !== ""
+    readonly property bool editRefused: gestures.editKey !== "" && !gestures.editUnanswered
         && (gestures.editTaken
             || !(gestures.editKind === "stash"
                  ? gestures.repoTab.validStashMessage(gestures.editText)
@@ -72,6 +78,10 @@ QtObject {
         const id = gestures.editId
         const oid = gestures.editOid
         const mode = gestures.editMode
+        // Enter on a box nobody has typed in leaves it standing, the same as Enter on a refused one: it has not been
+        // answered, and closing it would be answering for the reader (`editUnanswered`).
+        if (mode === "branch" && text.trim() === "")
+            return
         // What the box opened with: a remote branch is typed without the remote it is on, so the name it answers to is
         // not what it shows.
         const was = kind === "remote" ? id.substring(id.indexOf("/") + 1) : id
