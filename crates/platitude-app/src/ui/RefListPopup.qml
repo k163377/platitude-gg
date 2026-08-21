@@ -54,6 +54,12 @@ AppCard {
     /// A chip that wrapped keeps the same margin above and below and takes the extra height for itself.
     readonly property real chipInset:
         Math.round((Theme.rowHeight - (Theme.fontChipLine + 2 * Theme.borderWidth)) / 2)
+    /// The narrowest a row may be — the chip this card is covering, handed over by the owner.
+    ///
+    /// **The card is never narrower than what it stands on.** Its own rows carry one record each and so draw no `+N`,
+    /// while the chip underneath may be wearing one: a card sized only to its own names can come out narrower than the
+    /// chip and leave a sliver of the frame it is replacing showing past its edge (measured at two pixels).
+    property real minRowWidth: 0
 
     padding: Theme.spaceXs
     // Nothing stands between the chip and this: the pointer has to be able to walk down into it without leaving both.
@@ -86,7 +92,7 @@ AppCard {
         // A Column takes its width from the widest child, and the rows have to reach that width for their highlight to
         // line up — and, now that the chips can stand flush against either edge, for them to line up as well.
         readonly property real rowWidth: {
-            let widest = 0
+            let widest = refList.minRowWidth
             for (let i = 0; i < rows.children.length; i++)
                 widest = Math.max(widest, rows.children[i].implicitWidth)
             return widest
@@ -119,10 +125,13 @@ AppCard {
                 readonly property bool leadsNowhere:
                     refRow.unavailable || refRow.current || refRow.modelData[0] === "T"
 
-                implicitWidth: rowChip.width + 2 * Theme.spaceSm + (whose.visible ? whose.width + Theme.spaceSm : 0)
+                // The chip is the row: no margin of the row's own on either side, so that what stands between a chip's
+                // frame and the card's is the card's padding and nothing else (規約 §グラフ行のダブルクリック — the card lands on
+                // the chip column's own edge, and a wider one would reach past the divider into the lanes).
+                implicitWidth: rowChip.width + (whose.visible ? whose.width + Theme.spaceSm : 0)
                 /// What this row would take with nothing capping the name — the card's half of picking a side.
                 readonly property real wantWidth:
-                    rowChip.wantWidth + 2 * Theme.spaceSm + (whose.visible ? whose.width + Theme.spaceSm : 0)
+                    rowChip.wantWidth + (whose.visible ? whose.width + Theme.spaceSm : 0)
                 width: rows.rowWidth
                 // The chip sets the height, so a wrapped name makes its own row taller and leaves the others alone.
                 height: rowChip.height + 2 * refList.chipInset
@@ -134,7 +143,7 @@ AppCard {
                     y: refList.chipInset
                     // Flush against the edge the card is anchored by, so every frame in the list ends where the chip's
                     // own frame ended.
-                    x: refList.alignRight ? refRow.width - Theme.spaceSm - rowChip.width : Theme.spaceSm
+                    x: refList.alignRight ? refRow.width - rowChip.width : 0
                     records: [refRow.modelData]
                     muted: refRow.unavailable
                     // Unstacking is only worth it if the names read, so the chip takes everything the row has left once
@@ -153,7 +162,7 @@ AppCard {
                     // On the outer side — the edge the card grew toward, which is the one the chips are not flush
                     // against. Put on the chip's own side it would push the frame off the edge the whole list is lined
                     // up on, which is the line that says these rows are the chip (2026-08-21 ユーザー判断: 左揃えで).
-                    x: refList.alignRight ? Theme.spaceSm : refRow.width - Theme.spaceSm - whose.width
+                    x: refList.alignRight ? 0 : refRow.width - whose.width
                     // Level with the chip's first line, not with the row: a wrapped name takes the row down with it and
                     // this is meta about the name's first line.
                     y: refList.chipInset + Theme.borderWidth

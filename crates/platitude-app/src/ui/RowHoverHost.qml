@@ -96,10 +96,16 @@ Item {
     }
 
     /// What the list puts between a chip's own edge and the card's, on
-    /// whichever side: the card's padding and the gap a row keeps in
-    /// front of the chip. Both edges spend the same, so one term
-    /// measures either side.
-    readonly property real listAround: Theme.spaceXs + Theme.spaceSm
+    /// whichever side: the card's padding, and nothing else — the rows
+    /// keep no margin of their own (`RefListPopup`).
+    ///
+    /// **That is what lands the card on the chip column's own edge**:
+    /// the column keeps the same `spaceXs` in front of its chip
+    /// (`GraphRowChips`), so a card spending exactly that much reaches
+    /// the divider and stops. Anything more crosses it and takes a bite
+    /// out of lane zero's node — measured at eight pixels over, three of
+    /// them the node's (2026-08-21 ユーザー報告).
+    readonly property real listAround: refList.padding
 
     /// Opens the chip's names on the chip's own seat.
     ///
@@ -117,6 +123,9 @@ Item {
         // — it would be drawn over the list the chip is opening.
         host.closeRowCard()
         refList.records = records
+        // Never narrower than the chip it is covering — the rows draw no
+        // `+N` and the chip may be wearing one (see the property).
+        refList.minRowWidth = anchor.width
         // How wide the card could be on each side, anchored where it
         // has to be anchored. The lanes and the message are to the
         // right of the chips, so the left is the side that covers
