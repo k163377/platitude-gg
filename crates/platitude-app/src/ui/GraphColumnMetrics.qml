@@ -38,11 +38,31 @@ QtObject {
     readonly property int labelMinChars: 3
     readonly property real chipNameMinW: Math.ceil(chipCutInk.advanceWidth
         + labelMinChars * chipFont.averageCharacterWidth)
-    /// Everything a chip spends on what is not the name: the `+N` seat, the remote/PR badge and the gap before it, and
-    /// its own padding on either side. **Each one is a term `RefChip` takes off the name**, so each one is here — the
-    /// row that carries them is the one whose name is worth reading (the branch under the working tree wears both), and
-    /// a floor measured on the bare chip leaves that row with nothing but the cut mark (実測).
+    /// The mark a chip wears when another working copy holds the branch, kept here only to be priced. **A seat is the
+    /// mark's ink, not its box** (規約 §余白), and how much of the 16-grid a kind fills is the icon's own knowledge —
+    /// `NavIcon.inkGrid` says the caller cannot carry that number — so the width comes off a mark rather than out of
+    /// the tokens. It draws nothing: `inkWidth` is arithmetic on the kind, the size and the stroke, and answers the
+    /// same 7.5 with no scene around it (2026-08-22 実測 qmltestrunner: no window, no warning).
+    readonly property NavIcon chipHeldMark: NavIcon {
+        kind: "tree"
+        width: Theme.iconSm
+        height: Theme.iconSm
+    }
+    /// That ink's seat, the way `RefChip.heldSeat` takes it: half a gap narrower, the half the mark gives back to the
+    /// name beside it. Left fractional rather than rounded up, so the floor reserves exactly what the chip subtracts.
+    readonly property real chipHeldSeatW: chipHeldMark.inkWidth - Theme.spaceXs / 2
+    /// Everything a chip spends on what is not the name: the `+N` seat, the remote/PR badge and the gap before it, the
+    /// held mark and the gap after it, and its own padding on either side. **Each one is a term `RefChip` takes off the
+    /// name**, so each one is here, and a floor measured on the bare chip leaves the row that wears them with nothing
+    /// but the cut mark (実測).
+    ///
+    /// **The marks come and go and the floor still counts them all**: a column may not be narrowed to a width that
+    /// would crush the chip that turns up in it later. The worst-dressed chip is a branch another working copy holds
+    /// that is also on a remote, on a commit some other ref names too — measured at `fontChip` in Yu Gothic UI, the
+    /// held mark alone is 9.5 of the 28 the floor keeps for a name, so a floor that leaves it out gives
+    /// `feature/topic-a` one character where three were promised (2026-08-22 実測).
     readonly property real chipFurnitureW: Theme.spaceLg + Theme.iconSm + 3 * Theme.spaceXs
+        + chipHeldSeatW + Theme.spaceXs
     // The narrowest the chip column goes, and the widest. The floor is that much name, that much furniture, and the
     // gap the column keeps in front of the chip (`GraphRowChips` hands it the column less `spaceSm`). **Move any of
     // those and this moves too** — a floor that forgets one draws two characters where it promised three. The far end
