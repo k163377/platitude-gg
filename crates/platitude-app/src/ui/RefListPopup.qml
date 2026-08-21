@@ -9,8 +9,9 @@ import platitude.ui
 //
 // **It opens over the chip, not under it** (規約 §グラフ行のダブルクリック): the owner lands the first row on the chip's own
 // seat, so the name the chip was showing is not written out a second time, and the `+N` goes with it — a row carries
-// one record, and a chip with one record has no count to draw. What is left reads as the chip's own frame widening to
-// the side there was room on, with the rest of the names stacked under it.
+// one record, and a chip with one record has no count to draw. What is left reads as the chip's own frame widening
+// into the graph, with the rest of the names stacked under it. **Always that way** — see the owner on why the side is
+// not chosen.
 //
 // Owned by the page, not by the delegate that raised it — delegates are recycled out from under an open popup, which is
 // why the context menus live there too. It is a popup rather than an item in the row for the same reason a menu is:
@@ -29,23 +30,16 @@ AppCard {
     signal menuAsked(string record)
 
     /// What a row has to divide between the chip and the reading's remote. **Handed over by the owner, measured from
-    /// the side this is opening toward** (規約 §hover のツールチップ「hover で開いたものの幅は、開く位置から測る」) — the pane's own width
-    /// is not it: a card that starts partway across the page has only what is left beyond that point, and one sized to
-    /// the pane is placed inside the window by `Popup` without ever being narrowed, so it ends up flat against an edge
-    /// with its anchor nowhere near the chip.
+    /// where this opens** (規約 §hover のツールチップ「hover で開いたものの幅は、開く位置から測る」) — the pane's own width is not it: a card
+    /// that starts partway across the page has only what is left beyond that point, and one sized to the pane is placed
+    /// inside the window by `Popup` without ever being narrowed, so it ends up flat against an edge with its anchor
+    /// nowhere near the chip.
     ///
     /// Both strings on a row are ref components and can run to the same wall (250 bytes, measured), so a row that just
     /// added them together grew until it left the window: a wall-length tag beside a 90-byte remote already reached
     /// edge to edge, and the remote may be as long as the tag.
     property real chipRoom: Metrics.labelColW
-    /// Which edge the chips stand flush against — the one the card is anchored by, so that whichever way it grew, the
-    /// first row still sits exactly on the chip it came out of. Right when it opened to the left (the side that does
-    /// not cover the graph), left when it had to fall back to the right.
-    property bool alignRight: false
 
-    /// How wide the card would be if nothing capped the names, which is what the owner picks a side with — see
-    /// `RefChip.wantWidth` on why this cannot be read off `implicitWidth`.
-    readonly property real wantWidth: rows.wantWidth + 2 * refList.padding
     /// The card's own size once the rows have been laid out, for an owner placing it against the chip. Read off the
     /// rows rather than off `width` / `height`, which a `Popup` only settles when it is shown.
     readonly property real cardWidth: rows.rowWidth + 2 * refList.padding
@@ -97,16 +91,6 @@ AppCard {
                 widest = Math.max(widest, rows.children[i].implicitWidth)
             return widest
         }
-        // The same scan over what the rows would have taken uncapped, which is the question "does this side fit".
-        readonly property real wantWidth: {
-            let widest = 0
-            for (let i = 0; i < rows.children.length; i++) {
-                const want = rows.children[i].wantWidth
-                if (want !== undefined)
-                    widest = Math.max(widest, want)
-            }
-            return widest
-        }
         Repeater {
             model: refList.records
             delegate: Rectangle {
@@ -129,9 +113,6 @@ AppCard {
                 // frame and the card's is the card's padding and nothing else (規約 §グラフ行のダブルクリック — the card lands on
                 // the chip column's own edge, and a wider one would reach past the divider into the lanes).
                 implicitWidth: rowChip.width + (whose.visible ? whose.width + Theme.spaceSm : 0)
-                /// What this row would take with nothing capping the name — the card's half of picking a side.
-                readonly property real wantWidth:
-                    rowChip.wantWidth + (whose.visible ? whose.width + Theme.spaceSm : 0)
                 width: rows.rowWidth
                 // The chip sets the height, so a wrapped name makes its own row taller and leaves the others alone.
                 height: rowChip.height + 2 * refList.chipInset
@@ -141,9 +122,10 @@ AppCard {
                 RefChip {
                     id: rowChip
                     y: refList.chipInset
-                    // Flush against the edge the card is anchored by, so every frame in the list ends where the chip's
-                    // own frame ended.
-                    x: refList.alignRight ? refRow.width - rowChip.width : 0
+                    // Flush against the edge the card is anchored by, so every name in the list starts where the chip's
+                    // own name started — the head of a name is what it is told apart by, so that is the edge that has
+                    // to hold still (規約 §グラフ列は最も広い所のレーンまで).
+                    x: 0
                     records: [refRow.modelData]
                     muted: refRow.unavailable
                     // Unstacking is only worth it if the names read, so the chip takes everything the row has left once
@@ -159,10 +141,9 @@ AppCard {
                 Label {
                     id: whose
                     visible: rowChip.recWhere !== ""
-                    // On the outer side — the edge the card grew toward, which is the one the chips are not flush
-                    // against. Put on the chip's own side it would push the frame off the edge the whole list is lined
-                    // up on, which is the line that says these rows are the chip (2026-08-21 ユーザー判断: 左揃えで).
-                    x: refList.alignRight ? 0 : refRow.width - whose.width
+                    // At the far edge of the row, away from the names: put beside its own chip it would sit at a
+                    // different distance on every row, and the reading is meta rather than part of the name.
+                    x: refRow.width - whose.width
                     // Level with the chip's first line, not with the row: a wrapped name takes the row down with it and
                     // this is meta about the name's first line.
                     y: refList.chipInset + Theme.borderWidth

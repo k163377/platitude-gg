@@ -38,11 +38,6 @@ Rectangle {
     width: Math.min(chipContent.implicitWidth + 2 * Theme.spaceXs, maxWidth)
     /// How many lines the name came out on. Only a wrapped chip can answer more than one.
     readonly property int nameLines: chip.wrapped ? Math.max(1, nameLabel.lineCount) : 1
-    /// What the chip would take if nothing capped it — the name on one line, plus everything it stands beside.
-    ///
-    /// **Not `implicitWidth`**, which is the answer after `maxWidth` has already been applied: an owner sizing itself
-    /// from that would settle on whatever it happened to hand over first (rules-refs: `ActionButtonLabel.wantWidth`).
-    readonly property real wantWidth: nameLabel.implicitWidth + 2 * Theme.spaceXs + chip.furnitureW
     /// Everything in the chip that is not the name: the `+N` seat and the badge with its gap.
     readonly property real furnitureW: (chip.records.length > 1 ? Theme.spaceLg : 0)
                                        + (chip.hasBadge ? Theme.iconSm + Theme.spaceXs : 0)

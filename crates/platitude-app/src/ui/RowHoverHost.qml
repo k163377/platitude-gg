@@ -95,30 +95,20 @@ Item {
         rowCard.close()
     }
 
-    /// What the list puts between a chip's own edge and the card's, on
-    /// whichever side: the card's padding, and nothing else — the rows
-    /// keep no margin of their own (`RefListPopup`).
-    ///
-    /// **That is what lands the card on the chip column's own edge**:
-    /// the column keeps the same `spaceXs` in front of its chip
-    /// (`GraphRowChips`), so a card spending exactly that much reaches
-    /// the divider and stops. Anything more crosses it and takes a bite
-    /// out of lane zero's node — measured at eight pixels over, three of
-    /// them the node's (2026-08-21 ユーザー報告).
-    readonly property real listAround: refList.padding
-
     /// Opens the chip's names on the chip's own seat.
     ///
     /// **The first row lands exactly on the chip** (規約 §グラフ行の
     /// ダブルクリック), so the name the chip was showing is not written
     /// out again beside itself, and the `+N` is covered by the row that
-    /// takes its place. Which way the rest of the card grows is decided
-    /// here, once, from what is left of the page on either side — a
-    /// measured answer, so a function pushes it out rather than a
-    /// binding reading it back (規約 §QML 実装ルール).
+    /// takes its place. From there it always grows the one way, into the
+    /// graph: a card that picked its side by how long the names were
+    /// answered the same chip differently on different rows, and the
+    /// reason was not on screen to be read (2026-08-21 ユーザー報告 —
+    /// the same condition §hover のツールチップ turns down for the file
+    /// rows). The names' heads hold still instead, which is what a name
+    /// is told apart by.
     function openRefList(records, anchor) {
         const at = anchor.mapToItem(host, 0, 0)
-        const chipRight = at.x + anchor.width
         // The row's card opens under the pointer, which is on the chip
         // — it would be drawn over the list the chip is opening.
         host.closeRowCard()
@@ -126,25 +116,18 @@ Item {
         // Never narrower than the chip it is covering — the rows draw no
         // `+N` and the chip may be wearing one (see the property).
         refList.minRowWidth = anchor.width
-        // How wide the card could be on each side, anchored where it
-        // has to be anchored. The lanes and the message are to the
-        // right of the chips, so the left is the side that covers
-        // nothing anyone is reading it for — it is tried first, and the
-        // right takes over only when it is the side with more to give.
-        const leftMost = chipRight + host.listAround
-        const rightMost = host.width - at.x + host.listAround
-        refList.alignRight = true
-        refList.chipRoom = leftMost - 2 * host.listAround
+        // What is left of the page from the chip's own left edge, less
+        // what the card puts around a chip on its own edges (its
+        // padding, and nothing else — `RefListPopup`'s rows keep no
+        // margin) and the stop every floating card in the app shares:
+        // `spaceXxl` short of the edge, the ceiling a menu's width has
+        // (規約 §メニュー). Without it the longest name takes the card
+        // flat against the window frame.
+        refList.chipRoom = host.width - Theme.spaceXxl - at.x - refList.padding
         // Sized before it is shown, so it does not grow under the hand
         // that is walking into it — see the function.
         refList.layOutRows()
-        if (refList.wantWidth > leftMost && rightMost > leftMost) {
-            refList.alignRight = false
-            refList.chipRoom = rightMost - 2 * host.listAround
-            refList.layOutRows()
-        }
-        refList.x = refList.alignRight ? leftMost - refList.cardWidth
-                                       : at.x - host.listAround
+        refList.x = at.x - refList.padding
         // Down from the chip, and kept inside the page: a card longer
         // than what is under the chip would otherwise be moved by
         // `Popup` itself, which knows nothing about the seat it is
