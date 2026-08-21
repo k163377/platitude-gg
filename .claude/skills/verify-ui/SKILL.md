@@ -25,17 +25,24 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 ## 起動 fast path(「rebase して起動」等、起動だけの要求)
 
-ユーザーが待っているのは**窓が出ること**で、Done パイプラインではない。前提は「rebase が通り、release exe がビルドできる」ことだけ — **fmt / clippy / test / verify-ui / linux 系を起動の前に置かない**。状態確認・生存確認を個別ターンに積まず、下の 1 コマンドに畳む。
+ユーザーが待っているのは**窓が出ること**で、Done パイプラインではない。前提は「rebase が通り、release exe がビルドできる」ことだけ — **fmt / clippy / test / verify-ui / linux 系を起動の前に置かない**。**シェル呼び出しは 1 個**(状態確認・pid 確認を前にも後ろにも積まない)。
 
-1. **停止 → rebase → ビルド → 起動 → 生存確認まで 1 個の複合コマンド**(ユーザーの指示が前提の操作なので、その指示を記録する escape を両方付ける):
+1. **停止 → rebase → ビルド → 起動 → 生存確認まで 1 個の複合コマンド**(ユーザーの指示が前提の操作なので、その指示を記録する escape を両方付ける)。**パイプにもコマンド置換にも通さない**(下記の罠。hook が deny する):
 
    ```bash
    PG_ALLOW_REBASE=1 git rebase main && PG_ALLOW_GUI=1 cargo xtask launch
    ```
 
-   `launch` が自ツリーの居残りプロセス回収(`cargo xtask kill` 相当)→ release ビルド → 切り離し起動 → 生存確認(約 10ms の無言終了 = Qt bin 不在の検出)まで行い、Qt の PATH も自分で解決する。rebase 不要の要求なら `PG_ALLOW_GUI=1 cargo xtask launch` だけ。**他席やユーザーの窓を殺さない** — 掴まれた exe・二重起動ゲートの原因は常に自ツリーの居残りで、`kill` / `launch` がそれだけを落とす(画像名 kill は hook が deny)。
-2. 窓が出たら**即報告してターンを終える**。起動を待たせてよいのは rebase の衝突と build エラーだけ(衝突を解決したら、Done パイプラインへ寄り道せずこの fast path の続きで起動まで行く)。
-3. **報告したら背景タスクを 1 個も残さずターンを終える** — 起動の後ろに `check` を run_in_background で吊るさない。背景タスクが残っている間セッションの表示は「処理中」のままで、完了通知がエージェントを起こし直す = 打ちっぱなしのはずの起動がトークンを食い続ける。**Done の基準は CLAUDE.md ビルド・テスト(段 2)のまま不変** — 走らせるのはユーザーが検証・反映を指示した時で、起動の報告には**段 2 が未実行であることを 1 行添える**(「マージ可」は check の green を見てから言う)。
+   `launch` が自ツリーの居残りプロセス回収(`cargo xtask kill` 相当)→ release ビルド → 切り離し起動 → 生存確認(約 10ms の無言終了 = Qt bin 不在の検出)まで行い、Qt の PATH も自分で解決する。rebase 不要の要求なら `PG_ALLOW_GUI=1 cargo xtask launch` だけ。冷えたツリーの release ビルドは既定の 2 分を超えうるので、**前景のまま timeout を上げる**(background へ逃がすのは下の 3 で禁止)。**他席やユーザーの窓を殺さない** — 掴まれた exe・二重起動ゲートの原因は常に自ツリーの居残りで、`kill` / `launch` がそれだけを落とす(画像名 kill は hook が deny)。
+2. **`launch` の行が最後のツール呼び出し**。窓が出たら報告してターンを終える。起動を待たせてよいのは rebase の衝突と build エラーだけ(衝突を解決したら、Done パイプラインへ寄り道せずこの fast path の続きで起動まで行く)。
+3. **起動したら監視しない** — 報告の後ろに何も吊らない。禁止は全部同じ 1 つの理由で、**ターンが終わらない間ユーザーの次の指示はキューに載ったまま届かない**(実測: 起動の 36 秒後に打たれた指示が届いたのは 9 分後):
+   - 起動そのものを run_in_background で撃つ(hook が deny)/ 報告と同じターンで `check` 等を run_in_background で始める。背景タスクが残る間セッションの表示は「処理中」のままで、完了通知がエージェントを起こし直す = 打ちっぱなしのはずの起動がトークンを食い続ける
+   - `Get-Process` / `xtask seats` / ログの tail で生存や pid を確かめ直す(生存確認は `launch` が済ませている。その報告行より後のことはユーザーの窓の話で、このセッションの持ち物ではない)
+   - 窓が閉じるのを待つ・ユーザーの操作を待つ・撃ち直す・スクショを撮る
+
+   **Done の基準は CLAUDE.md ビルド・テスト(段 2)のまま不変** — 走らせるのはユーザーが検証・反映を指示した時で、起動の報告には**段 2 が未実行であることを 1 行添える**(「マージ可」は check の green を見てから言う)。
+
+**`cargo xtask launch` をパイプ・コマンド置換に通すと、ターンが窓の寿命だけ返らない**(実測 2026-08-21)。`| tail -N` / `| Select-Object -Last N` を付けた 32 回は最短 23 秒・中央値 206 秒・最長 603 秒(= ツールのタイムアウト)で返り、パイプを外した回だけ 8.7 秒だった。原因は Windows の handle 継承で、`std::process::Command` は `bInheritHandles=TRUE` で起こすため、**切り離した窓がシェルの作ったパイプの書き込み端を掴んだまま生き続け**、読み手が EOF を見ない。`Stdio::null()` も `DETACHED_PROCESS` も `cmd /c start` も外れない(使い捨ての spawner で 3 つとも孫の寿命そのもの = 19s。外れるのは ShellExecute 経由の `Start-Process` だけ)。ハーネス自身の出力取り込みは継承されないので、**パイプを書かなければ掴まれない** — `launch` の出力は 3 行なので削る必要も無い(`2>&1` だけ・ファイルへの `>` は読み手が居ないので無害)。
 
 ## PG_AUTO_ACT 動詞表
 
@@ -71,7 +78,7 @@ hover はアプリへは注入できない(§Windows での実行・デバッグ
 
 - Qt / QML のログ(console.*、QML ロードエラー含む)は既定で OutputDebugString 行き — **`QT_FORCE_STDERR_LOGGING=1` を付けないと stderr に出ず、QML の失敗が無音になる**
 - release ビルドは GUI サブシステム(`windows_subsystem`)のため PowerShell から直接起動すると**待機されない**(即座に制御が返り、プロセスが残って exe をロックする)。検証は `Start-Process -PassThru` + `WaitForExit` で行う
-- **ログを読みたい起動は `cargo run --release -p platitude-app [--features …]` で撃つ**(memprobe の `mem report` を読む時など、verify-ui に乗らない 1 回きりの計測)。GUI サブシステムの exe を PowerShell から直に撃つと**出力は自分のターンより後に届いて 1 行も掴めず**、`Start-Process -RedirectStandardError` は**空のファイルを残す**(2026-08-12 実測)。cargo は子を待って stdio をそのまま繋ぐので普通に読める。**Qt の bin を PATH に足すのを忘れない**(無いと約 10ms で無言終了 = 下の項)
+- **ログを読みたい起動は `cargo run --release -p platitude-app [--features …]` で撃つ**(memprobe の `mem report` を読む時など、verify-ui に乗らない 1 回きりの計測)。**これは fast path の起動ではない** — cargo が子を待つので窓を閉じるまでターンが返らない。ユーザーの「起動」には使わず、この形を選ぶのは自分でログを読み切って窓を閉じるまでやる時だけ。GUI サブシステムの exe を PowerShell から直に撃つと**出力は自分のターンより後に届いて 1 行も掴めず**、`Start-Process -RedirectStandardError` は**空のファイルを残す**(2026-08-12 実測)。cargo は子を待って stdio をそのまま繋ぐので普通に読める。**Qt の bin を PATH に足すのを忘れない**(無いと約 10ms で無言終了 = 下の項)
 - **raw worktree app 起動は親監督なしでは許可しない** — `QT_QPA_PLATFORM=offscreen` だけではプロセス寿命を保証しないため、親 watchdog を持つ verify-ui / linux verify-ui を使う。ログ確認でも直接 exe を放置せず、監督付きの起動経路を選ぶ
 - **画面ロック中は通常起動の GUI 検証がハングする**(プロセスは動きログも出るが `grabToImage` callback が返らない — 2026-08-03 ロック実測)。GUI 起動を伴う検証は必ず `WaitForExit(ms)` タイムアウト + 未終了なら `Kill()` のガード付きで実行し、無限待ち・無限ポーリングをしない。`verify-ui` は app-side watchdog + parent kill guard の二重境界を持つ
 - **ヘッドレス検証の標準**(ロック状態と無関係に成立、2026-08-03 ロック実測): `QT_QPA_PLATFORM=offscreen` + `QT_QPA_FONTDIR=C:\Windows\Fonts` + 自動化 env(PG_AUTO_OPEN / PG_AUTO_WATCHDOG_MS / PG_SHOT_DIR / PG_AUTO_SELECT 等)。成否は stderr の `screenshot saved=true` と保存 PNG の目視で判定する。**FONTDIR 指定が無いと全文字が豆腐**(offscreen は Windows のシステムフォントを自動検出しない)
