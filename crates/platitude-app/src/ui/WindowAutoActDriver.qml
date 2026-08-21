@@ -92,6 +92,61 @@ Item {
         }
     }
 
+    // The same card's avatar half, whose four shots the page opens and this finishes. Each waits on what its own verb
+    // produced: the row the store answered the filing with and the picture inside it, that row's `lit`, the candidate
+    // list's `opened`, and — for the removal — the row leaving the store on the far side of a hold that runs at its own
+    // length (`Metrics.holdMs`). Nothing here reads a clock.
+    Timer {
+        id: avatarCardTimer
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "avatar-settings" || AppBackend.autoAct === "avatar-row-lit"
+                 || AppBackend.autoAct === "avatar-combo" || AppBackend.autoAct === "avatar-remove"
+        /// Raised once this verb's own move has been made, so nothing after it re-reads what had to be true before it.
+        /// The removal's answer is a row going away, and a gate still wanting that row would never let go of it (the
+        /// wait `middle-close` describes).
+        property bool acted: false
+        /// How many rows the hold was made against, read in the branch that presses and nowhere else.
+        property int rowsBefore: -1
+        onTriggered: {
+            const act = AppBackend.autoAct
+            if (!avatarCardTimer.acted) {
+                if (!settingsDialog.opened)
+                    return
+                // A run that filed a picture on its way in has to have it in the list before any of this means
+                // anything; one that filed nothing — the round-trip read — has whatever the store gave it.
+                if (AppBackend.autoActArg !== "" && !settingsDialog.autoAvatarRowPainted(0))
+                    return
+                if (act === "avatar-row-lit") {
+                    if (!settingsDialog.autoAvatarRowLit(0))
+                        return
+                } else if (act === "avatar-combo") {
+                    // Asked again while it is still shut: the field defers the list by a turn of the loop, and a list
+                    // taken back down under an unwinding grab has to be asked for a second time (`AppCombo.pressField`).
+                    if (!settingsDialog.autoAvatarComboOpen) {
+                        settingsDialog.autoAvatarOfferCombo()
+                        return
+                    }
+                } else if (act === "avatar-remove") {
+                    if (!settingsDialog.autoAvatarHoldRemove(0))
+                        return
+                    avatarCardTimer.rowsBefore = settingsDialog.autoAvatarRows
+                }
+                avatarCardTimer.acted = true
+            }
+            // The hold is the one move whose answer arrives after it: the store has to have let the row go.
+            if (act === "avatar-remove" && settingsDialog.autoAvatarRows >= avatarCardTimer.rowsBefore)
+                return
+            avatarCardTimer.stop()
+            AppBackend.report("avatar_card rows=" + settingsDialog.autoAvatarRows
+                              + " painted=" + settingsDialog.autoAvatarRowPainted(0)
+                              + " lit=" + settingsDialog.autoAvatarRowLit(0)
+                              + " combo=" + settingsDialog.autoAvatarComboOpen
+                              + " removed=" + (avatarCardTimer.rowsBefore > settingsDialog.autoAvatarRows))
+            window.finishAutoAct()
+        }
+    }
+
     // What remains after a middle-click is the output under test. Wait for the tab-model count edge rather than
     // allowing a fixed delay to stand in for it. The two tabs this verb needs are a precondition of the press and
     // nothing else: read again after it, they turn the verb's own answer — one tab fewer — into a wait nothing can end.

@@ -210,6 +210,17 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // the caret out of the box it came from.
         "settings-tools-loading" => Some("settled=false loading=true open=true typing=true"),
         "settings-tools" => Some("settled=true loading=false open=true typing=true"),
+        // The same card's avatar half. Only this one of its four wants a
+        // line: the other three cannot reach the camera with the wrong
+        // state, because each waits on the state itself — a filed picture
+        // in the list, a lit row, a row gone from the store — and a run
+        // where any of that never came photographs nothing at all. What
+        // no predicate covers is the second grab: the list is a popup, it
+        // lives in overlay.png, and a mirror refreshed over an empty
+        // overlay passes (the blind spot `commit-menu` is here for). Three
+        // popups because the card is modal — its dimmer, itself, and the
+        // list that came down inside it.
+        "avatar-combo" => Some("overlay saved=true popups=3"),
         // `edge=` rides along in that report but is not judged: whether an
         // edge would land off the screen is a question about a real
         // monitor, and the offscreen platform has none to answer with.

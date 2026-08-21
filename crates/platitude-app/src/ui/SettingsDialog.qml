@@ -35,6 +35,35 @@ AppDialog {
     /// Stands in for the pointer on one row, which headless cannot inject.
     property int pointedAtRow: -1
 
+    /// What the avatar verbs wait on, and the two moves they have no hand to make. The card is the window's, so those
+    /// verbs are finished by `WindowAutoActDriver`; everything here is the list's own output side — the rows the store
+    /// answered the filing with, the picture inside the first of them, that row's `lit`, and the candidate list's own
+    /// `opened`.
+    readonly property int autoAvatarRows: avatarRepeater.count
+    readonly property bool autoAvatarComboOpen: avatarWho.popup.opened
+    function autoAvatarRowLit(at) {
+        const row = avatarRepeater.itemAt(at)
+        return !!row && row.lit
+    }
+    function autoAvatarRowPainted(at) {
+        const row = avatarRepeater.itemAt(at)
+        return !!row && row.pictureReady()
+    }
+    /// The door a press uses, so the list comes down the way it does under a hand — including the turn of the loop the
+    /// field puts between the press and the list (`AppCombo.pressField`).
+    function autoAvatarOfferCombo() {
+        avatarWho.pressField()
+    }
+    /// Runs the row's hold to its end. False where the list has no such row yet, so the caller waits instead of
+    /// counting a press it never made.
+    function autoAvatarHoldRemove(at) {
+        const row = avatarRepeater.itemAt(at)
+        if (!row)
+            return false
+        row.holdRemove()
+        return true
+    }
+
     /// The author an avatar's badge was pressed on. The card opens
     /// already carrying whom it is about, so the only thing left to do is
     /// name the picture.
@@ -288,6 +317,14 @@ AppDialog {
                     /// headless having put it there for a shot.
                     readonly property bool lit: rowHover.hovered || unsetButton.activeFocus
                         || settingsDialog.pointedAtRow === index
+                    /// Automation reads and works the row through these two rather than reaching inside it: the
+                    /// picture the list is photographed for, and the hold it has no hand to make.
+                    function pictureReady() {
+                        return rowFace.pictureReady()
+                    }
+                    function holdRemove() {
+                        unsetButton.completeHold()
+                    }
                     // A handler, not a MouseArea: a MouseArea is an Item,
                     // so a layout gives it a seat of its own and every
                     // column after it starts a gap further right — 
@@ -298,6 +335,7 @@ AppDialog {
                         id: rowHover
                     }
                     IdentIcon {
+                        id: rowFace
                         imageUrl: modelData.url
                         width: Theme.iconLg
                         height: Theme.iconLg
@@ -349,12 +387,6 @@ AppDialog {
                         holdMs: Metrics.holdMs
                         holdTone: Theme.danger
                         onHeld: AppBackend.removeAvatar(modelData.email)
-                        Timer {
-                            running: settingsDialog.opened && AppBackend.autoAct === "avatar-remove"
-                                     && index === 0
-                            interval: 500
-                            onTriggered: unsetButton.completeHold()
-                        }
                     }
                 }
             }
@@ -366,11 +398,6 @@ AppDialog {
                     Layout.fillWidth: true
                     placeholder: qsTr("name or email")
                     model: settingsDialog.authorChoices
-                    Timer {
-                        running: settingsDialog.opened && AppBackend.autoAct === "avatar-combo"
-                        interval: 400
-                        onTriggered: avatarWho.popup.open()
-                    }
                 }
                 ActionButton {
                     id: chooseAvatar

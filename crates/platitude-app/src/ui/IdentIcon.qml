@@ -12,6 +12,14 @@ Item {
     property int code: 0
     /// A `file:` URL from the store, empty for the generated pattern.
     property string imageUrl: ""
+
+    /// Whether the circle has in hand what it will paint. The canvas reads a `file:` URL off disk asynchronously, and
+    /// until it lands the ring is drawn around nothing — so a shot of a list of faces waits on this. A function rather
+    /// than a property: `isImageLoaded` is a call, and a binding on it would never be re-evaluated.
+    function pictureReady() {
+        return ident.imageUrl === "" || pattern.isImageLoaded(ident.imageUrl)
+    }
+
     width: Theme.iconLg
     height: Theme.iconLg
 

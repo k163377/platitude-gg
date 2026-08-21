@@ -142,7 +142,6 @@ Item {
                 "graph-tail", "divider-refuse", "cherry-pick", "reword", "edit-message",
                 "edit-message-leave", "edit-message-focus",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
-                "avatar-settings", "avatar-combo", "avatar-row-lit", "avatar-remove",
                 "find", "find-next", "find-prev", "find-drop",
                 // These flows are completed by Main/WindowAutoActDriver. Some still begin here (picker, command
                 // failure, recovery), but the page must never photograph their intermediate state before the
@@ -158,7 +157,8 @@ Item {
                 "badges", "badges-hover", "old-git", "old-git-card",
                 "old-git-fold", "state", "middle-close", "open-again",
                 "force-push-hold", "fetch-busy", "fetch-fail", "fetch-resume", "fetch-tip",
-                "settings-tools", "settings-tools-loading"].indexOf(act) >= 0
+                "settings-tools", "settings-tools-loading",
+                "avatar-settings", "avatar-combo", "avatar-row-lit", "avatar-remove"].indexOf(act) >= 0
     }
 
     function prepareCompletion(act) {
@@ -3088,7 +3088,8 @@ Item {
         } else if (act === "avatar-settings" || act === "avatar-combo"
                    || act === "avatar-row-lit" || act === "avatar-remove") {
             // Each run starts with an empty store, so a picture to look at has to be filed first — the argument is the
-            // one to file.
+            // one to file. The card the four of them are about is the window's, and so is their completion
+            // (`WindowAutoActDriver`); all that happens here is the filing and the asking.
             page.activateRow(graphModel.oidAt(1))
             if (arg !== "")
                 avatarSeedTimer.start()
