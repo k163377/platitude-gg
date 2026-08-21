@@ -75,7 +75,7 @@ Rectangle {
                 }
                 Label {
                     text: "(" + list.count + ")"
-                    font.pixelSize: Theme.fontSm
+                    font.pixelSize: Theme.fontMd
                     color: Theme.textMuted
                 }
                 // Why the panel is up, in git's own words. One line here; the row that failed keeps the whole of it.

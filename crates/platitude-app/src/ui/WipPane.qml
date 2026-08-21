@@ -537,7 +537,7 @@ ColumnLayout {
         }
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: Theme.spaceSm
+            anchors.leftMargin: Theme.spaceXs
             anchors.rightMargin: Theme.spaceXs
             spacing: Theme.spaceXs
             Label {
@@ -546,11 +546,12 @@ ColumnLayout {
                 font.weight: Font.DemiBold
                 color: Theme.textSecondary
             }
-            // The count keeps the small step, the way every heading band in the window carries its own (NavHeader,
-            // CommandsPane, WipBucketHeader).
+            // The count stands at the caption's own step, the way every heading band in the window carries its own
+            // (NavHeader, CommandsPane, WipBucketHeader) — see DetailsPane's for why the step is not what says it is
+            // a count.
             Label {
                 text: "(" + wipPane.worktreeModel.total + ")"
-                font.pixelSize: Theme.fontSm
+                font.pixelSize: Theme.fontMd
                 color: Theme.textMuted
             }
             Item { Layout.fillWidth: true }
@@ -665,9 +666,10 @@ ColumnLayout {
             // the same way (see DetailsPane) so switching modes doesn't move the box.
             ColumnLayout {
                 Layout.fillWidth: true
-                Layout.margins: Theme.spaceSm
-                Layout.topMargin: Theme.spaceXs
-                Layout.bottomMargin: Theme.spaceXs
+                Layout.margins: Theme.spaceXs
+                // The gutter this block's scroll bar is drawn in — see DetailsPane, which insets the same pair the
+                // same way.
+                Layout.rightMargin: Theme.spaceSm
                 spacing: Theme.spaceXs
                 // The pair is one block of one height, in the same component the details pane reads messages in (デザイン規約
                 // §コミットメッセージの 2 つの枠).

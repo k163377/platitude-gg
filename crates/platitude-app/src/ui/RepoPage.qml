@@ -1553,7 +1553,7 @@ Item {
                         roomLeft: page.wipShown ? wipPane.bottomRoom : detailsPane.bottomRoom
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
-                        anchors.rightMargin: Theme.spaceSm
+                        anchors.rightMargin: Theme.spaceXs
                         anchors.bottomMargin: Theme.spaceXs
                         // Declared before the panes it hangs over, so z holds it in front of whatever they draw here.
                         z: 1

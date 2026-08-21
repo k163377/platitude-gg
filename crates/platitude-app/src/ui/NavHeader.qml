@@ -74,7 +74,7 @@ Rectangle {
     }
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: Theme.spaceSm
+        anchors.leftMargin: Theme.spaceXs
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
         NavIcon {
@@ -100,10 +100,12 @@ Rectangle {
             font.pixelSize: Theme.fontMd
             font.weight: Font.DemiBold
         }
+        // At the caption's own step, in its own label: what says it is a count is the weight and the colour, not the
+        // size (デザイン規約 §タイポグラフィ).
         Label {
             text: "(" + header.count + ")"
             color: Theme.textMuted
-            font.pixelSize: Theme.fontSm
+            font.pixelSize: Theme.fontMd
         }
         Item { Layout.fillWidth: true }
         // Whether the graph is drawing tags. An eye rather than a flag: a flag is a mark on a commit, which is what a

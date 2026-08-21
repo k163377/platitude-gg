@@ -12,7 +12,7 @@ Rectangle {
     Label {
         id: headerLabel
         anchors.verticalCenter: parent.verticalCenter
-        x: Theme.spaceSm
+        x: Theme.spaceXs
         font.pixelSize: Theme.fontMd
         font.weight: Font.DemiBold
         color: Theme.textSecondary

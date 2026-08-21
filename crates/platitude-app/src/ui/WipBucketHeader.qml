@@ -44,7 +44,7 @@ Rectangle {
     color: Theme.bgElevated
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: Theme.spaceSm
+        anchors.leftMargin: Theme.spaceXs
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
         Label {
@@ -57,15 +57,15 @@ Rectangle {
             font.weight: Font.DemiBold
             color: bucketHeader.section === "conflicts" ? Theme.danger : Theme.textSecondary
         }
-        // How many, in its own label at the small step — the seat every heading band in the window keeps its count in
-        // (NavHeader, CommandsPane). Inside the caption it was set at the caption's step, and a band this size has no
-        // room for what that puts under the baseline: the band is `rowHeight`, and the brackets of a 14px count run a
-        // pixel past its floor into the list below (measured). The conflicted bucket has no count — the rows under it
-        // are the number.
+        // How many, in its own label at the caption's own step — the seat every heading band in the window keeps its
+        // count in (NavHeader, CommandsPane). This is the shortest band a count stands in and the step still clears
+        // its floor: measured on the 24px band, the brackets' ink runs y 82..96 with 6px of air above and 3px below,
+        // and the first row of the list under it is bare. The conflicted bucket has no count — the rows under it are
+        // the number.
         Label {
             visible: bucketHeader.section !== "conflicts"
             text: "(" + bucketHeader.count + ")"
-            font.pixelSize: Theme.fontSm
+            font.pixelSize: Theme.fontMd
             color: Theme.textMuted
         }
         Item { Layout.fillWidth: true }

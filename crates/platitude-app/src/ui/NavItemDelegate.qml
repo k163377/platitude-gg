@@ -177,7 +177,9 @@ Item {
     RowLayout {
         id: rowLayout
         anchors.fill: parent
-        anchors.leftMargin: Theme.spaceMd + navRow.depth * Theme.spaceMd
+        anchors.leftMargin: Theme.spaceXs + navRow.depth * Theme.spaceMd
+        // Not padding: the gutter the list's own scroll bar is drawn in. This row ends in a right-aligned column (the
+        // branch a worktree has out), and at the pane's own inset the thumb was drawn over its last glyph (measured).
         anchors.rightMargin: Theme.spaceSm
         spacing: Theme.spaceXs
         // The mark and the name, in the part both file lists share (`NameCell`): the slot every row opens with — a

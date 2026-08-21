@@ -41,7 +41,7 @@ Rectangle {
     }
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: Theme.spaceSm
+        anchors.leftMargin: Theme.spaceXs
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
         NavIcon {

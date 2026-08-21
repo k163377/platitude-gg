@@ -103,7 +103,7 @@ ColumnLayout {
         // Measured from where it opens, not from the pane: the card
         // starts partway across, so the pane's width is not what is
         // left for it.
-        mateCard.maxRowWidth = detailsPane.width - p.x - 2 * Theme.spaceSm
+        mateCard.maxRowWidth = detailsPane.width - p.x - 2 * Theme.spaceXs
         mateCard.x = p.x
         // Flush against the underline: a gap is a band the pointer
         // crosses while touching neither, and the card closes under it
@@ -131,7 +131,7 @@ ColumnLayout {
         if (detailsPane.details.authorName === "")
             return
         const p = authorRow.mapToItem(detailsPane, at.x, at.y)
-        authorCard.maxRowWidth = detailsPane.width - p.x - 2 * Theme.spaceSm
+        authorCard.maxRowWidth = detailsPane.width - p.x - 2 * Theme.spaceXs
         authorCard.x = p.x
         authorCard.y = p.y
         authorCard.open()
@@ -360,15 +360,17 @@ ColumnLayout {
 
             // Inset on all four sides — the message box carries its own frame,
             // and flush against the header band the two borders read as one
-            // welded block. Vertically the inset is the same step the rows
+            // welded block. One step on every side, the same step the rows
             // inside use, so band → summary → description → author → band is
-            // one even rhythm; horizontally it is the pane inset, which puts
-            // the card's edge under the header labels.
+            // one even rhythm and the card's edge stands under the header
+            // label. The right is the exception and is not padding: it is the
+            // gutter this block's scroll bar is drawn in, which at the pane's
+            // own inset covers the boxes' frame and the parent hash's tail
+            // (measured — デザイン規約 §QML 実装ルール).
             ColumnLayout {
                 Layout.fillWidth: true
-                Layout.margins: Theme.spaceSm
-                Layout.topMargin: Theme.spaceXs
-                Layout.bottomMargin: Theme.spaceXs
+                Layout.margins: Theme.spaceXs
+                Layout.rightMargin: Theme.spaceSm
                 spacing: Theme.spaceXs
                 visible: detailsPane.details.shaHex !== ""
 
@@ -445,7 +447,7 @@ ColumnLayout {
         color: Theme.bgElevated
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: Theme.spaceSm
+            anchors.leftMargin: Theme.spaceXs
             anchors.rightMargin: Theme.spaceXs
             spacing: Theme.spaceXs
             Label {
@@ -454,11 +456,11 @@ ColumnLayout {
                 font.weight: Font.DemiBold
                 color: Theme.textSecondary
             }
-            // The count keeps the small step, the way every heading band in the window carries its own (NavHeader,
-            // CommandsPane, WipBucketHeader).
+            // The count stands at the caption's own step, the way every heading band in the window carries its own
+            // (NavHeader, CommandsPane, WipBucketHeader) — the weight and the colour say it is a count (規約 §タイポグラフィ).
             Label {
                 text: "(" + detailsPane.details.fileTotal + ")"
-                font.pixelSize: Theme.fontSm
+                font.pixelSize: Theme.fontMd
                 color: Theme.textMuted
             }
             Item { Layout.fillWidth: true }

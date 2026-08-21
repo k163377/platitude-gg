@@ -67,7 +67,9 @@ Item {
     // itself.
     NameCell {
         anchors.fill: parent
-        anchors.leftMargin: Theme.spaceSm + (fileRow.model.depth ?? 0) * Theme.spaceMd
+        anchors.leftMargin: Theme.spaceXs + (fileRow.model.depth ?? 0) * Theme.spaceMd
+        // Not padding: the gutter the list's own scroll bar is drawn in. At the pane's own inset the thumb takes the
+        // last glyph of an elided name (measured: the thumb ends 2px inside the list's right edge and reaches 8 in).
         anchors.rightMargin: Theme.spaceSm
         folder: fileRow.isFolder
         change: fileRow.changeText
