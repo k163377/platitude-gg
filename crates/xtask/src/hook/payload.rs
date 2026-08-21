@@ -25,9 +25,22 @@ pub(super) fn string_field(input: &str, key: &str) -> Option<String> {
     None
 }
 
+/// Returns the first JSON boolean value for `key` in `input`. A field the
+/// tool left out is `None`, which is not the same answer as `false` for a
+/// caller that only wants to act on an explicit yes.
+pub(super) fn bool_field(input: &str, key: &str) -> Option<bool> {
+    let needle = format!("\"{key}\"");
+    let after_key = &input[input.find(&needle)? + needle.len()..];
+    let after_colon = after_key.trim_start().strip_prefix(':')?.trim_start();
+    if after_colon.starts_with("true") {
+        return Some(true);
+    }
+    after_colon.starts_with("false").then_some(false)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::string_field;
+    use super::{bool_field, string_field};
     use crate::seats::worktree_root;
 
     #[test]
@@ -42,5 +55,13 @@ mod tests {
             worktree_root(&cwd).as_deref(),
             Some("C:/Users/x/IdeaProjects/platitude-gg/.claude/worktrees/nice-satoshi-45da22")
         );
+    }
+
+    #[test]
+    fn tells_an_absent_flag_from_one_that_says_no() {
+        let payload = r#"{"tool_input":{"command":"ls","run_in_background": true,"quiet":false}}"#;
+        assert_eq!(bool_field(payload, "run_in_background"), Some(true));
+        assert_eq!(bool_field(payload, "quiet"), Some(false));
+        assert_eq!(bool_field(payload, "timeout"), None);
     }
 }

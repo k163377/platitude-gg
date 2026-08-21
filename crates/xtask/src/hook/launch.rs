@@ -1,9 +1,10 @@
 //! The launch guard: a real window and a process nothing ends both take
-//! something from the sessions beside this one.
+//! something from the sessions beside this one, and a launch someone reads
+//! the output of takes the turn it was started from.
 
 use super::WINDOW_ESCAPE;
 use super::git::{unquote, xtask_verb};
-use super::payload::string_field;
+use super::payload::{bool_field, string_field};
 use crate::seats::worktree_root;
 
 /// PreToolUse(Bash|PowerShell): starting the app from a worktree takes
@@ -16,6 +17,44 @@ pub(super) fn pre_launch(input: &str) -> Result<(), String> {
     let Some(command) = string_field(input, "command") else {
         return Ok(());
     };
+    // Held to before the escape and outside any worktree: the escape records
+    // that the user asked for a window, not that the session may stop
+    // answering, and a launch takes the turn wherever it is started from.
+    if reads_the_launch(&command) {
+        println!(
+            "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
+             \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
+             \"A launch must not feed a pipe or a command substitution. The \
+             window it starts inherits the write end of the shell's pipe and \
+             holds it open for as long as it lives, so the reader never sees \
+             end-of-file: the call does not come back until the window closes, \
+             and until then the turn cannot end and whatever the user types \
+             next waits in the queue. Measured: piped launches came back after \
+             23s to 603s (the tool's own timeout), the same launch without a \
+             pipe after 8.7s. `cargo xtask launch` prints three lines, so there \
+             is nothing to trim — run it on its own, report, and end the \
+             turn.\"}}}}"
+        );
+        return Ok(());
+    }
+    // Same reason from the other side: a background task keeps the session
+    // busy while it runs and wakes the agent again when it lands, and a
+    // launch has nothing to wait for once the window is up.
+    if !launch_segments(&command).is_empty() && bool_field(input, "run_in_background") == Some(true)
+    {
+        println!(
+            "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
+             \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
+             \"A launch is not background work. It reaps this tree's stale \
+             runs, builds, starts the window detached and answers, all in the \
+             foreground; a background task instead leaves the session busy \
+             until it lands and then wakes the agent again, which is the one \
+             thing a launch is not supposed to do. Run it in the foreground \
+             (raise the tool's timeout if the release build needs it), report, \
+             and end the turn.\"}}}}"
+        );
+        return Ok(());
+    }
     if command.contains(WINDOW_ESCAPE) {
         return Ok(());
     }
@@ -38,6 +77,44 @@ pub(super) fn pre_launch(input: &str) -> Result<(), String> {
         WINDOW_ESCAPE
     );
     Ok(())
+}
+
+/// Whether `command` puts a reader on `cargo xtask launch`'s output. The
+/// launch is detached, but Windows hands a new process every inheritable
+/// handle the starting one holds — the write end of a shell pipe included —
+/// so the reader waits for an end-of-file that only the window's death
+/// brings. A redirect has no reader and is harmless; a pipe and a
+/// substitution are readers. Only the detached launch is held to this:
+/// `verify-ui` ends the app it starts, and `cargo run` holds it in the
+/// foreground on purpose.
+fn reads_the_launch(command: &str) -> bool {
+    launch_segments(command)
+        .iter()
+        .any(|segment| segment.contains('|') || segment.contains("$("))
+}
+
+/// The commands in the line that start the detached window.
+fn launch_segments(command: &str) -> Vec<&str> {
+    shell_segments(command)
+        .into_iter()
+        .filter(|segment| {
+            // A substitution wraps the launch in parentheses, which would
+            // otherwise stick to the verb.
+            let bare = segment.replace(['(', ')'], " ");
+            let tokens: Vec<&str> = bare.split_whitespace().collect();
+            xtask_verb(&tokens, "launch")
+        })
+        .collect()
+}
+
+/// `command` cut where one command in the line ends and the next begins, so
+/// that a pipe belonging to a neighbour is not read as the launch's own.
+fn shell_segments(command: &str) -> Vec<&str> {
+    command
+        .split(['\n', ';'])
+        .flat_map(|part| part.split("&&"))
+        .flat_map(|part| part.split("||"))
+        .collect()
 }
 
 /// What `command`, run from `cwd`, would take from the sessions beside it.
@@ -169,7 +246,7 @@ pub(super) fn resolve(cwd: &str, path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{launch_objections, resolve};
+    use super::{launch_objections, reads_the_launch, resolve};
 
     const IN_WORKTREE: &str = "C:/Users/x/IdeaProjects/platitude-gg/.claude/worktrees/launch";
     const PRIMARY: &str = "C:/Users/x/IdeaProjects/platitude-gg";
@@ -258,6 +335,33 @@ mod tests {
         );
         assert_eq!(resolve("/home/x/w", "../t/app"), "/home/x/t/app");
         assert_eq!(resolve("/home/x/w", "/opt/app"), "/opt/app");
+    }
+
+    #[test]
+    fn refuses_a_launch_whose_output_something_waits_on() {
+        for command in [
+            "PG_ALLOW_GUI=1 cargo xtask launch 2>&1 | tail -4",
+            "PG_ALLOW_GUI=1 cargo xtask launch --no-build | Select-Object -Last 3",
+            "pid=$(PG_ALLOW_GUI=1 cargo xtask launch)",
+        ] {
+            assert!(reads_the_launch(command), "{command}");
+        }
+    }
+
+    #[test]
+    fn lets_through_a_launch_nothing_is_waiting_on() {
+        for command in [
+            "PG_ALLOW_REBASE=1 git rebase main && PG_ALLOW_GUI=1 cargo xtask launch",
+            // Nobody reads a file, and stderr joining stdout adds no reader.
+            "PG_ALLOW_GUI=1 cargo xtask launch > launch.log 2>&1",
+            // The pipe belongs to the command beside it, not to the launch.
+            "git rebase main 2>&1 | tail -2 && PG_ALLOW_GUI=1 cargo xtask launch",
+            // These two end their app themselves, so their reader sees an end.
+            "cargo xtask verify-ui commit --preset basic | tail -5",
+            "cargo run --release -p platitude-app 2>&1 | tail -50",
+        ] {
+            assert!(!reads_the_launch(command), "{command}");
+        }
     }
 
     #[test]
