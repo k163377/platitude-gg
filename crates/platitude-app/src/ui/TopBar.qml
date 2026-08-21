@@ -35,7 +35,7 @@ Rectangle {
     /// together, and the colour it painted from it. Asked here rather than of the page, because what is being checked
     /// is that the page's news reached this mark at all (`PG_AUTO_ACT=commands-clear`).
     readonly property bool commandsWrong: commandsToggle.wrong
-    readonly property color commandsMarkColor: commandsMark.color
+    readonly property color commandsMarkColor: commandsToggle.markColor
     /// Automation: the four things that can be the matter here. The group owns the conditions and the hidden
     /// measurements behind them; what the hooks ask the band for comes back through here (`BandStateGroup`).
     readonly property bool opBadgeShown: stateGroup.opBadgeShown
@@ -236,54 +236,11 @@ Rectangle {
             Layout.horizontalStretchFactor: 1
             onIdentityEditRequested: topBar.identityEditRequested()
         }
-        // The git commands this tab ran; the mark also carries the state of the last one.
-        Rectangle {
+        CommandsToggle {
             id: commandsToggle
-            readonly property var log: topBar.curPage !== null ? topBar.curPage.pageCommands : null
-            // Asked of the log rather than of the page: closing a tab takes the page's models down while the page
-            // itself is still standing, so `curPage !== null` is true for a beat after there is nothing left to read
-            // off it.
-            readonly property bool wrong: commandsToggle.log !== null
-                && (commandsToggle.log.failed || topBar.curPage.pageTab.lastError !== "")
-            readonly property bool open: topBar.curPage !== null && topBar.curPage.commandsOpen
-
-            visible: topBar.curPage !== null
-            // Measured off the pair beside it rather than written to tokens of its own: what sets how big a target is
-            // here is the padding a Fusion `ToolButton` keeps around its content — a number the theme does not have
-            // (sized from the table it came out 24x20 against the neighbours' 92x32). `padding` rather than the two
-            // sides it settles to: those carry the shared box's slack as well (`ActionButton.slack`), so reading them
-            // would move this mark every time the fetch button changed its wording.
-            implicitWidth: commandsMark.implicitWidth + 2 * fetchButton.padding
-            implicitHeight: fetchButton.implicitHeight
-            radius: Theme.radiusSm
-            color: open ? Theme.bgSelected : commandsMouse.containsMouse ? Theme.bgHover : "transparent"
-            border.width: commandsToggle.wrong ? Theme.borderWidth : 0
-            border.color: Theme.danger
-            Label {
-                id: commandsMark
-                anchors.centerIn: parent
-                text: ">_"
-                font.family: Theme.monoFamily
-                font.pixelSize: Theme.fontMd
-                color: commandsToggle.wrong ? Theme.danger
-                       : commandsToggle.log !== null && commandsToggle.log.running
-                         ? Theme.accent
-                       : commandsToggle.open ? Theme.textPrimary
-                       : Theme.textMuted
-            }
-            MouseArea {
-                id: commandsMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                onClicked: topBar.curPage.toggleCommands()
-                ToolTip.visible: containsMouse
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: commandsToggle.open
-                              ? qsTr("Hide the git commands this window ran")
-                              : commandsToggle.wrong
-                                ? qsTr("The last command failed — read it here")
-                                : qsTr("Show the git commands this window ran")
-            }
+            curPage: topBar.curPage
+            controlPadding: fetchButton.padding
+            controlHeight: fetchButton.implicitHeight
         }
         // Fetch, and everything the network has to say about fetching (デザイン規約 §リモートから取り込む).
         ActionButton {
