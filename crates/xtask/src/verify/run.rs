@@ -340,6 +340,24 @@ pub fn run(args: &[String]) -> Result<(), String> {
     for shot in &shots {
         println!("shot: {}", shot.display());
     }
+    // Onto the board as the run goes, not when somebody remembers: the
+    // seat is read from the working directory there, so a picture that
+    // is registered is a picture that says which tree took it. A pass is
+    // not the condition — a failing run's picture is the one most worth
+    // looking at.
+    if !shots.is_empty() && !opts.no_board {
+        let label = if opts.label.is_empty() {
+            format!("{} {}", opts.verb, opts.arg).trim().to_string()
+        } else {
+            opts.label.clone()
+        };
+        match crate::shots::record(&label, &opts.verb, &shots) {
+            Ok(page) => println!("board: {}", page.display()),
+            // The board is not what this run is judging. Say the reason
+            // and let the verdict stand on the pictures themselves.
+            Err(message) => println!("board: not updated ({message})"),
+        }
+    }
 
     println!(
         "{}: {} in {:.1}s (exit {}, screenshot saved={}, write-failures {}{})",

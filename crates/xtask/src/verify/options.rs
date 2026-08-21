@@ -28,6 +28,13 @@ pub(super) struct Options {
     /// passes everything else to the real one (`git_shim`). Empty is the
     /// ordinary case: the git this machine has.
     pub(super) old_git: String,
+    /// What the pictures show, for the board. Empty falls back to the
+    /// verb and its argument, which is a poor name but a true one — the
+    /// board would rather hold a weakly named run than lose the run.
+    pub(super) label: String,
+    /// Keep this run off the board. For a sweep measuring flakiness,
+    /// where ten identical pictures bury what somebody wanted to look at.
+    pub(super) no_board: bool,
 }
 
 pub(super) fn parse(args: &[String]) -> Result<Options, String> {
@@ -44,6 +51,8 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         restore: false,
         allow_write_failure: false,
         old_git: String::new(),
+        label: String::new(),
+        no_board: false,
     };
     let mut positional: Vec<&str> = Vec::new();
     let mut it = args.iter();
@@ -57,6 +66,8 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                 .push(it.next().ok_or("--preset needs a name")?.clone()),
             "--no-build" => opts.build = false,
             "--select" => opts.select = true,
+            "--label" => opts.label = it.next().ok_or("--label needs a phrase")?.clone(),
+            "--no-board" => opts.no_board = true,
             "--quit-ms" => {
                 return Err(
                     "unknown verify-ui option: --quit-ms (wall-clock shot selection was removed; use --watchdog-ms only as a diagnostic ceiling)"

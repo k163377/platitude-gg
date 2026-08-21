@@ -1,6 +1,11 @@
 # Rust build artifacts (workspace root and spike/)
 target/
 
+# The shot board (cargo xtask shots): pictures and the page over them.
+# One board beside this .git for every seat, so it sits in the primary
+# checkout and never in a worktree's own tree.
+.shots/
+
 # IDE / editors
 .idea/
 *.iml

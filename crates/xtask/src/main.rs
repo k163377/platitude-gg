@@ -14,6 +14,7 @@ mod linux;
 mod perf;
 mod qt;
 mod seats;
+mod shots;
 mod structure;
 mod verify;
 
@@ -268,6 +269,18 @@ commands:
       one (CLAUDE.md ビルド・テスト). Ends with how to read the columns,
       and a locked seat carries the mark past them.
 
+  shots <add|open|list|path>
+      The shot board: pictures land on a page that opens in a window of
+      its own, magnifies to exact integer ratios without smoothing, and
+      is still there after it is closed. A chat pane fits a picture to
+      its width and cannot zoom it, so a 1440x900 window is unreadable
+      there and shooting it larger changes nothing. `verify-ui` puts its
+      own pair on the board as it goes, so the usual reason to reach for
+      `add` is a crop or a comparison sheet made by hand. All six seats
+      write to one board beside the primary checkout's .git (.shots/,
+      gitignored) and every run carries the seat that took it — a
+      picture from another tree proves nothing about this one.
+
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads
       the hook payload from stdin). Events: pre-write, post-write,
@@ -290,6 +303,7 @@ fn main() -> ExitCode {
         Some("perf") => perf::run(&args[1..]),
         Some("linux") => linux::run(&args[1..]),
         Some("seats") => seats::run(&args[1..]),
+        Some("shots") => shots::run(&args[1..]),
         Some("land") => land::run(&args[1..]),
         Some("kill") => gui::kill(&args[1..]),
         Some("launch") => gui::launch(&args[1..]),
