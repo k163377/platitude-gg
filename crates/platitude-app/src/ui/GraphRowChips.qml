@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls.Fusion
 import platitude.ui
 
 // The chip column of one commit-graph row: the names this commit carries, or — on a row that carries none — the box
@@ -18,6 +19,9 @@ Item {
 
     /// The chip itself — what a stacked one is unstacked under.
     readonly property alias chipItem: rowChip
+    /// What the name box came out to — the column, or its own floor where that is wider. The row reads it for the
+    /// ground the box is standing on, and a headless run (`PG_AUTO_ACT=name-box`) to say which of the two it got.
+    readonly property alias nameBoxWidth: nameField.width
 
     signal namingSubmitted(string name)
     signal namingEdited(string text)
@@ -34,12 +38,26 @@ Item {
     /// just the same, and a name that cannot be read is a name that cannot be read — the reason a stack unfolds is the
     /// reason a single one does. What comes out is the same card either way.
     readonly property bool hasChip: rowChip.visible
+    /// The narrowest the box goes: the whole of the question it asks. The placeholder is all there is to say what the
+    /// box is for, so a cut one (`Create branch he…`) asks nothing — and the column is narrower than that at every
+    /// width up to and including its default (2026-08-21 ユーザー指示).
+    ///
+    /// Measured off a label that is never drawn, the way the diff's number column measures (app-ui.md): `TextMetrics`
+    /// comes out a few pixels tighter than the label the words are actually set in, and a floor measured tight is a
+    /// floor that still elides. Both terms come off the field itself, because it is the field's own placeholder that
+    /// has to fit: Controls lays it out in `width` less the two paddings and elides whatever is left over.
+    readonly property real nameBoxMinW:
+        Math.ceil(placeholderInk.implicitWidth) + nameField.leftPadding + nameField.rightPadding
     /// Carries the box on from whatever the last delegate to hold it was left with. `text` comes off the view, not off
     /// this column: this delegate is recycled the moment the row scrolls off.
     function takeNamingFocus(text) {
         nameField.text = text
         nameField.forceActiveFocus()
     }
+
+    // The open box reaches past the column's edge on any width under its floor, and the lane cell is laid out after
+    // this column — so without this the strokes would be drawn over it.
+    z: chipColumn.naming ? 1 : 0
 
     RefChip {
         id: rowChip
@@ -58,21 +76,31 @@ Item {
     SlimField {
         id: nameField
         visible: chipColumn.naming
-        anchors.right: parent.right
-        anchors.rightMargin: Theme.spaceXs
+        // Anchored by the head, which is the edge that holds still, and grown the one way from there — into the graph
+        // (規約 §グラフ行のダブルクリック「開く向きは 1 つ」). The card a chip unfolds into takes the same ground for the same
+        // reason: what covers the lanes is out only while a hand is on it, and this box is not read at all if the
+        // question on it cannot be.
+        anchors.left: parent.left
+        anchors.leftMargin: Theme.spaceXs
         anchors.verticalCenter: parent.verticalCenter
-        width: chipColumn.columnWidth - 2 * Theme.spaceXs
-        // Left at the slim field's own size, which is the chip's: what is typed here becomes the chip that stands in
-        // this column, so it is read at the size it will be read at. **The placeholder does not fit a column at
-        // `labelColW`** — it elides to `Create branch he…`, which asks nothing — but the column is a width a hand can
-        // drag, so that is a question about the wording and the floor rather than about this size (2026-08-20 ユーザー判断:
-        // 別セッションで直す).
+        // The column, until the column is narrower than the question. Left at the slim field's own size, which is the
+        // chip's: what is typed here becomes the chip that stands in this column, so it is read at the size it will be
+        // read at — but the box is an offer before it is a name, and one that cannot be read is not an offer.
+        width: Math.max(chipColumn.columnWidth - 2 * Theme.spaceXs, chipColumn.nameBoxMinW)
         placeholderText: qsTr("Create branch here?")
         onAccepted: chipColumn.namingSubmitted(nameField.text.trim())
         // Held on the view, not here: this delegate is recycled the moment the row scrolls off, and half a name is
         // still worth not losing.
         onTextEdited: chipColumn.namingEdited(nameField.text)
         Keys.onEscapePressed: chipColumn.namingCancelled()
+    }
+    // The box's floor, measured. Never drawn — it stands in for the placeholder the field lays out inside itself,
+    // which cannot be measured before the box it is being measured for has a width.
+    Label {
+        id: placeholderInk
+        visible: false
+        text: nameField.placeholderText
+        font: nameField.font
     }
     // Nothing in this column can be hovered on its own: the row's MouseArea fills the row and is declared after it, so
     // it takes every hover the chips would have seen (デザイン規約 §hover の ツールチップ). What the stacked chips hold is read from

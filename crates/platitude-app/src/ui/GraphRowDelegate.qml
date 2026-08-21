@@ -273,9 +273,11 @@ Item {
         id: rowMouse
         anchors.fill: parent
         anchors.topMargin: -rowItem.topBleed
-        // While the box is open the chip column belongs to it: this area is painted over everything in the row, so
-        // anything under it would never see a click of its own.
-        anchors.leftMargin: rowItem.naming ? rowItem.labelsW : 0
+        // While the box is open the ground it stands on belongs to it: this area is painted over everything in the
+        // row, so anything under it would never see a click of its own. **The box's own edge, not the column's** — a
+        // box wider than its column reaches into the lanes, and the part of it out there takes presses like the rest
+        // of it (the column's edge is still a divider a hand can drag, which is the other way out of a narrow one).
+        anchors.leftMargin: rowItem.naming ? Theme.spaceXs + chipColumn.nameBoxWidth : 0
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         onClicked: mouse => {
