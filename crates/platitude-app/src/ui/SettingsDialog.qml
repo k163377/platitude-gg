@@ -205,9 +205,15 @@ AppDialog {
     // it is named, so a Save that governed the other two would be telling
     // the truth about half of this card; the fields write as they are
     // finished with instead, and the one button left only dismisses it.
+    // The tool is written only where it would change what git answers
+    // with. Pressing the field is not choosing anything, and the write for
+    // "the same as now" is not free: an empty field asks git to unset a
+    // key, which fails when the key was never there in the first place
+    // (2026-08-21 ユーザー報告 — the log raised itself over the card
+    // closing).
     function applyFields() {
         AppBackend.setAutoFetchMinutes(fetchField.text === "" ? 0 : Number(fetchField.text))
-        if (settingsDialog.toolTouched && settingsDialog.curPage)
+        if (settingsDialog.curPage && toolField.wanted !== settingsDialog.mergeTool)
             settingsDialog.curPage.pageTab.setMergeTool(toolField.wanted)
     }
     contentItem: ColumnLayout {
