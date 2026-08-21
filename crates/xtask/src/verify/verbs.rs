@@ -136,6 +136,20 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "nav-rename-far" => Some("shown=true box=true"),
         "nav-rename-drop" if arg == "fold" => Some("nav_drop how=fold collapsed=true box=false"),
         "nav-rename-drop" => Some("nav_drop how=away collapsed=false box=false"),
+        // The run that walks the list on past the row a box is standing
+        // on: the box has to go with it, which is the whole of what a box
+        // drawn outside its list owes. A sidebar with no box in it is the
+        // same picture whether the box went or never opened.
+        "nav-branch-box" | "nav-rename-box" if arg.ends_with(":away") => {
+            Some("open=true focused=true shown=false")
+        }
+        // The two name boxes a sidebar row opens, held at the width the
+        // argument dragged the pane to. Whether what is in the box is cut
+        // is in the picture; the other two are not — a box drawn where
+        // nothing can be typed frames exactly like one waiting for a
+        // name, and a box drawn outside its list has one more way to be
+        // missing than a box in a row has.
+        "nav-branch-box" | "nav-rename-box" => Some("open=true focused=true shown=true"),
         // The same walking away, over the graph: a press that landed
         // somewhere else takes an empty box with it and leaves one with
         // something typed in it standing. Both halves are read off the

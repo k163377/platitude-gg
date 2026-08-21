@@ -139,6 +139,7 @@ Item {
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
                 "nav-filter", "nav-tip", "nav-reclick", "nav-reclick-away", "nav-rename-far",
+                "nav-branch-box", "nav-rename-box",
                 "nav-add-remote", "push-default", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "chip-menu", "chip-menu-current",
@@ -1948,6 +1949,123 @@ Item {
             driver.complete()
         }
     }
+    // PG_AUTO_ACT=nav-branch-box / nav-rename-box: the pane is set to the width the argument names, the ref it names
+    // is given a box, and the box is left standing for the shot. One timer for both, because what the shot is about —
+    // how wide the box comes out on a row of that depth in a pane of that width — is one question asked of the two
+    // things the box is opened for.
+    Timer {
+        id: navNameBoxTimer
+        property string mode: "branch"
+        property string kind: "branch"
+        property string ref: ""
+        /// The width the splitter settles at: the ask held to the pane's own floor, since a run asking for less than
+        /// the floor is asking what the floor looks like and the answer to that is the floor.
+        property real want: 0
+        property int step: 0
+        interval: 25
+        repeat: true
+        readonly property NavSectionModel section:
+            navNameBoxTimer.kind === "tag" ? tagsModel
+            : navNameBoxTimer.kind === "remote" ? remotesModel : branchesModel
+        /// The run walks the list on past the row once the box is standing, to read the one thing a box drawn outside
+        /// the list has to answer for: that it goes when its row does.
+        property bool away: false
+        function begin(mode, arg) {
+            const parts = ("" + arg).split(":")
+            navNameBoxTimer.mode = mode
+            navNameBoxTimer.away = parts[parts.length - 1] === "away"
+            navNameBoxTimer.kind = parts[0]
+            navNameBoxTimer.ref = parts[1]
+            // Left at whatever the session opened with when no width is named.
+            const asked = parts.length > 2 && parts[2] !== "away" ? Number(parts[2]) : NaN
+            navNameBoxTimer.want = isNaN(asked) ? sidebarPane.width
+                                                  : Math.max(asked, sidebarPane.minOpenWidth)
+            if (!isNaN(asked))
+                page.setSidebarWidth(asked)
+            // A remote's root folder starts closed (`models::nav::tree`), so the rows under it are in no list for a
+            // menu to be raised on.
+            if (navNameBoxTimer.kind === "remote")
+                remotesModel.toggleFolder(
+                    navNameBoxTimer.ref.substring(0, navNameBoxTimer.ref.indexOf("/")))
+            navNameBoxTimer.step = 0
+            navNameBoxTimer.start()
+        }
+        onTriggered: {
+            // What is on show: a row behind a closed folder answers -1, and so does one whose section has not been
+            // read yet.
+            const row = navNameBoxTimer.section.rowOfName(navNameBoxTimer.ref)
+            if (navNameBoxTimer.step === 0) {
+                // The width first. The box is laid out in what the row has left over, so one opened before the pane
+                // has been given its width would settle into a width nobody asked about.
+                if (row < 0 || Math.round(sidebarPane.width) !== Math.round(navNameBoxTimer.want))
+                    return
+                if (navNameBoxTimer.mode === "rename") {
+                    // What a second click puts in the box, by the same rule the row itself follows (`NavList`): a
+                    // remote branch is typed without the remote it lives on, everything else answers to what it shows.
+                    const shown = navNameBoxTimer.kind === "remote"
+                        ? navNameBoxTimer.ref.substring(navNameBoxTimer.ref.indexOf("/") + 1)
+                        : navNameBoxTimer.ref
+                    sidebarPane.beginRename(navNameBoxTimer.kind, navNameBoxTimer.ref, shown)
+                    navNameBoxTimer.step = 1
+                    return
+                }
+                const oid = navNameBoxTimer.section.oidOfName(navNameBoxTimer.ref)
+                // Through the menu, which is the box's only door on this side — and the door that decides between
+                // this box and the graph's (`RepoPage.refMenuInSidebar`). The row shows its last segment and answers
+                // to the whole name; the menu wants both, and only the second is what git was given.
+                page.openRefMenu(navNameBoxTimer.kind, navNameBoxTimer.ref,
+                                 navNameBoxTimer.ref, oid, true)
+                page.startBranchAt(oid)
+                // Dismissed the way choosing a row dismisses it: the box it leaves behind is the subject, and a menu
+                // still standing is drawn over the rows beside it.
+                refMenu.close()
+                navNameBoxTimer.step = 1
+                return
+            }
+            const key = navNameBoxTimer.kind + ":" + navNameBoxTimer.ref
+            const list = sidebarPane.listOf(navNameBoxTimer.kind)
+            const drawn = list.rowBoxWidth(row)
+            if (navNameBoxTimer.step === 1) {
+                // On the row, and built: a row the view has not laid out yet answers 0 for its box, the same as a row
+                // with no box on it. Whether the box then took the keyboard is reported rather than waited on — a box
+                // drawn where nothing can be typed is a real state, and one this picture would not tell from the
+                // other.
+                if (sidebarPane.editKey !== key || drawn <= 0)
+                    return
+                if (navNameBoxTimer.away) {
+                    // Far enough that the row is out of the list, near enough that the view still holds its delegate —
+                    // otherwise what went is the row and not the box.
+                    list.scrollRows(4)
+                    navNameBoxTimer.step = 2
+                    return
+                }
+            } else if (list.rowBoxShown(row)) {
+                // Walked past: what is waited for now is the box going. **Not the box's width** — a delegate the view
+                // did let go of answers 0 for everything, and waiting on that number again would wait for ever.
+                return
+            }
+            navNameBoxTimer.stop()
+            const whole = list.rowBoxWhole(row)
+            AppBackend.report("nav_name_box mode=" + navNameBoxTimer.mode
+                              + " ref=" + navNameBoxTimer.ref
+                              + " row=" + row
+                              + " pane=" + Math.round(sidebarPane.width)
+                              // What the row had for it, what it came out at, and what it would take to read whole:
+                              // the seat is where the box used to stop, so the three together say whether this box
+                              // needed the room outside the pane and whether it got it.
+                              + " seat=" + Math.round(list.rowBoxSeat(row))
+                              + " box=" + Math.round(drawn)
+                              + " whole=" + Math.ceil(whole)
+                              // What the picture is being taken for: the placeholder is all there is to say what the
+                              // box is for, and a cut one asks nothing (デザイン規約 §グラフ行のダブルクリック).
+                              + " cut=" + (Math.ceil(whole) > Math.round(drawn))
+                              + " open=" + (sidebarPane.editKey === key)
+                              + " focused=" + list.rowFocused(row)
+                              + " shown=" + list.rowBoxShown(row)
+                              + " at=" + list.rowBoxAt(row))
+            driver.complete()
+        }
+    }
     // Automation: the details have to land before the author card can be worked, since it is that author the picture is
     // filed against.
     Timer {
@@ -2795,6 +2913,13 @@ Item {
             sidebarPane.beginBranchAt("tag", tagsModel.nameAt(0),
                                       tagsModel.oidOfName(tagsModel.nameAt(0)))
             sidebarPane.submitEdit(arg)
+        } else if (act === "nav-branch-box" || act === "nav-rename-box") {
+            // The two boxes the left menu opens on a row, left standing instead of submitted — the copy of the chip
+            // column's box on the side with no lanes to grow into, and the rename box that shares the field with it.
+            // The argument is `<section>:<ref>[:<幅>][:away]`: the width is what a hand would drag the pane's own bar
+            // to, since what the box is drawn at is the row's share of it and the indent under a folder comes out of
+            // that share; `away` walks the list on past the row afterwards.
+            navNameBoxTimer.begin(act === "nav-rename-box" ? "rename" : "branch", arg)
         } else if (act === "dbl-local" || act === "dbl-remote") {
             // The record is the chip as drawn (kind letter, four flags, name — see encode.rs).
             page.activateRecord(
