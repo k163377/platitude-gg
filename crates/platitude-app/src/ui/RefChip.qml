@@ -52,20 +52,17 @@ Rectangle {
     /// own. Each is counted only while it is drawn — the two marks come and go, and a name measured against room that
     /// is not taken would be cut short of the frame.
     readonly property real furnitureW: (chip.records.length > 1 ? Theme.spaceLg : 0)
-                                       + (chip.hasBadge ? chip.badgeSeat + Theme.spaceXs : 0)
-                                       + (chip.recHeld ? chip.heldSeat + Theme.spaceXs : 0)
-    /// What the held mark's ink actually spans (`NavIcon.inkWidth`) — the air a square seat would add is the mark's
-    /// own, and belongs to the gap beside it (デザイン規約 §余白).
+                                       + (chip.hasBadge ? chip.badgeInk + Theme.spaceXs / 2 : 0)
+                                       + (chip.recHeld ? chip.heldInk + Theme.spaceXs / 2 : 0)
+    /// What each mark's ink actually spans (`NavIcon.inkWidth`). **Both marks are seated to that rather than to their
+    /// square**: the air a box holds past its ink is the mark's own, and belongs to the gap beside it (デザイン規約 §余白).
+    /// Seated so, the chip reads the same figures from both ends — a whole gap between the frame and the mark, half a
+    /// one between the mark and the word.
     readonly property real heldInk: heldMark.inkWidth
-    /// The seat that ink sits in: half a gap narrower, so the mark comes that much nearer the name it belongs to.
-    readonly property real heldSeat: chip.heldInk - Theme.spaceXs / 2
-    /// The same pair for the badge at the other end. **Both marks in the chip are seated to their ink**, so the frame
-    /// keeps a whole gap on either side of it and each mark gives the other half back to what it stands beside — the
-    /// chip comes out `spaceXs` / half / … / half / `spaceXs`, the same figures read from both ends (2026-08-22 ユーザー
-    /// 判断). The cloud needs it more than the tree does: it is drawn 2.0 of the sixteen in from its own left edge, so
-    /// the gap before it was that air on top of the row's spacing.
+    /// The cloud needs the seat more than the tree does: it is drawn 2.0 of the sixteen in from its own left edge, so
+    /// the gap before it was that air on top of the row's spacing — the one place in the chip where two spacings added
+    /// up (2026-08-22 ユーザー報告).
     readonly property real badgeInk: badgeMark.inkWidth
-    readonly property real badgeSeat: chip.badgeInk - Theme.spaceXs / 2
     /// What is left for the name inside `maxWidth`.
     readonly property real nameRoom: chip.maxWidth - 2 * Theme.spaceXs - chip.furnitureW
     radius: Theme.radiusSm
@@ -160,7 +157,12 @@ Rectangle {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.leftMargin: Theme.spaceXs
-        spacing: Theme.spaceXs
+        // **A whole gap from the frame, half a gap between the things inside it** (2026-08-22 ユーザー判断). Everything in
+        // here — the mark, the name, the count, the badge — is one phrase about one commit, and the frame's own padding
+        // is the only wide space in the box; at a whole gap throughout, the `+N` stood off from the name it counts for
+        // as far as the name stands off from the frame. The two marks are then seated to their plain ink, since it is
+        // this spacing that is already the half gap they used to take out of a whole one.
+        spacing: Theme.spaceXs / 2
         // Ahead of the name, and only when there is one to draw: another working copy has this branch out (2026-08-21
         // ユーザー判断 — 「必要な時だけ左側に追加する」). Same mark and same meaning as the sidebar row's
         // (`NavItemDelegate`), which is the WORKTREES section's own.
@@ -169,16 +171,15 @@ Rectangle {
         // than laid out in a column of them, so an empty seat on every chip would walk every name on the graph one
         // mark to the right for a state almost none of them are in.
         //
-        // **And it is seated to its ink, not to its box, less half a gap.** The mark is a head on a stem and fills
-        // half the sixteen it is drawn on; a square seat would add that air to the gaps on both sides. The half gap
-        // then goes to the name, which the mark belongs to and whose first letter carries a bearing of its own — the
-        // pair read as a name pushed away from a mark that sat tight against the frame (デザイン規約 §余白「印が自分で
-        // 持っている余白は、隣の詰めに数える」; 2026-08-21 ユーザー報告, measured 114 -> 110 -> 108).
+        // **And it is seated to its ink, not to its box.** The mark is a head on a stem and fills half the sixteen it
+        // is drawn on; a square seat would add that air to the gaps on both sides, and the pair read as a name pushed
+        // away from a mark that sat tight against the frame (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」;
+        // 2026-08-21 ユーザー報告, measured 114 -> 110 -> 108).
         Item {
             visible: chip.recHeld
-            // The seat is the ink less half a gap, so the ink runs that far into the row's own spacing: the mark keeps
-            // its whole gap from the frame and gives up half of the one to the name.
-            width: chip.heldSeat
+            // The seat is the ink, so the frame keeps its whole gap to the mark and the row's own half gap is all
+            // that stands between the mark and the name.
+            width: chip.heldInk
             height: Theme.iconSm
             // On the first line's box, for the reason the badge at the other end is.
             y: Theme.borderWidth + Math.round((Theme.fontChipLine - Theme.iconSm) / 2)
@@ -223,12 +224,12 @@ Rectangle {
         //
         // **Seated to its ink, like the mark at the other end**, and for the reason that one is: a square seat hands
         // the mark's own air to the gaps on both sides of it, and the cloud carries two of the sixteen on its left. The
-        // gap before it then read as the row's `spaceXs` **plus** that — the one place in the chip where two spacings
+        // gap before it then read as the row's spacing **plus** that — the one place in the chip where two spacings
         // added up, and wider than the same token spends anywhere else in the same frame (デザイン規約 §余白; 2026-08-22
         // ユーザー報告).
         Item {
             visible: chip.hasBadge
-            width: chip.badgeSeat
+            width: chip.badgeInk
             height: Theme.iconSm
             // On the first line's box, not on the middle of the frame — the two are the same height until a name wraps,
             // and a badge that centres itself on a three-line chip has left the name it belongs to.

@@ -48,9 +48,6 @@ QtObject {
         width: Theme.iconSm
         height: Theme.iconSm
     }
-    /// That ink's seat, the way `RefChip.heldSeat` takes it: half a gap narrower, the half the mark gives back to the
-    /// name beside it. Left fractional rather than rounded up, so the floor reserves exactly what the chip subtracts.
-    readonly property real chipHeldSeatW: chipHeldMark.inkWidth - Theme.spaceXs / 2
     /// The badge at the chip's other end, priced the same way and for the same reason. **The cloud, not the pull
     /// request**: the two share one slot (`RefChip.hasBadge`) so only one of them is ever drawn, and the floor takes
     /// the wider — 12.72 of the grid against the PR mark's 10.4.
@@ -59,8 +56,6 @@ QtObject {
         width: Theme.iconSm
         height: Theme.iconSm
     }
-    /// Its seat, the way `RefChip.badgeSeat` takes it.
-    readonly property real chipBadgeSeatW: chipBadgeMark.inkWidth - Theme.spaceXs / 2
     /// Everything a chip spends on what is not the name: the `+N` seat, the remote/PR badge and the gap before it, the
     /// held mark and the gap after it, and its own padding on either side. **Each one is a term `RefChip` takes off the
     /// name**, so each one is here, and a floor measured on the bare chip leaves the row that wears them with nothing
@@ -71,8 +66,14 @@ QtObject {
     /// that is also on a remote, on a commit some other ref names too — measured at `fontChip` in Yu Gothic UI, the
     /// held mark alone is 9.5 of the 28 the floor keeps for a name, so a floor that leaves it out gives
     /// `feature/topic-a` one character where three were promised (2026-08-22 実測).
-    readonly property real chipFurnitureW: Theme.spaceLg + chipBadgeSeatW + 3 * Theme.spaceXs
-        + chipHeldSeatW + Theme.spaceXs
+    ///
+    /// **The gaps inside the frame are half ones** (`RefChip`'s row spacing), and the two whole ones are the frame's
+    /// own padding. Each mark's term is its plain ink and the half gap that follows it; `spaceLg` is the `+N` with its
+    /// own half gap already in it.
+    readonly property real chipFurnitureW: Theme.spaceLg
+        + chipBadgeMark.inkWidth + Theme.spaceXs / 2
+        + chipHeldMark.inkWidth + Theme.spaceXs / 2
+        + 2 * Theme.spaceXs
     // The narrowest the chip column goes, and the widest. The floor is that much name, that much furniture, and the
     // gap the column keeps in front of the chip (`GraphRowChips` hands it the column less `spaceSm`). **Move any of
     // those and this moves too** — a floor that forgets one draws two characters where it promised three. The far end
