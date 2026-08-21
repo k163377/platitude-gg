@@ -18,10 +18,37 @@ QtObject {
     // scrolls horizontally when the full graph is wider.
     property real labelWManual: -1
     property real graphColWManual: -1
-    // The narrowest the chip column goes, and the widest. `spaceXxl` is where the divider has always refused to be
-    // dragged any further in. The far end is where the two columns after it would stop being able to say anything: one
-    // lane, and enough message column to show that there is a message (規約 §グラフ列は最も広い所のレーンまで).
-    readonly property real labelColWMin: Theme.spaceXxl
+    /// The font a chip writes its name in: `RefChip`'s label takes the window's family (Main) and `fontChip`, and the
+    /// floor below is a count of characters, which only the family that draws them can price.
+    readonly property FontMetrics chipFont: FontMetrics {
+        font.family: Theme.uiFamily
+        font.pixelSize: Theme.fontChip
+    }
+    /// The cut mark's own advance. Measured by a TextMetrics rather than asked of `chipFont`: `advanceWidth()` is a
+    /// method, so a binding on it takes no dependency, settles once, and settles on the default font — before the
+    /// family above has arrived (app-ui.md). `TextMetrics.advanceWidth` is a property, and follows.
+    readonly property TextMetrics chipCutInk: TextMetrics {
+        font: metrics.chipFont.font
+        text: "…"
+    }
+    /// How much of a name the chip column keeps at its narrowest: the first characters and the mark that says the rest
+    /// was cut. **Characters, not pixels**, for the reason the tab titles' floor is one (規約 §ウィンドウの縁) — the same
+    /// count costs a different number of pixels in each platform's UI font and at every scaling, so the length comes
+    /// out of the font. Three of them, the same count a tab keeps.
+    readonly property int labelMinChars: 3
+    readonly property real chipNameMinW: Math.ceil(chipCutInk.advanceWidth
+        + labelMinChars * chipFont.averageCharacterWidth)
+    /// Everything a chip spends on what is not the name: the `+N` seat, the remote/PR badge and the gap before it, and
+    /// its own padding on either side. **Each one is a term `RefChip` takes off the name**, so each one is here — the
+    /// row that carries them is the one whose name is worth reading (the branch under the working tree wears both), and
+    /// a floor measured on the bare chip leaves that row with nothing but the cut mark (実測).
+    readonly property real chipFurnitureW: Theme.spaceLg + Theme.iconSm + 3 * Theme.spaceXs
+    // The narrowest the chip column goes, and the widest. The floor is that much name, that much furniture, and the
+    // gap the column keeps in front of the chip (`GraphRowChips` hands it the column less `spaceSm`). **Move any of
+    // those and this moves too** — a floor that forgets one draws two characters where it promised three. The far end
+    // is where the two columns after it would stop being able to say anything: one lane, and enough message column to
+    // show that there is a message (規約 §グラフ列は最も広い所のレーンまで).
+    readonly property real labelColWMin: chipNameMinW + chipFurnitureW + Theme.spaceSm
     readonly property real labelColWMax: Math.max(labelColWMin, paneW - graphColWMin - Metrics.messageMinW)
     // The chip column does not give when the pane narrows — the lanes do (`graphColWMax`), and the window's floor holds
     // this one's width in reserve (規約 §窓の床). Squeezing it was tried and taken back out: a column narrower than a chip
