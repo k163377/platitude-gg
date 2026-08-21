@@ -41,6 +41,7 @@ Item {
 
     property AppMenu refMenu
     property AppMenuItem refDeleteItem
+    property AppMenuItem refSwitchItem
     property FileRowMenu fileRowMenu
     property AppMenu fileMenu
     property AppMenuItem fileDiscardItem
@@ -131,7 +132,8 @@ Item {
                 "nav-filter", "nav-tip", "nav-reclick", "nav-reclick-away", "nav-rename-far",
                 "nav-add-remote", "tags-eye",
                 "delete-branch-refused", "chip-menu", "chip-menu-current",
-                "delete-blocked-tip", "delete-branch-early", "ref-list-card", "row-part",
+                "delete-blocked-tip", "switch-blocked-tip", "delete-branch-early",
+                "ref-list-card", "row-part",
                 "signature", "signature-tip", "stash-tip", "path-tip", "row-card", "menu-hover",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
@@ -1103,6 +1105,21 @@ Item {
             "delete_blocked code=" + refDeleteItem.code
             + " tip=" + refDeleteItem.ToolTip.visible
             + " reason=" + refDeleteItem.blockedReason)
+            driver.complete()
+        }
+    }
+    Timer {
+        id: switchBlockedTipTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!refSwitchItem.ToolTip.visible)
+                return
+            switchBlockedTipTimer.stop()
+            AppBackend.report(
+            "switch_blocked offered=" + refSwitchItem.offered
+            + " tip=" + refSwitchItem.ToolTip.visible
+            + " reason=" + refSwitchItem.blockedReason)
             driver.complete()
         }
     }
@@ -2563,29 +2580,38 @@ Item {
             refusedRowTimer.start()
         } else if (act === "chip-menu") {
             // Only the kind letter and the name of the record are read.
-            page.openRecordMenu("L0000" + arg, branchesModel.oidOfName(arg))
+            page.openRecordMenu("L00000" + arg, branchesModel.oidOfName(arg))
             chipMenuTimer.start()
         } else if (act === "chip-menu-current") {
-            page.openRecordMenu("L1001" + workTree.branch,
+            page.openRecordMenu("L10010" + workTree.branch,
                                 branchesModel.oidOfName(workTree.branch))
             chipMenuTimer.start()
         } else if (act === "delete-blocked-tip") {
             // Forced rather than hovered: the pointer cannot be put on a row from here, and this writes to the property
-            // the real hover writes to.
-            page.openRecordMenu("L1001" + workTree.branch,
-                                branchesModel.oidOfName(workTree.branch))
+            // the real hover writes to. The argument names the branch, because the delete row is out for more than one
+            // reason: without one it is the branch you are standing on, with one it is a branch another working copy
+            // has checked out (the flags say which, and the current branch is the only chip that carries them).
+            const blockedOn = arg === "" ? workTree.branch : arg
+            page.openRecordMenu((arg === "" ? "L10010" : "L00000") + blockedOn,
+                                branchesModel.oidOfName(blockedOn))
             refDeleteItem.tipForced = true
             blockedTipTimer.start()
+        } else if (act === "switch-blocked-tip") {
+            // The other row that stays and says why: a branch another working copy has out. Same forced tooltip as the
+            // delete row's, on the row above it.
+            page.openRecordMenu("L00000" + arg, branchesModel.oidOfName(arg))
+            refSwitchItem.tipForced = true
+            switchBlockedTipTimer.start()
         } else if (act === "menu-highlight") {
             // The keyboard's road to `highlighted` — the only one that can be driven from here.
-            page.openRecordMenu("L0000" + (arg === "" ? workTree.branch : arg),
+            page.openRecordMenu("L00000" + (arg === "" ? workTree.branch : arg),
                                 branchesModel.oidOfName(
                                     arg === "" ? workTree.branch : arg))
             refMenu.currentIndex = 1
             AppBackend.report("menu_highlight index=" + refMenu.currentIndex)
         } else if (act === "delete-branch-early") {
             // The early answer dresses the delete row before any click; the argument picks which half is on show.
-            page.openRecordMenu("L0000" + arg, branchesModel.oidOfName(arg))
+            page.openRecordMenu("L00000" + arg, branchesModel.oidOfName(arg))
             earlyDeleteTimer.start()
         } else if (act === "stash-menu" || act === "delete-stash-row") {
             // The row menu on the first stash's row; the argument "go" holds the delete row down.
@@ -2611,7 +2637,7 @@ Item {
         } else if (act === "dbl-local" || act === "dbl-remote") {
             // The record is the chip as drawn (kind letter, four flags, name — see encode.rs).
             page.activateRecord(
-                (act === "dbl-local" ? "L0001" : "R0000") + arg)
+                (act === "dbl-local" ? "L00010" : "R00000") + arg)
         } else if (act === "move-branch") {
             // Past the question, for the write it guards.
             page.switchTo("force", repoTab.localNameFor(arg),

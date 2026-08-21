@@ -87,6 +87,11 @@ impl NavSectionModel {
             }),
             Role::Change => match of {
                 Entry::File { item, bucket } => Value::Spelled(letters_of(item, bucket)),
+                // A branch another working copy has out keeps the state
+                // in the same shared slot a worktree row does, and the
+                // mark it draws comes out of the same seat — one question
+                // (`can a move go here`), one answer, wherever it is met.
+                Entry::Local(branch) if branch.held_elsewhere => Value::Said(HELD),
                 // A worktree row has no change code, so it keeps the
                 // state of the checkout in the same shared slot — the
                 // mark the row opens with (`item::LOCKED`).
@@ -347,5 +352,78 @@ mod tests {
         );
         assert_eq!(says(&model, 4, Role::Change), "LOCKED");
         assert_eq!(says(&model, 4, Role::OrigPath), "release run");
+    }
+
+    /// A branch row wears the state in the same slot the worktree rows
+    /// use, so the seat draws one mark from one field whichever section
+    /// the row is in (`item::HELD`).
+    #[test]
+    fn a_branch_another_copy_holds_wears_the_state_in_the_shared_slot() {
+        let local = |short: &str, held: bool| platitude_core::session::BranchItem {
+            short: short.into(),
+            full: format!("refs/heads/{short}").into(),
+            oid: oid("a"),
+            has_remote: false,
+            is_head: false,
+            upstream: "".into(),
+            held_elsewhere: held,
+        };
+        let mut snap = platitude_core::session::RefsSnapshot {
+            locals: vec![local("main", false), local("feature/topic-a", true)],
+            remotes: Vec::new(),
+            tags: Vec::new(),
+            head: None,
+            remote_names: Vec::new(),
+        };
+        snap.locals.sort_by(|a, b| a.short.cmp(&b.short));
+        let mut model = section("branches", Source::Locals(std::sync::Arc::new(snap)));
+        model.arrange();
+        assert_eq!(model.oid_of_name("main".to_string()), oid("a").to_hex());
+        assert_eq!(
+            model.told(Role::Name, "feature/topic-a", Role::Change),
+            "HELD"
+        );
+        assert_eq!(model.told(Role::Name, "main", Role::Change), "");
+    }
+
+    /// What the rows that would run `switch` or `branch --delete` ask
+    /// before offering: git refuses both for a branch another worktree
+    /// holds, and answers nothing about the copy this window is in.
+    #[test]
+    fn the_worktree_holding_a_branch_answers_for_every_other_copy() {
+        let entry = |path: &str, branch: Option<&str>| platitude_core::worktrees::WorktreeEntry {
+            path: path.to_string(),
+            branch: branch.map(str::to_string),
+            head_hex: None,
+            bare: false,
+            detached: false,
+            locked: false,
+            lock_reason: String::new(),
+            prunable: false,
+            prune_reason: String::new(),
+        };
+        let mut model = section(
+            "worktrees",
+            Source::Worktrees {
+                list: vec![
+                    entry("C:\\work\\repo", Some("main")),
+                    entry("C:\\work\\other", Some("topic")),
+                    entry("C:\\work\\loose", None),
+                ],
+                current: "c:/work/repo".to_string(),
+            },
+        );
+        model.arrange();
+        assert_eq!(
+            model.worktree_holding("topic".to_string()),
+            "C:\\work\\other"
+        );
+        // The copy this window is in refuses nothing — moving onto the
+        // branch it already has out is a no-op, not a refusal.
+        assert_eq!(model.worktree_holding("main".to_string()), "");
+        assert_eq!(model.worktree_holding("nobody".to_string()), "");
+        // A detached row names no branch, and the empty string must not
+        // find it.
+        assert_eq!(model.worktree_holding(String::new()), "");
     }
 }

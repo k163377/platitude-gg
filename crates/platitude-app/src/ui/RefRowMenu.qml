@@ -19,6 +19,8 @@ Item {
     required property WorkTreeModel workTree
     /// Which remote reading a branch speaks for (`upstreamOf`).
     required property NavSectionModel branchesModel
+    /// Which other working copy has a branch checked out (`worktreeHolding`) — the list lives in this section alone.
+    required property NavSectionModel worktreesModel
 
     /// The row the menu stands on. `refName` is what the row shows, `refId` what git knows it by (they differ for a
     /// stash: a message and a selector).
@@ -38,12 +40,27 @@ Item {
     /// delete rows name.
     property string remoteCounterpart: ""
     property bool canDeleteRemote: false
+    /// The other working copy holding this row's local branch, empty when none does. **git refuses both `switch` and
+    /// `branch --delete` for a branch another worktree has out** (実測), so the two rows read it and not the lock — a
+    /// lock stops `worktree remove` and `worktree move`, which is a different question the WORKTREES row answers.
+    property string heldByWorktree: ""
+    /// The folder that copy is listed under in WORKTREES. The whole path is what git answers with and is the only
+    /// unambiguous form, but nobody reads a tooltip that wide — and the list the reader goes to next shows the leaf.
+    readonly property string heldByWorktreeName: {
+        const at = refRowMenu.heldByWorktree.replace(/\\/g, "/").lastIndexOf("/")
+        return at < 0 ? refRowMenu.heldByWorktree : refRowMenu.heldByWorktree.substring(at + 1)
+    }
     /// Why the delete table's rows are out — decided as the menu opens, worn as the rows' `blockedReason` (デザイン規約 §無効).
     property bool onCurrentBranch: false
     readonly property string deleteBlockedOnCurrent:
         qsTr("Switch away first — this is the branch you are on")
     readonly property string deleteBlockedWhileBusy:
         qsTr("Another git command is still running")
+    // Why git keeps a branch to one working copy is the causal half, and the tooltip rule drops it (デザイン規約 §hover の
+    // ツールチップ) — what is left is the state that blocks the row and the one thing the menu cannot show: where.
+    //: %1 is the folder of the other working copy that has this branch checked out.
+    readonly property string blockedByWorktree:
+        qsTr("Checked out in another working copy — %1").arg(refRowMenu.heldByWorktreeName)
 
     // ---- bringing two lines of history together --------------------
     /// The live condition the row above is read off as the menu opens.
@@ -71,6 +88,7 @@ Item {
     readonly property alias menu: refMenu
     readonly property alias branchHereItem: refBranchHereItem
     readonly property alias deleteItem: refDeleteItem
+    readonly property alias switchItem: refSwitchItem
 
     /// What the page answers for: moving the working tree, the delete git may still refuse, and the stash drop that two
     /// menus share.
@@ -95,7 +113,17 @@ Item {
         refRowMenu.refOid = oidHex
         refRowMenu.forceDeleteBranch = ""
         refRowMenu.rebasePublished = false
-        refRowMenu.canSwitch = (kind === "branch" || kind === "remote") && full !== refRowMenu.workTree.branch
+        // A remote row lands on the local branch of the same name, so it is that one another copy can be holding.
+        refRowMenu.heldByWorktree =
+            kind === "branch" ? refRowMenu.worktreesModel.worktreeHolding(full)
+            : kind === "remote" ? refRowMenu.worktreesModel.worktreeHolding(
+                                      refRowMenu.repoTab.localNameFor(full))
+                                : ""
+        // **Held elsewhere keeps its row.** Everywhere else in this menu a row that cannot be chosen is left away
+        // (§メニュー), and the exception is the same one the delete table gets: the row is the only place the reason can
+        // be read, and a `switch` that quietly stopped being offered reads as a menu that lost it (2026-08-21 ユーザー判断).
+        refRowMenu.canSwitch = (kind === "branch" || kind === "remote")
+            && full !== refRowMenu.workTree.branch
         // Every ref that names a commit can have a new branch started on it — the current branch included, which is
         // where one is most often started. A stash is the exception: it is nobody's history to carry on from
         // (デザイン規約 §グラフ行の右クリック).
@@ -103,10 +131,12 @@ Item {
             kind !== "stash" && oidHex !== "" && refRowMenu.repoTab.busyCount === 0
             && refRowMenu.workTree.opText === ""
         refRowMenu.canIntegrateFrom = refRowMenu.integrateAllowed
-        // git refuses to delete the branch the working tree is on; its remote reading can still be deleted.
+        // git refuses to delete the branch the working tree is on — or the one any other working copy is on; its
+        // remote reading can still be deleted in either case.
         refRowMenu.canDelete =
             refRowMenu.repoTab.busyCount === 0
-            && !(kind === "branch" && full === refRowMenu.workTree.branch)
+            && !(kind === "branch"
+                 && (full === refRowMenu.workTree.branch || refRowMenu.heldByWorktree !== ""))
         refRowMenu.remoteCounterpart = kind === "branch" ? refRowMenu.branchesModel.upstreamOf(full) : ""
         refRowMenu.canDeleteRemote = refRowMenu.repoTab.busyCount === 0 && refRowMenu.remoteCounterpart !== ""
         refRowMenu.onCurrentBranch = kind === "branch" && full === refRowMenu.workTree.branch
@@ -153,8 +183,10 @@ Item {
         }
         AppMenuSeparator {}
         AppMenuItem {
+            id: refSwitchItem
             code: "switch"
             offered: refRowMenu.canSwitch
+            blockedReason: refRowMenu.heldByWorktree === "" ? "" : refRowMenu.blockedByWorktree
             // Through the chips' dispatcher: a remote branch whose local one already exists cannot simply be created.
             onTriggered: refRowMenu.switchRequested(refRowMenu.kind === "remote" ? "R" : "L", refRowMenu.refId)
         }
@@ -213,7 +245,9 @@ Item {
             blockedReason: !branchRow || refRowMenu.canDelete ? ""
                          : refRowMenu.onCurrentBranch
                            ? refRowMenu.deleteBlockedOnCurrent
-                           : refRowMenu.deleteBlockedWhileBusy
+                           : refRowMenu.heldByWorktree !== ""
+                             ? refRowMenu.blockedByWorktree
+                             : refRowMenu.deleteBlockedWhileBusy
             holdMs: heldRow ? Metrics.holdMs : 0
             // A branch's plain delete keeps the menu up: git's answer has nowhere to land otherwise, and this row is
             // where it lands.
@@ -267,7 +301,9 @@ Item {
                            ? ""
                            : refRowMenu.onCurrentBranch
                              ? refRowMenu.deleteBlockedOnCurrent
-                             : refRowMenu.deleteBlockedWhileBusy
+                             : refRowMenu.heldByWorktree !== ""
+                               ? refRowMenu.blockedByWorktree
+                               : refRowMenu.deleteBlockedWhileBusy
             holdMs: Metrics.holdMs
             // The colour of the half that decides: reaching past this machine is warning, but once the local half runs
             // as `-D` this row throws away commits that live nowhere else, and that is danger (デザイン規約 §状態).

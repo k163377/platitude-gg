@@ -19,15 +19,27 @@ pub(crate) fn fake_pr_set() -> &'static std::collections::HashSet<String> {
     SET.get_or_init(|| env_name_set("PG_FAKE_PR"))
 }
 
-/// Labels → `\u{1f}`-joined chip records: a kind letter, four flag digits,
+/// How many flag digits stand between the kind letter and the name. The
+/// QML side counts the same seat by hand (`RefChip`), so a change here is
+/// a change there.
+const FLAGS: usize = 5;
+
+/// Labels → `\u{1f}`-joined chip records: a kind letter, the flag digits,
 /// the name, and — only when the ref was read off a remote — the field
 /// separator and the remotes it came from.
 ///
 /// The letter is `H`ead / `L`ocal / `R`emote / `T`ag; the flags, in order,
 /// are is-head, has-remote, has-PR (preview via [`fake_pr_set`] until Phase
-/// 4) and is-it-here. The last one is what the chip writes in the name's
-/// colour: a remote branch and a tag only a remote has are both somewhere
-/// else, and read the same way for it.
+/// 4), is-it-here and is-it-out-in-another-working-copy. The fourth is what
+/// the chip writes in the name's colour: a remote branch and a tag only a
+/// remote has are both somewhere else, and read the same way for it. The
+/// fifth is what makes the chip say a move cannot go here — it mutes and
+/// wears the WORKTREES mark (`RefChip.recHeld`), because git refuses a
+/// `switch` onto a branch another working copy holds (2026-08-21 実測).
+///
+/// **The flags are fixed-width and the name starts after them**
+/// ([`FLAGS`]), so adding one moves every reader; the test at the foot of
+/// this file spells a whole record out for that reason.
 ///
 /// Records arrive sorted HEAD → local → remote → tag, and stay that way:
 /// the row's one chip shows the first of them, so a branch is what a
@@ -50,6 +62,7 @@ pub fn encode_labels(labels: &[RefLabel]) -> String {
             matches!(l.kind, LabelKind::LocalBranch) && fake_pr_set().contains(l.text.as_str());
         out.push(if pr { '1' } else { '0' });
         out.push(if l.here { '1' } else { '0' });
+        out.push(if l.held_elsewhere { '1' } else { '0' });
         out.push_str(&l.text);
         if !l.remote.is_empty() {
             out.push(FIELD_SEP);
@@ -63,9 +76,9 @@ pub fn encode_labels(labels: &[RefLabel]) -> String {
 /// name half of [`encode_labels`].
 pub fn label_names(encoded: &str) -> impl Iterator<Item = &str> {
     encoded.split(RECORD_SEP).filter_map(|record| {
-        // Kind letter plus four flag digits, then the name, then — only
+        // Kind letter plus the flag digits, then the name, then — only
         // when the ref was read off a remote — the remotes it came from.
-        let rest = record.get(5..)?;
+        let rest = record.get(FLAGS + 1..)?;
         Some(rest.split(FIELD_SEP).next().unwrap_or(rest))
     })
 }
@@ -117,6 +130,7 @@ mod tests {
                 is_head: true,
                 here: true,
                 remote: String::new(),
+                held_elsewhere: false,
             },
             RefLabel {
                 text: "v1.0".into(),
@@ -125,9 +139,31 @@ mod tests {
                 is_head: false,
                 here: true,
                 remote: String::new(),
+                held_elsewhere: false,
             },
         ];
-        assert_eq!(encode_labels(&labels), "L1101main\u{1f}T0001v1.0");
+        assert_eq!(encode_labels(&labels), "L11010main\u{1f}T00010v1.0");
+    }
+
+    /// The fifth flag, spelled out: the chip is what says a move cannot
+    /// go here, and it reads the digit by its seat (`RefChip`).
+    #[test]
+    fn a_branch_another_working_copy_holds_carries_the_last_flag() {
+        let labels = [RefLabel {
+            text: "feature/topic-a".into(),
+            kind: LabelKind::LocalBranch,
+            has_remote: false,
+            is_head: false,
+            here: true,
+            remote: String::new(),
+            held_elsewhere: true,
+        }];
+        assert_eq!(encode_labels(&labels), "L00011feature/topic-a");
+        // And the name still starts where the readers look for it.
+        assert_eq!(
+            label_names("L00011feature/topic-a").collect::<Vec<_>>(),
+            vec!["feature/topic-a"]
+        );
     }
 
     #[test]
@@ -174,8 +210,9 @@ mod tests {
             is_head: false,
             here: true,
             remote: String::new(),
+            held_elsewhere: false,
         }];
-        assert_eq!(encode_labels(&labels), "T0101v1.0");
+        assert_eq!(encode_labels(&labels), "T01010v1.0");
     }
 
     #[test]
@@ -187,8 +224,9 @@ mod tests {
             is_head: false,
             here: false,
             remote: "origin, fork".into(),
+            held_elsewhere: false,
         }];
-        assert_eq!(encode_labels(&labels), "T0100v9.9\u{1e}origin, fork");
+        assert_eq!(encode_labels(&labels), "T01000v9.9\u{1e}origin, fork");
     }
 
     #[test]
@@ -201,6 +239,7 @@ mod tests {
                 is_head: true,
                 here: true,
                 remote: String::new(),
+                held_elsewhere: false,
             },
             RefLabel {
                 text: "v9.9".into(),
@@ -209,6 +248,7 @@ mod tests {
                 is_head: false,
                 here: false,
                 remote: "origin, fork".into(),
+                held_elsewhere: false,
             },
         ];
         let encoded = encode_labels(&labels);
@@ -230,6 +270,7 @@ mod tests {
             is_head: false,
             here: true,
             remote: String::new(),
+            held_elsewhere: false,
         }];
         assert!(!encode_labels(&labels).contains(FIELD_SEP));
     }

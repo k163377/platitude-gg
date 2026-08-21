@@ -33,7 +33,7 @@ mod view_tests;
 // through `fold_state`.
 #[cfg(test)]
 use item::FOLDED;
-use item::{LOCKED, NavItem, PRUNABLE, fold_state};
+use item::{HELD, LOCKED, NavItem, PRUNABLE, fold_state};
 use role::{Arranged, Role, Row, Value};
 use source::{Bucket, Entry, Source, letters_of, pr_key};
 

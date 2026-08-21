@@ -147,6 +147,7 @@ mod tests {
                 is_head: true,
                 here: true,
                 remote: String::new(),
+                held_elsewhere: false,
             }],
             stash_ref: String::new(),
         };

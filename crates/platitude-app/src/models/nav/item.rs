@@ -85,6 +85,11 @@ pub const LOCKED: &str = "LOCKED";
 /// `git worktree prune` would drop this entry — the folder it names is
 /// gone from where git's administrative file says it is.
 pub const PRUNABLE: &str = "PRUNABLE";
+/// What a **branch** row puts in the slot: another working copy has it
+/// checked out, so no move can land here (`BranchItem::held_elsewhere`).
+/// The same seat, and the same one question the WORKTREES rows answer —
+/// which is why the three share it rather than each finding a corner.
+pub const HELD: &str = "HELD";
 
 pub(super) fn fold_state(expanded: bool) -> String {
     if expanded {

@@ -24,10 +24,22 @@ pub(super) struct RefJoins<'a> {
     /// Where each tag this repository holds points, by short name. Answers
     /// both "is this name here" and "is it on the same commit as there".
     tag_commit: HashMap<&'a str, Oid>,
+    /// The branches other working copies have checked out. A third join
+    /// on the same listing, and the reason it is here rather than in the
+    /// app: **the sidebar row and the graph chip ask the same question**,
+    /// and answering it per row per copy is the shape the refs budget
+    /// rules out (CLAUDE.md §性能予算). The set is a handful of names, so
+    /// it is handed in rather than built from the listing.
+    held: &'a WorktreeHolders,
 }
 
+/// Branches that a working copy other than this session's has out, by
+/// short name. Kept behind a name because it travels from the worktree
+/// read to the ref joins, which are two different reads.
+pub type WorktreeHolders = std::collections::HashSet<String>;
+
 impl<'a> RefJoins<'a> {
-    pub(super) fn new(refs: &'a [RefEntry]) -> Self {
+    pub(super) fn new(refs: &'a [RefEntry], held: &'a WorktreeHolders) -> Self {
         let remotes = refs::RemoteBranches::index(refs);
         let folded = remotes.folded_into_local(refs);
         let tag_commit = refs
@@ -39,7 +51,14 @@ impl<'a> RefJoins<'a> {
             remotes,
             folded,
             tag_commit,
+            held,
         }
+    }
+
+    /// Whether another working copy has this ref out. Only a local branch
+    /// can be — a remote-tracking ref is nobody's checkout.
+    fn held_elsewhere(&self, r: &RefEntry) -> bool {
+        r.kind == RefKind::LocalBranch && self.held.contains(r.short.as_str())
     }
 }
 
@@ -85,6 +104,7 @@ pub(super) fn build_label_map(
                 is_head: r.is_head,
                 here: r.kind != RefKind::RemoteBranch,
                 remote: String::new(),
+                held_elsewhere: joins.held_elsewhere(r),
             },
         ));
     }
@@ -108,6 +128,8 @@ pub(super) fn build_label_map(
                         .map(|c| c.remote.as_str())
                         .collect::<Vec<_>>()
                         .join(", "),
+                    // A tag is nobody's checkout.
+                    held_elsewhere: false,
                 },
             ));
         }
@@ -124,6 +146,9 @@ pub(super) fn build_label_map(
                 is_head: true,
                 here: true,
                 remote: String::new(),
+                // The marker for a detached HEAD names no branch, so
+                // there is none for another copy to be holding.
+                held_elsewhere: false,
             },
         ));
     }
@@ -183,11 +208,20 @@ pub(super) fn refs_key(refs: &[RefEntry], head: &HeadState) -> u64 {
 /// Takes a counter the session bumps when the index became different
 /// readings rather than the index's 45,909 entries, so this stays O(1) on
 /// top of the key it wraps.
-pub(super) fn join_key(refs: u64, remote_tags_gen: u64, remotes: &[remote::Remote]) -> u64 {
+pub(super) fn join_key(
+    refs: u64,
+    remote_tags_gen: u64,
+    worktrees_gen: u64,
+    remotes: &[remote::Remote],
+) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     refs.hash(&mut hasher);
     remote_tags_gen.hash(&mut hasher);
+    // A working copy taken or given back moves no ref, so nothing else
+    // here would notice it — and the mark it decides is on rows the
+    // joins build.
+    worktrees_gen.hash(&mut hasher);
     for r in remotes {
         r.name.hash(&mut hasher);
     }
@@ -224,6 +258,7 @@ pub(super) fn build_snapshot(
                     .spoken_for(r)
                     .map(|u| u.short.clone())
                     .unwrap_or_default(),
+                held_elsewhere: joins.held_elsewhere(r),
             }),
             RefKind::RemoteBranch => snapshot.remotes.push(BranchItem {
                 short: r.short.clone(),
@@ -232,6 +267,11 @@ pub(super) fn build_snapshot(
                 has_remote: true,
                 is_head: false,
                 upstream: crate::Name::default(),
+                // A remote-tracking ref is nobody's checkout. Whether the
+                // local branch a `switch` here would land on is held is
+                // the menu's question, asked of the worktree list by the
+                // name it would take (`RefRowMenu`).
+                held_elsewhere: false,
             }),
             RefKind::Tag => snapshot.tags.push(TagItem {
                 short: r.short.clone(),
@@ -278,4 +318,67 @@ pub(super) fn build_snapshot(
     snapshot.remotes.shrink_to_fit();
     snapshot.tags.shrink_to_fit();
     snapshot
+}
+
+/// What feeds the join above: the branches other working copies have
+/// out, filed away by the worktree read so the next refs read can join
+/// against them.
+impl RepoSession {
+    /// Files away which branches the *other* working copies have out, and
+    /// says so to the ref joins by bumping their generation.
+    ///
+    /// **This copy is not one of them.** Moving onto the branch this
+    /// window already has out is a no-op, not a refusal, and marking it
+    /// would put the mark on the row every reader is standing on.
+    ///
+    /// Answers whether the set became a different one — the caller's cue
+    /// to re-read the refs. **Waiting for the next poll tick is not good
+    /// enough**: until the join runs again the rows offer a move git will
+    /// refuse, and a session's first worktree read lands *after* its
+    /// first refs read, so the window is exactly the moment somebody is
+    /// looking at a repository they have just opened (2026-08-21 実測: a
+    /// run photographed a second in had no marks on it). The remote-tag
+    /// index asks for the same re-read on the same terms.
+    pub(super) fn note_worktree_holders(
+        &self,
+        worktrees: &[crate::worktrees::WorktreeEntry],
+        workdir: &Path,
+    ) -> bool {
+        let here = same_path_key(&workdir.to_string_lossy());
+        let fresh: WorktreeHolders = worktrees
+            .iter()
+            .filter(|w| !w.bare && same_path_key(&w.path) != here)
+            .filter_map(|w| w.branch.clone())
+            .collect();
+        // A poisoned lock is taken rather than given up on, the way the
+        // tag index's is: the set behind it is a snapshot, not a
+        // half-written structure, and dropping it would take every mark
+        // off the rows for the rest of the session.
+        let mut held = match self.worktree_holders.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        if **held == fresh {
+            return false;
+        }
+        *held = Arc::new(fresh);
+        self.worktree_gen.fetch_add(1, Ordering::SeqCst);
+        true
+    }
+
+    /// The set as the last worktree read left it, for the join that marks
+    /// the rows with it.
+    pub(super) fn worktree_holders(&self) -> Arc<WorktreeHolders> {
+        match self.worktree_holders.lock() {
+            Ok(g) => Arc::clone(&g),
+            Err(e) => Arc::clone(&e.into_inner()),
+        }
+    }
+}
+
+/// How two spellings of one folder are compared. git prints worktree
+/// paths its own way and the session holds the platform's, which differ
+/// in separator on Windows and in case on both Windows and macOS.
+fn same_path_key(path: &str) -> String {
+    path.replace('\\', "/").to_lowercase()
 }

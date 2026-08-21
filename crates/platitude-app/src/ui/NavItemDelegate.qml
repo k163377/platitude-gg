@@ -169,7 +169,12 @@ Item {
             // A worktree row has no change code, so the seat carries the state of the checkout instead — the same
             // shared slot a folder keeps its fold state in (`models::nav::item`). A lock is somebody's choice and
             // wears the quiet colour every other row mark does; a folder git can no longer find is a warning.
-            seatMark: navRow.kindHint !== "worktree" ? ""
+            //
+            // A branch row uses the same slot for the one question it shares with those rows: whether a move can land
+            // here. Its mark is the WORKTREES section's own (`tree`) — where the branch actually is — and **not the
+            // padlock**, which is spoken for by `git worktree lock`; a mark cannot mean two things in one window.
+            seatMark: navRow.kindHint === "branch" ? (navRow.change === "HELD" ? "tree" : "")
+                    : navRow.kindHint !== "worktree" ? ""
                     : navRow.change === "LOCKED" ? "lock"
                     : navRow.change === "PRUNABLE" ? "bang" : ""
             seatTint: navRow.change === "PRUNABLE" ? Theme.warning : Theme.textSecondary

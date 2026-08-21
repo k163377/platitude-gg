@@ -278,6 +278,43 @@ impl NavSectionModel {
         self.told(Role::Name, &name, Role::Upstream)
     }
 
+    /// The other working copy holding this branch, by the path git lists
+    /// it under; empty when no other one has it out.
+    ///
+    /// **git refuses to move onto, or delete, a branch another worktree
+    /// has checked out** — `fatal: 'feat' is already used by worktree at
+    /// …` and `error: cannot delete branch 'feat' used by worktree at …`
+    /// (2026-08-21 実測). It refuses that whether or not the worktree is
+    /// **locked**: a lock stops `worktree remove` and `worktree move`,
+    /// which is a different question, so the rows that would try ask this
+    /// one and not the lock.
+    ///
+    /// Asked of the worktrees section, the only one holding the list —
+    /// and held to it, because a file row keeps its bucket name in the
+    /// same slot a worktree row keeps its branch in.
+    #[qslot]
+    pub(super) fn worktree_holding(&self, branch: String) -> String {
+        if branch.is_empty() || self.section != "worktrees" {
+            return String::new();
+        }
+        (0..self.all.len())
+            .filter_map(|at| self.all.entry(at))
+            .map(|of| Row::Shown {
+                of,
+                depth: 0,
+                from: 0,
+            })
+            // The branch a worktree row shows on its right, and the mark
+            // saying the row is the copy this window is already in — that
+            // one is where a switch is a no-op, not where it is refused.
+            .find(|row| {
+                self.field(*row, Role::Bucket).as_str() == branch
+                    && !self.field(*row, Role::IsHead).flag()
+            })
+            .map(|row| self.field(row, Role::Full).as_str().to_string())
+            .unwrap_or_default()
+    }
+
     /// What one row shows, and what git knows it by (empty out of range).
     ///
     /// Roles are only visible to a delegate, so this is how automation

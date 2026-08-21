@@ -33,6 +33,16 @@ pub struct BranchItem {
     /// wherever the two stand — the one its badge is about, and the one a
     /// rename offers to carry over. Empty when it speaks for none.
     pub upstream: crate::Name,
+    /// Another working copy has this branch checked out, so git refuses
+    /// both `switch` and `branch --delete` for it (2026-08-21 実測) —
+    /// whether or not that copy is **locked**, which stops a different
+    /// set of commands. A `bool` and not the folder: this rides one per
+    /// branch, and the reference repository has fifty thousand refs.
+    ///
+    /// Local branches only. A remote row lands on the local branch of
+    /// the same name, and whether *that* one is held is a question the
+    /// menu asks of the worktree list by name.
+    pub held_elsewhere: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

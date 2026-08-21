@@ -23,6 +23,10 @@ Rectangle {
     /// the one place the name is shown *in order to be read* (規約 §hover のツールチップ). **One frame either way**: the
     /// lines are a single label inside a single border, so a wrapped name is one chip that got taller, not two chips.
     property bool wrapped: false
+    /// The same answer the record itself can carry: a branch another working copy has out is nowhere a move can go
+    /// either (git refuses it outright), so it reads the way the caller's own `muted` does. It carries a mark of its
+    /// own as well — the muting says a move cannot land here, the mark says where the branch went instead.
+    readonly property bool dulled: chip.muted || chip.recHeld
 
     visible: records.length > 0
     // The name's own line box, and the frame drawn around it — nothing else is in the box, so nothing else sets its
@@ -38,24 +42,36 @@ Rectangle {
     width: Math.min(chipContent.implicitWidth + 2 * Theme.spaceXs, maxWidth)
     /// How many lines the name came out on. Only a wrapped chip can answer more than one.
     readonly property int nameLines: chip.wrapped ? Math.max(1, nameLabel.lineCount) : 1
-    /// Everything in the chip that is not the name: the `+N` seat and the badge with its gap.
+    /// Everything in the chip that is not the name: the `+N` seat, the badge with its gap, and the held mark with its
+    /// own. Each is counted only while it is drawn — the two marks come and go, and a name measured against room that
+    /// is not taken would be cut short of the frame.
     readonly property real furnitureW: (chip.records.length > 1 ? Theme.spaceLg : 0)
                                        + (chip.hasBadge ? Theme.iconSm + Theme.spaceXs : 0)
+                                       + (chip.recHeld ? chip.heldSeat + Theme.spaceXs : 0)
+    /// What the held mark's ink actually spans (`NavIcon.inkWidth`) — the air a square seat would add is the mark's
+    /// own, and belongs to the gap beside it (デザイン規約 §余白).
+    readonly property real heldInk: heldMark.inkWidth
+    /// The seat that ink sits in: half a gap narrower, so the mark comes that much nearer the name it belongs to.
+    readonly property real heldSeat: chip.heldInk - Theme.spaceXs / 2
     /// What is left for the name inside `maxWidth`.
     readonly property real nameRoom: chip.maxWidth - 2 * Theme.spaceXs - chip.furnitureW
     radius: Theme.radiusSm
     clip: true
 
-    readonly property string rec: records.length > 0 ? records[0] : "L0001"
+    readonly property string rec: records.length > 0 ? records[0] : "L00010"
     readonly property string recKind: rec[0]
     readonly property bool recHead: rec[1] === "1"
     readonly property bool recRemote: rec.length > 2 && rec[2] === "1"
     readonly property bool recPr: rec.length > 3 && rec[3] === "1"
     readonly property bool recHere: rec.length > 4 && rec[4] === "1"
+    // Another working copy has this branch out, so git refuses a move onto it (2026-08-21 実測). Read off the record
+    // rather than asked of a model: the record is rebuilt whenever the ref joins are, so the chip repaints with the
+    // rest of them instead of hanging a binding off a slot (app-ui.md 「QML バインディングはプロパティにしか反応しない」).
+    readonly property bool recHeld: rec.length > 5 && rec[5] === "1"
     readonly property bool tagStyle: recKind === "T"
     // Name, and the remotes it was read from when it was not read here. The separator is absent whenever there are
     // none, so the name runs to the end of the record (see encode.rs).
-    readonly property var recFields: rec.substring(5).split("\u001E")
+    readonly property var recFields: rec.substring(6).split("\u001E")
     readonly property string recName: chip.recFields[0]
     readonly property string recWhere: chip.recFields.length > 1 ? chip.recFields[1] : ""
     // One slot, one mark: on the remote, or on the remote with a PR open (規約 §グラフ行のダブルクリック — the two never stack).
@@ -63,7 +79,7 @@ Rectangle {
     // A tag this repository does not hold keeps the tag hue and only drops a step (§暗く落とした段): still a tag, read
     // somewhere else. Only tags dim, because only tags need it — every other kind says where it is in its own frame
     // colour (a remote branch is grey) or in its name (`origin/main` carries the remote in the name itself).
-    readonly property color kindColor: muted ? Theme.textMuted
+    readonly property color kindColor: chip.dulled ? Theme.textMuted
                                        : tagStyle ? (recHere ? Theme.refTag : Theme.refTagDim)
                                        : recKind === "R" ? Theme.textSecondary
                                        : recKind === "H" ? Theme.warning
@@ -73,7 +89,7 @@ Rectangle {
     // remote branch row goes there (§無効 is for what is actually unavailable). The detached HEAD marker keeps its state
     // colour in the name too: it is the one chip whose colour is not a kind. The branch the working tree stands on is
     // the nearest answer this colour has — "here" — and the sidebar already writes it that way, so the chip does too.
-    readonly property color nameColor: muted ? Theme.textMuted
+    readonly property color nameColor: chip.dulled ? Theme.textMuted
                                        : recKind === "H" ? Theme.warning
                                        : recHead ? Theme.textLink
                                        : !recHere ? Theme.textSecondary
@@ -132,6 +148,38 @@ Rectangle {
         anchors.left: parent.left
         anchors.leftMargin: Theme.spaceXs
         spacing: Theme.spaceXs
+        // Ahead of the name, and only when there is one to draw: another working copy has this branch out (2026-08-21
+        // ユーザー判断 — 「必要な時だけ左側に追加する」). Same mark and same meaning as the sidebar row's
+        // (`NavItemDelegate`), which is the WORKTREES section's own.
+        //
+        // **The seat is not held open** the way the sidebar row's is: a chip is measured to its own contents rather
+        // than laid out in a column of them, so an empty seat on every chip would walk every name on the graph one
+        // mark to the right for a state almost none of them are in.
+        //
+        // **And it is seated to its ink, not to its box, less half a gap.** The mark is a head on a stem and fills
+        // half the sixteen it is drawn on; a square seat would add that air to the gaps on both sides. The half gap
+        // then goes to the name, which the mark belongs to and whose first letter carries a bearing of its own — the
+        // pair read as a name pushed away from a mark that sat tight against the frame (デザイン規約 §余白「印が自分で
+        // 持っている余白は、隣の詰めに数える」; 2026-08-21 ユーザー報告, measured 114 -> 110 -> 108).
+        Item {
+            visible: chip.recHeld
+            // The seat is the ink less half a gap, so the ink runs that far into the row's own spacing: the mark keeps
+            // its whole gap from the frame and gives up half of the one to the name.
+            width: chip.heldSeat
+            height: Theme.iconSm
+            // On the first line's box, for the reason the badge at the other end is.
+            y: Theme.borderWidth + Math.round((Theme.fontChipLine - Theme.iconSm) / 2)
+            NavIcon {
+                id: heldMark
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.left: parent.left
+                anchors.leftMargin: -(Theme.iconSm - heldMark.inkWidth) / 2
+                kind: "tree"
+                tint: chip.dulled ? Theme.textMuted : Theme.textSecondary
+                width: Theme.iconSm
+                height: Theme.iconSm
+            }
+        }
         Label {
             id: nameLabel
             y: chip.inkY(nameLabel, nameInk)
@@ -155,7 +203,7 @@ Rectangle {
             y: chip.inkY(countLabel, countInk)
             visible: chip.records.length > 1
             text: "+" + (chip.records.length - 1)
-            color: chip.muted ? Theme.textMuted : Theme.textSecondary
+            color: chip.dulled ? Theme.textMuted : Theme.textSecondary
             font.pixelSize: Theme.fontSm
         }
         // Remote / PR badge: reserved width above, so it survives any elision.
@@ -165,7 +213,7 @@ Rectangle {
             // and a badge that centres itself on a three-line chip has left the name it belongs to.
             y: Theme.borderWidth + Math.round((Theme.fontChipLine - Theme.iconSm) / 2)
             kind: chip.recPr ? "pr" : "remote"
-            tint: chip.muted ? Theme.textMuted : chip.recPr ? Theme.success : Theme.textSecondary
+            tint: chip.dulled ? Theme.textMuted : chip.recPr ? Theme.success : Theme.textSecondary
             width: Theme.iconSm
             height: Theme.iconSm
         }

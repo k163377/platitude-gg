@@ -57,6 +57,12 @@ pub struct RefLabel {
     /// bare name on two rows. The hover card is where those two meet, and
     /// this is what tells them apart there.
     pub remote: String,
+    /// Another working copy has this branch checked out — the same bit
+    /// the sidebar row reads (`BranchItem::held_elsewhere`), so the chip
+    /// and the row cannot disagree about where a branch can be gone to.
+    /// The chip has no room for a mark of its own and does not need one:
+    /// it already has a way of saying "nowhere to go from here".
+    pub held_elsewhere: bool,
 }
 
 /// The chips every commit carries, as one sorted run.

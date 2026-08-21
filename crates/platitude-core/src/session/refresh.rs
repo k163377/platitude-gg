@@ -180,7 +180,12 @@ impl RepoSession {
                 // after the last one is waiting for it, and it is the one
                 // already published, so the sidebar reads it by pointer
                 // and rebuilds nothing (`share_snapshot`).
-                let inputs = join_key(key, self.remote_tag_gen.load(Ordering::SeqCst), &remotes);
+                let inputs = join_key(
+                    key,
+                    self.remote_tag_gen.load(Ordering::SeqCst),
+                    self.worktree_gen.load(Ordering::SeqCst),
+                    &remotes,
+                );
                 let seen = self
                     .join_key
                     .lock()
@@ -198,7 +203,8 @@ impl RepoSession {
                 // sidebar snapshot and the row chips read the same
                 // listing, and building either twice is one whole join
                 // thrown away.
-                let joins = RefJoins::new(&refs);
+                let held = self.worktree_holders();
+                let joins = RefJoins::new(&refs, &held);
                 let mut snapshot = build_snapshot(&refs, &head, &remote_tags, &joins);
                 snapshot.remote_names = remotes.into_iter().map(|r| r.name).collect();
                 let label_map = build_label_map(&refs, &head, &remote_tags, &joins);
@@ -476,6 +482,11 @@ impl RepoSession {
             |s| &s.worktrees_gate,
             |s, workdir, cancel| async move {
                 let worktrees = crate::worktrees::load(&s.executor, &workdir, &cancel).await?;
+                // A working copy taken or given back moves no ref, so the
+                // join that marks the rows has to be asked for by name.
+                if s.note_worktree_holders(&worktrees, &workdir) {
+                    s.refresh_refs();
+                }
                 Ok(SessionEvent::WorktreesLoaded { worktrees })
             },
         );

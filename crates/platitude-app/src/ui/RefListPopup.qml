@@ -102,10 +102,12 @@ AppCard {
                 // colour too.
                 readonly property bool current:
                     refRow.modelData[0] === "L"
-                    && refRow.modelData.substring(5).split("\u001E")[0] === refList.currentBranch
+                    && refRow.modelData.substring(6).split("\u001E")[0] === refList.currentBranch
                 // The detached-HEAD marker is the one row that is only a marker: nowhere to go and no ref to read, so
-                // it mutes.
-                readonly property bool unavailable: refRow.modelData[0] === "H"
+                // it mutes. A branch another working copy has out mutes for the other reason there is — git refuses
+                // the move outright (§無効 is for what is actually unavailable, and this one is).
+                readonly property bool unavailable:
+                    refRow.modelData[0] === "H" || refRow.modelData[5] === "1"
                 readonly property bool leadsNowhere:
                     refRow.unavailable || refRow.current || refRow.modelData[0] === "T"
 

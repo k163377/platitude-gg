@@ -6,9 +6,15 @@
     reason = "the scale measurement reports its number to whoever ran it"
 )]
 
-use super::joins::{RefJoins, build_label_map, build_snapshot};
+use super::joins::{RefJoins, WorktreeHolders, build_label_map, build_snapshot};
 use super::*;
 use crate::remote::RemoteTag;
+
+/// The everyday repository: one working copy, so no branch is held
+/// anywhere else. The join that reads this has a test of its own below.
+fn held_by_nobody() -> WorktreeHolders {
+    WorktreeHolders::default()
+}
 
 fn tag(name: &str, commit: Oid, annotated: bool) -> RefEntry {
     RefEntry {
@@ -55,6 +61,39 @@ fn index_of(remote: &str, tags: Vec<RemoteTag>) -> RemoteTagIndex {
     )
 }
 
+/// A branch another working copy has out is marked on **both** halves of
+/// the join — the sidebar row and the graph chip read one bit between
+/// them, and a chip that offered a move the row refused would be two
+/// answers to one question.
+#[test]
+fn a_branch_another_copy_holds_is_marked_on_the_row_and_the_chip() {
+    let refs = vec![branch("main", oid(1)), branch("feature/topic-a", oid(2))];
+    let remote_tags = index_of("origin", Vec::new());
+    let mut held = WorktreeHolders::default();
+    held.insert("feature/topic-a".to_string());
+    let joins = RefJoins::new(&refs, &held);
+
+    let snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
+    let topic = snapshot
+        .locals
+        .iter()
+        .find(|b| b.short == "feature/topic-a")
+        .expect("the branch is listed");
+    assert!(topic.held_elsewhere);
+    // The copy this session is in never reaches the set, so the branch
+    // the reader is standing on is not marked (`note_worktree_holders`).
+    let main = snapshot
+        .locals
+        .iter()
+        .find(|b| b.short == "main")
+        .expect("the branch is listed");
+    assert!(!main.held_elsewhere);
+
+    let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
+    assert!(map.labels_of(&oid(2), true)[0].held_elsewhere);
+    assert!(!map.labels_of(&oid(1), true)[0].held_elsewhere);
+}
+
 /// A tag both sides agree on is one tag: the local label carries the
 /// cloud and the remote's reading adds no second chip.
 #[test]
@@ -68,7 +107,8 @@ fn an_agreed_tag_gets_one_label() {
             annotated: false,
         }],
     );
-    let joins = RefJoins::new(&refs);
+    let nobody = held_by_nobody();
+    let joins = RefJoins::new(&refs, &nobody);
     let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
     let labels = map.labels_of(&oid(1), true);
     assert_eq!(labels.len(), 1, "one name, one chip: {labels:?}");
@@ -93,7 +133,8 @@ fn a_drifted_tag_stands_on_both_rows() {
             annotated: false,
         }],
     );
-    let joins = RefJoins::new(&refs);
+    let nobody = held_by_nobody();
+    let joins = RefJoins::new(&refs, &nobody);
     let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
     assert!(map.labels_of(&oid(1), true)[0].here);
     let theirs = map.labels_of(&oid(2), true);
@@ -117,7 +158,8 @@ fn the_chips_lose_their_tags_with_the_graph() {
         tag("v1", oid(1), false),
         tag("islet", oid(2), false),
     ];
-    let joins = RefJoins::new(&refs);
+    let nobody = held_by_nobody();
+    let joins = RefJoins::new(&refs, &nobody);
     let map = build_label_map(&refs, &head_at(oid(1)), &index_of("origin", vec![]), &joins);
 
     let both = map.labels_of(&oid(1), true);
@@ -151,7 +193,8 @@ fn a_tag_only_a_remote_has_is_listed_and_marked() {
             annotated: true,
         }],
     );
-    let joins = RefJoins::new(&refs);
+    let nobody = held_by_nobody();
+    let joins = RefJoins::new(&refs, &nobody);
     let snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
     let v9 = snapshot
         .tags
@@ -203,7 +246,8 @@ fn refs_join_at_scale() {
     );
 
     let started = Instant::now();
-    let joins = RefJoins::new(&refs);
+    let nobody = held_by_nobody();
+    let joins = RefJoins::new(&refs, &nobody);
     let snapshot = build_snapshot(&refs, &head, &remote_tags, &joins);
     let labels = build_label_map(&refs, &head, &remote_tags, &joins);
     println!(

@@ -168,16 +168,23 @@ Item {
     }
 
     // ---- what a chip leads to --------------------------------------
-    // `record` is the chip as it is drawn — kind letter, four flags, then the name (see encode.rs).
+    // `record` is the chip as it is drawn — kind letter, the flag digits, then the name (see encode.rs, `FLAGS`).
     function activateRecord(record) {
         if (record !== "")
-            page.switchToRef(record[0], record.substring(5).split("\u001E")[0])
+            page.switchToRef(record[0], record.substring(6).split("\u001E")[0])
+    }
+    // git keeps a branch to one working copy: moving onto one another worktree already has out is refused outright
+    // (`fatal: '<branch>' is already used by worktree at …`, 2026-08-21 実測), whether or not that copy is locked. The
+    // menu keeps its `switch` row and greys it, which is where the reason is read; this is the same answer for the
+    // ways in that have no row to say it on — the double-click on a sidebar row, and a chip on the graph.
+    function heldElsewhere(local) {
+        return worktreesModel.worktreeHolding(local) !== ""
     }
     function switchToRef(kind, name) {
         if (repoTab.state !== "open" || repoTab.busyCount > 0)
             return
         if (kind === "L") {
-            if (name !== workTree.branch)
+            if (name !== workTree.branch && !page.heldElsewhere(name))
                 page.switchTo("branch", name, name, "")
             return
         }
@@ -186,6 +193,9 @@ Item {
         if (kind !== "R")
             return
         const local = remotesModel.localNameFor(name)
+        // The local branch a remote row lands on is the one another copy can be holding.
+        if (page.heldElsewhere(local))
+            return
         if (branchesModel.oidOfName(local) === "")
             page.switchTo("remote", name, local, "")
         else
@@ -285,6 +295,7 @@ Item {
         repoTab: repoTab
         workTree: workTree
         branchesModel: branchesModel
+        worktreesModel: worktreesModel
         onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
         onBranchHereRequested: oidHex => page.startBranchAt(oidHex)
         onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
@@ -327,7 +338,7 @@ Item {
                 page.openRowMenu(oidHex)
             return
         }
-        const name = record.substring(5).split(String.fromCharCode(30))[0]
+        const name = record.substring(6).split(String.fromCharCode(30))[0]
         const oid = kind === "branch" ? branchesModel.oidOfName(name)
                   : kind === "remote" ? remotesModel.oidOfName(name)
                   : tagsModel.oidOfName(name)
@@ -626,6 +637,7 @@ Item {
             gitCorner: gitCorner
             refMenu: refRowMenu.menu
             refDeleteItem: refRowMenu.deleteItem
+            refSwitchItem: refRowMenu.switchItem
             fileRowMenu: fileRowMenu
             fileMenu: fileRowMenu.menu
             fileDiscardItem: fileRowMenu.discardItem

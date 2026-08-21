@@ -25,6 +25,9 @@ Canvas {
         switch (icon.kind) {
         case "bang": return 2
         case "arrow": return 8
+        // A head on a stem: the head is the whole of its width, and it is
+        // half the box (the stem is a line down the middle).
+        case "tree": return 8
         case "plus":
         case "minus":
         case "copyicon": return 9

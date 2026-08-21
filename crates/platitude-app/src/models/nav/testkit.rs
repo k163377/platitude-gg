@@ -23,6 +23,7 @@ pub(super) fn remote(short: &str) -> platitude_core::session::BranchItem {
         has_remote: true,
         is_head: false,
         upstream: "".into(),
+        held_elsewhere: false,
     }
 }
 

@@ -111,6 +111,17 @@ pub struct RepoSession {
     /// Bumped whenever the index above became different readings, so the
     /// refs key can cover it without walking 45,909 entries.
     pub(super) remote_tag_gen: AtomicU64,
+    /// The branches other working copies have checked out, as the last
+    /// worktree read left them. Read by the ref joins so the sidebar rows
+    /// and the graph chips get one answer between them; shared for the
+    /// reason the tag index is, since every refs read wants it and none
+    /// of them changes it.
+    pub(super) worktree_holders: Mutex<Arc<super::joins::WorktreeHolders>>,
+    /// Bumped when that set became a different one. **Nothing else in the
+    /// refs key would notice** — taking or giving back a working copy
+    /// moves no ref, so without this the mark would wait for an unrelated
+    /// ref to move.
+    pub(super) worktree_gen: AtomicU64,
     /// One permit for the background read of the above, so a second
     /// permission-granting call cannot stack another on top of it.
     pub(super) remote_tags_slot: Arc<tokio::sync::Semaphore>,
@@ -201,6 +212,8 @@ impl RepoSession {
             config_stamp: Mutex::new(None),
             remote_tag_index: Mutex::new(Arc::new(RemoteTagIndex::default())),
             remote_tag_gen: AtomicU64::new(0),
+            worktree_holders: Mutex::new(Arc::new(super::joins::WorktreeHolders::default())),
+            worktree_gen: AtomicU64::new(0),
             remote_tags_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             head_hold: Mutex::new(None),
             head_tip: Mutex::new(None),
