@@ -173,7 +173,10 @@ ApplicationWindow {
         // The left menu's name box is held open by nothing but the keyboard it took, so the press that took the
         // keyboard away is what walks away from it (デザイン規約 §左メニューの所作). Only the tab on screen has one: a
         // box in a tab nobody is looking at was not what the press landed away from.
-        onPressedAway: if (root.curPage !== null) root.curPage.releaseRowEdit()
+        onPressedAway: scenePos => {
+            if (root.curPage !== null)
+                root.curPage.releasePressedAway(scenePos)
+        }
     }
 
     // Identity dialog: opens on startup when git has no name and email to put on a commit, and on demand from the app

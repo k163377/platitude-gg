@@ -58,6 +58,9 @@ Rectangle {
     readonly property alias findMatches: findBar.matches
     readonly property alias findAt: findBar.atMatch
     readonly property alias findWidth: findBar.width
+    /// How far in or out the card is. Only `1` and `0` are worth photographing — the fade between them is a card that
+    /// is neither up nor gone, and the headless run waits for one end or the other.
+    readonly property alias findFade: findBar.opacity
     /// How far the graph has stepped down out from under the card.
     readonly property real findShift: graphList.anchors.topMargin
     readonly property alias findOn: findBar.findOn
@@ -66,6 +69,16 @@ Rectangle {
     function startFind() { findBar.startFind() }
     function findNext() { findBar.findNext() }
     function findPrevious() { findBar.findPrevious() }
+
+    // ---- a press that landed somewhere else -------------------------
+    /// Both boxes this pane can be standing on are offers rather than work half done: the find card and the name box on
+    /// a row. An empty one goes away with the press that landed elsewhere (`RepoPage.releasePressedAway`, `scenePos` =
+    /// where it landed); one with something typed in it stays, because the typing is what there would be to lose.
+    function dropEmptyBoxes(scenePos) {
+        findBar.dropIfEmpty(scenePos)
+        if (graphList.namingOid !== "" && graphList.namingText === "")
+            graphArea.stopNaming()
+    }
     /// Whether all of `row` is on screen — asked of the list, which is where the viewport arithmetic lives.
     function rowOnScreen(row) { return graphList.rowOnScreen(row) }
 

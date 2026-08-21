@@ -54,6 +54,21 @@ Rectangle {
         findBar.open = false
         findBar.dismissed()
     }
+    /// The same card going down because the hand went somewhere else, rather than because it was sent away. Nobody is
+    /// told, so nothing is handed the keyboard on the way out: the press that landed elsewhere has its own claim on it,
+    /// and a card grabbing it here would take the caret out of the box that press just landed in.
+    function dropAway() {
+        findBar.open = false
+    }
+    /// Whether a press landed on this card — `scenePos` is where it landed, in scene coordinates, and `null` is a press
+    /// with no place of its own (the headless run's door). The `✕` and the count are the card's own, so a press on
+    /// either of them is not a press somewhere else.
+    function holds(scenePos) {
+        if (!scenePos)
+            return false
+        const p = findBar.mapFromItem(null, scenePos)
+        return p.x >= 0 && p.y >= 0 && p.x < findBar.width && p.y < findBar.height
+    }
 
     // Hangs from the edge it is anchored to, so the corners that meet it stay square and the two below it are the
     // card's own.

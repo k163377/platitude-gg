@@ -39,6 +39,19 @@ FindBar {
         // search is run again rather than waiting for a key that may never come.
         find.runFind()
     }
+    /// A press landed somewhere else (`RepoPage.releasePressedAway`), at `scenePos`. A card with nothing in it goes
+    /// away with the press — it was an offer nobody took, and the press says where the reading went on — while a card
+    /// with a query in it stays: the query is the only thing there would be to lose, and `✕` and Escape are both one
+    /// gesture away (規約 §コミットを探す).
+    ///
+    /// "Nothing was typed" is the model's answer rather than a second reading of the box: whitespace alone is not a
+    /// query, and which rule that is belongs in one place (`platitude-core::find`).
+    function dropIfEmpty(scenePos) {
+        if (!find.open || find.graphModel.searching || find.holds(scenePos))
+            return
+        find.dropAway()
+        find.runFind()
+    }
     /// Re-runs the search and goes to where it lands. Called on every keystroke: the marking is a walk over rows
     /// already in memory, and no git runs for any of it.
     function runFind() {

@@ -143,7 +143,7 @@ Item {
                 "edit-message-leave", "edit-message-focus",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
                 "avatar-settings", "avatar-combo", "avatar-row-lit", "avatar-remove",
-                "find", "find-next", "find-prev",
+                "find", "find-next", "find-prev", "find-drop",
                 // These flows are completed by Main/WindowAutoActDriver. Some still begin here (picker, command
                 // failure, recovery), but the page must never photograph their intermediate state before the
                 // window-level predicate has answered.
@@ -1771,6 +1771,22 @@ Item {
             driver.complete()
         }
     }
+    // The card fades in and out, so both halves of `find-drop` are photographed at one end of that fade or the other:
+    // caught in between, the card that stayed and the card that went away frame the same.
+    Timer {
+        id: findDropSettled
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (graphPane.findFade > 0 && graphPane.findFade < 1)
+                return
+            findDropSettled.stop()
+            AppBackend.report("find_drop open=" + graphPane.findOpen
+                              + " shown=" + (graphPane.findFade > 0)
+                              + " query=" + graphPane.findQuery)
+            driver.complete()
+        }
+    }
     // The store starts empty in every run, so the card's own verbs put a picture in it before opening on it.
     Timer {
         id: avatarSeedTimer
@@ -2345,7 +2361,7 @@ Item {
             if (arg === "fold")
                 page.foldByHand(true)
             else
-                page.releaseRowEdit()
+                page.releasePressedAway(null)
             AppBackend.report("nav_drop how=" + arg
                               + " collapsed=" + page.sidebarCollapsed
                               + " box=" + (sidebarPane.editKey !== "")
@@ -2644,6 +2660,25 @@ Item {
             diffStepTimer.start()
         } else if (act === "name-box") {
             graphPane.startNaming(graphModel.oidAt(Number(arg)))
+        } else if (act === "name-box-drop") {
+            // The same box, and the press that lands somewhere else while it stands. The argument is `<行>[:<打つ名前>]`
+            // — with nothing typed the box goes with the press, with a name in it it stays. What is typed goes in the
+            // way a recycled delegate puts it back (`GraphRowDelegate.takeNamingFocus`), so the box on screen holds
+            // what the run says it holds.
+            const nameCut = arg.indexOf(":")
+            const nameRow = Number(nameCut < 0 ? arg : arg.substring(0, nameCut))
+            const nameTyped = nameCut < 0 ? "" : arg.substring(nameCut + 1)
+            graphPane.startNaming(graphModel.oidAt(nameRow))
+            if (nameTyped !== "") {
+                graphPane.view.namingText = nameTyped
+                const nameItem = graphPane.view.itemAtIndex(nameRow)
+                if (nameItem)
+                    nameItem.takeNamingFocus()
+            }
+            page.releasePressedAway(null)
+            AppBackend.report("name_drop box=" + (graphPane.view.namingOid !== "")
+                              + " row=" + nameRow
+                              + " typed=" + nameTyped)
         } else if (act === "graph-tail") {
             graphTailTimer.start()
         } else if (act === "graph-bar" || act === "graph-bar-away"
@@ -2970,6 +3005,17 @@ Item {
                               + " cap=" + Math.round(graphPane.width - graphPane.subjectTextX)
                               + " clears=" + graphPane.findClears)
             findSettled.restart()
+        } else if (act === "find-drop") {
+            // The card standing while a press lands somewhere else. Presses cannot be injected (verify-ui スキル), so
+            // this enters where `FocusRelease.pressedAway` enters and gives the press no place of its own — which is
+            // "it landed on none of ours", the answer that matters here. The argument is what is typed in first:
+            // nothing, and the card goes with the press; a query, and the card stays because the query is what there
+            // would be to lose (規約 §コミットを探す).
+            page.startFind()
+            if (arg !== "")
+                graphPane.findQuery = arg
+            page.releasePressedAway(null)
+            findDropSettled.restart()
         } else if (act === "commands") {
             // Stage and unstage so the log has something in it.
             repoTab.stageAll()

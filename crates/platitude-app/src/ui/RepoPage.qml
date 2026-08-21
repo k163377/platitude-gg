@@ -39,10 +39,13 @@ Item {
             page.foldedByDiff = false
         }
     }
-    /// A press landed away from whatever held the keyboard (Main's `FocusRelease`). The left menu's name box goes with
-    /// it — nothing is asked, what it costs is the typing (デザイン規約 §左メニューの所作).
-    function releaseRowEdit() {
+    /// A press landed away from whatever held the keyboard (Main's `FocusRelease`), at `scenePos` — `null` for a press
+    /// with no place of its own (the headless run's door). The left menu's name box goes with it — nothing is asked,
+    /// what it costs is the typing (デザイン規約 §左メニューの所作) — and so does anything over the graph that is standing on an
+    /// empty box, where there is not even that to lose (§コミットを探す).
+    function releasePressedAway(scenePos) {
         sidebarPane.stopEdit()
+        graphPane.dropEmptyBoxes(scenePos)
     }
     function foldByHand(collapse) {
         page.sidebarCollapsed = collapse

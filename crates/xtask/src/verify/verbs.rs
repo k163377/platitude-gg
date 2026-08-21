@@ -7,6 +7,7 @@
 /// What `verb` has to say for its picture to be worth anything, or `None`
 /// when the picture is the whole of it. `arg` is the verb's own argument:
 /// one verb serves two panes and wants a different line for each.
+#[expect(clippy::too_many_lines)]
 pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
     match verb {
         "solo" => Some("solo blocked=true"),
@@ -118,6 +119,16 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "nav-rename-far" => Some("shown=true box=true"),
         "nav-rename-drop" if arg == "fold" => Some("nav_drop how=fold collapsed=true box=false"),
         "nav-rename-drop" => Some("nav_drop how=away collapsed=false box=false"),
+        // The same walking away, over the graph: a press that landed
+        // somewhere else takes an empty box with it and leaves one with
+        // something typed in it standing. Both halves are read off the
+        // report because the picture holds only one of the two states,
+        // and the card the run is about fades — so `shown=` says which
+        // end of that fade the picture was taken at.
+        "find-drop" if arg.is_empty() => Some("find_drop open=false shown=false"),
+        "find-drop" => Some("find_drop open=true shown=true"),
+        "name-box-drop" if arg.contains(':') => Some("name_drop box=true"),
+        "name-box-drop" => Some("name_drop box=false"),
         // The `+` on a REMOTES band that has gone unavailable around it.
         // The picture holds the band; it cannot hold whether the mark
         // still answers, and a `+` wired to nothing frames exactly like
