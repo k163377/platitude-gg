@@ -198,8 +198,17 @@ Item {
     // row's own coordinates rather than a hover area inside the chip: this one is on top, so it is the one that hears
     // about the pointer at all.
     property Item hoveredChip: null
-    /// This row's chip is the one with the list open under it.
+    /// This row's chip is the one with the list open on it.
     property bool chipHeld: false
+    /// The open list is this row's chip's — read back from the page, which owns the card. What the row skips while this
+    /// is true (above) it has to take back the moment it goes false, or the chip stays "the one the hand is on" and a
+    /// hand coming back to it is taken for one that never left, so the list never opens again.
+    readonly property bool listOnThisChip:
+        rowItem.ListView.view ? rowItem.ListView.view.chipListAnchor === chipColumn.chipItem : false
+    onListOnThisChipChanged: {
+        if (!rowItem.listOnThisChip && !rowMouse.containsMouse)
+            rowItem.noteChipHover(-1, -1)
+    }
     function chipUnder(px, py) {
         const p = rowItem.mapToItem(chipColumn, px, py)
         return chipColumn.chipAt(p.x, p.y, rowItem.chipHeld)
@@ -286,8 +295,16 @@ Item {
         }
         onPositionChanged: mouse => rowItem.noteChipHover(mouse.x, mouse.y)
         onContainsMouseChanged: {
-            if (!rowMouse.containsMouse)
-                rowItem.noteChipHover(-1, -1)
+            if (rowMouse.containsMouse)
+                return
+            // The list opens *on* the chip, so this area loses the pointer the instant it is drawn — a row under a
+            // popup sees no hover at all. That leave says nothing about where the hand went, and answering it takes the
+            // list down under the hand that asked for it. **Only the row the list is standing on skips it**, and only
+            // while it stands: the hand walking off anywhere else lands on another row, which reports a real point and
+            // puts the list away (`noteChipHover`), and the card holds itself once it has the pointer (`RowHoverHost`).
+            if (rowItem.listOnThisChip)
+                return
+            rowItem.noteChipHover(-1, -1)
         }
     }
     /// Where the pointer is along the row, so the card can open under it rather than at the row's left edge — a row is

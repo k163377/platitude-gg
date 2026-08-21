@@ -95,17 +95,54 @@ Item {
         rowCard.close()
     }
 
+    /// What the list puts between a chip's own edge and the card's, on
+    /// whichever side: the card's padding and the gap a row keeps in
+    /// front of the chip. Both edges spend the same, so one term
+    /// measures either side.
+    readonly property real listAround: Theme.spaceXs + Theme.spaceSm
+
+    /// Opens the chip's names on the chip's own seat.
+    ///
+    /// **The first row lands exactly on the chip** (規約 §グラフ行の
+    /// ダブルクリック), so the name the chip was showing is not written
+    /// out again beside itself, and the `+N` is covered by the row that
+    /// takes its place. Which way the rest of the card grows is decided
+    /// here, once, from what is left of the page on either side — a
+    /// measured answer, so a function pushes it out rather than a
+    /// binding reading it back (規約 §QML 実装ルール).
     function openRefList(records, anchor) {
-        const at = anchor.mapToItem(host, 0, anchor.height)
+        const at = anchor.mapToItem(host, 0, 0)
+        const chipRight = at.x + anchor.width
         // The row's card opens under the pointer, which is on the chip
         // — it would be drawn over the list the chip is opening.
         host.closeRowCard()
         refList.records = records
+        // How wide the card could be on each side, anchored where it
+        // has to be anchored. The lanes and the message are to the
+        // right of the chips, so the left is the side that covers
+        // nothing anyone is reading it for — it is tried first, and the
+        // right takes over only when it is the side with more to give.
+        const leftMost = chipRight + host.listAround
+        const rightMost = host.width - at.x + host.listAround
+        refList.alignRight = true
+        refList.chipRoom = leftMost - 2 * host.listAround
         // Sized before it is shown, so it does not grow under the hand
         // that is walking into it — see the function.
         refList.layOutRows()
-        refList.x = at.x
-        refList.y = at.y
+        if (refList.wantWidth > leftMost && rightMost > leftMost) {
+            refList.alignRight = false
+            refList.chipRoom = rightMost - 2 * host.listAround
+            refList.layOutRows()
+        }
+        refList.x = refList.alignRight ? leftMost - refList.cardWidth
+                                       : at.x - host.listAround
+        // Down from the chip, and kept inside the page: a card longer
+        // than what is under the chip would otherwise be moved by
+        // `Popup` itself, which knows nothing about the seat it is
+        // keeping (it still covers the chip either way — the card is
+        // taller than one).
+        refList.y = Math.max(0, Math.min(at.y - refList.padding - refList.chipInset,
+                                         host.height - refList.cardHeight))
         host.refListWanted = true
         host.refListAnchor = anchor
         refList.open()
@@ -126,6 +163,17 @@ Item {
         currentBranch: host.currentBranch
         onPicked: record => host.recordActivated(record)
         onMenuAsked: record => host.recordMenuAsked(record)
+        // The card is drawn over the chip that raised it, so the chip
+        // stops being able to say the hand is still on it — the row
+        // under a popup sees no hover at all. Until the card itself has
+        // the pointer, the ask that opened it is what holds it up
+        // (`refListWanted` stays on through the leave the row reports
+        // the instant this is drawn); from the moment the card has it,
+        // the card holds itself, and letting go is what closes it.
+        onPointerInsideChanged: {
+            if (refList.pointerInside)
+                host.refListWanted = false
+        }
         onClosed: {
             host.refListWanted = false
             host.refListAnchor = null
