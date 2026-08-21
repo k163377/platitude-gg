@@ -33,4 +33,11 @@ Rectangle {
     implicitWidth: Theme.splitterWidth
     implicitHeight: Theme.splitterWidth
     color: Theme.borderSubtle
+    // Under the panes rather than over them. **A handle is not laid out inside the content** — SplitView parents it to
+    // itself and the panes to its contentItem — so a pane that draws past its own edge is drawn under this bar
+    // whatever `z` the pane is given. Nothing reaches into this strip in the ordinary way (the layout stops each pane
+    // at the bar's edge), so this changes nothing until something crosses it deliberately, and the one thing that does
+    // is the left menu's name box reaching out past its pane (`NavNameBox`). The bar cut the question in half
+    // (2026-08-21 ユーザー報告). The hand still finds it: an uncovered strip has nothing above it to take the press.
+    z: -1
 }
