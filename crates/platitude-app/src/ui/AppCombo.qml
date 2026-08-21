@@ -91,12 +91,16 @@ ComboBox {
         MouseArea {
             anchors.fill: parent
             enabled: combo.pickOnly
-            onClicked: {
-                if (combo.popup.opened)
-                    combo.popup.close()
-                else
-                    combo.offer()
-            }
+            onClicked: combo.pressField()
+        }
+        // Where the name can also be typed, Qt hands the press straight to the input and only the small mark at the
+        // right edge opens anything — so the answers this field already knows stay hidden behind a target the width of
+        // an icon. A handler rather than a MouseArea, because the input still needs that press to put the caret where
+        // it was aimed; and a tap rather than a press, so dragging a selection out of the text does not drop the list
+        // over what is being selected.
+        TapHandler {
+            enabled: !combo.pickOnly
+            onTapped: combo.pressField()
         }
         Label {
             anchors.fill: parent
@@ -110,33 +114,60 @@ ComboBox {
     }
 
     indicator: Item {
+        id: seat
         x: combo.width - width - Theme.spaceSm
         y: (combo.height - height) / 2
         width: Theme.iconMd
         height: Theme.iconMd
-        NavIcon {
-            id: seatMark
+        // Nothing to open, nothing to point at (see `hasList`).
+        visible: combo.hasList
+        // The ring turns in one place at a time: here while the card is shut, inside the card once it is up — two of
+        // them a row apart would be one waiting said twice.
+        readonly property bool waits: combo.loading && !combo.popup.opened
+        // Two marks in one seat rather than one mark that changes kind, because an animator **takes** the property it
+        // turns: the ring's first frame kills the binding that stands the arrow on end, and nothing puts it back when
+        // the ring stops — so the seat kept whatever angle the last frame left, and the arrow that came back pointed
+        // sideways at a list that comes **down** (2026-08-21 ユーザー報告 — the merge editor's seat, after its
+        // `--tool-help` read landed). Invisible in headless, where the ring is held still for the camera and the
+        // binding therefore survives. Split, the arrow is never animated and has no angle to lose.
+        SpinnerIcon {
             anchors.fill: parent
-            // Nothing to open, nothing to point at (see `hasList`).
-            visible: combo.hasList
-            // The ring turns in one place at a time: here while the card is shut, inside the card once it is up — two
-            // of them a row apart would be one waiting said twice.
-            readonly property bool waits: combo.loading && !combo.popup.opened
-            kind: waits ? "spinner" : "chevron"
+            spinning: seat.waits
+        }
+        NavIcon {
+            anchors.fill: parent
+            visible: !seat.waits
+            kind: "chevron"
             tint: Theme.textSecondary
-            // Only the turning one is animated; the arrow keeps the angle it was drawn at (an animator leaves it where
-            // it stopped).
-            rotation: waits ? 0 : 90
-            // On the render thread, so it keeps turning while the GUI thread drains models.
-            RotationAnimator on rotation {
-                running: seatMark.waits && AppBackend.shotDir === ""
-                loops: Animation.Infinite
-                from: 0
-                to: 360
-                duration: Metrics.spinMs
-            }
+            // Drawn pointing right, stood on end here: down is where the list comes from.
+            rotation: 90
         }
     }
+
+    /// What a press on the field means, wherever the press came from.
+    ///
+    /// Picking only, the field is a button and one press is the whole errand, so it toggles. Where the name can also be
+    /// typed, the press is asking two things at once — "let me type here" and "show me what you already know" — and
+    /// they are not in conflict: the caret lands where it was pressed and the list comes down beside it, so nobody has
+    /// to find the mark at the right edge to learn there were answers. A second press inside the text is someone moving
+    /// that caret, not putting the list away; the mark at the edge and Escape are what shut it.
+    function pressField() {
+        if (combo.pickOnly) {
+            if (combo.popup.opened)
+                combo.popup.close()
+            else
+                combo.offer()
+            return
+        }
+        // Redundant under a real press — the input takes the caret itself — and the whole of what "was pressed" can
+        // mean to the automation verb, which has no pointer to put anywhere.
+        input.forceActiveFocus()
+        combo.offer()
+    }
+
+    /// Whether a letter typed right now would land in the field. The list coming down must not take the caret with it,
+    /// and that is not a thing a photograph can answer.
+    readonly property bool typing: !combo.pickOnly && input.activeFocus
 
     /// Opens the list. A read still out counts as something to open — the card says so with its own ring (see
     /// `hasList`).
@@ -162,6 +193,10 @@ ComboBox {
         y: combo.height
         width: combo.width
         padding: Theme.spaceXs
+        // Outside the *field*, not outside the card: the field's own press is what opens the list now, and under the
+        // default policy that same press closes it first — leaving a press that flickers the list instead of dropping
+        // it, and a chooser whose second press could never close it at all.
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         // The other way in is the control's own press, which Qt takes before anything here sees it.
         //
         // The arrows start from the answer as well, so the wash that says where they are does not land on a row nobody

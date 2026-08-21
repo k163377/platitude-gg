@@ -104,6 +104,7 @@ AppDialog {
                               + " configured=" + settingsDialog.mergeTool + " settled=" + (settingsDialog.curPage
                                   && !settingsDialog.curPage.pageTab.mergeToolsLoading)
                               + " loading=" + toolField.loading + " open=" + toolField.popup.opened
+                              + " typing=" + toolField.typing
                               + " choices=" + settingsDialog.toolChoices.length)
     }
     onToolChoicesChanged: settingsDialog.reportTool()
@@ -126,8 +127,6 @@ AppDialog {
             if (AppBackend.autoAct === "settings-tools-loading" && settingsDialog.curPage.pageTab.mergeToolsLoading)
                 settingsDialog.autoToolLoadingLatched = true
         }
-        if (AppBackend.autoAct === "settings-tools" || AppBackend.autoAct === "settings-tools-loading")
-            toolField.popup.open()
         // Opened from an avatar, the first thing left to do is name the
         // picture, so the focus goes there rather than to the top field.
         if (settingsDialog.prefillEmail !== "") {
@@ -140,6 +139,14 @@ AppDialog {
             avatarWho.editText = ""
             fetchField.forceActiveFocus()
         }
+        // Through the press rather than the popup: what these two are for
+        // is the state a finger on the field leaves behind, and opening
+        // the card from here would photograph that just as well with the
+        // wiring cut. Last, because a press also takes the caret — the
+        // focus settled just above is the one a person would be taking it
+        // from.
+        if (AppBackend.autoAct === "settings-tools" || AppBackend.autoAct === "settings-tools-loading")
+            toolField.pressField()
     }
     // Escape and the button are the same exit, so both leave the fields
     // written: with no Cancel there is nothing for a discard to mean.

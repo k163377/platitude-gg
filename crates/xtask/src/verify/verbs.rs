@@ -196,9 +196,12 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "fetch-tip" if arg == "off" => Some("fetch_tip enabled=false tip=false remotes=0"),
         "fetch-tip" => Some("fetch_tip enabled=true tip=true"),
         // The same popup has a real loading and a causally settled form;
-        // neither is selected by a millisecond window.
-        "settings-tools-loading" => Some("settled=false loading=true open=true"),
-        "settings-tools" => Some("settled=true loading=false open=true"),
+        // neither is selected by a millisecond window. Both are opened by
+        // the field's own press, and `typing=` is the half of that press a
+        // photograph cannot answer: the list must come down without taking
+        // the caret out of the box it came from.
+        "settings-tools-loading" => Some("settled=false loading=true open=true typing=true"),
+        "settings-tools" => Some("settled=true loading=false open=true typing=true"),
         // `edge=` rides along in that report but is not judged: whether an
         // edge would land off the screen is a question about a real
         // monitor, and the offscreen platform has none to answer with.
