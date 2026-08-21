@@ -34,6 +34,12 @@ Canvas {
         // Two rotated pieces: the body and the point, turned 45° about the middle, so what they span sideways is their
         // diagonal.
         case "pen": return 10
+        // The two commit rings, each 1.7 either side of its own centre (4.5 and 11.5). The elbow and the arrowhead it
+        // carries both stand inside them.
+        case "pr": return 10.4
+        // The three lobes as drawn: the left one reaches 2.0 and the right one 14.72. **Not centred in its box** —
+        // which is why this kind answers `inkRightGrid` as well.
+        case "remote": return 12.72
         default: return 16
         }
     }
@@ -55,6 +61,10 @@ Canvas {
         // The tick's high end, and the dot the stem hangs over (8 ± its own radius).
         case "check": return 12.5
         case "bang": return 9
+        // The far ring, and the far lobe: the badge a chip wears is set against the frame's right, so both of the
+        // kinds that stand in that slot answer here.
+        case "pr": return 13.2
+        case "remote": return 14.72
         default: return 16
         }
     }
@@ -70,6 +80,10 @@ Canvas {
     readonly property real inkWidth:
         (icon.rotation % 180 === 0 ? icon.inkGrid : icon.inkTallGrid)
         / 16 * icon.width + icon.stroke
+    /// Where that ink's right edge falls in the item's own pixels, with the half line the cap hangs over it — so
+    /// `width - inkRight` is the air the box holds on that side, which is what a caller seating this mark against
+    /// something on its right takes off (デザイン規約 §余白). Asked of the unturned mark, the way `inkRightGrid` is.
+    readonly property real inkRight: icon.inkRightGrid / 16 * icon.width + icon.stroke / 2
     width: Theme.iconMd
     height: Theme.iconMd
     onKindChanged: requestPaint()

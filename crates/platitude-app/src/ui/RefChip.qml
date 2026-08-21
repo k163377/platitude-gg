@@ -39,20 +39,33 @@ Rectangle {
     // is clipped in a family whose lines are taller than the box (the CJK ones are). **A one-line chip is the same
     // eighteen it always was** — the term is zero.
     height: Theme.fontChipLine + Math.max(0, chip.nameLines - 1) * chipFont.lineSpacing + 2 * Theme.borderWidth
-    width: Math.min(chipContent.implicitWidth + 2 * Theme.spaceXs, maxWidth)
+    // **The frame is drawn on whole pixels.** Every term inside is fractional — glyph advances, and a mark's seat is
+    // its ink — so the box lands wherever the sum does, and a box whose width stops just past a whole pixel **loses its
+    // right border altogether**: the top and bottom rules and both corners are drawn, and the straight run between them
+    // is not (2026-08-22 実測 — `main +4` came to 71.04 and drew three sides; the same chip at 72 draws four. The chip
+    // clips, which is what puts its own frame under the cut). Rounded up, so the box is never narrower than what it
+    // holds; the pixel that buys goes where a layout's remainder goes anyway, into the padding at the end (§余白).
+    width: Math.min(Math.ceil(chipContent.implicitWidth) + 2 * Theme.spaceXs, maxWidth)
     /// How many lines the name came out on. Only a wrapped chip can answer more than one.
     readonly property int nameLines: chip.wrapped ? Math.max(1, nameLabel.lineCount) : 1
     /// Everything in the chip that is not the name: the `+N` seat, the badge with its gap, and the held mark with its
     /// own. Each is counted only while it is drawn — the two marks come and go, and a name measured against room that
     /// is not taken would be cut short of the frame.
     readonly property real furnitureW: (chip.records.length > 1 ? Theme.spaceLg : 0)
-                                       + (chip.hasBadge ? Theme.iconSm + Theme.spaceXs : 0)
+                                       + (chip.hasBadge ? chip.badgeSeat + Theme.spaceXs : 0)
                                        + (chip.recHeld ? chip.heldSeat + Theme.spaceXs : 0)
     /// What the held mark's ink actually spans (`NavIcon.inkWidth`) — the air a square seat would add is the mark's
     /// own, and belongs to the gap beside it (デザイン規約 §余白).
     readonly property real heldInk: heldMark.inkWidth
     /// The seat that ink sits in: half a gap narrower, so the mark comes that much nearer the name it belongs to.
     readonly property real heldSeat: chip.heldInk - Theme.spaceXs / 2
+    /// The same pair for the badge at the other end. **Both marks in the chip are seated to their ink**, so the frame
+    /// keeps a whole gap on either side of it and each mark gives the other half back to what it stands beside — the
+    /// chip comes out `spaceXs` / half / … / half / `spaceXs`, the same figures read from both ends (2026-08-22 ユーザー
+    /// 判断). The cloud needs it more than the tree does: it is drawn 2.0 of the sixteen in from its own left edge, so
+    /// the gap before it was that air on top of the row's spacing.
+    readonly property real badgeInk: badgeMark.inkWidth
+    readonly property real badgeSeat: chip.badgeInk - Theme.spaceXs / 2
     /// What is left for the name inside `maxWidth`.
     readonly property real nameRoom: chip.maxWidth - 2 * Theme.spaceXs - chip.furnitureW
     radius: Theme.radiusSm
@@ -207,15 +220,32 @@ Rectangle {
             font.pixelSize: Theme.fontSm
         }
         // Remote / PR badge: reserved width above, so it survives any elision.
-        NavIcon {
+        //
+        // **Seated to its ink, like the mark at the other end**, and for the reason that one is: a square seat hands
+        // the mark's own air to the gaps on both sides of it, and the cloud carries two of the sixteen on its left. The
+        // gap before it then read as the row's `spaceXs` **plus** that — the one place in the chip where two spacings
+        // added up, and wider than the same token spends anywhere else in the same frame (デザイン規約 §余白; 2026-08-22
+        // ユーザー報告).
+        Item {
             visible: chip.hasBadge
+            width: chip.badgeSeat
+            height: Theme.iconSm
             // On the first line's box, not on the middle of the frame — the two are the same height until a name wraps,
             // and a badge that centres itself on a three-line chip has left the name it belongs to.
             y: Theme.borderWidth + Math.round((Theme.fontChipLine - Theme.iconSm) / 2)
-            kind: chip.recPr ? "pr" : "remote"
-            tint: chip.dulled ? Theme.textMuted : chip.recPr ? Theme.success : Theme.textSecondary
-            width: Theme.iconSm
-            height: Theme.iconSm
+            NavIcon {
+                id: badgeMark
+                anchors.verticalCenter: parent.verticalCenter
+                // The ink's right edge on the seat's, which is where the frame's own padding starts: the air the box
+                // holds past the ink comes off here rather than widening that padding, and the ink runs half a gap out
+                // the other side into the row's spacing.
+                anchors.right: parent.right
+                anchors.rightMargin: -(badgeMark.width - badgeMark.inkRight)
+                kind: chip.recPr ? "pr" : "remote"
+                tint: chip.dulled ? Theme.textMuted : chip.recPr ? Theme.success : Theme.textSecondary
+                width: Theme.iconSm
+                height: Theme.iconSm
+            }
         }
     }
 }
