@@ -736,22 +736,6 @@ ColumnLayout {
                         implicitHeight: Theme.controlHeight
                         onToggled: wipPane.amendToggled(checked)
                     }
-                    // git records who committed, but leaves the author alone: an amend of someone else's commit — or of
-                    // one's own made under a different name — keeps the name it had. Offered only where the two
-                    // identities actually differ, and unchecked again whenever it goes away.
-                    CheckBox {
-                        id: authorBox
-                        visible: wipPane.amending && wipPane.repoTab.headAuthorDiffers
-                        text: qsTr("Make me the author")
-                        font.pixelSize: Theme.fontSm
-                        implicitHeight: Theme.controlHeight
-                        onVisibleChanged: if (!visible) checked = false
-                        ToolTip.visible: hovered
-                        ToolTip.delay: Metrics.tipDelayMs
-                        ToolTip.text: qsTr("Replaces the author %1 <%2> with you, dated now")
-                                      .arg(wipPane.repoTab.headAuthorName)
-                                      .arg(wipPane.repoTab.headAuthorEmail)
-                    }
                     Item { Layout.fillWidth: true }
                     // Said, not asked: rewriting a pushed commit is undone by a switch or a reset, so the amend goes
                     // ahead and this tag is all the warning it gets.
@@ -770,6 +754,28 @@ ColumnLayout {
                             acceptedButtons: Qt.NoButton
                         }
                     }
+                }
+                // git records who committed, but leaves the author alone: an amend of someone else's commit — or of
+                // one's own made under a different name — keeps the name it had. Offered only where the two
+                // identities actually differ, and unchecked again whenever it goes away.
+                //
+                // **On its own line, under the box it depends on.** Beside it there is no room: the three words the
+                // amend row can be carrying at once want about 392px between them, which is past the 400 this pane
+                // opens at and well past the 300 it can be dragged to — and none of the three elides, so what went
+                // over came off the tag at the end. Stacking is also how a dependent option reads: the stash card
+                // already piles its boxes this way, at this spacing and with no indent (`StashOptionsCard`).
+                CheckBox {
+                    id: authorBox
+                    visible: wipPane.amending && wipPane.repoTab.headAuthorDiffers
+                    text: qsTr("Make me the author")
+                    font.pixelSize: Theme.fontSm
+                    implicitHeight: Theme.controlHeight
+                    onVisibleChanged: if (!visible) checked = false
+                    ToolTip.visible: hovered
+                    ToolTip.delay: Metrics.tipDelayMs
+                    ToolTip.text: qsTr("Replaces the author %1 <%2> with you, dated now")
+                                  .arg(wipPane.repoTab.headAuthorName)
+                                  .arg(wipPane.repoTab.headAuthorEmail)
                 }
                 // The framed button the rest of the app uses, at the size this pane needs. Its frame, its tone and
                 // its `!` are the ones the toolbar's buttons already wear, so the state this button can be in is
