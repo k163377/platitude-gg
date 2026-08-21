@@ -53,6 +53,7 @@ use crate::tag;
 
 mod auto_fetch;
 mod build;
+mod chips;
 mod eol;
 mod event;
 mod feed;
