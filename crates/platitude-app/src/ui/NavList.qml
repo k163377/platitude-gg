@@ -36,6 +36,21 @@ AppListView {
     /// photographed (PG_AUTO_ACT=nav-tip). -1 points at no row. The file lists carry the same property on their own
     /// panes (`WipPane` / `DetailsPane`).
     property int pointedTipRow: -1
+    /// Where a row's open name box is drawn — outside this list, which clips, because the box is allowed past the
+    /// pane's edge when what is in it does not fit (`NavItemDelegate`).
+    ///
+    /// **Two out, not one.** One out is the column the sections are laid out in, and a layout lays out whatever is
+    /// parented into it — a box put there is given the column's own next row (measured: it landed at the foot of the
+    /// pane). Two out is what that column fills, which lays nothing out and clips nothing.
+    ///
+    /// A list whose rows cannot be typed into is left with none: the working tree's file lists have no gestures, so
+    /// no row of theirs ever opens a box, and naming a layer for them would only say where a box that never comes
+    /// would have gone. Settable, for a surface where the box is better off staying in its seat.
+    property Item boxLayer:
+        navList.gestures && navList.parent ? navList.parent.parent : null
+    /// Where this list's rows begin in that layer: its own place in the column, and the column's in the layer.
+    readonly property real boxRowsX: (navList.parent ? navList.parent.x : 0) + navList.x
+    readonly property real boxRowsTop: (navList.parent ? navList.parent.y : 0) + navList.y
 
     signal refActivated(string oidHex)
     signal fileActivated(string bucket, string path, string origPath)
@@ -90,6 +105,29 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.editFocused : false
     }
+    /// The box on one row, as drawn and as the question on it wants to be drawn (PG_AUTO_ACT=nav-branch-box). Neither
+    /// is anything a picture answers: an elided placeholder frames like a shorter question. A row the view has not
+    /// built answers 0 — the same miss `clickRow` reports as false.
+    function rowBoxWidth(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.editBoxWidth : 0
+    }
+    function rowBoxWhole(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.editBoxWhole : 0
+    }
+    function rowBoxSeat(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.editBoxSeat : 0
+    }
+    function rowBoxShown(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.editBoxShown : false
+    }
+    function rowBoxAt(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.editBoxAt : ""
+    }
     /// What the pointed row itself would say, and what it is called (PG_AUTO_ACT=nav-tip). The row decides and the
     /// shared instance shows, so the two are read apart: a row with nothing to say never reaches the instance. Read off
     /// `hoverText` and not the attached `ToolTip.visible` — **that one reads back the instance's own state**, so during
@@ -113,6 +151,13 @@ AppListView {
     function scrollToEnd() {
         navList.contentY = Math.max(0, navList.contentHeight - navList.height)
     }
+    /// A few rows on, which is how a run puts a row just out of sight (PG_AUTO_ACT=nav-branch-box:away). Not to the
+    /// end: past the view's own cache the delegate is gone, and a box that went with it proves nothing about the one
+    /// rule being read — that a box whose row has left the list goes with it.
+    function scrollRows(rows) {
+        navList.contentY = Math.min(Math.max(0, navList.contentHeight - navList.height),
+                                    navList.contentY + rows * Theme.rowHeight)
+    }
 
     visible: expanded
     Layout.fillWidth: true
@@ -126,6 +171,12 @@ AppListView {
     delegate: NavItemDelegate {
         id: row
         listWidth: navList.width
+        // The list's own place in that layer, so a scroll carries the box along with the row it belongs to.
+        boxLayer: navList.boxLayer
+        boxRowsX: navList.boxRowsX
+        boxRowsY: navList.boxRowsTop - navList.contentY
+        boxRowsTop: navList.boxRowsTop
+        boxRowsHeight: navList.height
         kindHint: navList.kindHint
         remoteNames: navList.remoteNames
         markedRemote: navList.markedRemote

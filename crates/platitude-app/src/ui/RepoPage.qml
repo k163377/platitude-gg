@@ -1037,6 +1037,9 @@ Item {
     function setGraphColumns(labels, lanes) {
         pageLayout.setGraphColumns(labels, lanes)
     }
+    function setSidebarWidth(w) {
+        pageLayout.setSidebarWidth(w)
+    }
 
     Component.onCompleted: {
         // The bars that announced themselves before the watcher existed.
@@ -1436,6 +1439,11 @@ Item {
 
                 SidebarPane {
                     id: sidebarPane
+                    // Over the pane beside it while a name box is standing: the box reaches past this pane's edge when
+                    // what is in it does not fit, and the graph is laid out after this one (`NavItemDelegate`). Only
+                    // then — a pane that sat over its neighbour the rest of the time would draw its own edge over the
+                    // splitter.
+                    z: sidebarPane.editKey !== "" ? 1 : 0
                     repoTab: repoTab
                     workTree: workTree
                     branchesModel: branchesModel

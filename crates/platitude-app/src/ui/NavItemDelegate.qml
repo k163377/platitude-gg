@@ -68,6 +68,15 @@ Item {
     property int headAhead: 0
     property int headBehind: 0
     property real listWidth: 200
+    /// Where an open name box is drawn, and where the list showing this row sits in it: where its rows begin, where
+    /// the list itself begins, and how tall it is. All of it comes from the list (`NavList`), so that a scroll moves
+    /// the box with its row and a row carried out of the list takes the box with it. No layer means the box stays in
+    /// its seat, which is what a list nobody can type into hands down.
+    property Item boxLayer: null
+    property real boxRowsX: 0
+    property real boxRowsY: 0
+    property real boxRowsTop: 0
+    property real boxRowsHeight: 0
     // Shows the hover stage/unstage affordance (WIP view).
     property bool showStage: false
     /// Whether this row is one of those chosen (working-tree list). Held by the list, since a delegate is recycled the
@@ -166,6 +175,7 @@ Item {
     // No mark: nothing asks a question about a row in this list any more. What one of these rows takes away is held
     // down on the menu row that names it, and that menu is standing over the row while it is held (デザイン規約 §長押し).
     RowLayout {
+        id: rowLayout
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceMd + navRow.depth * Theme.spaceMd
         anchors.rightMargin: Theme.spaceSm
@@ -208,26 +218,14 @@ Item {
             // What it is about is the row's hover; the sentence in full is the diff pane's.
             marked: navRow.kindHint === "wt" && navRow.eol_mark
         }
-        // The name, in a box, where the name was. Nothing is asked before it opens or when it is walked away from: what
-        // it costs is the typing (デザイン規約 §可否・警告の出し場所).
-        SlimField {
-            id: editField
+        // Where the box stands, and the slack it takes off the row while it is open. The box itself is drawn outside
+        // this layout (below) — it is allowed to be wider than the seat, and a seat that grew with it would push the
+        // row's own columns sideways.
+        Item {
+            id: boxSeat
             visible: navRow.editing
             Layout.fillWidth: true
-            font.pixelSize: Theme.fontMd
-            refused: navRow.editRefused
-            placeholderText: navRow.editMode === "branch" ? qsTr("Create branch here?") : ""
-            onTextEdited: navRow.editTyped(editField.text)
-            // Refused text stays in the box: Enter that does nothing is the answer, and the frame and its tooltip say
-            // why.
-            onAccepted: {
-                if (!navRow.editRefused)
-                    navRow.editAccepted(editField.text)
-            }
-            Keys.onEscapePressed: navRow.editCancelled()
-            ToolTip.visible: navRow.editRefused && editField.activeFocus && navRow.editRefusedWhy !== ""
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: navRow.editRefusedWhy
+            Layout.fillHeight: true
         }
         // Worktree rows: checked-out branch on the right.
         Label {
@@ -272,6 +270,27 @@ Item {
             height: Theme.iconSm
         }
     }
+    // The name, in a box, where the name was — drawn outside the list, which is the box's own business (`NavNameBox`).
+    NavNameBox {
+        id: editField
+        row: navRow
+        seat: boxSeat
+        drawnIn: navRow.boxLayer
+        // Where the seat sits inside the row is the layout's to say, so what the box is told is where the row's own
+        // columns begin; it adds the seat's place to that itself.
+        rowsX: navRow.boxRowsX + rowLayout.x
+        rowsY: navRow.boxRowsY
+        rowsTop: navRow.boxRowsTop
+        rowsHeight: navRow.boxRowsHeight
+        editing: navRow.editing
+        mode: navRow.editMode
+        carried: navRow.editText
+        refused: navRow.editRefused
+        refusedWhy: navRow.editRefusedWhy
+        onTyped: text => navRow.editTyped(text)
+        onSubmitted: text => navRow.editAccepted(text)
+        onCancelled: navRow.editCancelled()
+    }
     // Rows whose name can be changed from here. A remote branch is one of them even though git has no rename over there
     // — core builds the rename out of a push and a delete, and the bar asks before it runs. A folder is not: it is the
     // shape of the names below it, not a name.
@@ -291,17 +310,6 @@ Item {
         interval: Application.styleHints.mouseDoubleClickInterval
         onTriggered: navRow.renameRequested()
     }
-    // The box has to carry the name into itself when it opens, and again when a scrolled-off row is built anew (the
-    // delegate is recycled; the text is not this row's to keep).
-    onEditingChanged: navRow.takeEditFocus()
-    Component.onCompleted: navRow.takeEditFocus()
-    function takeEditFocus() {
-        if (!navRow.editing)
-            return
-        editField.text = navRow.editText
-        editField.selectAll()
-        editField.forceActiveFocus()
-    }
     /// Whether this row is holding the wait the name box opens after, and whether a click landing now would still be
     /// counted as the other half of a double-click. What a headless run reads to see the gesture armed, and to know
     /// when a second click of its own counts as a second (app-ui.md §UI 自動化の因果性).
@@ -310,6 +318,13 @@ Item {
     /// Whether the box on this row has the keyboard. The output side: a box drawn where nothing can be typed reads as
     /// a box, and the folded list's section is a popup, which takes the keyboard only when something in it asks.
     readonly property bool editFocused: editField.activeFocus
+    /// What the box came out as, for the runs that photograph it (`NavNameBox`): as drawn, as what is in it wants,
+    /// whether it is on screen at all, and where it landed.
+    readonly property real editBoxWidth: editField.width
+    readonly property real editBoxWhole: editField.wantWidth
+    readonly property real editBoxSeat: boxSeat.width
+    readonly property bool editBoxShown: editField.visible
+    readonly property string editBoxAt: editField.cameOut
     /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
     /// the row itself rather than at a copy of what the row would have decided (PG_AUTO_ACT=nav-reclick).
     function leftClick(modifiers) {

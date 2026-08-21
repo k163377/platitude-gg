@@ -97,6 +97,12 @@ QtObject {
     function setDetailsWidth(w) {
         layout.rightPane.SplitView.preferredWidth = w
     }
+    /// The same, for the left menu: what a hand dragging its bar would leave. An ask narrower than the list's own
+    /// floor comes back at the floor by the splitter's arithmetic, not by a second copy of it here. Only the headless
+    /// state check calls this; a person drags.
+    function setSidebarWidth(w) {
+        layout.sidebarPane.SplitView.preferredWidth = w
+    }
 
     /// What dragging the two dividers inside the graph would leave. Only the headless state check calls this; a person
     /// drags.
