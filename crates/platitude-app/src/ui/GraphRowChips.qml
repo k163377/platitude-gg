@@ -23,13 +23,17 @@ Item {
     signal namingEdited(string text)
     signal namingCancelled()
 
-    /// Which stacked chip a point in this column's frame is over, if it is over one that has something to unstack.
+    /// Which chip a point in this column's frame is over.
+    ///
+    /// **Every chip answers, stacked or not** (2026-08-21 ユーザー判断): a chip with one name on it is cut to the column
+    /// just the same, and a name that cannot be read is a name that cannot be read — the reason a stack unfolds is the
+    /// reason a single one does. What comes out is the same card either way.
     ///
     /// A chip is a line box and a border — eighteen pixels in a row of twenty-eight — and a hand just arrived is
     /// still settling. Landing takes the chip itself, but once the list is out (`held`) the whole chip column holds it:
     /// drifting a dozen pixels inside the column the chips live in is not leaving them (2026-08-09 trace).
     function chipAt(px, py, held) {
-        if (!rowChip.visible || rowChip.records.length < 2)
+        if (!rowChip.visible)
             return null
         const p = chipColumn.mapToItem(rowChip, px, py)
         if (rowChip.contains(Qt.point(p.x, p.y)))
