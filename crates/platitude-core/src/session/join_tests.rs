@@ -6,7 +6,7 @@
     reason = "the scale measurement reports its number to whoever ran it"
 )]
 
-use super::build::{RefJoins, build_label_map, build_snapshot};
+use super::joins::{RefJoins, build_label_map, build_snapshot};
 use super::*;
 use crate::remote::RemoteTag;
 

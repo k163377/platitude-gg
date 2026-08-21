@@ -60,6 +60,7 @@ mod feed;
 mod graph_refresh;
 #[cfg(test)]
 mod join_tests;
+mod joins;
 mod log;
 mod model;
 mod ops_integrate;

@@ -1,7 +1,7 @@
 //! Snapshot refreshes: refs, status (+ op state), author identity, head
 //! reachability, stashes and worktrees.
 
-use super::build::{RefJoins, build_label_map, build_snapshot, join_key, refs_key, status_key};
+use super::joins::{RefJoins, build_label_map, build_snapshot, join_key, refs_key, status_key};
 use super::*;
 
 impl RepoSession {
