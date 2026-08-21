@@ -51,7 +51,7 @@
 | `clean` | `-f` `-d` | 古参 |
 | `commit` | `--amend` / `--allow-empty` / `--reset-author` / `--no-edit` / `--cleanup=whitespace` / `--file` | 2.43.0 ✓ |
 | `commit-tree` | `-p` / `-m` | 古参(1.7.6) |
-| `config` | `--get` / `--get-regexp` / `-z` / `--global` / 書き込みは旧形式 `config <key> <value>` | 古参 |
+| `config` | `--get` / `--get-regexp` / `-z` / `--global` / `--show-scope` / `--unset` / 書き込みは旧形式 `config <key> <value>` | 古参 + **`--show-scope` は 2.26** ✓(`remote.pushDefault` を「どの階層が決めたか」ごと読む 1 本)。`--unset` の exit 5(元から無い)も 2.43 実測 |
 | `diff` | `--cached` / `--no-ext-diff` / `--find-renames` / `--name-status` / `-z` / `--no-index` | 古参(`--no-index` 1.5.1) |
 | `diff-tree` | `-r` / `--no-commit-id` / `-z` / `--name-status` / `--find-renames` / `--root` / `--no-ext-diff` | 2.43.0 ✓ |
 | `fetch` | `--prune` / `--all` | 古参(1.6.5 / 1.6.6) |
