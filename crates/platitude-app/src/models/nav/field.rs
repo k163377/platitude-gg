@@ -87,6 +87,16 @@ impl NavSectionModel {
             }),
             Role::Change => match of {
                 Entry::File { item, bucket } => Value::Spelled(letters_of(item, bucket)),
+                // A worktree row has no change code, so it keeps the
+                // state of the checkout in the same shared slot — the
+                // mark the row opens with (`item::LOCKED`).
+                Entry::Worktree { entry, .. } => Value::Said(if entry.locked {
+                    LOCKED
+                } else if entry.prunable {
+                    PRUNABLE
+                } else {
+                    ""
+                }),
                 _ => Value::Said(""),
             },
             Role::Bucket => Value::Said(match of {
@@ -107,6 +117,21 @@ impl NavSectionModel {
                     item: platitude_core::status::StatusItem::Tracked { orig_path, .. },
                     bucket: Bucket::Staged,
                 } => orig_path.as_deref().unwrap_or(""),
+                // A worktree row's words for the state in the slot
+                // beside it: what the lock was given as its reason, or
+                // git's own sentence for why it would be pruned. Empty
+                // on an ordinary checkout — **and on a lock taken
+                // without a reason**, which is a state of its own (the
+                // row then says `Locked` and nothing after it).
+                Entry::Worktree { entry, .. } => {
+                    if entry.locked {
+                        &entry.lock_reason
+                    } else if entry.prunable {
+                        &entry.prune_reason
+                    } else {
+                        ""
+                    }
+                }
                 _ => "",
             }),
             // The same source, written the way this row writes names: the
@@ -245,6 +270,9 @@ mod tests {
             bare: false,
             detached: false,
             locked: false,
+            lock_reason: String::new(),
+            prunable: false,
+            prune_reason: String::new(),
         };
         let mut model = section(
             "worktrees",
@@ -264,5 +292,60 @@ mod tests {
         // The one this window is showing is marked, however git spelled it.
         assert!(flags(&model, 1, Role::IsHead));
         assert_eq!(model.head_row, 1);
+    }
+
+    /// The seat a worktree row opens with, and the words behind it — both
+    /// out of slots the row shares with the other kinds, so a change to
+    /// either would draw the wrong mark rather than fail (`item::LOCKED`).
+    #[test]
+    fn a_worktree_row_wears_the_state_of_its_checkout() {
+        let entry = |path: &str, locked: bool, reason: &str, prunable: bool| {
+            platitude_core::worktrees::WorktreeEntry {
+                path: path.to_string(),
+                branch: Some("topic".to_string()),
+                head_hex: None,
+                bare: false,
+                detached: false,
+                locked,
+                lock_reason: reason.to_string(),
+                prunable,
+                prune_reason: if prunable {
+                    "gitdir file points to non-existent location".to_string()
+                } else {
+                    String::new()
+                },
+            }
+        };
+        let mut model = section(
+            "worktrees",
+            Source::Worktrees {
+                list: vec![
+                    entry("C:\\work\\plain", false, "", false),
+                    entry("C:\\work\\held", true, "release run", false),
+                    entry("C:\\work\\quiet", true, "", false),
+                    entry("C:\\work\\gone", false, "", true),
+                    // git reports both on one entry; the lock is the one
+                    // somebody chose, so it is the one the seat shows.
+                    entry("C:\\work\\both", true, "release run", true),
+                ],
+                current: String::new(),
+            },
+        );
+        model.arrange();
+        assert_eq!(says(&model, 0, Role::Change), "");
+        assert_eq!(says(&model, 0, Role::OrigPath), "");
+        assert_eq!(says(&model, 1, Role::Change), "LOCKED");
+        assert_eq!(says(&model, 1, Role::OrigPath), "release run");
+        // A lock taken without a reason is still a lock: the mark comes
+        // out and there is nothing to say beside it.
+        assert_eq!(says(&model, 2, Role::Change), "LOCKED");
+        assert_eq!(says(&model, 2, Role::OrigPath), "");
+        assert_eq!(says(&model, 3, Role::Change), "PRUNABLE");
+        assert_eq!(
+            says(&model, 3, Role::OrigPath),
+            "gitdir file points to non-existent location"
+        );
+        assert_eq!(says(&model, 4, Role::Change), "LOCKED");
+        assert_eq!(says(&model, 4, Role::OrigPath), "release run");
     }
 }

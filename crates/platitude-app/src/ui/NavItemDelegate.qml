@@ -166,6 +166,13 @@ Item {
             folder: navRow.folder
             change: navRow.change
             showChange: navRow.kindHint === "wt"
+            // A worktree row has no change code, so the seat carries the state of the checkout instead — the same
+            // shared slot a folder keeps its fold state in (`models::nav::item`). A lock is somebody's choice and
+            // wears the quiet colour every other row mark does; a folder git can no longer find is a warning.
+            seatMark: navRow.kindHint !== "worktree" ? ""
+                    : navRow.change === "LOCKED" ? "lock"
+                    : navRow.change === "PRUNABLE" ? "bang" : ""
+            seatTint: navRow.change === "PRUNABLE" ? Theme.warning : Theme.textSecondary
             name: navRow.name
             // Where a renamed file came from, said the same way the commit's own file list says it: a rename is two
             // names, and a row that shows only the new one leaves the reader to work out what moved. Empty on
@@ -376,8 +383,18 @@ Item {
         // in `orig_path` (`full` is the fold key, and a ref folder's fold key is its own path).
         if (navRow.folder)
             return navRow.kindHint === "wt" ? navRow.orig_path : full
-        if (navRow.kindHint === "worktree")
+        if (navRow.kindHint === "worktree") {
+            // The state of the checkout comes before where the row leads: it is what the mark in the seat cannot spell
+            // out, and on a locked row the words git was given are the whole of what a reader hovers to learn (デザイン規約
+            // §hover のツールチップ: 結論から 1 行). A lock taken without a reason has nothing after the word.
+            if (navRow.change === "LOCKED")
+                return navRow.orig_path === "" ? qsTr("Locked")
+                                               : qsTr("Locked — %1").arg(navRow.orig_path)
+            if (navRow.change === "PRUNABLE")
+                return navRow.orig_path === "" ? qsTr("Folder is gone")
+                                               : qsTr("Folder is gone — %1").arg(navRow.orig_path)
             return qsTr("Open %1 in a new tab").arg(full)
+        }
         if (navRow.kindHint === "stash")
             return navRow.name
         if (navRow.kindHint === "branch" || navRow.kindHint === "tag" || navRow.kindHint === "remote")

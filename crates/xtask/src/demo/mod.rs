@@ -12,6 +12,7 @@ mod repo;
 mod scale;
 mod signing;
 mod tags;
+mod worktrees;
 
 pub use presets::{create, create_named, run};
 pub(crate) use scale::pasted;

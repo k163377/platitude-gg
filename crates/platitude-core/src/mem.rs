@@ -296,7 +296,11 @@ impl Footprint for crate::stash::StashEntry {
 
 impl Footprint for crate::worktrees::WorktreeEntry {
     fn heap_bytes(&self) -> usize {
-        self.path.heap_bytes() + self.branch.heap_bytes() + self.head_hex.heap_bytes()
+        self.path.heap_bytes()
+            + self.branch.heap_bytes()
+            + self.head_hex.heap_bytes()
+            + self.lock_reason.heap_bytes()
+            + self.prune_reason.heap_bytes()
     }
 }
 

@@ -265,6 +265,18 @@ Canvas {
             ctx.beginPath()
             ctx.arc(8 * s, 6.2 * s, 1.2 * s, 0, 2 * Math.PI)
             ctx.fill()
+        } else if (icon.kind === "lock") {
+            // A padlock, shut. Drawn rather than borrowed from a symbol font for the reason `eye` is — U+1F512 is in
+            // none of the families the chain names, so a glyph would be a different shape on each of the three
+            // platforms. **The shackle keeps its legs**: an arc that lands straight on the body's top edge merges with
+            // that edge at the size a row wears this, and what came out read as a box with a lid.
+            ctx.beginPath()
+            ctx.moveTo(5.6 * s, 8.2 * s)
+            ctx.lineTo(5.6 * s, 6.8 * s)
+            ctx.arc(8 * s, 6.8 * s, 2.4 * s, Math.PI, 2 * Math.PI)
+            ctx.lineTo(10.4 * s, 8.2 * s)
+            ctx.stroke()
+            ctx.strokeRect(3.5 * s, 8.2 * s, 9 * s, 5.3 * s)
         } else if (icon.kind === "folder") {
             ctx.beginPath()
             ctx.moveTo(2.5 * s, 12.5 * s)

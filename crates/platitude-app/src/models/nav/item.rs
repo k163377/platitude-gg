@@ -72,6 +72,20 @@ impl platitude_core::mem::Footprint for NavItem {
 /// What a folder row puts in `change` while it is closed.
 pub const FOLDED: &str = "FOLDED";
 
+/// What a worktree row puts in the same slot: the state of the checkout
+/// itself, since it has no change code of its own. Read back by
+/// `NameCell.seatMark`, which draws the mark the row opens with — the
+/// seat a folder's arrow and a file's change letter share.
+///
+/// **Locked wins over prunable.** git can report both on one entry, and
+/// they answer different questions: a lock is what somebody chose, a
+/// prune is what happened to the folder. One seat holds one mark, and
+/// the chosen one is the one a reader can act on.
+pub const LOCKED: &str = "LOCKED";
+/// `git worktree prune` would drop this entry — the folder it names is
+/// gone from where git's administrative file says it is.
+pub const PRUNABLE: &str = "PRUNABLE";
+
 pub(super) fn fold_state(expanded: bool) -> String {
     if expanded {
         String::new()

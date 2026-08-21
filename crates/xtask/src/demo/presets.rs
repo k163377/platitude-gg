@@ -14,6 +14,7 @@ use super::repo::DemoRepo;
 use super::scale::{deep, edges, long, longpaths, manyhunks, widelines};
 use super::signing::{errsig, signed};
 use super::tags::{manytags, tags};
+use super::worktrees::worktrees;
 
 pub fn run(args: &[String]) -> Result<PathBuf, String> {
     let mut preset: Option<&str> = None;
@@ -83,6 +84,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "longpaths" => longpaths(&mut repo)?,
         "manyhunks" => manyhunks(&mut repo)?,
         "widelines" => widelines(&mut repo)?,
+        "worktrees" => worktrees(&mut repo)?,
         "empty" => {}
         other => return Err(format!("unknown preset: {other}")),
     }

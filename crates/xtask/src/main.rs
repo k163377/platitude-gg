@@ -94,6 +94,10 @@ commands:
         widelines one unstaged file whose lines run far past the pane:
                   the only shape with anywhere sideways to go, so the
                   only one the diff's own bar comes out on (code-send)
+        worktrees six linked working copies, one in each state git can
+                  report: ordinary, detached, locked with a reason,
+                  locked without one, one whose folder is gone, and one
+                  whose folder and branch both run past the pane
         empty     `git init` and nothing else
 
   verify-ui <verb> [arg] [options]

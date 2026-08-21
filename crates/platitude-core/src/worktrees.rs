@@ -19,6 +19,18 @@ pub struct WorktreeEntry {
     pub bare: bool,
     pub detached: bool,
     pub locked: bool,
+    /// What `git worktree lock --reason` was given, as git prints it
+    /// after the word. Empty both when the entry is not locked and when
+    /// it was locked without one, so `locked` is the flag and this is
+    /// only ever the words beside it.
+    pub lock_reason: String,
+    /// `git worktree prune` would drop this entry — its directory is
+    /// gone from where the administrative file says it is. The entry is
+    /// still listed, and the path it names leads nowhere.
+    pub prunable: bool,
+    /// Why git would drop it, in git's own words (`gitdir file points to
+    /// non-existent location`). Empty when `prunable` is false.
+    pub prune_reason: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -50,6 +62,9 @@ pub fn parse_worktrees(bytes: &[u8]) -> Result<Vec<WorktreeEntry>, WorktreeParse
                 bare: false,
                 detached: false,
                 locked: false,
+                lock_reason: String::new(),
+                prunable: false,
+                prune_reason: String::new(),
             });
             continue;
         }
@@ -70,14 +85,33 @@ pub fn parse_worktrees(bytes: &[u8]) -> Result<Vec<WorktreeEntry>, WorktreeParse
             entry.bare = true;
         } else if line.as_ref() == "detached" {
             entry.detached = true;
-        } else if line.starts_with("locked") {
+        } else if let Some(reason) = annotation(&line, "locked") {
             entry.locked = true;
+            entry.lock_reason = reason.to_string();
+        } else if let Some(reason) = annotation(&line, "prunable") {
+            entry.prunable = true;
+            entry.prune_reason = reason.to_string();
         }
     }
     if let Some(entry) = cur.take() {
         out.push(entry);
     }
     Ok(out)
+}
+
+/// A flag line that may carry words after it (`locked`, `prunable`):
+/// `Some("")` for the bare word, `Some(reason)` for the word and its
+/// reason, `None` for anything else. **Not `strip_prefix` on its own** —
+/// that would read a future `lockedsomething` as this flag, and git adds
+/// attributes to this listing (the parse ignores the ones it does not
+/// know precisely so that it can).
+fn annotation<'a>(line: &'a str, word: &str) -> Option<&'a str> {
+    if line == word {
+        return Some("");
+    }
+    line.strip_prefix(word)
+        .and_then(|rest| rest.strip_prefix(' '))
+        .map(str::trim)
 }
 
 /// Loads the worktree list.
@@ -145,7 +179,76 @@ mod tests {
         let list = parse_worktrees(&bytes).unwrap();
         assert!(list[0].bare);
         assert!(list[1].locked);
+        assert_eq!(list[1].lock_reason, "reason text");
         assert_eq!(list[1].branch.as_deref(), Some("dev"));
+    }
+
+    /// Every annotation git puts on one of these entries, copied off a
+    /// real listing (git 2.55.0.windows.3): a lock with a reason and a
+    /// lock without one read apart, and the entry whose folder is gone
+    /// carries git's own words for why.
+    #[test]
+    fn parses_every_state_of_a_real_listing() {
+        let bytes = z(&[
+            "worktree C:/tmp/wtprobe/main",
+            "HEAD 8cd5289c16c24ae01dd41d6a1a4afec20f6ba99d",
+            "branch refs/heads/master",
+            "",
+            "worktree C:/tmp/wtprobe/wt-det",
+            "HEAD 8cd5289c16c24ae01dd41d6a1a4afec20f6ba99d",
+            "detached",
+            "",
+            "worktree C:/tmp/wtprobe/wt-gone",
+            "HEAD 8cd5289c16c24ae01dd41d6a1a4afec20f6ba99d",
+            "branch refs/heads/gone",
+            "prunable gitdir file points to non-existent location",
+            "",
+            "worktree C:/tmp/wtprobe/wt-lock",
+            "HEAD 8cd5289c16c24ae01dd41d6a1a4afec20f6ba99d",
+            "branch refs/heads/locked",
+            "locked seat held by claude",
+            "",
+            "worktree C:/tmp/wtprobe/wt-lock2",
+            "HEAD 8cd5289c16c24ae01dd41d6a1a4afec20f6ba99d",
+            "branch refs/heads/locked2",
+            "locked",
+            "",
+        ]);
+        let list = parse_worktrees(&bytes).unwrap();
+        assert_eq!(list.len(), 5);
+        // The everyday entry carries none of them.
+        assert!(!list[0].locked && !list[0].prunable && !list[0].detached);
+        assert!(list[1].detached);
+        assert!(list[2].prunable);
+        assert_eq!(
+            list[2].prune_reason,
+            "gitdir file points to non-existent location"
+        );
+        assert!(!list[2].locked);
+        assert!(list[3].locked);
+        assert_eq!(list[3].lock_reason, "seat held by claude");
+        // Locked without a reason: the flag is on and there are no words
+        // to show beside it. The two cannot collapse — a row saying
+        // `Locked —` with nothing after it is what that would draw.
+        assert!(list[4].locked);
+        assert_eq!(list[4].lock_reason, "");
+    }
+
+    /// git adds attributes to this listing, so the parse ignores what it
+    /// does not know — and must not read one of them as a flag it does
+    /// know because the word starts the same way.
+    #[test]
+    fn an_attribute_that_only_starts_like_a_flag_is_ignored() {
+        let bytes = z(&[
+            "worktree /srv/wt",
+            "HEAD 3333333333333333333333333333333333333333",
+            "lockedness whatever",
+            "prunableness whatever",
+            "",
+        ]);
+        let list = parse_worktrees(&bytes).unwrap();
+        assert!(!list[0].locked);
+        assert!(!list[0].prunable);
     }
 
     #[test]

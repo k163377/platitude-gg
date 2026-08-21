@@ -34,6 +34,12 @@ RowLayout {
     /// layout**, so no row moves and whatever sits at the right edge keeps its own seat.
     property bool marked: false
     property color markTint: Theme.warning
+    /// A mark for the seat that is not a change code: a locked working copy's padlock, the bang on one whose folder
+    /// has gone, and the WORKTREES mark on a branch another copy has out. `NavIcon.kind`, empty where the seat's
+    /// usual tenants have it. **Only one of the three ever draws** — a row is a folder, a file with a change, or one
+    /// of these.
+    property string seatMark: ""
+    property color seatTint: Theme.textSecondary
     /// Whether the name is in the row at all. The seat stays either way: a box opening over the name
     /// (`NavItemDelegate`'s rename) must not walk the row's other columns sideways. The owner takes the slack back the
     /// same way it gives it — `Layout.fillWidth` follows this.
@@ -59,6 +65,15 @@ RowLayout {
             anchors.fill: parent
             visible: !nameCell.folder && nameCell.showChange
             change: nameCell.change
+        }
+        // The whole seat, the way the change mark takes it — not the fold arrow's smaller share. A state mark is what
+        // this seat is for on a row that is not a folder, and the conflict `!` a file row wears is this same mark at
+        // this same size (`ChangeIcon`): one question, one size (デザイン規約 §寸法).
+        NavIcon {
+            anchors.fill: parent
+            visible: nameCell.seatMark !== ""
+            kind: nameCell.seatMark
+            tint: nameCell.seatTint
         }
     }
     // A rename is two names with the way between them drawn rather than typed: U+2192 is East Asian Ambiguous, so the
