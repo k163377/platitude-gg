@@ -23,25 +23,17 @@ Item {
     signal namingEdited(string text)
     signal namingCancelled()
 
-    /// Which chip a point in this column's frame is over.
+    /// Whether there is a name in this column at all — the whole of what the row needs to divide itself
+    /// (`GraphRowDelegate.partAt`).
+    ///
+    /// **Not "which chip is under this point".** The row divides on this column's own edge rather than on the chip's
+    /// frame, so the geometry belongs to the row, which is where the column's width already lives. A frame eighteen
+    /// pixels tall in a row of twenty-eight is a boundary nobody can see (2026-08-21 ユーザー報告).
     ///
     /// **Every chip answers, stacked or not** (2026-08-21 ユーザー判断): a chip with one name on it is cut to the column
     /// just the same, and a name that cannot be read is a name that cannot be read — the reason a stack unfolds is the
     /// reason a single one does. What comes out is the same card either way.
-    ///
-    /// A chip is a line box and a border — eighteen pixels in a row of twenty-eight — and a hand just arrived is
-    /// still settling. Landing takes the chip itself, but once the list is out (`held`) the whole chip column holds it:
-    /// drifting a dozen pixels inside the column the chips live in is not leaving them (2026-08-09 trace).
-    function chipAt(px, py, held) {
-        if (!rowChip.visible)
-            return null
-        const p = chipColumn.mapToItem(rowChip, px, py)
-        if (rowChip.contains(Qt.point(p.x, p.y)))
-            return rowChip
-        if (!held)
-            return null
-        return chipColumn.contains(Qt.point(px, py)) ? rowChip : null
-    }
+    readonly property bool hasChip: rowChip.visible
     /// Carries the box on from whatever the last delegate to hold it was left with. `text` comes off the view, not off
     /// this column: this delegate is recycled the moment the row scrolls off.
     function takeNamingFocus(text) {

@@ -194,68 +194,79 @@ Item {
         chipColumn.takeNamingFocus(rowItem.ListView.view.namingText)
     }
 
-    // Which stacked chip the pointer is over, if it is over one that has something to unstack. Worked out from the
-    // row's own coordinates rather than a hover area inside the chip: this one is on top, so it is the one that hears
-    // about the pointer at all.
-    property Item hoveredChip: null
-    /// This row's chip is the one with the list open on it.
-    property bool chipHeld: false
-    /// The open list is this row's chip's — read back from the page, which owns the card. What the row skips while this
-    /// is true (above) it has to take back the moment it goes false, or the chip stays "the one the hand is on" and a
-    /// hand coming back to it is taken for one that never left, so the list never opens again.
+    // ---- what the pointer is on ------------------------------------------------------------------------------------
+    //
+    // **The row is divided once, and everything the pointer does on it reads that one answer** — the two things a rest
+    // opens, and the two menus a right-click opens. The division is the chip column's own edge: on that side of it is
+    // the chip, on the other side the commit.
+    //
+    // It used to be the chip's frame, and the frame is the wrong line to divide on. It is drawn eighteen pixels tall in
+    // a row of twenty-eight and stops where the name stops, so the margin around it — inside the column, plainly part
+    // of "the branch" to anyone looking — answered with the commit's card instead (2026-08-21 ユーザー報告: ギリギリの余白に
+    // 重ねるとコミットが出てしまう). **The column's edge is a line that is actually drawn** (the divider), which is what makes
+    // it a boundary a reader can hold. The chip is alone in that column, so opening from the whole of it costs nothing
+    // — the exception デザイン規約 §hover のツールチップ「開けるのは的、保つのはその的が属する区画」 now names.
+
+    /// Where along the row the pointer is, or -1 for "not on this row". Written by the area below.
+    property real pointerRowX: -1
+    /// Which half of the row a point along it falls in: `chip`, `row`, or `""` for neither. **One place**, so a rest
+    /// and a right-click cannot disagree about where the boundary was.
+    function partAt(px) {
+        if (px < 0)
+            return ""
+        if (chipColumn.hasChip && px < rowItem.labelsW)
+            return "chip"
+        // The WIP row is not a commit: it has no card and no menu (規約 §hover のツールチップ / §グラフ行の右クリック).
+        return rowItem.isWip ? "" : "row"
+    }
+    readonly property string pointedPart: rowItem.partAt(rowItem.pointerRowX)
+    /// The open list is this row's chip's — read back from the page, which owns the card.
     readonly property bool listOnThisChip:
         rowItem.ListView.view ? rowItem.ListView.view.chipListAnchor === chipColumn.chipItem : false
+    /// What the row skips while the list stands on it (see the area below) it takes back the moment the list goes, or
+    /// the pointer is left where it was last seen and a hand coming back is taken for one that never left.
     onListOnThisChipChanged: {
         if (!rowItem.listOnThisChip && !rowMouse.containsMouse)
-            rowItem.noteChipHover(-1, -1)
+            rowItem.pointerRowX = -1
     }
-    function chipUnder(px, py) {
-        const p = rowItem.mapToItem(chipColumn, px, py)
-        return chipColumn.chipAt(p.x, p.y, rowItem.chipHeld)
-    }
-    // Opens on a rest, the way the row's own card does, and closes with the pointer. Not on landing: a pointer crossing
-    // the chip column on its way somewhere passes over every stacked chip on the way, and opening on landing flashes
-    // each one's list out and back (2026-08-09 報告).
+
+    // Both open on a rest, and neither on landing: a hand crossing the graph passes over every row on the way, and
+    // opening where it lands flashes one card out and back per row (2026-08-09 報告. 規約 §hover のツールチップ).
     //
-    // The row's own card gives way to it: the two open off the same pointer and land in the same place, and the chip is
-    // the more particular thing to be standing on (デザイン規約 §hover のツール チップ). Stepping off the chip onto the rest of the
-    // row offers the card again from the beginning.
-    function noteChipHover(px, py) {
-        const chip = rowItem.naming ? null : rowItem.chipUnder(px, py)
-        if (chip === rowItem.hoveredChip || !rowItem.ListView.view)
+    // **Only one of the two is ever out** (規約: 1 つのポインタが開けるものは 1 つ). Whatever the pointer has left goes now
+    // rather than in a beat's time — the beat is for walking into what is open, and what is being left is not it.
+    onPointedPartChanged: rowItem.settlePointed()
+    function settlePointed() {
+        const view = rowItem.ListView.view
+        if (!view)
             return
-        rowItem.hoveredChip = chip
-        if (chip) {
-            hoverDelay.stop()
-            rowItem.ListView.view.rowHoverRequested(rowItem, false)
-            if (rowItem.ListView.view.chipListAnchor === chip) {
-                // The list this chip opened is still out: the hand walked down into it and came back up. The rest is a
-                // question about opening, and nothing is being opened — re-hold now, or the settle closes the list at
-                // `hoverKeepMs` and the rest reopens it at `tipDelayMs`, which reads as a blink (規約 §hover
-                // のツールチップ「戻る手は待たせない」).
-                chipDelay.stop()
-                rowItem.chipHeld = true
-                rowItem.ListView.view.chipExpandRequested(chip.records, chip)
-            } else {
-                chipDelay.restart()
-            }
-        } else {
-            chipDelay.stop()
-            rowItem.chipHeld = false
-            rowItem.ListView.view.chipCollapseRequested()
-            if (rowMouse.containsMouse && !rowItem.isWip)
-                hoverDelay.restart()
+        restDelay.stop()
+        if (rowItem.pointedPart !== "chip")
+            view.chipCollapseRequested()
+        if (rowItem.pointedPart !== "row")
+            view.rowHoverRequested(rowItem, false)
+        if (rowItem.pointedPart === "chip" && rowItem.listOnThisChip) {
+            // Already out, and the hand walked down into it and came back. The rest is the question "did you mean to
+            // point at this", and it has been answered — re-hold now, or the settle closes the list at `hoverKeepMs`
+            // and the rest opens it again at `tipDelayMs`, which reads as a blink (規約「戻る手は待たせない」).
+            rowItem.openPointed()
+        } else if (rowItem.pointedPart !== "") {
+            restDelay.restart()
         }
+    }
+    function openPointed() {
+        const view = rowItem.ListView.view
+        if (!view)
+            return
+        if (rowItem.pointedPart === "chip")
+            view.chipExpandRequested(chipColumn.chipItem.records, chipColumn.chipItem)
+        else if (rowItem.pointedPart === "row")
+            view.rowHoverRequested(rowItem, true)
     }
     Timer {
-        id: chipDelay
+        id: restDelay
         interval: Metrics.tipDelayMs
-        onTriggered: {
-            if (!rowItem.hoveredChip || !rowItem.ListView.view)
-                return
-            rowItem.chipHeld = true
-            rowItem.ListView.view.chipExpandRequested(rowItem.hoveredChip.records, rowItem.hoveredChip)
-        }
+        onTriggered: rowItem.openPointed()
     }
 
     MouseArea {
@@ -276,11 +287,11 @@ Item {
             rowItem.ListView.view.rowSelected(rowItem.oid_hex)
             // The synthetic WIP row is not a commit, so nothing in the commit menu applies to it.
             if (mouse.button === Qt.RightButton && !rowItem.isWip) {
-                // On the chip the menu is the named ref's — what the name on screen names — and everywhere else the
-                // row's. The stacked names under +N take the same right-click on the list the chip unfolds into.
-                const chip = chipColumn.chipItem
-                const p = rowItem.mapToItem(chip, mouse.x, mouse.y)
-                if (chip.visible && chip.contains(Qt.point(p.x, p.y)))
+                // In the chip's half the menu is the named ref's — what the name on screen names — and in the other
+                // half the row's. **The same division the hover uses** (`partAt`): one boundary, so the button and the
+                // rest cannot answer a point differently. The stacked names under +N take the same right-click on the
+                // list the chip unfolds into.
+                if (rowItem.partAt(mouse.x) === "chip")
                     rowItem.ListView.view.chipMenuRequested(rowItem.oid_hex, rowItem.labelRecords[0])
                 else
                     rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex)
@@ -293,58 +304,27 @@ Item {
                 return
             rowItem.ListView.view.rowSwitchRequested(rowItem.oid_hex, rowItem.primaryRecord)
         }
-        onPositionChanged: mouse => rowItem.noteChipHover(mouse.x, mouse.y)
+        onPositionChanged: mouse => rowItem.pointerRowX = mouse.x
         onContainsMouseChanged: {
-            if (rowMouse.containsMouse)
+            if (rowMouse.containsMouse) {
+                rowItem.pointerRowX = rowMouse.mouseX
                 return
+            }
             // The list opens *on* the chip, so this area loses the pointer the instant it is drawn — a row under a
             // popup sees no hover at all. That leave says nothing about where the hand went, and answering it takes the
             // list down under the hand that asked for it. **Only the row the list is standing on skips it**, and only
             // while it stands: the hand walking off anywhere else lands on another row, which reports a real point and
-            // puts the list away (`noteChipHover`), and the card holds itself once it has the pointer (`RowHoverHost`).
+            // puts the list away, and the card holds itself once it has the pointer (`RowHoverHost`).
             if (rowItem.listOnThisChip)
                 return
-            rowItem.noteChipHover(-1, -1)
+            rowItem.pointerRowX = -1
         }
     }
     /// Where the pointer is along the row, so the card can open under it rather than at the row's left edge — a row is
     /// the width of the pane, and its left edge is nowhere near the pointer.
     readonly property real pointerX: rowMouse.mouseX
 
-    // Hover details: who wrote it, when, and whoever they credited. The row reports; the page decides, because the card
-    // outlives this delegate (it is recycled the moment the row scrolls off).
-    //
-    // The WIP row opens nothing: it has no commit behind it, and its count is already in its own label (規約 §hover
-    // のツールチップ).
-    Timer {
-        id: hoverDelay
-        interval: Metrics.tipDelayMs
-        onTriggered: {
-            if (rowMouse.containsMouse && rowItem.ListView.view)
-                rowItem.ListView.view.rowHoverRequested(rowItem, true)
-        }
-    }
-    onIsWipChanged: hoverDelay.stop()
-    // A pooled row is under no pointer, and the row it comes back as has its own chips: anything this one was holding
-    // goes with it.
-    ListView.onPooled: {
-        hoverDelay.stop()
-        chipDelay.stop()
-        rowItem.hoveredChip = null
-        rowItem.chipHeld = false
-    }
-    Connections {
-        target: rowMouse
-        function onContainsMouseChanged() {
-            if (rowItem.isWip)
-                return
-            if (rowMouse.containsMouse) {
-                hoverDelay.restart()
-            } else {
-                hoverDelay.stop()
-                if (rowItem.ListView.view)
-                    rowItem.ListView.view.rowHoverRequested(rowItem, false)
-            }
-        }
-    }
+    // A pooled row is under no pointer, and the row it comes back as has its own names: what this one was pointed at
+    // goes with it. Clearing where the pointer was takes the rest and whatever was open down with it (`settlePointed`).
+    ListView.onPooled: rowItem.pointerRowX = -1
 }
