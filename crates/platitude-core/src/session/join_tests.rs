@@ -23,6 +23,19 @@ fn tag(name: &str, commit: Oid, annotated: bool) -> RefEntry {
     }
 }
 
+fn branch(name: &str, commit: Oid) -> RefEntry {
+    RefEntry {
+        name: crate::Name::from(format!("refs/heads/{name}")),
+        short: crate::Name::from(name),
+        kind: RefKind::LocalBranch,
+        target: commit,
+        peeled: None,
+        upstream: None,
+        is_head: false,
+        created_unix: 0,
+    }
+}
+
 fn oid(byte: u8) -> Oid {
     Oid::from_hex_str(&format!("{byte:02x}").repeat(20)).expect("valid sha")
 }
@@ -57,7 +70,7 @@ fn an_agreed_tag_gets_one_label() {
     );
     let joins = RefJoins::new(&refs);
     let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
-    let labels = map.labels_of(&oid(1));
+    let labels = map.labels_of(&oid(1), true);
     assert_eq!(labels.len(), 1, "one name, one chip: {labels:?}");
     assert!(labels[0].has_remote, "the cloud says the remote has it");
     assert!(labels[0].here);
@@ -82,8 +95,8 @@ fn a_drifted_tag_stands_on_both_rows() {
     );
     let joins = RefJoins::new(&refs);
     let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
-    assert!(map.labels_of(&oid(1))[0].here);
-    let theirs = map.labels_of(&oid(2));
+    assert!(map.labels_of(&oid(1), true)[0].here);
+    let theirs = map.labels_of(&oid(2), true);
     assert!(!theirs.is_empty(), "the remote's reading");
     assert!(!theirs[0].here);
     assert_eq!(theirs[0].remote, "origin");
@@ -91,6 +104,38 @@ fn a_drifted_tag_stands_on_both_rows() {
     let snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
     assert_eq!(snapshot.tags.len(), 1);
     assert!(snapshot.tags[0].here);
+}
+
+/// With the tags out of the graph, the chips lose them too — on the rows
+/// that stay as well as the rows that go. A tag standing on a commit a
+/// branch also reaches is the one the walk cannot take away, and leaving
+/// its chip behind is the whole of what the switch would have missed.
+#[test]
+fn the_chips_lose_their_tags_with_the_graph() {
+    let refs = vec![
+        branch("main", oid(1)),
+        tag("v1", oid(1), false),
+        tag("islet", oid(2), false),
+    ];
+    let joins = RefJoins::new(&refs);
+    let map = build_label_map(&refs, &head_at(oid(1)), &index_of("origin", vec![]), &joins);
+
+    let both = map.labels_of(&oid(1), true);
+    assert_eq!(both.len(), 2, "the branch and the tag: {both:?}");
+    let kept = map.labels_of(&oid(1), false);
+    assert_eq!(kept.len(), 1, "the tag is cut off the end: {kept:?}");
+    assert_eq!(kept[0].kind, LabelKind::LocalBranch);
+    assert!(
+        map.labels_of(&oid(2), false).is_empty(),
+        "a commit nothing but a tag names carries no chip at all"
+    );
+
+    let carried: Vec<Oid> = map.commits(false).map(|(commit, _)| commit).collect();
+    assert_eq!(
+        carried,
+        vec![oid(1)],
+        "a commit cut down to no chips is not one of the commits carrying them"
+    );
 }
 
 /// A name only a remote has reaches no graph row, so the sidebar is

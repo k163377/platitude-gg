@@ -9,6 +9,18 @@ impl RepoSession {
         *self.lock_log_options()
     }
 
+    /// Whether the graph is drawing tags — the TAGS band's eye, and what
+    /// every row's chips are cut against (`LabelIndex::labels_of`).
+    ///
+    /// Read from the session and **not from the pass's own `LogOptions`**:
+    /// the first of a restart's two passes runs with the tags taken out of
+    /// the walk to get a picture up (see `restart_log`), and a chip cut to
+    /// match that would take every tag off the screen for the length of
+    /// that pass and then put it back.
+    pub(super) fn tags_shown(&self) -> bool {
+        self.lock_log_options().include_tags
+    }
+
     /// Toggles tags in the graph walk and restarts the stream.
     pub fn set_include_tags(self: &Arc<Self>, include_tags: bool) {
         {
@@ -200,6 +212,7 @@ impl RepoSession {
         };
 
         let total = rows.len() as u32;
+        let tags = self.tags_shown();
         {
             let mut shared = self.lock_shared();
             // Superseded: someone asked for a graph after this pass was
@@ -214,7 +227,7 @@ impl RepoSession {
             let mut applied: HashMap<u32, Vec<RefLabel>> = HashMap::new();
             for row in &mut rows {
                 if let Ok(oid) = Oid::from_hex_str(&row.oid_hex) {
-                    let labels = shared.label_map.labels_of(&oid);
+                    let labels = shared.label_map.labels_of(&oid, tags);
                     if !labels.is_empty() {
                         row.labels = labels.to_vec();
                         applied.insert(row.row, labels.to_vec());
@@ -461,6 +474,7 @@ impl RepoSession {
     /// it moves for passes that never reach anybody, and a stream still
     /// on screen would stop delivering halfway through.
     fn emit_rows(&self, generation: u64, batch: &[StreamItem], pool: &crate::model::StrPool) {
+        let tags = self.tags_shown();
         let mut guard = self.lock_shared();
         if guard.generation != generation {
             return;
@@ -469,7 +483,7 @@ impl RepoSession {
         let mut rows = Vec::with_capacity(batch.len());
         for item in batch {
             let mut row = item.row(pool, &mut shared.builder);
-            let labels = shared.label_map.labels_of(&item.meta.oid).to_vec();
+            let labels = shared.label_map.labels_of(&item.meta.oid, tags).to_vec();
             if !labels.is_empty() {
                 row.labels = labels.clone();
                 shared.applied.insert(row.row, labels);
@@ -478,87 +492,6 @@ impl RepoSession {
         }
         shared.sent_rows.extend(rows.iter().map(RowPrint::of));
         self.sink.event(SessionEvent::LogChunk { generation, rows });
-    }
-
-    /// The snapshot to publish: the one already on screen when this read
-    /// found it unchanged, so the sidebar can tell "the same" from "equal"
-    /// by pointer and rebuild nothing for it.
-    ///
-    /// Still published either way. Withholding the event instead would
-    /// save the same work, but a consumer that attached after the last one
-    /// went out would then sit empty until something moved, and "nothing
-    /// changed" is the state that lasts longest.
-    pub(super) fn published_snapshot(&self) -> Option<Arc<RefsSnapshot>> {
-        match self.last_snapshot.lock() {
-            Ok(slot) => slot.as_ref().map(Arc::clone),
-            Err(e) => e.into_inner().as_ref().map(Arc::clone),
-        }
-    }
-
-    pub(super) fn share_snapshot(&self, fresh: RefsSnapshot) -> Arc<RefsSnapshot> {
-        let mut slot = match self.last_snapshot.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        };
-        if let Some(previous) = slot.as_ref()
-            && **previous == fresh
-        {
-            return Arc::clone(previous);
-        }
-        let shared = Arc::new(fresh);
-        *slot = Some(Arc::clone(&shared));
-        shared
-    }
-
-    /// Installs a new label map into the join and sends the rows whose
-    /// chips changed.
-    ///
-    /// Read and send happen under one lock, and the row numbers travel
-    /// with the graph they were read from: a log pass installs its own
-    /// state and announces it under the same lock, so a diff can neither
-    /// be invalidated between the two nor arrive ahead of the rows it
-    /// numbers. The generation covers what the lock cannot — a superseded
-    /// pass that installs late leaves `shared` describing a graph the
-    /// consumer already dropped, and its row numbers point at other
-    /// commits there.
-    pub(super) fn apply_refs(&self, label_map: LabelIndex) {
-        let mut shared = self.lock_shared();
-        shared.label_map = label_map;
-
-        let mut fresh: HashMap<u32, Vec<RefLabel>> = HashMap::new();
-        for (oid, labels) in shared.label_map.commits() {
-            if let Some(row) = shared.builder.row_of(&oid) {
-                fresh.insert(row, labels.to_vec());
-            }
-        }
-        let mut changed: Vec<(u32, Vec<RefLabel>)> = Vec::new();
-        for (row, labels) in &fresh {
-            if shared.applied.get(row) != Some(labels) {
-                changed.push((*row, labels.clone()));
-            }
-        }
-        for row in shared.applied.keys() {
-            if !fresh.contains_key(row) {
-                changed.push((*row, Vec::new()));
-            }
-        }
-        shared.applied = fresh;
-        changed.sort_by_key(|(row, _)| *row);
-        // Mirror the chip change into the delivered-rows record, or the
-        // next background rebuild would see a phantom difference and swap
-        // an identical graph.
-        for (row, labels) in &changed {
-            if let Some(sent) = shared.sent_rows.get_mut(*row as usize) {
-                sent.labels = RowPrint::labels_of(labels);
-            }
-        }
-        if changed.is_empty() {
-            return;
-        }
-        self.sink.event(SessionEvent::LabelsChanged {
-            generation: shared.generation,
-            rows: changed,
-        });
     }
 }
 

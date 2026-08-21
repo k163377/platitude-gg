@@ -109,29 +109,59 @@ impl LabelIndex {
     }
 
     /// The chips on one commit; empty when it carries none.
-    pub(crate) fn labels_of(&self, oid: &Oid) -> &[RefLabel] {
+    ///
+    /// `tags` is whether the graph is drawing tags at all — the TAGS
+    /// band's eye. Off, a tag's chip goes with the rows the walk stopped
+    /// covering, so a tag standing on a commit a branch also reaches
+    /// stops being drawn rather than staying behind on its own.
+    pub(crate) fn labels_of(&self, oid: &Oid, tags: bool) -> &[RefLabel] {
         let Ok(at) = self.commits.binary_search_by(|(c, _, _)| c.cmp(oid)) else {
             return &[];
         };
         match self.commits.get(at) {
-            Some((_, first, count)) => self
-                .labels
-                .get(*first as usize..(*first + *count) as usize)
-                .unwrap_or_default(),
+            Some((_, first, count)) => Self::cut(self.run(*first, *count), tags),
             None => &[],
         }
     }
 
     /// Every commit carrying chips, in commit order, with them.
-    pub(crate) fn commits(&self) -> impl Iterator<Item = (Oid, &[RefLabel])> {
-        self.commits.iter().map(|(oid, first, count)| {
-            (
-                *oid,
-                self.labels
-                    .get(*first as usize..(*first + *count) as usize)
-                    .unwrap_or_default(),
-            )
+    ///
+    /// A commit whose only chips were tags carries none once they are cut,
+    /// and it is left out rather than yielded empty: what reads this tells
+    /// "these chips" from "no chips" by whether the commit is in it.
+    pub(crate) fn commits(&self, tags: bool) -> impl Iterator<Item = (Oid, &[RefLabel])> {
+        self.commits.iter().filter_map(move |(oid, first, count)| {
+            let run = Self::cut(self.run(*first, *count), tags);
+            (!run.is_empty()).then_some((*oid, run))
         })
+    }
+
+    fn run(&self, first: u32, count: u32) -> &[RefLabel] {
+        self.labels
+            .get(first as usize..(first + count) as usize)
+            .unwrap_or_default()
+    }
+
+    /// One commit's chips with the tags taken off the end.
+    ///
+    /// **A cut rather than a filter**, because `from_pairs` has already
+    /// left them there: it sorts by `kind` after the current branch, and
+    /// `Tag` is the last kind there is. So the tags of a commit are the
+    /// tail of its run, and dropping them is a shorter slice of the same
+    /// labels — no second index, and nothing allocated to hide a chip.
+    fn cut(run: &[RefLabel], tags: bool) -> &[RefLabel] {
+        if tags {
+            return run;
+        }
+        let kept = run
+            .iter()
+            .take_while(|label| label.kind != LabelKind::Tag)
+            .count();
+        debug_assert!(
+            run[kept..].iter().all(|label| label.kind == LabelKind::Tag),
+            "from_pairs leaves a commit's tags at the tail of its run"
+        );
+        &run[..kept]
     }
 
     /// Commits carrying chips.
