@@ -61,9 +61,6 @@ ColumnLayout {
     /// The arrows walked onto another file. Not the signal a click raises: a click on the file already open closes the
     /// diff, and holding Down must not (規約 §diff のファイル一覧).
     signal fileWalked(string bucket, string path, string origPath)
-    /// The Stash button. It carries nothing: the button does the whole thing, on the one set of options a stash is
-    /// made with (デザイン規約 §変更を退避する).
-    signal stashRequested()
     /// Right-click on a file row; the page owns the menu because delegates are recycled out from under an open popup.
     signal fileMenuRequested(string bucket, string path)
 
@@ -522,19 +519,6 @@ ColumnLayout {
     /// the commit-details pane instead (`DetailsPane.bottomRoom`).
     readonly property real bottomRoom: 0
 
-    /// The Stash button, pressed (`PG_AUTO_ACT=stash`). Put in at the button rather than at this pane's own signal, so
-    /// what answers is the band's real wiring and not a second way in written for the run.
-    ///
-    /// **Answers whether the press went in.** The band refuses it while the tab is busy — the fetch a repository does
-    /// on the way open is one — and a shot fired at nothing is not one to latch: the caller keeps offering it, the way
-    /// a hand waits for the button to come alive.
-    function stashNow() {
-        if (!stashButton.enabled)
-            return false
-        stashButton.clicked()
-        return true
-    }
-
     spacing: 0
 
     Rectangle {
@@ -570,19 +554,6 @@ ColumnLayout {
                 color: Theme.textMuted
             }
             Item { Layout.fillWidth: true }
-            // Everything uncommitted, set aside in one entry, on the press (デザイン規約 §変更を退避する). No
-            // ellipsis and nothing asked: a stash destroys nothing, the entry it makes is named afterwards in the
-            // STASHES list, and what a card would have collected is one fixed set of options.
-            HoverToolButton {
-                id: stashButton
-                text: qsTr("Stash")
-                font.pixelSize: Theme.fontMd
-                enabled: wipPane.repoTab.busyCount === 0 && wipPane.worktreeModel.total > 0
-                // The breadth is what the label has no room for, and with no card to read it is the only place it is
-                // said (規約 §hover のツールチップ).
-                tip: qsTr("Set these changes aside, files git is not tracking yet included")
-                onClicked: wipPane.stashRequested()
-            }
             TreeViewToggle {
                 treeView: wipPane.worktreeModel.treeView
                 onChosen: tree => wipPane.setTreeView(tree)

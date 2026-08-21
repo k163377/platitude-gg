@@ -92,6 +92,30 @@ Rectangle {
     /// claim about a line that is not there, and a picture cannot be judged on the absence of one.
     property bool autoFetchBusyLatched: false
     readonly property string pushMode: pushButton.mode
+    /// Automation: what the Stash button read the working tree as, and the edge `stash-state` waits on.
+    readonly property string stashMode: stashButton.mode
+    /// PG_AUTO_ACT=stash-state: which answer the button settled on and what the band did with it.
+    ///
+    /// The reading is a binding over a HEAD and four counts, and a photograph of a dim button carries none of them —
+    /// every refusal frames the same way. `tip=` is the string the button would open rather than a ToolTip caught
+    /// open, for the reason `fetch-tip` gives below.
+    function reportStashState() {
+        AppBackend.report("stash_state mode=" + stashButton.mode
+                          + " enabled=" + stashButton.enabled
+                          + " tip=" + (stashButton.tip !== ""))
+    }
+    /// Automation: the Stash button, pressed (`PG_AUTO_ACT=stash`). Put in at the button rather than at what it calls,
+    /// so what answers is the band's real wiring and not a second way in written for the run.
+    ///
+    /// **Answers whether the press went in.** The band refuses it while the tab is busy — the fetch a repository does
+    /// on the way open is one — and a shot fired at nothing is not one to latch: the caller keeps offering it, the way
+    /// a hand waits for the button to come alive.
+    function stashNow() {
+        if (!stashButton.enabled)
+            return false
+        stashButton.clicked()
+        return true
+    }
     function completePushHold() {
         pushButton.completeHold()
     }
@@ -142,22 +166,24 @@ Rectangle {
     function pointAtTab(index) { tabStrip.pointAtTab(index) }
     function tabMarks() { return tabStrip.tabMarks() }
 
-    /// The word both toolbar buttons are measured for: one box for the pair keeps either from shifting the other, and
-    /// which wording is wider is a question about the installed fonts. Settled once rather than bound: a binding that
-    /// reads four text metrics and feeds two button widths is a loop as far as the engine is concerned.
+    /// The word all three toolbar buttons are measured for: one box for the set keeps any of them from shifting the
+    /// others, and which wording is wider is a question about the installed fonts. Settled once rather than bound: a
+    /// binding that reads four text metrics and feeds three button widths is a loop as far as the engine is concerned.
     property string widestAction: ""
     property bool widestActionCode: false
     Component.onCompleted: {
         let best = fetchCodeWidest
-        for (const m of [fetchWordWidest, pushCodeWidest])
+        for (const m of [fetchWordWidest, pushCodeWidest, stashCodeWidest])
             if (m.implicitWidth > best.implicitWidth)
                 best = m
         topBar.widestAction = best.text
         topBar.widestActionCode = best.code
     }
-    // `push` is inside `push -f`, and fetch says the command in every shape but the stopped one, so three cover all six
-    // states. Labels rather than TextMetrics: TextMetrics reports a few pixels tighter than a Label — the pair could be
-    // ranked on one measure and sized by another, and the loser could then be the wider of the two.
+    // `push` is inside `push -f`, fetch says the command in every shape but the stopped one, and stash has the one
+    // wording, so four cover all seven states. `stash` never wins — five monospaced cells is what `fetch` already is —
+    // but it is measured rather than reasoned about, so re-wording any of them cannot leave the box short. Labels
+    // rather than TextMetrics: TextMetrics reports a few pixels tighter than a Label — the set could be ranked on one
+    // measure and sized by another, and the loser could then be the wider of them.
     component Widest: Label {
         visible: false
         property bool code: false
@@ -178,6 +204,11 @@ Rectangle {
         id: pushCodeWidest
         code: true
         text: "push -f"
+    }
+    Widest {
+        id: stashCodeWidest
+        code: true
+        text: "stash"
     }
 
     /// Automation: what the strip made of the run it was handed, and the two ends it was settled between
@@ -366,6 +397,69 @@ Rectangle {
                 return what
             }
             onActivated: topBar.curPage.pushNow()
+        }
+        // Everything uncommitted, set aside in one entry, on the press (デザイン規約 §変更を退避する). It stands on the band
+        // rather than over the file list: what it sets aside is the working tree, which is there whichever pane is
+        // open, and the pane it used to stand in is one row's selection away most of the time.
+        ActionButton {
+            id: stashButton
+            /// What the working tree lets this button do (デザイン規約 §変更を退避する). Every refusal is git's own, measured
+            /// rather than guessed (実測 — rules-refs/app-ui.md §stash):
+            ///
+            /// - `closed`    — nothing open here to read a working tree off
+            /// - `unborn`    — no commit yet, and git turns the write down flat however dirty the folder is
+            ///                 ("You do not have the initial commit yet")
+            /// - `conflicts` — a file is unmerged, and git refuses the **whole** write, not the unmerged path
+            ///                 ("needs merge")
+            /// - `clean`     — nothing uncommitted to set aside
+            /// - `ready`     — anything staged, unstaged or untracked; git takes all three
+            readonly property string mode: {
+                if (topBar.curPage === null || topBar.curPage.pageTab.state !== "open"
+                        || !topBar.curPage.pageWt.loaded)
+                    return "closed"
+                const wt = topBar.curPage.pageWt
+                if (wt.headOid === "")
+                    return "unborn"
+                if (wt.conflictCount > 0)
+                    return "conflicts"
+                if (wt.stagedCount + wt.unstagedCount + wt.untrackedCount === 0)
+                    return "clean"
+                return "ready"
+            }
+            kind: "stash"
+            // The label is the command, like both buttons beside it (デザイン規約 §git 用語のコード表記). One wording in every
+            // state: nothing here changes what the press costs, so there is no second shape to say.
+            text: "stash"
+            code: true
+            widestText: topBar.widestAction
+            widestCode: topBar.widestActionCode
+            // Nothing worn on top of that: a stash destroys nothing, so no frame, no `!` and no hold (デザイン規約
+            // §変更を退避する). No ring either — the ring names a wait on the network and this write is local (§進行中・
+            // 長押しの定数); while it runs the band is busy and the button is down, like the commit button beside its
+            // own write.
+            enabled: stashButton.mode === "ready" && topBar.curPage.pageTab.busyCount === 0
+            tip: {
+                // Nothing open, or another git command already out. Neither is about stashing, and both are said on
+                // this band already (デザイン規約 §無効). Said out loud because a disabled control still takes hover and
+                // still opens its attached ToolTip (実測: rules-refs/app-ui.md §hover).
+                if (stashButton.mode === "closed" || topBar.curPage.pageTab.busyCount > 0)
+                    return ""
+                // The three that *are* about the working tree each name what is missing (デザイン規約 §hover のツールチップ).
+                // They speak where the fetch button's refusals stay silent, because the reason is not on screen the way
+                // `REMOTES 0` is: a tree with conflicts in it looks exactly like one that could be stashed, and the
+                // band's own conflict badge says the repository has them — not that they are what is holding this
+                // button down.
+                if (stashButton.mode === "unborn")
+                    return qsTr("No commits yet — git cannot stash before the first one")
+                if (stashButton.mode === "conflicts")
+                    return qsTr("Settle the conflicts first — git will not stash an unmerged file")
+                if (stashButton.mode === "clean")
+                    return qsTr("Nothing to stash — the working tree is clean")
+                // The breadth is what the label has no room for, and with no card to read it is the only place it is
+                // said (デザイン規約 §hover のツールチップ).
+                return qsTr("Set these changes aside, files git is not tracking yet included")
+            }
+            onActivated: topBar.curPage.pageTab.pushStash()
         }
         // Where what the app owns ends and what the window owns begins.
         Rectangle {

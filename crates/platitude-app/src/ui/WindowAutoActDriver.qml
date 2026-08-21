@@ -458,6 +458,33 @@ Item {
         }
     }
 
+    // PG_AUTO_ACT=stash-state: which of the working tree's four answers the Stash button settled on. The argument names
+    // the one this repository is meant to give (`ready` / `clean` / `conflicts` / `unborn`), and the run waits for the
+    // band to say it — the reading is built out of a HEAD and four counts that land over several drains, so a band read
+    // too early would answer `unborn` for every repository on its way open.
+    //
+    // Four runs, because a dim button frames the same whichever refusal put it there: only the set says that the
+    // conditions are told apart at all (デザイン規約 §変更を退避する).
+    Timer {
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "stash-state"
+        onTriggered: {
+            // The graph as well, for the picture rather than for the answer — the same reason `fetch-tip` waits on it.
+            // `empty` has no rows at all, so that repository is judged settled on its working tree alone.
+            if (window.curPage === null || !window.curPage.pageWt.loaded)
+                return
+            const tab = window.curPage.pageTab
+            if (tab.busyCount !== 0 || tab.autoFetchRunning)
+                return
+            if (topBar.stashMode !== AppBackend.autoActArg)
+                return
+            stop()
+            topBar.reportStashState()
+            window.finishAutoAct()
+        }
+    }
+
     // Smoke hooks (PG_AUTO_ACT=open-not-a-repo / open-bare and the two ways back out). The picker is the platform's own
     // window, so the run enters where its answer lands — the path it accepted.
     readonly property bool pickAct: AppBackend.autoAct === "open-not-a-repo"

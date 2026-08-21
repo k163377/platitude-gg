@@ -464,6 +464,8 @@ ApplicationWindow {
                     focusEpoch: root.focusEpoch
                     onScreen: root.onScreen
                     pageCurrent: index === tabsModel.currentIndex
+                    // The band this page's toolbar actions stand on (`RepoPage.pageBand`).
+                    pageBand: topBar
                     onOpenRepositoryPicker: root.openRepositoryPicker()
                     onOpenRepositoryPathRequested: path => tabsModel.openRepositoryPath(path)
                     onSettingsDialogRequested: settingsDialog.open()

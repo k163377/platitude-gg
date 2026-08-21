@@ -953,6 +953,11 @@ Item {
     /// Whether the refs listing has landed — the read that also settles how many remotes this repository has, and so
     /// what the band's fetch button is allowed to be (`fetch-tip`).
     readonly property bool pageRefsLoaded: branchesModel.refsLoaded
+    /// The window's own band, handed back in by `Main`. The Stash button stands there rather than on this page
+    /// (デザイン規約 §変更を退避する), and this page's verbs press the real one through here — a verb that called what the
+    /// button calls would be answering for a second way in rather than for the band's wiring. An automation-only
+    /// exposure, the same one `GraphPane.view` is (app-ui.md). `var` because `TopBar` is above this file, not beside it.
+    property var pageBand: null
 
     /// Whether the command log is up. Closed is the resting state: the toolbar's `>_` opens it, and a failed command
     /// raises it.
@@ -1572,7 +1577,6 @@ Item {
                         readPath: page.diffFromWt ? page.diffPath : ""
                         onFileActivated: (bucket, path, origPath) => page.toggleDiff(bucket, path, origPath)
                         onFileWalked: (bucket, path, origPath) => page.openDiff(bucket, path, origPath)
-                        onStashRequested: repoTab.pushStash()
                         onFileMenuRequested: (bucket, path) => page.openFileMenu(bucket, path)
                     }
 

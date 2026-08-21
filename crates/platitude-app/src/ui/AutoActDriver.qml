@@ -170,6 +170,7 @@ Item {
                 "badges", "badges-hover", "old-git", "old-git-card",
                 "old-git-fold", "state", "middle-close", "open-again",
                 "force-push-hold", "fetch-busy", "fetch-fail", "fetch-resume", "fetch-tip",
+                "stash-state",
                 "settings-tools", "settings-tools-loading",
                 "avatar-settings", "avatar-combo", "avatar-row-lit", "avatar-remove"].indexOf(act) >= 0
     }
@@ -685,7 +686,7 @@ Item {
         interval: 25
         repeat: true
         onTriggered: {
-            if (wipPane.stashNow())
+            if (page.pageBand !== null && page.pageBand.stashNow())
                 stashPressTimer.stop()
         }
     }
@@ -2561,8 +2562,10 @@ Item {
             page.amendToggled(true)
             resetAuthorTimer.start()
         } else if (act === "stash") {
-            // Through the band's button, which is the whole of it now: nothing is asked before the write.
-            page.showWip()
+            // Through the band's button, which is the whole of it: nothing is asked before the write. The WIP pane is
+            // left where it is — the button stands on the window's band now, so a run that opened that pane first
+            // would be proving the reach of a pane the button no longer needs (デザイン規約 §変更を退避する).
+            //
             // Everything goes, so the working-tree row goes with it and the new stash takes the lead — the row whose
             // absence says the rebuild has landed. The one-path verb leaves the row where it is and keeps the plain
             // write barrier.

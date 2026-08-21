@@ -57,6 +57,19 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // taken at the write barrier, which is the graph as it was.
         "stash" => Some("graph_settled gone=true top=stash"),
         "stash-pop-row" => Some("graph_settled gone=true top=wip"),
+        // The band's Stash button, on each of the four things a working
+        // tree can be. A button held down frames the same whichever
+        // refusal put it there, so the reading is said out loud beside
+        // what the band did with it — and the four are read as a set:
+        // one alone passes a band that answers the same thing to
+        // everything. `tip=` is the string the button would open, for
+        // the reason `fetch-tip` gives below.
+        "stash-state" if arg == "ready" => Some("stash_state mode=ready enabled=true tip=true"),
+        "stash-state" if arg == "clean" => Some("stash_state mode=clean enabled=false tip=true"),
+        "stash-state" if arg == "conflicts" => {
+            Some("stash_state mode=conflicts enabled=false tip=true")
+        }
+        "stash-state" => Some("stash_state mode=unborn enabled=false tip=true"),
         // The fourth: an elided row whose hover says the whole name.
         // One verb serves both panes (the argument picks one), so the
         // wanted line names neither — `tree=` echoes which view the
