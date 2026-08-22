@@ -170,6 +170,11 @@ Rectangle {
             holdIndent: opExitCard.holdIndent
             code: "--quit"
             text: qsTr("Stop stepping, keep the tree")
+            // **The tree it keeps is the conflicted one.** git drops the operation and leaves every unmerged path
+            // exactly where it stood (実測 2.55), so the badge and this card go while the files still wait on a
+            // decision — and a move out of here is refused all over again, in git's other wording. Said in the seat
+            // `--skip` says its own cost from (デザイン規約 §進行中の操作から出る).
+            note: opExitCard.workTree.conflictCount > 0 ? qsTr("conflicts stay") : ""
             visible: opExitCard.workTree.opStepping
             enabled: opExitCard.repoTab.busyCount === 0
             onPicked: opExitCard.repoTab.resolveOperation("quit")

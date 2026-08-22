@@ -35,8 +35,14 @@ Item {
     /// Run, whichever gesture this row takes.
     signal picked()
 
-    /// Automation: run the hold to its end without a press behind it.
+    /// Automation: run the row to its end without a press behind it — the hold where there is one, and the plain press
+    /// where there is not. **`HoldDriver.begin()` is a no-op on a row with no hold** (holdMs 0 disarms it), so a run
+    /// that only called it waited out the watchdog in silence on `--continue`, `--quit` and the free `--skip`.
     function completeHold() {
+        if (opRow.holdMs <= 0) {
+            opRow.picked()
+            return
+        }
         holdDrive.begin()
     }
     readonly property bool holding: opRow.holdProgress > 0
