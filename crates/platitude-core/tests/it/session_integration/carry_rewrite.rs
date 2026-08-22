@@ -2,7 +2,9 @@
 //! dirty work they carry across.
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, install_todo_editor, opened, write_result};
+use crate::support::session::{
+    CaptureSink, install_todo_editor, opened, write_result, write_stopped,
+};
 use platitude_core::session::SessionEvent;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -197,9 +199,14 @@ async fn a_rebase_onto_that_stops_leaves_the_work_in_the_stash() {
 
     let (sink, session) = opened(&repo).await;
     session.rebase("main".into(), rebase_onto());
+    assert_eq!(
+        write_result(&sink, "rebase").await,
+        None,
+        "a stop is not a failed write (2026-08-22 ユーザー判断)"
+    );
     assert!(
-        write_result(&sink, "rebase").await.is_some(),
-        "git's own message about where it stopped goes through"
+        write_stopped(&sink, "rebase"),
+        "and the landing is said out loud, because the answer cannot say it"
     );
 
     assert_eq!(
@@ -308,9 +315,14 @@ async fn a_replay_that_stops_part_way_leaves_the_work_in_the_stash() {
 
     let (sink, session) = opened(&repo).await;
     session.drop_commit(gone);
+    assert_eq!(
+        write_result(&sink, "drop").await,
+        None,
+        "a stop is not a failed write (2026-08-22 ユーザー判断)"
+    );
     assert!(
-        write_result(&sink, "drop").await.is_some(),
-        "git's own message about where it stopped goes through"
+        write_stopped(&sink, "drop"),
+        "and the landing is said out loud, because the answer cannot say it"
     );
 
     assert_eq!(

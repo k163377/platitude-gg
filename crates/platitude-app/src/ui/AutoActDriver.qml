@@ -115,7 +115,7 @@ Item {
                 "branch-at-tag", "dbl-local", "dbl-remote", "move-branch",
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
-                "merge-stops", "cherry-pick-stops", "revert-stops",
+                "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
                 "rebase-onto", "revert-commit", "op-exit-go", "stage-hunk",
                 "stage-line", "keep-place", "discard-hunk-go", "line-back", "diff-follow",
                 "line-run",
@@ -134,10 +134,11 @@ Item {
                 "eol-commit", "eol-hover", "commit-face",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "conflict-sides", "line-tools", "hunk-tools",
-                // The write barrier is behind these, not in front of them: three land on the working tree's own
+                // The write barrier is behind these, not in front of them: five land on the working tree's own
                 // row, which the graph pass after the write is what puts there, and the last has to read the
                 // commit it just made.
-                "merge-stops", "cherry-pick-stops", "revert-stops", "merge-commit",
+                "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
+                "merge-commit",
                 "code-send", "line-back", "diff-follow", "line-run",
                 "stage-all", "unstage-all",
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
@@ -1876,8 +1877,17 @@ Item {
         id: opStoppedTimer
         interval: 25
         repeat: true
+        // Whether a carry is part of this landing. The stash section is refreshed *after* the graph, so reading it
+        // at the write barrier answers 0 for a tree whose work is sitting in an entry — and where the entry is the
+        // whole claim, that is the answer arriving too early rather than the truth.
+        property bool carried: false
+        function begin(withStash) {
+            opStoppedTimer.carried = withStash
+            opStoppedTimer.start()
+        }
         onTriggered: {
-            if (repoTab.busyCount !== 0 || !page.wipShown || workTree.conflictCount === 0)
+            if (repoTab.busyCount !== 0 || !page.wipShown || workTree.conflictCount === 0
+                    || (opStoppedTimer.carried && stashesModel.total === 0))
                 return
             opStoppedTimer.stop()
             AppBackend.report(
@@ -1886,6 +1896,10 @@ Item {
                 + " error=" + (repoTab.lastError !== "")
                 + " log=" + page.commandsOpen
                 + " cont=" + wipPane.offersOpExit("--continue")
+                // What the carry left behind, for a rewrite that took a stash out of its own way: git's words
+                // are not raised over the stop, so the count and the graph's own row are the only things saying
+                // where the work went (規約 §未コミット変更がある状態で履歴を書き換える).
+                + " stashes=" + stashesModel.total
                 + " op=" + workTree.opText
                 + " files=" + workTree.conflictCount)
             driver.complete()
@@ -3405,7 +3419,7 @@ Item {
             // Two landings, one press: a copy that goes through answers at the tip, one that stops answers in the
             // working tree (規約 §履歴を合流させる / §進行中の操作から出る).
             if (act === "cherry-pick-stops")
-                opStoppedTimer.start()
+                opStoppedTimer.begin(false)
             else
                 tipLandedTimer.start()
             repoTab.cherryPick(pickOid)
@@ -3470,7 +3484,7 @@ Item {
             AppBackend.report("message_focus pane=wip focused="
                               + wipPane.descriptionFocused
                               + " color=" + wipPane.descriptionColor)
-        } else if (act === "drop-commit" || act === "drop-commit-go") {
+        } else if (act === "drop-commit" || act === "drop-commit-go" || act === "drop-stops") {
             // The plan is built by object name, the way a graph row hands one over — a symbolic name is not what this
             // takes.
             page.openRowMenu(driver.autoActOid(arg))
@@ -3479,14 +3493,20 @@ Item {
                               + " oid=" + commitMenuState.menuOid.substring(0, 8)
                               + " hold=" + (dropCommitItem.holdMs > 0)
                               + " reached=" + repoTab.headReachedElsewhere)
-            if (act === "drop-commit-go") {
+            if (act !== "drop-commit") {
+                // "drop-stops" is the replay that walks into a hole and stops with the work still in the stash it
+                // took: the landing is the working tree, and the count and the stash's own row are what say where
+                // that work went (規約 §未コミット変更がある状態で履歴を書き換える の着地表).
+                if (act === "drop-stops")
+                    opStoppedTimer.begin(true)
                 if (dropCommitItem.holdMs > 0)
                     dropCommitItem.completeHold()
                 else
                     page.dropCommit(commitMenuState.menuOid)
             }
         } else if (act === "merge-branch" || act === "merge-stops" || act === "rebase-onto"
-                   || act === "revert-commit" || act === "revert-stops" || act === "integrate-menu") {
+                   || act === "rebase-stops" || act === "revert-commit" || act === "revert-stops"
+                   || act === "integrate-menu") {
             // Through the menus a right-click opens, so the rows' own gating decides whether anything runs.
             if (act === "revert-commit" || act === "revert-stops") {
                 // The click that opens this menu selects the row too (GraphRowDelegate), so the hook takes both steps a
@@ -3497,7 +3517,7 @@ Item {
                 page.openRowMenu(oidHex)
                 // The undo's two landings, read like the copy's above.
                 if (act === "revert-stops")
-                    opStoppedTimer.start()
+                    opStoppedTimer.begin(false)
                 else
                     tipLandedTimer.start()
                 repoTab.revert(oidHex)
@@ -3512,7 +3532,12 @@ Item {
                     else
                         tipLandedTimer.start()
                     repoTab.merge(arg, false, false, "")
-                } else if (act === "rebase-onto") {
+                } else if (act === "rebase-onto" || act === "rebase-stops") {
+                    // A replay that stopped part-way answers in the working tree like the other three: no commit
+                    // was written, and the badge, the exit card and the conflicted rows are where the press ends
+                    // (規約 §未コミット変更がある状態で履歴を書き換える の着地表).
+                    if (act === "rebase-stops")
+                        opStoppedTimer.begin(false)
                     repoTab.rebase(arg, "", true)
                 }
             }

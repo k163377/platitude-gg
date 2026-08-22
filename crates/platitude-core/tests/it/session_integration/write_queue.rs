@@ -224,9 +224,17 @@ async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() 
             })
         })
         .await;
-    assert!(error.is_some(), "the conflict is reported as a failure");
+    // Not a failure: git stopped and left the rebase standing, which is a
+    // landing of its own (2026-08-22 ユーザー判断). The event that says so
+    // has already been published — it goes out between the write's start
+    // and the answer just waited for.
+    assert_eq!(error, None, "a stop is not a failed write");
+    assert!(
+        crate::support::session::write_stopped(&sink, "rebase"),
+        "the landing is said out loud, because the answer cannot say it"
+    );
 
-    // The refresh that follows a failed write carries the step counter.
+    // The refresh that follows carries the step counter.
     let progress = sink
         .wait_for("progress in a status refresh", |evs| {
             evs.iter().rev().find_map(|e| match e {

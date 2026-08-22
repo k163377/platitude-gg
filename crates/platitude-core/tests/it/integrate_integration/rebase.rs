@@ -8,6 +8,17 @@ use platitude_core::integrate::{self, Continuation, InProgress, RebaseOptions};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 use platitude_core::{opstate, status};
 
+/// A rebase that stopped part-way is a landing of its own, not a failure
+/// — git left the replay standing, and the badge, the exit card and the
+/// conflicted rows are the whole of what happened
+/// (2026-08-22 ユーザー判断. デザイン規約 §進行中の操作から出る).
+fn stopped(outcome: Result<integrate::RebaseOutcome, platitude_core::error::GitError>) {
+    match outcome.expect("a stop is an answer, not a failure") {
+        integrate::RebaseOutcome::Stopped => {}
+        other => panic!("the replay was expected to stop: {other:?}"),
+    }
+}
+
 #[tokio::test]
 async fn rebase_replays_commits_onto_the_upstream() {
     let mut repo = TestRepo::init();
@@ -70,6 +81,9 @@ async fn a_dirty_tree_stops_a_plain_rebase_before_it_touches_anything() {
     let refusal = |outcome| match outcome {
         integrate::RebaseOutcome::Blocked(error) => error.to_string(),
         integrate::RebaseOutcome::Done => panic!("git replayed over work it would lose"),
+        integrate::RebaseOutcome::Stopped => {
+            panic!("git began a rebase it should have refused")
+        }
     };
 
     let mut unstaged = behind_main();
@@ -127,15 +141,16 @@ async fn a_conflicting_rebase_reports_progress_and_can_be_aborted() {
     repo.git(&["checkout", "topic"]);
     let (exec, cancel) = env();
 
-    integrate::rebase(
-        &exec,
-        &repo.path,
-        "main",
-        &RebaseOptions::default(),
-        &cancel,
-    )
-    .await
-    .expect_err("conflict stops the rebase");
+    stopped(
+        integrate::rebase(
+            &exec,
+            &repo.path,
+            "main",
+            &RebaseOptions::default(),
+            &cancel,
+        )
+        .await,
+    );
 
     assert_eq!(current_op(&repo).await, Some(InProgress::Rebase));
     let progress = conflict::rebase_progress(&exec, &repo.path, &cancel)
@@ -173,15 +188,16 @@ async fn a_conflicting_rebase_can_be_skipped() {
     repo.git(&["checkout", "topic"]);
     let (exec, cancel) = env();
 
-    integrate::rebase(
-        &exec,
-        &repo.path,
-        "main",
-        &RebaseOptions::default(),
-        &cancel,
-    )
-    .await
-    .expect_err("conflict");
+    stopped(
+        integrate::rebase(
+            &exec,
+            &repo.path,
+            "main",
+            &RebaseOptions::default(),
+            &cancel,
+        )
+        .await,
+    );
     integrate::resolve_current(&exec, &repo.path, Continuation::Skip, &cancel)
         .await
         .expect("skip the conflicting commit");
@@ -246,15 +262,16 @@ async fn skipping_drops_work_that_is_nowhere_else() {
     let before = repo.git(&["rev-parse", "topic"]);
     let (exec, cancel) = env();
 
-    integrate::rebase(
-        &exec,
-        &repo.path,
-        "main",
-        &RebaseOptions::default(),
-        &cancel,
-    )
-    .await
-    .expect_err("conflict");
+    stopped(
+        integrate::rebase(
+            &exec,
+            &repo.path,
+            "main",
+            &RebaseOptions::default(),
+            &cancel,
+        )
+        .await,
+    );
     integrate::resolve_current(&exec, &repo.path, Continuation::Skip, &cancel)
         .await
         .expect("skip");
@@ -288,15 +305,16 @@ async fn resolving_a_conflict_to_match_upstream_then_continuing() {
     repo.git(&["checkout", "topic"]);
     let (exec, cancel) = env();
 
-    integrate::rebase(
-        &exec,
-        &repo.path,
-        "main",
-        &RebaseOptions::default(),
-        &cancel,
-    )
-    .await
-    .expect_err("conflict");
+    stopped(
+        integrate::rebase(
+            &exec,
+            &repo.path,
+            "main",
+            &RebaseOptions::default(),
+            &cancel,
+        )
+        .await,
+    );
     // Taking upstream's side outright, which is what `Take theirs`-style
     // resolution does — and which leaves this commit contributing nothing.
     conflict::take_side(&exec, &repo.path, &["f.txt".into()], Side::Ours, &cancel)
@@ -337,7 +355,11 @@ async fn an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip() {
     repo.git(&["add", "-A"]);
     repo.git(&["commit", "-m", "X arrives with company"]);
     repo.git(&["checkout", "topic"]);
-    let (exec, cancel) = env();
+    // The stop is an answer, so nothing carries git's words back to the
+    // caller: the command log is where they are read, and this is the
+    // observer that stands in for it (デザイン規約 §git が言ったことを読む場所).
+    let said = std::sync::Arc::new(crate::support::Said::default());
+    let (exec, cancel) = crate::support::exec::observed_env(said.clone(), true);
 
     let steps = vec![
         RebaseStep::pick(doomed.clone(), "adds X"),
@@ -348,22 +370,23 @@ async fn an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip() {
             message: None,
         },
     ];
-    let outcome = sequencer::rebase_interactive(
-        &exec,
-        &info(&repo).await,
-        "main",
-        &steps,
-        &RebaseOptions::default(),
-        &helper(),
-        &cancel,
-    )
-    .await;
+    stopped(
+        sequencer::rebase_interactive(
+            &exec,
+            &info(&repo).await,
+            "main",
+            &steps,
+            &RebaseOptions::default(),
+            &helper(),
+            &cancel,
+        )
+        .await,
+    );
 
-    let message = match outcome {
-        Ok(_) => "REBASE FINISHED".to_string(),
-        Err(e) => e.to_string(),
-    };
     assert_eq!(current_op(&repo).await, Some(InProgress::Rebase));
+    let message = said
+        .message_of(platitude_core::process::CommandEnd::Answered(1))
+        .expect("the stop was recorded as an answer");
     assert!(
         message.contains("The previous cherry-pick is now empty"),
         "git's reason: {message}"

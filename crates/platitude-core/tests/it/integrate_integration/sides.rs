@@ -99,7 +99,7 @@ async fn sides_names_each_side_by_what_it_actually_is() {
         &cancel,
     )
     .await
-    .expect_err("conflict");
+    .expect("a stop is an answer, not a failure");
     let s = conflict::sides(&exec, &repo.path, InProgress::Rebase, &cancel)
         .await
         .expect("sides");

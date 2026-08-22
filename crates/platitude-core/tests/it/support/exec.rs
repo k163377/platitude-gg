@@ -172,3 +172,36 @@ impl CommandObserver for Ends {
         self.0.lock().unwrap().push(end);
     }
 }
+
+/// The same, keeping what git *said* with each end.
+///
+/// The only way left to read the words of a stop that is an answer: it
+/// comes back as a landing rather than an error, so nothing carries git's
+/// message to the caller and the command log is where a person reads it
+/// (デザイン規約 §git が言ったことを読む場所).
+#[derive(Default)]
+pub struct Said(pub Mutex<Vec<(CommandEnd, String)>>);
+
+impl Said {
+    /// The message of the first row that ended this way, if any.
+    pub fn message_of(&self, end: CommandEnd) -> Option<String> {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(seen, _)| *seen == end)
+            .map(|(_, said)| said.clone())
+    }
+}
+
+impl CommandObserver for Said {
+    fn records(&self, _user: bool) -> bool {
+        true
+    }
+    fn started(&self, _display: &str, _full: &str, _user: bool) -> u64 {
+        0
+    }
+    fn finished(&self, _id: u64, end: CommandEnd, _elapsed_ms: u64, message: &str) {
+        self.0.lock().unwrap().push((end, message.to_string()));
+    }
+}

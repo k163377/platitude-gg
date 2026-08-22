@@ -21,7 +21,7 @@ pub use pick::{cherry_pick, revert};
 pub use rebase::{RebaseOptions, RebaseOutcome, rebase};
 pub use resolve::{Continuation, InProgress, resolve, resolve_current};
 
-pub(crate) use rebase::{rebase_command, refusal_or};
+pub(crate) use rebase::{landed, rebase_command};
 
 /// Where an operation that can stop part-way came to rest.
 ///
@@ -34,9 +34,10 @@ pub(crate) use rebase::{rebase_command, refusal_or};
 /// repository instead: the operation left standing is the stop, and
 /// anything else that exited non-zero is the failure it looks like.
 ///
-/// `rebase` answers with [`RebaseOutcome`] rather than this: it has a
-/// third thing to say (the refusal a stash gets past), and whether a
-/// stopped one lands here too is not settled (internal-docs/P3-確認事項).
+/// `rebase` answers [`RebaseOutcome`] first, because it has a third
+/// thing to say — the refusal a stash gets past. It becomes one of these
+/// once the carry is behind it (`session::build::rewrite_carrying`), and
+/// a stopped rebase lands exactly where the other three do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Landing {
     /// git took the operation to the end: a commit, a fast-forward, a

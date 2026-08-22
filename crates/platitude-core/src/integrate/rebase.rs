@@ -4,6 +4,7 @@ use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
 
+use super::opstate;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
@@ -27,9 +28,7 @@ pub struct RebaseOptions {
 /// dirty working tree in the very same words (実測).
 #[derive(Debug)]
 pub enum RebaseOutcome {
-    /// git took the rebase through to the end. One that stopped part-way
-    /// is *not* this: git exits non-zero and the error carries its
-    /// message, with the sequencer state left for the UI to read.
+    /// git took the rebase through to the end.
     Done,
     /// git refused before touching anything, because uncommitted work is
     /// in the way, so the repository is exactly as it was. Carries the
@@ -38,6 +37,17 @@ pub enum RebaseOutcome {
     /// by then, so something git cannot see past is holding it — has to
     /// say why it gave up, in git's own words.
     Blocked(GitError),
+    /// git stopped part-way and left the rebase standing. Not a failure:
+    /// the badge, the exit card and the conflicted rows are the whole of
+    /// what happened, and the carried work waits in the stash until the
+    /// operation is over (デザイン規約 §未コミット変更がある状態で履歴を
+    /// 書き換える, 2026-08-22 ユーザー判断).
+    ///
+    /// [`super::Landing`] is what this becomes once the carry is behind
+    /// it (`session::build::rewrite_carrying`) — a refusal cannot reach
+    /// the screen, because going round through a stash is the answer to
+    /// one.
+    Stopped,
 }
 
 /// `git rebase <upstream>`.
@@ -58,25 +68,66 @@ pub async fn rebase(
     // are answers, so the 128 a name git does not know exits with still
     // reads as the failure it is (規約 §終了コードで答える問い合わせ).
     let cmd = rebase_command(workdir, upstream, options, None).answers_by_code(1);
-    refusal_or(executor.run(cmd, cancel).await.map(drop))
+    let result = executor.run(cmd, cancel).await.map(drop);
+    landed(executor, workdir, result, cancel).await
 }
 
 /// Sorts a rebase's result into [`RebaseOutcome`], shared by the plain
 /// rebase above and the driven one in [`crate::sequencer`].
-pub(crate) fn refusal_or(result: Result<(), GitError>) -> Result<RebaseOutcome, GitError> {
-    match result {
-        Ok(()) => Ok(RebaseOutcome::Done),
-        Err(GitError::Failed {
+///
+/// **Exit 1 is the whole of what this command answers with**, and both
+/// answers wear it: the refusal a stash gets past, and the stop that
+/// leaves the rebase standing. The two are told apart by what is on
+/// disk — a refusal touched nothing, a stop left `rebase-merge` behind
+/// (実測 2.55).
+///
+/// **The code has to be read as well as the marker.** The one failure
+/// that leaves `rebase-merge` standing is a rebase asked for while
+/// another is already in progress, and git spends 128 on it (実測 2.55)
+/// — asking the repository alone would report that as a stop and hide
+/// the sentence telling the person what is actually there. Every other
+/// failure exits 128 with nothing standing.
+///
+/// A read that fails answers "not a stop", so git's own words are what
+/// reaches the screen: this is a question *about* that failure, and
+/// letting it replace the answer would report a `rev-parse` where git
+/// said why it would not rebase.
+pub(crate) async fn landed(
+    executor: &GitExecutor,
+    workdir: &Path,
+    result: Result<(), GitError>,
+    cancel: &CancellationToken,
+) -> Result<RebaseOutcome, GitError> {
+    let Err(error) = result else {
+        return Ok(RebaseOutcome::Done);
+    };
+    let GitError::Failed {
+        command,
+        code,
+        stderr,
+    } = error
+    else {
+        return Err(error);
+    };
+    if work_is_in_the_way(&stderr) {
+        return Ok(RebaseOutcome::Blocked(GitError::Failed {
             command,
             code,
             stderr,
-        }) if work_is_in_the_way(&stderr) => Ok(RebaseOutcome::Blocked(GitError::Failed {
-            command,
-            code,
-            stderr,
-        })),
-        Err(other) => Err(other),
+        }));
     }
+    if code == 1
+        && opstate::detect(executor, workdir, cancel)
+            .await
+            .is_ok_and(|state| state.rebasing)
+    {
+        return Ok(RebaseOutcome::Stopped);
+    }
+    Err(GitError::Failed {
+        command,
+        code,
+        stderr,
+    })
 }
 
 /// Whether git's refusal is the "commit or stash them" one it gives

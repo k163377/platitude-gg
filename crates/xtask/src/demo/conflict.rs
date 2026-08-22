@@ -120,10 +120,11 @@ pub(super) fn conflict_staged(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// A rebase stopped part-way, which a stopped merge cannot stand in for:
-/// it steps (so it counts `1/2` and takes `--skip` / `--quit`), and the
-/// two sides swap over — the commit being replayed is "theirs".
-pub(super) fn rebase_conflict(repo: &mut DemoRepo) -> Result<(), String> {
+/// The two branches of a rebase that will stop, with the rebase **not
+/// yet run** — pressing `rebase` in the window is what stops it
+/// (`rebase-stops`), the way [`clashing`] serves the merge and the copy.
+/// Sitting on `feature/clash`, so the branch to rebase onto is `main`.
+pub(super) fn rebase_clashes(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("shared.txt", "base\n", "feat: shared base")?;
     repo.commit("other.txt", "calm\n", "feat: untouched elsewhere")?;
     repo.git(&["switch", "--create", "feature/clash"])?;
@@ -134,6 +135,14 @@ pub(super) fn rebase_conflict(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["switch", "main"])?;
     repo.commit("shared.txt", "main side\n", "fix: change shared too")?;
     repo.git(&["switch", "feature/clash"])?;
+    Ok(())
+}
+
+/// A rebase stopped part-way, which a stopped merge cannot stand in for:
+/// it steps (so it counts `1/2` and takes `--skip` / `--quit`), and the
+/// two sides swap over — the commit being replayed is "theirs".
+pub(super) fn rebase_conflict(repo: &mut DemoRepo) -> Result<(), String> {
+    rebase_clashes(repo)?;
     repo.git_expecting_stop(&["rebase", "main"])?;
     Ok(())
 }

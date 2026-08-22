@@ -38,8 +38,17 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // the merge above: their `--continue` is a step onward rather
         // than the commit somebody is writing, so the row stays — and a
         // card with a row missing frames exactly like one that has it.
-        "cherry-pick-stops" | "revert-stops" => {
+        "cherry-pick-stops" | "revert-stops" | "rebase-stops" => {
             Some("write_stopped wip=true conflicts=true error=false log=false cont=true")
+        }
+        // The same landing reached through a carry, where the stash the
+        // rewrite took out of its own way is still standing. Nothing
+        // raises git's words over it any more, so the count is the claim:
+        // a screen that lost the work and one that is holding it in the
+        // stash frame nearly alike (規約 §未コミット変更がある状態で
+        // 履歴を書き換える).
+        "drop-stops" => {
+            Some("write_stopped wip=true conflicts=true error=false log=false cont=true stashes=1")
         }
         // The other end of the same merge: the button under the card is
         // what finishes it, and an empty box commits the message git

@@ -88,21 +88,28 @@ pub(super) async fn run_plan(
     repo: &RepoInfo,
     plan: &sequencer::EditPlan,
     cancel: &CancellationToken,
-) -> Result<(), GitError> {
+) -> Result<integrate::Landing, GitError> {
     let replay = Replay::of(&plan.upstream, &plan.steps, plan.options())?;
     rewrite_carrying(executor, repo, &Rewrite::Replay(&replay), cancel).await
 }
 
 /// Runs `rewrite`, going round through a stash when the working tree is
 /// in the way (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
+///
+/// Answers a [`Landing`](integrate::Landing) rather than a
+/// [`RebaseOutcome`](integrate::RebaseOutcome): the refusal is what the
+/// carry is *for*, so it never reaches a caller, and what is left is the
+/// two answers every other operation gives — git got through it, or git
+/// stopped and left it standing.
 pub(super) async fn rewrite_carrying(
     executor: &GitExecutor,
     repo: &RepoInfo,
     rewrite: &Rewrite<'_>,
     cancel: &CancellationToken,
-) -> Result<(), GitError> {
+) -> Result<integrate::Landing, GitError> {
     match rewrite.run(executor, repo, cancel).await? {
-        integrate::RebaseOutcome::Done => Ok(()),
+        integrate::RebaseOutcome::Done => Ok(integrate::Landing::Done),
+        integrate::RebaseOutcome::Stopped => Ok(integrate::Landing::Stopped),
         integrate::RebaseOutcome::Blocked(refusal) => {
             tracing::info!(%refusal, "rebase refused: going round through a stash");
             carry_across_rewrite(executor, repo, rewrite, refusal, cancel).await
@@ -132,18 +139,26 @@ async fn carry_across_rewrite(
     rewrite: &Rewrite<'_>,
     refusal: GitError,
     cancel: &CancellationToken,
-) -> Result<(), GitError> {
+) -> Result<integrate::Landing, GitError> {
     if !stash_everything(executor, repo, cancel).await? {
         // The tree was cleaned between the refusal and now, so there is
         // nothing of ours to carry and nothing of anybody else's to
         // touch: the rebase that was refused goes through as it stands.
         return match rewrite.run(executor, repo, cancel).await? {
-            integrate::RebaseOutcome::Done => Ok(()),
+            integrate::RebaseOutcome::Done => Ok(integrate::Landing::Done),
+            integrate::RebaseOutcome::Stopped => Ok(integrate::Landing::Stopped),
             integrate::RebaseOutcome::Blocked(again) => Err(again),
         };
     }
     match rewrite.run(executor, repo, cancel).await {
         Ok(integrate::RebaseOutcome::Done) => {}
+        // The work stays in the stash until the operation is over: git
+        // will not write into an index that already holds unmerged
+        // paths, so a `pop` here would do nothing while reporting the
+        // conflict it walked into. The stash list and the graph's own
+        // row are what say where it is
+        // (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
+        Ok(integrate::RebaseOutcome::Stopped) => return Ok(integrate::Landing::Stopped),
         Ok(integrate::RebaseOutcome::Blocked(_)) => {
             // Nothing should stand in the way of a tree that was just
             // emptied, so whatever is holding this one is not something a
@@ -154,10 +169,12 @@ async fn carry_across_rewrite(
             return Err(refusal);
         }
         Err(error) => {
-            // A rebase that stopped part-way is holding the tree; the
-            // work stays in the stash until the operation is over. One
-            // that failed without starting leaves the emptied tree, and
-            // then the stash was only the room it needed.
+            // A failure that left something standing is holding the tree
+            // — a rebase asked for while another was in progress is the
+            // one measured (実測 2.55) — so the work stays in the stash
+            // until whatever that is has been dealt with. One that
+            // failed without starting leaves the emptied tree, and then
+            // the stash was only the room it needed.
             if !opstate::detect(executor, &repo.workdir, cancel)
                 .await?
                 .any()
@@ -168,7 +185,8 @@ async fn carry_across_rewrite(
         }
     }
 
-    pop_back_split_first(executor, repo, cancel).await
+    pop_back_split_first(executor, repo, cancel).await?;
+    Ok(integrate::Landing::Done)
 }
 
 /// The entry a [`stash_everything`] just made, for the moves that put it

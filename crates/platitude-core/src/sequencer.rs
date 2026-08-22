@@ -474,7 +474,7 @@ pub async fn rebase_interactive(
     // Keep both sets of scratch files alive until git is done with them.
     drop(plan);
     drop(message_files);
-    crate::integrate::refusal_or(result.map(drop))
+    crate::integrate::landed(executor, &repo.workdir, result.map(drop), cancel).await
 }
 
 /// The `GIT_SEQUENCE_EDITOR` value that installs `plan` as the todo list.

@@ -17,7 +17,7 @@ pub mod wait;
 // Everything else a module holds is reached through it (`wait::QUIET_BUDGET`)
 // — re-exporting a name nothing calls for is an unused import, not a path
 // anybody is keeping.
-pub use exec::Ends;
+pub use exec::{Ends, Said};
 pub use graph::replay_graph;
 pub use repo::TestRepo;
 pub use wait::Patience;

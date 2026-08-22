@@ -39,6 +39,7 @@ impl RepoSession {
     /// staged/unstaged split survives
     /// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
     pub fn rebase(self: &Arc<Self>, upstream: String, options: integrate::RebaseOptions) {
+        let session = Arc::clone(self);
         self.write(
             "rebase",
             AfterWrite::Graph,
@@ -47,7 +48,9 @@ impl RepoSession {
                     upstream: &upstream,
                     options: &options,
                 };
-                rewrite_carrying(&exec, &repo, &rewrite, &cancel).await
+                let landing = rewrite_carrying(&exec, &repo, &rewrite, &cancel).await?;
+                session.note_landing("rebase", landing);
+                Ok(())
             },
         );
     }
@@ -60,18 +63,23 @@ impl RepoSession {
         steps: Vec<sequencer::RebaseStep>,
         options: integrate::RebaseOptions,
     ) {
+        let session = Arc::clone(self);
         self.write(
             "rebase",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let replay = Replay::of(&upstream, &steps, options)?;
-                rewrite_carrying(&exec, &repo, &Rewrite::Replay(&replay), &cancel).await
+                let landing =
+                    rewrite_carrying(&exec, &repo, &Rewrite::Replay(&replay), &cancel).await?;
+                session.note_landing("rebase", landing);
+                Ok(())
             },
         );
     }
 
     /// Folds one commit into its parent.
     pub fn squash_into_parent(self: &Arc<Self>, oid: String) {
+        let session = Arc::clone(self);
         self.write(
             "squash",
             AfterWrite::Graph,
@@ -84,13 +92,16 @@ impl RepoSession {
                     &cancel,
                 )
                 .await?;
-                run_plan(&exec, &repo, &plan, &cancel).await
+                let landing = run_plan(&exec, &repo, &plan, &cancel).await?;
+                session.note_landing("squash", landing);
+                Ok(())
             },
         );
     }
 
     /// Leaves one commit out of the history.
     pub fn drop_commit(self: &Arc<Self>, oid: String) {
+        let session = Arc::clone(self);
         self.write(
             "drop",
             AfterWrite::Graph,
@@ -103,7 +114,9 @@ impl RepoSession {
                     &cancel,
                 )
                 .await?;
-                run_plan(&exec, &repo, &plan, &cancel).await
+                let landing = run_plan(&exec, &repo, &plan, &cancel).await?;
+                session.note_landing("drop", landing);
+                Ok(())
             },
         );
     }
@@ -113,6 +126,7 @@ impl RepoSession {
     /// The newest commit is amended instead of replayed: an amend touches
     /// nothing else, while a rebase would rewrite every commit after it.
     pub fn reword(self: &Arc<Self>, oid: String, message: String) {
+        let session = Arc::clone(self);
         self.write(
             "reword",
             AfterWrite::Graph,
@@ -135,7 +149,9 @@ impl RepoSession {
                     &cancel,
                 )
                 .await?;
-                run_plan(&exec, &repo, &plan, &cancel).await
+                let landing = run_plan(&exec, &repo, &plan, &cancel).await?;
+                session.note_landing("reword", landing);
+                Ok(())
             },
         );
     }

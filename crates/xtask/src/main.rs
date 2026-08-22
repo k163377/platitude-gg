@@ -70,6 +70,7 @@ commands:
                   left in the tree, still unmerged in the index
         conflict-staged  and staged: nothing waiting on a decision, the
                   merge still standing, the commit button live
+        rebase-clashes   the same two branches with the rebase not run
         rebase-conflict  a rebase stopped on conflicts, 1 of 2 steps
         rebase-staged    the same rebase, conflict resolved and staged
         rebase-empty     a rebase stopped on a commit that came out empty
@@ -155,9 +156,11 @@ commands:
                           a write git refused is what this verb shows, so
                           it does not sink the run (delete-branch-refused,
                           commands-fail, commands-clear, fetch-fail,
-                          fetch-recover, fetch-resume, push-retry,
-                          drop-commit on the drop-stops preset, and push /
-                          publish-new-go against an unreachable remote)
+                          fetch-recover, fetch-resume, push-retry, and
+                          push / publish-new-go against an unreachable
+                          remote). A replay that stops part-way is not
+                          among them any more: git left it standing,
+                          which is a landing rather than a failed write.
         --old-git <ver>   run the app against a git that answers --version
                           with <ver> and passes everything else to the real
                           one, so an installation older than the supported
