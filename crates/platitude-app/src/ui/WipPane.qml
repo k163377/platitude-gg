@@ -93,6 +93,9 @@ ColumnLayout {
     // against three and three against six both come out even — in neither is there room going spare. One against six
     // does not: five of the six can be shown without taking anything the other bucket had a use for.
 
+    /// Whether any bucket is standing. **A clean tree stands none of them** (デザイン規約 §その他の操作): the lists are
+    /// empty throughout, and a `(0)` heads nothing.
+    readonly property bool bucketsStanding: wipPane.worktreeModel.total > 0
     /// The buckets that are standing, top to bottom. The conflicted one is not there most of the time, and everything
     /// that reaches across the buckets — the choice, the walk, the automation — reads them from here.
     readonly property var bucketPanes:
@@ -542,9 +545,12 @@ ColumnLayout {
     ///
     /// The buckets' own frame comes off first: a heading is not one of the two rows, and left in, a pane squeezed to
     /// the window's floor would keep nothing but headings — two places named and no file under either of them.
+    ///
+    /// A clean tree stands no bucket at all, and neither the frame nor the two rows are owed to a list that is not
+    /// there: what the block may take is everything under the heading band.
     readonly property real blockRoom:
         Math.max(0, wipPane.height - headerBand.height
-                    - wipPane.bucketFrame - 2 * Theme.rowHeight)
+                    - (wipPane.bucketsStanding ? wipPane.bucketFrame + 2 * Theme.rowHeight : 0))
     /// Moves the block by a wheel a box on it could not use. The boxes cover most of the block, so without this the
     /// surface they stand on has no way to be reached by wheel at all (2026-08-09 ユーザー報告: the description box's own
     /// scrolling swallowed it and the block would not go down).
@@ -637,7 +643,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
         // On a clean tree there is nothing to head: a lone `(0)` above `(0)` heads nothing (デザイン規約 §その他の操作).
-        visible: wipPane.worktreeModel.total > 0
+        visible: wipPane.bucketsStanding
 
         WipBucketPane {
             id: conflictsBucket
@@ -681,6 +687,17 @@ ColumnLayout {
             y: unstagedBucket.y + unstagedBucket.height + Theme.borderWidth
             height: stagedBucket.headHeight + wipPane.bucketSeats[2]
         }
+    }
+
+    // The room the buckets were holding, on a clean tree where they stand down. Something has to go on holding it, or
+    // the pane has nothing in it that can grow: a layout whose items are all at their own height shares what is left
+    // over evenly between them and centres each one in its share, which is a heading band hanging off the pane's top
+    // edge and a commit block adrift in the middle of it (2026-08-22 ユーザー報告). Bare ground, and it stands where the
+    // files would have — the block below it does not move when the last change in the tree is committed.
+    Item {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: !wipPane.bucketsStanding
     }
 
     // Everything under the file list, pinned to the pane's bottom, in a surface of its own that scrolls when the pane
