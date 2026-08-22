@@ -62,6 +62,18 @@ pub struct NavSectionModel {
     /// list stands in no tree, so its refs have no full name.
     tree_named: bool,
     filter: String,
+    /// Rows this list is already showing as gone, while git is still
+    /// being asked to delete them (デザイン規約 §消す操作は先に画面から消す).
+    /// Keyed the way `Row::Full`-carrying rows are named to git — a
+    /// stash by its selector, a ref by its short name.
+    ///
+    /// Not the same thing as `filter`: a filtered-out row is still one of
+    /// the section's rows and is still counted, where one of these is
+    /// being shown as though the delete had already landed, `total`
+    /// included. The page puts a name in when the write goes out and
+    /// takes it back out when the write is refused or the refs it moved
+    /// have arrived (`RepoPage.showGone` / `RepoPage.showBack`).
+    hidden: Vec<String>,
     total: i32,
     /// Rows on screen — what filtering, folding and the run leave shown.
     /// A property rather than the slot beside it because the pane's share

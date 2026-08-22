@@ -56,8 +56,18 @@ Rectangle {
     /// A HEAD outside the loaded window has no row to lead to, and one whose chips have not arrived yet has no name to
     /// show — neither is a stand-in worth drawing (`models::graph::head`).
     readonly property bool wanted: pin.headRow >= 0 && pin.graphModel.headLabels !== ""
-    readonly property var records: pin.graphModel.headLabels === ""
-        ? [] : pin.graphModel.headLabels.split(String.fromCharCode(31))
+    /// The chips the stand-in draws, less the ones the window has already said are gone — the same answer the rows
+    /// themselves give (`GraphRowDelegate.recordsShown`). HEAD's own branch is never one of them (git refuses to
+    /// delete the branch it is on), but another branch standing on the same commit can be.
+    readonly property string goneChips: pin.graphModel.goneChips
+    readonly property var records: pin.recordsShown(pin.graphModel.headLabels, pin.goneChips)
+    function recordsShown(packed, gone) {
+        const all = packed === "" ? [] : packed.split(String.fromCharCode(31))
+        if (gone === "")
+            return all
+        const dropped = gone.split(String.fromCharCode(31))
+        return all.filter(r => !dropped.includes(r[0] + r.substring(6).split(String.fromCharCode(30))[0]))
+    }
     readonly property color laneColor: Theme.graphLane[pin.graphModel.headColor % Theme.graphLane.length]
 
     // ---- the three bands ---------------------------------------------------------------------------------------------

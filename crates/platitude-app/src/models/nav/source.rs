@@ -78,6 +78,33 @@ impl Source {
         }
     }
 
+    /// Whether the entry at `at` is one of `names` — the names being
+    /// what git is asked about rather than what a row shows, so a stash
+    /// answers to its selector and every other row to the name it shows
+    /// (the same split `Entry::full` makes).
+    ///
+    /// What the sidebar shows a row as gone by while its delete is out
+    /// (`NavSectionModel::set_hidden`).
+    pub(super) fn is_named(&self, at: usize, names: &[String]) -> bool {
+        self.entry(at).is_some_and(|of| {
+            let full = of.full();
+            let key = if full.is_empty() { of.name() } else { full };
+            names.iter().any(|named| named == key)
+        })
+    }
+
+    /// How many of this source's entries `names` covers. Zero without a
+    /// delete standing, which is what keeps the scan off every arrange of
+    /// a section holding tens of thousands of tags.
+    pub(super) fn named_count(&self, names: &[String]) -> usize {
+        if names.is_empty() {
+            return 0;
+        }
+        (0..self.len())
+            .filter(|at| self.is_named(*at, names))
+            .count()
+    }
+
     pub(super) fn files(status: platitude_core::status::WorkTreeStatus) -> Self {
         let mut order = Vec::new();
         // The heading being filled, and where its rows began: buckets

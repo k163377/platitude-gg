@@ -9,6 +9,15 @@ use super::*;
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
 impl GraphModel {
     qproperty!("loading", Member = loading, Notify = stats_changed);
+    // Chips the window is already showing as gone while git is still
+    // being asked to delete the refs they name — kind letter + name,
+    // separated by U+001F (デザイン規約 §消す操作は先に画面から消す). Held
+    // here, beside the rows that carry those names, for the same reason
+    // the sidebar's sections hold theirs (`NavSectionModel::set_hidden`):
+    // the page tells every list what the window is standing in for, and
+    // the drawing is where the names are left out — the rows still have
+    // them until the walk that follows the delete lands.
+    qproperty!("goneChips", Member = gone_chips, Notify = stats_changed);
     qproperty!("rowTotal", Member = row_total, Notify = stats_changed);
     qproperty!("walkedTotal", Member = walked_total, Notify = stats_changed);
     qproperty!("maxLanes", Member = max_lanes, Notify = stats_changed);
@@ -65,6 +74,17 @@ impl GraphModel {
 
     #[qsignal]
     fn stats_changed(&mut self);
+
+    /// Names the chips to leave undrawn (see `goneChips`). An empty
+    /// string puts them all back, which is what a refused delete does.
+    #[qslot]
+    fn set_gone_chips(&mut self, names: String) {
+        if self.gone_chips == names {
+            return;
+        }
+        self.gone_chips = names;
+        self.stats_changed();
+    }
 
     #[qslot]
     fn attach(&mut self, tab_id: i32) {

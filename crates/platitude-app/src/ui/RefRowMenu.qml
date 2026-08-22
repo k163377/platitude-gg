@@ -98,6 +98,11 @@ Item {
     signal branchHereRequested(string oidHex)
     signal deleteRequested(string kind, string id, string name, string oidHex)
     signal dropStashRequested(string selector)
+    /// A ref this menu has just asked git to delete, so the window can show it as gone while the write is out
+    /// (デザイン規約 §消す操作は先に画面から消す). One per ref — `Delete both` names two. `kind` is `branch` / `remote` /
+    /// `tag`, `id` what git knows it by. Raised beside the write rather than instead of it: the rows the page owns
+    /// (`deleteRequested`, `dropStashRequested`) take themselves away where they are answered.
+    signal deleting(string kind, string id)
     /// The menu went away — with it goes a refused delete's offer, and the stacked list it may have been standing on is
     /// the pointer's to answer for again.
     signal dismissed()
@@ -161,6 +166,7 @@ Item {
         const cut = remoteRef.indexOf("/")
         if (cut < 0)
             return
+        refRowMenu.deleting("remote", remoteRef)
         refRowMenu.repoTab.deleteRemoteBranch(remoteRef.substring(0, cut), remoteRef.substring(cut + 1))
     }
 
@@ -264,10 +270,13 @@ Item {
                     refRowMenu.dropStashRequested(refRowMenu.refId)
                 else if (remoteRow)
                     refRowMenu.deleteRemoteNow(refRowMenu.refId)
-                else if (tagRow)
+                else if (tagRow) {
+                    refRowMenu.deleting("tag", refRowMenu.refId)
                     refRowMenu.repoTab.deleteTag(refRowMenu.refId)
-                else
+                } else {
+                    refRowMenu.deleting("branch", refRowMenu.refId)
                     refRowMenu.repoTab.deleteBranch(refRowMenu.refId, true)
+                }
             }
         }
         // The branch's remote reading, deleted without touching the local one — on the current branch the one delete on
@@ -314,6 +323,9 @@ Item {
                 const cut = c.indexOf("/")
                 if (cut < 0)
                     return
+                // Both halves go at once: the pair is one write with one answer, so it is one thing to put back.
+                refRowMenu.deleting("branch", refRowMenu.refId)
+                refRowMenu.deleting("remote", c)
                 refRowMenu.repoTab.deleteBranchEverywhere(
                     refRowMenu.refId, c.substring(0, cut), c.substring(cut + 1),
                     refDeleteItem.refusedRow)

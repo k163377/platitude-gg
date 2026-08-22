@@ -28,6 +28,11 @@ pub struct GraphModel {
     rows: Vec<GraphRowItem>,
     generation: u64,
     loading: bool,
+    /// Chip records to leave undrawn — see the property's own note in
+    /// `qobject.rs`. Nothing here reads it: the rows are handed out by
+    /// reference (`QListModel::get`), so the leaving-out happens where
+    /// the chips are drawn.
+    gone_chips: String,
     row_total: i32,
     /// Commits the walk emitted — the truncation footer's number. Equals
     /// the window limit whenever `truncated`, where `row_total` drifts

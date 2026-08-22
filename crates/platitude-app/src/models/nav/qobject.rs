@@ -87,6 +87,17 @@ impl NavSectionModel {
     #[qsignal]
     fn refs_settled(&mut self);
 
+    /// A stash listing arrived, whether or not it moved anything.
+    ///
+    /// **Separate from `refs_settled`, because the two do not land
+    /// together**: a write publishes its refs before it rebuilds the
+    /// graph and asks for the stashes only after (`session::write`), so a
+    /// page that read the refs' arrival as the stashes' would put a
+    /// dropped stash back on screen for the length of the rebuild
+    /// (デザイン規約 §消す操作は先に画面から消す).
+    #[qsignal]
+    fn stashes_settled(&mut self);
+
     /// Wires this instance to one section's data feed. `section`:
     /// `branches` / `remotes` / `worktrees` / `stashes` / `tags`. The
     /// working tree's changed files come through [`Self::attach_worktree`]
@@ -202,22 +213,51 @@ impl NavSectionModel {
             let list = list.into_iter().filter(|w| !w.bare).collect();
             arrived |= self.take(Source::Worktrees { list, current });
         }
+        let mut stashes_arrived = false;
         if let Some(feed) = self.stash_feed.clone()
             && let Some(stashes) = feed.drain().pop()
         {
+            stashes_arrived = true;
             arrived |= self.take(Source::Stashes(stashes));
         }
         if arrived {
-            self.total = self.all.len() as i32;
+            // `total` is settled by the arrange below, which is the one
+            // place that knows how many rows are being shown as gone.
             self.reshape();
             self.changed();
         }
         if settled {
             self.refs_settled();
         }
+        if stashes_arrived {
+            self.stashes_settled();
+        }
         if crate::memprobe::enabled() {
             self.note_footprint();
         }
+    }
+
+    /// Shows these rows as already gone: the page hands over the names of
+    /// what it has just asked git to delete, separated by U+001F, and an
+    /// empty string puts them all back (デザイン規約 §消す操作は先に画面から消す).
+    ///
+    /// The page owns when they go back, because only the page knows which
+    /// answer it is waiting for — this list holds nothing but what it was
+    /// told, so a name for a row that is not here costs one comparison and
+    /// changes nothing.
+    #[qslot]
+    fn set_hidden(&mut self, names: String) {
+        let hidden: Vec<String> = if names.is_empty() {
+            Vec::new()
+        } else {
+            names.split('\u{1f}').map(str::to_string).collect()
+        };
+        if self.hidden == hidden {
+            return;
+        }
+        self.hidden = hidden;
+        self.reshape();
+        self.changed();
     }
 
     #[qslot]

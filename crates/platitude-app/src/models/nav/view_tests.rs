@@ -179,3 +179,130 @@ fn a_republished_snapshot_moves_nothing() {
         vec![tag("v1.1", true, true)]
     ))));
 }
+
+/// A row the page is showing as already deleted leaves the list, the
+/// count, and — where it was the last one under it — the folder it stood
+/// in (デザイン規約 §消す操作は先に画面から消す).
+#[test]
+fn a_row_shown_as_gone_leaves_the_list_and_the_count() {
+    let mut model = section(
+        "remotes",
+        Source::Remotes(snapshot(
+            vec![
+                remote("origin/feature/one"),
+                remote("origin/feature/two"),
+                remote("origin/main"),
+            ],
+            Vec::new(),
+        )),
+    );
+    model.folder_overrides.insert("origin".to_string(), true);
+    model.arrange();
+    // origin / feature / one / two / main.
+    assert_eq!(model.shown_rows(), 5);
+    assert_eq!(model.total, 3);
+
+    // One of the two under `feature`: the folder stays, opened by the
+    // sibling that is still there.
+    model.hidden = vec!["origin/feature/one".to_string()];
+    model.arrange();
+    assert_eq!(model.shown_rows(), 4);
+    assert_eq!(says(&model, 1, Role::Name), "feature");
+    assert_eq!(says(&model, 2, Role::Name), "two");
+    assert_eq!(says(&model, 3, Role::Name), "main");
+    // The band counts what the repository has, and this row is being
+    // shown as no longer one of them.
+    assert_eq!(model.total, 2);
+
+    // Both of them: the folder they were the whole of goes with them.
+    model.hidden = vec![
+        "origin/feature/one".to_string(),
+        "origin/feature/two".to_string(),
+    ];
+    model.arrange();
+    assert_eq!(model.shown_rows(), 2);
+    assert_eq!(says(&model, 0, Role::Name), "origin");
+    assert_eq!(says(&model, 1, Role::Name), "main");
+    assert_eq!(model.total, 1);
+
+    // Taken back — a refused delete puts every one of them back where it
+    // was, folders included.
+    model.hidden = Vec::new();
+    model.arrange();
+    assert_eq!(model.shown_rows(), 5);
+    assert_eq!(model.total, 3);
+}
+
+/// The sections that arrange nothing at all still have to leave a row
+/// out: with no tree and no filter their rows are the source's own, and
+/// the one being shown as gone is not among them (`arrange`).
+#[test]
+fn a_flat_section_leaves_out_the_row_shown_as_gone() {
+    let mut model = section(
+        "tags",
+        Source::Tags(snapshot(
+            Vec::new(),
+            vec![tag("v1.0", false, true), tag("v1.1", false, true)],
+        )),
+    );
+    model.arrange();
+    assert!(model.arranged.is_none(), "nothing to arrange yet");
+    assert_eq!(model.total, 2);
+
+    model.hidden = vec!["v1.0".to_string()];
+    model.arrange();
+    assert_eq!(model.shown_rows(), 1);
+    assert_eq!(says(&model, 0, Role::Name), "v1.1");
+    assert_eq!(model.total, 1);
+}
+
+/// A stash is named to git by its selector rather than by the words it
+/// shows, and the selector is what the page hands over.
+#[test]
+fn a_stash_is_hidden_by_the_selector_git_knows_it_by() {
+    let entry = |name: &str, message: &str| platitude_core::stash::StashEntry {
+        name: name.to_string(),
+        oid: oid("a"),
+        time: 0,
+        message: message.to_string(),
+    };
+    let mut model = section(
+        "stashes",
+        Source::Stashes(vec![
+            entry("stash@{0}", "WIP on main"),
+            entry("stash@{1}", "WIP on topic"),
+        ]),
+    );
+    // What the row shows is not what git is asked about, so it hides
+    // nothing.
+    model.hidden = vec!["WIP on main".to_string()];
+    model.arrange();
+    assert_eq!(model.shown_rows(), 2);
+
+    model.hidden = vec!["stash@{0}".to_string()];
+    model.arrange();
+    assert_eq!(model.shown_rows(), 1);
+    assert_eq!(says(&model, 0, Role::Name), "WIP on topic");
+    assert_eq!(model.total, 1);
+}
+
+/// Filtering and hiding answer different questions and a row can be
+/// caught by both: the filter says which rows match, the hidden list says
+/// which the repository is being shown as no longer having.
+#[test]
+fn a_filtered_list_leaves_out_the_row_shown_as_gone_as_well() {
+    let mut model = section(
+        "remotes",
+        Source::Remotes(snapshot(
+            vec![remote("origin/feature/one"), remote("origin/feature/two")],
+            Vec::new(),
+        )),
+    );
+    model.filter = "feature".to_string();
+    model.hidden = vec!["origin/feature/one".to_string()];
+    model.arrange();
+
+    assert_eq!(model.shown_rows(), 1);
+    assert_eq!(says(&model, 0, Role::Name), "origin/feature/two");
+    assert_eq!(model.total, 1);
+}

@@ -149,6 +149,8 @@ Item {
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "chip-menu", "chip-menu-current",
                 "delete-blocked-tip", "switch-blocked-tip", "delete-branch-early",
+                // Deliberately not a write act: what it photographs is the moment before the answer.
+                "delete-gone",
                 "ref-list-card", "row-part",
                 "signature", "signature-tip", "stash-tip", "path-tip", "row-card", "menu-hover",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
@@ -1337,6 +1339,23 @@ Item {
             AppBackend.report("ref_menu delete=" + refDeleteItem.code
                                        + " " + refDeleteItem.text
                                        + " note=" + refDeleteItem.note)
+            driver.complete()
+        }
+    }
+    // The row taken away ahead of git's answer. **Waited on the list, not on the write** — being ahead of the write
+    // is the whole of what this photographs, so a barrier here would wait out the very state it is about.
+    Timer {
+        id: goneRowTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (tagsModel.rowOfName(AppBackend.autoActArg) >= 0)
+                return
+            goneRowTimer.stop()
+            AppBackend.report("gone_row tag=" + AppBackend.autoActArg
+                              + " row=" + tagsModel.rowOfName(AppBackend.autoActArg)
+                              + " total=" + tagsModel.total
+                              + " chips=" + (graphModel.goneChips !== ""))
             driver.complete()
         }
     }
@@ -2997,6 +3016,14 @@ Item {
             page.deleteRow("branch", arg, arg, branchesModel.oidOfName(arg))
             if (act === "delete-branch-go")
                 forceDeleteTimer.start()
+        } else if (act === "delete-gone") {
+            // The row and its chip leave at the press, and git is asked behind them (デザイン規約 §消す操作は先に画面から
+            // 消す). **A tag, because git refuses no tag delete** — the branch's own half of the rule is the row coming
+            // *back* from a refusal, which `delete-branch-refused` photographs. The page holds the in-between open
+            // for the shot (`RepoPage.goneHeldForShot`); a demo repository answers before a picture can be grabbed.
+            page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
+            refDeleteItem.completeHold()
+            goneRowTimer.start()
         } else if (act === "delete-tag" || act === "delete-tag-go") {
             page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
             if (act === "delete-tag-go")

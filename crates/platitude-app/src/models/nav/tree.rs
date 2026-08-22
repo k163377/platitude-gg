@@ -87,7 +87,12 @@ impl NavSectionModel {
         let mut collapsed_at: Option<usize> = None;
 
         for at in 0..self.all.len() {
-            let Some(leaf) = self.all.entry(at) else {
+            // Skipped before its folders are opened, not after: the rows
+            // that carry a `/` are the only thing that puts a folder row
+            // on screen, so a leaf shown as gone takes with it any folder
+            // it was the last of — and leaves the ones it shared standing,
+            // because the next leaf opens those itself.
+            let Some(leaf) = self.all.entry(at).filter(|_| !self.hidden_at(at)) else {
                 continue;
             };
             let name = leaf.name();

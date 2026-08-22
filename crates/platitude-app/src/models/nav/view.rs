@@ -98,13 +98,27 @@ impl NavSectionModel {
                     }
                     Some(out)
                 }
-                _ => None,
+                // Nothing arranges these — until a row is being shown as
+                // gone, which is an order of its own and has to be written
+                // down (`hidden_at`).
+                _ if self.hidden.is_empty() => None,
+                _ => Some(
+                    (0..self.all.len())
+                        .filter(|at| !self.hidden_at(*at))
+                        .map(|at| Arranged::At {
+                            at: at as u32,
+                            depth: 0,
+                            from: 0,
+                        })
+                        .collect(),
+                ),
             }
         } else {
             // Filtering shows flat full names (folders would hide context).
             Some(
                 (0..self.all.len())
                     .filter(|at| self.in_run(*at))
+                    .filter(|at| !self.hidden_at(*at))
                     .filter(|at| {
                         self.all
                             .entry(*at)
@@ -126,6 +140,20 @@ impl NavSectionModel {
             })
             .map_or(-1, |row| row as i32);
         self.shown_total = self.shown_rows() as i32;
+        // The count the section's band shows. **A hidden row is not one
+        // of them** — the band is saying how many the repository has, and
+        // a row being shown as already deleted has to be gone from the
+        // number as well as from the list, or the band reads one more
+        // than the reader can count (デザイン規約 §消す操作は先に画面から消す).
+        // A *filtered* row still counts: that band answers "how many are
+        // there", not "how many match" (`set_filter`).
+        self.total = (self.all.len() - self.all.named_count(&self.hidden)) as i32;
+    }
+
+    /// Whether this source row is one the page is already showing as gone
+    /// (`Source::is_named`).
+    pub(super) fn hidden_at(&self, at: usize) -> bool {
+        !self.hidden.is_empty() && self.all.is_named(at, &self.hidden)
     }
 
     /// Whether a source row belongs to the run this list shows. Every row

@@ -343,6 +343,7 @@ Item {
         onBranchHereRequested: oidHex => page.startBranchAt(oidHex)
         onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
         onDropStashRequested: selector => page.dropStashNow(selector)
+        onDeleting: (kind, id) => page.showGone(kind, id)
         // The settle re-run is for a menu that stood on the stacked list's row: the list stayed up under it, and
         // whether it stays now is the pointer's to answer again.
         onDismissed: rowHost.settleRefList()
@@ -461,6 +462,105 @@ Item {
     /// was rather than raising itself over the same news (デザイン規約 §git が言ったことを読む場所). Counted rather than flagged
     /// because the refusal and the write result arrive on separate paths, in no fixed order.
     property int expectedRefusals: 0
+
+    // ---- what the window is already showing as gone ------------------
+    //
+    // **A delete takes the row away at the press, and git is asked behind it** (デザイン規約 §消す操作は先に画面から消す).
+    // The write itself is the short half: `git branch -d` is one process, and everything the reader is actually
+    // waiting on comes after it — the refs read, then the walk that rebuilds the graph (kotlin 級で 54ms のあとに
+    // 1.3s、`busyCount` はその先頭しか覆わない — 2026-08-22 実測). Left to those, the row sits there through all of it
+    // with nothing to say whether the press even landed.
+    //
+    // One key per kind, because a delete touches at most one of each; `Delete both` is the one that touches two.
+    // Empty means nothing is being shown as gone, which is also what a refusal goes back to.
+    property string goneBranch: ""
+    property string goneRemote: ""
+    property string goneTag: ""
+    property string goneStash: ""
+    /// The write count the rows were taken away at. **The reading that puts them back has to be one that came after
+    /// the write answered** — a listing already queued when the press landed says nothing about the delete, and read
+    /// as though it did it would put the row straight back under the hand that had just taken it away.
+    property int goneAtSeq: -1
+    /// The chips that go with the rows, keyed the way a chip record is (kind letter + the name on it —
+    /// `GraphRowDelegate.recordsShown`). A dropped stash has no chip: it is a row of the graph rather than a name on
+    /// one, and a row only leaves with the walk.
+    readonly property string goneChips: {
+        const gone = []
+        if (page.goneBranch !== "")
+            gone.push("L" + page.goneBranch)
+        if (page.goneRemote !== "")
+            gone.push("R" + page.goneRemote)
+        if (page.goneTag !== "")
+            gone.push("T" + page.goneTag)
+        return gone.join(String.fromCharCode(31))
+    }
+    onGoneChipsChanged: graphModel.setGoneChips(page.goneChips)
+    onGoneBranchChanged: branchesModel.setHidden(page.goneBranch)
+    onGoneRemoteChanged: remotesModel.setHidden(page.goneRemote)
+    onGoneTagChanged: tagsModel.setHidden(page.goneTag)
+    onGoneStashChanged: stashesModel.setHidden(page.goneStash)
+
+    /// Automation: the run that photographs a row already gone holds it there.
+    ///
+    /// What it photographs is the in-between — the row taken away, git not yet answered for it — and a demo
+    /// repository answers in tens of milliseconds, which is over before the picture is grabbed. Latched at the press
+    /// itself, which is the real edge rather than a stand-in for one (verify-ui スキル §壊れない動詞の実装と反復).
+    property bool goneHeldForShot: false
+
+    /// Takes a row away before git has answered for it. `id` is what git is being asked to delete, which is also what
+    /// the row is keyed by — so a refusal puts back exactly what was taken.
+    function showGone(kind, id) {
+        page.goneAtSeq = repoTab.writeSeq
+        if (AppBackend.autoAct === "delete-gone")
+            page.goneHeldForShot = true
+        if (kind === "branch")
+            page.goneBranch = id
+        else if (kind === "remote")
+            page.goneRemote = id
+        else if (kind === "tag")
+            page.goneTag = id
+        else if (kind === "stash")
+            page.goneStash = id
+        if (AppBackend.autoAct !== "")
+            AppBackend.report("gone_shown kind=" + kind + " id=" + id)
+    }
+    /// Puts every one of them back: git refused, and what it refused is still there.
+    ///
+    /// **Only for the answer to the write that took them away** — `goneAtSeq` is read before the write goes out, so
+    /// its own answer is the next one. The queue is serial across the refreshes as well (`session::write` holds
+    /// `write_busy` around the whole request), so the only thing that can still be standing when a later write
+    /// answers is the stash: its listing is asked for after the request returns rather than awaited inside it, and a
+    /// refusal read as this one's would put a dropped stash back while its own listing was still in flight.
+    ///
+    /// **What it cannot tell apart is the composite.** `Delete both` deletes locally and then pushes, and a remote
+    /// half that failed answers with the same one error as a local half git would not do — so a landed local delete
+    /// is put back here too, until the refs read takes it away again (rules-refs/app-ui.md).
+    function showBack() {
+        if (repoTab.writeSeq !== page.goneAtSeq + 1)
+            return
+        page.goneBranch = ""
+        page.goneRemote = ""
+        page.goneTag = ""
+        page.goneStash = ""
+    }
+    /// Whether a listing arriving now is one that can answer for the delete.
+    readonly property bool goneAnswered:
+        page.goneAtSeq >= 0 && repoTab.writeSeq > page.goneAtSeq && !page.goneHeldForShot
+    /// The refs the delete moved have arrived, so what the sidebar and the chips now hold is the truth — whichever
+    /// way it went, nothing is being stood in for any more. **The stash is not one of them**: its listing is asked
+    /// for after the graph is rebuilt rather than beside the refs (`session::write`), so it has a word of its own.
+    function refsProvedGone() {
+        if (!page.goneAnswered)
+            return
+        page.goneBranch = ""
+        page.goneRemote = ""
+        page.goneTag = ""
+    }
+    function stashesProvedGone() {
+        if (page.goneAnswered)
+            page.goneStash = ""
+    }
+
     function deleteRow(kind, id, name, oidHex) {
         if (kind !== "branch")
             return
@@ -470,10 +570,12 @@ Item {
             return
         page.pendingDeleteBranch = id
         page.expectedRefusals++
+        page.showGone("branch", id)
         repoTab.deleteBranch(id, false)
     }
     /// Held, not asked (デザイン規約 §長押し).
     function dropStashNow(ref) {
+        page.showGone("stash", ref)
         repoTab.dropStash(ref)
         if (page.selectedStashRef === ref)
             page.selectedStashRef = ""
@@ -723,6 +825,10 @@ Item {
         // A push this button sent has come back; what it means for the toolbar's button is the flow's to work out.
         publishFlow.noteWriteAnswer(repoTab.lastWriteOp, repoTab.lastWriteError)
         if (repoTab.lastWriteError !== "") {
+            // Whatever the window took away for this write is still there — git would not do it, or could not reach
+            // the far side to. Put back before anything below answers for the refusal, so the row the question is
+            // about is on screen when the question is (デザイン規約 §消す操作は先に画面から消す).
+            page.showBack()
             // A refused stage, unstage or discard says the rows on screen are not the file any more — drifted bytes are
             // the one thing the fingerprint refuses on. The tally watch below cannot always catch the drift that caused
             // it (an outside change that moves no bucket count moves no tally), so left alone the same press would be
@@ -1345,6 +1451,17 @@ Item {
         // already has owes the same landing as one that wrote a commit, and this is the only word that it can be paid.
         function onRefsSettled() {
             page.tryPendingHeadSelect()
+            // The listing the delete was waiting on: the rows it took away are gone from the model itself now, so the
+            // window stops standing in for it (デザイン規約 §消す操作は先に画面から消す).
+            page.refsProvedGone()
+        }
+    }
+    // The stashes arrive on a word of their own, later than the refs — read off the refs' arrival, a dropped stash
+    // would be back on screen for the whole of the graph rebuild that sits between the two (`session::write`).
+    Connections {
+        target: stashesModel
+        function onStashesSettled() {
+            page.stashesProvedGone()
         }
     }
     /// What the working tree looked like the last time the open diff was read against it. Not a diff of the file — the

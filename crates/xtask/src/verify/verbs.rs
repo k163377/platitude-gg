@@ -68,6 +68,13 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // taken at the write barrier, which is the graph as it was.
         "stash" => Some("graph_settled gone=true top=stash"),
         "stash-pop-row" => Some("graph_settled gone=true top=wip"),
+        // The row taken away before git answered for it, held open for
+        // the picture. `row=-1` is the sidebar without it and `chips=true`
+        // the graph without its chip — **both halves at once** is the whole
+        // of the rule, and a run that only ever reached the state after
+        // the refs landed would say the same `row=-1` for a different
+        // reason (デザイン規約 §消す操作は先に画面から消す).
+        "delete-gone" => Some("gone_row tag=v0.3-local row=-1 total=2 chips=true"),
         // The band's Stash button, on each of the four things a working
         // tree can be. A button held down frames the same whichever
         // refusal put it there, so the reading is said out loud beside
