@@ -14,6 +14,14 @@ cargo xtask shots <command>
       pictures under no name leave nobody able to say which file was
       which change.
 
+  add --label \"<what changed>\" --before <png> --after <png>
+      The same, for two pictures of one thing: they go on the board as a
+      single view holding both side by side under one magnifier, each
+      with its word over it. Read one after the other they are not a
+      comparison — the reader carries the first picture in their head
+      while looking at the second — so a before/after goes on the board
+      this way and never as two runs.
+
   prune [--seat <letter>]... [--label \"<label>\"]
       Take runs off the board — their pictures and all — and rebuild the
       page. Without --seat it reaches this seat's own runs and nobody
@@ -80,12 +88,16 @@ fn add(args: &[String]) -> Result<(), String> {
     let mut label = String::new();
     let mut verb = String::new();
     let mut want_open = false;
+    let mut before: Option<PathBuf> = None;
+    let mut after: Option<PathBuf> = None;
     let mut pngs: Vec<PathBuf> = Vec::new();
     let mut rest = args.iter();
     while let Some(arg) = rest.next() {
         match arg.as_str() {
             "--label" => label = rest.next().cloned().unwrap_or_default(),
             "--verb" => verb = rest.next().cloned().unwrap_or_default(),
+            "--before" => before = rest.next().map(PathBuf::from),
+            "--after" => after = rest.next().map(PathBuf::from),
             "--open" => want_open = true,
             other if other.starts_with("--") => {
                 return Err(format!("shots add: unknown flag {other}"));
@@ -93,11 +105,24 @@ fn add(args: &[String]) -> Result<(), String> {
             other => pngs.push(PathBuf::from(other)),
         }
     }
-    let page = board::record(&label, &verb, &pngs)?;
+    // Half a comparison is not one, and the halves must not arrive as
+    // two runs by accident: the whole point of the pair is that they are
+    // looked at together.
+    let (page, count) = match (before, after) {
+        (Some(before), Some(after)) if pngs.is_empty() => {
+            (board::record_pair(&label, &verb, &before, &after)?, 2)
+        }
+        (None, None) => (board::record(&label, &verb, &pngs)?, pngs.len()),
+        _ => {
+            return Err(
+                "shots add: --before and --after go together, and take no other pictures"
+                    .to_string(),
+            );
+        }
+    };
     println!(
-        "board: {} (+{} shot(s) in seat {} under \"{}\")",
+        "board: {} (+{count} shot(s) in seat {} under \"{}\")",
         board::shown(&page),
-        pngs.len(),
         board::seat_here(),
         label
     );

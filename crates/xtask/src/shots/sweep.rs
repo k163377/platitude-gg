@@ -335,6 +335,7 @@ mod tests {
             seat: seat.to_string(),
             session: session.to_string(),
             at,
+            side_by_side: false,
             shots: Vec::new(),
         }
     }

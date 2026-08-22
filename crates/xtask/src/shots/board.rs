@@ -83,6 +83,39 @@ pub(super) fn session_here() -> String {
 /// page is. An empty label is refused here rather than at the command
 /// line, so the rule holds for `verify-ui`'s own calls too.
 pub(crate) fn record(label: &str, verb: &str, pngs: &[PathBuf]) -> Result<PathBuf, String> {
+    let captions: Vec<String> = pngs.iter().map(|_| String::new()).collect();
+    record_with(label, verb, pngs, &captions, false)
+}
+
+/// Two pictures of the same thing under one name, read abreast: the one
+/// before the change on the left, the one after it on the right.
+///
+/// Shown one at a time they are not a comparison at all — the reader
+/// holds the first in their head while looking at the second
+/// (2026-08-22 ユーザー指示). One view, one magnifier, and the difference
+/// is on the screen instead of in the memory.
+pub(crate) fn record_pair(
+    label: &str,
+    verb: &str,
+    before: &Path,
+    after: &Path,
+) -> Result<PathBuf, String> {
+    record_with(
+        label,
+        verb,
+        &[before.to_path_buf(), after.to_path_buf()],
+        &["before".to_string(), "after".to_string()],
+        true,
+    )
+}
+
+fn record_with(
+    label: &str,
+    verb: &str,
+    pngs: &[PathBuf],
+    captions: &[String],
+    side_by_side: bool,
+) -> Result<PathBuf, String> {
     let label = one_line(label);
     if label.is_empty() {
         return Err("a run needs --label \"<what these pictures show>\"".to_string());
@@ -109,6 +142,7 @@ pub(crate) fn record(label: &str, verb: &str, pngs: &[PathBuf]) -> Result<PathBu
         seat,
         session: session_here(),
         at,
+        side_by_side,
         shots: Vec::new(),
     };
     for (n, png) in pngs.iter().enumerate() {
@@ -123,6 +157,7 @@ pub(crate) fn record(label: &str, verb: &str, pngs: &[PathBuf]) -> Result<PathBu
         run.shots.push(Shot {
             file: format!("img/{name}"),
             from,
+            caption: captions.get(n).cloned().unwrap_or_default(),
             width,
             height,
         });
@@ -187,10 +222,15 @@ fn write_run(runs: &Path, stem: &str, run: &Run) -> Result<(), String> {
         text.push_str(&format!("{key}{SEP}{value}\n"));
     }
     text.push_str(&format!("at{SEP}{}\n", run.at));
+    if run.side_by_side {
+        text.push_str(&format!("abreast{SEP}1\n"));
+    }
+    // The caption goes last, so a run written before the board had one
+    // parses here with every field it does carry still in its place.
     for shot in &run.shots {
         text.push_str(&format!(
-            "shot{SEP}{}{SEP}{}{SEP}{}{SEP}{}\n",
-            shot.file, shot.from, shot.width, shot.height
+            "shot{SEP}{}{SEP}{}{SEP}{}{SEP}{}{SEP}{}\n",
+            shot.file, shot.from, shot.width, shot.height, shot.caption
         ));
     }
     let final_path = runs.join(format!("{stem}.tsv"));
@@ -210,6 +250,7 @@ pub(super) fn parse_run(text: &str) -> Option<Run> {
         seat: String::new(),
         session: String::new(),
         at: 0,
+        side_by_side: false,
         shots: Vec::new(),
     };
     for line in text.lines() {
@@ -223,14 +264,19 @@ pub(super) fn parse_run(text: &str) -> Option<Run> {
             // is what they are: nothing that ends can claim them.
             Some("session") => run.session = parts.next().unwrap_or_default().to_string(),
             Some("at") => run.at = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0),
+            Some("abreast") => run.side_by_side = parts.next() == Some("1"),
             Some("shot") => {
                 let file = parts.next()?.to_string();
                 let from = parts.next()?.to_string();
                 let width = parts.next()?.parse().ok()?;
                 let height = parts.next()?.parse().ok()?;
+                // Absent in every run written before captions existed,
+                // and empty is exactly what those runs mean.
+                let caption = parts.next().unwrap_or_default().to_string();
                 run.shots.push(Shot {
                     file,
                     from,
+                    caption,
                     width,
                     height,
                 });
@@ -305,6 +351,33 @@ mod tests {
         assert_eq!(run.shots[0].width, 1440);
     }
 
+    /// A before/after has to come back off the board as one thing: the
+    /// two are read abreast, and each half keeps the word over it.
+    #[test]
+    fn a_pair_is_still_a_pair_after_a_rebuild() {
+        let text = "label\tthe stopped landing\tseat\ta\nseat\ta\nat\t1700000000000\n\
+                    abreast\t1\n\
+                    shot\timg/x.png\tapp.png\t1440\t900\tbefore\n\
+                    shot\timg/y.png\tapp.png\t1440\t900\tafter\n";
+        let run = parse_run(text).expect("a whole run parses");
+        assert!(run.side_by_side);
+        assert_eq!(run.shots.len(), 2);
+        assert_eq!(run.shots[0].caption, "before");
+        assert_eq!(run.shots[1].caption, "after");
+    }
+
+    /// Every other run is read one picture at a time, and says so by
+    /// carrying no such line — including the ones written before the
+    /// board could put two pictures side by side.
+    #[test]
+    fn a_run_from_before_pairs_is_read_one_at_a_time() {
+        let text = "label\tthe chip's badge\nseat\ta\nat\t1700000000000\n\
+                    shot\timg/x.png\tapp.png\t1440\t900\n";
+        let run = parse_run(text).expect("a whole run parses");
+        assert!(!run.side_by_side);
+        assert!(run.shots[0].caption.is_empty());
+    }
+
     /// A run written before the board carried sessions is still a run —
     /// one that belongs to no session, which is the reading that keeps a
     /// session's sweep off it.
@@ -348,9 +421,11 @@ mod tests {
             seat: "a".to_string(),
             session: String::new(),
             at,
+            side_by_side: false,
             shots: vec![Shot {
                 file: "img/x.png".to_string(),
                 from: "app.png".to_string(),
+                caption: String::new(),
                 width: 1,
                 height: 1,
             }],

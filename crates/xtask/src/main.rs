@@ -296,6 +296,11 @@ commands:
       also why `prune` reaches this seat's runs and no others unless it
       is told to.
 
+      A before/after goes on with `add --before <png> --after <png>`,
+      which puts the two on one view side by side under one magnifier.
+      Never as two runs: read one after the other, the difference is
+      whatever the reader remembered rather than whatever changed.
+
       The board keeps itself to what is being looked at now, and the
       three rules that do it are in shots/sweep.rs: a picture retaken
       replaces the one before it, a seat's runs go when its branch

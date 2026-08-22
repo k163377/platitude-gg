@@ -43,6 +43,15 @@ pub(crate) struct Run {
     /// Milliseconds since the epoch. The page formats it — it has a
     /// calendar, and xtask depends on std alone (CLAUDE.md 技術スタック).
     pub(crate) at: u128,
+    /// Whether the pictures are read *abreast* — one view holding them
+    /// all in a row under one zoom — rather than one at a time.
+    ///
+    /// What a before/after is for: shown one after the other, the reader
+    /// carries the first picture in their head while looking at the
+    /// second, and the difference is whatever they remember rather than
+    /// whatever changed (2026-08-22 ユーザー指示). Side by side under one
+    /// magnifier there is nothing to remember.
+    pub(crate) side_by_side: bool,
     pub(crate) shots: Vec<Shot>,
 }
 
@@ -55,6 +64,11 @@ pub(crate) struct Shot {
     /// What the file was called where it was taken (app.png, overlay.png)
     /// — the name that ties it back to the run that produced it.
     pub(crate) from: String,
+    /// What this one picture is, when the run holds more than one and
+    /// says so (`before` / `after`). Empty everywhere else: a run whose
+    /// pictures are read one at a time is named by its label, and a
+    /// caption over every shot would only repeat it.
+    pub(crate) caption: String,
     pub(crate) width: u32,
     pub(crate) height: u32,
 }
