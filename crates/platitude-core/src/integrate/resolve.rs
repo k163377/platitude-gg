@@ -41,10 +41,9 @@ pub enum InProgress {
 }
 
 impl InProgress {
-    /// Widened from private to the module only because the file split
-    /// put [`pick`](super::pick) on the other side of it; nothing outside
-    /// `integrate` can see it.
-    pub(super) fn command(self) -> &'static str {
+    /// The verb git knows this operation by — what a chip or a pill
+    /// spells when it names the way out (`cherry-pick --abort`).
+    pub fn command(self) -> &'static str {
         match self {
             InProgress::Rebase => "rebase",
             InProgress::Merge => "merge",
@@ -55,11 +54,14 @@ impl InProgress {
 
     fn supports(self, continuation: Continuation) -> bool {
         match self {
-            // `git merge` steps through nothing, so there is nothing to
-            // skip or quit.
-            InProgress::Merge => {
-                matches!(continuation, Continuation::Continue | Continuation::Abort)
-            }
+            // `git merge` steps through nothing, so there is no commit to
+            // leave out. **`--quit` it does take** (実測 2.55: the marker
+            // goes, the tree stays exactly as it stood) — the exit card
+            // still does not offer the row, but that is a decision about
+            // what to put in front of a reader, and the way out of a
+            // stopped operation that ends on another branch goes through
+            // this one (`session::build::leave_operation`).
+            InProgress::Merge => !matches!(continuation, Continuation::Skip),
             _ => true,
         }
     }
@@ -134,9 +136,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn merge_supports_only_continue_and_abort() {
+    fn a_merge_steps_through_nothing_so_it_cannot_skip() {
         assert!(InProgress::Merge.supports(Continuation::Continue));
         assert!(InProgress::Merge.supports(Continuation::Abort));
+        assert!(
+            InProgress::Merge.supports(Continuation::Quit),
+            "the marker goes and the tree stays: what leaving for another branch needs"
+        );
         assert!(!InProgress::Merge.supports(Continuation::Skip));
         assert!(InProgress::CherryPick.supports(Continuation::Skip));
     }

@@ -310,3 +310,189 @@ async fn a_pop_refused_by_a_conflicted_tree_is_still_a_failure() {
     assert!(!repo.path.join("spare.txt").exists(), "still in the entry");
     session.close();
 }
+
+/// Moving out of a stopped cherry-pick: the operation is put down, the
+/// tree it left goes into a stash, and the move lands — one write.
+///
+/// **Nothing is undone.** `--quit` keeps every commit an earlier step of
+/// the sequence already made, and the conflicted paths travel in the
+/// stash rather than being thrown away, which is what tells this apart
+/// from the `--abort` a reader can still choose on the exit card
+/// (デザイン規約 §進行中の操作から出る).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_move_out_of_a_stopped_pick_puts_it_in_a_stash() {
+    let mut repo = colliding_branches();
+    repo.commit_file("both.txt", "ours\n", "main");
+    let before = repo.git(&["rev-parse", "HEAD"]);
+    repo.git_expect_failure(&["cherry-pick", "other"]);
+    assert!(
+        repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
+        "the pick stopped on a conflict"
+    );
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout_leaving_operation(platitude_core::branch::CheckoutTarget::Branch {
+        name: "other".into(),
+    });
+    assert_eq!(write_result(&sink, "checkout").await, None);
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
+    assert_eq!(
+        repo.git(&["status", "--porcelain=v2"]),
+        "",
+        "the tree went into the stash, so nothing is in the move's way"
+    );
+    assert_eq!(
+        repo.git(&["stash", "list"]).lines().count(),
+        1,
+        "and it is still somewhere: the entry is not popped at the far end"
+    );
+    assert_eq!(
+        repo.git(&["rev-parse", "main"]),
+        before,
+        "the branch it was on is where it was — nothing was rewound"
+    );
+    assert!(
+        !repo.path.join(".git/sequencer").exists(),
+        "nothing of the pick is left for the next command to trip over"
+    );
+    session.close();
+}
+
+/// The same move out of a stopped **rebase** aborts instead.
+///
+/// `git rebase --quit` is the one `--quit` that loses something: it
+/// leaves HEAD detached at the half-rewritten line, with every copy it
+/// already made unreferenced (実測 2.55). `--abort` puts the branch back
+/// where it was, and a replay is not work in hand.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_move_out_of_a_stopped_rebase_puts_the_branch_back() {
+    let mut repo = colliding_branches();
+    repo.commit_file("both.txt", "ours\n", "mine");
+    let before = repo.git(&["rev-parse", "HEAD"]);
+    repo.git_expect_failure(&["rebase", "other"]);
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout_leaving_operation(platitude_core::branch::CheckoutTarget::Branch {
+        name: "other".into(),
+    });
+    assert_eq!(write_result(&sink, "checkout").await, None);
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
+    assert_eq!(
+        repo.git(&["rev-parse", "main"]),
+        before,
+        "the branch the rebase was rewriting is back where it started"
+    );
+    assert_eq!(
+        repo.git(&["stash", "list"]),
+        "",
+        "an abort leaves nothing to carry, so no entry is made"
+    );
+    session.close();
+}
+
+/// With no operation left standing, the unmerged index alone is what is
+/// in the way — the tree `cherry-pick --quit` leaves when a reader takes
+/// that row themselves — and the same two steps clear it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_move_out_of_unmerged_files_stashes_them_with_no_operation_to_put_down() {
+    let mut repo = colliding_branches();
+    repo.commit_file("both.txt", "ours\n", "main");
+    repo.git_expect_failure(&["cherry-pick", "other"]);
+    repo.git(&["cherry-pick", "--quit"]);
+    assert!(
+        repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
+        "the operation is gone and the conflict is not"
+    );
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout_leaving_operation(platitude_core::branch::CheckoutTarget::Branch {
+        name: "other".into(),
+    });
+    assert_eq!(write_result(&sink, "checkout").await, None);
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
+    assert_eq!(repo.git(&["status", "--porcelain=v2"]), "");
+    assert_eq!(repo.git(&["stash", "list"]).lines().count(), 1);
+    session.close();
+}
+
+/// And a clean tree with nothing standing over it is nobody's business:
+/// a move that reaches this by any other road must not stash a tree the
+/// reader was only carrying across.
+#[tokio::test(flavor = "multi_thread")]
+async fn nothing_in_the_way_means_nothing_is_put_aside() {
+    let mut repo = colliding_branches();
+    // On neither branch, so nothing it could collide with: git carries it
+    // across itself and the carry never reaches for a stash either.
+    repo.write_file("spare.txt", "uncommitted\n");
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout_leaving_operation(platitude_core::branch::CheckoutTarget::Branch {
+        name: "other".into(),
+    });
+    assert_eq!(write_result(&sink, "checkout").await, None);
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
+    assert_eq!(
+        repo.git(&["stash", "list"]),
+        "",
+        "nothing was in the way, so nothing was put aside"
+    );
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("spare.txt")).unwrap(),
+        "uncommitted\n",
+        "and the work came with it"
+    );
+    session.close();
+}
+
+/// The same move without that agreement is the refusal it always was:
+/// core does not abort anything nobody asked it to.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ordinary_move_still_refuses_while_a_pick_is_standing() {
+    let mut repo = colliding_branches();
+    repo.commit_file("both.txt", "ours\n", "main");
+    repo.git_expect_failure(&["cherry-pick", "other"]);
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
+        name: "other".into(),
+    });
+    let error = write_result(&sink, "checkout").await;
+    assert!(
+        error.is_some_and(|e| e.contains("cherry-picking")),
+        "git's own refusal comes through"
+    );
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+    assert!(
+        repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
+        "the stopped pick is untouched"
+    );
+    session.close();
+}
+
+/// The agreement is spent after the question about the move, not before
+/// it: a move that has to ask leaves the operation standing, so walking
+/// away from `Move here?` costs the cherry-pick nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_move_that_has_to_ask_leaves_the_operation_standing() {
+    let mut repo = colliding_branches();
+    // `other` holds a commit `main` does not, so moving it onto `main`
+    // would put that one out of reach: the case the question exists for.
+    repo.commit_file("both.txt", "ours\n", "main");
+    repo.git_expect_failure(&["cherry-pick", "other"]);
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout_moving_branch("other".into(), "main".into(), true);
+    assert_eq!(write_result(&sink, "checkout").await, None);
+    assert!(
+        sink.count(|e| matches!(
+            e,
+            platitude_core::session::SessionEvent::MoveNeedsAsk { .. }
+        )) > 0,
+        "the move came back as a question"
+    );
+    assert!(
+        repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
+        "and the pick it would have undone is still standing"
+    );
+    session.close();
+}

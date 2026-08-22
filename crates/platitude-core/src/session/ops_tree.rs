@@ -1,7 +1,7 @@
 //! Working-tree and local-ref writes: stage / unstage / discard, commit,
 //! checkout, reset, and the branch / tag / stash commands.
 
-use super::build::{conflicts_now, move_carrying};
+use super::build::{conflicts_now, leave_operation, move_carrying};
 use super::*;
 
 impl RepoSession {
@@ -181,6 +181,26 @@ impl RepoSession {
         );
     }
 
+    /// Puts the operation standing in the way down — see
+    /// [`leave_operation`](super::build::leave_operation) for what that
+    /// takes and why it differs by operation — and then moves.
+    ///
+    /// One write, so nothing can start the move while the operation is
+    /// still being put down and nobody can answer the question twice.
+    /// Every command stands in the log under its own line, which is what
+    /// a reader who typed them would have in front of them
+    /// (デザイン規約 §進行中の操作から出る).
+    pub fn checkout_leaving_operation(self: &Arc<Self>, target: CheckoutTarget) {
+        self.write(
+            "checkout",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                leave_operation(&exec, &repo, &cancel).await?;
+                move_carrying(&exec, &repo, &target, &cancel).await
+            },
+        );
+    }
+
     /// Moves a local branch onto `start` and lands on it, asking first only
     /// when there is something to ask about.
     ///
@@ -192,7 +212,13 @@ impl RepoSession {
     /// [`SessionEvent::MoveNeedsAsk`] without touching anything.
     ///
     /// The check is a read, so a refusal here has nothing to undo.
-    pub fn checkout_moving_branch(self: &Arc<Self>, local: String, start: String) {
+    ///
+    /// `leaving` is [`checkout_leaving_operation`](Self::checkout_leaving_operation)'s
+    /// agreement, and it is spent **after** the check rather than before
+    /// it: a move that has to ask leaves the operation standing for the
+    /// answer to that second question to undo, so a reader who walks away
+    /// from `Move here?` still has their cherry-pick.
+    pub fn checkout_moving_branch(self: &Arc<Self>, local: String, start: String, leaving: bool) {
         let session = Arc::clone(self);
         self.write(
             "checkout",
@@ -203,6 +229,9 @@ impl RepoSession {
                         .sink
                         .event(SessionEvent::MoveNeedsAsk { local, start });
                     return Ok(());
+                }
+                if leaving {
+                    leave_operation(&exec, &repo, &cancel).await?;
                 }
                 let target = CheckoutTarget::ForceCreate { local, start };
                 move_carrying(&exec, &repo, &target, &cancel).await

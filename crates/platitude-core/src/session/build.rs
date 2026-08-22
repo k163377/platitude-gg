@@ -193,6 +193,82 @@ async fn carry_across_rewrite(
 /// back.
 const STASH_TOP: &str = "stash@{0}";
 
+/// Puts the operation standing in a move's way down, and the tree it left
+/// behind with it, so `git switch` has nothing left to refuse.
+///
+/// **git refuses every move while a merge / rebase / cherry-pick / revert
+/// stands** — clean tree, conflicted tree and resolved-and-staged tree all
+/// get the same `cannot switch branch while …` (実測 2.55). What it takes
+/// to clear the way is not the same for all four:
+///
+/// - **cherry-pick / revert / merge**: `--quit` puts the operation down
+///   and keeps everything it has already done — the commits an earlier
+///   step of the sequence made stay on the branch (実測: a two-commit
+///   pick whose second step conflicts keeps the first). What is left is
+///   an unmerged index, which **`git stash push` cannot write at all**
+///   (`error: could not write index`), so the conflicted paths are marked
+///   resolved first — the markers become the content, which is what the
+///   working-tree pane's own `Mark all resolved` does. The whole tree
+///   then goes into a stash and **stays there**: nothing is popped at the
+///   far end, because markers belong to the branch they were made on.
+/// - **rebase**: `--quit` is the one that loses something — it leaves
+///   HEAD detached at the half-rewritten line and every copy it already
+///   made unreferenced (実測 2.55). `--abort` puts the branch back
+///   exactly where it was, and what it undoes is a replay rather than
+///   work in hand.
+///
+/// **With nothing standing, the unmerged index alone is the thing in the
+/// way** — what the exit card's own `--quit` row leaves behind — and the
+/// two steps after the quit clear it on their own.
+///
+/// A clean tree stashes nothing and says so by exiting 0 (実測), so an
+/// operation that stopped over nothing — a rebase on an emptied commit —
+/// leaves no entry behind.
+pub(super) async fn leave_operation(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let state = opstate::detect(executor, &repo.workdir, cancel).await?;
+    let standing = integrate::InProgress::from_state(&state);
+    if standing == Some(integrate::InProgress::Rebase) {
+        return integrate::resolve(
+            executor,
+            &repo.workdir,
+            integrate::InProgress::Rebase,
+            integrate::Continuation::Abort,
+            cancel,
+        )
+        .await;
+    }
+    if let Some(op) = standing {
+        integrate::resolve(
+            executor,
+            &repo.workdir,
+            op,
+            integrate::Continuation::Quit,
+            cancel,
+        )
+        .await?;
+    }
+    // Read here rather than handed in: the set is whatever is unmerged at
+    // the moment the command runs, which is the only moment it is true of.
+    let paths: Vec<String> = status::load(executor, &repo.workdir, cancel)
+        .await?
+        .conflicted()
+        .map(|item| item.path().to_string())
+        .collect();
+    // **Nothing standing and nothing unmerged is not this function's
+    // business.** The screen only sends a move here when something is in
+    // the way, and stashing a tree nobody asked about would take work
+    // away from a reader who was only switching branches.
+    if standing.is_none() && paths.is_empty() {
+        return Ok(());
+    }
+    stage::stage_paths(executor, &repo.workdir, &paths, cancel).await?;
+    stash_everything(executor, repo, cancel).await.map(drop)
+}
+
 /// Moves HEAD to `target`, going round through a stash when the working
 /// tree is in the way (デザイン規約 §未コミット変更がある状態での移動).
 pub(super) async fn move_carrying(
