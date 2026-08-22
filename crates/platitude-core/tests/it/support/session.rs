@@ -340,9 +340,16 @@ pub fn publish_helper(
     let published = std::fs::copy(built, &staged).and_then(|_| std::fs::rename(&staged, &beside));
     if let Err(error) = published {
         // Windows locks a running executable, so the rename can lose to a
-        // helper another run left behind — the one that is there will do.
+        // helper another run left behind. One holding this build's bytes
+        // will do; anything else would run yesterday's helper under
+        // today's assertions, and stopping here is what keeps that from
+        // surfacing as an unrelated failure later. (A running exe stays
+        // readable on Windows — only writing and renaming are refused.)
         let _ = std::fs::remove_file(&staged);
-        if !beside.is_file() {
+        let same = std::fs::read(built)
+            .and_then(|want| std::fs::read(&beside).map(|have| have == want))
+            .unwrap_or(false);
+        if !same {
             return Err(error);
         }
     }

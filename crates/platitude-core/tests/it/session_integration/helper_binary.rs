@@ -31,9 +31,13 @@ fn run_published_helper(
     path: &std::path::Path,
     on_busy: impl FnOnce(),
 ) -> std::io::Result<std::process::Output> {
-    // A second in all (40 × 25ms), which spans a fork→exec on a loaded
-    // machine many times over, and is paid only while it really is busy.
-    let mut retries = 40;
+    // Paid only while it really is busy. The deadline is the suite's
+    // failure-detection backstop (`QUIET_BUDGET`), not a guess at the
+    // window: the window belongs to another process's scheduling, and a
+    // fixed second of retries is a wall-clock verdict a loaded machine
+    // can outlast (.claude/rules/core.md: a ceiling is for detecting
+    // failure, never for deciding it).
+    let deadline = std::time::Instant::now() + crate::support::wait::QUIET_BUDGET;
     let mut on_busy = Some(on_busy);
     loop {
         let answer = std::process::Command::new(path).output();
@@ -41,13 +45,12 @@ fn run_published_helper(
             &answer,
             Err(error) if error.kind() == std::io::ErrorKind::ExecutableFileBusy
         );
-        if !busy || retries == 0 {
+        if !busy || std::time::Instant::now() >= deadline {
             return answer;
         }
         if let Some(notify) = on_busy.take() {
             notify();
         }
-        retries -= 1;
         std::thread::sleep(std::time::Duration::from_millis(25));
     }
 }
