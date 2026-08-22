@@ -112,10 +112,26 @@ pub(super) fn conflict_typed(repo: &mut DemoRepo) -> Result<(), String> {
 
 /// The same merge with that resolution staged: nothing waits on a
 /// decision any more, `MERGE_HEAD` still stands, and the way out is the
-/// commit button (`merge-commit`). The one preset where that button is
-/// live under a stopped operation.
+/// commit button (`merge-commit`). One of the two presets where that
+/// button is live under a stopped operation — this is the one with
+/// something left to list, [`conflict_ours`] the one without.
 pub(super) fn conflict_staged(repo: &mut DemoRepo) -> Result<(), String> {
     conflict_typed(repo)?;
+    repo.git(&["add", "--", "shared.txt"])?;
+    Ok(())
+}
+
+/// The same merge resolved by keeping ours, and staged: the index is back
+/// to what HEAD holds, so `git status` answers empty while `MERGE_HEAD`
+/// stands and the commit button still writes a merge of two parents
+/// (実測 2.55). The only preset where the uncommitted row is drawn over a
+/// clean tree — nothing to list, and a fork to record.
+pub(super) fn conflict_ours(repo: &mut DemoRepo) -> Result<(), String> {
+    conflict(repo)?;
+    repo.write(
+        "shared.txt",
+        &BASE.replace("- pick the version number", "- decide the version number"),
+    )?;
     repo.git(&["add", "--", "shared.txt"])?;
     Ok(())
 }

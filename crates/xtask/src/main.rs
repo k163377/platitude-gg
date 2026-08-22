@@ -70,6 +70,9 @@ commands:
                   left in the tree, still unmerged in the index
         conflict-staged  and staged: nothing waiting on a decision, the
                   merge still standing, the commit button live
+        conflict-ours    the same merge kept as ours and staged: status
+                  empty, merge still standing, a merge still to write —
+                  the one clean tree with an uncommitted row over it
         rebase-clashes   the same two branches with the rebase not run
         rebase-conflict  a rebase stopped on conflicts, 1 of 2 steps
         rebase-staged    the same rebase, conflict resolved and staged
