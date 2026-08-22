@@ -59,11 +59,16 @@ fn boundary_lanes(row: &GraphRow, bottom: bool) -> BTreeMap<u16, (u8, bool)> {
 /// Every edge leaving a row's bottom must continue at the next row's
 /// top on the same lane, in the same color and the same dash — across
 /// arbitrary DAGs (merges, octopus and duplicate parents, extra roots,
-/// orphan tips) with WIP and stash rows mixed in. A leash lane is a
+/// orphan tips) with WIP and stash rows mixed in, the WIP row leashing
+/// the sides of a standing merge as well as HEAD. A leash lane is a
 /// leash for its whole run: no row may turn it solid, and no solid
 /// lane may turn dashed.
 #[test]
 fn edges_are_continuous_across_rows_on_random_dags() {
+    // A property test is worth what its generator produces: this counts
+    // the WIP rows that really did leave on more than one leash, so a
+    // change to the random walk cannot quietly stop covering them.
+    let mut merging_rows = 0usize;
     for seed in 1..=300u64 {
         let mut rng = Rng(seed);
         let mut pool = StrPool::new();
@@ -90,9 +95,27 @@ fn edges_are_continuous_across_rows_on_random_dags() {
         let mut rows: Vec<GraphRow> = Vec::new();
         // Half the seeds open like a dirty repository with one stash:
         // a WIP leash plus a dashed stash tip, both leading to HEAD.
+        // Some of those are stopped mid-merge, where the WIP row holds a
+        // leash per side as well as HEAD's — several lanes leaving one
+        // row, which nothing else here produces. The sides are ids from
+        // the walk, so HEAD and repeats turn up among them and each one
+        // has a node further down to land on.
         if seed % 2 == 0 {
             let head = oid(n);
-            rows.push(b.push_virtual(&Oid::zero_like(&head), &head));
+            let sides: Vec<Oid> = (0..rng.below(4))
+                .map(|_| oid(1 + rng.below(u64::from(n)) as u8))
+                .collect();
+            let wip = b.push_virtual_merging(&Oid::zero_like(&head), &head, &sides);
+            if wip
+                .segments
+                .iter()
+                .filter(|s| s.kind == SegmentKind::OutOfNode)
+                .count()
+                > 1
+            {
+                merging_rows += 1;
+            }
+            rows.push(wip);
             let stash = commit(&mut pool, n + 1, &[n]);
             rows.push(b.push_with_edge_style(&stash, true));
         }
@@ -130,4 +153,8 @@ fn edges_are_continuous_across_rows_on_random_dags() {
             }
         }
     }
+    assert!(
+        merging_rows >= 50,
+        "only {merging_rows} of 300 seeds put a standing merge above the graph"
+    );
 }
