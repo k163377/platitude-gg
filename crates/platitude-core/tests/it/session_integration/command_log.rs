@@ -19,7 +19,7 @@ async fn the_command_log_holds_what_the_user_asked_for() {
             .then_some(())
     })
     .await;
-    sink.opened_graph_gen(&session, 5).await;
+    sink.opened_graph(&session, 5).await;
     assert_eq!(
         sink.count(|e| matches!(e, SessionEvent::CommandStarted { .. })),
         0,

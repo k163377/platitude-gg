@@ -65,8 +65,10 @@ pub trait CommandObserver: Send + Sync + 'static {
 
 /// A command's time budget: the stock default — resolved by the executor,
 /// so a test harness can lift it in one place — an explicit bound, or
-/// none at all.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// none at all. Deliberately not comparable: `At(DEFAULT_TIMEOUT)` and
+/// `Stock` resolve to the same bound, so an `==` would answer the wrong
+/// question.
+#[derive(Debug, Clone, Copy)]
 pub(super) enum TimeBudget {
     Stock,
     At(Duration),

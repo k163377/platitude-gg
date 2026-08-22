@@ -75,9 +75,10 @@ async fn tag_only_commits_follow_the_include_tags_option() {
         let left: Vec<LabelKind> = events
             .iter()
             .filter_map(|e| match e {
-                SessionEvent::LogChunk { generation, rows } if *generation == off.generation => {
-                    Some(chips_of(rows))
-                }
+                SessionEvent::LogChunk { generation, rows }
+                | SessionEvent::LogReplaced {
+                    generation, rows, ..
+                } if *generation == off.generation => Some(chips_of(rows)),
                 _ => None,
             })
             .flatten()
@@ -91,6 +92,36 @@ async fn tag_only_commits_follow_the_include_tags_option() {
             "no tag is drawn with the tags out of the graph: {left:?}"
         );
     }
+
+    // Two-phase streaming, deterministically this time. The lookback at
+    // the top could only assert the fast pass's order — during an opening,
+    // a rebuild may swallow it wordlessly. Here the opening is settled and
+    // no other ask is outstanding, so nothing can take the log token from
+    // the toggle's own two passes: the fast tag-less pass must land, in
+    // full, before the tag-inclusive swap.
+    let base = sink.opened_graph(&session, 1).await;
+    session.set_include_tags(true);
+    let swap = sink
+        .wait_for("the tag-inclusive swap", move |evs| {
+            evs.iter()
+                .filter_map(pass_of)
+                .find(|p| p.generation > base.generation && p.total == 2)
+        })
+        .await;
+    let fast = {
+        let events = sink.events.lock().unwrap();
+        events.iter().find_map(|e| match e {
+            SessionEvent::LogFinished {
+                generation, total, ..
+            } if *generation > base.generation && *generation < swap.generation => Some(*total),
+            _ => None,
+        })
+    };
+    assert_eq!(
+        fast,
+        Some(1),
+        "the fast tag-less pass paints first, and paints whole"
+    );
 
     session.close();
 }
@@ -117,14 +148,11 @@ async fn log_limit_truncates_the_window() {
         sink.clone(),
     );
 
-    // Whichever shape lands the full graph (`pass_of`), it is untruncated.
-    let full = sink
-        .wait_for("the full pass", |evs| {
-            evs.iter().filter_map(pass_of).find(|p| p.total == 3)
-        })
-        .await;
+    // The opening pass, whichever shape landed it — and the footer read
+    // off the very pass the rest of the test anchors on.
+    let full = sink.opened_graph(&session, 3).await;
     assert!(!full.truncated, "3 commits fit in the default window");
-    let first_gen = sink.opened_graph_gen(&session, 3).await;
+    let first_gen = full.generation;
 
     session.set_log_limit(Some(2));
     let limited = sink.pass_after("the limited window", first_gen).await;
@@ -156,14 +184,10 @@ async fn truncation_follows_the_walk_not_the_shown_rows() {
     );
 
     // Full pass first: stash row + three commits, nothing truncated —
-    // whichever shape landed it (`pass_of`).
-    let full = sink
-        .wait_for("the full pass", |evs| {
-            evs.iter().filter_map(pass_of).find(|p| p.total == 4)
-        })
-        .await;
+    // whichever shape landed it.
+    let full = sink.opened_graph(&session, 4).await;
     assert!(!full.truncated);
-    let first_gen = sink.opened_graph_gen(&session, 4).await;
+    let first_gen = full.generation;
 
     // The walk emits 4 rows (stash, its index parent, "three", "two") and
     // is cut before "one"; the sifted index parent leaves 3 shown rows.
@@ -206,7 +230,7 @@ async fn the_wip_row_does_not_trigger_truncation() {
 
     // Wait until the dirty state is reflected and the stream settles, so
     // the next pass is the reaction to the limit change.
-    let first_gen = sink.opened_graph_gen(&session, 3).await;
+    let first_gen = sink.opened_graph(&session, 3).await.generation;
 
     // One commit through a window of one: cut, and the WIP row rides on
     // top of it regardless.
@@ -254,7 +278,7 @@ async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
         repo.path.clone(),
         sink.clone(),
     );
-    sink.opened_graph_gen(&session, 2).await;
+    sink.opened_graph(&session, 2).await;
 
     // Park in the swap that adds the WIP row: it sends under the graph
     // lock, so every pass asked for from here waits at that door.
@@ -276,14 +300,7 @@ async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
     .await;
     // The sink records before it runs the hook, so the graph the change
     // is measured against is already readable from where it is parked.
-    let wip_gen = sink
-        .wait_for("the WIP row's generation", |evs| {
-            evs.iter()
-                .filter_map(pass_of)
-                .find(|p| p.total == 3)
-                .map(|p| p.generation)
-        })
-        .await;
+    let wip_gen = sink.settled_pass(3).await.generation;
 
     // The change's stream is stopped at that door; the rebuild asked for
     // behind it takes its place before the stream gets through.
@@ -330,7 +347,7 @@ async fn a_window_change_only_the_footer_notices_still_lands() {
         repo.path.clone(),
         sink.clone(),
     );
-    let first_gen = sink.opened_graph_gen(&session, 2).await;
+    let first_gen = sink.opened_graph(&session, 2).await.generation;
 
     // A window exactly as wide as the history: every commit is shown, and
     // the walk stopping on the limit is what makes it cut all the same.
@@ -358,11 +375,7 @@ async fn a_window_change_only_the_footer_notices_still_lands() {
             .then_some(())
     })
     .await;
-    let wip = sink
-        .wait_for("the WIP row's pass", |evs| {
-            evs.iter().filter_map(pass_of).find(|p| p.total == 3)
-        })
-        .await;
+    let wip = sink.settled_pass(3).await;
     assert!(wip.truncated, "the window is still sitting on the limit");
 
     // Widen past the end of the history. The stream this asks for is

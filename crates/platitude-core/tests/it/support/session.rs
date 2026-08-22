@@ -99,6 +99,17 @@ impl CaptureSink {
         when: impl Fn(&SessionEvent) -> bool + Send + 'static,
         run: impl FnOnce() + Send + 'static,
     ) {
+        // The parked worker is the premise, so it is asserted where it is
+        // created: with a single worker nobody is left to drive the test,
+        // and the failure would be a silent livelock instead of a name.
+        // The default worker count is the machine's — the test declares
+        // its own (`worker_threads = 2`).
+        let workers = tokio::runtime::Handle::current().metrics().num_workers();
+        assert!(
+            workers >= 2,
+            "hook_once parks a worker and needs at least 2, got {workers}: declare \
+             #[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+        );
         *self.hook.lock().unwrap() = Some((Box::new(when), Box::new(run)));
     }
 
@@ -112,16 +123,17 @@ impl CaptureSink {
     }
 
     /// Waits for a pass ending with `total` rows (a `LogFinished`, or a
-    /// `LogReplaced`) and returns its generation. Callers that need a
-    /// baseline must additionally await the operation that owns it; a
-    /// quiet interval cannot establish that no later opening work exists.
-    pub async fn settled_stream_gen(&self, total: u32) -> u64 {
+    /// `LogReplaced`) and returns it — the newest, when several landed
+    /// that way, so the footer read off it belongs to the same pass the
+    /// generation anchors. Callers that need a baseline must additionally
+    /// await the operation that owns it; a quiet interval cannot establish
+    /// that no later opening work exists.
+    pub async fn settled_pass(&self, total: u32) -> Pass {
         self.wait_for(&format!("a {total}-row graph pass"), |evs| {
             evs.iter()
                 .filter_map(pass_of)
                 .filter(|pass| pass.total == total)
-                .map(|pass| pass.generation)
-                .max()
+                .max_by_key(|pass| pass.generation)
         })
         .await
     }
@@ -132,10 +144,13 @@ impl CaptureSink {
     /// graph refresh either requested. The matching pass then proves that
     /// the expected graph is actually installed, irrespective of which
     /// opening task won the scheduler race.
-    pub async fn opened_graph_gen(&self, session: &Arc<RepoSession>, total: u32) -> u64 {
-        self.opening_snapshots().await;
-        session.wait_for_snapshot_reads().await;
-        let outcome = session.refresh_log_tracked().outcome().await;
+    pub async fn opened_graph(&self, session: &Arc<RepoSession>, total: u32) -> Pass {
+        self.opening_settled(session).await;
+        let outcome = crate::support::wait::bounded(
+            "the tracked opening graph refresh",
+            session.refresh_log_tracked().outcome(),
+        )
+        .await;
         assert!(
             matches!(
                 outcome,
@@ -144,7 +159,21 @@ impl CaptureSink {
             ),
             "the opening graph was available: {outcome:?}"
         );
-        self.settled_stream_gen(total).await
+        self.settled_pass(total).await
+    }
+
+    /// Closes the opening baseline: both opening snapshots have landed
+    /// *and* their readers have handed the read slot back. The snapshot
+    /// events are sent from inside the readers, so the events alone leave
+    /// the slot occupied and a count taken then still sees opening work
+    /// (`wait_for_snapshot_reads` is the slot boundary).
+    pub async fn opening_settled(&self, session: &Arc<RepoSession>) {
+        self.opening_snapshots().await;
+        crate::support::wait::bounded(
+            "the opening snapshot reads",
+            session.wait_for_snapshot_reads(),
+        )
+        .await;
     }
 
     /// Waits until the two repository snapshots started by `open` have
@@ -314,7 +343,10 @@ pub fn install_todo_editor() {
         else {
             return;
         };
-        let _ = publish_helper(&built, &dir);
+        // A refused install must fail here, by name — swallowing it would
+        // run whatever helper is already there under this build's
+        // assertions, and the tests would fail somewhere unrelated later.
+        publish_helper(&built, &dir).expect("publish the todo editor beside the test binary");
     });
 }
 
@@ -345,12 +377,19 @@ pub fn publish_helper(
         // today's assertions, and stopping here is what keeps that from
         // surfacing as an unrelated failure later. (A running exe stays
         // readable on Windows — only writing and renaming are refused.)
+        // The refusal names its own condition: the raw rename error alone
+        // reads as an unrelated permission problem.
         let _ = std::fs::remove_file(&staged);
-        let same = std::fs::read(built)
-            .and_then(|want| std::fs::read(&beside).map(|have| have == want))
-            .unwrap_or(false);
-        if !same {
-            return Err(error);
+        let refused = match (std::fs::read(built), std::fs::read(&beside)) {
+            (Ok(want), Ok(have)) if have == want => None,
+            (Ok(_), Ok(_)) => Some("holds different bytes than this build"),
+            _ => Some("could not be read for comparison"),
+        };
+        if let Some(why) = refused {
+            return Err(std::io::Error::other(format!(
+                "the helper already at {} {why}, and replacing it failed: {error}",
+                beside.display()
+            )));
         }
     }
     Ok(beside)

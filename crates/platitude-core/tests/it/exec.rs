@@ -1,14 +1,21 @@
 //! Integration tests for the execution layer against the real system git.
+//!
+//! These await the executor directly — no `CaptureSink`, so no `Patience`
+//! arms itself — and the test executors carry no stock timeout. `bounded`
+//! is the backstop that turns a wedged git into a named failure here.
 
 use crate::support::TestRepo;
 use crate::support::exec::{env, observed_env};
+use crate::support::wait::bounded;
 use platitude_core::{GitCommand, GitError, GitExecutor, repo, version};
 use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
 async fn detects_a_supported_git_version() {
     let (executor, cancel) = env();
-    let v = version::detect(&executor, &cancel).await.unwrap();
+    let v = bounded("version detect", version::detect(&executor, &cancel))
+        .await
+        .unwrap();
     assert!(v.supported(), "dev/CI machines must have git >= 2.43");
 }
 
@@ -16,7 +23,9 @@ async fn detects_a_supported_git_version() {
 async fn missing_binary_maps_to_git_not_found() {
     let executor = GitExecutor::with_program("definitely-not-a-real-git-binary");
     let cancel = CancellationToken::new();
-    let err = version::detect(&executor, &cancel).await.unwrap_err();
+    let err = bounded("version detect", version::detect(&executor, &cancel))
+        .await
+        .unwrap_err();
     assert!(matches!(err, GitError::GitNotFound { .. }), "got {err:?}");
 }
 
@@ -26,7 +35,7 @@ async fn opens_a_valid_repository() {
     repo_dir.commit_file("a.txt", "hello\n", "initial");
 
     let (executor, cancel) = env();
-    let info = repo::open(&executor, &repo_dir.path, &cancel)
+    let info = bounded("repo open", repo::open(&executor, &repo_dir.path, &cancel))
         .await
         .unwrap();
 
@@ -48,7 +57,9 @@ async fn open_from_a_subdirectory_resolves_the_root() {
 
     let (executor, cancel) = env();
     let sub = repo_dir.path.join("sub").join("dir");
-    let info = repo::open(&executor, &sub, &cancel).await.unwrap();
+    let info = bounded("repo open", repo::open(&executor, &sub, &cancel))
+        .await
+        .unwrap();
 
     let expected = std::fs::canonicalize(&repo_dir.path).unwrap();
     assert_eq!(std::fs::canonicalize(&info.workdir).unwrap(), expected);
@@ -58,7 +69,7 @@ async fn open_from_a_subdirectory_resolves_the_root() {
 async fn open_rejects_a_non_repository() {
     let dir = tempfile::tempdir().unwrap();
     let (executor, cancel) = env();
-    let err = repo::open(&executor, dir.path(), &cancel)
+    let err = bounded("repo open", repo::open(&executor, dir.path(), &cancel))
         .await
         .unwrap_err();
     assert!(
@@ -72,7 +83,9 @@ async fn open_rejects_a_missing_path() {
     let dir = tempfile::tempdir().unwrap();
     let missing = dir.path().join("nope");
     let (executor, cancel) = env();
-    let err = repo::open(&executor, &missing, &cancel).await.unwrap_err();
+    let err = bounded("repo open", repo::open(&executor, &missing, &cancel))
+        .await
+        .unwrap_err();
     assert!(
         matches!(err, GitError::NotARepository { bare: false, .. }),
         "got {err:?}"
@@ -95,7 +108,9 @@ async fn open_rejects_a_bare_repository_as_bare() {
     assert!(status.success());
 
     let (executor, cancel) = env();
-    let err = repo::open(&executor, &bare, &cancel).await.unwrap_err();
+    let err = bounded("repo open", repo::open(&executor, &bare, &cancel))
+        .await
+        .unwrap_err();
     assert!(
         matches!(err, GitError::NotARepository { bare: true, .. }),
         "got {err:?}"
@@ -112,7 +127,9 @@ async fn failed_commands_surface_gits_stderr() {
         GitCommand::new()
             .cwd(&repo_dir.path)
             .args(["rev-parse", "--verify", "does-not-exist"]);
-    let err = executor.run(cmd, &cancel).await.unwrap_err();
+    let err = bounded("the failing command", executor.run(cmd, &cancel))
+        .await
+        .unwrap_err();
     match err {
         GitError::Failed { code, stderr, .. } => {
             assert_ne!(code, 0);
@@ -135,12 +152,14 @@ async fn streaming_delivers_all_stdout_chunks() {
         .args(["log", "--format=%H"]);
 
     let mut collected = Vec::new();
-    executor
-        .run_streaming(cmd, &cancel, &mut |chunk| {
+    bounded(
+        "the streamed log",
+        executor.run_streaming(cmd, &cancel, &mut |chunk| {
             collected.extend_from_slice(chunk)
-        })
-        .await
-        .unwrap();
+        }),
+    )
+    .await
+    .unwrap();
 
     let text = String::from_utf8(collected).unwrap();
     let shas: Vec<&str> = text.lines().collect();
@@ -155,7 +174,9 @@ async fn pre_cancelled_token_short_circuits() {
     let (executor, cancel) = env();
     cancel.cancel();
     let cmd = GitCommand::new().cwd(&repo_dir.path).args(["status"]);
-    let err = executor.run(cmd, &cancel).await.unwrap_err();
+    let err = bounded("the pre-cancelled command", executor.run(cmd, &cancel))
+        .await
+        .unwrap_err();
     assert!(err.is_cancelled(), "got {err:?}");
 }
 
@@ -189,7 +210,9 @@ async fn answers_by_code_reports_only_zero_and_one_as_answers() {
         ancestor(c2, c1.clone()),         // no → 1
         ancestor("0".repeat(40), c1),     // fatal → 128
     ] {
-        let _out = executor.run_unchecked(cmd, &cancel).await.expect("spawn");
+        let _out = bounded("the ancestry answer", executor.run_unchecked(cmd, &cancel))
+            .await
+            .expect("spawn");
     }
 
     let seen = ends.0.lock().unwrap().clone();

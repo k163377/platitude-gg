@@ -1,6 +1,7 @@
 //! What the suite waits on a session with: budgets that diagnose a stuck
 //! causal wait rather than establish correctness by elapsed time.
 
+use std::future::Future;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -14,6 +15,22 @@ pub const QUIET_BUDGET: Duration = Duration::from_secs(120);
 /// talking without ever getting to the answer renews the silence budget
 /// forever, and only a livelock reaches this one.
 pub const OVERALL_BUDGET: Duration = Duration::from_secs(900);
+
+/// Bounds an await the suite has no other backstop for.
+///
+/// The test executors run without a stock command timeout and their token
+/// is never cancelled, so an await on the executor itself — or on a
+/// session boundary like `wait_for_snapshot_reads` — has nothing under it:
+/// a wedged git would hang the binary until the CI kill, with no failing
+/// test named. This is that backstop. [`OVERALL_BUDGET`], not a verdict:
+/// nothing correct takes this long, and a run that does is reported as
+/// the failure it is, under the caller's name for it.
+pub async fn bounded<T>(what: &str, wait: impl Future<Output = T>) -> T {
+    match tokio::time::timeout(OVERALL_BUDGET, wait).await {
+        Ok(answer) => answer,
+        Err(_) => panic!("{what}: no answer within the overall budget ({OVERALL_BUDGET:?})"),
+    }
+}
 
 /// What a wait spends while it waits.
 ///

@@ -91,7 +91,7 @@ async fn a_refs_read_takes_head_out_of_the_listing_it_already_has() {
     let (sink, session) = opened(&repo).await;
     // Complete the opening work before clearing the observer; `Opened`
     // alone only accepts the path.
-    sink.opened_graph_gen(&session, 1).await;
+    sink.opened_graph(&session, 1).await;
     session.set_record_background(true);
     // A baseline index, not an erasure: the history stays for the failure
     // message, and the wait below reads only past it.
@@ -219,7 +219,7 @@ async fn the_walk_reads_head_from_the_refs_read_that_already_landed() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "0\n", "root");
     let (sink, session) = opened(&repo).await;
-    sink.opened_graph_gen(&session, 1).await;
+    sink.opened_graph(&session, 1).await;
     // Background recording starts only now, so the commands below are the
     // refresh's own; the event history stays for the failure message.
     session.set_record_background(true);
@@ -227,7 +227,7 @@ async fn the_walk_reads_head_from_the_refs_read_that_already_landed() {
     // An external commit moves the refs, which is what rebuilds the graph.
     repo.commit_file("g.txt", "1\n", "second");
     session.refresh_refs();
-    sink.settled_stream_gen(2).await;
+    sink.settled_pass(2).await;
 
     let seen = commands_of(&sink);
     assert!(
@@ -249,7 +249,7 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "0\n", "root");
     let (sink, session) = opened(&repo).await;
-    sink.opened_graph_gen(&session, 1).await;
+    sink.opened_graph(&session, 1).await;
     // Background recording starts only now, so `reads` counts the work
     // below; the waits are count-relative, so the history can stay.
     session.set_record_background(true);
@@ -308,12 +308,11 @@ async fn concurrent_diffs_share_the_line_ending_setting_read() {
     repo.commit_file("a.txt", "one\n", "root");
     repo.commit_file("b.txt", "two\n", "second");
     let (sink, session) = opened(&repo).await;
-    sink.opening_snapshots().await;
-    // The snapshot events are sent from inside the readers; the reader's
-    // own tail (apply, settle, the eol forget that bumps the `Derived`
-    // generation) runs after them, and a diff racing that tail reads git
-    // twice. The slot return is the boundary the count needs.
-    session.wait_for_snapshot_reads().await;
+    // The reader's own tail (apply, settle, the eol forget that bumps
+    // the `Derived` generation) runs after the snapshot events, and a
+    // diff racing that tail reads git twice — the settled boundary is
+    // what the count needs.
+    sink.opening_settled(&session).await;
     session.set_record_background(true);
 
     let head = platitude_core::Oid::from_hex_str(&repo.git(&["rev-parse", "HEAD"])).unwrap();
@@ -428,8 +427,7 @@ async fn a_re_read_of_a_file_nobody_touched_says_nothing() {
     repo.commit_file("f.txt", "one\n", "root");
     repo.write_file("f.txt", "two\n");
     let (sink, session) = opened(&repo).await;
-    sink.opening_snapshots().await;
-    session.wait_for_snapshot_reads().await;
+    sink.opening_settled(&session).await;
 
     let target = DiffTarget::Unstaged {
         path: "f.txt".to_string(),
@@ -464,8 +462,7 @@ async fn a_file_typed_over_outside_the_window_is_re_read() {
     let mut repo = crate::support::integrate::conflicting_branches();
     repo.git_expect_failure(&["merge", "side"]);
     let (sink, session) = opened(&repo).await;
-    sink.opening_snapshots().await;
-    session.wait_for_snapshot_reads().await;
+    sink.opening_settled(&session).await;
 
     let target = DiffTarget::Unstaged {
         path: "f.txt".to_string(),

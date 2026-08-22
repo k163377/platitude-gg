@@ -26,7 +26,7 @@ async fn a_write_rebuilds_the_graph_once() {
     // Wait until the WIP row is on screen (root + WIP = 2 rows) behind an
     // explicit opening boundary, so the commit below is the transition
     // that removes it and every later stream event is a reaction to a write.
-    sink.opened_graph_gen(&session, 2).await;
+    sink.opened_graph(&session, 2).await;
 
     session.stage_all();
     session.commit(
@@ -98,7 +98,7 @@ async fn settled_graph() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, usize
         repo.path.clone(),
         sink.clone(),
     );
-    sink.opened_graph_gen(&session, 5).await;
+    sink.opened_graph(&session, 5).await;
     let baseline = sink.count(is_stream_event);
     (repo, sink, session, baseline)
 }
@@ -174,7 +174,7 @@ async fn an_external_ref_move_rebuilds_the_graph() {
     // both sides: nothing but the refs can report this.
     repo.commit_file("outside.txt", "x\n", "outside commit");
     session.refresh_refs();
-    sink.settled_stream_gen(6).await;
+    sink.settled_pass(6).await;
     let events = sink.events.lock().unwrap();
     let replacements = events[..]
         .iter()
@@ -225,7 +225,7 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
         repo.path.clone(),
         sink.clone(),
     );
-    sink.opened_graph_gen(&session, 3).await;
+    sink.opened_graph(&session, 3).await;
 
     // Something for the read to find, on the last row of the graph it
     // reads it from: a chip that travels as a diff instead of with a walk.
@@ -322,7 +322,7 @@ async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
         repo.path.clone(),
         sink.clone(),
     );
-    sink.opened_graph_gen(&session, 3).await;
+    sink.opened_graph(&session, 3).await;
 
     // Park in the swap that adds the WIP row: it sends under the graph
     // lock, so everything else is stopped at the door with the graph
@@ -391,7 +391,7 @@ async fn a_poll_rebuilds_the_graph_once() {
         sink.clone(),
     );
     // root + WIP row.
-    sink.opened_graph_gen(&session, 2).await;
+    sink.opened_graph(&session, 2).await;
 
     let replacements = || sink.count(|e| matches!(e, SessionEvent::LogReplaced { .. }));
     let starts = || sink.count(|e| matches!(e, SessionEvent::LogStarted { .. }));

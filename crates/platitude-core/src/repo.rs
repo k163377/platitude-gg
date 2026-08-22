@@ -1,7 +1,6 @@
 //! Repository discovery and validation.
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
@@ -49,23 +48,20 @@ pub async fn open(
         });
     }
 
-    let cmd = GitCommand::new()
-        .cwd(path)
-        .args([
-            "rev-parse",
-            "--show-toplevel",
-            "--absolute-git-dir",
-            "--show-object-format",
-            // Said before the path below and after everything else: it
-            // decides how paths come out, and the two above are absolute
-            // already. Without it `--git-path` answers relative to the
-            // working directory, which is the folder the user picked and
-            // not necessarily the repository root.
-            "--path-format=absolute",
-            "--git-path",
-            "config",
-        ])
-        .timeout(Duration::from_secs(10));
+    let cmd = GitCommand::new().cwd(path).args([
+        "rev-parse",
+        "--show-toplevel",
+        "--absolute-git-dir",
+        "--show-object-format",
+        // Said before the path below and after everything else: it
+        // decides how paths come out, and the two above are absolute
+        // already. Without it `--git-path` answers relative to the
+        // working directory, which is the folder the user picked and
+        // not necessarily the repository root.
+        "--path-format=absolute",
+        "--git-path",
+        "config",
+    ]);
     let described = "git rev-parse --show-toplevel --absolute-git-dir --show-object-format \
          --path-format=absolute --git-path config";
 
@@ -125,7 +121,6 @@ async fn is_bare(executor: &GitExecutor, path: &Path, cancel: &CancellationToken
     let cmd = GitCommand::new()
         .cwd(path)
         .args(["rev-parse", "--is-bare-repository"])
-        .timeout(Duration::from_secs(10))
         // Outside a repository this exits 128, which is the answer here
         // and not a failure worth raising the command log over.
         .answers_by_code(1);

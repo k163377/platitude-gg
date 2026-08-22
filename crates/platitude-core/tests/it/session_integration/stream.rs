@@ -1,7 +1,7 @@
 //! Opening a repository, and the log stream that comes out of it.
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, pass_of, scenario};
+use crate::support::session::{CaptureSink, scenario};
 use platitude_core::session::{RepoSession, SessionEvent};
 
 #[tokio::test(flavor = "multi_thread")]
@@ -23,43 +23,26 @@ async fn open_streams_the_full_pipeline() {
     })
     .await;
 
-    // Root + side + main + merge + stash row. Which shape lands it — a
-    // stream or a replacement — is a scheduling accident (`pass_of`), so
-    // the wait names the outcome: a 5-row pass, whichever generation
-    // carries it.
-    let pass_gen = sink.settled_stream_gen(5).await;
-
-    // All rows delivered, topo-consistent; the stash (newest child of the
-    // merge) streams first, the head commit right after. Only that pass's
-    // own rows count — a concurrent pass must not bleed rows into the
-    // tally, so the accumulation is scoped to its generation.
+    // Root + side + main + merge + stash row, in whichever shape the
+    // passes landed them — `replay_rows` keeps the generation rules, so
+    // a superseded pass's rows cannot bleed into the tally. The stash
+    // (newest child of the merge) leads, the head commit right under it.
     let rows = sink
-        .wait_for("the pass's rows", move |evs| {
-            let rows: Vec<_> = evs
-                .iter()
-                .filter_map(|e| match e {
-                    SessionEvent::LogChunk { generation, rows }
-                    | SessionEvent::LogReplaced {
-                        generation, rows, ..
-                    } if *generation == pass_gen => Some(rows.iter().cloned()),
-                    _ => None,
-                })
-                .flatten()
-                .collect();
+        .wait_for("all five rows", |evs| {
+            let rows = crate::support::replay_rows(evs);
             (rows.len() == 5).then_some(rows)
         })
         .await;
-    assert_eq!(rows[0].stash_ref, "stash@{0}", "stash row leads");
+    assert_eq!(rows[&0].stash_ref, "stash@{0}", "stash row leads");
     assert!(
-        rows[0].subject.contains("wip stash"),
+        rows[&0].subject.contains("wip stash"),
         "stash subject is its reflog message: {:?}",
-        rows[0].subject
+        rows[&0].subject
     );
-    assert_eq!(rows[1].oid_hex, head, "merge commit is the newest commit");
-    assert_eq!(rows[1].row, 1);
-    assert!(rows.iter().skip(1).all(|r| r.stash_ref.is_empty()));
-    assert!(rows.iter().all(|r| !r.subject.is_empty()));
-    assert!(rows.iter().all(|r| r.author == "Test User"));
+    assert_eq!(rows[&1].oid_hex, head, "merge commit is the newest commit");
+    assert!(rows.values().skip(1).all(|r| r.stash_ref.is_empty()));
+    assert!(rows.values().all(|r| !r.subject.is_empty()));
+    assert!(rows.values().all(|r| r.author == "Test User"));
 
     // Labels: the head row must end up carrying main (+ v1 tag), either
     // inline or via a LabelsChanged update.
@@ -127,13 +110,14 @@ async fn restart_log_delivers_a_new_generation() {
         sink.clone(),
     );
 
-    // Either pass may land as a stream or as a replacement (`pass_of`),
-    // so both waits go by "a pass landed", not by one event shape.
-    let first_gen = sink
-        .wait_for("first pass", |evs| {
-            evs.iter().filter_map(pass_of).map(|p| p.generation).max()
-        })
-        .await;
+    // The restart must answer for itself, so the opening settles first:
+    // an opening rebuild still in flight could supersede the restarted
+    // stream without a word (nothing changed) — hanging the wait — or
+    // land its own pass where the restart's is expected, passing the
+    // test with the restart broken. After the baseline, nothing else can
+    // take the log token, and the restart's first pass is a direct
+    // stream that always speaks.
+    let first_gen = sink.opened_graph(&session, 5).await.generation;
 
     session.restart_log();
 
@@ -171,9 +155,7 @@ async fn unborn_repository_finishes_with_zero_rows() {
         sink.clone(),
     );
 
-    let pass = sink
-        .wait_for("the opening pass", |evs| evs.iter().find_map(pass_of))
-        .await;
+    let pass = sink.pass_after("the opening pass", 0).await;
     assert_eq!(pass.total, 0);
 
     sink.wait_for("StatusLoaded", |evs| {
@@ -249,9 +231,7 @@ async fn an_independent_history_sits_where_its_date_puts_it() {
         repo.path.clone(),
         sink.clone(),
     );
-    let pass = sink
-        .wait_for("the opening pass", |evs| evs.iter().find_map(pass_of))
-        .await;
+    let pass = sink.pass_after("the opening pass", 0).await;
     assert_eq!(pass.total, 5, "four on main plus the orphan");
 
     // Chips are what make a row unreachable from every branch findable at
@@ -294,7 +274,7 @@ async fn a_standing_merge_dots_the_side_it_is_bringing_in() {
     // status read has found the tree dirty, and that same read is what
     // reports the merge — so the pass that shows four rows is the pass
     // that knows about both.
-    sink.opened_graph_gen(&session, 4).await;
+    sink.opened_graph(&session, 4).await;
     let rows = sink
         .wait_for("the four-row graph", |evs| {
             let rows = crate::support::replay_rows(evs);
@@ -359,7 +339,7 @@ async fn a_merge_resolved_as_ours_keeps_the_row_a_clean_tree_would_not() {
     );
 
     let (sink, session) = crate::support::session::opened(&repo).await;
-    sink.opened_graph_gen(&session, 4).await;
+    sink.opened_graph(&session, 4).await;
     let rows = sink
         .wait_for("the four-row graph", |evs| {
             let rows = crate::support::replay_rows(evs);
@@ -405,7 +385,7 @@ async fn a_side_only_merge_head_names_is_never_on_screen_unleashed() {
     assert_eq!(repo.git(&["status", "--porcelain"]), "", "a clean tree");
 
     let (sink, session) = crate::support::session::opened(&repo).await;
-    sink.opened_graph_gen(&session, 4).await;
+    sink.opened_graph(&session, 4).await;
     let rows = sink
         .wait_for("the four-row graph", |evs| {
             let rows = crate::support::replay_rows(evs);
@@ -439,7 +419,7 @@ async fn a_side_no_ref_names_still_joins_the_walk() {
     repo.git_expect_failure(&["merge", &theirs]);
 
     let (sink, session) = crate::support::session::opened(&repo).await;
-    sink.opened_graph_gen(&session, 4).await;
+    sink.opened_graph(&session, 4).await;
     let rows = sink
         .wait_for("the four-row graph", |evs| {
             let rows = crate::support::replay_rows(evs);
@@ -472,7 +452,7 @@ async fn aborting_the_merge_takes_the_second_dotted_edge_away() {
     repo.write_file("untracked.txt", "keep\n");
 
     let (sink, session) = crate::support::session::opened(&repo).await;
-    sink.opened_graph_gen(&session, 4).await;
+    sink.opened_graph(&session, 4).await;
     sink.wait_for("the merge's two dotted edges", |evs| {
         let rows = crate::support::replay_rows(evs);
         (rows.len() == 4 && rows.get(&0).is_some_and(|r| r.width == 2)).then_some(())
