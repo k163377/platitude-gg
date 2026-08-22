@@ -95,6 +95,13 @@ Item {
     /// so a shot taken the moment the graph settles frames a sidebar still counting the old entries — which is not a
     /// state the application ever rests in, and the run is judged by eye.
     property int stashTotalBefore: -1
+    /// The summary this run put in the commit box before the write, or "" — what the entry the write makes has to be
+    /// carrying when the list settles (`named=`). Held here rather than read back off the box, because the box is not
+    /// what the claim is about: the name has to have reached git.
+    property string stashWanted: ""
+    /// The name the entry this run pops was carrying, or "" — what the commit box has to be holding once the pop has
+    /// landed (`back=`). Read before the press, because the entry is gone by the time the answer is.
+    property string popWanted: ""
     /// What HEAD was before that write, for the run whose picture is of the commit that replaces it. The same
     /// `AfterWrite::Graph` ordering applies: at the write barrier the panes still frame the commit that was replaced,
     /// wearing the author it was replaced for — which is the whole subject of `amend-reset-author`.
@@ -191,6 +198,21 @@ Item {
         driver.writeSeqBefore = repoTab.writeSeq
         driver.graphGoneOid = ""
         driver.stashTotalBefore = stashesModel.total
+        driver.stashWanted = ""
+        driver.popWanted = ""
+    }
+
+    /// Whether the entry now at the top of the list is wearing the summary this run typed. Read off the sidebar's own
+    /// model — the reflog subject git wrote — so a name that never left the box answers `false`. git puts its own
+    /// `On <branch>: ` in front of a named entry (実測), which is why this is a tail and not an equality.
+    function stashNamed() {
+        return driver.stashWanted !== "" && stashesModel.nameAt(0).endsWith(driver.stashWanted)
+    }
+
+    /// Whether the entry this run popped left its name in the commit box. The box is read, not the property that was
+    /// put there: the claim is about what a reader would find typed in front of them.
+    function stashCameBack() {
+        return driver.popWanted !== "" && wipPane.subjectText === driver.popWanted
     }
 
     /// What the graph's leading row is, for the runs that are about the mark it wears.
@@ -267,6 +289,8 @@ Item {
                 return
             graphBarrier.stop()
             AppBackend.report("graph_settled gone=true top=" + driver.graphTopKind()
+                              + " named=" + driver.stashNamed()
+                              + " back=" + driver.stashCameBack()
                               + " rows=" + graphModel.rowTotal
                               + " stashes=" + stashesModel.total)
             renderedBarrier.begin()
@@ -2806,13 +2830,23 @@ Item {
             // Everything goes, so the working-tree row goes with it and the new stash takes the lead — the row whose
             // absence says the rebuild has landed. The one-path verb leaves the row where it is and keeps the plain
             // write barrier.
+            //
+            // `named` leaves a summary in the commit box first, which the entry is then called after (デザイン規約
+            // §変更を退避する). The words are the driver's own, the way `wip-message` supplies its own line: a summary
+            // written for a commit has spaces and a colon in it, and the argument cannot carry either (`check --verb`
+            // splits its line on whitespace). The pane still is not opened — the button does not need it, and the name
+            // is read back off the sidebar rather than off the box.
+            if (arg === "named") {
+                driver.stashWanted = "feat: write the summary"
+                wipPane.setMessage(driver.stashWanted, "")
+            }
             driver.graphGoneOid = graphModel.oidAt(0)
             stashPressTimer.start()
         } else if (act === "stash-file") {
             wipPane.chooseOnly("unstaged", arg)
             page.openFileMenu("unstaged", arg, "")
             fileRowMenu.sendPaths([arg])
-            repoTab.stashPaths("")
+            repoTab.stashPaths(wipPane.stashName)
         } else if (act === "stage-all" || act === "unstage-all" || act === "resolve-all") {
             page.showWip()
             bucketAllTimer.begin(act === "stage-all" ? "unstaged"
@@ -3156,7 +3190,10 @@ Item {
                 // A pop drops the entry, so its row leaves the graph — the edge that says the rebuild has landed.
                 // An apply keeps it, and keeps the plain write barrier.
                 driver.graphGoneOid = stashOid
-                repoTab.popStash(commitMenuState.menuStashRef)
+                // Through the page, which is where the entry's name is read before it goes (`popStash`) — the menu's
+                // own road. What the box has to be holding afterwards is read back at the barrier (`back=`).
+                driver.popWanted = repoTab.stashLabel(stashesModel.nameAt(0))
+                page.popStash(commitMenuState.menuStashRef)
             }
         } else if (act === "branch-at-tag") {
             sidebarPane.beginBranchAt("tag", tagsModel.nameAt(0),

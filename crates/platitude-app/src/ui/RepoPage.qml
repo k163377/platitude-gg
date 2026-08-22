@@ -175,6 +175,20 @@ Item {
         wipPane.setMessage(subject, body)
     }
 
+    /// The name the entry a pop is bringing back was carrying, held until git says the pop landed.
+    ///
+    /// **Read at the press**: by the time the answer comes the entry is off the list, and nothing else holds the
+    /// words. Empty for one git named itself (`WIP on …`) — that line names the commit the work was standing on,
+    /// not the work.
+    property string pendingPopLabel: ""
+    /// Both ways in to a pop — the graph row's menu and the details pane's band — so the name comes back from one
+    /// place (デザイン規約 §変更を退避する).
+    function popStash(selector) {
+        page.pendingPopLabel = repoTab.stashLabel(stashesModel.nameOfFull(selector))
+        repoTab.popStash(selector)
+        page.selectedStashRef = ""
+    }
+
     // Not confirmed even when HEAD is already on a remote: amending rewrites nothing that a switch or a reset cannot
     // bring back, and the push that would spread it is asked about on its own.
     function commitNow() {
@@ -640,10 +654,7 @@ Item {
         onDropRequested: oidHex => page.dropCommit(oidHex)
         onResetRequested: mode => page.moveBranchHere(mode)
         onApplyStashRequested: selector => repoTab.applyStash(selector)
-        onPopStashRequested: selector => {
-            repoTab.popStash(selector)
-            page.selectedStashRef = ""
-        }
+        onPopStashRequested: selector => page.popStash(selector)
         onDropStashRequested: selector => page.dropStashNow(selector)
     }
 
@@ -825,6 +836,8 @@ Item {
         // A push this button sent has come back; what it means for the toolbar's button is the flow's to work out.
         publishFlow.noteWriteAnswer(repoTab.lastWriteOp, repoTab.lastWriteError)
         if (repoTab.lastWriteError !== "") {
+            // A pop that did not happen leaves its entry, and its name, where they were.
+            page.pendingPopLabel = ""
             // Whatever the window took away for this write is still there — git would not do it, or could not reach
             // the far side to. Put back before anything below answers for the refusal, so the row the question is
             // about is on screen when the question is (デザイン規約 §消す操作は先に画面から消す).
@@ -878,6 +891,17 @@ Item {
             page.clearCommitEditor()
             wipPane.setAmendChecked(false)
             page.amending = false
+        }
+        // The work is back in the tree, so the words that named it go back in the box they were written in — the entry
+        // is gone and nothing else is holding them (デザイン規約 §変更を退避する. 2026-08-22 ユーザー指示).
+        //
+        // **Never over what is already typed.** Text in these boxes is the one thing on this page that cannot be read
+        // back off disk (`absorbOpMessage`), and both are asked: a description with no summary is not an empty editor.
+        if (repoTab.lastWriteOp === "stash" && page.pendingPopLabel !== "") {
+            const carried = page.pendingPopLabel
+            page.pendingPopLabel = ""
+            if (wipPane.subjectText === "" && wipPane.bodyText === "")
+                wipPane.setMessage(carried, "")
         }
         // git stopped part-way and left the operation standing, so there is no commit at the tip to land on and the
         // answer to the press is the working tree: the conflicted rows, and the way out under them (デザイン規約
@@ -1102,6 +1126,9 @@ Item {
     // Exposed for the window toolbar (acts on the active tab).
     readonly property var pageTab: repoTab
     readonly property var pageWt: workTree
+    /// What the band's Stash button would name the entry — the commit box is on this page, the button is not
+    /// (デザイン規約 §変更を退避する). Decided by the pane that owns the box, so the file row's `stash` reads the same one.
+    readonly property string pageStashName: wipPane.stashName
     readonly property var pageCommands: commandsModel
     /// For the settings card's avatar entry, which offers the authors of the repository being looked at.
     readonly property var pageGraph: graphModel
@@ -1814,10 +1841,7 @@ Item {
                         onAvatarEditRequested: (name, email) => page.avatarSettingsRequested(name, email)
                         onCopyRequested: text => clipboard.copy(text)
                         onApplyStashRequested: selector => repoTab.applyStash(selector)
-                        onPopStashRequested: selector => {
-                            repoTab.popStash(selector)
-                            page.selectedStashRef = ""
-                        }
+                        onPopStashRequested: selector => page.popStash(selector)
                     }
                 }
             }

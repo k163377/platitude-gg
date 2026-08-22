@@ -196,7 +196,8 @@ Item {
                 for (let i = 0; i < rows.length; i++)
                     paths.push(rows[i].fullName)
                 fileRowMenu.sendPaths(paths)
-                fileRowMenu.repoTab.stashPaths("")
+                // Named out of the commit box like the band's button, and by the same pane (デザイン規約 §変更を退避する).
+                fileRowMenu.repoTab.stashPaths(fileRowMenu.wipPane.stashName)
             }
         }
         // Held, not asked (デザイン規約 §長押し). On a file changed on both sides the two rows are the choice itself: the

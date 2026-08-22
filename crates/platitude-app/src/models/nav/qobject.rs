@@ -369,6 +369,18 @@ impl NavSectionModel {
         self.shows(row, Role::Full)
     }
 
+    /// The other way round: what the row git knows by this name shows.
+    /// A stash is the section where the two differ — git is told
+    /// `stash@{0}` and the row shows the entry's message — and this is
+    /// how a pop reads that message while the entry is still there.
+    ///
+    /// Asked of every entry, not of the rows on show: a filter typed into
+    /// the sidebar does not stop the graph's own menu from popping one.
+    #[qslot]
+    fn name_of_full(&self, full: String) -> String {
+        self.told(Role::Full, &full, Role::Name)
+    }
+
     /// Local branch name a remote-tracking ref would take. The remotes
     /// snapshot owns both the visible row and its configured prefixes.
     #[qslot]

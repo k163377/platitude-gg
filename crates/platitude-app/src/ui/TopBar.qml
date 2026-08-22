@@ -459,7 +459,9 @@ Rectangle {
                 // said (デザイン規約 §hover のツールチップ).
                 return qsTr("Set these changes aside, files git is not tracking yet included")
             }
-            onActivated: topBar.curPage.pageTab.pushStash()
+            // The name comes from the page rather than being asked for here: a summary already written for these
+            // changes is the name the reader would have given them anyway (デザイン規約 §変更を退避する).
+            onActivated: topBar.curPage.pageTab.pushStash(topBar.curPage.pageStashName)
         }
         // Where what the app owns ends and what the window owns begins.
         Rectangle {

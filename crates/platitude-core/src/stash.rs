@@ -216,6 +216,36 @@ pub fn is_valid_message(message: &str) -> bool {
     !message.trim().is_empty() && !message.chars().any(|c| c.is_control())
 }
 
+/// The label somebody gave a stash, out of the reflog subject a listing
+/// carries — empty where git wrote the whole subject itself.
+///
+/// git leaves three shapes on the reflog (実測):
+/// - `WIP on <branch>: <abbrev> <subject>` — its own, for an entry pushed
+///   with no message. That names the commit the work was standing on, not
+///   the work, so nobody gave this one a label and it answers empty.
+/// - `On <branch>: <label>` — an entry pushed with `--message`. The prefix
+///   is cut at the first `": "` and not at the first space: a detached
+///   HEAD puts `(no branch)` in that slot.
+/// - `<label>` — an entry put on the reflog by `stash store`, which is
+///   what [`rename`] is built out of; there is no branch for it to name.
+///
+/// A label that itself opens `On …: ` is read as the second shape and
+/// loses its first words. git cannot tell those two apart either — the
+/// reflog holds one line, with nothing marking where a prefix ends.
+#[must_use]
+pub fn label_in(message: &str) -> &str {
+    if message.starts_with("WIP on ") {
+        return "";
+    }
+    if let Some((_, label)) = message
+        .strip_prefix("On ")
+        .and_then(|rest| rest.split_once(": "))
+    {
+        return label;
+    }
+    message
+}
+
 /// Renames a stash entry: the label the list shows.
 ///
 /// git has no rename for one, so this is built from what it does have.
@@ -435,5 +465,37 @@ mod tests {
         assert!(!is_valid_message("   "));
         assert!(!is_valid_message("two\nlines"));
         assert!(!is_valid_message("tab\there"));
+    }
+
+    /// The three shapes measured out of git, and the one it cannot tell
+    /// apart from a prefix it wrote.
+    #[test]
+    fn a_label_is_read_out_of_the_prefix_git_put_on_it() {
+        assert_eq!(
+            label_in("On main: half of the refactor"),
+            "half of the refactor"
+        );
+        assert_eq!(
+            label_in("On (no branch): on a detached head"),
+            "on a detached head"
+        );
+        // A summary written for a commit has its own colon in it, and the
+        // cut is at the first `": "` — the one git made.
+        assert_eq!(
+            label_in("On main: feat: write the summary"),
+            "feat: write the summary"
+        );
+        // git's own, naming the commit the work stood on.
+        assert_eq!(label_in("WIP on main: 1234567 subject"), "");
+        assert_eq!(label_in("WIP on (no branch): 1234567 subject"), "");
+        // Put on the reflog by `stash store` (a rename), which has no
+        // branch to name.
+        assert_eq!(label_in("a plain label"), "a plain label");
+        assert_eq!(
+            label_in("On its own with no colon"),
+            "On its own with no colon"
+        );
+        // The ambiguity, recorded rather than fixed.
+        assert_eq!(label_in("On second thought: revert it"), "revert it");
     }
 }

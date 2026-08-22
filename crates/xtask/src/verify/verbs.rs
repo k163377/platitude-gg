@@ -83,8 +83,21 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // was just popped back. `gone=` is the row the write took away,
         // and it is what the run waited on; without the line the shot was
         // taken at the write barrier, which is the graph as it was.
-        "stash" => Some("graph_settled gone=true top=stash"),
-        "stash-pop-row" => Some("graph_settled gone=true top=wip"),
+        //
+        // `stash named` leaves a summary in the commit box first, and
+        // `named=` is the entry's own reflog subject held against it — read
+        // off the sidebar's model, so a name that never left the box says
+        // `false`. **Read as a pair with the bare verb**: one alone passes
+        // a build that names every entry the same way. The picture settles
+        // neither — the two rows are the same row with different text in
+        // it, at a width that elides most of it.
+        "stash" if arg == "named" => Some("graph_settled gone=true top=stash named=true"),
+        "stash" => Some("graph_settled gone=true top=stash named=false"),
+        // `back=` is the other half of the same press: the entry's name is
+        // in the commit box, where the entry is not there to hold it any
+        // more. Read off the box, and invisible in the picture at any
+        // width the summary field is drawn at.
+        "stash-pop-row" => Some("graph_settled gone=true top=wip named=false back=true"),
         // The row taken away before git answered for it, held open for
         // the picture. `row=-1` is the sidebar without it and `chips=true`
         // the graph without its chip — **both halves at once** is the whole

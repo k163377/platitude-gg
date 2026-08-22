@@ -3,20 +3,23 @@
 use super::*;
 
 impl RepoTab {
-    /// Everything uncommitted, in one unnamed entry.
+    /// Everything uncommitted, in one entry.
     ///
     /// Untracked files go with it: a stash that leaves new files behind is
     /// the surprise most often reported to other git GUIs, and the stash
-    /// a switch makes on its own carries them for the same reason. The
-    /// entry is named afterwards from the STASHES list, so nothing is
-    /// gathered before the write (デザイン規約 §変更を退避する).
-    pub(super) fn stash_push(&mut self) {
+    /// a switch makes on its own carries them for the same reason.
+    ///
+    /// `message` is the summary standing in the commit box, or empty —
+    /// the press still asks nothing, so nothing is gathered before the
+    /// write; what is already written down is used (デザイン規約
+    /// §変更を退避する). Empty leaves git to write its own `WIP on …`.
+    pub(super) fn stash_push(&mut self, message: String) {
         let options = platitude_core::stash::PushOptions {
             include_untracked: true,
             keep_index: false,
             staged_only: false,
         };
-        self.with_session(|s| s.stash_push(String::new(), options, Vec::new()));
+        self.with_session(|s| s.stash_push(message.clone(), options, Vec::new()));
     }
 
     pub(super) fn stash_chosen_paths(&mut self, message: String) {

@@ -482,6 +482,23 @@ ColumnLayout {
         wipPane.onStandingMessage ? wipPane.standingSubject : msgEditor.subjectText
     readonly property string outgoingBody:
         wipPane.onStandingMessage ? wipPane.standingBody : msgEditor.bodyText
+
+    /// The label a stash made now would take: the summary already standing in the box, when git would have it as one
+    /// (デザイン規約 §変更を退避する). Empty means the entry goes unnamed, which is what git writes its own `WIP on …` for.
+    ///
+    /// **The typed line only, never `outgoingSubject`'s fallback.** A stopped merge's message is git's sentence about
+    /// the commit that merge is going to make, not a name the reader gave these changes. **And never in amend mode**,
+    /// where the box is holding the message of a commit that already exists (`absorbHeadMessage`) — a stash called
+    /// after it would be naming someone else's work.
+    ///
+    /// The text is not taken away by the write that reads it: the boxes are the one thing here that cannot be read
+    /// back off disk, and `pop` does not put a message back (see `absorbOpMessage`).
+    ///
+    /// Asked of core per keystroke, the same pure function the rename box asks — one line with something on it, and no
+    /// rule of this pane's own on top (規約 §同名).
+    readonly property string stashName:
+        !wipPane.amending && wipPane.repoTab.validStashMessage(msgEditor.subjectText)
+        ? msgEditor.subjectText : ""
     // Whether the amend should also put the current identity on the commit it replaces (git keeps the original author
     // otherwise).
     readonly property bool resetAuthor: authorBox.checked

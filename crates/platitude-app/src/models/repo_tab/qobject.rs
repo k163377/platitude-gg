@@ -482,11 +482,23 @@ impl RepoTab {
         platitude_core::stash::is_valid_message(&message)
     }
 
+    /// What somebody called a stash, out of the line the list shows —
+    /// empty where the whole line is git's own (`WIP on …`). Asked before
+    /// a pop, which is the last moment the entry is there to ask.
+    #[qslot]
+    fn stash_label(&self, message: String) -> String {
+        platitude_core::stash::label_in(&message).to_string()
+    }
+
     /// `git stash push -u` over the whole working tree, on the press —
     /// the button asks nothing first (デザイン規約 §変更を退避する).
+    ///
+    /// `message` is what the commit box already had in it, so the entry
+    /// arrives named without anything being asked; empty names it the way
+    /// git does.
     #[qslot]
-    fn push_stash(&mut self) {
-        self.stash_push()
+    fn push_stash(&mut self, message: String) {
+        self.stash_push(message)
     }
 
     /// `git stash push -- <paths>`: puts the gathered files' changes away
