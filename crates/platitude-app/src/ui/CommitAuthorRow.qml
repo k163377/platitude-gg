@@ -160,7 +160,7 @@ RowLayout {
             spacing: Theme.spaceSm
             Label {
                 id: detailsDate
-                text: Qt.formatDateTime(new Date(authorRow.details.authorTime * 1000), "yyyy-MM-dd HH:mm")
+                text: Words.stamp(authorRow.details.authorTime)
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
             }

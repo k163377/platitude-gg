@@ -149,7 +149,7 @@ Rectangle {
                 tint: header.iconTint
             }
             // The dialog it opens is named by the `…`, the way the chooser's own row names it (デザイン規約 §長押し の語彙).
-            tip: qsTr("Add remote…")
+            tip: Words.addRemote
             onClicked: header.addRemoteRequested()
         }
     }

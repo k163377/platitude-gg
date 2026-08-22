@@ -165,7 +165,7 @@ AppCard {
                 Label {
                     id: conflictLabel
                     anchors.centerIn: parent
-                    text: qsTr("CONFLICTS")
+                    text: Words.badgeConflicts
                     color: Theme.textOnAccent
                     font.pixelSize: Theme.fontSm
                     font.weight: Font.DemiBold
@@ -202,7 +202,7 @@ AppCard {
                 Label {
                     id: identityLabel
                     anchors.centerIn: parent
-                    text: qsTr("SET IDENTITY")
+                    text: Words.badgeSetIdentity
                     color: Theme.warning
                     font.pixelSize: Theme.fontSm
                     font.weight: Font.DemiBold
@@ -244,7 +244,7 @@ AppCard {
                 Label {
                     id: oldGitLabel
                     anchors.centerIn: parent
-                    text: qsTr("OLD GIT")
+                    text: Words.badgeOldGit
                     color: Theme.warning
                     font.pixelSize: Theme.fontSm
                     font.weight: Font.DemiBold

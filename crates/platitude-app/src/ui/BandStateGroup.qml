@@ -204,15 +204,15 @@ Item {
     }
     BadgeWord {
         id: mConflict
-        text: qsTr("CONFLICTS")
+        text: Words.badgeConflicts
     }
     BadgeWord {
         id: mIdentity
-        text: qsTr("SET IDENTITY")
+        text: Words.badgeSetIdentity
     }
     BadgeWord {
         id: mOldGit
-        text: qsTr("OLD GIT")
+        text: Words.badgeOldGit
     }
     DotMark {
         id: mDot
@@ -278,7 +278,7 @@ Item {
             cap: stateGroup.cap
             filled: true
             Label {
-                text: qsTr("CONFLICTS")
+                text: Words.badgeConflicts
                 color: Theme.textOnAccent
                 font.pixelSize: Theme.fontSm
                 font.weight: Font.DemiBold
@@ -295,7 +295,7 @@ Item {
             pressable: true
             onPressed: stateGroup.identityEditRequested()
             Label {
-                text: qsTr("SET IDENTITY")
+                text: Words.badgeSetIdentity
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
                 font.weight: Font.DemiBold
@@ -310,7 +310,7 @@ Item {
             naturalW: stateGroup.oldGitBadgeW
             cap: stateGroup.cap
             Label {
-                text: qsTr("OLD GIT")
+                text: Words.badgeOldGit
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
                 font.weight: Font.DemiBold

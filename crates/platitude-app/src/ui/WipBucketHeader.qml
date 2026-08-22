@@ -50,7 +50,7 @@ Rectangle {
                   ? qsTr("STAGED FILES")
                   : bucketHeader.section === "unstaged"
                   ? qsTr("UNSTAGED FILES")
-                  : qsTr("CONFLICTS")
+                  : Words.badgeConflicts
             font.pixelSize: Theme.fontMd
             font.weight: Font.DemiBold
             color: bucketHeader.section === "conflicts" ? Theme.danger : Theme.textSecondary

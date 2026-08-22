@@ -136,7 +136,7 @@ Item {
     }
     /// The chooser's last row: opens the add-remote dialog. The question stays standing behind it and picks the new
     /// remote up when it lands.
-    readonly property string publishAddChoice: qsTr("Add remote…")
+    readonly property string publishAddChoice: Words.addRemote
     readonly property var publishChoices:
         publishFlow.publishRemotes.concat([publishFlow.publishAddChoice])
     /// The `+` on the left menu's REMOTES band, with no question

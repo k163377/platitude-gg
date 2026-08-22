@@ -93,7 +93,7 @@ AppCard {
             Layout.fillWidth: true
             spacing: Theme.spaceSm
             Label {
-                text: Qt.formatDateTime(new Date(hoverCard.atime * 1000), "yyyy-MM-dd HH:mm")
+                text: Words.stamp(hoverCard.atime)
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
             }

@@ -31,7 +31,7 @@ Item {
         spacing: Theme.spaceLg
         width: Math.min(640, gate.width - 2 * Theme.spaceXxl)
         Label {
-            text: qsTr("Platitude GG")
+            text: Words.appName
             font.pixelSize: Theme.fontXl
             font.weight: Font.DemiBold
             anchors.horizontalCenter: parent.horizontalCenter

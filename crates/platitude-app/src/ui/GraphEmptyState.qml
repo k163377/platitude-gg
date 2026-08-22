@@ -37,7 +37,7 @@ Item {
         visible: emptyState.blank
         spacing: Theme.spaceLg
         Label {
-            text: qsTr("Platitude GG")
+            text: Words.appName
             font.pixelSize: Theme.fontXl
             font.weight: Font.DemiBold
             anchors.horizontalCenter: parent.horizontalCenter
@@ -52,7 +52,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
         }
         NoticeButton {
-            text: qsTr("Open repository…")
+            text: Words.openRepository
             onActivated: emptyState.openRepositoryRequested()
         }
     }

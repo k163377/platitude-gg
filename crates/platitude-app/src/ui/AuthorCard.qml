@@ -162,7 +162,7 @@ AppCard {
             face: authorCard.authorFace
             faceUrl: authorCard.authorFaceUrl
             word: authorCard.actsShown ? authorCard.wroteWord : ""
-            stamp: Qt.formatDateTime(new Date(authorCard.authoredAt * 1000), "yyyy-MM-dd HH:mm")
+            stamp: Words.stamp(authorCard.authoredAt)
             wordWidth: authorCard.wordColW
             cap: authorCard.rowCap
         }
@@ -173,7 +173,7 @@ AppCard {
             face: authorCard.committerFace
             faceUrl: authorCard.committerFaceUrl
             word: authorCard.actsShown ? authorCard.putWord : ""
-            stamp: Qt.formatDateTime(new Date(authorCard.committedAt * 1000), "yyyy-MM-dd HH:mm")
+            stamp: Words.stamp(authorCard.committedAt)
             wordWidth: authorCard.wordColW
             cap: authorCard.rowCap
         }
@@ -196,7 +196,7 @@ AppCard {
                     font.pixelSize: Theme.fontSm
                 }
                 Label {
-                    text: Qt.formatDateTime(new Date(authorCard.committedAt * 1000), "yyyy-MM-dd HH:mm")
+                    text: Words.stamp(authorCard.committedAt)
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSm
                 }

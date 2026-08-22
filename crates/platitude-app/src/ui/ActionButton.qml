@@ -147,7 +147,7 @@ HoverToolButton {
     // Tab reaches the buttons that need a second way in. The rest of the toolbar stays out of the tab order: a hold is
     // the only gesture here that a pointer alone can fail to make (デザイン規約 §長押し).
     activeFocusOnTab: actionBtn.holdMs > 0
-    Accessible.description: actionBtn.holdMs > 0 ? qsTr("Hold to activate") : ""
+    Accessible.description: actionBtn.holdMs > 0 ? Words.holdToActivate : ""
 
     onClicked: if (actionBtn.holdMs <= 0 && actionBtn.live) actionBtn.activated()
     onDownChanged: {

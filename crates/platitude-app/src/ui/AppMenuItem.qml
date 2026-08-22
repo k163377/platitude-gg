@@ -99,7 +99,7 @@ MenuItem {
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
     // The words do not say the gesture, so this is where it is left for a reader who cannot see the mark.
-    Accessible.description: menuItem.holdMs > 0 ? qsTr("Hold to activate") : ""
+    Accessible.description: menuItem.holdMs > 0 ? Words.holdToActivate : ""
 
     // The one colour every word in the row follows, so the chip cannot disagree with the sentence it sits in. A held
     // row says what it costs in its own colour before it is touched at all — it is the one row in the menu that takes

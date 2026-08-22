@@ -48,7 +48,7 @@ Item {
     readonly property bool holding: opRow.holdProgress > 0
 
     implicitHeight: opRow.visible ? Theme.rowHeight : 0
-    Accessible.description: opRow.holdMs > 0 ? qsTr("Hold to activate") : ""
+    Accessible.description: opRow.holdMs > 0 ? Words.holdToActivate : ""
 
     // A row says its whole line when the pane has narrowed enough to cut it, the way a menu row does — the elision is
     // the pane running out of width, not the row having less to say (`AppMenuItem`).

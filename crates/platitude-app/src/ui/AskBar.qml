@@ -228,7 +228,7 @@ Rectangle {
             // because the words on it no longer carry it.
             Accessible.role: Accessible.Button
             Accessible.name: bar.code !== "" ? bar.code : bar.accept
-            Accessible.description: bar.hold ? qsTr("Hold to activate") : ""
+            Accessible.description: bar.hold ? Words.holdToActivate : ""
             // The hold filling the frame from the left, inset by the border so the frame stays a frame while it fills:
             // that the fill reaches the end is the whole progress report.
             Rectangle {

@@ -189,7 +189,7 @@ Rectangle {
                 // the two doors into the dialog do not name it differently (デザイン規約 §リモートを書き留める).
                 ToolTip.visible: cell.addable && cellHover.hovered
                 ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: qsTr("Add remote…")
+                ToolTip.text: Words.addRemote
 
                 Column {
                     // All the cell's slack above the mark, none under the number. The slack is the `spaceXs` the

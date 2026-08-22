@@ -310,7 +310,7 @@ Item {
             // A full-height cell ends where the band does, so the card would otherwise open on top of the divider.
             y: menuButton.height + Theme.splitterWidth
             AppMenuItem {
-                text: qsTr("Open repository…")
+                text: Words.openRepository
                 onTriggered: tabStrip.openRepositoryRequested()
             }
             AppMenuItem {
@@ -450,7 +450,7 @@ Item {
         // What the label was saying for it: a ToolButton names itself by its text, and this one no longer has any. The
         // words the menu's own row uses, since it raises the same request — the mark is idiomatic and the answer comes
         // straight out, so it gets a name and no tip, like the ☰ and the three at the far end (デザイン規約 §hover のツールチップ).
-        Accessible.name: qsTr("Open repository…")
+        Accessible.name: Words.openRepository
         contentItem: NavIcon {
             kind: "plus"
             tint: Theme.textPrimary

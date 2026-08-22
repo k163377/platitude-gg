@@ -30,7 +30,7 @@ ApplicationWindow {
     // minimise/maximise/menu style bits, and the subclass pins a maximise to the work area (`clamp_maximized`) because
     // Windows would otherwise maximise a frameless window over the whole monitor. No shadow: the drawn edge stands in.
     flags: root.captionMerged ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
-    title: qsTr("Platitude GG")
+    title: Words.appName
     color: Theme.bgBase
 
     // ---- the floor the window may not be dragged under --------------------

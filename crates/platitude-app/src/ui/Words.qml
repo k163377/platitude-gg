@@ -5,6 +5,31 @@ import QtQuick
 // Wording that more than one place has to say the same way. A second copy of a sentence is a second answer, and the two
 // drift.
 QtObject {
+    /// The application's name, as the window title and both empty states write it.
+    readonly property string appName: qsTr("Platitude GG")
+
+    /// A held control's answer to a screen reader, wherever a HoldDriver drives one.
+    readonly property string holdToActivate: qsTr("Hold to activate")
+
+    /// Opening a repository, as the graph's empty state, the tab strip's `+` menu and its accessible name offer it.
+    readonly property string openRepository: qsTr("Open repository…")
+
+    /// Adding a remote, as the sidebar header, the collapsed rail and the publish flow offer it.
+    readonly property string addRemote: qsTr("Add remote…")
+
+    /// The window band's three badge words (BandStateGroup measures and draws them, BandStateCard titles them);
+    /// the WIP pane's conflicts bucket header shares the first.
+    readonly property string badgeConflicts: qsTr("CONFLICTS")
+    readonly property string badgeSetIdentity: qsTr("SET IDENTITY")
+    readonly property string badgeOldGit: qsTr("OLD GIT")
+
+    /// The one way a commit's moment is written down: the rows carry epoch seconds, and the display side makes the
+    /// `yyyy-MM-dd HH:mm` out of them (デザイン規約 — 行が持つのは epoch 秒). The commands panel's `HH:mm:ss` clock
+    /// is a different thing and stays its own.
+    function stamp(epochSeconds) {
+        return Qt.formatDateTime(new Date(epochSeconds * 1000), "yyyy-MM-dd HH:mm")
+    }
+
     /// What to call a side git left nothing to name. Reached from a cherry-pick of a commit no branch can see, among
     /// others. The names swap over during a rebase, so they are handed in from `WorkTreeModel` rather than worked out
     /// here.
