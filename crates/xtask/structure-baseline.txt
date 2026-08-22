@@ -15,3 +15,4 @@
 528 crates/platitude-core/src/identity.rs
 758 crates/platitude-core/src/patch.rs
 664 crates/platitude-core/src/sequencer.rs
+702 crates/xtask/src/verify/verbs.rs
