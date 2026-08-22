@@ -131,11 +131,21 @@ pub trait CommandObserver: Send + Sync + 'static {
     fn finished(&self, id: u64, end: CommandEnd, elapsed_ms: u64, message: &str);
 }
 
+/// A command's time budget: the stock default — resolved by the executor,
+/// so a test harness can lift it in one place — an explicit bound, or
+/// none at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TimeBudget {
+    Stock,
+    At(Duration),
+    Never,
+}
+
 #[derive(Debug, Clone)]
 pub struct GitCommand {
     args: Vec<OsString>,
     cwd: Option<PathBuf>,
-    timeout: Option<Duration>,
+    timeout: TimeBudget,
     /// Applied after [`FIXED_ENV`], so a command can override a default
     /// or add its own (interactive rebase adds `GIT_SEQUENCE_EDITOR`).
     env: Vec<(OsString, OsString)>,
@@ -148,7 +158,7 @@ impl GitCommand {
         Self {
             args: Vec::new(),
             cwd: None,
-            timeout: Some(DEFAULT_TIMEOUT),
+            timeout: TimeBudget::Stock,
             env: Vec::new(),
             answer_code: None,
         }
@@ -188,13 +198,13 @@ impl GitCommand {
     }
 
     pub fn timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = Some(timeout);
+        self.timeout = TimeBudget::At(timeout);
         self
     }
 
     /// Removes the time budget; the command is bounded only by cancellation.
     pub fn no_timeout(mut self) -> Self {
-        self.timeout = None;
+        self.timeout = TimeBudget::Never;
         self
     }
 
@@ -267,6 +277,12 @@ pub struct GitExecutor {
     /// than on the command so the callers stay unaware of it: the
     /// session hands out a different handle for each.
     user: bool,
+    /// What [`TimeBudget::Stock`] resolves to. `None` lifts the stock
+    /// budget entirely — the test harness's setting, where wall time is
+    /// load-dependent and must not decide correctness
+    /// ([`GitExecutor::without_stock_timeouts`]); commands that named
+    /// their own budget keep it either way.
+    stock_timeout: Option<Duration>,
 }
 
 impl std::fmt::Debug for GitExecutor {
@@ -303,7 +319,19 @@ impl GitExecutor {
             env: Arc::new(Vec::new()),
             observer: None,
             user: false,
+            stock_timeout: Some(DEFAULT_TIMEOUT),
         }
+    }
+
+    /// Lifts the stock time budget from every command that did not set
+    /// one of its own: those commands are then bounded by cancellation
+    /// alone. For test harnesses — under a loaded suite a git round trip
+    /// inflates ~25×, and a wall-clock cap that generous proves nothing
+    /// (待ちの上限は失敗検出の backstop, .claude/rules/core.md). The
+    /// shipped application keeps the stock budget.
+    pub fn without_stock_timeouts(mut self) -> Self {
+        self.stock_timeout = None;
+        self
     }
 
     /// Returns an executor with environment defaults applied to every Git
@@ -330,6 +358,7 @@ impl GitExecutor {
             env: Arc::clone(&self.env),
             observer: Some(observer),
             user,
+            stock_timeout: self.stock_timeout,
         }
     }
 
@@ -416,14 +445,10 @@ impl GitExecutor {
         Ok(out)
     }
 
-    async fn execute(
-        &self,
-        cmd: &GitCommand,
-        cancel: &CancellationToken,
-        on_stdout: &mut (dyn FnMut(&[u8]) + Send),
-    ) -> Result<GitOutput, GitError> {
-        let described = cmd.describe();
-
+    /// The process command for `cmd`: program, arguments, the layered
+    /// environment (fixed, executor, per-command — later layers win), and
+    /// the platform wiring.
+    fn assemble(&self, cmd: &GitCommand) -> Command {
         let mut command = Command::new(self.program.as_ref());
         command.args(FIXED_ARGS);
         command.args(&cmd.args);
@@ -446,6 +471,17 @@ impl GitExecutor {
             .kill_on_drop(true);
         #[cfg(windows)]
         command.creation_flags(CREATE_NO_WINDOW);
+        command
+    }
+
+    async fn execute(
+        &self,
+        cmd: &GitCommand,
+        cancel: &CancellationToken,
+        on_stdout: &mut (dyn FnMut(&[u8]) + Send),
+    ) -> Result<GitOutput, GitError> {
+        let described = cmd.describe();
+        let mut command = self.assemble(cmd);
 
         tracing::debug!(command = %described, "spawning git");
         let started = Instant::now();
@@ -476,7 +512,12 @@ impl GitExecutor {
             }
         })?;
 
-        let outcome = run_child(&mut child, cmd.timeout, cancel, on_stdout)
+        let budget = match cmd.timeout {
+            TimeBudget::Stock => self.stock_timeout,
+            TimeBudget::At(timeout) => Some(timeout),
+            TimeBudget::Never => None,
+        };
+        let outcome = run_child(&mut child, budget, cancel, on_stdout)
             .await
             .map_err(|source| {
                 report(CommandEnd::Failed, &source.to_string());
@@ -517,7 +558,7 @@ impl GitExecutor {
                     command: described,
                     // `unwrap_or` only for the error message: TimedOut cannot
                     // happen without a configured timeout.
-                    timeout: cmd.timeout.unwrap_or(Duration::ZERO),
+                    timeout: budget.unwrap_or(Duration::ZERO),
                 })
             }
             ChildOutcome::Cancelled => {

@@ -1,7 +1,5 @@
 //! Integration tests for the execution layer against the real system git.
 
-use std::time::Duration;
-
 use crate::support::TestRepo;
 use crate::support::exec::{env, observed_env};
 use platitude_core::{GitCommand, GitError, GitExecutor, repo, version};
@@ -134,8 +132,7 @@ async fn streaming_delivers_all_stdout_chunks() {
     let (executor, cancel) = env();
     let cmd = GitCommand::new()
         .cwd(&repo_dir.path)
-        .args(["log", "--format=%H"])
-        .timeout(Duration::from_secs(30));
+        .args(["log", "--format=%H"]);
 
     let mut collected = Vec::new();
     executor

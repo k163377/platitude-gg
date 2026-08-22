@@ -52,8 +52,15 @@ fn isolated_env() -> Vec<(OsString, OsString)> {
 
 /// Git executor for integration tests. The raw `GitExecutor::new()` remains
 /// available for tests that intentionally exercise the host configuration.
+///
+/// No stock wall-clock budget: under a loaded suite one git round trip
+/// measures ~25× its lone cost (`wait.rs`), so a fixed cap decides by
+/// load, not correctness. Cancellation still bounds every command, and
+/// `Patience` is the suite's failure-detection backstop.
 pub fn isolated() -> GitExecutor {
-    GitExecutor::new().with_env(isolated_env())
+    GitExecutor::new()
+        .without_stock_timeouts()
+        .with_env(isolated_env())
 }
 
 /// An executor and a token nothing ever cancels — what a test that only
@@ -130,6 +137,7 @@ pub fn logged() -> (GitExecutor, Arc<Log>, CancellationToken) {
 pub fn logged_global(global_config: &Path) -> (GitExecutor, Arc<Log>, CancellationToken) {
     let log = Arc::new(Log::default());
     let exec = GitExecutor::new()
+        .without_stock_timeouts()
         .with_env(vec![
             (
                 OsString::from("GIT_CONFIG_GLOBAL"),
