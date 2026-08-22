@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened, write_result};
 use platitude_core::details::DiffTarget;
-use platitude_core::session::{RepoSession, SessionEvent};
+use platitude_core::session::{DiffRefreshOutcome, RepoSession, SessionEvent};
 
 /// Opening a repository asks for a read, and so does the window becoming
 /// active a moment later; on a large repository that pair would be two
@@ -370,5 +370,112 @@ async fn publish_check_answers_through_the_session() {
         .await;
     assert_eq!(state.total, 1);
     assert!(!state.rewrites_published(), "nothing is on a remote");
+    session.close();
+}
+
+/// The fingerprints of every diff of the working-tree side of `path` in
+/// what the session has published, in order — what a re-read either adds
+/// to or leaves alone.
+///
+/// Over the events rather than over the sink, because `wait_for` runs its
+/// predicate holding that lock: a helper that took it again would wedge
+/// the test rather than fail it.
+fn diffs_in(events: &[SessionEvent], path: &str) -> Vec<u64> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            SessionEvent::DiffLoaded {
+                target: DiffTarget::Unstaged { path: seen },
+                fingerprint,
+                ..
+            } if seen == path => Some(*fingerprint),
+            _ => None,
+        })
+        .collect()
+}
+
+fn diffs_of(sink: &CaptureSink, path: &str) -> Vec<u64> {
+    diffs_in(&sink.events.lock().unwrap(), path)
+}
+
+async fn diffs_reach(sink: &CaptureSink, path: &str, count: usize) {
+    sink.wait_for("the diff", |events| {
+        (diffs_in(events, path).len() >= count).then_some(())
+    })
+    .await;
+}
+
+/// The tick that re-reads the file the diff pane is holding runs over
+/// every open diff, so what it answers most of the time has to be nothing
+/// at all: rows republished unasked would swap the list — and the reader's
+/// place with it — once every poll.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_re_read_of_a_file_nobody_touched_says_nothing() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\n", "root");
+    repo.write_file("f.txt", "two\n");
+    let (sink, session) = opened(&repo).await;
+    sink.opening_snapshots().await;
+
+    let target = DiffTarget::Unstaged {
+        path: "f.txt".to_string(),
+    };
+    session.load_diff(target.clone());
+    diffs_reach(&sink, "f.txt", 1).await;
+    let published = diffs_of(&sink, "f.txt");
+
+    // The outcome is the boundary: once it has answered, nothing from this
+    // read can still be on its way (core.md §非同期・並行テスト).
+    assert_eq!(
+        session.refresh_diff_tracked(target).outcome().await,
+        DiffRefreshOutcome::Unchanged
+    );
+    assert_eq!(
+        diffs_of(&sink, "f.txt"),
+        published,
+        "the re-read published a diff of a file nobody had touched"
+    );
+    session.close();
+}
+
+/// A conflict resolved in another window, the way a merge tool leaves one:
+/// the markers are gone from the file and git has not been told yet.
+///
+/// **Status cannot see this.** The path is unmerged either way, so every
+/// letter and every count the window watches reads the same before and
+/// after — and the pane went on drawing the conflict it was opened on
+/// (2026-08-22 ユーザー報告). Only the file itself answers.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_typed_over_outside_the_window_is_re_read() {
+    let mut repo = crate::support::integrate::conflicting_branches();
+    repo.git_expect_failure(&["merge", "side"]);
+    let (sink, session) = opened(&repo).await;
+    sink.opening_snapshots().await;
+
+    let target = DiffTarget::Unstaged {
+        path: "f.txt".to_string(),
+    };
+    session.load_diff(target.clone());
+    diffs_reach(&sink, "f.txt", 1).await;
+    let published = diffs_of(&sink, "f.txt");
+
+    let before = repo.git(&["status", "--porcelain", "--", "f.txt"]);
+    repo.write_file("f.txt", "settled\n");
+    let after = repo.git(&["status", "--porcelain", "--", "f.txt"]);
+    assert_eq!(
+        before, after,
+        "the whole of this case is that status says the same thing"
+    );
+
+    assert_eq!(
+        session.refresh_diff_tracked(target).outcome().await,
+        DiffRefreshOutcome::Sent
+    );
+    diffs_reach(&sink, "f.txt", published.len() + 1).await;
+    assert_ne!(
+        diffs_of(&sink, "f.txt").last(),
+        published.last(),
+        "the file the pane is holding was read again as the file it now is"
+    );
     session.close();
 }
