@@ -60,6 +60,25 @@ pub async fn sequence_pending(
     Ok(workdir.join(out.stdout_utf8().trim_end()).exists())
 }
 
+/// The commits a standing merge is bringing in, as `MERGE_HEAD` lists
+/// them — one id per line, so an octopus comes back with all of its
+/// sides. Empty when nothing is merging.
+///
+/// Only the ids: what the sides are *called* is [`crate::conflict::sides`],
+/// and the two are wanted in different places (a name goes in a sentence,
+/// an id joins the graph).
+pub async fn merge_heads(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Vec<crate::oid::Oid> {
+    crate::conflict::git_file(executor, workdir, "MERGE_HEAD", cancel)
+        .await
+        .lines()
+        .filter_map(|line| crate::oid::Oid::from_hex_str(line.trim()).ok())
+        .collect()
+}
+
 /// Detects in-progress operations for the repository at `workdir`.
 pub async fn detect(
     executor: &GitExecutor,

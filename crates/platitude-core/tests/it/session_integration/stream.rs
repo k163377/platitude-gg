@@ -293,3 +293,141 @@ async fn an_independent_history_sits_where_its_date_puts_it() {
     );
     session.close();
 }
+
+/// A merge stopped in the working tree. The row for the uncommitted files
+/// is the merge commit it is about to become, so it draws that commit's
+/// fork: a dotted edge to HEAD and another to the side being brought in,
+/// each landing on the tip it names.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_standing_merge_dots_the_side_it_is_bringing_in() {
+    let mut repo = crate::support::integrate::conflicting_branches();
+    let ours = repo.git(&["rev-parse", "HEAD"]);
+    let theirs = repo.git(&["rev-parse", "side"]);
+    repo.git_expect_failure(&["merge", "side"]);
+
+    let (sink, session) = crate::support::session::opened(&repo).await;
+    // WIP + main + side + root. The WIP row only appears once the opening
+    // status read has found the tree dirty, and that same read is what
+    // reports the merge — so the pass that shows four rows is the pass
+    // that knows about both.
+    sink.opened_graph_gen(&session, 4).await;
+    let rows = sink
+        .wait_for("the four-row graph", |evs| {
+            let rows = crate::support::replay_rows(evs);
+            (rows.len() == 4).then_some(rows)
+        })
+        .await;
+
+    let wip = &rows[&0];
+    assert!(
+        wip.oid_hex.bytes().all(|b| b == b'0'),
+        "the uncommitted row leads: {:?}",
+        wip.oid_hex
+    );
+    let outs: Vec<(u16, bool)> = wip
+        .segments
+        .iter()
+        .filter(|s| s.kind == platitude_core::graph::SegmentKind::OutOfNode)
+        .map(|s| (s.lane, s.dashed))
+        .collect();
+    assert_eq!(
+        outs,
+        vec![(0, true), (1, true)],
+        "both parents of the pending merge leave the row dotted: {:?}",
+        wip.segments
+    );
+
+    // Each edge lands on its own tip, and the side arrives on the lane the
+    // dotted edge reserved for it.
+    assert_eq!(rows[&1].oid_hex, ours);
+    assert_eq!(rows[&1].node_lane, 0);
+    assert_eq!(rows[&2].oid_hex, theirs);
+    assert_eq!(rows[&2].node_lane, 1);
+    assert!(
+        rows[&2]
+            .segments
+            .iter()
+            .any(|s| s.kind == platitude_core::graph::SegmentKind::IntoNode
+                && s.lane == 1
+                && s.dashed),
+        "the side's tip gathers the dotted edge: {:?}",
+        rows[&2].segments
+    );
+    session.close();
+}
+
+/// A side no ref names — `git merge <sha>`, or the `FETCH_HEAD` of a
+/// one-off fetch — is still a parent of the commit being written, so the
+/// walk is told to start there. Nothing else would offer it, and a dotted
+/// edge to a commit the graph does not hold runs off the bottom of the
+/// window instead of landing.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_side_no_ref_names_still_joins_the_walk() {
+    let mut repo = crate::support::integrate::conflicting_branches();
+    let theirs = repo.git(&["rev-parse", "side"]);
+    repo.git(&["branch", "-D", "side"]);
+    repo.git_expect_failure(&["merge", &theirs]);
+
+    let (sink, session) = crate::support::session::opened(&repo).await;
+    sink.opened_graph_gen(&session, 4).await;
+    let rows = sink
+        .wait_for("the four-row graph", |evs| {
+            let rows = crate::support::replay_rows(evs);
+            (rows.len() == 4).then_some(rows)
+        })
+        .await;
+    assert_eq!(rows[&2].oid_hex, theirs, "the side is on screen");
+    assert!(
+        rows[&2]
+            .segments
+            .iter()
+            .any(|s| s.kind == platitude_core::graph::SegmentKind::IntoNode
+                && s.lane == 1
+                && s.dashed),
+        "its dotted edge lands: {:?}",
+        rows[&2].segments
+    );
+    session.close();
+}
+
+/// Aborting the merge takes the second dotted edge away again — the row
+/// stands for whatever the next commit will be, and that is no longer a
+/// merge.
+#[tokio::test(flavor = "multi_thread")]
+async fn aborting_the_merge_takes_the_second_dotted_edge_away() {
+    let mut repo = crate::support::integrate::conflicting_branches();
+    repo.git_expect_failure(&["merge", "side"]);
+    // Something uncommitted has to outlive the abort, or the row it draws
+    // goes with the merge and there is nothing left to assert on.
+    repo.write_file("untracked.txt", "keep\n");
+
+    let (sink, session) = crate::support::session::opened(&repo).await;
+    sink.opened_graph_gen(&session, 4).await;
+    sink.wait_for("the merge's two dotted edges", |evs| {
+        let rows = crate::support::replay_rows(evs);
+        (rows.len() == 4 && rows.get(&0).is_some_and(|r| r.width == 2)).then_some(())
+    })
+    .await;
+
+    repo.git(&["merge", "--abort"]);
+    session.refresh_quick();
+    let rows = sink
+        .wait_for("the row after the abort", |evs| {
+            let rows = crate::support::replay_rows(evs);
+            (rows.len() == 4 && rows.get(&0).is_some_and(|r| r.width == 1)).then_some(rows)
+        })
+        .await;
+    let outs: Vec<(u16, bool)> = rows[&0]
+        .segments
+        .iter()
+        .filter(|s| s.kind == platitude_core::graph::SegmentKind::OutOfNode)
+        .map(|s| (s.lane, s.dashed))
+        .collect();
+    assert_eq!(
+        outs,
+        vec![(0, true)],
+        "only HEAD is left on a leash: {:?}",
+        rows[&0].segments
+    );
+    session.close();
+}

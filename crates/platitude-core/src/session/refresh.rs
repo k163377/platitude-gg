@@ -265,8 +265,30 @@ impl RepoSession {
         });
     }
 
-    /// Loads status + op state and publishes them, returning whether
-    /// working-tree dirtiness flipped.
+    /// What a standing merge is bringing in, as the last status read left
+    /// it (see [`RepoSession::merge_incoming`]).
+    pub(super) fn merge_incoming(&self) -> Vec<Oid> {
+        match self.merge_incoming.lock() {
+            Ok(g) => g.clone(),
+            Err(e) => e.into_inner().clone(),
+        }
+    }
+
+    /// Records them, answering whether they moved — a merge that started,
+    /// finished or was aborted redraws the WIP row's leashes.
+    fn set_merge_incoming(&self, incoming: Vec<Oid>) -> bool {
+        let mut slot = match self.merge_incoming.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        let moved = *slot != incoming;
+        *slot = incoming;
+        moved
+    }
+
+    /// Loads status + op state and publishes them, returning whether the
+    /// synthetic WIP row moved: the working tree turned dirty or clean, or
+    /// a standing merge changed what it is bringing in.
     ///
     /// Does not rebuild the graph itself: after a write the caller knows
     /// whether it needs one anyway, and rebuilding on both counts would do
@@ -307,6 +329,14 @@ impl RepoSession {
                 } else {
                     String::new()
                 };
+                // The sides the pending merge commit will have as parents.
+                // Same rarity again — only a merge has them, so nothing
+                // else pays for the read.
+                let incoming = if op_state.merging {
+                    opstate::merge_heads(&self.executor, &workdir, &cancel).await
+                } else {
+                    Vec::new()
+                };
                 // And again: the tool is only worth naming where there is
                 // something to open with it, so a clean tree pays nothing
                 // — unless the settings field asked, which it does once
@@ -332,7 +362,12 @@ impl RepoSession {
                     return false;
                 }
                 let dirty = status.is_dirty();
-                let flipped = self.wip_dirty.swap(dirty, Ordering::SeqCst) != dirty;
+                // Both halves are recorded whatever the other says: they
+                // are what the next read compares against, and a `||` that
+                // skipped the second would leave it behind.
+                let dirt_flipped = self.wip_dirty.swap(dirty, Ordering::SeqCst) != dirty;
+                let merge_moved = self.set_merge_incoming(incoming);
+                let flipped = dirt_flipped || merge_moved;
                 // Reading the pending diffs is the one part of this that
                 // scales with the change rather than with the tree, so it
                 // does not run on every tick — only where the answer can

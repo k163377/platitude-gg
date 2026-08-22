@@ -12,6 +12,38 @@ pub struct SeenRow {
     pub labels: Vec<RefLabel>,
 }
 
+/// The same replay as [`replay_graph`], keeping the whole row — the lane
+/// geometry a chip-level view drops. Chips are not corrected here: a test
+/// reading lanes is asking what the walk drew.
+pub fn replay_rows(events: &[SessionEvent]) -> BTreeMap<u32, LogRow> {
+    let mut generation = 0;
+    let mut rows: BTreeMap<u32, LogRow> = BTreeMap::new();
+    for event in events {
+        match event {
+            SessionEvent::LogStarted { generation: g } if *g > generation => {
+                generation = *g;
+                rows.clear();
+            }
+            SessionEvent::LogChunk {
+                generation: g,
+                rows: chunk,
+            } if *g == generation => {
+                rows.extend(chunk.iter().map(|r| (r.row, r.clone())));
+            }
+            SessionEvent::LogReplaced {
+                generation: g,
+                rows: fresh,
+                ..
+            } if *g > generation => {
+                generation = *g;
+                rows = fresh.iter().map(|r| (r.row, r.clone())).collect();
+            }
+            _ => {}
+        }
+    }
+    rows
+}
+
 /// Replays the graph events the way the UI model does (`GraphModel::drain`
 /// in platitude-app), keyed by row number.
 ///

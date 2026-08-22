@@ -189,6 +189,21 @@ impl GraphBuilder {
     /// before the first real commit so the current chain keeps lane 0 and
     /// other tips shift right, exactly like a real commit would.
     pub fn push_virtual(&mut self, oid: &Oid, parent: &Oid) -> GraphRow {
+        self.push_virtual_merging(oid, parent, &[])
+    }
+
+    /// Like [`GraphBuilder::push_virtual`], but the row also reaches the
+    /// sides a standing merge is bringing in (`MERGE_HEAD` — more than
+    /// one of them for an octopus).
+    ///
+    /// The commit this row is about to become has those parents, so the
+    /// row draws them: the same fork the graph will show once it is
+    /// committed, on leashes, because nothing here is a commit yet.
+    ///
+    /// Same feeding rule as [`GraphBuilder::push_virtual`] — first, before
+    /// any real commit — so HEAD keeps lane 0 and each incoming side takes
+    /// the lane beside it that its own tip will arrive on.
+    pub fn push_virtual_merging(&mut self, oid: &Oid, parent: &Oid, incoming: &[Oid]) -> GraphRow {
         let row = self.next_row;
         self.next_row += 1;
         let lane = self.find_free_lane();
@@ -210,6 +225,25 @@ impl GraphBuilder {
             color,
             dashed: true,
         });
+        // One leash per commit: git accepts a merge that names the same
+        // side twice, and two lanes waiting for one id would draw the
+        // second as an edge arriving from nowhere.
+        let mut leashed = vec![*parent];
+        for side in incoming {
+            if leashed.contains(side) {
+                continue;
+            }
+            leashed.push(*side);
+            let side_lane = self.find_free_lane_near(lane);
+            let side_color = self.take_color();
+            self.occupy(side_lane, *side, side_color, true);
+            segments.push(Segment {
+                kind: SegmentKind::OutOfNode,
+                lane: side_lane,
+                color: side_color,
+                dashed: true,
+            });
+        }
         self.rows.insert(*oid, row);
         let mut width = lane + 1;
         for s in &segments {

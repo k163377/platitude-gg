@@ -18,6 +18,6 @@ pub mod wait;
 // — re-exporting a name nothing calls for is an unused import, not a path
 // anybody is keeping.
 pub use exec::{Ends, Said};
-pub use graph::replay_graph;
+pub use graph::{replay_graph, replay_rows};
 pub use repo::TestRepo;
 pub use wait::Patience;

@@ -31,7 +31,12 @@ impl RepoSession {
             .map(|list| list.into_iter().map(|s| (s.oid, s.name)).collect())
             .unwrap_or_default();
 
-        let cmd = walk_command(workdir, options, &stash_refs);
+        // What a standing merge is bringing in: the WIP row leashes it,
+        // and the walk is told to start there so the leash has a node to
+        // land on even when no branch or remote points at it any more.
+        let incoming = self.merge_incoming();
+
+        let cmd = walk_command(workdir, options, &stash_refs, &incoming);
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
@@ -45,7 +50,7 @@ impl RepoSession {
         if self.wip_dirty.load(Ordering::SeqCst)
             && let Some(head_oid) = head_tip
         {
-            self.emit_wip_row(generation, &head_oid);
+            self.emit_wip_row(generation, &head_oid, &incoming);
             totals.shown += 1;
         }
 
@@ -112,12 +117,16 @@ impl RepoSession {
             return Ok(0);
         }
 
+        // A standing merge's sides join the row and the walk here too (see
+        // stream_log).
+        let incoming = self.merge_incoming();
+
         // Dirty working tree: prepend the synthetic WIP row (mirrors
         // stream_log).
         if self.wip_dirty.load(Ordering::SeqCst)
             && let Some(head_oid) = head_tip
         {
-            out.push(wip_row(&head_oid, builder));
+            out.push(wip_row(&head_oid, &incoming, builder));
         }
 
         // Stashes join the walk here too (see stream_log).
@@ -126,7 +135,7 @@ impl RepoSession {
             .map(|list| list.into_iter().map(|s| (s.oid, s.name)).collect())
             .unwrap_or_default();
 
-        let cmd = walk_command(workdir, options, &stash_refs);
+        let cmd = walk_command(workdir, options, &stash_refs, &incoming);
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
@@ -162,12 +171,12 @@ impl RepoSession {
     }
 
     /// Sends the synthetic WIP row (dirty working tree) as its own chunk.
-    fn emit_wip_row(&self, generation: u64, head: &Oid) {
+    fn emit_wip_row(&self, generation: u64, head: &Oid, incoming: &[Oid]) {
         let mut guard = self.lock_shared();
         if guard.generation != generation {
             return; // this stream is not the graph on screen (see emit_rows)
         }
-        let row = wip_row(head, &mut guard.builder);
+        let row = wip_row(head, incoming, &mut guard.builder);
         guard.sent_rows.push(RowPrint::of(&row));
         self.sink.event(SessionEvent::LogChunk {
             generation,
@@ -214,6 +223,7 @@ fn walk_command(
     workdir: &std::path::Path,
     options: LogOptions,
     stash_refs: &HashMap<Oid, String>,
+    incoming: &[Oid],
 ) -> GitCommand {
     let mut cmd = GitCommand::new()
         .cwd(workdir)
@@ -226,9 +236,15 @@ fn walk_command(
     if let Some(limit) = options.limit {
         cmd = cmd.arg(format!("--max-count={limit}"));
     }
-    if !stash_refs.is_empty() {
+    // Stashes and the sides of a standing merge are named by id: neither
+    // is under `--branches` or `--remotes` (a merge of a tag, of
+    // `FETCH_HEAD`, or of a branch deleted since it stopped is reachable
+    // by nothing else), and the row that leashes them needs the node its
+    // dotted edge lands on.
+    let mut extra = stash_refs.keys().chain(incoming).peekable();
+    if extra.peek().is_some() {
         cmd = cmd.arg("--ignore-missing");
-        for oid in stash_refs.keys() {
+        for oid in extra {
             cmd = cmd.arg(oid.to_hex());
         }
     }

@@ -6,9 +6,13 @@ use super::*;
 /// Builds the synthetic row for uncommitted changes: zero id, no author,
 /// one dashed edge running down to HEAD. The UI recognizes the all-zero
 /// id and renders the dashed empty node and the WIP subject.
-pub(super) fn wip_row(head: &Oid, builder: &mut GraphBuilder) -> LogRow {
+///
+/// `incoming` is what a standing merge is bringing in (`MERGE_HEAD`, empty
+/// otherwise): each side gets a dashed edge of its own, so the row already
+/// draws the fork the merge commit will have.
+pub(super) fn wip_row(head: &Oid, incoming: &[Oid], builder: &mut GraphBuilder) -> LogRow {
     let zero = Oid::zero_like(head);
-    let g = builder.push_virtual(&zero, head);
+    let g = builder.push_virtual_merging(&zero, head, incoming);
     LogRow {
         row: g.row,
         oid_hex: zero.to_hex(),

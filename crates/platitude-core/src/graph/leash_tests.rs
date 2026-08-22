@@ -199,3 +199,95 @@ fn duplicate_parent_merge_keeps_an_unrelated_leash_dashed() {
         .unwrap();
     assert!(into.dashed);
 }
+
+/// A merge stopped in the working tree: the row for the uncommitted
+/// files is the merge commit it is about to become, so the side being
+/// brought in hangs off it too — on a leash of its own, beside HEAD's.
+#[test]
+fn a_standing_merge_leashes_the_side_it_is_bringing_in() {
+    let mut pool = StrPool::new();
+    let mut b = GraphBuilder::new();
+    let head = oid(1);
+    let theirs = oid(9);
+    let wip = b.push_virtual_merging(&Oid::zero_like(&head), &head, &[theirs]);
+    assert_eq!((wip.row, wip.node_lane), (0, 0));
+    let outs: Vec<(u16, bool)> = wip
+        .segments
+        .iter()
+        .filter(|s| s.kind == SegmentKind::OutOfNode)
+        .map(|s| (s.lane, s.dashed))
+        .collect();
+    assert_eq!(
+        outs,
+        vec![(0, true), (1, true)],
+        "both sides leave the node dotted: {:?}",
+        wip.segments
+    );
+    assert_eq!(wip.width, 2);
+
+    // The side's tip arrives on the lane its leash reserved, and the
+    // chain below it is committed history again.
+    let their_tip = b.push(&commit(&mut pool, 9, &[3]));
+    assert_eq!(their_tip.node_lane, 1);
+    let into = their_tip
+        .segments
+        .iter()
+        .find(|s| s.kind == SegmentKind::IntoNode && s.lane == 1)
+        .unwrap();
+    assert!(into.dashed, "the leash arrives dotted");
+    assert!(
+        their_tip
+            .segments
+            .iter()
+            .filter(|s| s.kind == SegmentKind::OutOfNode)
+            .all(|s| !s.dashed)
+    );
+
+    // HEAD keeps lane 0 the whole way, with its own leash still dotted.
+    let head_row = b.push(&commit(&mut pool, 1, &[3]));
+    assert_eq!(head_row.node_lane, 0);
+    assert!(
+        head_row
+            .segments
+            .iter()
+            .find(|s| s.kind == SegmentKind::IntoNode && s.lane == 0)
+            .is_some_and(|s| s.dashed)
+    );
+}
+
+/// An octopus gets a leash per side, each in its own lane and colour.
+#[test]
+fn an_octopus_leashes_every_side_separately() {
+    let mut b = GraphBuilder::new();
+    let head = oid(1);
+    let wip = b.push_virtual_merging(&Oid::zero_like(&head), &head, &[oid(8), oid(9)]);
+    let outs: Vec<u16> = wip
+        .segments
+        .iter()
+        .filter(|s| s.kind == SegmentKind::OutOfNode)
+        .map(|s| s.lane)
+        .collect();
+    assert_eq!(outs, vec![0, 1, 2]);
+    assert!(wip.segments.iter().all(|s| s.dashed));
+    let colors: std::collections::HashSet<u8> = wip.segments.iter().map(|s| s.color).collect();
+    assert_eq!(colors.len(), 3, "three chains, three colours");
+}
+
+/// One leash per commit, however many times it is named: a side that is
+/// where HEAD already stands, and a side named twice, each draw the one
+/// edge the graph will have.
+#[test]
+fn a_side_already_leashed_does_not_get_a_second_lane() {
+    let head = oid(1);
+    let mut b = GraphBuilder::new();
+    let same = b.push_virtual_merging(&Oid::zero_like(&head), &head, &[head]);
+    assert_eq!(same.width, 1, "the side is HEAD: {:?}", same.segments);
+
+    let mut b = GraphBuilder::new();
+    let twice = b.push_virtual_merging(&Oid::zero_like(&head), &head, &[oid(9), oid(9)]);
+    assert_eq!(
+        twice.width, 2,
+        "one side, named twice: {:?}",
+        twice.segments
+    );
+}

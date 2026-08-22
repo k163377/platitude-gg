@@ -31,6 +31,12 @@ pub struct RepoSession {
     pub(super) diff_epoch: AtomicU64,
     /// Dirty working tree → the log stream prepends a synthetic WIP row.
     pub(super) wip_dirty: std::sync::atomic::AtomicBool,
+    /// What a standing merge is bringing in (`MERGE_HEAD`), empty the rest
+    /// of the time: the WIP row leashes these as well as HEAD, so it draws
+    /// the fork the merge commit is about to have. Kept beside
+    /// [`RepoSession::wip_dirty`] because the two decide the same row, and
+    /// either moving is a graph to rebuild.
+    pub(super) merge_incoming: Mutex<Vec<Oid>>,
     /// Set by [`RepoSession::ask_merge_tool`] to have the next status read
     /// name the merge tool even with nothing conflicted. Cleared by that
     /// read: two `git config` spawns on every poll of every open tab is
@@ -194,6 +200,7 @@ impl RepoSession {
             diff_epoch: AtomicU64::new(0),
             log_cancel: Mutex::new(None),
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
+            merge_incoming: Mutex::new(Vec::new()),
             merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),
             merge_tool_seen: Mutex::new(String::new()),
             eol_baselines: Mutex::new(HashMap::new()),
