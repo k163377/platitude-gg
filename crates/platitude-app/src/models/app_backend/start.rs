@@ -1,13 +1,11 @@
 use super::*;
 
-/// Separators the packed records use. Note the graph's label records
-/// (`encode::FIELD_SEP` / `RECORD_SEP`) assign the same two characters
-/// the other way round — each side matches its own reader, not the other.
-const FIELD_SEP: char = '\u{1f}';
-const RECORD_SEP: char = '\u{1e}';
+use crate::encode::{FIELD_SEP, RECORD_SEP};
 
-/// Every assignment as `email\u{1f}name\u{1f}url`, records joined by
-/// `\u{1e}`, sorted by address (the store keeps them that way).
+/// Every assignment as `email\u{1e}name\u{1e}url`, records joined by
+/// `\u{1f}`, sorted by address (the store keeps them that way) — the one
+/// packed-record convention every list in this crate uses
+/// (`encode::RECORD_SEP` / `FIELD_SEP`).
 pub(super) fn packed_avatars() -> String {
     Hub::with(|hub| {
         let urls = hub.avatar_urls();

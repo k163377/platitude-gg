@@ -80,6 +80,11 @@ pub struct NavSectionModel {
     /// of room is worked out from it, and a binding follows properties
     /// (app-ui.md 「QML バインディングはプロパティにしか反応しない」).
     shown_total: i32,
+    /// Worktree sections only: files in this list's bucket run — the
+    /// number its heading wears. Untracked files count as unstaged
+    /// because the run does (`Bucket::run`), which is what keeps the
+    /// heading's number and the rows under it one rule.
+    run_files: i32,
     /// Current branch (branches section only) — feeds the sticky row
     /// that stands in for it while its own row is scrolled off.
     head_name: String,
@@ -93,7 +98,11 @@ pub struct NavSectionModel {
     /// True once a refs snapshot arrived (distinguishes "no head yet"
     /// from "detached / no local branches" for the default selection).
     refs_loaded: bool,
-    /// Worktree section only: tree (default) vs flat-path display.
+    /// Worktree section only: tree (default) vs flat-path display. The
+    /// page's restore is the only writer (`PageLayout.applySavedLayout` →
+    /// `set_tree_view`, before anything shows): `attach_*` must not touch
+    /// it — an attach after the restore once put the saved flat view back
+    /// to a tree and then wrote the tree over the saved flag.
     tree_view: bool,
     /// Which row the pointer is on; the notice follows, taken apart into
     /// the pieces its sentence needs. Kept once here rather than on every

@@ -1501,7 +1501,11 @@ Item {
     function tryPendingHeadSelect() {
         if (!page.pendingHeadSelect || !branchesModel.refsLoaded)
             return
-        const row = branchesModel.headOid !== "" ? graphModel.rowOf(branchesModel.headOid) : -1
+        // The branches section answers only for a branch; detached, HEAD is still somewhere, and the status model is
+        // the one that says where (`WorkTreeModel.headOid` — "branch or not"). Without the fallback a landing owed
+        // after a write made detached never resolves.
+        const head = branchesModel.headOid !== "" ? branchesModel.headOid : workTree.headOid
+        const row = head !== "" ? graphModel.rowOf(head) : -1
         if (row < 0)
             return
         page.pendingHeadSelect = false
@@ -2128,6 +2132,9 @@ Item {
         // Details resolve even outside the window.
         page.rewordRow = -1
         page.wipShown = false
+        // The row travels with the oid: a landing owed later (`followVanishedCommit`) reads `selectedRow`, and a
+        // stale one lands the selection on whatever now stands at the previous selection's row.
+        page.selectedRow = row
         page.selectedOid = oidHex
         page.selectedStashRef = graphModel.stashRefOf(oidHex)
         detailsModel.request(oidHex)

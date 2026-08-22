@@ -57,14 +57,6 @@ impl RepoTab {
         self.with_session(|s| s.set_identity(name.clone(), email.clone(), scope));
     }
 
-    pub(super) fn write_network_timeout(&mut self, seconds: i32) {
-        if seconds <= 0 {
-            return;
-        }
-        let timeout = std::time::Duration::from_secs(seconds as u64);
-        self.with_session(|s| s.set_network_timeout(timeout));
-    }
-
     pub(super) fn write_tags_shown(&mut self, shown: bool) {
         if self.tags_shown == shown {
             return;

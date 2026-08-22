@@ -13,7 +13,10 @@ impl Default for RepoTab {
             error_path: String::new(),
             last_error: String::new(),
             last_error_from_fetch: false,
-            // Mirrors core LogOptions::default().
+            // Placeholder until the page's restore writes the saved flag
+            // (`PageLayout.applySavedLayout`); the session takes the same
+            // saved flag at open (`Hub::ensure_open`), so the eye and the
+            // walk cannot start apart however the two writes land.
             tags_shown: true,
             busy_count: 0,
             busy_op: String::new(),

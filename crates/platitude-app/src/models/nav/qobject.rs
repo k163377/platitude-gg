@@ -4,6 +4,7 @@ use super::*;
 impl NavSectionModel {
     qproperty!("total", Member = total, Notify = changed);
     qproperty!("shownRows", Member = shown_total, Notify = changed);
+    qproperty!("runFiles", Member = run_files, Notify = changed);
     qproperty!("headName", Member = head_name, Notify = changed);
     qproperty!("headOid", Member = head_oid, Notify = changed);
     qproperty!("headHasRemote", Member = head_has_remote, Notify = changed);
@@ -106,7 +107,6 @@ impl NavSectionModel {
     fn attach_section(&mut self, tab_id: i32, section: String) {
         self.tab_id = tab_id;
         self.section = section;
-        self.tree_view = true;
         let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) else {
             return;
         };
@@ -133,7 +133,6 @@ impl NavSectionModel {
         self.tab_id = tab_id;
         self.section = "worktree".to_string();
         self.run = run;
-        self.tree_view = true;
         let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) else {
             return;
         };

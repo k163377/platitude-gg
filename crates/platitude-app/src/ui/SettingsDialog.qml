@@ -70,13 +70,14 @@ AppDialog {
     property string prefillName: ""
     property string prefillEmail: ""
 
-    /// Assignments as the settings file holds them: address, name, URL.
+    /// Assignments as the settings file holds them: address, name, URL — U+001F between records, U+001E between a
+    /// record's fields, the same convention every packed list carries (`encode::RECORD_SEP` / `FIELD_SEP`).
     readonly property var assigned: {
         const packed = AppBackend.avatars
         if (packed === "")
             return []
-        return packed.split(String.fromCharCode(30)).map(record => {
-            const parts = record.split(String.fromCharCode(31))
+        return packed.split(String.fromCharCode(31)).map(record => {
+            const parts = record.split(String.fromCharCode(30))
             return { email: parts[0], name: parts[1] || parts[0], url: parts[2] }
         })
     }

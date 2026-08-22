@@ -18,13 +18,11 @@ Rectangle {
     required property string section
     required property var repoTab
     required property var workTree
-    /// Files in this bucket. Untracked ones are shown as unstaged (`NavItem.group`), so they are counted there.
-    readonly property int count:
-        bucketHeader.section === "staged"
-        ? bucketHeader.workTree.stagedCount
-        : bucketHeader.section === "unstaged"
-        ? bucketHeader.workTree.unstagedCount + bucketHeader.workTree.untrackedCount
-        : bucketHeader.workTree.conflictCount
+    /// This bucket's rows — the same list the heading sits above.
+    required property var bucketModel
+    /// Files in this bucket, as the list itself counts them (`NavSectionModel.runFiles`): untracked files ride in
+    /// unstaged because the bucket run does, and that rule lives once, on the Rust side (`Bucket::run`).
+    readonly property int count: bucketHeader.bucketModel.runFiles
     /// An external merge tool holds the write queue until it is closed, which is the longest wait in the app and the
     /// only one with no upper bound.
     readonly property bool waitingForTool: bucketHeader.section === "conflicts"

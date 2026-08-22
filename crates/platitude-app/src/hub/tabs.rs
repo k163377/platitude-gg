@@ -160,6 +160,11 @@ impl Hub {
         let sink = Arc::new(BridgeSink { feeds });
         let session = RepoSession::open(executor, handle, path, sink);
         apply_repo_settings(&session, &applied);
+        // The saved tags flag takes the same door the settings do: the
+        // page's restore runs before this session exists, so its
+        // `setTagsShown` cannot be the write that lands here — without
+        // this the eye read "hidden" while the walk drew every tag.
+        session.set_include_tags(self.state.layout.tags_shown);
         // Straight after the settings, because they are the permission:
         // the session holds this until it knows where the repository is,
         // and fetches before it reads anything (`fetch_on_open`).
@@ -269,27 +274,21 @@ impl Hub {
     }
 
     /// How many messages are waiting in each tab's feeds, as
-    /// `<name>#<tab>:<depth>` for the ones holding anything.
+    /// `<name>#<tab>:<depth>` for the ones holding anything. The feeds
+    /// walked are the one list `for_every_feed!` carries — a copy kept by
+    /// hand here once under-reported exactly the queue this report exists
+    /// to catch.
     pub fn feed_depths(&self) -> String {
         let mut waiting: Vec<String> = Vec::new();
         for (id, tab) in &self.tabs {
             let f = &tab.feeds;
-            let depths = [
-                ("tab", f.tab.depth()),
-                ("graph", f.graph.depth()),
-                ("refs-branches", f.refs_branches.depth()),
-                ("refs-remotes", f.refs_remotes.depth()),
-                ("refs-tags", f.refs_tags.depth()),
-                ("status", f.status.depth()),
-                ("status-nav-conflicts", f.status_nav_conflicts.depth()),
-                ("status-nav-unstaged", f.status_nav_unstaged.depth()),
-                ("status-nav-staged", f.status_nav_staged.depth()),
-                ("stash", f.stash.depth()),
-                ("worktrees", f.worktrees.depth()),
-                ("details", f.details.depth()),
-                ("diff", f.diff.depth()),
-                ("commands", f.commands.depth()),
-            ];
+            let mut depths: Vec<(&'static str, usize)> = Vec::new();
+            macro_rules! note {
+                ($feeds:expr, $field:ident, $name:literal) => {
+                    depths.push(($name, $feeds.$field.depth()));
+                };
+            }
+            super::feed::for_every_feed!(note, f);
             for (name, depth) in depths {
                 if depth > 0 {
                     waiting.push(format!("{name}#{id}:{depth}"));

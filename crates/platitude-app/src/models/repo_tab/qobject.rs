@@ -848,12 +848,6 @@ impl RepoTab {
         self.write_identity(name, email, global)
     }
 
-    /// Time budget for fetch / push, in seconds. Zero is ignored.
-    #[qslot]
-    fn set_network_timeout(&mut self, seconds: i32) {
-        self.write_network_timeout(seconds)
-    }
-
     /// Shows/hides tags in the graph walk (restarts the stream).
     #[qslot]
     fn set_tags_shown(&mut self, shown: bool) {

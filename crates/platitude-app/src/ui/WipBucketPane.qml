@@ -56,6 +56,7 @@ ColumnLayout {
         section: bucketPane.section
         repoTab: bucketPane.repoTab
         workTree: bucketPane.workTree
+        bucketModel: bucketPane.model
     }
     AppListView {
         id: bucketList

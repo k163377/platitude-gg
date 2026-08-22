@@ -142,42 +142,56 @@ pub struct Feeds {
     pub commands: Arc<Feed<CommandMsg>>,
 }
 
-/// Calls one of [`Feed`]'s no-argument methods on every feed a tab has.
+/// Expands `$with!(feeds, field, "name")` once per feed a tab has.
 ///
 /// The list of feeds is written once, here. There is nothing to iterate —
-/// each feed carries a different message type — so without this the walks
-/// below would be two copies of the same list, free to disagree about
-/// what a tab holds; a feed left out of one of them is a queue that goes
-/// on holding a repository nobody is reading.
-macro_rules! every_feed {
-    ($feeds:expr => $method:ident) => {{
-        let feeds: &Feeds = $feeds;
-        feeds.tab.$method();
-        feeds.graph.$method();
-        feeds.refs_branches.$method();
-        feeds.refs_remotes.$method();
-        feeds.refs_tags.$method();
-        feeds.status.$method();
-        feeds.status_nav_conflicts.$method();
-        feeds.status_nav_unstaged.$method();
-        feeds.status_nav_staged.$method();
-        feeds.stash.$method();
-        feeds.worktrees.$method();
-        feeds.details.$method();
-        feeds.diff.$method();
-        feeds.commands.$method();
-    }};
+/// each feed carries a different message type — so every walk over "all
+/// of a tab's feeds" expands from this list through a small local adapter
+/// macro: the no-argument methods below, and the named depth report
+/// ([`crate::hub::Hub::feed_depths`]). A hand-kept second copy of the
+/// list is free to disagree about what a tab holds, and a feed left out
+/// of one is a queue that goes on holding a repository nobody is reading
+/// — or one the memory report cannot name, which is exactly the queue
+/// that report exists to catch.
+macro_rules! for_every_feed {
+    ($with:ident, $feeds:expr) => {
+        $with!($feeds, tab, "tab");
+        $with!($feeds, graph, "graph");
+        $with!($feeds, refs_branches, "refs-branches");
+        $with!($feeds, refs_remotes, "refs-remotes");
+        $with!($feeds, refs_tags, "refs-tags");
+        $with!($feeds, status, "status");
+        $with!($feeds, status_nav_conflicts, "status-nav-conflicts");
+        $with!($feeds, status_nav_unstaged, "status-nav-unstaged");
+        $with!($feeds, status_nav_staged, "status-nav-staged");
+        $with!($feeds, stash, "stash");
+        $with!($feeds, worktrees, "worktrees");
+        $with!($feeds, details, "details");
+        $with!($feeds, diff, "diff");
+        $with!($feeds, commands, "commands");
+    };
 }
+pub(super) use for_every_feed;
 
 impl Feeds {
     /// Empties every queue and forgets every consumer ([`Feed::release`]).
     pub fn release_all(&self) {
-        every_feed!(self => release);
+        macro_rules! call {
+            ($feeds:expr, $field:ident, $name:literal) => {
+                $feeds.$field.release();
+            };
+        }
+        for_every_feed!(call, self);
     }
 
     /// Empties every queue and keeps the consumers ([`Feed::clear_queued`]).
     pub fn clear_queued_all(&self) {
-        every_feed!(self => clear_queued);
+        macro_rules! call {
+            ($feeds:expr, $field:ident, $name:literal) => {
+                $feeds.$field.clear_queued();
+            };
+        }
+        for_every_feed!(call, self);
     }
 }
 
