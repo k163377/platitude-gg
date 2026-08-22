@@ -118,20 +118,7 @@ Rectangle {
                     font.pixelSize: Theme.fontMd
                     onClicked: pane.clearPanel()
                 }
-                HoverToolButton {
-                    padding: 0
-                    implicitWidth: Theme.iconLg
-                    implicitHeight: Theme.iconLg
-                    contentItem: Item {
-                        // A step under what it closes (デザイン規約 §寸法).
-                        NavIcon {
-                            anchors.centerIn: parent
-                            width: Theme.iconSm
-                            height: Theme.iconSm
-                            kind: "close"
-                            tint: Theme.textSecondary
-                        }
-                    }
+                CloseToolButton {
                     onClicked: pane.closeRequested()
                 }
             }

@@ -80,20 +80,7 @@ Rectangle {
                  ? qsTr("Unstage the whole file at once") : qsTr("Stage the whole file at once")
             onActivated: header.stageFileRequested()
         }
-        HoverToolButton {
-            implicitWidth: Theme.iconLg
-            implicitHeight: Theme.iconLg
-            padding: 0
-            contentItem: Item {
-                // A step under what it closes (デザイン規約 §寸法).
-                NavIcon {
-                    anchors.centerIn: parent
-                    width: Theme.iconSm
-                    height: Theme.iconSm
-                    kind: "close"
-                    tint: Theme.textSecondary
-                }
-            }
+        CloseToolButton {
             onClicked: header.closeRequested()
         }
     }

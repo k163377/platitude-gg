@@ -175,6 +175,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/RemoteDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RepoPage.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RepoPageStack.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/CloseToolButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RowHoverHost.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SampleTimer.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SectionPeekPopup.qml", "qt/qml/platitude");

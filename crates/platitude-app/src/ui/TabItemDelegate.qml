@@ -165,22 +165,10 @@ Rectangle {
         // Shown on the tab in front and under the pointer (デザイン規約 §タブの所作). Dimmed rather than dropped: an item the
         // layout has stopped seeing takes its width with it, and the tab would change size under the hand that came to
         // close it.
-        HoverToolButton {
+        CloseToolButton {
             id: closeMark
-            padding: 0
             Layout.alignment: Qt.AlignVCenter
-            implicitWidth: Theme.iconLg
-            implicitHeight: Theme.iconLg
             opacity: tabItem.current || tabItem.pointed ? 1 : 0
-            contentItem: Item {
-                NavIcon {
-                    anchors.centerIn: parent
-                    width: Theme.iconSm
-                    height: Theme.iconSm
-                    kind: "close"
-                    tint: Theme.textSecondary
-                }
-            }
             onClicked: tabItem.tabsModel.closeTab(tabItem.tab_id)
         }
     }

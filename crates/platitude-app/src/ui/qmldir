@@ -23,6 +23,7 @@ PagePerfDriver 1.0 PagePerfDriver.qml
 AvatarButton 1.0 AvatarButton.qml
 ChangeIcon 1.0 ChangeIcon.qml
 ClipboardHelper 1.0 ClipboardHelper.qml
+CloseToolButton 1.0 CloseToolButton.qml
 BandStateCard 1.0 BandStateCard.qml
 BandStateGroup 1.0 BandStateGroup.qml
 CoAuthorCard 1.0 CoAuthorCard.qml

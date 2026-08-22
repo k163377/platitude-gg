@@ -165,23 +165,10 @@ Rectangle {
                 text: qsTr("%1 / %2").arg(findBar.loaded).arg(findBar.loaded)
             }
         }
-        HoverToolButton {
+        CloseToolButton {
             id: closeButton
-            padding: 0
             Layout.alignment: Qt.AlignVCenter
-            implicitWidth: Theme.iconLg
-            implicitHeight: Theme.iconLg
             Accessible.name: qsTr("Close the find bar")
-            contentItem: Item {
-                // A step under what it closes (デザイン規約 §寸法).
-                NavIcon {
-                    anchors.centerIn: parent
-                    width: Theme.iconSm
-                    height: Theme.iconSm
-                    kind: "close"
-                    tint: Theme.textSecondary
-                }
-            }
             onClicked: findBar.dismiss()
         }
     }
