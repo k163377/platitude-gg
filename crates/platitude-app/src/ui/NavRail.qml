@@ -110,12 +110,23 @@ Rectangle {
         return kind === "remote" && rail.countOf(kind) === 0
     }
 
+    /// How tall one cell stands. **The ☰'s own cell**, which is the band it sits in (`toolbarHeight` — TopBar): the
+    /// mark at the head of this column and the five under it answer the pointer over the same run, and a reach that
+    /// changes partway down a column of one kind of thing is a difference nobody can see and everybody feels. Written
+    /// as the relationship rather than the number, so the two move together (デザイン規約 §ウィンドウの縁 — 近い値を
+    /// 書き写さない).
+    ///
+    /// Not `railWidth`: that one is the window's own outer edge, and what sets it is the mark at the head of this
+    /// column plus a step either side (§左メニューを畳む). Two questions, and once the edge came in they stopped
+    /// having one answer — a square cell would have the narrower of them decide the reach.
+    readonly property int cellHeight: Theme.toolbarHeight
+
     /// Where a section's cell sits, for anything that has to line up with it without the pointer having been there (the
     /// smoke hook).
     function topOf(kind) {
         for (let i = 0; i < rail.sections.length; i++) {
             if (rail.sections[i].kind === kind)
-                return Theme.headerHeight + i * Theme.railWidth
+                return Theme.headerHeight + i * rail.cellHeight
         }
         return Theme.headerHeight
     }
@@ -167,7 +178,7 @@ Rectangle {
                 readonly property bool addable: rail.addableAt(cell.modelData.kind)
 
                 width: Theme.railWidth
-                height: Theme.railWidth
+                height: rail.cellHeight
                 // The open section keeps the hover wash while the pointer is away in its list: what is on screen has to
                 // say which cell put it there. An empty one washes for nobody — unavailable does not answer the pointer
                 // (規約 §無効) — unless it is the one with something to press.
@@ -181,13 +192,22 @@ Rectangle {
                 ToolTip.text: qsTr("Add remote…")
 
                 Column {
-                    anchors.centerIn: parent
+                    // All the cell's slack above the mark, none under the number. The slack is the `spaceXs` the
+                    // spacing below takes back, and split in two it left the first cell with half of what the others
+                    // have between them: the band's mark sits right on the cell's own top edge, so the top cell pays
+                    // one half where every other pair of cells pays two. Put on one side it is the same gap
+                    // everywhere — fold block to the first mark, and each number to the next mark
+                    // (2026-08-22 ユーザー指示. デザイン規約 §左メニューを畳む).
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: Theme.spaceXs
                     // Taken back, not written: the box keeps half its unused grid as air under the mark's ink, and the
-                    // number's line box keeps its own leading above the digit, so a zero here still reads as a gap.
-                    // Once the mark filled the cell that gap grew to the width of the one between two cells, and the
-                    // pair stopped reading as a pair (measured on Windows: 7px from ink to digit against 8px from the
-                    // digit to the next cell's mark; 4 against 9 with this). Subtracting the air a mark holds is what
-                    // デザイン規約 §余白 says to do beside a word — under one it is the same sum.
+                    // number's line box keeps its own leading above the digit, so a zero here still reads as a gap —
+                    // and once the mark took the cell's whole remainder, a wider one than the cells keep between them.
+                    // The pair then reads as two things rather than one (measured on Windows, ink to ink: at zero, 6px
+                    // from the mark to its own digit against 5px from that digit to the next cell's mark — the gap
+                    // inside the pair is the larger of the two; 2 against 9 with this). Subtracting the air a mark
+                    // holds is what デザイン規約 §余白 says to do beside a word — under one it is the same sum.
                     spacing: -Theme.spaceXs
                     NavIcon {
                         id: sectionIcon
@@ -203,6 +223,10 @@ Rectangle {
                         // carries its own air inside it (デザイン規約 §余白 — a mark's own margin counts towards the gap
                         // beside it), and these marks draw some 11 of their 16 grid. A `spaceXs` written on either
                         // side of the box was that air twice over, and what the eye measures is the ink.
+                        //
+                        // The remainder of `cellHeight` once the number's line and the slack above are out of it, one
+                        // step up from the marks that stand alone in a band: this one is the cell (デザイン規約 §寸法 —
+                        // 印が帯ではなくセルの中身そのものである時).
                         width: Theme.iconXl
                         height: Theme.iconXl
                         // The eye the TAGS header carries, worn as a mark on the corner: folded, this is the only place
@@ -221,11 +245,16 @@ Rectangle {
                             width: Theme.iconSm
                             height: Theme.iconSm
                             // Sideways it hangs off the box, into the air the cell keeps either side of the mark;
-                            // downwards it starts at the box's own top, because the box now reaches the top of the
-                            // cell. Centred on that corner, half the badge would stand in the cell above — beside a
-                            // number that counts a different section.
+                            // downwards it starts at the box's own top. A `spaceXs` off both, back towards the mark it
+                            // belongs to: hung off the corner outright it stood on the cell's right edge with the air
+                            // all on the other side, and the step up spends the slack the column keeps above it, so
+                            // the badge's own box starts where the cell does (2026-08-22 ユーザー指示). Centred on the
+                            // corner, half the badge would stand in the cell above — beside a number that counts a
+                            // different section.
                             anchors.horizontalCenter: parent.right
+                            anchors.horizontalCenterOffset: -Theme.spaceXs
                             anchors.top: parent.top
+                            anchors.topMargin: -Theme.spaceXs
                         }
                         // The `+` the open band carries at the end of it (NavHeader), worn on the same corner as the
                         // eye and only while the section is empty: with rows in it the band is a hover away and
@@ -237,8 +266,12 @@ Rectangle {
                             tint: cell.modelData.tint
                             width: Theme.iconSm
                             height: Theme.iconSm
+                            // The eye's seat exactly (規約 §左メニューを畳む names one corner for both) — the two are
+                            // never on screen together, so a step between them would read as two different corners.
                             anchors.horizontalCenter: parent.right
+                            anchors.horizontalCenterOffset: -Theme.spaceXs
                             anchors.top: parent.top
+                            anchors.topMargin: -Theme.spaceXs
                         }
                     }
                     // How many are in there. It stands in for the caption as well as the count, so it takes the

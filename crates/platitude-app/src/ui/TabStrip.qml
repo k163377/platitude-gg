@@ -280,8 +280,9 @@ Item {
     }
 
     // App menu; most entries are placeholders until their phases land. Sized as the head of the folded sidebar's column
-    // — `railWidth` wide, the rail cells' wash — so this mark and the section marks under it stand on one line (デザイン規約
-    // §寸法).
+    // — `railWidth` wide, the rail cells' wash, and this band's own full height, which is the run those cells answer
+    // over as well (`NavRail.cellHeight`). The mark inside is a step under theirs: this one stands alone in a band,
+    // theirs are the cells themselves (デザイン規約 §寸法).
     ToolButton {
         id: menuButton
         width: Theme.railWidth
