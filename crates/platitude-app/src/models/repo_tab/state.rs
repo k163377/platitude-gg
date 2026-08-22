@@ -60,6 +60,7 @@ impl Default for RepoTab {
             head_commit_seq: 0,
             last_write_op: String::new(),
             last_write_error: String::new(),
+            last_write_stopped: false,
             write_seq: 0,
             move_ask_local: String::new(),
             move_ask_start: String::new(),

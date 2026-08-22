@@ -28,6 +28,10 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "revert-commit" | "cherry-pick" | "merge-branch" => {
             Some("tip_landed follows=true onscreen=true")
         }
+        // The other landing the same press has. Two halves the picture
+        // cannot hold either: that no red line was written over an
+        // ordinary conflict, and that the command log stayed down.
+        "merge-stops" => Some("merge_stopped wip=true conflicts=true error=false log=false"),
         // The caret is the whole of these two, and a hook that never
         // reached the box leaves a picture of the resting colour --
         // which is a real state, and the other half of each pair.
@@ -465,6 +469,13 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // names the act, so a run whose hook never reached the diff at
         // all cannot borrow another verb's report to pass on.
         "diff-file" => Some("diff_row act=diff-file ready=true"),
+        // Both sides have to be named on some row, and on a file that has
+        // been typed over both of them are removals — the half that used
+        // to be dropped, which left the legend explaining a distinction
+        // no row was making (2026-08-22 ユーザー報告). A count of zero on
+        // either side photographs exactly like a file with nothing to
+        // tell apart.
+        "conflict-sides" => Some("conflict_sides combined=true told=true both=true"),
         "line-tools" => Some("diff_row act=line-tools ready=true"),
         "hunk-tools" => Some("diff_row act=hunk-tools ready=true"),
         "stage-hunk" => Some("diff_row act=stage-hunk ready=true"),

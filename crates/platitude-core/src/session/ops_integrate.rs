@@ -6,12 +6,25 @@ use super::*;
 
 impl RepoSession {
     /// `git merge <rev>`.
+    ///
+    /// A merge that stops on a conflict is reported as the landing it is
+    /// ([`SessionEvent::WriteStopped`]), not as a failed write: git left
+    /// the merge standing and everything it did is on screen — the badge,
+    /// the exit card, the conflicted rows (デザイン規約 §進行中の操作から出る).
     pub fn merge(self: &Arc<Self>, rev: String, options: integrate::MergeOptions) {
+        let session = Arc::clone(self);
         self.write(
             "merge",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                integrate::merge(&exec, &repo.workdir, &rev, &options, &cancel).await
+                let outcome =
+                    integrate::merge(&exec, &repo.workdir, &rev, &options, &cancel).await?;
+                if outcome == integrate::MergeOutcome::Stopped {
+                    session
+                        .sink
+                        .event(SessionEvent::WriteStopped { op: "merge" });
+                }
+                Ok(())
             },
         );
     }

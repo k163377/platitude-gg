@@ -815,7 +815,14 @@ ColumnLayout {
                     text: wipPane.workTree.stagedCount === 1 ? qsTr("file to") : qsTr("files to")
                     // An amend can stand on its own (message only); a new commit needs staged content and a
                     // summary, and git needs an identity to attribute either one to.
+                    //
+                    // A file still waiting on a decision stops it as well: git will not write a commit over an
+                    // index that holds unmerged paths, whatever is staged beside them, and the exit card's own
+                    // `--continue` is down for exactly the same reason (デザイン規約 §可否・警告の出し場所).
+                    // The button stays where it is — during a stopped merge this seat is what finishes the merge,
+                    // and the way out stands underneath it (§進行中の操作から出る).
                     enabled: wipPane.repoTab.busyCount === 0 && wipPane.repoTab.identityReady
+                             && wipPane.workTree.conflictCount === 0
                              && msgEditor.subjectText.trim() !== ""
                              && (wipPane.amending || wipPane.workTree.stagedCount > 0)
                     // **Still one click.** Committing is a daily operation and a confirmation on a daily operation
@@ -830,6 +837,8 @@ ColumnLayout {
                     ToolTip.delay: Metrics.tipDelayMs
                     ToolTip.text: !wipPane.repoTab.identityReady
                                   ? qsTr("No name or email set for commits")
+                                  : wipPane.workTree.conflictCount > 0
+                                  ? qsTr("Files are still waiting on a decision")
                                   : msgEditor.subjectText.trim() === ""
                                   ? qsTr("A commit needs a summary")
                                   : qsTr("Stage something to commit")

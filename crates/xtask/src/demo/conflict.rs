@@ -3,15 +3,7 @@
 
 use super::repo::DemoRepo;
 
-/// A merge stopped on conflicts: MERGE_HEAD present, one unmerged path.
-///
-/// The file is long enough to be read as one: a conflicted path's diff is
-/// the combined form, which puts context, our side, their side and the
-/// markers git wrote in one hunk — a one-line file shows none of that.
-/// The two sides also disagree about one line and agree about another, so
-/// both the fenced part and the part that merged cleanly are on screen.
-pub(super) fn conflict(repo: &mut DemoRepo) -> Result<(), String> {
-    const BASE: &str = "\
+const BASE: &str = "\
 Release checklist
 =================
 
@@ -20,6 +12,16 @@ Release checklist
 - tag the commit
 - upload the archives
 ";
+
+/// `main` and `feature/clash`, each having changed the same line of
+/// `shared.txt`, with the merge **not yet made**.
+///
+/// The file is long enough to be read as one: a conflicted path's diff is
+/// the combined form, which puts context, our side, their side and the
+/// markers git wrote in one hunk — a one-line file shows none of that.
+/// The two sides also disagree about one line and agree about another, so
+/// both the fenced part and the part that merged cleanly are on screen.
+fn two_sides_of_one_line(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("shared.txt", BASE, "feat: shared base")?;
     repo.commit("other.txt", "calm\n", "feat: untouched elsewhere")?;
 
@@ -41,7 +43,45 @@ Release checklist
         &BASE.replace("- pick the version number", "- decide the version number"),
         "fix: change shared too",
     )?;
+    Ok(())
+}
+
+/// The two sides with the merge still to come, so pressing `merge` in the
+/// window is what stops it (`merge-stops`). Every other conflict preset
+/// arrives already parked, which cannot show what the press itself
+/// answers with.
+pub(super) fn clashing(repo: &mut DemoRepo) -> Result<(), String> {
+    two_sides_of_one_line(repo)
+}
+
+/// A merge stopped on conflicts: MERGE_HEAD present, one unmerged path.
+pub(super) fn conflict(repo: &mut DemoRepo) -> Result<(), String> {
+    two_sides_of_one_line(repo)?;
     repo.git_expecting_stop(&["merge", "--no-edit", "feature/clash"])?;
+    Ok(())
+}
+
+/// The same stopped merge with the conflicted file **typed over**: the
+/// markers are gone and one line stands where the two sides disagreed,
+/// while the index still holds the path unmerged.
+///
+/// This is the shape the combined diff changes under: while the markers
+/// are there both sides' lines are in the work tree and arrive as
+/// additions, and the moment they are typed over the same two lines
+/// become removals against their own parent. Nothing else in the presets
+/// stands here — a staged resolution has left the conflict bucket
+/// altogether.
+pub(super) fn conflict_typed(repo: &mut DemoRepo) -> Result<(), String> {
+    conflict(repo)?;
+    repo.write(
+        "shared.txt",
+        &BASE
+            .replace("- pick the version number", "- settle the version number")
+            .replace(
+                "- upload the archives",
+                "- upload the archives and checksums",
+            ),
+    )?;
     Ok(())
 }
 

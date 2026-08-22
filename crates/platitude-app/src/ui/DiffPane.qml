@@ -44,14 +44,22 @@ Rectangle {
     /// This diff has more than one old side, so every row carries a marker
     /// column per side (`platitude_core::parse::diff`).
     readonly property bool combined: diffPane.diffModel.isCombined
-    /// Which side a combined row's line came from, read off its markers: a column holds a space where that side has the
-    /// line. A line both sides have is context, one neither has is a marker git wrote (or a line typed while
-    /// resolving), and both answer "".
+    /// Which side a combined row's line came from, read off its markers, by the same rule the parser reads them by
+    /// (`platitude_core::parse::diff::combined`): **on a line that survived, the side that has it is the column that is
+    /// not `+`; on a removed line it is the column marked `-`.** A line both sides have is context, one neither has is
+    /// a marker git wrote or a line typed while resolving, and both answer "".
+    ///
+    /// The removed half is what a resolved file is made of. While the markers are still in the tree both sides' lines
+    /// are present, so both arrive as `+` against one parent and the bands stand; the moment the file is resolved the
+    /// two sides' lines become removals against their own parent, and reading only the `+` half left every row on a
+    /// resolved conflict colourless (2026-08-22 ユーザー報告 / 実測 2.55: `- ours` / ` -theirs` / `--both` / `++typed`).
     function sideOf(markers) {
-        if (markers.length < 2 || markers.indexOf("-") >= 0)
+        if (markers.length < 2)
             return ""
-        const inOurs = markers.charAt(0) === " "
-        const inTheirs = markers.charAt(1) === " "
+        const gone = markers.indexOf("-") >= 0
+        const held = gone ? "-" : " "
+        const inOurs = markers.charAt(0) === held
+        const inTheirs = markers.charAt(1) === held
         if (inOurs === inTheirs)
             return ""
         return inOurs ? "ours" : "theirs"
@@ -64,6 +72,22 @@ Rectangle {
     function sideColor(side) {
         const index = side === "ours" ? diffPane.sideColorOurs : diffPane.sideColorTheirs
         return Theme.graphLane[index % Theme.graphLane.length]
+    }
+    /// How many rows each side is named on, for the automation (`conflict-sides`). The bands are a few pixels wide and
+    /// a picture cannot be asked whether the ones that should be there are — least of all on a file that has been
+    /// typed over, where the answer used to be "none at all".
+    function sideTally() {
+        let ours = 0
+        let theirs = 0
+        for (let i = 0; i < diffPane.view.count; i++) {
+            const side = diffPane.sideOf(diffPane.diffModel.markersAt(i))
+            if (side === "ours")
+                ours++
+            else if (side === "theirs")
+                theirs++
+        }
+        return "combined=" + diffPane.combined + " told=" + diffPane.sidesTold
+             + " both=" + (ours > 0 && theirs > 0) + " ours=" + ours + " theirs=" + theirs
     }
 
     signal closeRequested()

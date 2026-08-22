@@ -102,10 +102,12 @@
 - `name-box-drop`(同じ押下を**グラフ行の名前欄**に当てる側。引数は `<行>[:<打つ名前>]` で、名前を渡さなければ空の箱 = 押下と一緒に閉じ、渡せば箱は残る。打つ名前はデリゲートが行を戻す時と同じ口(`GraphRowDelegate.takeNamingFocus`)から入るので、**絵の中の箱も同じものを持っている**。報告行 `name_drop box= row= typed=`、`must_say` は `box=false` / `box=true`。行 0 は WIP なので**行は 1 以上**を渡す)
 - `op-exit`(止まった操作の出口カード。`--preset rebase-conflict` / `rebase-staged` / `rebase-empty` / `cherry-pick-conflict` / `conflict` で全状態が撮れる)
 - `op-exit-go`(引数は `--skip` 等のフラグ。その行の長押しを完走させる)
+- `conflict-sides`(引数は `conflicts:<パス>`。conflict の diff で**行頭の帯がどちら側を名乗ったか**を数える。**`--preset conflict-typed` が本番** — マーカーを消して 1 行に書き直した木で、そこでは両側の行が「消えた行」に変わる(残った行だけを読む実装は帯を 1 本も引けない = 2026-08-22 ユーザー報告)。報告行 `conflict_sides combined= told= both= ours= theirs=` の **`must_say` は `combined=true told=true both=true`**。**`told=` だけでは通らない** — あれは色が 2 つ揃ったかで、行が実際にその色を着たかは `both=` しか言わない。**帯は数 px なので写真で数えない**。`--preset conflict` を渡せばマーカーの在る側も同じ 1 本で読める)
 - `take-side-ours`
 - `take-side-theirs`(引数はパス。conflict 行のメニューから片側を採る)
 - `open-mergetool`(引数はパス。同じメニューから外部ツールへ渡し、`merge_tool <名前>` を報告する。**待ちの表示を撮るには、閉じないツールを設定したリポジトリが要る** — demo repo の `.git/config` に `merge.guitool = <名前>` + `[mergetool "<名前>"] cmd = sleep 30` / `trustExitCode = true` を書いて `--repo` で渡す。未設定なら行が `Choose merge editor…` になり何も起動しない)
 - `merge-branch`
+- `merge-stops`(引数はブランチ名。**`--preset clashing` が要る** — 他の conflict preset は最初から止まった状態で建つので、押した merge が何を答えるかは撮れない。同じ 1 押しの**もう 1 つの着地** = コミットが 1 つも増えない側で、選択は先端でなく **WIP 行**へ行き、**エラー帯もコマンドログの持ち上げも出ない**(規約 §進行中の操作から出る。2026-08-22 ユーザー報告)。報告行 `merge_stopped wip= conflicts= error= log= op= files=` の **`must_say` は `wip=true conflicts=true error=false log=false`** — 後ろの 2 つが「正常な conflict を失敗として出さない」側で、**写真では答えられない**(帯もログも出ていない絵は、出ていない絵と同じ)。`op=` / `files=` は絵に写る側の相乗り)
 - `rebase-onto`(引数はブランチ名。merge は下の `tip_landed` を読む)
 - `revert-commit`(引数は**完全な oid** か **`row:<n>`**、省略で HEAD。**その行へスクロールして選んでから**メニューを開いて撃つ = 人がする所作そのもの。下の `tip_landed` を読む。**視界の側は背の高い履歴でしか試験にならない** — ペインに収まる木では最初から `onscreen=true` なので、`demo-repo co-authors --at <dir>` の木に 40 件ほどコミットを積んで `--repo` で渡し、深い行(`row:44` 等)を撃つ。**コンテナへ渡す木は `git config commit.gpgsign false` を先に撃つ**(co-authors の preset は署名鍵を Windows の絶対パスで指しており、`/work` からは読めず `git revert` が exit 128 で落ちる)。**失敗した run の木は捨てるか `reset --hard` する** — 止まった revert が staged を残し、次の run が `your local changes would be overwritten` で落ちる)
 - `integrate-menu`(引数はブランチ名。ref メニューを立てたまま止める)

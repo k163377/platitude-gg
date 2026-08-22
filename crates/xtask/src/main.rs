@@ -61,7 +61,10 @@ commands:
         basic     branches + remote (ahead) + tags + stash + dirty WIP
         dirty     every WIP bucket: staged, unstaged, untracked, renamed
         eol       all four line-ending cases, in a directory of LF files
+        clashing  two branches that will not merge cleanly, unmerged yet
         conflict  a merge stopped on conflicts (MERGE_HEAD present)
+        conflict-typed   the same, with the file typed over: no markers
+                  left in the tree, still unmerged in the index
         rebase-conflict  a rebase stopped on conflicts, 1 of 2 steps
         rebase-staged    the same rebase, conflict resolved and staged
         rebase-empty     a rebase stopped on a commit that came out empty

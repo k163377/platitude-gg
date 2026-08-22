@@ -65,6 +65,7 @@ Item {
         page.wipShown = true
         page.pendingHeadSelect = false
         page.pendingHeadAsked = false
+        page.pendingWipSelect = false
         page.selectedOid = ""
         page.selectedStashRef = ""
         page.closeDiff()
@@ -730,13 +731,19 @@ Item {
             wipPane.setAmendChecked(false)
             page.amending = false
         }
+        // git stopped part-way and left the operation standing, so there is no commit at the tip to land on and the
+        // answer to the press is the working tree: the conflicted rows, and the way out under them (デザイン規約
+        // §進行中の操作から出る). Armed rather than done on the spot, for the reason the head landing below is: the
+        // status that will carry those rows has not arrived yet (2026-08-22 ユーザー要望).
+        if (repoTab.lastWriteStopped)
+            page.pendingWipSelect = true
         // These three answer with a commit at the tip — the undo, the copy, the merge — and that commit is what was
         // asked for here, not the row or the ref that was clicked. The selection goes to it and the viewport follows:
         // what was clicked can be anywhere in the history, while the answer is always at the top.
         //
         // A merge of something the branch already holds lands there too, and rightly: git says "Already up to date",
         // and the tip is exactly where that merge would have put anyone.
-        if (repoTab.lastWriteOp === "revert" || repoTab.lastWriteOp === "cherry-pick"
+        else if (repoTab.lastWriteOp === "revert" || repoTab.lastWriteOp === "cherry-pick"
                 || repoTab.lastWriteOp === "merge") {
             page.pendingHeadSelect = true
             page.pendingHeadAsked = true
@@ -1148,6 +1155,26 @@ Item {
             graphPane.showRowSoon(row)
     }
 
+    // An operation stopped part-way and this page owes it a landing on the working tree, where the conflicts and the
+    // way out are. Held for the same reason `pendingHeadSelect` is: git has already written the markers by the time it
+    // answers, but the status carrying those rows arrives afterwards, and the row does not exist until it does. Always
+    // asked for — a stop only ever follows a press — so the viewport goes along.
+    property bool pendingWipSelect: false
+    function tryPendingWipSelect() {
+        if (!page.pendingWipSelect)
+            return
+        // Row 0 is where the working tree stands, and its all-zero id is the graph saying the row is there at all: the
+        // walk prepends it only once it knows the tree is dirty, and until then row 0 is still the commit that was on
+        // top. Landing on that one would take the press to the wrong place entirely.
+        const oidHex = graphModel.oidAt(0)
+        if (oidHex === "" || /[^0]/.test(oidHex))
+            return
+        page.pendingWipSelect = false
+        graphPane.setCurrentRow(0)
+        page.showWip()
+        graphPane.showRowSoon(0)
+    }
+
     // The selected commit is gone from the graph and this page did not rewrite it: an amend or a rebase run in a
     // terminal replaced it while the poll was watching. Whatever now stands where it stood is the closest thing to what
     // was being read; failing that, fall back to the branch's own commit, which is never nothing.
@@ -1183,6 +1210,7 @@ Item {
         page.rewordRow = -1
         page.pendingHeadSelect = false
         page.pendingHeadAsked = false
+        page.pendingWipSelect = false
         // Clicking anywhere is the way out of the name box and of a standing row question: both are offers, not work in
         // progress.
         graphPane.stopNaming()
@@ -1242,6 +1270,8 @@ Item {
                 if (!resetHappened)
                     graphPane.shiftRows(page.anchorShift())
                 page.rememberAnchor()
+                // A stopped operation lands on the working tree's own row, which this pass is what puts there.
+                page.tryPendingWipSelect()
                 if (page.pendingHeadSelect) {
                     page.tryPendingHeadSelect()
                 } else if (page.selectedOid !== "") {

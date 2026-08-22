@@ -115,6 +115,7 @@ Item {
                 "branch-at-tag", "dbl-local", "dbl-remote", "move-branch",
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
+                "merge-stops",
                 "rebase-onto", "revert-commit", "op-exit-go", "stage-hunk",
                 "stage-line", "keep-place", "discard-hunk-go", "line-back", "diff-follow",
                 "line-run",
@@ -132,7 +133,10 @@ Item {
                 "publish-go", "publish-new-go", "amend-reset-author",
                 "eol-commit", "eol-hover", "commit-face",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
-                "diff-file", "line-tools", "hunk-tools",
+                "diff-file", "conflict-sides", "line-tools", "hunk-tools",
+                // The write barrier is behind this one, not in front of it: the landing is on the working tree's own
+                // row, which the graph pass after the write is what puts there.
+                "merge-stops",
                 "code-send", "line-back", "diff-follow", "line-run",
                 "stage-all", "unstage-all",
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
@@ -405,7 +409,10 @@ Item {
         // is the one answer they share — "diff-file" alone reads the model instead of a row, and the pictures and
         // binary files it also opens have no rows to find.
         function ready() {
-            if (AppBackend.autoAct === "diff-file")
+            // "diff-file" alone reads the model instead of a row, and "conflict-sides" reads every row there is — the
+            // one it is about (a side's own line, once it has been typed over) is a removal, which is not a changed
+            // line of the first hunk.
+            if (AppBackend.autoAct === "diff-file" || AppBackend.autoAct === "conflict-sides")
                 return diffPane.diffSettled()
             return diffPane.firstChangedLine(0) >= 0
         }
@@ -435,6 +442,13 @@ Item {
                                   + " text=" + Words.lineEndings(
                                       d.endingKind, d.endingFrom, d.endingTo,
                                   d.endingLines, d.endingScope, d.endingExt))
+                driver.complete()
+                return
+            }
+            // Which rows the two sides are named on. The bands themselves are in the picture, but "how many rows
+            // should have carried one" is not — and a resolved conflict is exactly where none of them did.
+            if (act === "conflict-sides") {
+                AppBackend.report("conflict_sides " + diffPane.sideTally())
                 driver.complete()
                 return
             }
@@ -1805,6 +1819,27 @@ Item {
                 + " head=" + branchesModel.headOid.substring(0, 8)
                 + " selected=" + page.selectedOid.substring(0, 8)
                 + " row=" + row)
+            driver.complete()
+        }
+    }
+    // Where a merge that stopped on conflicts left the reader. The other half of `tipLandedTimer`: there is no commit
+    // at the tip to land on, and what the press is answered with is the working tree — so this waits for the rows the
+    // stop wrote to be on screen, and says in the same breath that nothing called it a failure.
+    Timer {
+        id: mergeStoppedTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (repoTab.busyCount !== 0 || !page.wipShown || workTree.conflictCount === 0)
+                return
+            mergeStoppedTimer.stop()
+            AppBackend.report(
+                "merge_stopped wip=" + page.wipShown
+                + " conflicts=" + (workTree.conflictCount > 0)
+                + " error=" + (repoTab.lastError !== "")
+                + " log=" + page.commandsOpen
+                + " op=" + workTree.opText
+                + " files=" + workTree.conflictCount)
             driver.complete()
         }
     }
@@ -3332,7 +3367,7 @@ Item {
                 else
                     page.dropCommit(commitMenuState.menuOid)
             }
-        } else if (act === "merge-branch" || act === "rebase-onto"
+        } else if (act === "merge-branch" || act === "merge-stops" || act === "rebase-onto"
                    || act === "revert-commit" || act === "integrate-menu") {
             // Through the menus a right-click opens, so the rows' own gating decides whether anything runs.
             if (act === "revert-commit") {
@@ -3347,8 +3382,13 @@ Item {
             } else {
                 page.openRefMenu("branch", arg, arg,
                                  branchesModel.oidOfName(arg))
-                if (act === "merge-branch") {
-                    tipLandedTimer.start()
+                if (act === "merge-branch" || act === "merge-stops") {
+                    // Two landings, one press: a merge that goes through answers at the tip, and one that stops
+                    // answers in the working tree (規約 §履歴を合流させる / §進行中の操作から出る).
+                    if (act === "merge-stops")
+                        mergeStoppedTimer.start()
+                    else
+                        tipLandedTimer.start()
                     repoTab.merge(arg, false, false, "")
                 } else if (act === "rebase-onto") {
                     repoTab.rebase(arg, "", true)
@@ -3390,7 +3430,7 @@ Item {
             eolHoverTimer.start()
         } else if (act === "stage-hunk" || act === "stage-line"
                    || act === "discard-hunk" || act === "discard-hunk-go"
-                   || act === "diff-file" || act === "line-tools"
+                   || act === "diff-file" || act === "conflict-sides" || act === "line-tools"
                    || act === "hunk-tools" || act === "keep-place"
                    || act === "code-send" || act === "line-back"
                    || act === "diff-follow" || act === "line-run") {

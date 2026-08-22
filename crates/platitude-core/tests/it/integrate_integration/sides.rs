@@ -80,7 +80,7 @@ async fn sides_names_each_side_by_what_it_actually_is() {
     let repo = conflicting_branches();
     integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
         .await
-        .expect_err("conflict");
+        .expect("conflict");
     let s = conflict::sides(&exec, &repo.path, InProgress::Merge, &cancel)
         .await
         .expect("sides");

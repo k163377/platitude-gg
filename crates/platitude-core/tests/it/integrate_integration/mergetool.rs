@@ -13,7 +13,7 @@ async fn stopped_merge() -> TestRepo {
     let (exec, cancel) = env();
     integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
         .await
-        .expect_err("conflict");
+        .expect("conflict");
     repo
 }
 

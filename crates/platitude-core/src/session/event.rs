@@ -223,6 +223,15 @@ pub enum SessionEvent {
     WriteStarted {
         op: &'static str,
     },
+    /// A write did what it was asked and git stopped part-way through it,
+    /// leaving the operation standing for someone to finish. Not a
+    /// failure: the [`WriteFinished`](SessionEvent::WriteFinished) that
+    /// follows carries no error, and this says the one thing that answer
+    /// cannot — that the screen should go to the conflicts rather than to
+    /// a commit that was never made.
+    WriteStopped {
+        op: &'static str,
+    },
     /// A write operation's Git command ended. `error` carries Git's own
     /// message. The queue can still be settling its follow-up snapshots and
     /// graph, so this is deliberately not a queue-idle boundary.

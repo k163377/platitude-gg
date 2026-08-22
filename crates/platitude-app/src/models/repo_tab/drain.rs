@@ -151,10 +151,16 @@ impl RepoTab {
                         self.merge_tools_loading = false;
                     }
                 }
+                // Arrives between this write's start and its end, so the
+                // flag is already standing when the answer below is read.
+                TabMsg::WriteStopped => self.last_write_stopped = true,
                 TabMsg::WriteState { op, running, error } => {
                     if running {
                         self.busy_count += 1;
                         self.busy_op = op;
+                        // Whatever the last write left standing, this one
+                        // has not stopped yet.
+                        self.last_write_stopped = false;
                     } else {
                         self.busy_count = (self.busy_count - 1).max(0);
                         if self.busy_count == 0 {

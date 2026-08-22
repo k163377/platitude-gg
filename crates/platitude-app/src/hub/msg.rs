@@ -39,6 +39,11 @@ pub enum TabMsg {
     OpError {
         message: String,
     },
+    /// git stopped part-way through the write in flight and left the
+    /// operation standing. Arrives before the `WriteState` that ends that
+    /// write, so the answer the page reads already knows it — and which
+    /// write it was is that answer's own `op`, not repeated here.
+    WriteStopped,
     /// A write command started / ended. A failed write also arrives as an
     /// `OpError`, so the existing error surface needs no special case;
     /// `error` is here as well so an editor can tell whether the write it

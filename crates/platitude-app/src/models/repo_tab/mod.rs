@@ -163,6 +163,11 @@ pub struct RepoTab {
     /// only carries parameterless ones.
     last_write_op: String,
     last_write_error: String,
+    /// Whether git stopped part-way through that write and left the
+    /// operation standing. Not an error and not a landing: read from the
+    /// same answer, because where the screen goes next differs for all
+    /// three.
+    last_write_stopped: bool,
     write_seq: i32,
     /// A branch move that would leave commits unreachable, waiting to be
     /// asked about. Nothing has happened yet.

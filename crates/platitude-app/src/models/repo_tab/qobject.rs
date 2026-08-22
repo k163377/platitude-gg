@@ -119,6 +119,11 @@ impl RepoTab {
         Member = last_write_error,
         Notify = changed
     );
+    qproperty!(
+        "lastWriteStopped",
+        Member = last_write_stopped,
+        Notify = changed
+    );
     qproperty!("writeSeq", Member = write_seq, Notify = changed);
     qproperty!("moveAskLocal", Member = move_ask_local, Notify = changed);
     qproperty!("moveAskStart", Member = move_ask_start, Notify = changed);

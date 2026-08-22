@@ -4,6 +4,7 @@ use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
 
+use super::opstate;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
@@ -19,14 +20,38 @@ pub struct MergeOptions {
     pub message: Option<String>,
 }
 
+/// What a merge did.
+///
+/// Reading the two apart is the whole point: a merge that stops on a
+/// conflict is where merging a branch that moved on normally ends up, and
+/// calling that a failure puts a red line over an ordinary afternoon
+/// (2026-08-22 ユーザー報告).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeOutcome {
+    /// git took the merge to the end: a merge commit, a fast-forward, or
+    /// a branch that was already in.
+    Done,
+    /// git stopped and left the merge standing — `MERGE_HEAD`, the
+    /// markers in the tree, the conflicted rows. Nothing failed; the way
+    /// on is the exit card (デザイン規約 §進行中の操作から出る).
+    Stopped,
+}
+
 /// `git merge <rev>`.
+///
+/// **The exit code cannot tell these apart on its own.** `git merge`
+/// spends 1 on both a conflict and a name it cannot merge, keeps 128 for
+/// a `--ff-only` it must refuse and 2 for a tree whose changes would be
+/// overwritten (実測 2.55). So the answer is asked of the repository
+/// instead: a merge left standing is a stop, and anything else that
+/// exited non-zero is the failure it looks like.
 pub async fn merge(
     executor: &GitExecutor,
     workdir: &Path,
     rev: &str,
     options: &MergeOptions,
     cancel: &CancellationToken,
-) -> Result<(), GitError> {
+) -> Result<MergeOutcome, GitError> {
     let mut cmd = GitCommand::new().cwd(workdir).args(["merge", "--no-edit"]);
     if options.no_ff {
         cmd = cmd.arg("--no-ff");
@@ -40,5 +65,43 @@ pub async fn merge(
     if let Some(message) = &options.message {
         cmd = cmd.args(["-m", message]);
     }
-    executor.run(cmd.args(["--", rev]), cancel).await.map(drop)
+    // Exit 1 is this command answering as often as failing, so the log
+    // keeps the row without raising itself over it; whether the operation
+    // failed is settled below and reported by the write's own answer
+    // (デザイン規約 §git が言ったことを読む場所).
+    let cmd = cmd.args(["--", rev]).answers_by_code(1);
+    match executor.run(cmd, cancel).await {
+        Ok(_) => Ok(MergeOutcome::Done),
+        Err(error) if stopped_on_a_conflict(executor, workdir, &error, cancel).await => {
+            Ok(MergeOutcome::Stopped)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// Whether a merge that exited non-zero left itself standing to be
+/// finished, rather than refusing before it began.
+///
+/// `--squash` is the one stop this does not see: it writes `SQUASH_MSG`
+/// and no `MERGE_HEAD` (実測 2.55), so git leaves no operation to
+/// continue and its conflicts arrive as the failure they read as. Nothing
+/// in the application asks for one — the option is here for completeness
+/// of the command, not for a screen.
+///
+/// A read that fails answers "no", so the merge's own words are what
+/// reaches the screen: this is a question *about* that failure, and
+/// letting it replace the answer would report a `rev-parse` where git
+/// said why it would not merge.
+async fn stopped_on_a_conflict(
+    executor: &GitExecutor,
+    workdir: &Path,
+    error: &GitError,
+    cancel: &CancellationToken,
+) -> bool {
+    if !matches!(error, GitError::Failed { .. }) {
+        return false;
+    }
+    opstate::detect(executor, workdir, cancel)
+        .await
+        .is_ok_and(|state| state.merging)
 }

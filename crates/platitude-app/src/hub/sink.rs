@@ -283,6 +283,7 @@ impl SessionSink for BridgeSink {
                     announce: op == AUTO_FETCH_OP,
                 });
             }
+            SessionEvent::WriteStopped { .. } => self.feeds.tab.push(TabMsg::WriteStopped),
             SessionEvent::WriteStarted { op } => self.feeds.tab.push(TabMsg::WriteState {
                 op: op.to_string(),
                 running: true,

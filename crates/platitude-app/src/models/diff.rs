@@ -217,6 +217,19 @@ impl DiffModel {
         self.begin_request(path, target);
     }
 
+    /// The marker columns of one row, for the smoke hook that counts how
+    /// many rows the two sides are actually named on: which side a line
+    /// came from is drawn as a band a few pixels wide, and a picture
+    /// cannot be asked whether every band that should be there is.
+    #[qslot]
+    fn markers_at(&self, row: i32) -> String {
+        usize::try_from(row)
+            .ok()
+            .and_then(|i| self.lines.get(i))
+            .map(|l| l.markers.clone())
+            .unwrap_or_default()
+    }
+
     #[qslot]
     fn clear(&mut self) {
         self.current_key = String::new();
