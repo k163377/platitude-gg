@@ -275,6 +275,8 @@
 - タブは掴んで並べ替える(規約 §タブの所作)。移るのは `onPressed`・閉じるのは `onClicked` で、どちらの意味も `TabStrip.pressTab` の 1 か所が決めるのは変わらない(中クリックのフックもそこを通る)。閾値は `MouseArea.drag.threshold` を読むだけ(`drag.target` は使わない — プラットフォーム既定の startDragDistance を借りる口として使う)
 - 運んでいるタブを描く場所は `Translate`(`TabItemDelegate.transform`)で、`x` を書かない — ビューはデリゲートの `x` をレイアウトのたび書き戻すので必ず喧嘩になる。`heldX - x` の差分で当てれば、入れ替えで席が動いた瞬間もタブは手の下に残る(バインディングが同じフレームで追う)。掴んだのがどのタブかは `heldId`(index ではない — 順序は運んでいる最中に変わる)
 - 席の入れ替えは `TabsModel::move_tab`(`beginMoveRows` / `endMoveRows`)で、remove + insert にしない — デリゲートが作り直され、運んでいる当のアイテムが手の下から消える。qtbridge の `QListModelBase` に move は無いので `models/notify.rs` の `impl_move_notified!`(unsafe を置くのはこのファイルだけ、の続き)。Qt の `destinationChild` は「まだ両方在る状態で前に挿す行」なので、右へ動く時だけ `to + 1`
+- PR バッジの名簿は引数で渡す(`encode_labels(labels, pr)` — 実物の `fake_pr_set()` は呼び出し側の境界で 1 回)— encode の unit test が process env を読まない(開発シェルに `PG_FAKE_PR` が残っていても緑)。nav 側の読み(`nav/field.rs` / `nav/qobject.rs`)は境界そのものなので直読みのまま
+- memprobe の記帳台は値(`memprobe::Registry` — プロセス実体は free 関数越しの `REGISTRY`)— テストは自前の Registry に記帳する。process-global の台に書くテストは並行テストの note / forget と混線する
 - 入れ替えの判定は「進む側の縁 対 隣の中央」(`TabStrip.stepOrder`)— 中央同士で比べると幅の違うタブで端の席に入れない(運べる先は `contentWidth - width` で止まるため、隣より広いタブの中央は最後のタブの中央に届かない)。1 報告につき 1 歩ずつ進め、間に `forceLayout()` を挟む(次の比較は入れ替え後の席に対して行う)
 - **入れ替えに `displaced` のアニメーションを付けない** — 上の判定がアイテムの今の `x` を読むので、滑っている最中の中間位置と比べることになり、入れ替えた直後に逆向きの条件が立って往復する(規約 §タブの所作「その場で入れ替わる」の実装上の理由)
 - 運ぶ経路は `TabStrip.carryTo` の 1 本 — 手は `carryTab` が scene 座標を contentItem 座標へ写して呼び(タブは自分の席から離れて描かれているので、自分の座標では手の居場所を言えない)、動詞は `dragTabTo` / `holdTabAt` が同じ関数を呼ぶ
