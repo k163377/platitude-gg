@@ -129,6 +129,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/GraphLaneBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphLaneCell.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphLanePan.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/GraphList.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphRowChips.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphRowDelegate.qml", "qt/qml/platitude");

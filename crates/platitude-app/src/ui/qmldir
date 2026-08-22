@@ -65,6 +65,7 @@ GraphHeadPin 1.0 GraphHeadPin.qml
 GraphLaneBar 1.0 GraphLaneBar.qml
 GraphLaneCell 1.0 GraphLaneCell.qml
 GraphLanePan 1.0 GraphLanePan.qml
+GraphList 1.0 GraphList.qml
 GraphPane 1.0 GraphPane.qml
 GraphRowChips 1.0 GraphRowChips.qml
 GraphRowDelegate 1.0 GraphRowDelegate.qml

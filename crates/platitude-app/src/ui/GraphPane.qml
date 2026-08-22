@@ -230,7 +230,7 @@ Rectangle {
         }
         onLanded: oidHex => graphArea.findLanded(oidHex)
     }
-    AppListView {
+    GraphList {
         id: graphList
         anchors.left: parent.left
         anchors.right: parent.right
@@ -244,74 +244,16 @@ Rectangle {
         Behavior on anchors.topMargin {
             NumberAnimation { duration: 200 }
         }
-        model: graphArea.graphModel
-        // Nothing but this pane's own functions move the view — the chase is off in `AppListView`, and the arrow keys
-        // move it themselves by as little as will do (`revealStep`).
-        //
-        // Qt's own key navigation moves `currentIndex` and tells nobody: the highlight would walk off screen — the
-        // chase above is off — while the panes on the right went on showing the commit it set off from. The arrows are
-        // answered below instead, where the page hears about where they landed (規約 §矢印で履歴を辿る).
-        keyNavigationEnabled: false
+        graphModel: graphArea.graphModel
+        workTree: graphArea.workTree
+        columns: metrics
+        findOn: findBar.findOn
+        chipListAnchor: graphArea.chipListAnchor
+        rowCardOid: graphArea.rowCardOid
+        // The arrows are answered here rather than in the list, because it is this pane that walks the history with
+        // them and the page that hears where they landed (規約 §矢印で履歴を辿る).
         Keys.onUpPressed: event => event.accepted = graphArea.stepRow(-1)
         Keys.onDownPressed: event => event.accepted = graphArea.stepRow(1)
-        /// Where the keyboard goes when a press lands in this pane. Every way in comes through here — a row click, a
-        /// press on the lanes, the find card closing, the headless hook — so there is one answer to "what does a press
-        /// do to the keyboard".
-        function takeKeyboard() {
-            graphList.forceActiveFocus()
-        }
-        /// And gives it up when this pane is taken off the screen. Qt leaves active focus on an item it has just made
-        /// invisible, and the keys go on arriving there (qmltestrunner で実測 2026-08-11: a StackLayout child swapped away
-        /// reports `visible=false activeFocus=true`, and the next Down still fires; `focus = false` is what lets go).
-        /// Opening a diff over the graph did exactly that: the arrows walked the selection behind the diff, and moving
-        /// the selection closes the diff — so the screen was pulled back to the graph (2026-08-11 ユーザー報告).
-        onVisibleChanged: {
-            if (!graphList.visible)
-                graphList.focus = false
-        }
-        flickDeceleration: 8000
-        maximumFlickVelocity: 9000
-        // The graph is the one pane with no header band; this sliver of margin drops the first row so its bottom line
-        // meets the neighbouring bands' bottom edge when scrolled to the top.
-        topMargin: Theme.headerHeight - Theme.graphRowHeight
-        // A sliver of run-out at the end: without it the oldest row sits flush on the pane edge and reads as clipped
-        // rather than as the end of what is loaded. Just enough to see the break.
-        bottomMargin: Theme.spaceSm
-        // Bridge into the delegate (GraphRowDelegate reads its column geometry off ListView.view).
-        property real labelWidth: graphArea.labelW
-        property real graphColWidth: graphArea.graphColW
-        property real graphFullWidth: graphArea.graphFullW
-        property real graphXOffset: graphArea.graphX
-        property int wipAdded: graphArea.workTree.wipAdded
-        property int wipModified: graphArea.workTree.wipModified
-        property int wipDeleted: graphArea.workTree.wipDeleted
-        property int wipRenamed: graphArea.workTree.wipRenamed
-        property int wipCopied: graphArea.workTree.wipCopied
-        property int wipConflicted: graphArea.workTree.conflictCount
-        // Which row's chip column is a name box, and what has been typed into it. Held here rather than in the
-        // delegate: the delegate is recycled the moment its row scrolls off.
-        property string namingOid: ""
-        property string namingText: ""
-        // Which row the standing question is about, and in which tone — held here for the same recycling reason. The
-        // words are on the bar; the row only marks itself.
-        property string askOid: ""
-        property bool askDanger: false
-        // Mirrored for the delegates, which can only see the view: rows dim while a search is on.
-        readonly property bool findOn: findBar.findOn
-        // Which row the working tree stands on, mirrored for the delegates the same way: that row writes its message in
-        // the branch's blue, wherever it is read (規約 §グラフの中で HEAD を見失わない).
-        readonly property int headRow: graphArea.graphModel.headRow
-        signal rowSelected(string oidHex)
-        signal rowMenuRequested(string oidHex)
-        signal chipMenuRequested(string oidHex, string record)
-        signal rowSwitchRequested(string oidHex, string record)
-        signal chipExpandRequested(var records, var anchor)
-        signal chipCollapseRequested()
-        signal rowHoverRequested(var row, bool inside)
-        readonly property var chipListAnchor: graphArea.chipListAnchor
-        readonly property string rowCardOid: graphArea.rowCardOid
-        signal namingSubmitted(string oidHex, string name)
-        signal namingCancelled()
         onRowMenuRequested: oidHex => graphArea.rowMenuOpenRequested(oidHex)
         onChipMenuRequested: (oidHex, record) => graphArea.chipMenuOpenRequested(oidHex, record)
         onRowSelected: oidHex => graphArea.rowActivated(oidHex)
@@ -326,52 +268,9 @@ Rectangle {
                 graphArea.createBranchRequested(oidHex, name)
         }
         onNamingCancelled: graphArea.stopNaming()
-        delegate: GraphRowDelegate {}
-        footer: GraphTailFooter {
-            width: graphList.width
-            graphModel: graphArea.graphModel
-            labelWidth: graphList.labelWidth
-            graphColWidth: graphList.graphColWidth
-            graphXOffset: graphList.graphXOffset
-            graphFullWidth: graphList.graphFullWidth
-        }
-        // Manual contentY math must respect originY: after positionViewAtIndex jumps, the ListView shifts its
-        // coordinate origin as item positions are fixed up, so [0, contentHeight-height] no longer matches the real
-        // scroll range (top rows become unreachable, the bottom overshoots the truncation footer).
-        function clampY(y) {
-            // topMargin lives above the content origin — forgetting it makes the top gap unreachable by wheel after any
-            // scroll.
-            const minY = graphList.originY - graphList.topMargin
-            const maxY = Math.max(minY, graphList.originY + graphList.contentHeight
-                                        - graphList.height + graphList.bottomMargin)
-            return Math.max(minY, Math.min(y, maxY))
-        }
-        /// Topmost row with any of itself on screen; 0 while the view is in its own top margin, where there is no row
-        /// to be over.
-        function firstVisibleRow() {
-            const row = graphList.indexAt(0, graphList.contentY + 1)
-            return row >= 0 ? row : 0
-        }
-        /// Whether all of `row` is on screen. A row below the last one drawn reports no index at all, which is what a
-        /// list shorter than its viewport answers for its whole lower half — there, nothing is out of sight.
-        function rowOnScreen(row) {
-            const bottom = graphList.indexAt(0, graphList.contentY + graphList.height - Theme.graphRowHeight)
-            return row >= graphList.firstVisibleRow() && (bottom < 0 || row <= bottom)
-        }
-        // Mouse wheels scroll a fixed number of rows per notch; touchpads keep native Flickable panning.
-        WheelHandler {
-            acceptedDevices: PointerDevice.Mouse
-            onWheel: event => {
-                // Wheel input exits middle-click autoscroll (Chrome-like behavior).
-                graphArea.autoScrolling = false
-                graphList.cancelFlick()
-                if (event.angleDelta.x !== 0)
-                    graphArea.graphX = Math.max(0,
-                        Math.min(graphArea.graphX - event.angleDelta.x / 2, graphArea.graphXMax))
-                const step = (event.angleDelta.y / 120) * Metrics.wheelRows * Theme.graphRowHeight
-                graphList.contentY = graphList.clampY(graphList.contentY - step)
-            }
-        }
+        onWheelTaken: graphArea.autoScrolling = false
+        onWheelPanned: delta => graphArea.graphX = Math.max(0,
+            Math.min(graphArea.graphX - delta / 2, graphArea.graphXMax))
     }
     /// Whether a middle-click autoscroll is under way, and whether it carries the lanes sideways as well — read by the
     /// wheel, which ends the gesture, and by the automation hook.
