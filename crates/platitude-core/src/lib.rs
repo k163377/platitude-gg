@@ -39,6 +39,8 @@ pub mod settings;
 pub mod stage;
 pub mod stash;
 pub mod status;
+#[cfg(test)]
+mod status_tests;
 pub mod tag;
 pub mod trailers;
 pub mod version;
