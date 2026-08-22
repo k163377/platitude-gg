@@ -118,6 +118,12 @@ Rectangle {
     /// The command the pill answers with, and whether the far side could be read at all — both move under a publish
     /// question as the remote answers, because what would run depends on what is over there.
     property alias askCode: askBar.code
+    /// The pill's ordinary-voice word, for the questions git has no one command for (`Move` / `Open`).
+    property alias askAccept: askBar.accept
+    /// Automation: the bar is all the way down, words and pill at their own size (`AskBar.settled`) — and all the way
+    /// back up once it has been answered (`AskBar.shut`).
+    readonly property alias askSettled: askBar.settled
+    readonly property alias askShut: askBar.shut
     property alias askAlert: askBar.alert
     property alias askDetail: askBar.detail
     property alias askTip: askBar.tip

@@ -94,8 +94,10 @@ Rectangle {
     // own box asks for it.
     onOpenChanged: {
         if (bar.open) {
-            if (bar.form === null)
+            if (bar.form === null) {
+                acceptPill.tookTheOpening = true
                 Qt.callLater(acceptPill.forceActiveFocus)
+            }
         } else {
             bar.blankHold()
         }
@@ -104,7 +106,15 @@ Rectangle {
     // Sized by its own words, opened and closed with the standard 200ms.
     clip: true
     color: Theme.bgElevated
-    implicitHeight: bar.open ? askRow.implicitHeight + 2 * Theme.spaceMd : 0
+    /// The height the words ask for, before the 200ms takes it there. Kept apart from the animated one so a reader
+    /// (automation) can tell a bar that is all the way down from one still on its way — `label` is set a whole opening
+    /// ahead of any of it being on screen, so a run that photographed on the label caught a red line and no words.
+    readonly property real openHeight: bar.open ? askRow.implicitHeight + 2 * Theme.spaceMd : 0
+    readonly property bool settled: bar.openHeight > 0 && bar.implicitHeight === bar.openHeight
+    /// And the same edge at the other end: answered, and all the way back up. A run that photographed on the answer
+    /// caught the bar half-retracted with its words cut off by the clip.
+    readonly property bool shut: !bar.open && bar.implicitHeight === 0
+    implicitHeight: bar.openHeight
     Behavior on implicitHeight {
         NumberAnimation { duration: 200 }
     }
@@ -203,7 +213,17 @@ Rectangle {
             /// Whether the focus this pill holds arrived under a finger. Cleared when the focus leaves, so the next way
             /// in is read on its own terms — and cleared when the bar closes with it, since the focus goes then too.
             property bool tookAPress: false
-            onActiveFocusChanged: if (!acceptPill.activeFocus) acceptPill.tookAPress = false
+            /// And whether the focus it holds is the one the bar handed it as it opened. **Nobody reached for it**,
+            /// so the ring has nothing to report — a question that comes down wearing a blue frame over its own
+            /// warning one is saying "the keyboard is here" to a reader who has not touched the keyboard
+            /// (2026-08-22 ユーザー判断). Cleared the moment the focus leaves, so a tab back onto the pill rings.
+            property bool tookTheOpening: false
+            onActiveFocusChanged: {
+                if (acceptPill.activeFocus)
+                    return
+                acceptPill.tookAPress = false
+                acceptPill.tookTheOpening = false
+            }
             // The pill draws itself rather than being a control, so it has to name itself. The gesture is said here
             // because the words on it no longer carry it.
             Accessible.role: Accessible.Button
@@ -226,7 +246,8 @@ Rectangle {
                 visible: bar.holdProgress > 0
             }
             // Outside the frame: the frame's colour says what answering costs, and focus must not be able to take that
-            // over.
+            // over. **Outside is still over it** — a blue ring around a warning or a danger frame reads as one more
+            // colour on the same control — so the ring only comes up for focus somebody actually moved here.
             //
             // Focus that came from the keyboard, not from a press (`ActionButton` carries the same reading and the
             // reason). **`visualFocus` is not ours to read** — that is a `Control` property and this pill is drawn as a
@@ -241,6 +262,7 @@ Rectangle {
                 border.width: Theme.borderWidth
                 radius: Theme.radiusMd
                 visible: acceptPill.activeFocus && !acceptPill.tookAPress
+                         && !acceptPill.tookTheOpening
             }
             Row {
                 id: acceptRow
