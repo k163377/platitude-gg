@@ -16,6 +16,7 @@
 mod board;
 mod cli;
 mod page;
+mod sweep;
 
 pub(crate) use board::{record, record_dir, shown};
 pub(crate) use cli::run;

@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use super::board;
+use super::{board, sweep};
 
 const USAGE: &str = "\
 cargo xtask shots <command>
@@ -122,7 +122,7 @@ fn prune(args: &[String]) -> Result<(), String> {
     if seats.is_empty() && !every {
         seats.push(board::seat_here());
     }
-    let (gone, page) = board::prune(if every { None } else { Some(&seats) })?;
+    let (gone, page) = sweep::prune(if every { None } else { Some(&seats) })?;
     println!(
         "board: {} (-{gone} run(s) {})",
         board::shown(&page),
