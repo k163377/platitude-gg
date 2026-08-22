@@ -42,6 +42,76 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "cherry-pick-stops" | "revert-stops" | "rebase-stops" => {
             Some("write_stopped wip=true conflicts=true error=false log=false cont=true")
         }
+        // Where a move comes to rest, and whether the carry left an entry
+        // behind. The two landings frame almost alike — a branch is a
+        // branch — so the counts beside it are the whole claim, and the
+        // one that says nothing was stashed is half of the pair.
+        //
+        // **`log=false` is on all three of the move claims.** A move the
+        // screen knew git would refuse used to be sent anyway, and the
+        // refusal raised the command log — a red panel under a press that
+        // had a way out on screen the whole time (2026-08-22 ユーザー判断).
+        // A shut panel and a panel that was never raised are the same
+        // picture, so this is the half only the report can carry.
+        "switch-lands" if arg.starts_with("feature/topic-a") => {
+            Some("switch_landed branch=feature/topic-a stashes=2 wanted=2 conflicts=1 log=false")
+        }
+        "switch-lands" => {
+            Some("switch_landed branch=feature/clash stashes=0 wanted=0 conflicts=0 log=false")
+        }
+        // A bar with no words in it frames like a bar with words: this
+        // one is judged on the pill being held and on the chip being
+        // absent, neither of which a run that photographed the opening
+        // could say.
+        "move-ask" => Some("move_ask hold=true code= branch=main"),
+        // A bar that never came down and a bar that came down empty are
+        // the same picture, and where the move ended is the half the
+        // picture cannot answer at all: the run that answered the
+        // question has to have landed somewhere else, and the run that
+        // only raised it has to have landed nowhere.
+        //
+        // **The shape of the question is the claim.** A stopped
+        // cherry-pick is put down with `--quit` and its tree goes into a
+        // stash, so nothing is destroyed and the pill is an ordinary
+        // click; a stopped rebase has to be aborted (its `--quit`
+        // detaches HEAD and orphans the copies it made), so that one
+        // keeps the hold. The two frame alike — a bar is a bar — and only
+        // the chip and `hold=` tell them apart.
+        // `branch=` is empty on purpose: a rebase runs on a detached
+        // HEAD, so the working tree has no branch to name while it is
+        // standing.
+        "switch-stopped" if arg.starts_with("main") => Some(
+            "switch_stopped code=rebase --abort accept= hold=true bang=false op=rebase branch= log=false",
+        ),
+        "switch-stopped" => Some(
+            "switch_stopped code=stash accept= hold=false bang=false op=cherry-pick branch=main log=false",
+        ),
+        // The same question with one clause fewer: no operation to put
+        // down, the unmerged index the reader's own `--quit` left is the
+        // whole of what is in the way. `op=` empty is the half that says
+        // so — the bar itself frames exactly like the one above it.
+        "switch-conflicted" => Some(
+            "switch_stopped code=stash accept= hold=false bang=false op= branch=main log=false",
+        ),
+        // And the one nothing here can clear: the pill goes to the copy
+        // that has the branch instead of moving onto it, which is what
+        // the `!` after the word says. No chip — git has no one command
+        // for opening a working copy.
+        "switch-held" => {
+            Some("switch_stopped code= accept=Open hold=false bang=true op= branch=main log=false")
+        }
+        // The mark ahead of the row, which says the press raises a
+        // question rather than moving. **Read from the report, not the
+        // picture**: it is 16px in a full window, and the row it stands
+        // on is the same row with it and without it. The argument names
+        // which half of the pair the run is.
+        "switch-mark" if arg.ends_with(":asks") => {
+            Some("switch_mark offered=true asks=true want=asks indent=true")
+        }
+        "switch-mark" => Some("switch_mark offered=true asks=false want=plain indent="),
+        "switch-stopped-go" | "switch-conflicted-go" => Some(
+            "switch_stopped_landed branch=feature/clash op= conflicts=0 stashes=1 wanted=1 log=false",
+        ),
         // The same landing reached through a carry, where the stash the
         // rewrite took out of its own way is still standing. Nothing
         // raises git's words over it any more, so the count is the claim:

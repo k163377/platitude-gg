@@ -6,9 +6,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use super::authorship::{authorship, co_authors};
 use super::basic::{basic, detached, dirty, eol, noremote, stashes};
 use super::conflict::{
-    cherry_pick_conflict, clashing, conflict, conflict_kinds, conflict_ours, conflict_staged,
-    conflict_typed, drop_collides, drop_stops, rebase_clashes, rebase_conflict, rebase_empty,
-    rebase_staged, revert_clashes,
+    cherry_pick_conflict, cherry_pick_quit, clashing, conflict, conflict_kinds, conflict_ours,
+    conflict_staged, conflict_typed, drop_collides, drop_stops, rebase_clashes, rebase_conflict,
+    rebase_empty, rebase_staged, revert_clashes,
 };
 use super::deep::{deep, deep_detached};
 use super::remote::{behind, diverged, unpublished};
@@ -71,6 +71,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "rebase-staged" => rebase_staged(&mut repo)?,
         "rebase-empty" => rebase_empty(&mut repo)?,
         "cherry-pick-conflict" => cherry_pick_conflict(&mut repo)?,
+        "cherry-pick-quit" => cherry_pick_quit(&mut repo)?,
         "conflict-kinds" => conflict_kinds(&mut repo)?,
         "drop-collides" => drop_collides(&mut repo)?,
         "drop-stops" => drop_stops(&mut repo)?,

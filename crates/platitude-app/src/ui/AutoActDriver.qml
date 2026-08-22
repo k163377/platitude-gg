@@ -156,7 +156,11 @@ Item {
                 "nav-add-remote", "push-default", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "chip-menu", "chip-menu-current",
-                "delete-blocked-tip", "switch-blocked-tip", "delete-branch-early",
+                "delete-blocked-tip", "switch-stopped", "switch-lands",
+                "move-ask", "switch-conflicted", "switch-held", "switch-mark",
+                // The write barrier is behind these, not in front of them: the commands that clear the way and the
+                // move they carry only start once the question standing in the graph has been answered.
+                "switch-stopped-go", "switch-conflicted-go", "delete-branch-early",
                 // Deliberately not a write act: what it photographs is the moment before the answer.
                 "delete-gone",
                 "ref-list-card", "row-part",
@@ -1416,18 +1420,123 @@ Item {
             driver.complete()
         }
     }
+    // Where the move came to rest, and what the carry left in the stash list. The branch itself is the edge — the
+    // status pass after the move is what writes it — so a run that never landed waits out the watchdog rather than
+    // photographing the tree it started in.
     Timer {
-        id: switchBlockedTipTimer
+        id: moveAskTimer
         interval: 25
         repeat: true
         onTriggered: {
-            if (!refSwitchItem.ToolTip.visible)
+            if (!graphPane.askSettled)
                 return
-            switchBlockedTipTimer.stop()
-            AppBackend.report(
-            "switch_blocked offered=" + refSwitchItem.offered
-            + " tip=" + refSwitchItem.ToolTip.visible
-            + " reason=" + refSwitchItem.blockedReason)
+            moveAskTimer.stop()
+            // No chip on this one — git has no single word for moving a branch onto a ref, so the pill answers in the
+            // ordinary voice (規約 §git 用語のコード表記). `code=` being empty is part of the claim.
+            AppBackend.report("move_ask hold=" + graphPane.askHold
+                              + " code=" + graphPane.askCode
+                              + " branch=" + workTree.branch)
+            driver.complete()
+        }
+    }
+    Timer {
+        id: switchLandsTimer
+        property string branch: ""
+        property int stashes: -1
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (repoTab.busyCount !== 0 || workTree.branch !== switchLandsTimer.branch)
+                return
+            if (switchLandsTimer.stashes >= 0 && stashesModel.total !== switchLandsTimer.stashes)
+                return
+            switchLandsTimer.stop()
+            // `log=` on all three of these: a move that git refused would raise the command log
+            // (§git が言ったことを読む場所), and a red panel under a press that had a way out on screen is the thing
+            // this whole road exists to stop (2026-08-22 ユーザー判断). A shut panel and a panel that was never
+            // raised are the same picture, which is why it is said rather than shown.
+            AppBackend.report("switch_landed branch=" + workTree.branch
+                              + " stashes=" + stashesModel.total
+                              + " wanted=" + switchLandsTimer.stashes
+                              + " conflicts=" + workTree.conflictCount
+                              + " log=" + page.commandsOpen)
+            driver.complete()
+        }
+    }
+    // The bar that comes down instead of the move — waited on all the way down (`AskBar.settled`), not at the label
+    // that starts it: the 200ms opening is 200ms of red line with no words in it, and that is what the first run of
+    // this verb photographed.
+    Timer {
+        id: switchStoppedTimer
+        property bool go: false
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!graphPane.askSettled)
+                return
+            switchStoppedTimer.stop()
+            AppBackend.report("switch_stopped code=" + graphPane.askCode
+                              + " accept=" + graphPane.askAccept
+                              + " hold=" + graphPane.askHold
+                              + " bang=" + graphPane.askAlert
+                              + " op=" + workTree.opCommand
+                              + " branch=" + workTree.branch
+                              + " log=" + page.commandsOpen)
+            if (!switchStoppedTimer.go) {
+                driver.complete()
+                return
+            }
+            // Whichever gesture this shape of the question takes — a held pill reports no click, and a click pill has
+            // no hold to run to its end. The bar itself says which it is.
+            driver.writeSeqBefore = repoTab.writeSeq
+            if (graphPane.askHold)
+                graphPane.completeHold()
+            else
+                page.answerRowAsk()
+            switchStoppedLandedTimer.start()
+        }
+    }
+    // Where the answer put the reader, and what it left in the stash list. **The write's own answer is not the edge**
+    // — it lands before the rebuild it asks for (core `AfterWrite::Graph`), so a run that read the branch there would
+    // photograph the one it was leaving; and the stash list is read after that again (`switch-lands`), which is why
+    // the count comes from the argument and is waited for.
+    Timer {
+        id: switchStoppedLandedTimer
+        property int stashes: -1
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
+                    || workTree.opCommand !== "" || !graphPane.askShut)
+                return
+            if (switchStoppedLandedTimer.stashes >= 0
+                    && stashesModel.total !== switchStoppedLandedTimer.stashes)
+                return
+            switchStoppedLandedTimer.stop()
+            AppBackend.report("switch_stopped_landed branch=" + workTree.branch
+                              + " op=" + workTree.opCommand
+                              + " conflicts=" + workTree.conflictCount
+                              + " stashes=" + stashesModel.total
+                              + " wanted=" + switchStoppedLandedTimer.stashes
+                              + " log=" + page.commandsOpen)
+            driver.complete()
+        }
+    }
+    Timer {
+        id: switchMarkTimer
+        property string want: ""
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (!refMenu.opened)
+                return
+            switchMarkTimer.stop()
+            // `indent=` is the other half: the mark is drawn inside the padding the whole menu carries for it, so a
+            // menu that forgot to open that column would draw the `!` over its own edge (`AppMenu.holdIndent`).
+            AppBackend.report("switch_mark offered=" + refSwitchItem.offered
+                              + " asks=" + refSwitchItem.asks
+                              + " want=" + switchMarkTimer.want
+                              + " indent=" + (refMenu.holdIndent > 0))
             driver.complete()
         }
     }
@@ -3039,6 +3148,41 @@ Item {
             amendAuthorTimer.start()
         } else if (act === "switch") {
             page.switchTo("branch", arg, arg)
+        } else if (act === "move-ask") {
+            // The other question a move can raise: landing on a remote branch whose local one holds commits of its
+            // own. `move-branch` is the same road past this bar; this one stops on it. Waited on at `AskBar.settled`
+            // for the reason `switch-stopped` is — `dbl-remote` completes 18ms after the question opens and
+            // photographs a marked row under no bar at all (2026-08-22 実測).
+            page.switchToRef("R", arg)
+            moveAskTimer.start()
+        } else if (act === "switch-lands") {
+            // A move photographed where it comes to rest. **`switch` cannot do this** — it ends on the write barrier,
+            // and core answers a write before the rebuild it asks for (`AfterWrite::Graph`), so that verb's picture is
+            // of the branch being left and of the stash count before the carry touched it.
+            //
+            // The argument is `<branch>[:<stashes>]`, and the count is there because **the branch is not the last
+            // thing to arrive**: the stash list is read on its own after the move, so a run that stopped at the branch
+            // photographed a carry whose entry was not in the list yet (2026-08-22 実測 — the row reached the graph
+            // 70ms after the shot).
+            const landing = arg.split(":")
+            switchLandsTimer.branch = landing[0]
+            switchLandsTimer.stashes = landing.length > 1 ? Number(landing[1]) : -1
+            page.switchToRef("L", landing[0])
+            switchLandsTimer.start()
+        } else if (act === "switch-stopped" || act === "switch-stopped-go"
+                   || act === "switch-conflicted" || act === "switch-conflicted-go"
+                   || act === "switch-held") {
+            // The question a move raises when something is in its way, and the gesture that answers it. **One road for
+            // all three shapes** — an operation standing, an unmerged index with none, and a branch another working
+            // copy has out — because the press is the same press; only the bar differs, and the verbs are separate so
+            // each shape can be claimed on its own. Entered by the ref row's own road (`switchToRef`) rather than by
+            // `switchTo`, so the run proves the gate sits where a hand arrives and not only on the last call before
+            // the write. The argument is `<branch>[:<stashes>]`, the count meaning what it does for `switch-lands`.
+            const leave = arg.split(":")
+            switchStoppedTimer.go = act.endsWith("-go")
+            switchStoppedLandedTimer.stashes = leave.length > 1 ? Number(leave[1]) : -1
+            page.switchToRef("L", leave[0])
+            switchStoppedTimer.start()
         } else if (act === "switch-remote") {
             page.switchToRef("R", arg)
         } else if (act === "nav-dbl") {
@@ -3270,12 +3414,14 @@ Item {
                                 branchesModel.oidOfName(blockedOn))
             refDeleteItem.tipForced = true
             blockedTipTimer.start()
-        } else if (act === "switch-blocked-tip") {
-            // The other row that stays and says why: a branch another working copy has out. Same forced tooltip as the
-            // delete row's, on the row above it.
-            page.openRecordMenu("L00000" + arg, branchesModel.oidOfName(arg))
-            refSwitchItem.tipForced = true
-            switchBlockedTipTimer.start()
+        } else if (act === "switch-mark") {
+            // The mark the `switch` row wears when the press ahead of it raises a question rather than moving. The
+            // argument is `<branch>:asks` or `<branch>:plain` — **the row is the same row either way**, and a 16px
+            // mark in a full window is not something the picture answers (verify-ui §目視).
+            const want = arg.split(":")
+            switchMarkTimer.want = want.length > 1 ? want[1] : ""
+            page.openRecordMenu("L00000" + want[0], branchesModel.oidOfName(want[0]))
+            switchMarkTimer.start()
         } else if (act === "menu-highlight") {
             // The keyboard's road to `highlighted` — the only one that can be driven from here.
             page.openRecordMenu("L00000" + (arg === "" ? workTree.branch : arg),
@@ -3897,7 +4043,7 @@ Item {
         } else if (act === "commands-fail" || act === "commands-clear") {
             // A real refusal in git's own words, raising the panel by itself. The clearing verb starts from the same
             // failure (`Main` waits for it, presses Clear, and reads the band).
-            repoTab.checkoutBranch("pg-no-such-branch")
+            repoTab.checkoutBranch("pg-no-such-branch", false)
         } else if (act === "fetch-recover") {
             // A fetch that cannot land leaves a failure standing; `Main` then fires one that can and reads what the
             // success takes down by itself.

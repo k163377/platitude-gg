@@ -78,6 +78,8 @@ commands:
         rebase-staged    the same rebase, conflict resolved and staged
         rebase-empty     a rebase stopped on a commit that came out empty
         cherry-pick-conflict  a cherry-pick stopped on a conflict
+        cherry-pick-quit  the same, let go of with --quit: no operation
+                  standing, the same files still unmerged
         conflict-kinds   four kinds of conflict in one stopped merge
         drop-collides    a drop that replays clean and collides restoring
         drop-stops       a drop that stops part-way, over a dirty tree

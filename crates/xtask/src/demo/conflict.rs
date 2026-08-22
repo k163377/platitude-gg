@@ -266,6 +266,21 @@ pub(super) fn cherry_pick_conflict(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// The same stopped cherry-pick, then let go of with `--quit`.
+///
+/// **What git leaves behind is not a clean tree**: the operation is gone
+/// — no `CHERRY_PICK_HEAD`, no sequencer, so no badge and no exit card —
+/// while every unmerged path stays exactly where it stood, and a move out
+/// of here is refused all over again in git's other wording
+/// (`you need to resolve your current index first`). The one shape in
+/// which the working tree blocks a switch with nothing standing over it
+/// to explain why.
+pub(super) fn cherry_pick_quit(repo: &mut DemoRepo) -> Result<(), String> {
+    cherry_pick_conflict(repo)?;
+    repo.git(&["cherry-pick", "--quit"])?;
+    Ok(())
+}
+
 /// A merge stopped on four different kinds of conflict at once, so the
 /// rows that name what each side did can be read side by side: both
 /// changed it (`UU`), both added it (`AA`), deleted here and changed
