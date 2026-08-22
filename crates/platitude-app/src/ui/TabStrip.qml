@@ -419,19 +419,32 @@ Item {
     // The mark is a step below its seat. The band's own marks are its two ends — the ☰ and the window buttons, each a
     // `railWidth` cell the full height of it (§ウィンドウの縁) — and this is not one of those: it follows the last tab, so
     // what it is level with is the `✕` standing in the tabs beside it. That is the ink the typed `+` carried anyway
-    // (measured on Windows, offscreen: 8px against `iconSm`'s 8.25), so the band reads as it did. A `Control`
-    // stretches its `contentItem` over whatever the padding leaves, which is why the step is written as that padding
-    // and not as a width on the icon: a width there is gone on the next layout.
+    // (measured on Windows, offscreen: 8px against `iconSm`'s 8.25), so the band reads as it did.
+    //
+    // The seat that ink sits in runs the band top to bottom, so a hand coming down the strip lands on the mark anywhere
+    // in the band's depth — the `iconLg` box it used to be had to be aimed at (2026-08-22 ユーザー報告「当たり判定が狭すぎる」).
+    // Only the hit area reaches that far: the wash keeps a square box of its own, since paint carried to the band's
+    // edges would read as one of the two end cells the band does own (§当たり判定「広げるのは判定だけ」). That box is `iconXl`,
+    // a step over the seat every icon button sits in — unlike the `✕` beside it, which stands inside a tab that washes
+    // as a whole, this mark answers the pointer with nothing but itself.
+    //
+    // Both the ink and the wash are written as padding and inset rather than as sizes of their own: a `Control`
+    // stretches its `contentItem` over whatever the padding leaves and places its `background` inside the insets, so a
+    // size written on either is gone on the next layout (手本 `TreeViewToggle`).
     HoverToolButton {
         id: plusButton
         x: tabs.x + tabs.width
-        anchors.verticalCenter: parent.verticalCenter
-        padding: (Theme.iconLg - Theme.iconSm) / 2
-        // The seat every icon button in the window sits in. The typed `+` came out a pixel wider than that (Fusion's
-        // own padding around a glyph — 21 measured), and three of this strip's width expressions read `plusButton`, so
-        // the run the tabs share out gains that pixel back.
-        implicitWidth: Theme.iconLg
-        implicitHeight: Theme.iconLg
+        height: tabStrip.height
+        padding: (Theme.iconXl - Theme.iconSm) / 2
+        topPadding: Math.round((plusButton.height - Theme.iconSm) / 2)
+        bottomPadding: plusButton.topPadding
+        topInset: Math.round((plusButton.height - Theme.iconXl) / 2)
+        bottomInset: plusButton.topInset
+        // The seat's width, held to the box exactly. The typed `+` came out a pixel wider than a box (Fusion's own
+        // padding around a glyph — 21 measured), and three of this strip's width expressions read `plusButton` — as
+        // does `grabArea.x` — so a seat that drifts moves the run the tabs share out and the grab run with it.
+        implicitWidth: Theme.iconXl
+        implicitHeight: Theme.iconXl
         // What the label was saying for it: a ToolButton names itself by its text, and this one no longer has any. The
         // words the menu's own row uses, since it raises the same request — the mark is idiomatic and the answer comes
         // straight out, so it gets a name and no tip, like the ☰ and the three at the far end (デザイン規約 §hover のツールチップ).
