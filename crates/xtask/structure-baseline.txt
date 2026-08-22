@@ -13,7 +13,6 @@
 # <physical lines> <path from the workspace root>
 644 crates/platitude-core/src/conflict.rs
 528 crates/platitude-core/src/identity.rs
-586 crates/platitude-core/src/integrate.rs
 758 crates/platitude-core/src/patch.rs
 620 crates/platitude-core/src/process.rs
 664 crates/platitude-core/src/sequencer.rs
