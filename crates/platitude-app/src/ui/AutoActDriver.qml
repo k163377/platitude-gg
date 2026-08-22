@@ -137,7 +137,7 @@ Item {
 
     function defersCompletion(act) {
         return ["publish", "publish-taken", "publish-remotes", "publish-add",
-                "publish-go", "publish-new-go", "amend-reset-author",
+                "publish-go", "publish-new-go", "amend-reset-author", "amend-author",
                 "eol-commit", "eol-hover", "commit-face",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "conflict-sides", "line-tools", "hunk-tools",
@@ -375,6 +375,21 @@ Item {
                 return
             autoActTimer.stop()
             driver.runAutoAct()
+        }
+    }
+    // The offer to take HEAD's authorship over is only in the picture once HEAD's author has arrived, so the shot
+    // waits for it rather than for a stretch of time.
+    Timer {
+        id: amendAuthorTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (repoTab.headAuthorName === "")
+                return
+            amendAuthorTimer.stop()
+            AppBackend.report("amend_author differs=" + repoTab.headAuthorDiffers
+                              + " name=" + repoTab.headAuthorName)
+            driver.complete()
         }
     }
     // HEAD's author has to arrive before the offer to take it over can be there to tick.
@@ -3003,8 +3018,12 @@ Item {
             if (act.endsWith("-go"))
                 fileDiscardItem.completeHold()
         } else if (act === "amend-author") {
+            // The boxes live in the commit editor, which is only on screen while the uncommitted row is the selected
+            // one — without this the run photographs the details pane and says nothing about the amend row.
+            page.showWip()
             wipPane.setAmendChecked(true)
             page.amendToggled(true)
+            amendAuthorTimer.start()
         } else if (act === "switch") {
             page.switchTo("branch", arg, arg)
         } else if (act === "switch-remote") {

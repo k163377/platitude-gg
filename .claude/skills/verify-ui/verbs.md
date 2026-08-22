@@ -182,7 +182,7 @@
 - `state`(設定・画面状態の永続化。`--config-dir` を渡した 2 回目に `--restore`)
 - `settings-tools`(設定ダイアログの Merge editor 候補一覧を開いたまま)
 - `file-menu` / `file-menu-untracked` / `file-menu-staged` / `file-menu-conflict`(ファイル行の右クリック、バケツ別)
-- `amend-author`(amend の著者引き継ぎ表示)
+- `amend-author`(amend の著者引き継ぎ表示。**作業ツリーの行を選んでから**箱を入れる — commit 欄は未コミット行が選択の時しか画面に無く、選ばずに撃つと詳細ペインを撮って amend の行について何も言わない。報告行 `amend_author differs= name=` を待って撮るので、**チェック済みの箱と未チェックの箱が 1 枚に並ぶ唯一の席**。`differs=true` には HEAD の author が identity と違うリポジトリが要る = `demo-repo authorship --at <worktree>/<名前>` で建てて中のファイルを 1 つ触り、`--repo` で渡す(`--preset authorship` は木が綺麗なので未コミット行が無い))
 - `stash-menu`(stash 行の右クリック)
 - `name-box`(グラフ行の名前入力欄を開いたまま止める。引数は `<行番号>[:<チップ列の幅>]` — 幅は手が仕切りをドラッグした先で、**`0` は列の床**(metrics が clamp する)。省略すれば既定幅。報告行 `name_box row= label_w= box_w=` の **`box_w` − (`label_w` − 2×`spaceXs`) が箱が列からグラフ側へはみ出した分** = 箱の床(プレースホルダ全文)が効いた証拠。`box_w=-1` はその行のデリゲートが居なかった run なので絵も当てにならない)
 - `menu-hover`(引数は行番号 — 省略時は `commit-menu` と同じ既定行。コミット行メニューを開いてから、**その行の hover カードを行の遅延タイマと同じ経路で頼む**。報告行 `menu_hover menu= card= list=`、must_say は `menu=true card=false`。**`row-card` と対で読む** — 同じ入力でカードが開く側の証拠が無いと「出なかった」は何も言えない。`menu=true` が「カードが裏に回る相手が居た」を言う)
