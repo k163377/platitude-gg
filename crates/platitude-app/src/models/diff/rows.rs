@@ -68,7 +68,6 @@ impl DiffModel {
                 hunk: r.hunk,
                 line: r.line,
                 side: platitude_core::parse::diff::side_of_markers(&r.markers).to_string(),
-                markers: r.markers,
             })
             .collect();
         // Both sides at once: the two columns are laid out to one width,

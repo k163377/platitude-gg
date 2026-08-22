@@ -174,13 +174,13 @@ Item {
     /// Held, not asked: git refuses nothing here — the branch is on the far side, so no `-d` can weigh what it holds —
     /// and the hold stands in for that refusal (デザイン規約 §リモートブランチを消す).
     function deleteRemoteNow(remoteRef) {
-        // The remote's own name may contain `/` — the configured names say where the cut is (`GitFacts.splitRemoteRef`).
-        const pair = GitFacts.splitRemoteRef(remoteRef, refRowMenu.repoTab.remoteNames)
-        if (pair === "")
+        // The configured names say where the cut is (a remote's own name may contain `/`); an unconfigured
+        // remote still cuts at the first slash, so the press acts and git answers (`GitFacts.remoteOfRef`).
+        const remote = GitFacts.remoteOfRef(remoteRef, refRowMenu.repoTab.remoteNames)
+        if (remote === "")
             return
-        const halves = pair.split(String.fromCharCode(31))
         refRowMenu.deleting("remote", remoteRef)
-        refRowMenu.repoTab.deleteRemoteBranch(halves[0], halves[1])
+        refRowMenu.repoTab.deleteRemoteBranch(remote, GitFacts.branchOfRef(remoteRef, refRowMenu.repoTab.remoteNames))
     }
 
     AppMenu {
@@ -336,15 +336,15 @@ Item {
             onHeld: {
                 refMenu.close()
                 const c = refRowMenu.remoteCounterpart
-                const pair = GitFacts.splitRemoteRef(c, refRowMenu.repoTab.remoteNames)
-                if (pair === "")
+                const remote = GitFacts.remoteOfRef(c, refRowMenu.repoTab.remoteNames)
+                if (remote === "")
                     return
-                const halves = pair.split(String.fromCharCode(31))
                 // Both halves go at once: the pair is one write with one answer, so it is one thing to put back.
                 refRowMenu.deleting("branch", refRowMenu.refId)
                 refRowMenu.deleting("remote", c)
                 refRowMenu.repoTab.deleteBranchEverywhere(
-                    refRowMenu.refId, halves[0], halves[1],
+                    refRowMenu.refId, remote,
+                    GitFacts.branchOfRef(c, refRowMenu.repoTab.remoteNames),
                     refDeleteItem.refusedRow)
             }
         }

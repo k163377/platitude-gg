@@ -342,5 +342,18 @@ pub fn split_remote_ref<'a>(
     best.map(|name| (name, &full[name.len() + 1..]))
 }
 
+/// [`split_remote_ref`], falling back to the first slash when no
+/// configured remote owns the ref: the list may still be loading, or the
+/// remote may be gone from configuration while its refs remain (git-svn
+/// trees, hand-written `refs/remotes/*`). A gesture that acts on the
+/// fallback lets git answer loudly, where refusing to split would turn
+/// the press into a silent no-op.
+pub fn split_remote_ref_or_first_slash<'a>(
+    full: &'a str,
+    remotes: impl IntoIterator<Item = &'a str>,
+) -> Option<(&'a str, &'a str)> {
+    split_remote_ref(full, remotes).or_else(|| full.split_once('/'))
+}
+
 #[cfg(test)]
 mod tests;

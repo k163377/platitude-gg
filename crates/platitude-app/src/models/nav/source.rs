@@ -255,9 +255,9 @@ impl<'a> Entry<'a> {
 }
 
 /// The last segment of a path — git prints worktree paths the platform's
-/// way, so either separator splits.
+/// way, so either separator splits (`urlpath::path_leaf` is the one rule).
 fn leaf_of(path: &str) -> &str {
-    path.rsplit(['/', '\\']).next().unwrap_or(path)
+    crate::urlpath::path_leaf(path)
 }
 /// A remote branch is looked up without its remote prefix, so
 /// `origin/main` matches a PR on `main`.

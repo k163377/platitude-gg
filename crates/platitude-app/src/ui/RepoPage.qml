@@ -553,13 +553,12 @@ Item {
     /// the question is asked first and its answer is held down rather than clicked — this is the one write here that
     /// another machine keeps (デザイン規約 §長押し).
     function askRenameRemote(remoteRef, name) {
-        // The remote's own name may contain `/`, so the cut is the configured name, not the first slash
-        // (`platitude_core::refs::split_remote_ref`).
-        const pair = GitFacts.splitRemoteRef(remoteRef, repoTab.remoteNames)
-        if (pair === "")
+        // The cut is the configured remote name where one owns the ref (a remote's own name may contain `/`), the
+        // first slash otherwise — either way the question still fires (`GitFacts.remoteOfRef`).
+        const remote = GitFacts.remoteOfRef(remoteRef, repoTab.remoteNames)
+        if (remote === "")
             return
-        const remote = pair.split(String.fromCharCode(31))[0]
-        const from = pair.split(String.fromCharCode(31))[1]
+        const from = GitFacts.branchOfRef(remoteRef, repoTab.remoteNames)
         // A name already over there is not offered: a plain push to one that exists fast-forwards it and reports
         // success, so somebody else's branch would move instead of ours being renamed. The box refuses it too; this
         // catches the way in that has no box.
@@ -608,17 +607,20 @@ Item {
     /// The chips that go with the rows are the graph model's to key and pack (`GraphModel.setGone` /
     /// `encode::gone_keys`): the names cross the bridge as they are. A dropped stash has no chip: it is a row of the
     /// graph rather than a name on one, and a row only leaves with the walk.
+    function syncGone() {
+        graphModel.setGone(page.goneBranch, page.goneRemote, page.goneTag)
+    }
     onGoneBranchChanged: {
         branchesModel.setHidden(page.goneBranch)
-        graphModel.setGone(page.goneBranch, page.goneRemote, page.goneTag)
+        page.syncGone()
     }
     onGoneRemoteChanged: {
         remotesModel.setHidden(page.goneRemote)
-        graphModel.setGone(page.goneBranch, page.goneRemote, page.goneTag)
+        page.syncGone()
     }
     onGoneTagChanged: {
         tagsModel.setHidden(page.goneTag)
-        graphModel.setGone(page.goneBranch, page.goneRemote, page.goneTag)
+        page.syncGone()
     }
     onGoneStashChanged: stashesModel.setHidden(page.goneStash)
 

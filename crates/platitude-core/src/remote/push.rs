@@ -285,15 +285,15 @@ impl PushStanding {
 /// remote the list does not know (stale config) falls back to the exact
 /// prefix the mark itself gives.
 #[expect(clippy::too_many_arguments)]
-pub fn push_standing(
+pub fn push_standing<'a>(
     detached: bool,
     branch: &str,
-    upstream: &str,
+    upstream: &'a str,
     upstream_tracked: bool,
     ahead: i32,
     behind: i32,
     push_default: &str,
-    remotes: &[&str],
+    remotes: impl IntoIterator<Item = &'a str>,
 ) -> PushStanding {
     if detached || branch.is_empty() {
         return PushStanding::Closed;
@@ -302,7 +302,7 @@ pub fn push_standing(
         return PushStanding::Publish;
     }
     let marks_another = !push_default.is_empty()
-        && match crate::refs::split_remote_ref(upstream, remotes.iter().copied()) {
+        && match crate::refs::split_remote_ref(upstream, remotes) {
             Some((remote, _)) => remote != push_default,
             None => !upstream
                 .strip_prefix(push_default)
@@ -385,14 +385,14 @@ mod tests {
             ahead,
             behind,
             marked,
-            &["origin", "my", "my/fork"],
+            ["origin", "my", "my/fork"],
         )
     }
 
     #[test]
     fn a_push_standing_is_read_without_sending_anything() {
         assert_eq!(
-            push_standing(true, "", "", false, 0, 0, "", &[]),
+            push_standing(true, "", "", false, 0, 0, "", []),
             PushStanding::Closed
         );
         assert_eq!(standing_of("", false, 0, 0, ""), PushStanding::Publish);

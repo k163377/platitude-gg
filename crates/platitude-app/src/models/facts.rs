@@ -56,17 +56,32 @@ impl GitFacts {
         packed.split(crate::encode::RECORD_SEP).count() as i32
     }
 
-    /// Splits a remote-tracking name (`origin/main`) into the remote and
-    /// the branch on it, against the configured names (`\u{1f}`-packed,
-    /// `RepoTab.remoteNames`): `remote\u{1f}branch`, or `""` where no
-    /// configured remote owns it. The cut is the longest configured name
-    /// — a remote's own name may contain `/`
-    /// (`platitude_core::refs::split_remote_ref`).
+    /// The remote half of a remote-tracking name (`origin/main`), read
+    /// against the configured names (`\u{1f}`-packed,
+    /// `RepoTab.remoteNames`): the longest configured name wins — a
+    /// remote's own name may contain `/` — and where none owns the ref
+    /// the first slash answers, so the gesture still acts and git gets
+    /// to refuse loudly (`refs::split_remote_ref_or_first_slash` — the
+    /// list may still be loading, or the remote may be gone from
+    /// configuration while its refs remain). `""` only where there is no
+    /// slash at all: that name is not a remote branch.
     #[qslot]
-    fn split_remote_ref(&self, full: String, remote_names: String) -> String {
-        match platitude_core::refs::split_remote_ref(&full, packed_names(&remote_names)) {
-            Some((remote, branch)) => format!("{remote}\u{1f}{branch}"),
-            None => String::new(),
+    fn remote_of_ref(&self, full: String, remote_names: String) -> String {
+        platitude_core::refs::split_remote_ref_or_first_slash(&full, packed_names(&remote_names))
+            .map(|(remote, _)| remote.to_string())
+            .unwrap_or_default()
+    }
+
+    /// The branch half of the same cut. A name no slash divides is all
+    /// branch — the shape a rename box is typed in.
+    #[qslot]
+    fn branch_of_ref(&self, full: String, remote_names: String) -> String {
+        match platitude_core::refs::split_remote_ref_or_first_slash(
+            &full,
+            packed_names(&remote_names),
+        ) {
+            Some((_, branch)) => branch.to_string(),
+            None => full,
         }
     }
 
@@ -88,7 +103,6 @@ impl GitFacts {
         push_default: String,
         remote_names: String,
     ) -> String {
-        let names: Vec<&str> = packed_names(&remote_names).collect();
         platitude_core::remote::push_standing(
             detached,
             &branch,
@@ -97,7 +111,7 @@ impl GitFacts {
             ahead,
             behind,
             &push_default,
-            &names,
+            packed_names(&remote_names),
         )
         .as_str()
         .to_string()

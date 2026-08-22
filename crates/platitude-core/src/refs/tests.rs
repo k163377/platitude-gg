@@ -300,3 +300,24 @@ fn a_name_no_remote_owns_does_not_split() {
     assert_eq!(split_remote_ref("", names), None);
     assert_eq!(split_remote_ref("origin/main", []), None);
 }
+
+#[test]
+fn the_first_slash_answers_where_no_configured_remote_does() {
+    // The configured list wins where it speaks…
+    assert_eq!(
+        split_remote_ref_or_first_slash("my/fork/main", ["my", "my/fork"]),
+        Some(("my/fork", "main"))
+    );
+    // …and the ref's own first slash answers where it does not: a list
+    // still loading, or a remote gone from configuration.
+    assert_eq!(
+        split_remote_ref_or_first_slash("fork/main", ["origin"]),
+        Some(("fork", "main"))
+    );
+    assert_eq!(
+        split_remote_ref_or_first_slash("fork/feature/x", []),
+        Some(("fork", "feature/x"))
+    );
+    // No slash at all is still not a remote branch.
+    assert_eq!(split_remote_ref_or_first_slash("main", []), None);
+}

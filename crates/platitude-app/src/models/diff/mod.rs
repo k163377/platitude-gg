@@ -44,30 +44,25 @@ pub struct DiffLineItem {
     /// rather than sniffing the string — a line of C++ full of `<>` is
     /// not markup, and guessing would eventually decide it was.
     rich: bool,
-    /// One of git's conflict fences. Not the same thing as `markers`
+    /// One of git's conflict fences. Not the same thing as `side`
     /// below: that says which side a line came from, this says the line
     /// is not the file talking at all (see `encode::DiffRow`).
     fence: bool,
     /// Where this row sits in the patch, so staging it needs no lookup.
     hunk: i32,
     line: i32,
-    /// One marker column per side of a combined diff, empty otherwise —
-    /// the only place "which side is this line from" is written down (see
-    /// `encode::DiffRow`).
-    markers: String,
-    /// The side those markers name — `"ours"` / `"theirs"` / `""` — read
-    /// once here by the parser's own rule
-    /// (`platitude_core::parse::diff::side_of_markers`), so the rows and
-    /// the tally cannot come to read the columns two ways.
+    /// The side a combined diff's marker columns name — `"ours"` /
+    /// `"theirs"` / `""`, empty for a single-parent diff — read once as
+    /// the row is built, by the parser's own rule
+    /// (`platitude_core::parse::diff::side_of_markers` over
+    /// `encode::DiffRow.markers`), so the rows and the tally cannot come
+    /// to read the columns two ways.
     side: String,
 }
 
 impl platitude_core::mem::Footprint for DiffLineItem {
     fn heap_bytes(&self) -> usize {
-        self.kind.heap_bytes()
-            + self.text.heap_bytes()
-            + self.markers.heap_bytes()
-            + self.side.heap_bytes()
+        self.kind.heap_bytes() + self.text.heap_bytes() + self.side.heap_bytes()
     }
 }
 

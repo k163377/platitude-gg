@@ -25,13 +25,13 @@ QtObject {
     property string editOid: ""
     property string editText: ""
     /// The remote a row being renamed lives on (`origin`), empty for every other kind of row. The configured names
-    /// say where the cut is — a remote's own name may contain `/` (`GitFacts.splitRemoteRef`).
+    /// say where the cut is — a remote's own name may contain `/`; an unconfigured one cuts at the first slash, so
+    /// the duplicate-name refusal below keeps its remote to ask about (`GitFacts.remoteOfRef`).
     readonly property string editRemote: gestures.editKind !== "remote" ? ""
-        : GitFacts.splitRemoteRef(gestures.editId, gestures.repoTab.remoteNames).split(String.fromCharCode(31))[0]
+        : GitFacts.remoteOfRef(gestures.editId, gestures.repoTab.remoteNames)
     /// The name a remote row is typed and renamed by — the branch half, without the remote it lives on.
     function remoteBranchHalf(id) {
-        const pair = GitFacts.splitRemoteRef(id, gestures.repoTab.remoteNames)
-        return pair === "" ? id : pair.split(String.fromCharCode(31))[1]
+        return GitFacts.branchOfRef(id, gestures.repoTab.remoteNames)
     }
     /// A name the remote already carries. Refused here rather than left to git: a plain push to a name that exists
     /// fast-forwards it and reports success, so somebody else's branch would move instead of this one being renamed.
