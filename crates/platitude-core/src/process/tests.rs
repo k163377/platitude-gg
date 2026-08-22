@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 
 use super::*;
+use crate::process::literal_pathspec;
 
 /// A cross-platform command that announces it is running, then sleeps for
 /// ~30s, used to exercise cancellation after an observable start edge.

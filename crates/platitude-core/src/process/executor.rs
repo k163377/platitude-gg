@@ -1,12 +1,5 @@
-//! git subprocess execution — the single place that spawns `git`.
-//!
-//! Policy (.claude/rules/core.md / 実装計画 §2):
-//! - argument vectors only, never shell strings
-//! - fixed config arguments and environment keep output machine-readable,
-//!   prompt-free and lock-friendly
-//! - every run is cancellable and (optionally) time-limited; the process is
-//!   killed when either fires
-//! - on Windows no console window is shown
+//! Running what [`GitCommand`] describes: the executor, its fixed
+//! arguments and environment, and the child supervision under it.
 
 use std::ffi::OsString;
 use std::process::Stdio;
@@ -17,14 +10,12 @@ use tokio::io::AsyncReadExt;
 use tokio::process::{Child, Command};
 use tokio_util::sync::CancellationToken;
 
+use super::command::{CommandEnd, CommandObserver, GitCommand, GitOutput, TimeBudget, shell_quote};
 use crate::error::GitError;
 
-mod command;
 #[cfg(test)]
+#[path = "tests.rs"]
 mod tests;
-
-pub use command::{CommandEnd, CommandObserver, GitCommand, GitOutput, literal_pathspec};
-use command::{TimeBudget, shell_quote};
 
 /// Default time budget for short-lived commands. The streaming log walks
 /// and `mergetool` (open-ended, user-paced) opt out via
@@ -68,7 +59,7 @@ const FIXED_ARGS: [&str; 7] = [
 /// Deliberately absent: `GIT_LITERAL_PATHSPECS`. It disarms pathspec magic
 /// for git's *internal* use too — with it set, `git stash push -u` reports
 /// success and silently leaves untracked files in the working tree. Paths
-/// are quoted individually with [`literal_pathspec`] instead.
+/// are quoted individually with [`super::literal_pathspec`] instead.
 const FIXED_ENV: [(&str, &str); 4] = [
     ("LC_ALL", "C"),
     ("GIT_TERMINAL_PROMPT", "0"),
@@ -139,9 +130,10 @@ impl GitExecutor {
     /// Lifts the stock time budget from every command that did not set
     /// one of its own: those commands are then bounded by cancellation
     /// alone. For test harnesses — under a loaded suite a git round trip
-    /// inflates ~25×, and a wall-clock cap that generous proves nothing
-    /// (待ちの上限は失敗検出の backstop, .claude/rules/core.md). The
-    /// shipped application keeps the stock budget.
+    /// inflates ~25×, and a wall-clock cap that generous decides by load,
+    /// not correctness; the harness arms its own failure-detection
+    /// backstops instead (.claude/rules/core.md). The shipped application
+    /// keeps the stock budget.
     pub fn without_stock_timeouts(mut self) -> Self {
         self.stock_timeout = None;
         self
