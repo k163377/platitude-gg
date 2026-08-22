@@ -11,6 +11,7 @@ pub mod graph;
 pub mod integrate;
 pub mod repo;
 pub mod session;
+pub mod stage;
 pub mod wait;
 
 // `crate::support::<name>` is where the suite has always reached for these.
