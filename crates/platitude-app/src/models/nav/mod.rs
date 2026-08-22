@@ -15,6 +15,7 @@ use super::qml_register;
 
 mod field;
 mod item;
+mod qmodel;
 mod qobject;
 mod role;
 mod source;
