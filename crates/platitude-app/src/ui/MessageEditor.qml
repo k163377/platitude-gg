@@ -28,6 +28,11 @@ ColumnLayout {
     /// Stands in for the pointer on the summary box, so its read-only tooltip can be photographed — hover cannot be
     /// injected (verify-ui スキル).
     property bool summaryPointedAt: false
+    /// What the empty boxes say when there is a message standing behind them: a stopped merge already has one, and
+    /// leaving the boxes empty commits exactly what they are showing (デザイン規約 §進行中の操作から出る). Empty falls
+    /// back to the two words the boxes are otherwise named by.
+    property string standingSubject: ""
+    property string standingBody: ""
 
     // ---- what the pane says about its own geometry ------------------
     /// The pane's file list height. The list is the one thing under the block that gives, and two rows is where it
@@ -223,7 +228,9 @@ ColumnLayout {
             SummaryArea {
                 id: summaryArea
                 readOnly: editor.readOnly
-                placeholderText: editor.readOnly ? "" : qsTr("Commit summary")
+                placeholderText: editor.readOnly ? ""
+                                 : editor.standingSubject !== "" ? editor.standingSubject
+                                 : qsTr("Commit summary")
                 // A caret put in the box is the other way the reader takes it over (`DescriptionBox` does the same).
                 onActiveFocusChanged: if (summaryArea.activeFocus) editor.unpinSummary()
                 Keys.onEscapePressed: event => {
@@ -244,7 +251,9 @@ ColumnLayout {
     DescriptionBox {
         id: descBox
         readOnly: editor.readOnly
-        placeholderText: editor.readOnly ? "" : qsTr("Description")
+        placeholderText: editor.readOnly ? ""
+                         : editor.standingBody !== "" ? editor.standingBody
+                         : qsTr("Description")
         border.color: Theme.borderSubtle
         restHeight: editor.descRest
         room: editor.descRoom

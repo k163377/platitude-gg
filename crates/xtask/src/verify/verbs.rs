@@ -31,7 +31,14 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // The other landing the same press has. Two halves the picture
         // cannot hold either: that no red line was written over an
         // ordinary conflict, and that the command log stayed down.
-        "merge-stops" => Some("merge_stopped wip=true conflicts=true error=false log=false"),
+        "merge-stops" => {
+            Some("merge_stopped wip=true conflicts=true error=false log=false msg=true cont=false")
+        }
+        // The other end of the same merge: the button under the card is
+        // what finishes it, and an empty box commits the message git
+        // wrote when it stopped. Neither half is in the picture — a
+        // merge commit and an ordinary one draw the same row.
+        "merge-commit" => Some("merge_committed merging=false kept=true typed=false"),
         // The caret is the whole of these two, and a hook that never
         // reached the box leaves a picture of the resting colour --
         // which is a real state, and the other half of each pair.

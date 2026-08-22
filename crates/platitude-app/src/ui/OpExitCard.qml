@@ -42,6 +42,17 @@ Rectangle {
         return widest
     }
 
+    /// Automation: whether the card offers a row at all. A row that is not there and a row that is there and down
+    /// crop to the same picture (the card sizes itself to what it holds).
+    function offersOpExit(code) {
+        for (let i = 0; i < opExitCol.children.length; i++) {
+            const row = opExitCol.children[i]
+            if (row && row.code === code)
+                return row.visible
+        }
+        return false
+    }
+
     /// Automation: run one of the held rows to its end, named by its flag.
     function completeOpExit(code) {
         for (let i = 0; i < opExitCol.children.length; i++) {
@@ -103,12 +114,17 @@ Rectangle {
             // Someone takes the slack, or the engine centres what it cannot fill.
             Item { Layout.fillWidth: true }
         }
+        // **A merge does not get one.** `--continue` there *is* the commit — same tree, same two parents, same
+        // message, same hooks as pressing the button above this card (実測 2.55) — so the card would be offering a
+        // second door onto the seat it is standing under, and the one with no message box attached. Everything else
+        // here steps, and continuing a step is not a commit anybody is composing (デザイン規約 §進行中の操作から出る).
         OpExitRow {
             Layout.fillWidth: true
             codeColW: opExitCard.codeColW
             holdIndent: opExitCard.holdIndent
             code: "--continue"
             text: qsTr("Carry on with what is staged")
+            visible: !opExitCard.workTree.opMerging
             enabled: opExitCard.repoTab.busyCount === 0
                      && opExitCard.workTree.conflictCount === 0
             onPicked: opExitCard.repoTab.resolveOperation("continue")

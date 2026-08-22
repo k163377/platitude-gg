@@ -4,6 +4,7 @@
 use crate::support::TestRepo;
 use crate::support::exec::env;
 use crate::support::integrate::{conflicting_branches, current_op};
+use platitude_core::commit;
 use platitude_core::conflict::{self, ConflictKind, Side};
 use platitude_core::integrate::{self, Continuation, InProgress, MergeOptions, MergeOutcome};
 use platitude_core::status;
@@ -152,6 +153,90 @@ async fn a_conflicting_merge_is_reported_then_aborted() {
     assert_eq!(
         std::fs::read_to_string(repo.path.join("f.txt")).unwrap(),
         "main\n"
+    );
+}
+
+/// Finishing a stopped merge with a plain commit records what
+/// `--continue` would: same tree, same two parents, same message — and
+/// the message is the one git left in `MERGE_MSG`, which is why the
+/// application can put it in the box before the press
+/// (デザイン規約 §進行中の操作から出る).
+///
+/// The two runs are two repositories, so the ids differ; everything the
+/// two commits are made of does not.
+#[tokio::test]
+async fn a_stopped_merge_finished_by_committing_records_what_continue_would() {
+    let (exec, cancel) = env();
+    let mut landed = Vec::new();
+    for way in ["continue", "commit"] {
+        let mut repo = conflicting_branches();
+        integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
+            .await
+            .expect("conflict");
+        let waiting = integrate::stopped_message(&exec, &repo.path, &cancel).await;
+        assert_eq!(waiting, "Merge branch 'side'", "git's comment lines go");
+
+        std::fs::write(repo.path.join("f.txt"), "resolved\n").expect("resolve");
+        repo.git(&["add", "--", "f.txt"]);
+        if way == "continue" {
+            integrate::resolve_current(&exec, &repo.path, Continuation::Continue, &cancel)
+                .await
+                .expect("continue");
+        } else {
+            let info = crate::support::integrate::info(&repo).await;
+            commit::commit(&exec, &info, &waiting, Default::default(), &cancel)
+                .await
+                .expect("commit");
+        }
+        assert_eq!(current_op(&repo).await, None);
+        landed.push(repo.git(&["log", "-1", "--format=%T|%s|%P"]));
+    }
+    let by_continue: Vec<&str> = landed[0].split('|').collect();
+    let by_commit: Vec<&str> = landed[1].split('|').collect();
+    assert_eq!(by_continue[0], by_commit[0], "the same tree");
+    assert_eq!(by_continue[1], by_commit[1], "the same message");
+    assert_eq!(
+        by_continue[2].split(' ').count(),
+        2,
+        "two parents: {}",
+        by_continue[2]
+    );
+    assert_eq!(
+        by_commit[2].split(' ').count(),
+        2,
+        "two parents: {}",
+        by_commit[2]
+    );
+}
+
+/// A resolution that puts back exactly what HEAD already had still has a
+/// merge to finish, and a plain commit writes it — the merge commit
+/// records nothing and git makes it anyway (実測 2.55). Which is why the
+/// commit button cannot ask for something staged while a merge stands.
+#[tokio::test]
+async fn a_merge_that_records_nothing_is_still_committed() {
+    let mut repo = conflicting_branches();
+    let (exec, cancel) = env();
+    integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
+        .await
+        .expect("conflict");
+    repo.git(&["checkout", "HEAD", "--", "f.txt"]);
+    assert_eq!(repo.git(&["diff", "--cached", "--name-only", "HEAD"]), "");
+
+    let info = crate::support::integrate::info(&repo).await;
+    commit::commit(
+        &exec,
+        &info,
+        "Merge branch 'side'",
+        Default::default(),
+        &cancel,
+    )
+    .await
+    .expect("a merge with nothing in it is still a merge");
+    assert_eq!(current_op(&repo).await, None);
+    assert_eq!(
+        repo.git(&["log", "-1", "--format=%P"]).split(' ').count(),
+        2
     );
 }
 

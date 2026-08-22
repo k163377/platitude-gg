@@ -134,9 +134,10 @@ Item {
                 "eol-commit", "eol-hover", "commit-face",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "conflict-sides", "line-tools", "hunk-tools",
-                // The write barrier is behind this one, not in front of it: the landing is on the working tree's own
-                // row, which the graph pass after the write is what puts there.
-                "merge-stops",
+                // The write barrier is behind these two, not in front of them: one lands on the working tree's own
+                // row, which the graph pass after the write is what puts there, and the other has to read the
+                // commit it just made.
+                "merge-stops", "merge-commit",
                 "code-send", "line-back", "diff-follow", "line-run",
                 "stage-all", "unstage-all",
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
@@ -1838,8 +1839,60 @@ Item {
                 + " conflicts=" + (workTree.conflictCount > 0)
                 + " error=" + (repoTab.lastError !== "")
                 + " log=" + page.commandsOpen
+                // The box opened holding what the merge is about to record, and the card is not offering a second
+                // door onto the button under it.
+                + " msg=" + (workTree.opSubject !== "" && wipPane.subjectText === workTree.opSubject)
+                + " cont=" + wipPane.offersOpExit("--continue")
                 + " op=" + workTree.opText
                 + " files=" + workTree.conflictCount)
+            driver.complete()
+        }
+    }
+    // The merge finished from the button under the exit card, with nothing typed in the box. Two waits in one timer:
+    // the write has to land, and then HEAD's own message has to come back — the claim is that the empty box committed
+    // the merge's words, and only the commit that now exists can say so.
+    Timer {
+        id: mergeCommitTimer
+        interval: 25
+        repeat: true
+        property string wanted: ""
+        property bool typed: false
+        property int seenHead: -1
+        property string headWas: ""
+        function begin() {
+            mergeCommitTimer.wanted = workTree.opSubject
+            mergeCommitTimer.headWas = branchesModel.headOid
+            // Read now rather than at the report: the editor is cleared by the landing, so afterwards every run says
+            // the boxes were empty.
+            mergeCommitTimer.typed = wipPane.subjectText !== "" || wipPane.bodyText !== ""
+            mergeCommitTimer.seenHead = -1
+            mergeCommitTimer.start()
+        }
+        onTriggered: {
+            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
+                return
+            // The commit exists; the picture is of the graph holding it. **Against the id it moved from**, not
+            // merely "HEAD is somewhere in the graph": refs and the walk arrive behind the write and behind each
+            // other, so the old tip answers that question perfectly well, and the shot came back framing the branch
+            // still on it with a working-tree row above (2026-08-22 実測).
+            if (!branchesModel.refsLoaded || branchesModel.headOid === mergeCommitTimer.headWas
+                    || graphModel.rowOf(branchesModel.headOid) < 0
+                    || driver.graphTopKind() === "wip")
+                return
+            if (mergeCommitTimer.seenHead < 0) {
+                mergeCommitTimer.seenHead = repoTab.headCommitSeq
+                repoTab.requestHeadCommit()
+                return
+            }
+            if (repoTab.headCommitSeq === mergeCommitTimer.seenHead)
+                return
+            mergeCommitTimer.stop()
+            AppBackend.report(
+                "merge_committed merging=" + (workTree.opText !== "")
+                + " kept=" + (mergeCommitTimer.wanted !== ""
+                              && repoTab.headSubject === mergeCommitTimer.wanted)
+                + " typed=" + mergeCommitTimer.typed
+                + " head=" + repoTab.headSubject)
             driver.complete()
         }
     }
@@ -3394,6 +3447,14 @@ Item {
                     repoTab.rebase(arg, "", true)
                 }
             }
+        } else if (act === "merge-commit") {
+            // The box opens holding the merge's own message; this empties it first, because the state worth proving
+            // is the one where nothing is typed and the press still records those words
+            // (デザイン規約 §進行中の操作から出る).
+            page.showWip()
+            wipPane.clearMessage()
+            mergeCommitTimer.begin()
+            AppBackend.report("merge_commit pressed=" + wipPane.pressCommit())
         } else if (act === "op-exit" || act === "op-exit-go") {
             // "-go" runs the held row the argument names to its end.
             page.showWip()

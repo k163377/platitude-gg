@@ -79,6 +79,37 @@ pub async fn merge(
     }
 }
 
+/// The message a stopped merge is going to record, with git's own
+/// comment lines taken out. Empty where there is nothing to read.
+///
+/// **Both ways of finishing that merge write from this same file.**
+/// `git merge --continue` and a plain `git commit` record the identical
+/// commit — same tree, same two parents, same message, and the same four
+/// hooks (`pre-commit`, `prepare-commit-msg`, `commit-msg`,
+/// `post-commit`); `post-merge` and `pre-merge-commit` belong to a merge
+/// that never stopped and fire for neither. That holds even where the
+/// resolution records nothing at all: git writes the empty merge commit
+/// either way (実測 2.55). So the application can put this in the box
+/// the commit will be made from, and the person sees the message before
+/// it is written rather than after
+/// (デザイン規約 §進行中の操作から出る).
+///
+/// The comment lines go because the box shows what will be recorded: git
+/// strips them on the way through an editor, and this application
+/// commits with `--cleanup=whitespace` (`commit::commit`), which would
+/// not. `#` is git's own default; a repository that has moved
+/// `core.commentChar` keeps its comment lines here, where they are at
+/// least visible and can be deleted.
+pub async fn stopped_message(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> String {
+    let raw = crate::conflict::git_file(executor, workdir, "MERGE_MSG", cancel).await;
+    let kept: Vec<&str> = raw.lines().filter(|l| !l.starts_with('#')).collect();
+    kept.join("\n").trim().to_string()
+}
+
 /// Whether a merge that exited non-zero left itself standing to be
 /// finished, rather than refusing before it began.
 ///

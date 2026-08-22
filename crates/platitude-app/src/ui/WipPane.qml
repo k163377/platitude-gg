@@ -76,6 +76,17 @@ ColumnLayout {
     function completeOpExit(code) {
         return opExitCard.completeOpExit(code)
     }
+    /// Automation: whether the card offers that row at all.
+    function offersOpExit(code) {
+        return opExitCard.offersOpExit(code)
+    }
+    /// Automation: press the button that finishes things, the way a click does.
+    function pressCommit() {
+        if (!commitButton.enabled)
+            return false
+        wipPane.commitClicked()
+        return true
+    }
 
     // ---- how the buckets share the pane ------------------------------
     // **Even shares, and a share a bucket cannot fill goes to the ones that can** (デザイン規約 §その他の操作). Three files
@@ -449,6 +460,28 @@ ColumnLayout {
 
     readonly property string subjectText: msgEditor.subjectText
     readonly property string bodyText: msgEditor.bodyText
+
+    // -- the message a stopped merge already has --------------------
+    //
+    // A merge is the one operation finished from this seat, and git wrote its message down when it stopped. The page
+    // puts it in the boxes (`absorbOpMessage`); these say what the boxes fall back to when it is typed out of them —
+    // the placeholder underneath, and the message the press commits (デザイン規約 §進行中の操作から出る).
+    readonly property string standingSubject: wipPane.workTree.opMerging ? wipPane.workTree.opSubject : ""
+    readonly property string standingBody: wipPane.workTree.opMerging ? wipPane.workTree.opBody : ""
+    /// Whether the boxes are standing empty over one, which is the state that presses with nothing typed. Both boxes:
+    /// a description with no summary is not "empty", and git would write a commit whose first line is blank.
+    ///
+    /// **Never in amend mode.** A merge's message belongs to the commit the merge is about to make, not to the one
+    /// before it — and `git commit --amend` under `MERGE_HEAD` replaces that earlier commit with a merge commit,
+    /// leaving what was there in the reflog alone. An amend goes on asking for a summary of its own.
+    readonly property bool onStandingMessage:
+        !wipPane.amending && wipPane.standingSubject !== ""
+        && msgEditor.subjectText.trim() === "" && msgEditor.bodyText.trim() === ""
+    /// What a press would record. Read by the page rather than the boxes themselves, so the fallback is decided once.
+    readonly property string outgoingSubject:
+        wipPane.onStandingMessage ? wipPane.standingSubject : msgEditor.subjectText
+    readonly property string outgoingBody:
+        wipPane.onStandingMessage ? wipPane.standingBody : msgEditor.bodyText
     // Whether the amend should also put the current identity on the commit it replaces (git keeps the original author
     // otherwise).
     readonly property bool resetAuthor: authorBox.checked
@@ -677,6 +710,8 @@ ColumnLayout {
                     id: msgEditor
                     Layout.fillWidth: true
                     Layout.preferredHeight: msgEditor.pairHeight
+                    standingSubject: wipPane.standingSubject
+                    standingBody: wipPane.standingBody
                     listHeight: buckets.height
                     blockRoom: wipPane.blockRoom
                     blockHeight: blockCol.implicitHeight
@@ -812,19 +847,28 @@ ColumnLayout {
                     // files go is the one number here, and it costs nothing to keep.
                     phraseCount: wipPane.workTree.stagedCount === 0
                                  ? "" : wipPane.workTree.stagedCount.toString()
-                    text: wipPane.workTree.stagedCount === 1 ? qsTr("file to") : qsTr("files to")
+                    // With no count there is no noun for it to count: a message-only amend and a merge whose
+                    // resolution records nothing both press with nothing staged, and `commit files to main` names a
+                    // quantity that is not there.
+                    text: wipPane.workTree.stagedCount === 0 ? qsTr("to")
+                          : wipPane.workTree.stagedCount === 1 ? qsTr("file to") : qsTr("files to")
                     // An amend can stand on its own (message only); a new commit needs staged content and a
                     // summary, and git needs an identity to attribute either one to.
                     //
-                    // A file still waiting on a decision stops it as well: git will not write a commit over an
-                    // index that holds unmerged paths, whatever is staged beside them, and the exit card's own
-                    // `--continue` is down for exactly the same reason (デザイン規約 §可否・警告の出し場所).
-                    // The button stays where it is — during a stopped merge this seat is what finishes the merge,
-                    // and the way out stands underneath it (§進行中の操作から出る).
+                    // A file still waiting on a decision stops it: git will not write a commit over an index that
+                    // holds unmerged paths, whatever is staged beside them (デザイン規約 §可否・警告の出し場所).
+                    //
+                    // **A stopped merge asks for neither of the other two.** It carries its own message, so an
+                    // empty box is not an empty commit message; and a merge whose resolution records nothing at
+                    // all still has to be finished, so nothing staged is not nothing to do — git writes the empty
+                    // merge commit either way (実測 2.55). This seat is the whole way out of a merge
+                    // (§進行中の操作から出る), and a way out that will not press is not one.
                     enabled: wipPane.repoTab.busyCount === 0 && wipPane.repoTab.identityReady
                              && wipPane.workTree.conflictCount === 0
-                             && msgEditor.subjectText.trim() !== ""
-                             && (wipPane.amending || wipPane.workTree.stagedCount > 0)
+                             && (wipPane.onStandingMessage
+                                 || (msgEditor.subjectText.trim() !== ""
+                                     && (wipPane.amending || wipPane.workTree.stagedCount > 0
+                                         || wipPane.standingSubject !== "")))
                     // **Still one click.** Committing is a daily operation and a confirmation on a daily operation
                     // becomes something people press without reading, which spends the effect where it is really
                     // needed (デザイン規約 §可否・警告の出し場所). The frame, the mark and the hover say what is in

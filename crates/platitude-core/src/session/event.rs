@@ -76,6 +76,12 @@ pub enum SessionEvent {
         /// What to call the two sides of a conflict, for whatever is
         /// stopped. Default while nothing is.
         sides: conflict::Sides,
+        /// The message a stopped merge is about to record, comment lines
+        /// already gone (`integrate::stopped_message`). Empty unless a
+        /// merge is standing: it is the one operation this application
+        /// finishes from the commit box, so it is the one that has a
+        /// message to put there.
+        op_message: String,
         /// The merge tool git would launch, empty when none is configured
         /// or when nothing is conflicted. Display only — the launch reads
         /// the config again, so a stale name here cannot start anything.

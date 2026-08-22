@@ -65,6 +65,8 @@ commands:
         conflict  a merge stopped on conflicts (MERGE_HEAD present)
         conflict-typed   the same, with the file typed over: no markers
                   left in the tree, still unmerged in the index
+        conflict-staged  and staged: nothing waiting on a decision, the
+                  merge still standing, the commit button live
         rebase-conflict  a rebase stopped on conflicts, 1 of 2 steps
         rebase-staged    the same rebase, conflict resolved and staged
         rebase-empty     a rebase stopped on a commit that came out empty

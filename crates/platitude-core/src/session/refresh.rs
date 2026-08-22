@@ -299,6 +299,14 @@ impl RepoSession {
                         .unwrap_or_default(),
                     None => conflict::Sides::default(),
                 };
+                // Same rarity, same reason: a stopped merge is the one
+                // thing here finished from the commit box, and only then
+                // is there a message waiting to go in it.
+                let op_message = if op_state.merging {
+                    integrate::stopped_message(&self.executor, &workdir, &cancel).await
+                } else {
+                    String::new()
+                };
                 // And again: the tool is only worth naming where there is
                 // something to open with it, so a clean tree pays nothing
                 // — unless the settings field asked, which it does once
@@ -351,6 +359,7 @@ impl RepoSession {
                     op_state,
                     progress,
                     sides,
+                    op_message,
                     merge_tool,
                     eol_marks,
                 });

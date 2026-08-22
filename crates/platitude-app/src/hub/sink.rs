@@ -99,6 +99,7 @@ impl SessionSink for BridgeSink {
                 op_state,
                 progress,
                 sides,
+                op_message,
                 merge_tool,
                 eol_marks,
             } => {
@@ -115,6 +116,7 @@ impl SessionSink for BridgeSink {
                         op_state,
                         progress,
                         sides: sides.clone(),
+                        op_message: op_message.clone(),
                         merge_tool: merge_tool.clone(),
                         eol_marks: Arc::clone(&eol_marks),
                     });
@@ -124,6 +126,7 @@ impl SessionSink for BridgeSink {
                     op_state,
                     progress,
                     sides,
+                    op_message,
                     merge_tool,
                     eol_marks,
                 });

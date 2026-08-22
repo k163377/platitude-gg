@@ -209,7 +209,7 @@ pub async fn sides(
 /// Reads a file in the git directory, empty when it is not there. The
 /// path is asked for rather than assumed: a worktree's git directory is
 /// not `<workdir>/.git`.
-async fn git_file(
+pub(crate) async fn git_file(
     executor: &GitExecutor,
     workdir: &Path,
     rel: &str,

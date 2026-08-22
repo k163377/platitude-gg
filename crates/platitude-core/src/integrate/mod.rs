@@ -16,7 +16,7 @@ mod resolve;
 
 use crate::opstate;
 
-pub use merge::{MergeOptions, MergeOutcome, merge};
+pub use merge::{MergeOptions, MergeOutcome, merge, stopped_message};
 pub use pick::{cherry_pick, revert};
 pub use rebase::{RebaseOptions, RebaseOutcome, rebase};
 pub use resolve::{Continuation, InProgress, resolve, resolve_current};

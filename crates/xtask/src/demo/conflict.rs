@@ -85,6 +85,16 @@ pub(super) fn conflict_typed(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// The same merge with that resolution staged: nothing waits on a
+/// decision any more, `MERGE_HEAD` still stands, and the way out is the
+/// commit button (`merge-commit`). The one preset where that button is
+/// live under a stopped operation.
+pub(super) fn conflict_staged(repo: &mut DemoRepo) -> Result<(), String> {
+    conflict_typed(repo)?;
+    repo.git(&["add", "--", "shared.txt"])?;
+    Ok(())
+}
+
 /// A rebase stopped part-way, which a stopped merge cannot stand in for:
 /// it steps (so it counts `1/2` and takes `--skip` / `--quit`), and the
 /// two sides swap over — the commit being replayed is "theirs".

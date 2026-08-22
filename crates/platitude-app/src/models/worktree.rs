@@ -52,6 +52,15 @@ pub struct WorkTreeModel {
     /// count: only a rebase writes one, and a cherry-pick that steps
     /// would look like a merge if the count were the test.
     op_stepping: bool,
+    /// Whether the stopped operation is a merge. The one the commit box
+    /// finishes, so the one whose box opens filled in — and told apart
+    /// from `op_text` because that is a word on screen, not a question
+    /// to branch on.
+    op_merging: bool,
+    /// The message that merge is about to record, split the way the two
+    /// boxes hold it. Empty unless a merge is standing.
+    op_subject: String,
+    op_body: String,
     /// What to call each side of a conflict. **The two swap over during a
     /// rebase** (the commits being replayed are "theirs"), which is why
     /// these are read from the operation rather than worked out here.
@@ -105,6 +114,9 @@ impl WorkTreeModel {
     qproperty!("opStep", Member = op_step, Notify = changed);
     qproperty!("opSteps", Member = op_steps, Notify = changed);
     qproperty!("opStepping", Member = op_stepping, Notify = changed);
+    qproperty!("opMerging", Member = op_merging, Notify = changed);
+    qproperty!("opSubject", Member = op_subject, Notify = changed);
+    qproperty!("opBody", Member = op_body, Notify = changed);
     qproperty!("sideOurs", Member = side_ours, Notify = changed);
     qproperty!("sideTheirs", Member = side_theirs, Notify = changed);
     qproperty!("mergeTool", Member = merge_tool, Notify = changed);
@@ -139,6 +151,7 @@ impl WorkTreeModel {
             op_state,
             progress,
             sides,
+            op_message,
             merge_tool,
             eol_marks,
         }) = feed.drain().pop()
@@ -193,6 +206,8 @@ impl WorkTreeModel {
             InProgress::from_state(&op_state),
             None | Some(InProgress::Merge)
         );
+        self.op_merging = InProgress::from_state(&op_state) == Some(InProgress::Merge);
+        (self.op_subject, self.op_body) = platitude_core::commit::split_message(&op_message);
         // One pass, not five: `-uall` lists every untracked file, so the
         // list is as long as the working tree is dirty.
         // Same pass, same source: the kinds are the letters the file rows

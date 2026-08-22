@@ -131,12 +131,54 @@ Item {
     }
     function clearCommitEditor() {
         wipPane.clearMessage()
+        page.opFilledSubject = ""
+        page.opFilledBody = ""
+    }
+
+    /// A stopped merge opens the box already holding what it is about to record.
+    ///
+    /// The button under it is what finishes a merge — `git commit` there writes the very commit `--continue` would,
+    /// down to the tree, the two parents and the hooks it runs (実測 2.55) — so the message it will use belongs on
+    /// screen before the press rather than in the log after it (デザイン規約 §進行中の操作から出る).
+    ///
+    /// **Answered once per message, and never written over a draft.** Text in the boxes is the one thing here that
+    /// cannot be read back off disk, so a merge arriving under it leaves it where it is; the merge's own words are
+    /// still the placeholder underneath, and emptying the boxes commits them.
+    ///
+    /// **Taken back out when the merge goes** — but only where it is still standing untouched, which is what the pair
+    /// below is for: an abort leaves a box holding a message for a merge that no longer exists, and one word typed
+    /// into it makes it the reader's.
+    property string seenOpMessage: ""
+    property string opFilledSubject: ""
+    property string opFilledBody: ""
+    function absorbOpMessage() {
+        const subject = workTree.opMerging ? workTree.opSubject : ""
+        const body = workTree.opMerging ? workTree.opBody : ""
+        const message = subject === "" ? "" : subject + "\n" + body
+        if (message === page.seenOpMessage)
+            return
+        page.seenOpMessage = message
+        const ours = page.opFilledSubject !== ""
+                     && wipPane.subjectText === page.opFilledSubject
+                     && wipPane.bodyText === page.opFilledBody
+        page.opFilledSubject = ""
+        page.opFilledBody = ""
+        if (subject === "") {
+            if (ours)
+                wipPane.clearMessage()
+            return
+        }
+        if (!ours && (wipPane.subjectText !== "" || wipPane.bodyText !== ""))
+            return
+        page.opFilledSubject = subject
+        page.opFilledBody = body
+        wipPane.setMessage(subject, body)
     }
 
     // Not confirmed even when HEAD is already on a remote: amending rewrites nothing that a switch or a reset cannot
     // bring back, and the push that would spread it is asked about on its own.
     function commitNow() {
-        repoTab.commit(wipPane.subjectText, wipPane.bodyText, page.amending, wipPane.resetAuthor)
+        repoTab.commit(wipPane.outgoingSubject, wipPane.outgoingBody, page.amending, wipPane.resetAuthor)
     }
 
     // ---- moving between branches and commits ----------------------
@@ -1332,6 +1374,7 @@ Item {
             // refusal (2026-08-17 ユーザー報告).
             if (moved && !ours)
                 page.reloadDiff()
+            page.absorbOpMessage()
         }
     }
     Connections {

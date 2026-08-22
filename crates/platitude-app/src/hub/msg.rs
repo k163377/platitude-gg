@@ -224,6 +224,9 @@ pub struct StatusMsg {
     /// What the two sides of a conflict are called. Empty names while
     /// nothing is stopped, or where git left nothing to name one by.
     pub sides: platitude_core::conflict::Sides,
+    /// The message a stopped merge is about to record. Empty unless one
+    /// is standing.
+    pub op_message: String,
     /// The merge tool git would launch. Empty with none configured, or
     /// while nothing is conflicted. Names the menu row; the launch reads
     /// the config again rather than trusting this.
