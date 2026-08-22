@@ -51,6 +51,7 @@ use crate::stash::{self, StashEntry};
 use crate::status::{self, WorkTreeStatus};
 use crate::tag;
 
+mod author;
 mod auto_fetch;
 mod build;
 mod chips;
