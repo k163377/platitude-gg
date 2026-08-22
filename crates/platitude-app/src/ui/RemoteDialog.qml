@@ -143,14 +143,12 @@ AppDialog {
             Layout.fillWidth: true
             spacing: 0
             visible: markBox.offered
-            CheckBox {
+            AppCheckBox {
                 id: markBox
                 /// Whether this form is asking the question at all.
                 readonly property bool offered: remoteDialog.editing !== "" || remoteDialog.taken.length > 0
                 text: qsTr("Mark as default remote (origin)")
                 enabled: remoteDialog.markLocal || !remoteDialog.marked
-                font.pixelSize: Theme.fontMd
-                implicitHeight: Theme.controlHeight
             }
             // What checking it costs, and what unchecking it gives back (デザイン規約 §長さ: 見出し 1 行 + 失うもの 1 行). The third
             // line is not about this box at all: it says the one move a repository has against a mark it cannot clear.

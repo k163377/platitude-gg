@@ -746,11 +746,10 @@ ColumnLayout {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: Theme.spaceXs
-                    CheckBox {
+                    AppCheckBox {
                         id: amendBox
                         text: qsTr("Amend the last commit")
                         font.pixelSize: Theme.fontSm
-                        implicitHeight: Theme.controlHeight
                         onToggled: wipPane.amendToggled(checked)
                     }
                     Item { Layout.fillWidth: true }
@@ -781,12 +780,11 @@ ColumnLayout {
                 // opens at and well past the 300 it can be dragged to — and none of the three elides, so what went
                 // over came off the tag at the end. Stacking is also how a dependent option reads: one under the box
                 // it hangs off, at this spacing and with no indent.
-                CheckBox {
+                AppCheckBox {
                     id: authorBox
                     visible: wipPane.amending && wipPane.repoTab.headAuthorDiffers
                     text: qsTr("Make me the author")
                     font.pixelSize: Theme.fontSm
-                    implicitHeight: Theme.controlHeight
                     onVisibleChanged: if (!visible) checked = false
                     ToolTip.visible: hovered
                     ToolTip.delay: Metrics.tipDelayMs

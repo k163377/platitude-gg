@@ -100,9 +100,10 @@ Rectangle {
                     visible: pane.errorText === ""
                 }
 
-                CheckBox {
+                AppCheckBox {
                     text: qsTr("Background reads")
-                    font.pixelSize: Theme.fontMd
+                    // The panel's own band is shorter than a form row, so this box keeps the band's height rather
+                    // than the control height `AppCheckBox` opens at.
                     implicitHeight: Theme.iconLg
                     checked: pane.commandsModel.backgroundReads
                     // The reads a repository page makes on a timer are nobody's doing and would bury the rest, so they
