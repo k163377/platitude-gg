@@ -41,6 +41,26 @@ impl GraphModel {
         Member = tail_geometry,
         Notify = stats_changed
     );
+    // Which row the working tree stands on and what a stand-in for it
+    // draws. Properties for the reason `matchCount` is one: the rows
+    // arrive in chunks and their chips a pass later, and the pane has to
+    // hear about both (`head::settle_head`).
+    qproperty!("headRow", Member = head_row, Notify = stats_changed);
+    qproperty!("headLabels", Member = head_labels, Notify = stats_changed);
+    qproperty!("headSubject", Member = head_subject, Notify = stats_changed);
+    qproperty!("headColor", Member = head_color, Notify = stats_changed);
+    qproperty!("headLane", Member = head_lane, Notify = stats_changed);
+    qproperty!(
+        "headGeometry",
+        Member = head_geometry,
+        Notify = stats_changed
+    );
+    qproperty!("headAvatar", Member = head_avatar, Notify = stats_changed);
+    qproperty!(
+        "headAvatarUrl",
+        Member = head_avatar_url,
+        Notify = stats_changed
+    );
     qproperty!("error", Member = error, Notify = stats_changed);
 
     #[qsignal]
@@ -193,6 +213,7 @@ impl GraphModel {
                 }
             }
         }
+        self.settle_head();
         if crate::memprobe::enabled() {
             crate::memprobe::note("graph-rows", self.tab_id, &self.rows);
         }

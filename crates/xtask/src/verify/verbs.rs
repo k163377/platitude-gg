@@ -302,6 +302,21 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // are what the verb is for, and only neighbours are caught in one
         // substring.
         "graph-tail" => Some("graph_tail truncated=true shown=true"),
+        // The stand-in for a HEAD scrolled off. The five read as one set:
+        // a band that is there and a band that is gone frame the same
+        // way, and which edge it took is a difference of a few hundred
+        // pixels in a picture of two thousand rows. `onScreen=` is the
+        // other half of every one of them — the stand-in is wanted
+        // exactly while its row is not in sight, so a run where both are
+        // true (or neither) has the rule backwards.
+        "graph-head" => Some("shown=true above=true onScreen=false"),
+        "graph-head-below" => Some("shown=true above=false onScreen=false"),
+        "graph-head-lit" => Some("shown=true above=true onScreen=false lit=true"),
+        // And the two that take it away again: the press has to leave the
+        // selection on the row it led to, which is the whole of what it
+        // is for; the scroll back only has to bring the row into sight.
+        "graph-head-go" => Some("shown=false above=false onScreen=true lit=false landed=true"),
+        "graph-head-back" => Some("shown=false above=false onScreen=true lit=false"),
         // Which column the middle click landed in is the whole question,
         // and a photograph answers neither half of it: lanes carried
         // sideways and lanes left where they were frame alike at this

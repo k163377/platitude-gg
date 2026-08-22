@@ -61,6 +61,7 @@ GraphColumnDividers 1.0 GraphColumnDividers.qml
 GraphColumnMetrics 1.0 GraphColumnMetrics.qml
 GraphEmptyState 1.0 GraphEmptyState.qml
 GraphFind 1.0 GraphFind.qml
+GraphHeadPin 1.0 GraphHeadPin.qml
 GraphLaneBar 1.0 GraphLaneBar.qml
 GraphLaneCell 1.0 GraphLaneCell.qml
 GraphLanePan 1.0 GraphLanePan.qml

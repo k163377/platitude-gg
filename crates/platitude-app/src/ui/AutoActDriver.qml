@@ -152,7 +152,9 @@ Item {
                 "graph-step-named", "graph-step-dirty", "graph-step-diff", "diff-step",
                 "diff-step-edge", "changes-step", "changes-step-edge", "wip-step",
                 "graph-bar", "graph-bar-away", "middle-scroll",
-                "graph-tail", "divider-refuse", "cherry-pick", "reword", "edit-message",
+                "graph-tail", "graph-head", "graph-head-below", "graph-head-back",
+                "graph-head-go", "graph-head-lit",
+                "divider-refuse", "cherry-pick", "reword", "edit-message",
                 "edit-message-leave", "edit-message-focus",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
                 "find", "find-next", "find-prev", "find-drop",
@@ -1367,6 +1369,79 @@ Item {
             driver.complete()
         }
     }
+    // The stand-in for a HEAD scrolled off the graph (`GraphHeadPin`). It only exists where the row does not, so each
+    // of these sends the view to an edge first — and then reads the stand-in itself rather than the ask, because
+    // "told to go" and "arrived" are not the same thing (the same reason `graph-tail` reads `atYEnd`).
+    //
+    // Nothing here is waited out: the walk has to have answered (`headRow` is -1 until it has), and the chips arrive a
+    // pass behind the rows, so the row is found before it can say its own name.
+    Timer {
+        id: graphHeadTimer
+        interval: 25
+        repeat: true
+        /// Whether the second move — the press, or the scroll back — has been made. The first one is not latched: a
+        /// view told to go to its end before it has laid two thousand rows out goes to the end it knows about and stays
+        /// there, so the ask is repeated until the stand-in itself says it arrived (2026-08-22 実測 — one ask, and the
+        /// run waited out its watchdog at the top of the graph).
+        property bool answered: false
+        readonly property bool below: AppBackend.autoAct === "graph-head-below"
+        function report() {
+            const row = graphModel.headRow
+            // The five judged answers first and in one run, because a
+            // `must_say` catches neighbours only (`verify/verbs.rs`).
+            AppBackend.report(
+                "graph_head shown=" + graphPane.headPin.visible
+                + " above=" + graphPane.headPin.rowAbove
+                + " onScreen=" + graphPane.view.rowOnScreen(row)
+                + " lit=" + graphPane.headPin.lit
+                + " landed=" + (graphPane.view.currentIndex === row)
+                + " row=" + row
+                + " at=" + graphPane.view.currentIndex
+                // What it leaves the list's own scroll bar. A picture cannot answer it — the band is drawn over the
+                // trough either way — and a zero would mean the trough behind it answers with a jump to HEAD.
+                + " bar=" + Math.round(graphPane.headPin.barRoom))
+            driver.complete()
+        }
+        onTriggered: {
+            if (graphModel.loading || graphModel.rowTotal === 0
+                    || graphModel.headRow < 0 || graphModel.headLabels === "")
+                return
+            const act = AppBackend.autoAct
+            if (!graphHeadTimer.answered) {
+                // The stand-in has to have come up before anything is asked of it: the two runs below are about what
+                // takes it away again, and a run that never saw it would call an empty band a success.
+                if (!graphPane.headPin.visible) {
+                    if (graphHeadTimer.below)
+                        graphPane.view.positionViewAtBeginning()
+                    else
+                        graphPane.view.positionViewAtEnd()
+                    return
+                }
+                graphHeadTimer.answered = true
+                if (act === "graph-head-lit") {
+                    // Hover cannot be injected, so the rest goes to the one property the pointer's own arrival writes.
+                    graphPane.headPin.pointed = true
+                } else if (act === "graph-head-back") {
+                    graphPane.view.positionViewAtBeginning()
+                    return
+                } else if (act === "graph-head-go") {
+                    graphPane.headPin.activated(graphPane.headPin.headRow)
+                    return
+                }
+                graphHeadTimer.stop()
+                graphHeadTimer.report()
+                return
+            }
+            // What the press and the scroll back are both judged on: the row is on screen, so the stand-in has stepped
+            // aside. A press is judged on where the selection went as well.
+            if (graphPane.headPin.visible || !graphPane.view.rowOnScreen(graphModel.headRow))
+                return
+            if (act === "graph-head-go" && graphPane.view.currentIndex !== graphModel.headRow)
+                return
+            graphHeadTimer.stop()
+            graphHeadTimer.report()
+        }
+    }
     // The lane column has to have taken its narrower width before there is anywhere to pan to, or a bar worth wanting.
     Timer {
         id: graphPanTimer
@@ -2103,7 +2178,7 @@ Item {
         interval: 25
         repeat: true
         onTriggered: {
-            if (!graphPane.findOpen)
+            if (!graphPane.findCard.open)
                 return
             findSettled.stop()
             AppBackend.report(
@@ -2118,12 +2193,12 @@ Item {
         interval: 25
         repeat: true
         onTriggered: {
-            if (graphPane.findFade > 0 && graphPane.findFade < 1)
+            if (graphPane.findCard.opacity > 0 && graphPane.findCard.opacity < 1)
                 return
             findDropSettled.stop()
-            AppBackend.report("find_drop open=" + graphPane.findOpen
-                              + " shown=" + (graphPane.findFade > 0)
-                              + " query=" + graphPane.findQuery)
+            AppBackend.report("find_drop open=" + graphPane.findCard.open
+                              + " shown=" + (graphPane.findCard.opacity > 0)
+                              + " query=" + graphPane.findCard.query)
             driver.complete()
         }
     }
@@ -3117,6 +3192,10 @@ Item {
                               + " typed=" + nameTyped)
         } else if (act === "graph-tail") {
             graphTailTimer.start()
+        } else if (act === "graph-head" || act === "graph-head-below"
+                   || act === "graph-head-back" || act === "graph-head-go"
+                   || act === "graph-head-lit") {
+            graphHeadTimer.start()
         } else if (act === "graph-bar" || act === "graph-bar-away"
                    || act === "middle-scroll") {
             // Both want lanes that do not fit their column, and no demo repository has that many — the divider is
@@ -3425,22 +3504,22 @@ Item {
             // The key cannot be pressed from here; assigning the text runs the same search a keystroke runs.
             page.startFind()
             if (arg !== "")
-                graphPane.findQuery = arg
+                graphPane.findCard.query = arg
             if (act === "find-next")
                 graphPane.findNext()
             else if (act === "find-prev")
                 graphPane.findPrevious()
             // `width` and `cap` are the two halves of the rule the long queries are here to check: the card may grow,
             // and it may not reach past a subject's first character.
-            AppBackend.report("find open=" + graphPane.findOpen
-                              + " query=" + graphPane.findQuery
-                              + " matches=" + graphPane.findMatches
-                              + " at=" + graphPane.findAt
+            AppBackend.report("find open=" + graphPane.findCard.open
+                              + " query=" + graphPane.findCard.query
+                              + " matches=" + graphPane.findCard.matches
+                              + " at=" + graphPane.findCard.atMatch
                               + " row=" + graphPane.view.currentIndex
                               + " selected=" + page.selectedOid.substring(0, 7)
-                              + " width=" + Math.round(graphPane.findWidth)
+                              + " width=" + Math.round(graphPane.findCard.width)
                               + " cap=" + Math.round(graphPane.width - graphPane.subjectTextX)
-                              + " clears=" + graphPane.findClears)
+                              + " clears=" + graphPane.findCard.findClears)
             findSettled.restart()
         } else if (act === "find-drop") {
             // The card standing while a press lands somewhere else. Presses cannot be injected (verify-ui スキル), so
@@ -3450,7 +3529,7 @@ Item {
             // would be to lose (規約 §コミットを探す).
             page.startFind()
             if (arg !== "")
-                graphPane.findQuery = arg
+                graphPane.findCard.query = arg
             page.releasePressedAway(null)
             findDropSettled.restart()
         } else if (act === "commands") {

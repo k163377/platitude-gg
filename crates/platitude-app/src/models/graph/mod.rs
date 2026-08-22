@@ -13,6 +13,7 @@ use crate::hub::{Feed, GraphMsg};
 use super::{impl_extend_notified, impl_notify_runs, push_run, qml_register};
 
 mod find;
+mod head;
 mod item;
 mod qobject;
 mod stream;
@@ -62,6 +63,18 @@ pub struct GraphModel {
     /// uppercase for a dashed leash — `encode::tail_lanes`), drawn by the
     /// truncation footer.
     tail_geometry: String,
+    /// The loaded row the working tree stands on, and what a stand-in for
+    /// it draws — the chip records it carries and the subject it says.
+    /// -1 and two empty strings while HEAD is outside the window, which
+    /// is a row nothing can lead to (`head::settle_head`).
+    head_row: i32,
+    head_labels: String,
+    head_subject: String,
+    head_color: i32,
+    head_lane: i32,
+    head_avatar: i32,
+    head_avatar_url: String,
+    head_geometry: String,
     error: String,
     started_at: Option<Instant>,
     feed: Option<Arc<Feed<GraphMsg>>>,

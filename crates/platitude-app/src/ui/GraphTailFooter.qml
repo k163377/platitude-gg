@@ -4,10 +4,14 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// Window cut: lanes keep running through the footer and the message sits where subjects go. One row tall — the lanes
-// carry on for exactly one more commit's worth, which is all it takes to read as "and it continues" — unless the
-// message needs more than that. It is the only thing explaining the cut, so a narrow subject column grows the footer
-// rather than eliding it.
+// Window cut: the lanes run on into the footer and the message sits where subjects go. One row tall — one more
+// commit's worth of lane is all it takes to read as "and it continues" — unless the message needs more than that. It
+// is the only thing explaining the cut, so a narrow subject column grows the footer rather than eliding it.
+//
+// **And that run of lane goes out rather than stopping.** Full strength where the last row leaves off, gone by the
+// bottom of this band: there is nothing past the cut to draw, so what stands for it fades into the ground (2026-08-22
+// ユーザー判断). Nothing is added on top — a mark there said the same thing twice, and the line below already names the
+// cut in words.
 Item {
     id: tail
 
@@ -40,7 +44,6 @@ Item {
                 if (tail.graphModel.tailGeometry === "")
                     return
                 ctx.lineWidth = Metrics.laneStroke
-                ctx.globalAlpha = Metrics.dimFade
                 // Same tokens as a row's geometry (uppercase = dashed leash): a stash or WIP row whose target sits past
                 // the cut keeps dotting through here.
                 const toks = tail.graphModel.tailGeometry.split(";")
@@ -50,7 +53,15 @@ Item {
                     const lane = parseInt(t.substring(1, dot))
                     const color = parseInt(t.substring(dot + 1))
                     const x = Metrics.laneInset + lane * Metrics.laneW + Metrics.laneW / 2
-                    ctx.strokeStyle = Theme.graphLane[color % Theme.graphLane.length]
+                    // **The lanes go out rather than stop.** They used to be drawn flat at `dimFade`, which put a step
+                    // between the last row and this one exactly where the eye is following a line down (2026-08-22
+                    // ユーザー報告: 一気に変化している点で少し違和感). Full strength where the last row leaves off, gone by the
+                    // bottom — the history past the cut is not there to be drawn, so what stands for it fades out.
+                    const fade = ctx.createLinearGradient(0, 0, 0, height)
+                    const hex = Theme.graphLane[color % Theme.graphLane.length]
+                    fade.addColorStop(0, tailCanvas.faded(hex, 1))
+                    fade.addColorStop(1, tailCanvas.faded(hex, 0))
+                    ctx.strokeStyle = fade
                     ctx.setLineDash(t[0] === t[0].toLowerCase() ? [] : Metrics.laneDash)
                     ctx.beginPath()
                     ctx.moveTo(x, 0)
@@ -58,6 +69,13 @@ Item {
                     ctx.stroke()
                 }
                 ctx.setLineDash([])
+            }
+            /// A lane's colour at `a` of its strength, as a gradient stop. **`Theme.graphLane` holds strings, not
+            /// colours** — the token is a `var` array, so `.r` off one is `undefined` and `Qt.rgba` of that draws
+            /// nothing (2026-08-22 実測). Qt reads `#AARRGGBB`, so the alpha goes on the front of the token's own string.
+            function faded(hex, a) {
+                const v = Math.round(Math.max(0, Math.min(1, a)) * 255)
+                return "#" + (v < 16 ? "0" : "") + v.toString(16) + hex.substring(1)
             }
             Connections {
                 target: tail.graphModel

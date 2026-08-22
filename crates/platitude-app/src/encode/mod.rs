@@ -12,7 +12,7 @@ mod words;
 pub use columns::widest_columns;
 pub use graph::{avatar_code, conflict_side_colors, encode_geometry, tail_lanes};
 pub(crate) use labels::fake_pr_set;
-pub use labels::{co_author_pairs, encode_co_authors, encode_labels, label_names};
+pub use labels::{co_author_pairs, encode_co_authors, encode_labels, label_names, labels_head};
 pub use rows::{DiffRow, flatten_patches, is_combined, is_new_file, is_unmerged_only};
 pub use select::{diff_key, hunk_selection, worktree_target};
 // `EndingWords` itself is not re-exported: every caller takes it off

@@ -9,7 +9,7 @@ use super::conflict::{
     cherry_pick_conflict, conflict, conflict_kinds, drop_collides, drop_stops, rebase_conflict,
     rebase_empty, rebase_staged,
 };
-use super::deep::deep;
+use super::deep::{deep, deep_detached};
 use super::remote::{behind, diverged, unpublished};
 use super::repo::DemoRepo;
 use super::scale::{edges, long, longpaths, manyhunks, widelines};
@@ -80,6 +80,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "tags" => tags(&mut repo)?,
         "manytags" => manytags(&mut repo)?,
         "deep" => deep(&mut repo)?,
+        "deep-detached" => deep_detached(&mut repo)?,
         "edges" => edges(&mut repo)?,
         "long" => long(&mut repo)?,
         "longpaths" => longpaths(&mut repo)?,

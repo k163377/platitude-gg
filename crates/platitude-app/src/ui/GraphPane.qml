@@ -50,21 +50,13 @@ Rectangle {
     }
 
     // ---- looking for a commit --------------------------------------
-    /// The find bar's state, and its box, for the headless run — the key that opens it cannot be pressed from there.
-    readonly property alias findOpen: findBar.open
-    property alias findQuery: findBar.query
-    /// What the bar reports back, for the headless run and for whoever wants to read the search without opening the
-    /// card.
-    readonly property alias findMatches: findBar.matches
-    readonly property alias findAt: findBar.atMatch
-    readonly property alias findWidth: findBar.width
-    /// How far in or out the card is. Only `1` and `0` are worth photographing — the fade between them is a card that
-    /// is neither up nor gone, and the headless run waits for one end or the other.
-    readonly property alias findFade: findBar.opacity
-    /// How far the graph has stepped down out from under the card.
+    /// The card itself — automation-only exposure, the same one `view` and `headPin` are (app-ui.md). A headless run
+    /// reads its `open` / `query` / `matches` / `atMatch` / `width` / `opacity` / `findClears` off it and types into
+    /// its box; eight names on this pane said nothing the card does not, and the key that opens it cannot be pressed
+    /// from there.
+    readonly property alias findCard: findBar
+    /// How far the graph has stepped down out from under the card. This one is the list's, not the card's.
     readonly property real findShift: graphList.anchors.topMargin
-    readonly property alias findOn: findBar.findOn
-    readonly property alias findClears: findBar.findClears
     signal findLanded(string oidHex)
     function startFind() { findBar.startFind() }
     function findNext() { findBar.findNext() }
@@ -174,14 +166,11 @@ Rectangle {
     }
     property alias labelWManual: metrics.labelWManual
     property alias graphColWManual: metrics.graphColWManual
-    readonly property alias labelColWMin: metrics.labelColWMin
-    readonly property alias labelColWMax: metrics.labelColWMax
     readonly property alias labelW: metrics.labelW
     readonly property alias contentMinW: metrics.contentMinW
     readonly property alias graphFullW: metrics.graphFullW
     readonly property alias graphColWMin: metrics.graphColWMin
     readonly property alias graphColWMax: metrics.graphColWMax
-    readonly property alias graphColWFixed: metrics.graphColWFixed
     readonly property alias graphColW: metrics.graphColW
     property alias graphX: metrics.graphX
     readonly property alias graphXMax: metrics.graphXMax
@@ -248,7 +237,7 @@ Rectangle {
         // the answers, the graph steps down by the card's height so that answer is not the one thing the search covers.
         // It goes back the moment the top row stops matching, so the band is not a place the eye learns to expect (規約
         // §コミットを探す).
-        anchors.topMargin: graphArea.findClears ? findBar.height : 0
+        anchors.topMargin: findBar.findClears ? findBar.height : 0
         Behavior on anchors.topMargin {
             NumberAnimation { duration: 200 }
         }
@@ -305,7 +294,10 @@ Rectangle {
         property string askOid: ""
         property bool askDanger: false
         // Mirrored for the delegates, which can only see the view: rows dim while a search is on.
-        readonly property bool findOn: graphArea.findOn
+        readonly property bool findOn: findBar.findOn
+        // Which row the working tree stands on, mirrored for the delegates the same way: that row writes its message in
+        // the branch's blue, wherever it is read (規約 §グラフの中で HEAD を見失わない).
+        readonly property int headRow: graphArea.graphModel.headRow
         signal rowSelected(string oidHex)
         signal rowMenuRequested(string oidHex)
         signal chipMenuRequested(string oidHex, string record)
@@ -406,6 +398,33 @@ Rectangle {
         view: graphList
         graphModel: graphArea.graphModel
     }
+    // The current branch's stand-in, riding whichever edge its own row went out of. **Over the lane strip and under the
+    // dividers**: the strip takes presses across the lane column, so a stand-in below it would answer its own lanes
+    // with the row scrolling underneath — and the dividers stay on top, because a boundary that can be dragged is only
+    // a few pixels wide wherever it crosses. It follows the list's frame instead of living in it (`view`), which is
+    // what keeps it still while the rows go by.
+    GraphHeadPin {
+        id: headPin
+        z: 1
+        graphModel: graphArea.graphModel
+        view: graphList
+        labelWidth: graphArea.labelW
+        graphColWidth: graphArea.graphColW
+        graphFullWidth: graphArea.graphFullW
+        graphXOffset: graphArea.graphX
+        // The list's own bar, which this lies on top of. Read off the bar rather than off the token: the width is the
+        // style's, and a guess would leave either a strip of trough taken or a strip of stand-in that answers nothing.
+        barRoom: graphList.ScrollBar.vertical.visible ? graphList.ScrollBar.vertical.width : 0
+        onActivated: row => {
+            graphList.takeKeyboard()
+            graphArea.jumpToRow(row)
+            graphArea.rowActivated(graphArea.graphModel.oidAt(row))
+        }
+    }
+    /// The stand-in itself — automation-only exposure, the same one `view` is (app-ui.md). A headless run reads what it
+    /// drew (`visible` / `rowAbove` / `lit`), rests the pointer on it by writing the one property the pointer's own
+    /// arrival writes, and presses it through its own signal: five names on this pane said nothing the item does not.
+    readonly property alias headPin: headPin
 
     // Draggable column dividers (labels | graph | message). The hand is in there; the two lines it raises are drawn
     // above, under the list. Same seat in the stack as the two dividers had: over the lane pan, under the lane bar.
@@ -432,7 +451,6 @@ Rectangle {
     /// column that cannot be resized but still promises a drag cannot pass.
     readonly property alias graphDividerShown: columnDividers.graphDividerShown
     readonly property alias graphDividerLineShown: graphDividerLine.visible
-    readonly property alias labelDividerLineShown: labelDividerLine.visible
     /// Whether the badge the page draws for this pane is up. The page owns it, so this is the pane's half of that
     /// answer.
     readonly property alias graphDividerRefuses: columnDividers.refused

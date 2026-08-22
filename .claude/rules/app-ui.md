@@ -27,6 +27,7 @@ UI の色・寸法・用語の正本は [デザイン規約.md](../../internal-d
 - QML の font 値型に `families`(配列)は無い — フォールバックは `Qt.fontFamilies()` と照合して Theme 側で 1 家族に解決する
 - `grabToImage` は `Window.contentItem` には使えない("no QML engine")— QML 宣言したアイテムを対象にする
 - **画面全体の入力観測は最前面オーバーレイ + `PointHandler`**(passive grab のみが仕様保証)。TapHandler は DragThreshold でも press を消費して下のコントロールへ届かなくし、contentItem 直付けでは手前の MouseArea が accept した press が届かない(実測)
+- **`HoverHandler` は「親アイテムの全面」で hover を受け取り、下に重なったアイテムの hover を殺す** — 親に直付けなら自分の子は生きるが、**兄弟として上へ積んだアイテムに載せると、その下の行・セルの `containsMouse` が二度と立たない**(2026-08-22 qmltestrunner で実測。症状は「hover が出ない・出たカードが閉じない・ハイライトが点いたままスタック」)。ペイン全体の hover を測る handler は**ペイン自身に置く**(部品へ切り出す時に持って行かない)
 - **Flickable(ListView 含む)に宣言した子は contentItem に養子入りする** — そのままではコンテンツと一緒にスクロールして流れ去る。ビュー枠に固定するオーバーレイ(スクロール位置で出入りする現在ブランチ行など)は `parent:` でビュー自身を指し、描画も入力もデリゲートより手前に来る(実測)
 - **QML バインディングはプロパティにしか反応しない** — `#[qslot]` は呼び出し用。`enabled:` 等が値の変化を追う必要があるものは `qproperty!` にする(スロットのままだと初期値のまま固まる)
 - **`FontMetrics.advanceWidth()` も同じ側**(メソッド)— バインディングが依存を取らないので**初回の 1 回で確定**し、しかも**その 1 回のメトリクスはまだ既定フォント**(自分の `font` バインディングは後から着く)。エラーも警告も出ず値だけが黙って狂う(実測)。**測って決める値はバインディングにせず関数で押し出す**(`TopBar.settleTitleCap` / `widestAction` が既にその形)

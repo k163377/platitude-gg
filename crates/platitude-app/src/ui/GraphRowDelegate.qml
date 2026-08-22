@@ -53,6 +53,10 @@ Item {
     // Whether this row is somewhere HEAD could stand: the working-tree row is not a commit, and a stash sits on no
     // branch's history.
     readonly property bool movable: !rowItem.isWip && rowItem.stash_ref === ""
+    // The commit the working tree is standing on. Asked of the row number the model settled rather than of the chips
+    // this row carries: a detached HEAD is the same answer and the chip that says so is a different kind
+    // (`models::graph::head`).
+    readonly property bool isHead: rowItem.ListView.view ? rowItem.ListView.view.headRow === rowItem.index : false
     // Where a double-click on this row goes: the branch chip's own first record, so what is on screen is what is moved
     // to. Empty means the row shows no branch, which is the offer to put one there.
     readonly property string primaryRecord:
@@ -166,7 +170,13 @@ Item {
                 text: rowItem.isWip ? qsTr("Uncommitted changes") : rowItem.subject
                 elide: Text.ElideRight
                 font.pixelSize: Theme.fontMd
-                color: rowItem.isWip ? Theme.textSecondary : Theme.textPrimary
+                // The commit the working tree is standing on writes its message in the branch's own blue — the same
+                // `textLink` the chip on it uses, and the same the stand-in uses while this row is scrolled off
+                // (規約 §グラフの中で HEAD を見失わない). One rule for the one commit, so nothing changes under the reader when
+                // they go there and the stand-in steps aside (2026-08-22 ユーザー判断).
+                color: rowItem.isWip ? Theme.textSecondary
+                       : rowItem.isHead ? Theme.textLink
+                       : Theme.textPrimary
                 rightPadding: rowItem.isWip ? 0 : Theme.spaceSm
             }
             WipTallyRow {
