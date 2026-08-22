@@ -96,6 +96,20 @@ impl<T> Feed<T> {
         s.queue.clear();
         s.invoker = None;
     }
+
+    /// Drops what is queued and keeps the consumer.
+    ///
+    /// For the other end of a release: cancellation is cooperative, so a
+    /// task that had already worked out an answer can push it after
+    /// [`Feed::release`] has run, and it would then be waiting here for a
+    /// page that opens the repository *again* — a message about a session
+    /// that no longer exists, read as though it were about the new one.
+    /// The graph is where that goes worst: its generations restart with
+    /// the model, so one stale `Started` leaves it holding a number the
+    /// new stream never reaches and no chunk it sends is ever drawn.
+    pub fn clear_queued(&self) {
+        self.lock().queue.clear();
+    }
 }
 
 /// All feeds of one tab. Each feed is independently `Arc`-shared with the
@@ -128,27 +142,42 @@ pub struct Feeds {
     pub commands: Arc<Feed<CommandMsg>>,
 }
 
+/// Calls one of [`Feed`]'s no-argument methods on every feed a tab has.
+///
+/// The list of feeds is written once, here. There is nothing to iterate —
+/// each feed carries a different message type — so without this the walks
+/// below would be two copies of the same list, free to disagree about
+/// what a tab holds; a feed left out of one of them is a queue that goes
+/// on holding a repository nobody is reading.
+macro_rules! every_feed {
+    ($feeds:expr => $method:ident) => {{
+        let feeds: &Feeds = $feeds;
+        feeds.tab.$method();
+        feeds.graph.$method();
+        feeds.refs_branches.$method();
+        feeds.refs_remotes.$method();
+        feeds.refs_tags.$method();
+        feeds.status.$method();
+        feeds.status_nav_conflicts.$method();
+        feeds.status_nav_unstaged.$method();
+        feeds.status_nav_staged.$method();
+        feeds.stash.$method();
+        feeds.worktrees.$method();
+        feeds.details.$method();
+        feeds.diff.$method();
+        feeds.commands.$method();
+    }};
+}
+
 impl Feeds {
-    /// Empties every queue and forgets every consumer (see
-    /// [`Feed::release`]). Listed out rather than walked, because there is
-    /// nothing to walk: each feed carries a different message type, so a
-    /// feed added here and left out of this list is a queue that goes on
-    /// holding a repository nobody is reading.
+    /// Empties every queue and forgets every consumer ([`Feed::release`]).
     pub fn release_all(&self) {
-        self.tab.release();
-        self.graph.release();
-        self.refs_branches.release();
-        self.refs_remotes.release();
-        self.refs_tags.release();
-        self.status.release();
-        self.status_nav_conflicts.release();
-        self.status_nav_unstaged.release();
-        self.status_nav_staged.release();
-        self.stash.release();
-        self.worktrees.release();
-        self.details.release();
-        self.diff.release();
-        self.commands.release();
+        every_feed!(self => release);
+    }
+
+    /// Empties every queue and keeps the consumers ([`Feed::clear_queued`]).
+    pub fn clear_queued_all(&self) {
+        every_feed!(self => clear_queued);
     }
 }
 

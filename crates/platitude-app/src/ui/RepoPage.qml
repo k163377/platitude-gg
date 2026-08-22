@@ -1268,11 +1268,11 @@ Item {
         // mid-sentence, and what they come back to has to be the sentence. This is also what holds the selection off —
         // `trySelectDefault` leaves a page showing the working tree alone.
         page.showWip()
-        // …and the graph stands on the working tree's own row as soon as the walk has put one there
-        // (`tryPendingWipSelect`), so the highlight agrees with the pane. A clean tree has no such row and nothing
-        // stands anywhere, which is what any page nobody has picked a row on looks like.
-        page.pendingWipSelect = true
         wipPane.setMessage(subject, body)
+        // **Not `pendingWipSelect`.** A dirty tree already puts its own row at the top of a graph nobody has picked a
+        // row on, so the highlight lands there without asking; a clean tree has no such row, and the flag would then
+        // stand until the tree got dirty and jump the view to the top from wherever the reader had scrolled to
+        // (規約 §ListView.highlightFollowsCurrentItem — a background pass may not move a reader's view).
     }
 
     // ---- what this page is laid out at ------------------------------

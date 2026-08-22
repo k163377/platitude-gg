@@ -147,6 +147,14 @@ impl Hub {
             return;
         }
         let path = tab.path.clone();
+        // Nothing queued here can be about the session about to be opened,
+        // because there is no session yet — so anything waiting came from
+        // one that has been released, pushed by a task that had already
+        // worked out its answer when cancellation reached it. Read as the
+        // new session's, one such message is enough to leave the graph
+        // holding a generation the new stream never reaches
+        // (`Feed::clear_queued`).
+        tab.feeds.clear_queued_all();
         let feeds = Arc::clone(&tab.feeds);
         let applied = self.settings.for_repo(&path.to_string_lossy());
         let sink = Arc::new(BridgeSink { feeds });

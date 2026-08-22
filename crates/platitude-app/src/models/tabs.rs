@@ -205,8 +205,8 @@ impl TabsModel {
         });
         self.leave_front();
         self.current_index = self.items.len() as i32 - 1;
-        self.current_index_changed();
         self.report();
+        self.current_index_changed();
     }
 
     /// Puts back the tabs the last session had open.
@@ -268,8 +268,8 @@ impl TabsModel {
             return;
         }
         self.current_index = wanted_held.unwrap_or(wanted).min(self.items.len() - 1) as i32;
-        self.current_index_changed();
         self.report();
+        self.current_index_changed();
     }
 
     #[qslot]
@@ -294,8 +294,8 @@ impl TabsModel {
             if self.current_index >= len {
                 self.current_index = len - 1;
             }
-            self.current_index_changed();
             self.report();
+            self.current_index_changed();
         }
     }
 
@@ -320,11 +320,12 @@ impl TabsModel {
         // moved too, and each of them has to keep showing the repository
         // it was showing.
         let landed = index_after_move(self.current_index, from, to);
-        if landed != self.current_index {
-            self.current_index = landed;
+        let moved = landed != self.current_index;
+        self.current_index = landed;
+        self.report();
+        if moved {
             self.current_index_changed();
         }
-        self.report();
     }
 
     #[qslot]
@@ -332,8 +333,8 @@ impl TabsModel {
         if index != self.current_index && index >= -1 && index < self.items.len() as i32 {
             self.leave_front();
             self.current_index = index;
-            self.current_index_changed();
             self.report();
+            self.current_index_changed();
         }
     }
 }
@@ -390,6 +391,16 @@ impl TabsModel {
     /// switching are single acts rather than something that moves under a
     /// dragging hand, so they report as they happen; the file itself is
     /// still only written by the flush.
+    ///
+    /// **Called before the act's own `current_index_changed()`**, because
+    /// this is also where the tab in front is named ([`settle_current`]) —
+    /// and a notification that goes out with the row already moved and the
+    /// tab not yet named is one where the two disagree: the page for the
+    /// row arrived at has not been built, the page for the row left is
+    /// still standing, and anything reading "the page in front" gets
+    /// nothing.
+    ///
+    /// [`settle_current`]: TabsModel::settle_current
     fn report(&mut self) {
         self.settle_current();
         // Named the way the file names it. The store normalises separators
