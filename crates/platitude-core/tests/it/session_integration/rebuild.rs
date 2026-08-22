@@ -207,7 +207,11 @@ async fn an_external_ref_move_rebuilds_the_graph() {
 /// The hook makes the interleaving exact rather than hoped for: it holds
 /// the read at the sink call that publishes its snapshot while the test
 /// rebuilds the graph under it.
-#[tokio::test(flavor = "multi_thread")]
+// `worker_threads = 2` is the test's own premise, not tuning: the hook
+// below parks a worker on a blocking `recv`, and a pool inherited from
+// `available_parallelism` can be a single thread on a small runner —
+// the parked hook then owns the only worker and nothing else runs.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn chips_read_from_one_graph_do_not_land_on_another() {
     let mut repo = TestRepo::init();
     let root = repo.commit_file("f.txt", "0\n", "root");
@@ -302,7 +306,9 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
 ///
 /// Held under the graph lock, the interleaving is exact: the losing pass
 /// cannot reach its reset before the cancel that supersedes it.
-#[tokio::test(flavor = "multi_thread")]
+// `worker_threads = 2`: the parked hook must not own the only worker
+// (see the sibling above).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "0\n", "root");
