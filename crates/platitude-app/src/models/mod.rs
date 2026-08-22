@@ -23,6 +23,8 @@ mod notify;
 mod pathtree;
 mod repo_tab;
 mod tabs;
+#[cfg(test)]
+mod tabs_tests;
 mod worktree;
 
 pub use app_backend::{AppBackend, build_tree};

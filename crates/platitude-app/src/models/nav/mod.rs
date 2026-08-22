@@ -14,6 +14,8 @@ use super::pathtree::DirNode;
 use super::qml_register;
 
 mod field;
+#[cfg(test)]
+mod field_tests;
 mod item;
 mod qmodel;
 mod qobject;
