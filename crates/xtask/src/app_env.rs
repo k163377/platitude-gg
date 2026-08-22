@@ -1,5 +1,6 @@
 //! Isolation boundary for app automation launched by xtask.
 
+use std::ffi::OsString;
 use std::process::Command;
 
 /// Prefix every app automation variable lives under (core's
@@ -15,8 +16,23 @@ const AUTOMATION_PREFIX: &str = "PG_";
 const NOT_AUTOMATION: &[&str] = &["PG_CONFIG_DIR", "PG_LOG", "PG_ALLOW_GUI"];
 
 /// Whether one environment variable is an automation input to clear.
+/// Compared case-folded: Windows resolves environment names without
+/// case, so a parent's `pg_auto_act` reaches the child's
+/// `std::env::var("PG_AUTO_ACT")` all the same.
 fn is_automation(name: &str) -> bool {
-    name.starts_with(AUTOMATION_PREFIX) && !NOT_AUTOMATION.contains(&name)
+    let upper = name.to_ascii_uppercase();
+    upper.starts_with(AUTOMATION_PREFIX) && !NOT_AUTOMATION.contains(&upper.as_str())
+}
+
+/// The parent-environment names [`clear_automation`] removes, from an
+/// iterator of raw names. A name that is not Unicode cannot be read by
+/// the app's `std::env::var` and is left alone — and it must not stop
+/// the walk (`std::env::vars` panics on one, which is why this takes
+/// `vars_os`-shaped input).
+fn names_to_clear(names: impl Iterator<Item = OsString>) -> Vec<OsString> {
+    names
+        .filter(|name| name.to_str().is_some_and(is_automation))
+        .collect()
 }
 
 /// Removes every automation variable the parent process carries, so a
@@ -25,10 +41,8 @@ fn is_automation(name: &str) -> bool {
 /// own values after this — on a `Command`, a later set wins over the
 /// remove.
 pub(super) fn clear_automation(command: &mut Command) {
-    for (name, _) in std::env::vars() {
-        if is_automation(&name) {
-            command.env_remove(&name);
-        }
+    for name in names_to_clear(std::env::vars_os().map(|(name, _)| name)) {
+        command.env_remove(&name);
     }
 }
 
@@ -43,24 +57,31 @@ mod tests {
         assert!(is_automation("PG_AUTO_WATCHDOG_MS"));
         assert!(is_automation("PG_SHOT_DIR"));
         assert!(is_automation("PG_FAKE_PR"));
-        // …and the knob of tomorrow, which no list has heard of yet.
+        // …the knob of tomorrow, which no list has heard of yet…
         assert!(is_automation("PG_SOME_FUTURE_KNOB"));
+        // …and the spelling Windows resolves without case.
+        assert!(is_automation("pg_auto_act"));
         // What rides through: who is driving is not in these.
         assert!(!is_automation("PG_CONFIG_DIR"));
+        assert!(!is_automation("pg_config_dir"));
         assert!(!is_automation("PG_LOG"));
         assert!(!is_automation("PG_ALLOW_GUI"));
         assert!(!is_automation("PATH"));
     }
 
     #[test]
-    fn only_prefixed_variables_are_ever_removed() {
-        let mut command = Command::new("app");
-        clear_automation(&mut command);
-        for (name, value) in command.get_envs() {
-            if value.is_none() {
-                let name = name.to_string_lossy();
-                assert!(is_automation(&name), "{name}");
-            }
-        }
+    fn a_synthetic_environment_is_cleared_deterministically() {
+        let names = [
+            OsString::from("PG_AUTO_ACT"),
+            OsString::from("pg_shot_dir"),
+            OsString::from("PG_CONFIG_DIR"),
+            OsString::from("PATH"),
+        ];
+        let cleared = names_to_clear(names.into_iter());
+        assert_eq!(
+            cleared,
+            vec![OsString::from("PG_AUTO_ACT"), OsString::from("pg_shot_dir")],
+            "automation knobs go, either case; pass-through and foreign names stay"
+        );
     }
 }

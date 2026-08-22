@@ -105,6 +105,11 @@ pub struct WorkTreeModel {
     /// The counts `tree_revision` last spoke for; `None` before the
     /// first status, which always counts as movement.
     seen_counts: Option<(i32, i32, i32, i32)>,
+    /// Bumped on every drained status, moved or not — the freshness token
+    /// for readers that must not act on a status already in flight when
+    /// they armed (the page's detached landing). `tree_revision` cannot
+    /// serve there: a clean-tree write moves no count.
+    status_seq: i32,
     feed: Option<Arc<Feed<StatusMsg>>>,
     tab_id: i32,
 }
@@ -152,6 +157,7 @@ impl WorkTreeModel {
     qproperty!("wipCopied", Member = wip_copied, Notify = changed);
     qproperty!("stashStanding", Member = stash_standing, Notify = changed);
     qproperty!("treeRevision", Member = tree_revision, Notify = changed);
+    qproperty!("statusSeq", Member = status_seq, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -262,6 +268,7 @@ impl WorkTreeModel {
             self.seen_counts = Some(tally);
             self.tree_revision += 1;
         }
+        self.status_seq += 1;
         (self.op_step, self.op_steps) = match progress {
             Some(p) => (p.current as i32, p.total as i32),
             None => (0, 0),

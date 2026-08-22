@@ -275,21 +275,14 @@ impl Hub {
 
     /// How many messages are waiting in each tab's feeds, as
     /// `<name>#<tab>:<depth>` for the ones holding anything. The feeds
-    /// walked are the one list `for_every_feed!` carries — a copy kept by
+    /// walked are the one list `Feeds::each` carries — a copy kept by
     /// hand here once under-reported exactly the queue this report exists
     /// to catch.
     pub fn feed_depths(&self) -> String {
         let mut waiting: Vec<String> = Vec::new();
         for (id, tab) in &self.tabs {
-            let f = &tab.feeds;
-            let mut depths: Vec<(&'static str, usize)> = Vec::new();
-            macro_rules! note {
-                ($feeds:expr, $field:ident, $name:literal) => {
-                    depths.push(($name, $feeds.$field.depth()));
-                };
-            }
-            super::feed::for_every_feed!(note, f);
-            for (name, depth) in depths {
+            for (name, feed) in tab.feeds.each() {
+                let depth = feed.depth();
                 if depth > 0 {
                     waiting.push(format!("{name}#{id}:{depth}"));
                 }

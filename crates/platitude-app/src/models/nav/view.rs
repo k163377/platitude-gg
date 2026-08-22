@@ -151,8 +151,18 @@ impl NavSectionModel {
         // The bucket heading's number, counted where the rows are cut to
         // the run — so the heading and the list under it cannot come to
         // read the bucket rule (`Bucket::run`) two ways. Filter-
-        // independent for the same reason `total` is.
-        self.run_files = (0..self.all.len()).filter(|at| self.in_run(*at)).count() as i32;
+        // independent for the same reason `total` is, and hidden rows
+        // come off it by `total`'s own rule. Sections without a run
+        // (everything but the worktree buckets) answer 0: the property
+        // is the bucket heading's, and a tags list publishing its whole
+        // row count under this name would only invite a wrong reader.
+        self.run_files = if self.run.is_empty() {
+            0
+        } else {
+            (0..self.all.len())
+                .filter(|at| self.in_run(*at) && !self.hidden_at(*at))
+                .count() as i32
+        };
     }
 
     /// Whether this source row is one the page is already showing as gone

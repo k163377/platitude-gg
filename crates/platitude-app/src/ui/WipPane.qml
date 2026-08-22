@@ -647,8 +647,10 @@ ColumnLayout {
             id: conflictsBucket
             section: "conflicts"
             // The one bucket that comes and goes: git is not in the middle of anything most of the time, and a heading
-            // for a state the tree is not in is a place nothing can ever land (デザイン規約 §その他の操作).
-            visible: wipPane.workTree.conflictCount > 0
+            // for a state the tree is not in is a place nothing can ever land (デザイン規約 §その他の操作). Read off the
+            // bucket's own list, like the heading's count — two feeds carry the same status, and reading one for the
+            // frame and the other for the words opens a queue-order window where they disagree.
+            visible: conflictsBucket.model.runFiles > 0
             pane: wipPane
             repoTab: wipPane.repoTab
             workTree: wipPane.workTree

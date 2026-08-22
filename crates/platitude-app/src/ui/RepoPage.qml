@@ -1023,6 +1023,7 @@ Item {
         else if (repoTab.lastWriteOp === "revert" || repoTab.lastWriteOp === "cherry-pick"
                 || repoTab.lastWriteOp === "merge") {
             page.pendingHeadSelect = true
+            page.pendingHeadSeenSeq = workTree.statusSeq
             page.pendingHeadAsked = true
         }
         // Everything that moves what the two sides hold. A commit empties the index and a stash empties both, so a diff
@@ -1489,6 +1490,10 @@ Item {
     // first still describe the repository as it was — reading the branch out of them lands on the commit that was just
     // replaced. Resolved once the graph holds where the branch points, which is only true of the refreshed pair.
     property bool pendingHeadSelect: false
+    /// The `WorkTreeModel.statusSeq` the arming saw. The detached fallback below may only read a status that arrived
+    /// after it — the messages in flight at the arming still describe the repository as it was, and a stale HEAD
+    /// still has a row to land on.
+    property int pendingHeadSeenSeq: -1
     // Whether the landing is one the person here asked for, in which case the viewport goes to it as well: a commit
     // they meant to make is not an answer if it lands off screen. The other two ways this is set happen *to* the window
     // — a commit made in a terminal, a rewrite that swept the selected commit away while the poll was watching — and a
@@ -1503,8 +1508,11 @@ Item {
             return
         // The branches section answers only for a branch; detached, HEAD is still somewhere, and the status model is
         // the one that says where (`WorkTreeModel.headOid` — "branch or not"). Without the fallback a landing owed
-        // after a write made detached never resolves.
-        const head = branchesModel.headOid !== "" ? branchesModel.headOid : workTree.headOid
+        // after a write made detached never resolves — but only a status that arrived after the arming may answer
+        // (`statusSeq`): the one in flight still describes the repository as it was, and its stale HEAD has a row.
+        const statusFresh = workTree.statusSeq !== page.pendingHeadSeenSeq
+        const head = branchesModel.headOid !== "" ? branchesModel.headOid
+                   : statusFresh ? workTree.headOid : ""
         const row = head !== "" ? graphModel.rowOf(head) : -1
         if (row < 0)
             return
@@ -1551,6 +1559,7 @@ Item {
         }
         page.selectedOid = ""
         page.pendingHeadSelect = true
+        page.pendingHeadSeenSeq = workTree.statusSeq
     }
 
     // A reworded commit came back under a different hash: the one now standing where it stood is it, since only the
@@ -1647,7 +1656,9 @@ Item {
                             graphPane.anchorSoon()
                     } else if (page.rewordRow >= 0) {
                         page.followRewrittenCommit()
-                    } else {
+                    } else if (page.selectedRow >= 0) {
+                        // A selection that was never on screen — a details jump past the walk window — has not
+                        // vanished: the commit is still there, only unwalked. Leave the reader on it.
                         page.followVanishedCommit()
                     }
                 }
@@ -1714,6 +1725,9 @@ Item {
             if (moved && !ours)
                 page.reloadDiff()
             page.absorbOpMessage()
+            // The status can be the half a detached landing was waiting on (`tryPendingHeadSelect`'s fallback reads
+            // this model, and only a status younger than the arming may answer).
+            page.tryPendingHeadSelect()
         }
     }
     Connections {
@@ -1742,6 +1756,7 @@ Item {
                 page.stashLanded = false
                 page.wipShown = false
                 page.pendingHeadSelect = true
+                page.pendingHeadSeenSeq = workTree.statusSeq
                 // Only ours is a landing anybody asked for, so only ours takes the viewport along.
                 page.pendingHeadAsked = ourStash
             }

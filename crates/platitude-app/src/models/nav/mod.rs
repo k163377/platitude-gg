@@ -98,11 +98,13 @@ pub struct NavSectionModel {
     /// True once a refs snapshot arrived (distinguishes "no head yet"
     /// from "detached / no local branches" for the default selection).
     refs_loaded: bool,
-    /// Worktree section only: tree (default) vs flat-path display. The
-    /// page's restore is the only writer (`PageLayout.applySavedLayout` →
-    /// `set_tree_view`, before anything shows): `attach_*` must not touch
-    /// it — an attach after the restore once put the saved flat view back
-    /// to a tree and then wrote the tree over the saved flag.
+    /// Worktree section only: tree vs flat-path display. The page's
+    /// restore is the only writer (`PageLayout.applySavedLayout` →
+    /// `set_tree_view`, before anything shows — the saved default is the
+    /// tree; the derive-`Default` false here is never on screen):
+    /// `attach_*` must not touch it — an attach after the restore once
+    /// put the saved flat view back to a tree and then wrote the tree
+    /// over the saved flag.
     tree_view: bool,
     /// Which row the pointer is on; the notice follows, taken apart into
     /// the pieces its sentence needs. Kept once here rather than on every
