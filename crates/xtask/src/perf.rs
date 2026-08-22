@@ -77,10 +77,12 @@ fn parse(args: &[String]) -> Result<Options, String> {
                     .parse()
                     .map_err(|_| "--watchdog-ms takes a number".to_string())?;
             }
-            "--quit-ms" => return Err(
-                "--quit-ms is not supported; use --watchdog-ms as the outer hang ceiling"
-                    .into(),
-            ),
+            "--quit-ms" => {
+                return Err(
+                    "--quit-ms is not supported; use --watchdog-ms as the outer hang ceiling"
+                        .into(),
+                );
+            }
             "--no-scroll" => opts.scroll = false,
             "--no-select" => opts.select = false,
             "--no-open" => opts.open = false,
