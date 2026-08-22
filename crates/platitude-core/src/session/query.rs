@@ -180,8 +180,7 @@ impl RepoSession {
         known: Option<Vec<u8>>,
         epoch: u64,
     ) -> bool {
-        let s = self;
-        let cancel = s.root_cancel.clone();
+        let cancel = self.root_cancel.clone();
         // What git's settings say, and the neighbours if they are the
         // only answer, are read **beside** the diff rather than after
         // it: a notice that turns up a moment later is one the reader
@@ -196,13 +195,15 @@ impl RepoSession {
             async {
                 match known {
                     Some(raw) => Ok(raw),
-                    None => details::file_diff_raw(&s.executor, &workdir, &target, &cancel).await,
+                    None => {
+                        details::file_diff_raw(&self.executor, &workdir, &target, &cancel).await
+                    }
                 }
             },
-            s.ending_context(&workdir, &target, &cancel),
+            self.ending_context(&workdir, &target, &cancel),
             async {
                 match wants_source {
-                    true => preview::source_text(&s.executor, &workdir, &target, &cancel).await,
+                    true => preview::source_text(&self.executor, &workdir, &target, &cancel).await,
                     false => None,
                 }
             },
@@ -220,22 +221,23 @@ impl RepoSession {
                 let patches = Arc::new(patches);
                 let is_binary = patches.iter().any(|p| p.is_binary);
                 let preview =
-                    preview::file_preview(&s.executor, &workdir, &target, is_binary, &cancel).await;
+                    preview::file_preview(&self.executor, &workdir, &target, is_binary, &cancel)
+                        .await;
                 // Noted before the event and not after it: what the next
                 // re-read compares against is what the pane was handed.
-                s.note_diff(&target, fingerprint);
-                s.sink.event(SessionEvent::DiffLoaded {
+                self.note_diff(&target, fingerprint);
+                self.sink.event(SessionEvent::DiffLoaded {
                     target: target.clone(),
                     patches: Arc::clone(&patches),
                     preview,
                     fingerprint,
                     endings,
                 });
-                s.paint_diff(target, patches, source, epoch);
+                self.paint_diff(target, patches, source, epoch);
                 true
             }
             Err(e) => {
-                s.fail("diff", e);
+                self.fail("diff", e);
                 false
             }
         }
