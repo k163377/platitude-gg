@@ -331,11 +331,12 @@ impl RepoSession {
                 };
                 // The sides the pending merge commit will have as parents.
                 // Same rarity again — only a merge has them, so nothing
-                // else pays for the read.
+                // else pays for the read. `None` is "could not tell", and
+                // only nothing merging is an answer of no sides at all.
                 let incoming = if op_state.merging {
                     opstate::merge_heads(&self.executor, &workdir, &cancel).await
                 } else {
-                    Vec::new()
+                    Some(Vec::new())
                 };
                 // And again: the tool is only worth naming where there is
                 // something to open with it, so a clean tree pays nothing
@@ -366,7 +367,11 @@ impl RepoSession {
                 // are what the next read compares against, and a `||` that
                 // skipped the second would leave it behind.
                 let dirt_flipped = self.wip_dirty.swap(dirty, Ordering::SeqCst) != dirty;
-                let merge_moved = self.set_merge_incoming(incoming);
+                // A read that could not tell keeps the sides it had: taking
+                // them away would say the merge ended, and the graph would
+                // be rebuilt without its dotted edges only to be rebuilt
+                // again with them on the next tick.
+                let merge_moved = incoming.is_some_and(|sides| self.set_merge_incoming(sides));
                 let flipped = dirt_flipped || merge_moved;
                 // Reading the pending diffs is the one part of this that
                 // scales with the change rather than with the tree, so it

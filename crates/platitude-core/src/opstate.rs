@@ -62,7 +62,14 @@ pub async fn sequence_pending(
 
 /// The commits a standing merge is bringing in, as `MERGE_HEAD` lists
 /// them — one id per line, so an octopus comes back with all of its
-/// sides. Empty when nothing is merging.
+/// sides.
+///
+/// `None` when the file offered nothing to read: gone, unreadable, or
+/// holding no id this could parse. **Not the same answer as "the merge is
+/// over"**, which is what an empty list would say — the read that failed
+/// once would drop the graph's dotted edges, and the next one put them
+/// back, walking the whole history twice over a file that never changed.
+/// A caller that cannot tell keeps what it had.
 ///
 /// Only the ids: what the sides are *called* is [`crate::conflict::sides`],
 /// and the two are wanted in different places (a name goes in a sentence,
@@ -71,12 +78,14 @@ pub async fn merge_heads(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
-) -> Vec<crate::oid::Oid> {
-    crate::conflict::git_file(executor, workdir, "MERGE_HEAD", cancel)
-        .await
-        .lines()
-        .filter_map(|line| crate::oid::Oid::from_hex_str(line.trim()).ok())
-        .collect()
+) -> Option<Vec<crate::oid::Oid>> {
+    let heads: Vec<crate::oid::Oid> =
+        crate::conflict::git_file(executor, workdir, "MERGE_HEAD", cancel)
+            .await
+            .lines()
+            .filter_map(|line| crate::oid::Oid::from_hex_str(line.trim()).ok())
+            .collect();
+    (!heads.is_empty()).then_some(heads)
 }
 
 /// Detects in-progress operations for the repository at `workdir`.

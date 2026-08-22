@@ -7,6 +7,8 @@ use crate::support::integrate::{conflicting_branches, current_op};
 use platitude_core::commit;
 use platitude_core::conflict::{self, ConflictKind, Side};
 use platitude_core::integrate::{self, Continuation, InProgress, Landing, MergeOptions};
+use platitude_core::oid::Oid;
+use platitude_core::opstate;
 use platitude_core::status;
 
 #[tokio::test]
@@ -311,5 +313,33 @@ async fn resolving_a_conflict_by_taking_one_side_lets_the_merge_continue() {
     assert_eq!(
         repo.git(&["log", "-1", "--format=%P"]).split(' ').count(),
         2
+    );
+}
+
+/// The sides come back as `Some` only when they were really read. Nothing
+/// there is `None` rather than an empty list, so a caller cannot mistake a
+/// read that told it nothing for a merge that ended — every way of
+/// answering "no sides" other than `None` is one that a failed read would
+/// answer too.
+#[tokio::test]
+async fn merge_heads_says_nothing_read_rather_than_no_sides() {
+    let repo = conflicting_branches();
+    let (exec, cancel) = env();
+    assert_eq!(
+        opstate::merge_heads(&exec, &repo.path, &cancel).await,
+        None,
+        "no merge is standing, so there is no MERGE_HEAD to read"
+    );
+
+    integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
+        .await
+        .expect("conflict");
+    let sides = opstate::merge_heads(&exec, &repo.path, &cancel)
+        .await
+        .expect("a standing merge names its side");
+    let mut repo = repo;
+    assert_eq!(
+        sides.iter().map(Oid::to_hex).collect::<Vec<_>>(),
+        vec![repo.git(&["rev-parse", "side"])]
     );
 }
