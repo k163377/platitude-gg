@@ -1,5 +1,5 @@
 //! Running what [`GitCommand`] describes: the executor, its fixed
-//! arguments and environment, and the child supervision under it.
+//! arguments and environment (the child supervision is [`super::child`]).
 
 use std::ffi::OsString;
 use std::process::Stdio;
@@ -22,12 +22,6 @@ mod tests;
 /// [`GitCommand::no_timeout`]; network commands set their own, longer
 /// budget instead (`remote`).
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
-
-/// Keep at most this much stderr; git error messages are short, and a
-/// runaway process must not grow memory unboundedly.
-pub(super) const STDERR_CAP: usize = 256 * 1024;
-
-pub(super) const STDOUT_CHUNK: usize = 64 * 1024;
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;

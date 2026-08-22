@@ -608,8 +608,8 @@ ColumnLayout {
                 color: Theme.textSecondary
             }
             // The count stands at the caption's own step, the way every heading band in the window carries its own
-            // (NavHeader, CommandsPane, WipBucketHeader) — see DetailsPane's for why the step is not what says it is
-            // a count.
+            // (NavHeader, CommandsPane, WipBucketHeader) — see DetailsChangesBand's for why the step is not what
+            // says it is a count.
             Label {
                 text: "(" + wipPane.worktreeModel.total + ")"
                 font.pixelSize: Theme.fontMd

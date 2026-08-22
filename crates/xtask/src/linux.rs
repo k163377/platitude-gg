@@ -300,7 +300,6 @@ fn forget_older_images(stage: &str, keep: &str) {
     }
 }
 
-
 fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Result<(), String> {
     let mut cmd = Command::new("docker");
     cmd.arg("run").arg("--rm");

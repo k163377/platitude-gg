@@ -7,7 +7,11 @@ use tokio::io::AsyncReadExt;
 use tokio::process::Child;
 use tokio_util::sync::CancellationToken;
 
-use super::executor::{STDERR_CAP, STDOUT_CHUNK};
+/// Keep at most this much stderr; git error messages are short, and a
+/// runaway process must not grow memory unboundedly.
+const STDERR_CAP: usize = 256 * 1024;
+
+const STDOUT_CHUNK: usize = 64 * 1024;
 
 pub(super) enum ChildOutcome {
     Finished { code: i32, stderr: Vec<u8> },

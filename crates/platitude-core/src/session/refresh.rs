@@ -1,5 +1,6 @@
-//! Snapshot refreshes: refs, status (+ op state), head reachability,
-//! stashes and worktrees. The author identity reads are [`super::author`].
+//! Snapshot refreshes: refs, status (+ op state), stashes and worktrees.
+//! The author identity reads are [`super::author`], the head-reachability
+//! record and walk [`super::head_reach`].
 
 use super::joins::{RefJoins, build_label_map, build_snapshot, join_key, refs_key, status_key};
 use super::*;

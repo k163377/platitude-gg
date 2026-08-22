@@ -1,5 +1,5 @@
-//! The session handle itself: what one open repository holds, how it is
-//! opened, and what it cancels on the way out.
+//! The session handle itself: what one open repository holds, and what
+//! it cancels on the way out (the opening sequence is [`super::open`]).
 
 use super::*;
 
