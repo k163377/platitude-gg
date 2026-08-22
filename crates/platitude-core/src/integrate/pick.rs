@@ -133,6 +133,11 @@ async fn skip_past_empty_commits(
 /// of any kind), and that one is the landing the working tree is the
 /// answer to (デザイン規約 §進行中の操作から出る).
 ///
+/// **The code is read as well as the marker**, for the reason rebase's
+/// is: a cherry-pick or a revert asked for while one is *already*
+/// standing exits 128 with its own marker right there (実測 2.55), and
+/// the marker alone would call that a stop.
+///
 /// A read that fails answers "no", for the reason merge's does: this is a
 /// question *about* the failure, and letting it replace the answer would
 /// report a `rev-parse` where git said why it would not copy the commit.
@@ -146,7 +151,7 @@ async fn landed(
     let Err(error) = outcome else {
         return Ok(Landing::Done);
     };
-    if !matches!(error, GitError::Failed { .. }) {
+    if !matches!(error, GitError::Failed { code: 1, .. }) {
         return Err(error);
     }
     // The operation standing has to be *this* one: a rebase stopped on a

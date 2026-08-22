@@ -119,6 +119,38 @@ async fn a_squashed_merge_leaves_nothing_standing_to_continue() {
     assert_eq!(current_op(&repo).await, None);
 }
 
+/// The failure that leaves `MERGE_HEAD` standing: a merge asked for
+/// while one is already in progress. git spends 128 on it with the
+/// marker right there (実測 2.55), so reading the marker without the
+/// code would call it a stop — and the sentence saying what is really in
+/// the way would never reach the screen.
+#[tokio::test]
+async fn a_second_merge_over_one_already_standing_is_still_a_failure() {
+    let mut repo = conflicting_branches();
+    let (exec, cancel) = env();
+    let options = MergeOptions::default();
+
+    assert_eq!(
+        integrate::merge(&exec, &repo.path, "side", &options, &cancel)
+            .await
+            .expect("the first one stops"),
+        Landing::Stopped
+    );
+    // Resolved and staged, so what refuses the second one is the merge
+    // standing rather than the unmerged paths.
+    std::fs::write(repo.path.join("f.txt"), "resolved\n").expect("resolve");
+    repo.git(&["add", "--", "f.txt"]);
+
+    integrate::merge(&exec, &repo.path, "side", &options, &cancel)
+        .await
+        .expect_err("a merge over one already standing is a failure");
+    assert_eq!(
+        current_op(&repo).await,
+        Some(InProgress::Merge),
+        "and the one that was standing is still standing"
+    );
+}
+
 #[tokio::test]
 async fn a_conflicting_merge_is_reported_then_aborted() {
     let repo = conflicting_branches();

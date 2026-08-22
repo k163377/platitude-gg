@@ -176,6 +176,34 @@ async fn a_conflicting_rebase_reports_progress_and_can_be_aborted() {
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "topic two");
 }
 
+/// The one failure that leaves `rebase-merge` standing: a rebase asked
+/// for while one is already in progress. git spends 128 on it (実測
+/// 2.55) — every other failure leaves nothing behind — so reading the
+/// marker without the code would call it a stop, and git's sentence
+/// about what is really there would never reach the screen.
+#[tokio::test]
+async fn a_second_rebase_over_one_already_standing_is_still_a_failure() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "base\n", "root");
+    repo.git(&["checkout", "-b", "topic"]);
+    repo.commit_file("f.txt", "topic\n", "topic change");
+    repo.git(&["checkout", "main"]);
+    repo.commit_file("f.txt", "main\n", "main change");
+    repo.git(&["checkout", "topic"]);
+    let (exec, cancel) = env();
+    let opts = RebaseOptions::default();
+
+    stopped(integrate::rebase(&exec, &repo.path, "main", &opts, &cancel).await);
+    integrate::rebase(&exec, &repo.path, "main", &opts, &cancel)
+        .await
+        .expect_err("a rebase over one already standing is a failure");
+    assert_eq!(
+        current_op(&repo).await,
+        Some(InProgress::Rebase),
+        "and the one that was standing is still standing"
+    );
+}
+
 #[tokio::test]
 async fn a_conflicting_rebase_can_be_skipped() {
     let mut repo = TestRepo::init();

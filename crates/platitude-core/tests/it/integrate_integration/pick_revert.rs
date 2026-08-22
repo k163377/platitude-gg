@@ -295,6 +295,37 @@ async fn a_failure_that_left_nothing_standing_is_still_a_failure() {
     nothing_in_progress(&repo).await;
 }
 
+/// The failure that leaves this operation's *own* marker standing: a
+/// cherry-pick asked for while one is already in progress. git spends
+/// 128 on it with `CHERRY_PICK_HEAD` right there (実測 2.55), so reading
+/// the marker without the code would call it a stop — and the sentence
+/// saying what is really in the way would never reach the screen.
+#[tokio::test]
+async fn a_second_pick_over_one_already_standing_is_still_a_failure() {
+    let (mut repo, picked) = conflicting_sides();
+    let (exec, cancel) = env();
+
+    assert_eq!(
+        integrate::cherry_pick(&exec, &repo.path, std::slice::from_ref(&picked), &cancel)
+            .await
+            .expect("the first one stops"),
+        Landing::Stopped
+    );
+    // Resolved and staged, so what refuses the second one is the
+    // operation standing rather than the conflict or the tree.
+    std::fs::write(repo.path.join("f.txt"), "resolved\n").expect("resolve");
+    repo.git(&["add", "--", "f.txt"]);
+
+    integrate::cherry_pick(&exec, &repo.path, &[picked], &cancel)
+        .await
+        .expect_err("a pick over one already standing is a failure");
+    assert_eq!(
+        current_op(&repo).await,
+        Some(InProgress::CherryPick),
+        "and the one that was standing is still standing"
+    );
+}
+
 #[tokio::test]
 async fn resolving_with_nothing_in_progress_is_a_no_op() {
     let mut repo = TestRepo::init();

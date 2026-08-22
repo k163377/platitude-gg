@@ -22,7 +22,7 @@ pub struct MergeOptions {
 
 /// `git merge <rev>`.
 ///
-/// **The exit code cannot tell these apart on its own.** `git merge`
+/// **The exit code cannot sort the two landings on its own.** `git merge`
 /// spends 1 on both a conflict and a name it cannot merge, keeps 128 for
 /// a `--ff-only` it must refuse and 2 for a tree whose changes would be
 /// overwritten (実測 2.55). So the answer is asked of the repository
@@ -112,7 +112,13 @@ async fn stopped_on_a_conflict(
     error: &GitError,
     cancel: &CancellationToken,
 ) -> bool {
-    if !matches!(error, GitError::Failed { .. }) {
+    // **The code is read as well as the marker.** Exit 1 is what a
+    // conflict comes back as; a merge asked for while one is *already*
+    // standing exits 128 with `MERGE_HEAD` right there (実測 2.55, both
+    // wordings — unmerged files, and a resolved index that was never
+    // committed). Asking the repository alone would call that a stop and
+    // swallow the sentence saying what is really in the way.
+    if !matches!(error, GitError::Failed { code: 1, .. }) {
         return false;
     }
     opstate::detect(executor, workdir, cancel)
