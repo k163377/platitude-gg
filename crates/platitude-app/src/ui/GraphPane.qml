@@ -444,6 +444,10 @@ Rectangle {
     /// Whether the pointer is anywhere in this pane. A `HoverHandler` rather than a `MouseArea`: handlers are passive,
     /// so the rows', chips' and dividers' own hover does not take this one away. Real hover and the automation hook
     /// write the same property — hover cannot be injected (verify-ui).
+    ///
+    /// **It stays on the pane itself.** Moved into an item stacked over the list it took the hover away from every row
+    /// under it: hover goes to the topmost item that accepts it, and an item carrying a handler accepts it for its
+    /// whole area (2026-08-22 qmltestrunner で実測 — rows that would not light, cards that would not close).
     property bool pointerInside: false
     HoverHandler {
         onHoveredChanged: graphArea.pointerInside = hovered
@@ -456,27 +460,15 @@ Rectangle {
     /// What is drawn, not what was asked for: the automation hook reports the bar itself so a broken binding cannot
     /// pass.
     readonly property alias laneBarShown: laneBar.visible
-    // Horizontal scroll of the lanes when the full graph is wider than its column. The bar lies over the lanes of the
-    // last row, so it comes out only while the pointer is in the pane — and stays out for as long as it is being
-    // dragged, wherever that has taken the pointer (デザイン規約 §グラフを横へ送る).
-    ScrollBar {
+    // The lanes' horizontal bar (`GraphLaneBar`), on the pane's bottom edge. **Its own `z`, on the bar itself**: a QML
+    // stack is the parent's one number, and at the default it would go under the lane strip and the dividers it has to
+    // sit on top of.
+    GraphLaneBar {
         id: laneBar
-        visible: graphArea.graphXMax > 0 && (graphArea.pointerInside || pressed)
-        // Fusion draws its handle only in the style's "active" state, which for a bar that is not attached to a
-        // Flickable means while the pointer is on the bar itself — a 6px strip on the pane's bottom edge that nobody
-        // would find. When the bar is out it is because this pane put it there, so the style stops deciding.
-        policy: ScrollBar.AlwaysOn
-        orientation: Qt.Horizontal
-        x: graphArea.labelW
-        width: graphArea.graphColW
         anchors.bottom: parent.bottom
         z: 2
-        size: graphArea.graphFullW > 0 ? graphArea.graphColW / graphArea.graphFullW : 1
-        position: graphArea.graphFullW > 0 ? graphArea.graphX / graphArea.graphFullW : 0
-        onPositionChanged: {
-            if (pressed)
-                graphArea.graphX = Math.max(0, Math.min(position * graphArea.graphFullW, graphArea.graphXMax))
-        }
+        columns: metrics
+        pointerInside: graphArea.pointerInside
     }
     // What stands in the middle while there is no history to draw.
     GraphEmptyState {
