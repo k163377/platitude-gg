@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Fusion
+import platitude
 import platitude.ui
 
 // The refs a graph row has, unstacked: every one on a row of its own — branches first, then the tags the chip had no
@@ -102,7 +103,7 @@ AppCard {
                 // colour too.
                 readonly property bool current:
                     refRow.modelData[0] === "L"
-                    && refRow.modelData.substring(6).split("\u001E")[0] === refList.currentBranch
+                    && GitFacts.recordName(refRow.modelData) === refList.currentBranch
                 // The detached-HEAD marker is the one row that is only a marker: nowhere to go and no ref to read, so
                 // it mutes. A branch another working copy has out mutes for the other reason there is — git refuses
                 // the move outright (§無効 is for what is actually unavailable, and this one is).

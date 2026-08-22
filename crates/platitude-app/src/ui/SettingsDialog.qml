@@ -87,42 +87,22 @@ AppDialog {
     /// would be answering a question nobody asked.
     property var authorChoices: []
     function readAuthorChoices() {
-        const packed = settingsDialog.curPage ? settingsDialog.curPage.pageGraph.authorChoices() : ""
-        const seen = {}
-        const out = []
-        if (settingsDialog.prefillEmail !== "") {
-            out.push(settingsDialog.prefillName + " <" + settingsDialog.prefillEmail + ">")
-            seen[settingsDialog.prefillEmail] = true
-        }
-        if (packed !== "") {
-            for (const record of packed.split(String.fromCharCode(30))) {
-                const parts = record.split(String.fromCharCode(31))
-                if (seen[parts[1]])
-                    continue
-                seen[parts[1]] = true
-                out.push(parts[0] + " <" + parts[1] + ">")
-            }
-        }
-        settingsDialog.authorChoices = out
+        // The model dedupes, sorts and formats (`GraphModel.author_choices`); the prefill rides along so its address
+        // is not repeated below. With no page there are no rows to offer — the prefill still leads the list.
+        const packed = settingsDialog.curPage
+                     ? settingsDialog.curPage.pageGraph.authorChoices(settingsDialog.prefillName,
+                                                                      settingsDialog.prefillEmail)
+                     : settingsDialog.prefillEmail !== ""
+                       ? settingsDialog.prefillName + " <" + settingsDialog.prefillEmail + ">" : ""
+        settingsDialog.authorChoices = packed === "" ? [] : packed.split(String.fromCharCode(31))
     }
 
     /// The address the picker will file under, pulled back out of what the
     /// entry is showing. The list writes `Name <address>`; a person typing
     /// their own may write either half, and an address is the one with an
-    /// `@` in it.
-    readonly property string chosenEmail: {
-        const text = avatarWho.wanted.trim()
-        const open = text.lastIndexOf("<")
-        const close = text.lastIndexOf(">")
-        const inner = (open >= 0 && close > open)
-                      ? text.substring(open + 1, close).trim() : text
-        return inner.indexOf("@") > 0 ? inner : ""
-    }
-    readonly property string chosenName: {
-        const text = avatarWho.wanted.trim()
-        const open = text.lastIndexOf("<")
-        return open > 0 ? text.substring(0, open).trim() : ""
-    }
+    /// `@` in it (`platitude_core::trailers::split_identity`).
+    readonly property string chosenEmail: GitFacts.identityEmailOf(avatarWho.wanted)
+    readonly property string chosenName: GitFacts.identityNameOf(avatarWho.wanted)
 
     /// Smoke hook. The candidates arrive in two waves and the configured
     /// name in a third, so the value has three chances to be knocked out

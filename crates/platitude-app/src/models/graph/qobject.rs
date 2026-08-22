@@ -75,14 +75,19 @@ impl GraphModel {
     #[qsignal]
     fn stats_changed(&mut self);
 
-    /// Names the chips to leave undrawn (see `goneChips`). An empty
-    /// string puts them all back, which is what a refused delete does.
+    /// Names the refs whose chips are to be left undrawn — at most one
+    /// per kind, since a delete touches at most one of each; empty
+    /// halves put theirs back, which is what a refused delete does. The
+    /// packed set the delegates filter with (`goneChips`,
+    /// `encode::gone_keys`) is built here: which side of the bridge
+    /// spells a wire format is not the page's business.
     #[qslot]
-    fn set_gone_chips(&mut self, names: String) {
-        if self.gone_chips == names {
+    fn set_gone(&mut self, branch: String, remote: String, tag: String) {
+        let keys = crate::encode::gone_keys(&branch, &remote, &tag);
+        if self.gone_chips == keys {
             return;
         }
-        self.gone_chips = names;
+        self.gone_chips = keys;
         self.stats_changed();
     }
 
@@ -325,25 +330,35 @@ impl GraphModel {
             .count() as i32
     }
 
-    /// The authors of the loaded rows, one per address, packed as
-    /// `name\u{1f}email` and joined by `\u{1e}`.
+    /// The authors of the loaded rows as the settings card's entry shows
+    /// them — `Name <address>`, one per address, sorted, joined by
+    /// `\u{1f}`. A prefill (the badge's own author) goes first and its
+    /// address is not repeated below.
     ///
-    /// What the settings card offers instead of asking somebody to type an
+    /// What the card offers instead of asking somebody to type an
     /// address: the people whose commits are on screen are the people
     /// whose faces are worth setting. Read when the card opens, off rows
     /// already in memory — no git runs for it.
     #[qslot]
-    fn author_choices(&self) -> String {
+    fn author_choices(&self, prefill_name: String, prefill_email: String) -> String {
         let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
-        let mut out: Vec<String> = Vec::new();
+        let mut listed: Vec<String> = Vec::new();
         for row in &self.rows {
-            if row.author_email.is_empty() || !seen.insert(&row.author_email) {
+            if row.author_email.is_empty()
+                || row.author_email == prefill_email
+                || !seen.insert(&row.author_email)
+            {
                 continue;
             }
-            out.push(format!("{}\u{1f}{}", row.author, row.author_email));
+            listed.push(format!("{} <{}>", row.author, row.author_email));
         }
-        out.sort();
-        out.join("\u{1e}")
+        listed.sort();
+        let mut out: Vec<String> = Vec::new();
+        if !prefill_email.is_empty() {
+            out.push(format!("{prefill_name} <{prefill_email}>"));
+        }
+        out.extend(listed);
+        out.join("\u{1f}")
     }
 
     /// Puts the find bar's line to the rows, lighting the ones it is in.

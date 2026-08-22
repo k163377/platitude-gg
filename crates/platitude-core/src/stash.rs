@@ -37,6 +37,51 @@ pub struct StashEntry {
     pub message: String,
 }
 
+/// What the working tree lets a stash do. Every refusal here is git's
+/// own, measured rather than guessed (rules-refs/app-ui.md §stash):
+/// before the first commit git turns the write down flat however dirty
+/// the folder is; with a file unmerged it refuses the whole write, not
+/// the unmerged path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StashStanding {
+    /// No commit yet ("You do not have the initial commit yet").
+    Unborn,
+    /// A file is unmerged ("needs merge").
+    Conflicts,
+    /// Nothing uncommitted to set aside.
+    Clean,
+    /// Anything staged, unstaged or untracked; git takes all three.
+    Ready,
+}
+
+impl StashStanding {
+    /// The word the UI branches on (the toolbar's stash button).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Unborn => "unborn",
+            Self::Conflicts => "conflicts",
+            Self::Clean => "clean",
+            Self::Ready => "ready",
+        }
+    }
+}
+
+/// The standing itself, off a status already in hand — no git runs.
+/// `head_missing` is "the repository has no commit yet"
+/// (`WorkTreeStatus::branch_oid` is `None`).
+pub fn standing(head_missing: bool, counts: &crate::status::Counts) -> StashStanding {
+    if head_missing {
+        return StashStanding::Unborn;
+    }
+    if counts.conflicted > 0 {
+        return StashStanding::Conflicts;
+    }
+    if counts.staged + counts.unstaged + counts.untracked == 0 {
+        return StashStanding::Clean;
+    }
+    StashStanding::Ready
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("malformed stash list output")]
 pub struct StashParseError;
@@ -363,5 +408,24 @@ mod tests {
         // opens the way one of git's prefixes does is read as one.
         assert_eq!(label_in("On second thought: revert it"), "revert it");
         assert_eq!(label_in("WIP on the parser"), "");
+    }
+
+    #[test]
+    fn the_standing_names_the_one_refusal_that_applies() {
+        use crate::status::Counts;
+        let counts = |staged, unstaged, untracked, conflicted| Counts {
+            staged,
+            unstaged,
+            untracked,
+            conflicted,
+            partially_staged: 0,
+        };
+        // Unborn outranks everything: git refuses however dirty the
+        // folder is.
+        assert_eq!(standing(true, &counts(1, 2, 3, 0)).as_str(), "unborn");
+        assert_eq!(standing(false, &counts(1, 0, 0, 2)).as_str(), "conflicts");
+        assert_eq!(standing(false, &counts(0, 0, 0, 0)).as_str(), "clean");
+        assert_eq!(standing(false, &counts(0, 0, 1, 0)).as_str(), "ready");
+        assert_eq!(standing(false, &counts(2, 1, 0, 0)).as_str(), "ready");
     }
 }

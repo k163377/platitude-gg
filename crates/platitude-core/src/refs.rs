@@ -321,5 +321,26 @@ pub async fn head_state(
     })
 }
 
+/// Splits a remote-tracking display name (`origin/main`) into the remote
+/// and the branch on it, against the configured remote names. A remote's
+/// own name may contain `/`, so the cut is the longest configured name
+/// the ref starts with — never the first slash.
+pub fn split_remote_ref<'a>(
+    full: &'a str,
+    remotes: impl IntoIterator<Item = &'a str>,
+) -> Option<(&'a str, &'a str)> {
+    let mut best: Option<&'a str> = None;
+    for name in remotes {
+        if name.is_empty() || name.len() <= best.map_or(0, str::len) {
+            continue;
+        }
+        let cut = full.strip_prefix(name);
+        if cut.is_some_and(|rest| rest.starts_with('/')) {
+            best = Some(name);
+        }
+    }
+    best.map(|name| (name, &full[name.len() + 1..]))
+}
+
 #[cfg(test)]
 mod tests;

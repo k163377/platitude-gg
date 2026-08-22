@@ -83,6 +83,69 @@ pub fn label_names(encoded: &str) -> impl Iterator<Item = &str> {
     })
 }
 
+/// The name on one chip record — [`label_names`] for the single record a
+/// press or a right-click hands back.
+pub fn label_name_of(record: &str) -> &str {
+    label_names(record).next().unwrap_or("")
+}
+
+/// The ref kind a chip record's letter names, in the word the menus
+/// branch on. The HEAD marker (and anything unrecognised) answers `""`:
+/// it names nothing to act on.
+pub fn label_kind_word(record: &str) -> &'static str {
+    match record.as_bytes().first() {
+        Some(b'L') => "branch",
+        Some(b'R') => "remote",
+        Some(b'T') => "tag",
+        _ => "",
+    }
+}
+
+/// A chip's identity inside a gone set: its kind letter and the name on
+/// it. The flag digits between the two say how the chip is drawn, not
+/// which ref it is — and a tag may share a name with a branch, so the
+/// letter stays.
+fn label_key(record: &str) -> String {
+    let mut key = String::with_capacity(1 + record.len().saturating_sub(FLAGS + 1));
+    key.push_str(record.get(..1).unwrap_or(""));
+    key.push_str(label_name_of(record));
+    key
+}
+
+/// The gone set itself: one key per kind, empty halves left out — a
+/// delete touches at most one of each ([`label_key`] is the shape).
+pub fn gone_keys(branch: &str, remote: &str, tag: &str) -> String {
+    let mut out = String::new();
+    for (letter, name) in [('L', branch), ('R', remote), ('T', tag)] {
+        if name.is_empty() {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push(RECORD_SEP);
+        }
+        out.push(letter);
+        out.push_str(name);
+    }
+    out
+}
+
+/// The records still standing once the gone set has spoken: `packed` as
+/// [`encode_labels`] wrote it, less the chips `gone` names. The window
+/// says a deleted ref's chip is gone before the walk that follows the
+/// delete lands (デザイン規約 §消す操作は先に画面から消す), and this is
+/// where that word is applied.
+pub fn labels_shown(packed: &str, gone: &str) -> String {
+    if packed.is_empty() || gone.is_empty() {
+        return packed.to_string();
+    }
+    let dropped: Vec<&str> = gone.split(RECORD_SEP).collect();
+    packed
+        .split(RECORD_SEP)
+        .filter(|record| !dropped.contains(&label_key(record).as_str()))
+        .collect::<Vec<_>>()
+        .join(&RECORD_SEP.to_string())
+}
+
 /// Whether one of the names in a chip record string is the one the
 /// working tree stands on — the first flag digit, read by its seat the
 /// way `RefChip.recHead` reads it.
@@ -290,5 +353,39 @@ mod tests {
             held_elsewhere: false,
         }];
         assert!(!encode_labels(&labels).contains(FIELD_SEP));
+    }
+
+    #[test]
+    fn a_record_answers_its_kind_and_its_name() {
+        assert_eq!(label_kind_word("L11010main"), "branch");
+        assert_eq!(label_kind_word("R01000origin/main\u{1e}origin"), "remote");
+        assert_eq!(label_kind_word("T00010v1.0"), "tag");
+        assert_eq!(label_kind_word("H10010HEAD"), "", "nothing to act on");
+        assert_eq!(label_kind_word(""), "");
+        assert_eq!(
+            label_name_of("R01000origin/main\u{1e}origin"),
+            "origin/main"
+        );
+        assert_eq!(label_name_of("L11010main"), "main");
+        assert_eq!(label_name_of("L11"), "", "flags cut short name nothing");
+    }
+
+    #[test]
+    fn the_gone_set_takes_chips_out_by_kind_and_name() {
+        let packed = "L11010main\u{1f}T00010main\u{1f}R01000origin/main\u{1e}origin";
+        // A tag sharing the branch's name stays: the letter is part of
+        // the identity.
+        assert_eq!(
+            labels_shown(packed, &gone_keys("main", "", "")),
+            "T00010main\u{1f}R01000origin/main\u{1e}origin"
+        );
+        assert_eq!(
+            labels_shown(packed, &gone_keys("main", "origin/main", "main")),
+            ""
+        );
+        assert_eq!(labels_shown(packed, ""), packed);
+        assert_eq!(labels_shown("", "Lmain"), "");
+        assert_eq!(gone_keys("", "", ""), "");
+        assert_eq!(gone_keys("main", "", "v1"), "Lmain\u{1f}Tv1");
     }
 }

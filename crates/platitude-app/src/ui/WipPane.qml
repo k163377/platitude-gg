@@ -41,11 +41,9 @@ ColumnLayout {
     /// A binding over a slot: what it follows is the box's own `bodyText`, which is a property, so every keystroke
     /// re-asks — and the rule for what counts as a trailer stays in one place, on the Rust side (`co_authors_of`).
     readonly property string messageMates: wipPane.repoTab.coAuthorsOf(msgEditor.bodyText)
-    /// How many of them there are. **One record per person, U+001F between them** — the field separator inside a
-    /// record is U+001E, and counting on that answers "3" for one person with a name, an address and a code
-    /// (`CoAuthorLine.records` splits the same way).
-    readonly property int mateCount:
-        wipPane.messageMates === "" ? 0 : wipPane.messageMates.split(String.fromCharCode(31)).length
+    /// How many of them there are — one record per person, counted where the record shape lives
+    /// (`GitFacts.recordCount` / `encode::RECORD_SEP`).
+    readonly property int mateCount: GitFacts.recordCount(wipPane.messageMates)
     /// Stands in for the pointer on the signing tick in the commit button — hover cannot be injected (`commit-face`).
     property bool signingPointedAt: false
     /// What it puts on screen, for the headless report: the tooltip's own visible (the output side).

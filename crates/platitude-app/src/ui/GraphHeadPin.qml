@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Fusion
+import platitude
 import platitude.ui
 
 /// The branch the working tree stands on never leaves the graph: while its own row is scrolled off, this stand-in rides
@@ -57,17 +58,11 @@ Rectangle {
     /// show — neither is a stand-in worth drawing (`models::graph::head`).
     readonly property bool wanted: pin.headRow >= 0 && pin.graphModel.headLabels !== ""
     /// The chips the stand-in draws, less the ones the window has already said are gone — the same answer the rows
-    /// themselves give (`GraphRowDelegate.recordsShown`). HEAD's own branch is never one of them (git refuses to
-    /// delete the branch it is on), but another branch standing on the same commit can be.
+    /// themselves give (`encode::labels_shown`). HEAD's own branch is never one of them (git refuses to delete the
+    /// branch it is on), but another branch standing on the same commit can be.
     readonly property string goneChips: pin.graphModel.goneChips
-    readonly property var records: pin.recordsShown(pin.graphModel.headLabels, pin.goneChips)
-    function recordsShown(packed, gone) {
-        const all = packed === "" ? [] : packed.split(String.fromCharCode(31))
-        if (gone === "")
-            return all
-        const dropped = gone.split(String.fromCharCode(31))
-        return all.filter(r => !dropped.includes(r[0] + r.substring(6).split(String.fromCharCode(30))[0]))
-    }
+    readonly property string shownLabels: GitFacts.labelsShown(pin.graphModel.headLabels, pin.goneChips)
+    readonly property var records: pin.shownLabels === "" ? [] : pin.shownLabels.split(String.fromCharCode(31))
     readonly property color laneColor: Theme.graphLane[pin.graphModel.headColor % Theme.graphLane.length]
 
     // ---- the three bands ---------------------------------------------------------------------------------------------

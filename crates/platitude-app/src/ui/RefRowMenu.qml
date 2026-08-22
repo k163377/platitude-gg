@@ -52,10 +52,7 @@ Item {
     property string heldByWorktree: ""
     /// The folder that copy is listed under in WORKTREES. The whole path is what git answers with and is the only
     /// unambiguous form, but nobody reads a tooltip that wide — and the list the reader goes to next shows the leaf.
-    readonly property string heldByWorktreeName: {
-        const at = refRowMenu.heldByWorktree.replace(/\\/g, "/").lastIndexOf("/")
-        return at < 0 ? refRowMenu.heldByWorktree : refRowMenu.heldByWorktree.substring(at + 1)
-    }
+    readonly property string heldByWorktreeName: GitFacts.pathLeaf(refRowMenu.heldByWorktree)
     /// Why the delete table's rows are out — decided as the menu opens, worn as the rows' `blockedReason` (デザイン規約 §無効).
     property bool onCurrentBranch: false
     readonly property string deleteBlockedOnCurrent:
@@ -177,11 +174,13 @@ Item {
     /// Held, not asked: git refuses nothing here — the branch is on the far side, so no `-d` can weigh what it holds —
     /// and the hold stands in for that refusal (デザイン規約 §リモートブランチを消す).
     function deleteRemoteNow(remoteRef) {
-        const cut = remoteRef.indexOf("/")
-        if (cut < 0)
+        // The remote's own name may contain `/` — the configured names say where the cut is (`GitFacts.splitRemoteRef`).
+        const pair = GitFacts.splitRemoteRef(remoteRef, refRowMenu.repoTab.remoteNames)
+        if (pair === "")
             return
+        const halves = pair.split(String.fromCharCode(31))
         refRowMenu.deleting("remote", remoteRef)
-        refRowMenu.repoTab.deleteRemoteBranch(remoteRef.substring(0, cut), remoteRef.substring(cut + 1))
+        refRowMenu.repoTab.deleteRemoteBranch(halves[0], halves[1])
     }
 
     AppMenu {
@@ -337,14 +336,15 @@ Item {
             onHeld: {
                 refMenu.close()
                 const c = refRowMenu.remoteCounterpart
-                const cut = c.indexOf("/")
-                if (cut < 0)
+                const pair = GitFacts.splitRemoteRef(c, refRowMenu.repoTab.remoteNames)
+                if (pair === "")
                     return
+                const halves = pair.split(String.fromCharCode(31))
                 // Both halves go at once: the pair is one write with one answer, so it is one thing to put back.
                 refRowMenu.deleting("branch", refRowMenu.refId)
                 refRowMenu.deleting("remote", c)
                 refRowMenu.repoTab.deleteBranchEverywhere(
-                    refRowMenu.refId, c.substring(0, cut), c.substring(cut + 1),
+                    refRowMenu.refId, halves[0], halves[1],
                     refDeleteItem.refusedRow)
             }
         }

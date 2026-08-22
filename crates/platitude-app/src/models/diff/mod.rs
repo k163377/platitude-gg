@@ -55,11 +55,19 @@ pub struct DiffLineItem {
     /// the only place "which side is this line from" is written down (see
     /// `encode::DiffRow`).
     markers: String,
+    /// The side those markers name — `"ours"` / `"theirs"` / `""` — read
+    /// once here by the parser's own rule
+    /// (`platitude_core::parse::diff::side_of_markers`), so the rows and
+    /// the tally cannot come to read the columns two ways.
+    side: String,
 }
 
 impl platitude_core::mem::Footprint for DiffLineItem {
     fn heap_bytes(&self) -> usize {
-        self.kind.heap_bytes() + self.text.heap_bytes() + self.markers.heap_bytes()
+        self.kind.heap_bytes()
+            + self.text.heap_bytes()
+            + self.markers.heap_bytes()
+            + self.side.heap_bytes()
     }
 }
 

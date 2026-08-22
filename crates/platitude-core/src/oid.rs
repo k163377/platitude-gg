@@ -47,6 +47,13 @@ impl Oid {
         }
     }
 
+    /// Whether a hex id is the all-zero sentinel [`Oid::zero_like`]
+    /// writes — the id the synthetic uncommitted-changes row carries.
+    /// Empty is not a sentinel: it is "no id at all".
+    pub fn hex_is_zero(hex: &str) -> bool {
+        !hex.is_empty() && hex.bytes().all(|b| b == b'0')
+    }
+
     /// Raw bytes of the id.
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes[..self.len as usize]
@@ -142,5 +149,13 @@ mod tests {
         let sha1 = Oid::from_hex_str(&"0".repeat(40)).unwrap();
         let sha256 = Oid::from_hex_str(&"0".repeat(64)).unwrap();
         assert_ne!(sha1, sha256);
+    }
+
+    #[test]
+    fn the_zero_sentinel_is_read_off_the_hex() {
+        let head = Oid::from_hex_str(&"ab".repeat(20)).unwrap();
+        assert!(Oid::hex_is_zero(&Oid::zero_like(&head).to_hex()));
+        assert!(!Oid::hex_is_zero(&head.to_hex()));
+        assert!(!Oid::hex_is_zero(""), "no id at all is not the sentinel");
     }
 }

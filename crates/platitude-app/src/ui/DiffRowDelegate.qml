@@ -28,8 +28,8 @@ Rectangle {
     required property bool fence
     required property int hunk
     required property int line
-    required property string markers
-    /// "ours" / "theirs" / "" — see `DiffPane.sideOf`.
+    /// "ours" / "theirs" / "" — the model reads it off the marker columns once, by the parser's own rule
+    /// (`platitude_core::parse::diff::side_of_markers`).
     required property string side
 
     required property real rowWidth

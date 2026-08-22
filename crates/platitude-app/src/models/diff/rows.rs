@@ -67,6 +67,7 @@ impl DiffModel {
                 fence: r.fence,
                 hunk: r.hunk,
                 line: r.line,
+                side: platitude_core::parse::diff::side_of_markers(&r.markers).to_string(),
                 markers: r.markers,
             })
             .collect();

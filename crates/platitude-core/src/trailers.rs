@@ -110,9 +110,67 @@ pub fn parse_co_authors(field: &str) -> Vec<CoAuthor> {
         .collect()
 }
 
+/// Splits an identity a person typed — `Name <address>`, or either half
+/// on its own — into `(name, address)`. The address is the inside of the
+/// last angle-bracketed run, or the whole text when there is none, and
+/// it only counts as one with an `@` past its first character (an
+/// address is the half with an `@` in it); the name is what stands
+/// before that bracket. Unlike a co-author trailer ([`parse_co_authors`])
+/// a bare word here is nobody: with no address there is nothing to file
+/// under.
+pub fn split_identity(text: &str) -> (String, String) {
+    let text = text.trim();
+    let open = text.rfind('<');
+    let close = text.rfind('>');
+    let inner = match (open, close) {
+        (Some(o), Some(c)) if c > o => text[o + 1..c].trim(),
+        _ => text,
+    };
+    let email = if inner.find('@').is_some_and(|at| at > 0) {
+        inner.to_string()
+    } else {
+        String::new()
+    };
+    let name = match open {
+        Some(o) if o > 0 => text[..o].trim().to_string(),
+        _ => String::new(),
+    };
+    (name, email)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_typed_identity_splits_into_name_and_address() {
+        assert_eq!(
+            split_identity("Ada Lovelace <ada@example.com>"),
+            ("Ada Lovelace".to_string(), "ada@example.com".to_string())
+        );
+        assert_eq!(
+            split_identity("  ada@example.com  "),
+            (String::new(), "ada@example.com".to_string())
+        );
+        assert_eq!(
+            split_identity("<ada@example.com>"),
+            (String::new(), "ada@example.com".to_string())
+        );
+        // A bare word is nobody: with no address there is nothing to
+        // file under — and `@` cannot open one.
+        assert_eq!(split_identity("Ada"), (String::new(), String::new()));
+        assert_eq!(split_identity("@x"), (String::new(), String::new()));
+        assert_eq!(split_identity(""), (String::new(), String::new()));
+        // The last bracketed run is the address, brackets before it are
+        // part of the name.
+        assert_eq!(
+            split_identity("Ada <of Lovelace> <ada@example.com>"),
+            (
+                "Ada <of Lovelace>".to_string(),
+                "ada@example.com".to_string()
+            )
+        );
+    }
 
     #[test]
     fn co_author_field_splits_on_the_unit_separator() {

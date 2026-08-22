@@ -113,17 +113,22 @@ impl DiffModel {
         crate::hub::from_session(self.tab_id, |s| s.refresh_diff(target)).is_some()
     }
 
-    /// The marker columns of one row, for the smoke hook that counts how
-    /// many rows the two sides are actually named on: which side a line
-    /// came from is drawn as a band a few pixels wide, and a picture
-    /// cannot be asked whether every band that should be there is.
+    /// How many rows each side is named on, packed `ours theirs` — for
+    /// the smoke hook (`conflict-sides`): which side a line came from is
+    /// drawn as a band a few pixels wide, and a picture cannot be asked
+    /// whether every band that should be there is.
     #[qslot]
-    fn markers_at(&self, row: i32) -> String {
-        usize::try_from(row)
-            .ok()
-            .and_then(|i| self.lines.get(i))
-            .map(|l| l.markers.clone())
-            .unwrap_or_default()
+    fn side_counts(&self) -> String {
+        let mut ours = 0;
+        let mut theirs = 0;
+        for line in &self.lines {
+            match line.side.as_str() {
+                "ours" => ours += 1,
+                "theirs" => theirs += 1,
+                _ => {}
+            }
+        }
+        format!("{ours} {theirs}")
     }
 
     #[qslot]

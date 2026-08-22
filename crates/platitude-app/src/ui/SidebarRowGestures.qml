@@ -24,9 +24,15 @@ QtObject {
     property string editId: ""
     property string editOid: ""
     property string editText: ""
-    /// The remote a row being renamed lives on (`origin`), empty for every other kind of row.
+    /// The remote a row being renamed lives on (`origin`), empty for every other kind of row. The configured names
+    /// say where the cut is — a remote's own name may contain `/` (`GitFacts.splitRemoteRef`).
     readonly property string editRemote: gestures.editKind !== "remote" ? ""
-        : gestures.editId.substring(0, gestures.editId.indexOf("/"))
+        : GitFacts.splitRemoteRef(gestures.editId, gestures.repoTab.remoteNames).split(String.fromCharCode(31))[0]
+    /// The name a remote row is typed and renamed by — the branch half, without the remote it lives on.
+    function remoteBranchHalf(id) {
+        const pair = GitFacts.splitRemoteRef(id, gestures.repoTab.remoteNames)
+        return pair === "" ? id : pair.split(String.fromCharCode(31))[1]
+    }
     /// A name the remote already carries. Refused here rather than left to git: a plain push to a name that exists
     /// fast-forwards it and reports success, so somebody else's branch would move instead of this one being renamed.
     /// Only ever a rename's rule: the box for a new branch's name opens on a remote row too, and what it makes is a
@@ -84,7 +90,7 @@ QtObject {
             return
         // What the box opened with: a remote branch is typed without the remote it is on, so the name it answers to is
         // not what it shows.
-        const was = kind === "remote" ? id.substring(id.indexOf("/") + 1) : id
+        const was = kind === "remote" ? gestures.remoteBranchHalf(id) : id
         gestures.stopEdit()
         if (mode === "branch")
             gestures.host.branchAtRequested(oid, text.trim())

@@ -42,6 +42,13 @@ pub fn file_url(path: &Path) -> String {
     path_to_file_url(path)
 }
 
+/// The last segment of a path, whichever separator wrote it — the name a
+/// folder is shown by where the whole path would not be read (a question
+/// naming another working copy, a tooltip naming its folder).
+pub fn path_leaf(path: &str) -> &str {
+    path.rsplit(['/', '\\']).next().unwrap_or(path)
+}
+
 /// Converts a local path to a `file:` URL for QML. Empty for a path with
 /// no root: a dialog cannot be opened at a folder that is not one.
 fn path_to_file_url(path: &Path) -> String {
@@ -114,6 +121,15 @@ fn hex_val(c: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_leaf_is_the_last_segment_whichever_separator_wrote_it() {
+        assert_eq!(path_leaf("C:\\Users\\dev\\repo"), "repo");
+        assert_eq!(path_leaf("/home/dev/repo"), "repo");
+        assert_eq!(path_leaf("C:/mixed\\separators/leaf"), "leaf");
+        assert_eq!(path_leaf("bare"), "bare");
+        assert_eq!(path_leaf(""), "");
+    }
 
     #[test]
     #[cfg(windows)]

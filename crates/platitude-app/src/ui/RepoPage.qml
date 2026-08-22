@@ -302,7 +302,7 @@ Item {
     // `record` is the chip as it is drawn — kind letter, the flag digits, then the name (see encode.rs, `FLAGS`).
     function activateRecord(record) {
         if (record !== "")
-            page.switchToRef(record[0], record.substring(6).split("\u001E")[0])
+            page.switchToRef(record[0], GitFacts.recordName(record))
     }
     // git keeps a branch to one working copy: moving onto one another worktree already has out is refused outright
     // (`fatal: '<branch>' is already used by worktree at …`, 2026-08-21 実測), whether or not that copy is locked.
@@ -319,7 +319,7 @@ Item {
         const held = worktreesModel.worktreeHolding(local)
         if (held === "")
             return
-        const leaf = held.replace(/\\/g, "/").split("/").pop()
+        const leaf = GitFacts.pathLeaf(held)
         page.startRowAsk(
             branchesModel.oidOfName(local),
             //: %1 is the folder of the working copy that has the branch checked out.
@@ -511,16 +511,13 @@ Item {
     /// detached-HEAD marker, a stash, the current branch (whose ref menu has no rows) — falls back to the row's commit
     /// menu. The stacked list's rows pass no `oidHex` and have no row to fall back to (デザイン規約 §メニュー).
     function openRecordMenu(record, oidHex) {
-        const kind = record === "" ? ""
-                   : record[0] === "L" ? "branch"
-                   : record[0] === "R" ? "remote"
-                   : record[0] === "T" ? "tag" : ""
+        const kind = GitFacts.recordKind(record)
         if (kind === "") {
             if (oidHex !== "")
                 page.openRowMenu(oidHex)
             return
         }
-        const name = record.substring(6).split(String.fromCharCode(30))[0]
+        const name = GitFacts.recordName(record)
         const oid = kind === "branch" ? branchesModel.oidOfName(name)
                   : kind === "remote" ? remotesModel.oidOfName(name)
                   : tagsModel.oidOfName(name)
@@ -556,11 +553,13 @@ Item {
     /// the question is asked first and its answer is held down rather than clicked — this is the one write here that
     /// another machine keeps (デザイン規約 §長押し).
     function askRenameRemote(remoteRef, name) {
-        const cut = remoteRef.indexOf("/")
-        if (cut < 0)
+        // The remote's own name may contain `/`, so the cut is the configured name, not the first slash
+        // (`platitude_core::refs::split_remote_ref`).
+        const pair = GitFacts.splitRemoteRef(remoteRef, repoTab.remoteNames)
+        if (pair === "")
             return
-        const remote = remoteRef.substring(0, cut)
-        const from = remoteRef.substring(cut + 1)
+        const remote = pair.split(String.fromCharCode(31))[0]
+        const from = pair.split(String.fromCharCode(31))[1]
         // A name already over there is not offered: a plain push to one that exists fast-forwards it and reports
         // success, so somebody else's branch would move instead of ours being renamed. The box refuses it too; this
         // catches the way in that has no box.
@@ -606,23 +605,21 @@ Item {
     /// the write answered** — a listing already queued when the press landed says nothing about the delete, and read
     /// as though it did it would put the row straight back under the hand that had just taken it away.
     property int goneAtSeq: -1
-    /// The chips that go with the rows, keyed the way a chip record is (kind letter + the name on it —
-    /// `GraphRowDelegate.recordsShown`). A dropped stash has no chip: it is a row of the graph rather than a name on
-    /// one, and a row only leaves with the walk.
-    readonly property string goneChips: {
-        const gone = []
-        if (page.goneBranch !== "")
-            gone.push("L" + page.goneBranch)
-        if (page.goneRemote !== "")
-            gone.push("R" + page.goneRemote)
-        if (page.goneTag !== "")
-            gone.push("T" + page.goneTag)
-        return gone.join(String.fromCharCode(31))
+    /// The chips that go with the rows are the graph model's to key and pack (`GraphModel.setGone` /
+    /// `encode::gone_keys`): the names cross the bridge as they are. A dropped stash has no chip: it is a row of the
+    /// graph rather than a name on one, and a row only leaves with the walk.
+    onGoneBranchChanged: {
+        branchesModel.setHidden(page.goneBranch)
+        graphModel.setGone(page.goneBranch, page.goneRemote, page.goneTag)
     }
-    onGoneChipsChanged: graphModel.setGoneChips(page.goneChips)
-    onGoneBranchChanged: branchesModel.setHidden(page.goneBranch)
-    onGoneRemoteChanged: remotesModel.setHidden(page.goneRemote)
-    onGoneTagChanged: tagsModel.setHidden(page.goneTag)
+    onGoneRemoteChanged: {
+        remotesModel.setHidden(page.goneRemote)
+        graphModel.setGone(page.goneBranch, page.goneRemote, page.goneTag)
+    }
+    onGoneTagChanged: {
+        tagsModel.setHidden(page.goneTag)
+        graphModel.setGone(page.goneBranch, page.goneRemote, page.goneTag)
+    }
     onGoneStashChanged: stashesModel.setHidden(page.goneStash)
 
     /// Automation: the run that photographs a row already gone holds it there.
@@ -1469,7 +1466,7 @@ Item {
     function rememberAnchor() {
         let row = 0
         let oidHex = graphModel.oidAt(0)
-        if (oidHex !== "" && !/[^0]/.test(oidHex)) {
+        if (GitFacts.wipOid(oidHex)) {
             row = 1
             oidHex = graphModel.oidAt(1)
         }
@@ -1528,7 +1525,7 @@ Item {
         // walk prepends it only once it knows the tree is dirty, and until then row 0 is still the commit that was on
         // top. Landing on that one would take the press to the wrong place entirely.
         const oidHex = graphModel.oidAt(0)
-        if (oidHex === "" || /[^0]/.test(oidHex))
+        if (!GitFacts.wipOid(oidHex))
             return
         page.pendingWipSelect = false
         graphPane.setCurrentRow(0)
@@ -1541,7 +1538,7 @@ Item {
     // was being read; failing that, fall back to the branch's own commit, which is never nothing.
     function followVanishedCommit() {
         const oidHex = graphModel.oidAt(page.selectedRow)
-        if (oidHex !== "" && /[^0]/.test(oidHex)) {
+        if (oidHex !== "" && !GitFacts.wipOid(oidHex)) {
             graphPane.setCurrentRow(page.selectedRow)
             page.activateRow(oidHex)
             return
@@ -1556,7 +1553,7 @@ Item {
         const row = page.rewordRow
         const oidHex = graphModel.oidAt(row)
         // Nothing there, or the working-tree row moved under it.
-        if (oidHex === "" || !/[^0]/.test(oidHex)) {
+        if (oidHex === "" || GitFacts.wipOid(oidHex)) {
             page.rewordRow = -1
             return
         }
@@ -1581,7 +1578,7 @@ Item {
             graphPane.setCurrentRow(row)
             page.selectedRow = row
         }
-        if (oidHex !== "" && !/[^0]/.test(oidHex)) {
+        if (GitFacts.wipOid(oidHex)) {
             page.showWip()
             return
         }
@@ -1688,25 +1685,20 @@ Item {
             page.stashesProvedGone()
         }
     }
-    /// What the working tree looked like the last time the open diff was read against it. Not a diff of the file — the
-    /// counts of the four buckets, which is what a stage or an unstage moves whoever made it.
-    property string seenTreeTally: ""
+    /// The `WorkTreeModel.treeRevision` the open diff was last read against — the counts of the four buckets are what
+    /// a stage or an unstage moves whoever made it, and the model bumps the revision when they do.
+    property int seenTreeRev: -1
     /// The write whose answer already re-read the file, so that the status arriving behind it does not read the same
     /// file over again. -1 once that status has come and gone.
     property int diffReadAt: -1
-    function treeTally() {
-        return workTree.stagedCount + "/" + workTree.unstagedCount + "/"
-             + workTree.untrackedCount + "/" + workTree.conflictCount
-    }
     // **The tree was read.** Said by the working-tree model rather than by the file list beside it: the list says
     // `changed` only when its rows differ, and a status that moved no row is exactly the one this has to hear about (a
     // second line staged out of a file already on both sides moves nothing).
     Connections {
         target: workTree
         function onChanged() {
-            const tally = page.treeTally()
-            const moved = tally !== page.seenTreeTally
-            page.seenTreeTally = tally
+            const moved = workTree.treeRevision !== page.seenTreeRev
+            page.seenTreeRev = workTree.treeRevision
             // The status that follows this window's own write: the file was read when the write answered.
             const ours = page.diffReadAt === repoTab.writeSeq
             page.diffReadAt = -1
@@ -1810,7 +1802,7 @@ Item {
             // demo repository is dirty.
             for (let row = 0; row < graphModel.rowTotal; row++) {
                 const oid = graphModel.oidAt(row)
-                if (oid !== "" && /[^0]/.test(oid)) {
+                if (oid !== "" && !GitFacts.wipOid(oid)) {
                     page.autoSelected = true
                     graphPane.setCurrentRow(row)
                     page.activateRow(oid)

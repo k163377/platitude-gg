@@ -19,7 +19,7 @@ UI の色・寸法・用語の正本は [デザイン規約.md](../../internal-d
 - QML モジュール名は既定で Cargo パッケージ名(ハイフン不可)だが、`#[qobject(NoQmlElement)]` + 手動 `impl QmlRegister`(URI 定数)で任意にできる
 - Qt Widgets 不可・C++ 混在不可。必要になった時点で CXX-Qt 移行を検討
 - 参照実装は公式 examples(`hello_world` / `minimal_app` / `host_monitor` = tokio 連携 / `color_palette`)。ドキュメント https://doc-snapshots.qt.io/qtbridge-rust/qtbridge/index.html / リポジトリ https://github.com/qt/qtbridge-rust / フォールバックの CXX-Qt book https://kdab.github.io/cxx-qt/book/
-- **QML にビジネスロジックを書かない**(表示とインタラクションのみ。JS でのデータ加工禁止)— ブリッジ差し替え(Qt Bridges → CXX-Qt)を可能に保つための条件でもある
+- **QML にビジネスロジックを書かない**(表示とインタラクションのみ。JS でのデータ加工禁止)— ブリッジ差し替え(Qt Bridges → CXX-Qt)を可能に保つための条件でもある。**QML が値で問う純ルール(WIP oid・チップの gone filter・remote 名の切り分け・push standing・identity 分解等)は `GitFacts` singleton の stateless slot** — 引数だけを読むので「スロットはバインディングで固まる」規則の例外条件を満たす(隠れた Rust 状態を読む slot は従来どおり禁止)。状態から導く派生値(`stashStanding` / `treeRevision`)は drain で計算する qproperty
 - `include_bytes_qml!("dir/file", "prefix")` は **prefix にファイルの相対パス全体を連結**する(qrc:/prefix/dir/file)。ソースのディレクトリ構造 = qrc 構造として設計する。qmldir も埋め込めるので QML singleton(`platitude.ui` の `Theme` / `Metrics`)はこの方式で成立する
 - QML は `ui/` 直下フラットに 1 ファイル 1 コンポーネント(`platitude.ui` モジュール)。**新規 QML は qmldir と main.rs の `include_bytes_qml!` の両方へ登録**(qmldir があるディレクトリでは列挙された型しか見えない)
 - **意匠の土台は既存の部品から選ぶ**(一覧は rules-refs/app-ui.md の台座の行): カード = `AppCard` / `AppCardFace`、hover の閉じ待ち = `HoverCardHost`、回るリング = `SpinnerIcon`、ダイアログの足 = `DialogActions`、欄の見出し = `LabeledField`、ツールボタンの一言 = `HoverToolButton.tip`、スクロールする一覧 = `AppListView`。素の `Popup` / `ListView` / `RotationAnimator` を新しく書かない — 台座に積んだ罠避け(hover の 2 handler・撮影中の停止・追いかけない一覧)がまるごと落ちる

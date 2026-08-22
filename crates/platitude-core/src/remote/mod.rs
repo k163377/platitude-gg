@@ -23,7 +23,9 @@ pub use self::list::{
     PushDefault, Remote, Remotes, add, clear_push_default, list, push_default, read,
     set_push_default, set_url,
 };
-pub use self::push::{PushForce, PushSpec, plan_current_push, plan_publish, push};
+pub use self::push::{
+    PushForce, PushSpec, PushStanding, plan_current_push, plan_publish, push, push_standing,
+};
 pub use self::tags::{RemoteTag, list_tags, parse_ls_remote_tags};
 
 /// Default time budget for commands that talk to a remote.

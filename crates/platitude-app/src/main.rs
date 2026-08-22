@@ -13,8 +13,8 @@ mod winframe;
 
 use hub::Hub;
 use models::{
-    AppBackend, CommandsModel, DetailsModel, DiffModel, GraphModel, NavSectionModel, RepoTab,
-    TabsModel, WorkTreeModel,
+    AppBackend, CommandsModel, DetailsModel, DiffModel, GitFacts, GraphModel, NavSectionModel,
+    RepoTab, TabsModel, WorkTreeModel,
 };
 use platitude_core::settings::{Build, Claim, Store};
 use qtbridge::QApp;
@@ -208,6 +208,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/Main.qml", "qt/qml/platitude");
     let code = app
         .register::<AppBackend>()
+        .register::<GitFacts>()
         .register::<TabsModel>()
         .register::<RepoTab>()
         .register::<GraphModel>()

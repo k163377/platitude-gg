@@ -216,7 +216,7 @@ AppListView {
                 navList.kindHint, row.rowKey, "rename", id, row.oid_hex,
                 navList.kindHint === "stash" ? row.name
                 : navList.kindHint === "remote"
-                  ? id.substring(id.indexOf("/") + 1) : id)
+                  ? navList.gestures.remoteBranchHalf(id) : id)
         }
         onEditTyped: text => {
             if (navList.gestures)

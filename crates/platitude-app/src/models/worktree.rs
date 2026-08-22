@@ -91,6 +91,20 @@ pub struct WorkTreeModel {
     wip_deleted: i32,
     wip_renamed: i32,
     wip_copied: i32,
+    /// What the working tree lets a stash do — `unborn` / `conflicts` /
+    /// `clean` / `ready` (`platitude_core::stash::standing`). Empty until
+    /// `loaded`, like every count here.
+    stash_standing: String,
+    /// Bumped when a status moves any of the four bucket counts — what
+    /// "somebody moved the tree" is read off, so a status that moved no
+    /// count (the answer to this window's own poll) does not re-read an
+    /// open diff. Counts, not rows: a second line staged out of a file
+    /// already on both sides moves no row, and is exactly the change the
+    /// reader of this has to hear about.
+    tree_revision: i32,
+    /// The counts `tree_revision` last spoke for; `None` before the
+    /// first status, which always counts as movement.
+    seen_counts: Option<(i32, i32, i32, i32)>,
     feed: Option<Arc<Feed<StatusMsg>>>,
     tab_id: i32,
 }
@@ -136,6 +150,8 @@ impl WorkTreeModel {
     qproperty!("wipDeleted", Member = wip_deleted, Notify = changed);
     qproperty!("wipRenamed", Member = wip_renamed, Notify = changed);
     qproperty!("wipCopied", Member = wip_copied, Notify = changed);
+    qproperty!("stashStanding", Member = stash_standing, Notify = changed);
+    qproperty!("treeRevision", Member = tree_revision, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -233,6 +249,19 @@ impl WorkTreeModel {
         self.unstaged_count = counts.unstaged as i32;
         self.untracked_count = counts.untracked as i32;
         self.conflict_count = counts.conflicted as i32;
+        self.stash_standing = platitude_core::stash::standing(self.head_oid.is_empty(), &counts)
+            .as_str()
+            .to_string();
+        let tally = (
+            self.staged_count,
+            self.unstaged_count,
+            self.untracked_count,
+            self.conflict_count,
+        );
+        if self.seen_counts != Some(tally) {
+            self.seen_counts = Some(tally);
+            self.tree_revision += 1;
+        }
         (self.op_step, self.op_steps) = match progress {
             Some(p) => (p.current as i32, p.total as i32),
             None => (0, 0),

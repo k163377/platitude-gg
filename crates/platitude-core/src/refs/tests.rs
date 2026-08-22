@@ -270,3 +270,33 @@ fn folds_neither_same_named_remote_when_no_upstream_picks_one() {
         "no single branch the badge is about"
     );
 }
+
+#[test]
+fn a_remote_ref_splits_at_the_remote_name_not_the_first_slash() {
+    let names = ["origin", "my", "my/fork"];
+    assert_eq!(
+        split_remote_ref("origin/main", names),
+        Some(("origin", "main"))
+    );
+    assert_eq!(
+        split_remote_ref("origin/feature/x", names),
+        Some(("origin", "feature/x"))
+    );
+    // The longest configured name wins: `my/fork/main` lives on
+    // `my/fork`, not on `my` with a branch called `fork/main`.
+    assert_eq!(
+        split_remote_ref("my/fork/main", names),
+        Some(("my/fork", "main"))
+    );
+    assert_eq!(split_remote_ref("my/other", names), Some(("my", "other")));
+}
+
+#[test]
+fn a_name_no_remote_owns_does_not_split() {
+    let names = ["origin"];
+    assert_eq!(split_remote_ref("fork/main", names), None);
+    // The bare remote name is not a remote branch.
+    assert_eq!(split_remote_ref("origin", names), None);
+    assert_eq!(split_remote_ref("", names), None);
+    assert_eq!(split_remote_ref("origin/main", []), None);
+}

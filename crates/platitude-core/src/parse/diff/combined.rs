@@ -72,6 +72,27 @@ pub(super) fn read_combined_line(
     });
 }
 
+/// Which side of a conflicted (two-parent) diff a row's marker columns
+/// name: `"ours"` / `"theirs"`, or `""` for a line both sides have, a
+/// line neither has (a fence git wrote, or one typed while resolving),
+/// and markers too short to say — a single-parent diff has none at all.
+///
+/// The same reading [`read_combined_line`] gives the columns: on a
+/// removed line the side that has it is the one marked `-`; on a line
+/// that survived it is the one that is *not* marked `+`.
+pub fn side_of_markers(markers: &str) -> &'static str {
+    let bytes = markers.as_bytes();
+    let (Some(&ours), Some(&theirs)) = (bytes.first(), bytes.get(1)) else {
+        return "";
+    };
+    let held = if markers.contains('-') { b'-' } else { b' ' };
+    match (ours == held, theirs == held) {
+        (true, false) => "ours",
+        (false, true) => "theirs",
+        _ => "",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::parse_patch;
@@ -103,6 +124,24 @@ index 804ce7b,ba44bb1..0000000
 - five
 + FIVE-theirs
 ";
+
+    /// The four marker shapes a resolved and an unresolved conflict put
+    /// on screen (measured, git 2.55): `- ` ours / ` -` theirs on a
+    /// resolved file, `+ ` / ` +` while the markers are still in the
+    /// tree, `--` both, `++` a line typed while resolving.
+    #[test]
+    fn a_side_is_read_off_the_marker_columns() {
+        assert_eq!(side_of_markers("- "), "ours");
+        assert_eq!(side_of_markers(" -"), "theirs");
+        assert_eq!(side_of_markers(" +"), "ours");
+        assert_eq!(side_of_markers("+ "), "theirs");
+        assert_eq!(side_of_markers("--"), "");
+        assert_eq!(side_of_markers("++"), "");
+        assert_eq!(side_of_markers("  "), "");
+        // A single-parent diff has no marker columns at all.
+        assert_eq!(side_of_markers(""), "");
+        assert_eq!(side_of_markers("-"), "");
+    }
 
     #[test]
     fn reads_a_conflicted_file_as_one_combined_patch() {

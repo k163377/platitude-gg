@@ -43,30 +43,23 @@ Item {
     // The top row's highlight and hit area bleed over the list's top margin: hovering or selecting the first commit
     // shows one unbroken band level with the neighbouring header bands instead of leaving a dark sliver above the row.
     readonly property real topBleed: index === 0 && ListView.view ? ListView.view.topMargin : 0
-    // The all-zero id marks the synthetic uncommitted-changes row.
-    readonly property bool isWip: oid_hex !== "" && !/[^0]/.test(oid_hex)
+    // The all-zero id marks the synthetic uncommitted-changes row (the sentinel is core's — `Oid::zero_like`).
+    readonly property bool isWip: GitFacts.wipOid(oid_hex)
     // Chip records are separated by U+001F (see encode.rs), and arrive in the order the chip reads them out: HEAD →
     // local → remote → tag. One chip for the row, so a commit that is both a branch tip and a release shows the branch
     // — the tag is behind the "+N", where the hover card has it.
-    // A chip the window has already said is gone is left out of every one of them: the row still carries it, because
-    // the ref only leaves the model when the walk that follows the delete lands (デザイン規約 §消す操作は先に画面から消す).
+    // A chip the window has already said is gone is left out of every one of them (`encode::labels_shown` applies the
+    // set): the row still carries it, because the ref only leaves the model when the walk that follows the delete
+    // lands (デザイン規約 §消す操作は先に画面から消す).
     // Read off the model rather than mirrored onto the view, because that is where it belongs — the same list that
     // hands out `labels` says which of their names the window is standing in for, and the sidebar's own sections
     // hold theirs the same way (`NavSectionModel::set_hidden`).
     readonly property string goneChips:
         rowItem.ListView.view && rowItem.ListView.view.model ? rowItem.ListView.view.model.goneChips : ""
-    readonly property var labelRecords: rowItem.recordsShown(labels, rowItem.goneChips)
+    readonly property string shownLabels: GitFacts.labelsShown(labels, rowItem.goneChips)
+    readonly property var labelRecords:
+        rowItem.shownLabels === "" ? [] : rowItem.shownLabels.split(String.fromCharCode(31))
     readonly property var branchRecords: labelRecords.filter(r => r[0] !== "T")
-    /// The records to draw, out of the ones the row carries: `packed` as it arrived, less the chips `gone` names.
-    /// A chip is named by its kind letter and the name on it — the flags in between say how it is drawn, not which
-    /// ref it is, and a tag may share a name with a branch.
-    function recordsShown(packed, gone) {
-        const all = packed === "" ? [] : packed.split(String.fromCharCode(31))
-        if (gone === "")
-            return all
-        const dropped = gone.split(String.fromCharCode(31))
-        return all.filter(r => !dropped.includes(r[0] + r.substring(6).split(String.fromCharCode(30))[0]))
-    }
     // Whether this row is somewhere HEAD could stand: the working-tree row is not a commit, and a stash sits on no
     // branch's history.
     readonly property bool movable: !rowItem.isWip && rowItem.stash_ref === ""

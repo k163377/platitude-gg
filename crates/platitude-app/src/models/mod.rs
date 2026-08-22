@@ -16,6 +16,7 @@ mod details_tests;
 mod diff;
 #[cfg(test)]
 mod diff_tests;
+mod facts;
 mod graph;
 mod nav;
 mod notify;
@@ -28,6 +29,7 @@ pub use app_backend::{AppBackend, build_tree};
 pub use commands::CommandsModel;
 pub use details::DetailsModel;
 pub use diff::DiffModel;
+pub use facts::GitFacts;
 pub use graph::GraphModel;
 pub use nav::NavSectionModel;
 pub use repo_tab::RepoTab;

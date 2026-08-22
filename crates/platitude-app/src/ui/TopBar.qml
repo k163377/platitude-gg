@@ -403,29 +403,13 @@ Rectangle {
         // open, and the pane that could otherwise host it is one row's selection away most of the time.
         ActionButton {
             id: stashButton
-            /// What the working tree lets this button do (デザイン規約 §変更を退避する). Every refusal is git's own, measured
-            /// rather than guessed (実測 — rules-refs/app-ui.md §stash):
-            ///
-            /// - `closed`    — nothing open here to read a working tree off
-            /// - `unborn`    — no commit yet, and git turns the write down flat however dirty the folder is
-            ///                 ("You do not have the initial commit yet")
-            /// - `conflicts` — a file is unmerged, and git refuses the **whole** write, not the unmerged path
-            ///                 ("needs merge")
-            /// - `clean`     — nothing uncommitted to set aside
-            /// - `ready`     — anything staged, unstaged or untracked; git takes all three
-            readonly property string mode: {
-                if (topBar.curPage === null || topBar.curPage.pageTab.state !== "open"
-                        || !topBar.curPage.pageWt.loaded)
-                    return "closed"
-                const wt = topBar.curPage.pageWt
-                if (wt.headOid === "")
-                    return "unborn"
-                if (wt.conflictCount > 0)
-                    return "conflicts"
-                if (wt.stagedCount + wt.unstagedCount + wt.untrackedCount === 0)
-                    return "clean"
-                return "ready"
-            }
+            /// What the working tree lets this button do (デザイン規約 §変更を退避する). The refusals are read where they
+            /// were measured (`platitude_core::stash::standing` — unborn / conflicts / clean / ready); `closed` is
+            /// this band's own half: nothing open here to read a working tree off.
+            readonly property string mode:
+                topBar.curPage === null || topBar.curPage.pageTab.state !== "open"
+                    || !topBar.curPage.pageWt.loaded
+                ? "closed" : topBar.curPage.pageWt.stashStanding
             kind: "stash"
             // The label is the command, like both buttons beside it (デザイン規約 §git 用語のコード表記). One wording in every
             // state: nothing here changes what the press costs, so there is no second shape to say.

@@ -55,23 +55,17 @@ Item {
     /// - `behind`   — the remote moved on; we have nothing to add
     /// - `diverged` — both moved; only an overwrite can land
     ///
-    /// The counts behind this come from the last fetch, so they prove the negative only: a push may still be refused
-    /// when they say it fits.
+    /// The decision table itself lives in core (`platitude_core::remote::push_standing`, called through the pure
+    /// `GitFacts` slot — every input is a property of this binding, so it re-reads when any of them moves). The
+    /// tab-lifecycle half of `closed` is this side's own; whether the marked remote is the one the branch tracks is
+    /// answered by the configured names, not the first slash. The counts behind this come from the last fetch, so
+    /// they prove the negative only: a push may still be refused when they say it fits.
     readonly property string pushState:
-        publishFlow.repoTab.state !== "open" || publishFlow.workTree.detached
-        || publishFlow.workTree.branch === "" ? "closed"
-        : publishFlow.workTree.upstream === "" || !publishFlow.workTree.upstreamTracked ? "publish"
-        : publishFlow.marksAnother ? "elsewhere"
-        : publishFlow.workTree.behind > 0
-          ? (publishFlow.workTree.ahead > 0 ? "diverged" : "behind")
-        : publishFlow.workTree.ahead > 0 ? "ready" : "clean"
-    /// Whether the push is going somewhere the counts do not speak for: git's `ahead` / `behind` are the branch's
-    /// standing with the remote it *tracks*, and a marked remote takes the push away from that one (デザイン規約 §リモートへ送る).
-    /// Tested against the mark's own name rather than by cutting the upstream at a slash — the name is known, so the
-    /// prefix is exact (the general `remoteOf` this still wants is P3-確認事項).
-    readonly property bool marksAnother:
-        publishFlow.repoTab.pushDefault !== "" && publishFlow.workTree.upstream !== ""
-        && !publishFlow.workTree.upstream.startsWith(publishFlow.repoTab.pushDefault + "/")
+        publishFlow.repoTab.state !== "open" ? "closed"
+        : GitFacts.pushStanding(publishFlow.workTree.detached, publishFlow.workTree.branch,
+                                publishFlow.workTree.upstream, publishFlow.workTree.upstreamTracked,
+                                publishFlow.workTree.ahead, publishFlow.workTree.behind,
+                                publishFlow.repoTab.pushDefault, publishFlow.repoTab.remoteNames)
     readonly property bool canPush: (publishFlow.pushState === "publish"
                                      || publishFlow.pushState === "elsewhere"
                                      || publishFlow.pushState === "ready")

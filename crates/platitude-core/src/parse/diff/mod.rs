@@ -37,6 +37,7 @@ mod parse;
 #[cfg(test)]
 mod testkit;
 
+pub use combined::side_of_markers;
 pub use parse::parse_patch;
 
 /// Classification of one diff content line.
