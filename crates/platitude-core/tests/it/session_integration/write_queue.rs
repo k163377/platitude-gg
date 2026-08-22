@@ -271,3 +271,75 @@ async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() 
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "topic extra");
     session.close();
 }
+
+/// `stage_conflicted` is `git add` over the unmerged paths and nothing
+/// else. A merge stopped on all four kinds of conflict at once (`UU`,
+/// `AA`, `DU`, `UD`) settles whole, and a modification standing beside it
+/// stays out of the index — which is the whole difference between this
+/// and `git add --all`.
+#[tokio::test(flavor = "multi_thread")]
+async fn marking_the_conflicts_resolved_leaves_the_rest_of_the_tree_alone() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("both.txt", "base\n", "root");
+    repo.commit_file("ours-del.txt", "base\n", "one we will drop");
+    repo.commit_file("theirs-del.txt", "base\n", "one they will drop");
+    repo.commit_file("bystander.txt", "base\n", "one nobody touches");
+
+    repo.git(&["checkout", "-b", "topic"]);
+    repo.write_file("both.txt", "topic side\n");
+    repo.write_file("ours-del.txt", "topic keeps editing\n");
+    repo.write_file("added.txt", "topic's new file\n");
+    std::fs::remove_file(repo.path.join("theirs-del.txt")).expect("the topic side drops it");
+    repo.git(&["add", "-A"]);
+    repo.git(&["commit", "-m", "the topic side of all four"]);
+
+    repo.git(&["checkout", "main"]);
+    repo.write_file("both.txt", "main side\n");
+    repo.write_file("theirs-del.txt", "main keeps editing\n");
+    repo.write_file("added.txt", "main's new file\n");
+    std::fs::remove_file(repo.path.join("ours-del.txt")).expect("the main side drops it");
+    repo.git(&["add", "-A"]);
+    repo.git(&["commit", "-m", "the main side of all four"]);
+
+    assert!(
+        !repo.git_ok(&["merge", "--no-edit", "topic"]),
+        "the merge stopped on the conflicts, which is the point of it"
+    );
+    assert_eq!(
+        repo.git(&["diff", "--name-only", "--diff-filter=U"])
+            .lines()
+            .count(),
+        4,
+        "all four kinds are standing"
+    );
+    // Work of the reader's own, in the unstaged bucket beside the
+    // conflicts. Written after the merge so nothing could carry it into
+    // one.
+    repo.write_file("bystander.txt", "read while settling this\n");
+
+    let (sink, session) = opened(&repo).await;
+    session.stage_conflicted();
+    assert_eq!(write_result(&sink, "stage").await, None, "the write landed");
+
+    assert_eq!(
+        repo.git(&["ls-files", "--unmerged"]),
+        "",
+        "nothing is unmerged any more"
+    );
+    let staged = repo.git(&["diff", "--cached", "--name-only"]);
+    assert!(
+        staged.lines().any(|l| l == "added.txt"),
+        "the conflicted paths went into the index: {staged}"
+    );
+    assert!(
+        !staged.lines().any(|l| l == "bystander.txt"),
+        "the file beside them did not: {staged}"
+    );
+    assert!(
+        repo.git(&["diff", "--name-only"])
+            .lines()
+            .any(|l| l == "bystander.txt"),
+        "and is still where it was"
+    );
+    session.close();
+}

@@ -69,8 +69,9 @@ Rectangle {
             color: Theme.textMuted
         }
         Item { Layout.fillWidth: true }
-        // The seat `Stage all` takes on the other two buckets. The words stay — nothing else in view names the tool
-        // being waited on — and the ring says it is still running. No `…`: that is the word for a question standing,
+        // The whole-bucket button's own seat, taken over for as long as the tool holds the queue. The words stay —
+        // nothing else in view names the tool being waited on — and the ring says it is still running. No `…`: that is
+        // the word for a question standing,
         // and progress is the ring's job (規約 §進行中・長押しの定数).
         //
         // Nothing to press: killing `git mergetool` would leave the editor it started running and its scratch behind.
@@ -87,11 +88,21 @@ Rectangle {
         }
         HoverToolButton {
             id: moveAllButton
-            visible: bucketHeader.section !== "conflicts"
+            // The conflicted bucket has this seat too, and gives it up only when the wait for an external tool needs
+            // it: the words are the one thing in view naming the tool, and they are longer than the button
+            // (規約 §conflict を外部ツールへ渡す). Nothing is lost by standing down — that wait holds the write queue
+            // until the tool is closed, so a press taken here would sit behind it with nothing to show.
+            visible: !bucketHeader.waitingForTool
             // An empty bucket has nothing to move, and this heading stands even then (§無効 — what cannot be pressed says
             // so where it stands, rather than leaving its seat).
             enabled: bucketHeader.count > 0
-            text: bucketHeader.section === "staged" ? qsTr("Unstage all") : qsTr("Stage all")
+            // The same `git add` is a different act on a conflicted file, so the word is the row's own word carried up
+            // to the bucket's scope (規約 §diff の中のステージ — the ending names the scope).
+            text: bucketHeader.section === "staged"
+                  ? qsTr("Unstage all")
+                  : bucketHeader.section === "conflicts"
+                  ? qsTr("Mark all resolved")
+                  : qsTr("Stage all")
             font.pixelSize: Theme.fontMd
             // The seat every button in a `rowHeight` band takes (NavHeader's do the same). A `ToolButton` asks for its
             // word plus its own padding, and at the body step that came to more than the band it stands in — the
@@ -99,10 +110,16 @@ Rectangle {
             // until the count's brackets were through the floor (measured, both OSes).
             implicitHeight: Theme.iconLg
             tip: bucketHeader.section === "staged"
-                 ? qsTr("Unstage everything") : qsTr("Stage everything, untracked included")
+                 ? qsTr("Unstage everything")
+                 : bucketHeader.section === "conflicts"
+                 ? qsTr("Tell git every conflict has been dealt with")
+                 : qsTr("Stage everything, untracked included")
             onClicked: {
                 if (bucketHeader.section === "staged")
                     bucketHeader.repoTab.unstageAll()
+                else if (bucketHeader.section === "conflicts")
+                    // Not `stageAll()`: the unstaged bucket beside this one is not part of what this band names.
+                    bucketHeader.repoTab.stageConflicted()
                 else
                     bucketHeader.repoTab.stageAll()
             }

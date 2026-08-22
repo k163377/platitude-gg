@@ -570,6 +570,13 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // direction's picture.
         "stage-all" => Some("wip_heads from=unstaged unstaged=true staged=true"),
         "unstage-all" => Some("wip_heads from=staged unstaged=true staged=true"),
+        // The conflicted heading is the one that answers the other way:
+        // it stands only while git has something unmerged, so marking the
+        // whole bucket resolved has to take it off the screen. `staged=`
+        // rides along to say where the files went — `git add --all` would
+        // have emptied the unstaged bucket with them, and the picture of
+        // that is the same picture.
+        "resolve-all" => Some("wip_heads from=conflicts unstaged=true staged=true conflicts=false"),
         _ => None,
     }
 }

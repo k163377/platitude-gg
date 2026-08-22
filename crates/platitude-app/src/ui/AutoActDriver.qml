@@ -119,7 +119,7 @@ Item {
                 "rebase-onto", "revert-commit", "op-exit-go", "stage-hunk",
                 "stage-line", "keep-place", "discard-hunk-go", "line-back", "diff-follow",
                 "line-run",
-                "stage-all", "unstage-all",
+                "stage-all", "unstage-all", "resolve-all",
                 "push", "force-push", "push-retry", "fetch", "fetch-ref-list",
                 "commands", "commands-fail", "commands-clear", "fetch-recover",
                 "fetch-fail", "fetch-resume"].indexOf(act) >= 0
@@ -140,7 +140,7 @@ Item {
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
                 "merge-commit",
                 "code-send", "line-back", "diff-follow", "line-run",
-                "stage-all", "unstage-all",
+                "stage-all", "unstage-all", "resolve-all",
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
@@ -743,16 +743,26 @@ Item {
             // answer and the headings are the list's, and reading the second before the first would report the state
             // that was.
             const emptied = bucketAllTimer.from === "staged"
-                          ? workTree.stagedCount : workTree.unstagedCount + workTree.untrackedCount
+                          ? workTree.stagedCount
+                          : bucketAllTimer.from === "conflicts"
+                          ? workTree.conflictCount
+                          : workTree.unstagedCount + workTree.untrackedCount
             if (emptied !== 0)
                 return
             bucketAllTimer.stop()
+            // The three headings stand together at the front of the line, ahead of the counts: what a press claims is
+            // about the headings side by side, and the judgement reads one unbroken stretch of the line
+            // (`Outcome::must_say`) — a count in between would split the claim in two. `conflicts=` is the one that
+            // answers the opposite way: that bucket comes and goes with git's own state, so marking the whole of it
+            // resolved has to take its heading off the screen (規約 §その他の操作).
             AppBackend.report("wip_heads from=" + bucketAllTimer.from
                               + " unstaged=" + wipPane.bucketHeaded("unstaged")
                               + " staged=" + wipPane.bucketHeaded("staged")
+                              + " conflicts=" + wipPane.bucketHeaded("conflicts")
                               + " unstaged_count="
                               + (workTree.unstagedCount + workTree.untrackedCount)
-                              + " staged_count=" + workTree.stagedCount)
+                              + " staged_count=" + workTree.stagedCount
+                              + " conflict_count=" + workTree.conflictCount)
             renderedBarrier.begin()
         }
     }
@@ -2803,9 +2813,10 @@ Item {
             page.openFileMenu("unstaged", arg, "")
             fileRowMenu.sendPaths([arg])
             repoTab.stashPaths("")
-        } else if (act === "stage-all" || act === "unstage-all") {
+        } else if (act === "stage-all" || act === "unstage-all" || act === "resolve-all") {
             page.showWip()
-            bucketAllTimer.begin(act === "stage-all" ? "unstaged" : "staged")
+            bucketAllTimer.begin(act === "stage-all" ? "unstaged"
+                                 : act === "unstage-all" ? "staged" : "conflicts")
         } else if (act === "stage-many" || act === "stage-many-go") {
             page.showWip()
             const head = wipPane.rowAt(0)

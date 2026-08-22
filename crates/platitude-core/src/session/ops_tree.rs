@@ -27,6 +27,35 @@ impl RepoSession {
         );
     }
 
+    /// `git add` over every path git reports as unmerged: the whole
+    /// conflicted bucket marked resolved in one command.
+    ///
+    /// The set is read here rather than handed in, because it is read
+    /// under the write lock — the same place the command runs. A list
+    /// gathered in the UI would have been made before whatever writes are
+    /// queued ahead of this one, and a path that stopped being conflicted
+    /// in between is a path `git add` would stage for real.
+    ///
+    /// Deliberately not `git add --all`: the unstaged bucket beside this
+    /// one is not part of what was asked for.
+    pub fn stage_conflicted(self: &Arc<Self>) {
+        self.write(
+            "stage",
+            AfterWrite::Tree,
+            move |exec, repo, cancel| async move {
+                let paths: Vec<String> = status::load(&exec, &repo.workdir, &cancel)
+                    .await?
+                    .conflicted()
+                    .map(|item| item.path().to_string())
+                    .collect();
+                // Nothing unmerged: the bucket emptied while the press was
+                // in the queue. `stage_paths` turns an empty set away, but
+                // saying so here keeps the reason with the read.
+                stage::stage_paths(&exec, &repo.workdir, &paths, &cancel).await
+            },
+        );
+    }
+
     /// Empties the index back to HEAD.
     pub fn unstage_all(self: &Arc<Self>) {
         self.write(

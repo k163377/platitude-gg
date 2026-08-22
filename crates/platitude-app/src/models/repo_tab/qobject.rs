@@ -326,6 +326,14 @@ impl RepoTab {
         self.with_session(|s| s.unstage_all());
     }
 
+    /// `git add` over every conflicted path — the conflicted bucket's
+    /// whole-bucket affordance. The set is read under the write lock, so
+    /// no paths are gathered here.
+    #[qslot]
+    fn stage_conflicted(&mut self) {
+        self.with_session(|s| s.stage_conflicted());
+    }
+
     /// Stages (or unstages) part of one file's diff, addressed by the row
     /// the user clicked. `kind` is the diff-key prefix (`unstaged` /
     /// `staged` / `untracked`); a negative `line` takes the whole hunk.
