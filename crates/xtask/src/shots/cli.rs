@@ -14,6 +14,13 @@ cargo xtask shots <command>
       pictures under no name leave nobody able to say which file was
       which change.
 
+  prune [--seat <letter>]...
+      Take runs off the board — their pictures and all — and rebuild the
+      page. Without --seat it reaches this seat's own runs and nobody
+      else's: the board is shared, and the runs beside yours belong to a
+      session that may be showing them right now. Name others to include
+      them, or `--seat all` to sweep the board.
+
   open        Open the board in a window of its own.
   list        One line per run: when, seat, count, label.
   path        Where the page is.
@@ -22,6 +29,7 @@ cargo xtask shots <command>
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("add") => add(&args[1..]),
+        Some("prune") => prune(&args[1..]),
         Some("open") => {
             let page = board::board_dir()?.join("index.html");
             if !page.exists() {
@@ -90,6 +98,40 @@ fn add(args: &[String]) -> Result<(), String> {
     if want_open {
         open(&page)?;
     }
+    Ok(())
+}
+
+fn prune(args: &[String]) -> Result<(), String> {
+    let mut seats: Vec<String> = Vec::new();
+    let mut every = false;
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--seat" => match rest.next().map(String::as_str) {
+                // The sweep is a word rather than a missing flag: a
+                // prune that reached every seat because nobody typed
+                // anything is the one mistake this command can make
+                // that another session pays for.
+                Some("all") => every = true,
+                Some(seat) => seats.push(seat.to_string()),
+                None => return Err("shots prune: --seat wants a letter, or `all`".to_string()),
+            },
+            other => return Err(format!("shots prune: unknown argument {other}")),
+        }
+    }
+    if seats.is_empty() && !every {
+        seats.push(board::seat_here());
+    }
+    let (gone, page) = board::prune(if every { None } else { Some(&seats) })?;
+    println!(
+        "board: {} (-{gone} run(s) {})",
+        board::shown(&page),
+        if every {
+            "from every seat".to_string()
+        } else {
+            format!("from seat {}", seats.join(", "))
+        }
+    );
     Ok(())
 }
 

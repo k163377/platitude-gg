@@ -270,17 +270,21 @@ commands:
       one (CLAUDE.md ビルド・テスト). Ends with how to read the columns,
       and a locked seat carries the mark past them.
 
-  shots <add|open|list|path>
+  shots <add|prune|open|list|path>
       The shot board: pictures land on a page that opens in a window of
       its own, magnifies to exact integer ratios without smoothing, and
       is still there after it is closed. A chat pane fits a picture to
       its width and cannot zoom it, so a 1440x900 window is unreadable
       there and shooting it larger changes nothing. `verify-ui` puts its
       own pair on the board as it goes, so the usual reason to reach for
-      `add` is a crop or a comparison sheet made by hand. All six seats
-      write to one board beside the primary checkout's .git (.shots/,
+      `add` is a crop or a comparison sheet made by hand — and the
+      reason for `prune` is that a working session leaves a run per
+      shot, which buries the few worth looking at. All six seats write
+      to one board beside the primary checkout's .git (.shots/,
       gitignored) and every run carries the seat that took it — a
-      picture from another tree proves nothing about this one.
+      picture from another tree proves nothing about this one, which is
+      also why `prune` reaches this seat's runs and no others unless it
+      is told to.
 
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads
