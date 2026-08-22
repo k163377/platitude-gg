@@ -423,6 +423,8 @@ Item {
     //
     // The seat that ink sits in runs the band top to bottom, so a hand coming down the strip lands on the mark anywhere
     // in the band's depth — the `iconLg` box it used to be had to be aimed at (2026-08-22 ユーザー報告「当たり判定が狭すぎる」).
+    // The one part of that depth the scene never sees is the resize edge Windows keeps at the top of a window that is
+    // not maximised, which is the band's own affair rather than this button's (`winframe::hit_test`).
     // Only the hit area reaches that far: the wash keeps a square box of its own, since paint carried to the band's
     // edges would read as one of the two end cells the band does own (§当たり判定「広げるのは判定だけ」). That box is `iconXl`,
     // a step over the seat every icon button sits in — unlike the `✕` beside it, which stands inside a tab that washes
