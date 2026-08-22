@@ -12,12 +12,11 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use crate::support::TestRepo;
 use crate::support::exec::{env, observed_env};
+use crate::support::{TestRepo, info};
 use platitude_core::commit::{self, CommitOptions};
 use platitude_core::identity::{self, ConfigScope, SignatureFormat, SignatureStatus};
 use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor};
-use platitude_core::repo::RepoInfo;
 use tokio_util::sync::CancellationToken;
 
 /// Records what was spawned, so a test can count processes rather than
@@ -51,13 +50,6 @@ fn counted() -> (GitExecutor, Arc<Spawns>, CancellationToken) {
     // test counts is that they are spawned, not that they reach the log.
     let (exec, cancel) = observed_env(spawns.clone(), false);
     (exec, spawns, cancel)
-}
-
-async fn info(repo: &TestRepo) -> RepoInfo {
-    let (exec, cancel) = env();
-    platitude_core::repo::open(&exec, &repo.path, &cancel)
-        .await
-        .expect("open repo")
 }
 
 /// git config values are read back by git's own parser, which takes

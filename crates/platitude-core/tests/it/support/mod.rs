@@ -20,5 +20,5 @@ pub mod wait;
 // anybody is keeping.
 pub use exec::{Ends, Said};
 pub use graph::{replay_graph, replay_rows};
-pub use repo::TestRepo;
+pub use repo::{TestRepo, info};
 pub use wait::Patience;

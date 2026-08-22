@@ -1,9 +1,9 @@
 //! What staging refuses: commit diffs, vanished selections, stale
 //! fingerprints.
 
-use crate::support::TestRepo;
 use crate::support::exec::env;
-use crate::support::stage::{buckets, fp, info};
+use crate::support::stage::{buckets, fp};
+use crate::support::{TestRepo, info};
 use platitude_core::details::DiffTarget;
 use platitude_core::patch::HunkSelect;
 use platitude_core::{stage, status};

@@ -193,3 +193,12 @@ impl TestRepo {
         format!("file://{p}")
     }
 }
+
+/// The opened [`platitude_core::repo::RepoInfo`] of a test repository —
+/// what every write API takes instead of a bare path.
+pub async fn info(repo: &TestRepo) -> platitude_core::repo::RepoInfo {
+    let (exec, cancel) = super::exec::env();
+    platitude_core::repo::open(&exec, &repo.path, &cancel)
+        .await
+        .expect("open repo")
+}

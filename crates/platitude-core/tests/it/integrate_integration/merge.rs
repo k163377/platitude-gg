@@ -217,7 +217,7 @@ async fn a_stopped_merge_finished_by_committing_records_what_continue_would() {
                 .await
                 .expect("continue");
         } else {
-            let info = crate::support::integrate::info(&repo).await;
+            let info = crate::support::info(&repo).await;
             commit::commit(&exec, &info, &waiting, Default::default(), &cancel)
                 .await
                 .expect("commit");
@@ -257,7 +257,7 @@ async fn a_merge_that_records_nothing_is_still_committed() {
     repo.git(&["checkout", "HEAD", "--", "f.txt"]);
     assert_eq!(repo.git(&["diff", "--cached", "--name-only", "HEAD"]), "");
 
-    let info = crate::support::integrate::info(&repo).await;
+    let info = crate::support::info(&repo).await;
     commit::commit(
         &exec,
         &info,

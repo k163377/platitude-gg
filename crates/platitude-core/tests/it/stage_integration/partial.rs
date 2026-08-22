@@ -1,8 +1,8 @@
 //! Staging and discarding hunk and line selections.
 
-use crate::support::TestRepo;
 use crate::support::exec::env;
-use crate::support::stage::{buckets, fp, indexed, info};
+use crate::support::stage::{buckets, fp, indexed};
+use crate::support::{TestRepo, info};
 use platitude_core::details::DiffTarget;
 use platitude_core::patch::HunkSelect;
 use platitude_core::stage;

@@ -2,7 +2,8 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
-use crate::support::integrate::{current_op, helper, info};
+use crate::support::info;
+use crate::support::integrate::{current_op, helper};
 use platitude_core::conflict::{self, Side};
 use platitude_core::integrate::{self, Continuation, InProgress, RebaseOptions};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};

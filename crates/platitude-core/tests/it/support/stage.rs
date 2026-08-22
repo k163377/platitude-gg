@@ -1,5 +1,6 @@
-//! What the staging tests read the repository with: the opened info,
-//! the status buckets, the index's content and the selection fingerprint.
+//! What the staging tests read the repository with: the status buckets,
+//! the index's content and the selection fingerprint (the opened info is
+//! [`super::info`], shared by every write-API test).
 
 use platitude_core::details::DiffTarget;
 use platitude_core::repo::RepoInfo;
@@ -7,13 +8,6 @@ use platitude_core::status;
 
 use super::TestRepo;
 use super::exec::env;
-
-pub async fn info(repo: &TestRepo) -> RepoInfo {
-    let (exec, cancel) = env();
-    platitude_core::repo::open(&exec, &repo.path, &cancel)
-        .await
-        .expect("open repo")
-}
 
 /// Staged / unstaged / untracked paths of the current status.
 pub async fn buckets(repo: &TestRepo) -> (Vec<String>, Vec<String>, Vec<String>) {

@@ -2,7 +2,8 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::{env, observed_env};
-use crate::support::integrate::{helper, info};
+use crate::support::info;
+use crate::support::integrate::helper;
 use platitude_core::sequencer;
 
 /// Dropping one commit out of the middle leaves everything after it in

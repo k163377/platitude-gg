@@ -7,14 +7,6 @@ use crate::support::TestRepo;
 use crate::support::exec::env;
 use platitude_core::integrate::InProgress;
 use platitude_core::opstate;
-use platitude_core::repo::RepoInfo;
-
-pub async fn info(repo: &TestRepo) -> RepoInfo {
-    let (exec, cancel) = env();
-    platitude_core::repo::open(&exec, &repo.path, &cancel)
-        .await
-        .expect("open repo")
-}
 
 pub fn helper() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_pg-todo-editor"))

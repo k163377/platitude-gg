@@ -3,18 +3,10 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
-use crate::support::TestRepo;
 use crate::support::exec::env;
+use crate::support::{TestRepo, info};
 use platitude_core::branch::{self, CheckoutOutcome, CheckoutTarget, ResetMode};
 use platitude_core::commit::{self, CommitOptions};
-use platitude_core::repo::RepoInfo;
-
-async fn info(repo: &TestRepo) -> RepoInfo {
-    let (exec, cancel) = env();
-    platitude_core::repo::open(&exec, &repo.path, &cancel)
-        .await
-        .expect("open repo")
-}
 
 #[tokio::test]
 async fn commits_staged_content_with_a_multiline_message() {
