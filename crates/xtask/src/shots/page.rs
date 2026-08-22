@@ -8,6 +8,12 @@
 //! `image-rendering: pixelated` are the point: a 1px design call read off
 //! a smoothed enlargement is a guess, and the system image viewers all
 //! smooth.
+//!
+//! The seat filter shows the whole roster whatever the board holds, the
+//! seats with nothing on it disabled. Built from the seats that happen to
+//! have runs, the row would reorder itself every time a seat's last run
+//! swept away or a new seat took its first picture — a button that moves
+//! between two readings of the same board is one nobody can aim at.
 
 use super::Run;
 
@@ -23,6 +29,8 @@ const STYLE: &str = r#"
  #filter button{font:inherit;font-size:11px;padding:1px 8px;border-radius:9px;cursor:pointer;
   background:#151d3a;color:#8494c0;border:1px solid #26315c}
  #filter button.on{background:#1d2b57;color:#e6ecff;border-color:#4a63b8}
+ #filter button:disabled{background:none;border-style:dashed;border-color:#2a3560;
+  color:#4d598a;cursor:default}
  .run{padding:7px 12px 8px;border-bottom:1px solid #1a2445}
  .run.off{display:none}
  .run .top{display:flex;align-items:baseline;gap:6px}
@@ -74,16 +82,19 @@ RUNS.forEach(function(r,ri){
   im.dataset.k=String(FLAT.findIndex(f=>f.ri===ri&&f.si===si));
   im.onclick=()=>show(+im.dataset.k);t.append(im)});
  d.append(top,meta,t);side.append(d)});
-const seats=[...new Set(RUNS.map(r=>r.seat))];
-const filter=document.getElementById('filter');let only='';
-function chip(seat,text){const b=document.createElement('button');b.textContent=text;
- if(seat)b.style.color=ink(seat);
- b.onclick=()=>{only=seat;
-  filter.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
-  side.querySelectorAll('.run').forEach(r=>r.classList.toggle('off',!!seat&&r.dataset.seat!==seat))};
+const ROSTER=['a','b','c','d','e','f','main'];
+const held=new Set(RUNS.map(r=>r.seat));
+const seats=ROSTER.concat([...held].filter(s=>!ROSTER.includes(s)));
+const filter=document.getElementById('filter');
+function chip(seat,text,empty){const b=document.createElement('button');b.textContent=text;
+ if(empty){b.disabled=true;b.title='nothing from seat '+seat+' on the board'}
+ else{if(seat)b.style.color=ink(seat);
+  b.onclick=()=>{filter.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+   side.querySelectorAll('.run').forEach(
+    r=>r.classList.toggle('off',!!seat&&r.dataset.seat!==seat))}}
  filter.append(b);return b}
-chip('','all').classList.add('on');
-seats.forEach(s=>chip(s,'seat '+s));
+chip('','all',false).classList.add('on');
+seats.forEach(s=>chip(s,'seat '+s,!held.has(s)));
 let i=0,z=1,x=0,y=0;
 function draw(){img.style.transform='translate('+x+'px,'+y+'px) scale('+z+')';
  document.getElementById('zoom').textContent=(z*100).toFixed(0)+'%'}
@@ -240,6 +251,15 @@ mod tests {
         let page = render(&[]);
         assert!(page.contains("const RUNS=[]"));
         assert!(page.contains("no shots yet"));
+    }
+
+    /// The filter's buttons stand in one order however few seats have
+    /// taken anything, so a chip is in the same place on every reading.
+    #[test]
+    fn the_filter_carries_the_whole_roster() {
+        let roster = "const ROSTER=['a','b','c','d','e','f','main']";
+        assert!(render(&[]).contains(roster));
+        assert!(render(&[run("a", "chip padding")]).contains(roster));
     }
 
     #[test]
