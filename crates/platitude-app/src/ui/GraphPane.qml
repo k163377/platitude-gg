@@ -27,6 +27,9 @@ Rectangle {
     /// walked down into the list and comes back to this chip is not opening anything, so it is not made to sit out the
     /// opening rest again.
     property var chipListAnchor: null
+    /// The commit whose card the page has out (empty when none). Rows read it back through the view the same way: the
+    /// row the card came out of stays lit under it, the card having taken the pointer off it.
+    property string rowCardOid: ""
     /// A stacked chip was hovered: unstack it under the chip.
     signal chipExpandRequested(var records, var anchor)
     /// The pointer settled on a row (or left it): open the commit card under it. `row` is the delegate, which the page
@@ -306,6 +309,7 @@ Rectangle {
         signal chipCollapseRequested()
         signal rowHoverRequested(var row, bool inside)
         readonly property var chipListAnchor: graphArea.chipListAnchor
+        readonly property string rowCardOid: graphArea.rowCardOid
         signal namingSubmitted(string oidHex, string name)
         signal namingCancelled()
         onRowMenuRequested: oidHex => graphArea.rowMenuOpenRequested(oidHex)

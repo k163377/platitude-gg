@@ -123,6 +123,14 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // behind. Read as a pair with `row-card`, which proves that same
         // input does open the card (2026-08-17 ユーザー報告).
         "menu-hover" => Some("menu_hover menu=true card=false"),
+        // The card of a row's own message, and the row it came out of.
+        // `lit=` is the half a picture answers badly: the band is one
+        // shade off the ground under a card that covers the rows below
+        // it, and the card takes the pointer off the row the moment the
+        // hand walks in to read it — so the row went dark while its own
+        // card stood, and nothing on screen said which commit the message
+        // was of (2026-08-22 ユーザー報告).
+        "row-card" => Some("row_card open=true lit=true"),
         // Where a graph row divides into the chip's half and the commit's,
         // asked at one point along the row. The picture shows which card
         // came out, but not which point was asked for or whether that is

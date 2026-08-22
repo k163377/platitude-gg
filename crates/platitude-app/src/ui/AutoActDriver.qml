@@ -2347,12 +2347,19 @@ Item {
         id: rowCardTimer
         interval: 25
         repeat: true
+        /// The row the card was asked of, so the report can ask it back whether it is still lit. Read off the row
+        /// rather than off the host that wrote it — the whole point is that the row got the answer.
+        property int row: 0
         onTriggered: {
             if (!rowCard.opened && !refList.opened)
                 return
             rowCardTimer.stop()
+            const asked = graphPane.view.itemAtIndex(rowCardTimer.row)
             AppBackend.report(
+            // `lit=` sits next to `open=`: the pair is what the run is judged on, and the judge reads one unbroken
+            // stretch of the line (`verify::verbs::must_say`).
             "row_card open=" + rowCard.opened
+            + " lit=" + (asked ? asked.lit : false)
             + " credit=" + Math.round(rowCard.creditWidth)
             + " cut=" + rowCard.creditCut
             + " list=" + refList.opened
@@ -3147,6 +3154,7 @@ Item {
                     stacked.chipItem.records, stacked.chipItem)
                 if (act === "ref-list-card") {
                     graphPane.view.rowHoverRequested(stacked, true)
+                    rowCardTimer.row = Number(arg)
                     rowCardTimer.start()
                 }
             }
@@ -3181,6 +3189,7 @@ Item {
             const hovered = graphPane.view.itemAtIndex(Number(arg))
             if (hovered)
                 graphPane.view.rowHoverRequested(hovered, true)
+            rowCardTimer.row = Number(arg)
             rowCardTimer.start()
         } else if (act === "author-card" || act === "author-card-open") {
             // Hover cannot be injected, so `-open` writes the same property the handler writes; read the two as a pair

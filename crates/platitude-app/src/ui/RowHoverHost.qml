@@ -43,6 +43,15 @@ Item {
     /// walked down into the list and comes back to that chip re-holds it
     /// instead of sitting out the opening rest again.
     property var refListAnchor: null
+    /// The commit whose card is out (empty when none). The graph's rows
+    /// read it back through `GraphPane.rowCardOid`, so the row the card
+    /// came out of keeps its hover band while the card stands: the card
+    /// opens off the row's own bottom edge, so the hand that walks down
+    /// into it to read the message is off the row from that moment, and
+    /// the row went dark under a card that is still up — leaving the
+    /// message with nothing on screen saying which commit it is of
+    /// (2026-08-22 ユーザー報告).
+    property string rowCardOid: ""
     /// The chip's list is up, or is about to be. Only one of the two is
     /// ever out, and the chip's is the more particular
     /// (デザイン規約 §hover のツールチップ).
@@ -83,6 +92,9 @@ Item {
         rowCard.x = at.x
         rowCard.y = at.y
         host.rowCardWanted = true
+        // Which row it is of, for the row itself to read back — the card
+        // holds no commit of its own beyond the fields copied above.
+        host.rowCardOid = row.oid_hex
         rowCard.open()
     }
     function settleRowCard() {
@@ -190,6 +202,10 @@ Item {
         // A quarter each to the subject and the body, so the card can
         // never pass half the pane however long a message is.
         textHeight: host.graphPane.height / 4
+        // The band the row is holding goes with the card, and it is the
+        // card's own close that says when — the row lost the pointer a
+        // beat before that and cannot tell.
+        onClosed: host.rowCardOid = ""
     }
     HoverCardHost {
         id: rowCardKeep

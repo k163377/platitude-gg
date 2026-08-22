@@ -98,7 +98,7 @@ Item {
         anchors.fill: parent
         anchors.topMargin: -rowItem.topBleed
         color: Theme.bgHover
-        visible: rowMouse.containsMouse && !rowItem.selected
+        visible: rowItem.lit && !rowItem.selected
     }
     // The row the standing question is about: the tone of the bar, run down the edge the rows begin at.
     Rectangle {
@@ -258,6 +258,15 @@ Item {
         if (!rowItem.listOnThisChip && !rowMouse.containsMouse)
             rowItem.pointerRowX = -1
     }
+    /// The card out is of this row's own commit — read back from the page the same way. **By the commit, not by the
+    /// delegate**: delegates travel, and a row that scrolled into this one's place is not the row the card is of.
+    readonly property bool cardOnThisRow: rowItem.ListView.view && rowItem.oid_hex !== ""
+                                          ? rowItem.ListView.view.rowCardOid === rowItem.oid_hex : false
+    /// The row wears the hover band. **The pointer being on it is only one of the ways** — what the pointer opened on
+    /// this row holds it up too, for as long as that stands: both popups are drawn over or off the row and take the
+    /// pointer off it at once (`RowHoverHost`), and a row that goes dark under its own open card leaves the message
+    /// with nothing on screen saying which commit it is of (2026-08-22 ユーザー報告).
+    readonly property bool lit: rowMouse.containsMouse || rowItem.cardOnThisRow || rowItem.listOnThisChip
 
     // Both open on a rest, and neither on landing: a hand crossing the graph passes over every row on the way, and
     // opening where it lands flashes one card out and back per row (2026-08-09 報告. 規約 §hover のツールチップ).

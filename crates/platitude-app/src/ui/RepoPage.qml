@@ -1679,6 +1679,7 @@ Item {
                         workTree: workTree
                         blank: page.blank
                         chipListAnchor: rowHost.refListAnchor
+                        rowCardOid: rowHost.rowCardOid
                         onRowActivated: oidHex => page.activateRow(oidHex)
                         // The bar moves between matches, not between commits — landing on the same row twice changes
                         // nothing and costs no git.
