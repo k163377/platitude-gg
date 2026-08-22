@@ -29,8 +29,9 @@ const FLAGS: usize = 5;
 /// separator and the remotes it came from.
 ///
 /// The letter is `H`ead / `L`ocal / `R`emote / `T`ag; the flags, in order,
-/// are is-head, has-remote, has-PR (preview via [`fake_pr_set`] until Phase
-/// 4), is-it-here and is-it-out-in-another-working-copy. The fourth is what
+/// are is-head, has-remote, has-PR (`pr` names the branches wearing it —
+/// the callers pass [`fake_pr_set`], the preview until Phase 4),
+/// is-it-here and is-it-out-in-another-working-copy. The fourth is what
 /// the chip writes in the name's colour: a remote branch and a tag only a
 /// remote has are both somewhere else, and read the same way for it. The
 /// fifth is what makes the chip say a move cannot go here — it mutes and
@@ -44,7 +45,7 @@ const FLAGS: usize = 5;
 /// Records arrive sorted HEAD → local → remote → tag, and stay that way:
 /// the row's one chip shows the first of them, so a branch is what a
 /// commit that is also tagged reads as.
-pub fn encode_labels(labels: &[RefLabel]) -> String {
+pub fn encode_labels(labels: &[RefLabel], pr: &std::collections::HashSet<String>) -> String {
     let mut out = String::new();
     for (i, l) in labels.iter().enumerate() {
         if i > 0 {
@@ -58,9 +59,8 @@ pub fn encode_labels(labels: &[RefLabel]) -> String {
         });
         out.push(if l.is_head { '1' } else { '0' });
         out.push(if l.has_remote { '1' } else { '0' });
-        let pr =
-            matches!(l.kind, LabelKind::LocalBranch) && fake_pr_set().contains(l.text.as_str());
-        out.push(if pr { '1' } else { '0' });
+        let has_pr = matches!(l.kind, LabelKind::LocalBranch) && pr.contains(l.text.as_str());
+        out.push(if has_pr { '1' } else { '0' });
         out.push(if l.here { '1' } else { '0' });
         out.push(if l.held_elsewhere { '1' } else { '0' });
         out.push_str(&l.text);
@@ -217,7 +217,10 @@ mod tests {
                 held_elsewhere: false,
             },
         ];
-        assert_eq!(encode_labels(&labels), "L11010main\u{1f}T00010v1.0");
+        assert_eq!(
+            encode_labels(&labels, &Default::default()),
+            "L11010main\u{1f}T00010v1.0"
+        );
         // The seat the head flag is read by, from either end of the list.
         assert!(labels_head("L11010main\u{1f}T00010v1.0"));
         assert!(labels_head("T00010v1.0\u{1f}L11010main"));
@@ -238,7 +241,10 @@ mod tests {
             remote: String::new(),
             held_elsewhere: true,
         }];
-        assert_eq!(encode_labels(&labels), "L00011feature/topic-a");
+        assert_eq!(
+            encode_labels(&labels, &Default::default()),
+            "L00011feature/topic-a"
+        );
         // And the name still starts where the readers look for it.
         assert_eq!(
             label_names("L00011feature/topic-a").collect::<Vec<_>>(),
@@ -292,7 +298,33 @@ mod tests {
             remote: String::new(),
             held_elsewhere: false,
         }];
-        assert_eq!(encode_labels(&labels), "T01010v1.0");
+        assert_eq!(encode_labels(&labels, &Default::default()), "T01010v1.0");
+    }
+
+    /// The PR digit answers the set the caller passed — only a local
+    /// branch wears it, and only when named. The set is an argument so
+    /// this is a fact about the inputs, not about the process environment.
+    #[test]
+    fn the_pr_digit_answers_the_named_branches() {
+        let branch = |text: &str, kind| RefLabel {
+            text: text.into(),
+            kind,
+            has_remote: false,
+            is_head: false,
+            here: true,
+            remote: String::new(),
+            held_elsewhere: false,
+        };
+        let labels = [
+            branch("topic", LabelKind::LocalBranch),
+            branch("topic", LabelKind::Tag),
+        ];
+        let pr = std::collections::HashSet::from(["topic".to_string()]);
+        assert_eq!(
+            encode_labels(&labels, &pr),
+            "L00110topic\u{1f}T00010topic",
+            "the branch wears the digit; the tag sharing its name does not"
+        );
     }
 
     #[test]
@@ -306,7 +338,10 @@ mod tests {
             remote: "origin, fork".into(),
             held_elsewhere: false,
         }];
-        assert_eq!(encode_labels(&labels), "T01000v9.9\u{1e}origin, fork");
+        assert_eq!(
+            encode_labels(&labels, &Default::default()),
+            "T01000v9.9\u{1e}origin, fork"
+        );
     }
 
     #[test]
@@ -331,7 +366,7 @@ mod tests {
                 held_elsewhere: false,
             },
         ];
-        let encoded = encode_labels(&labels);
+        let encoded = encode_labels(&labels, &Default::default());
         assert_eq!(
             label_names(&encoded).collect::<Vec<_>>(),
             vec!["main", "v9.9"],
@@ -352,7 +387,7 @@ mod tests {
             remote: String::new(),
             held_elsewhere: false,
         }];
-        assert!(!encode_labels(&labels).contains(FIELD_SEP));
+        assert!(!encode_labels(&labels, &Default::default()).contains(FIELD_SEP));
     }
 
     #[test]

@@ -159,7 +159,7 @@ impl GraphModel {
                         let idx = row as usize;
                         if let Some(existing) = self.rows.get(idx) {
                             let mut updated = existing.clone();
-                            updated.labels = encode_labels(&labels);
+                            updated.labels = encode_labels(&labels, crate::encode::fake_pr_set());
                             // The names on the row are searched, so the
                             // second pass that puts the chips on can turn
                             // a row's light on or off.

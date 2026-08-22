@@ -218,41 +218,80 @@ pub fn enabled() -> bool {
 
 /// What each model last reported, keyed by kind and tab. Sorted, so two
 /// reports of the same shape read the same way down the line.
-static PARTS: Mutex<BTreeMap<(String, i32), (usize, usize)>> = Mutex::new(BTreeMap::new());
+///
+/// A value rather than a bare static so a test can file into a registry
+/// of its own; the process keeps one ([`REGISTRY`]) for the real models,
+/// reached through the free functions below.
+pub struct Registry(Mutex<BTreeMap<(String, i32), (usize, usize)>>);
 
-fn parts() -> std::sync::MutexGuard<'static, BTreeMap<(String, i32), (usize, usize)>> {
-    // A poisoned lock only means a holder panicked mid-report; the map is
-    // plain numbers and stays usable.
-    match PARTS.lock() {
-        Ok(g) => g,
-        Err(e) => e.into_inner(),
+impl Registry {
+    pub const fn new() -> Self {
+        Self(Mutex::new(BTreeMap::new()))
+    }
+
+    fn parts(&self) -> std::sync::MutexGuard<'_, BTreeMap<(String, i32), (usize, usize)>> {
+        // A poisoned lock only means a holder panicked mid-report; the map
+        // is plain numbers and stays usable.
+        match self.0.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        }
+    }
+
+    /// Files a collection's footprint under `kind` for tab `tab`.
+    ///
+    /// Call it where the collection settles — the end of a drain — and
+    /// only under [`enabled`]. Costs one walk of the items.
+    pub fn note<T: Footprint>(&self, kind: &str, tab: i32, items: &Vec<T>) {
+        self.note_bytes(kind, tab, items.heap_bytes(), items.len());
+    }
+
+    /// Files a number somebody else worked out.
+    pub fn note_bytes(&self, kind: &str, tab: i32, bytes: usize, count: usize) {
+        self.parts().insert((kind.to_string(), tab), (bytes, count));
+    }
+
+    /// Drops everything filed for a tab that has closed.
+    pub fn forget(&self, tab: i32) {
+        self.parts().retain(|(_, t), _| *t != tab);
+    }
+
+    /// Everything filed so far, tab numbers folded into the names.
+    pub fn model_parts(&self) -> Vec<(String, usize, usize)> {
+        self.parts()
+            .iter()
+            .map(|((kind, tab), (bytes, count))| (format!("{kind}#{tab}"), *bytes, *count))
+            .collect()
     }
 }
 
-/// Files a collection's footprint under `kind` for tab `tab`.
-///
-/// Call it where the collection settles — the end of a drain — and only
-/// under [`enabled`]. Costs one walk of the items.
+impl Default for Registry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// The process's registry — what the running models file into.
+static REGISTRY: Registry = Registry::new();
+
+/// [`Registry::note`], on the process's registry.
 pub fn note<T: Footprint>(kind: &str, tab: i32, items: &Vec<T>) {
-    note_bytes(kind, tab, items.heap_bytes(), items.len());
+    REGISTRY.note(kind, tab, items);
 }
 
-/// Files a number somebody else worked out.
+/// [`Registry::note_bytes`], on the process's registry.
 pub fn note_bytes(kind: &str, tab: i32, bytes: usize, count: usize) {
-    parts().insert((kind.to_string(), tab), (bytes, count));
+    REGISTRY.note_bytes(kind, tab, bytes, count);
 }
 
-/// Drops everything filed for a tab that has closed.
+/// [`Registry::forget`], on the process's registry.
 pub fn forget(tab: i32) {
-    parts().retain(|(_, t), _| *t != tab);
+    REGISTRY.forget(tab);
 }
 
-/// Everything filed so far, tab numbers folded into the names.
+/// [`Registry::model_parts`], on the process's registry.
 pub fn model_parts() -> Vec<(String, usize, usize)> {
-    parts()
-        .iter()
-        .map(|((kind, tab), (bytes, count))| (format!("{kind}#{tab}"), *bytes, *count))
-        .collect()
+    REGISTRY.model_parts()
 }
 
 // ---------------------------------------------------------------------------
@@ -299,13 +338,19 @@ mod tests {
 
     #[test]
     fn a_noted_collection_comes_back_named_by_tab() {
-        note("rows", 7, &vec![String::from("abc")]);
-        let parts = model_parts();
+        // A registry of this test's own: what the process one would show
+        // depends on which other tests have filed into it by now.
+        let registry = Registry::new();
+        registry.note("rows", 7, &vec![String::from("abc")]);
+        let parts = registry.model_parts();
         let row = parts.iter().find(|(name, _, _)| name == "rows#7");
         assert!(row.is_some(), "the note should be filed under kind#tab");
-        forget(7);
+        registry.forget(7);
         assert!(
-            !model_parts().iter().any(|(name, _, _)| name == "rows#7"),
+            !registry
+                .model_parts()
+                .iter()
+                .any(|(name, _, _)| name == "rows#7"),
             "a closed tab leaves nothing behind"
         );
     }
