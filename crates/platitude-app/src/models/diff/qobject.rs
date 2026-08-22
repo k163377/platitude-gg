@@ -1,0 +1,166 @@
+//! Everything QML sees of the diff pane: the properties it binds to, the
+//! file reads it asks for, and the feed it drains.
+//!
+//! One `#[qobject]` block, and it cannot be split further — QMetaInfo is
+//! built per file (app-ui.md).
+
+use super::*;
+
+#[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
+impl DiffModel {
+    qproperty!("widestNo", Member = widest_no, Notify = changed);
+    qproperty!("widestColumns", Member = widest_columns, Notify = changed);
+    qproperty!("title", Member = title, Notify = changed);
+    qproperty!("isBinary", Member = is_binary, Notify = changed);
+    qproperty!("isNewFile", Member = is_new_file, Notify = changed);
+    qproperty!("isCombined", Member = is_combined, Notify = changed);
+    qproperty!("unmerged", Member = unmerged, Notify = changed);
+    qproperty!("loading", Member = loading, Notify = changed);
+    qproperty!("coloured", Member = coloured, Notify = changed);
+    qproperty!("previewKind", Member = preview_kind, Notify = changed);
+    qproperty!("previewOldUrl", Member = preview_old_url, Notify = changed);
+    qproperty!("previewNewUrl", Member = preview_new_url, Notify = changed);
+    qproperty!(
+        "previewOldSize",
+        Member = preview_old_size,
+        Notify = changed
+    );
+    qproperty!(
+        "previewNewSize",
+        Member = preview_new_size,
+        Notify = changed
+    );
+    qproperty!("fingerprint", Member = fingerprint, Notify = changed);
+    qproperty!("endingKind", Member = ending_kind, Notify = changed);
+    qproperty!("endingFrom", Member = ending_from, Notify = changed);
+    qproperty!("endingTo", Member = ending_to, Notify = changed);
+    qproperty!("endingLines", Member = ending_lines, Notify = changed);
+    qproperty!("endingScope", Member = ending_scope, Notify = changed);
+    qproperty!("endingExt", Member = ending_ext, Notify = changed);
+
+    #[qsignal]
+    pub(super) fn changed(&mut self);
+
+    #[qslot]
+    fn attach(&mut self, tab_id: i32) {
+        self.tab_id = tab_id;
+        let invoker = self.get_qml_method_invoker();
+        self.feed = crate::hub::attach_feed(tab_id, |f| &f.diff, invoker);
+    }
+
+    /// Diff of one file of a commit (vs its first parent).
+    #[qslot]
+    fn request_commit_file(
+        &mut self,
+        oid_hex: String,
+        parent_hex: String,
+        path: String,
+        orig_path: String,
+    ) {
+        let Ok(oid) = Oid::from_hex_str(oid_hex.trim()) else {
+            return;
+        };
+        let parent = Oid::from_hex_str(parent_hex.trim()).ok();
+        let target = DiffTarget::Commit {
+            oid,
+            parent,
+            path: path.clone(),
+            orig_path: (!orig_path.is_empty()).then_some(orig_path),
+        };
+        self.begin_request(path, target);
+    }
+
+    /// Diff of a working-tree entry (bucket: staged/unstaged/untracked/
+    /// conflicts).
+    #[qslot]
+    fn request_work_tree(&mut self, bucket: String, path: String, orig_path: String) {
+        let target = match bucket.as_str() {
+            "staged" => DiffTarget::Staged {
+                path: path.clone(),
+                orig_path: (!orig_path.is_empty()).then_some(orig_path),
+            },
+            "untracked" => DiffTarget::Untracked { path: path.clone() },
+            // Conflicted files show their working-tree state.
+            _ => DiffTarget::Unstaged { path: path.clone() },
+        };
+        self.begin_request(path, target);
+    }
+
+    /// The marker columns of one row, for the smoke hook that counts how
+    /// many rows the two sides are actually named on: which side a line
+    /// came from is drawn as a band a few pixels wide, and a picture
+    /// cannot be asked whether every band that should be there is.
+    #[qslot]
+    fn markers_at(&self, row: i32) -> String {
+        usize::try_from(row)
+            .ok()
+            .and_then(|i| self.lines.get(i))
+            .map(|l| l.markers.clone())
+            .unwrap_or_default()
+    }
+
+    #[qslot]
+    fn clear(&mut self) {
+        self.current_key = String::new();
+        self.widest_no = 0;
+        self.widest_columns = 0;
+        self.title = String::new();
+        self.is_binary = false;
+        self.is_new_file = false;
+        self.is_combined = false;
+        self.unmerged = false;
+        self.loading = false;
+        self.apply_endings(None);
+        self.apply_preview(None);
+        self.reset();
+        self.changed();
+    }
+
+    #[qslot]
+    fn drain(&mut self) {
+        let Some(feed) = self.feed.clone() else {
+            return;
+        };
+        // Everything for the open file, in arrival order: the rows and the
+        // colours behind them are two messages about one diff, and taking
+        // only one of them would leave whichever came second unread until
+        // something else woke the slot.
+        let mine = wanted(feed.drain(), &self.current_key);
+        if mine.is_empty() {
+            return;
+        }
+        for msg in mine {
+            match msg {
+                DiffMsg::Loaded {
+                    patches,
+                    preview,
+                    fingerprint,
+                    endings,
+                    ..
+                } => {
+                    self.loading = false;
+                    self.is_binary = patches.iter().any(|p| p.is_binary);
+                    self.is_new_file = is_new_file(&patches);
+                    self.is_combined = is_combined(&patches);
+                    self.unmerged = is_unmerged_only(&patches);
+                    self.fingerprint = format!("{fingerprint:016x}");
+                    self.apply_endings(endings.as_ref());
+                    self.apply_preview(preview.as_ref());
+                    self.shown_has_preview = preview.is_some();
+                    self.shown = Some(patches);
+                    // Plain to begin with. The colours are a second
+                    // message and may never come at all — a language the
+                    // set has no rules for, a reader who has moved on.
+                    self.coloured = false;
+                    self.lay_out_rows(&Default::default());
+                }
+                DiffMsg::Coloured { colors, .. } => {
+                    self.coloured = true;
+                    self.repaint_rows(&colors);
+                }
+            }
+        }
+        self.changed();
+    }
+}
+qml_register!(DiffModel, "DiffModel", singleton = false);
