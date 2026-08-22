@@ -1868,11 +1868,11 @@ Item {
             driver.complete()
         }
     }
-    // Where a cherry-pick or a revert that stopped on conflicts left the reader. `mergeStoppedTimer`'s twin, for the
-    // two that step: the same press with no new commit at the tip to land on, answered by the working tree. What the
-    // picture cannot hold is the same pair — that nothing wrote a red line over an ordinary conflict, and that the
-    // command log stayed down — plus the row the merge does not have: these keep `--continue`, because for them it is
-    // a step onward and not the commit somebody is writing (規約 §進行中の操作から出る).
+    // Where a cherry-pick, a revert or a rebase that stopped on conflicts left the reader. `mergeStoppedTimer`'s twin,
+    // for the four that step: the same press with no new commit at the tip to land on, answered by the working tree.
+    // What the picture cannot hold is the same pair — that nothing wrote a red line over an ordinary conflict, and
+    // that the command log stayed down — plus the row the merge does not have: these keep `--continue`, because for
+    // them it is a step onward and not the commit somebody is writing (規約 §進行中の操作から出る).
     Timer {
         id: opStoppedTimer
         interval: 25

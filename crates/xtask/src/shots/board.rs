@@ -83,8 +83,9 @@ pub(super) fn session_here() -> String {
 /// page is. An empty label is refused here rather than at the command
 /// line, so the rule holds for `verify-ui`'s own calls too.
 pub(crate) fn record(label: &str, verb: &str, pngs: &[PathBuf]) -> Result<PathBuf, String> {
-    let captions: Vec<String> = pngs.iter().map(|_| String::new()).collect();
-    record_with(label, verb, pngs, &captions, false)
+    // No captions at all: a run read one picture at a time is named by
+    // its label, and a word over every shot would only repeat it.
+    record_with(label, verb, pngs, &[], false)
 }
 
 /// Two pictures of the same thing under one name, read abreast: the one
@@ -355,7 +356,7 @@ mod tests {
     /// two are read abreast, and each half keeps the word over it.
     #[test]
     fn a_pair_is_still_a_pair_after_a_rebuild() {
-        let text = "label\tthe stopped landing\tseat\ta\nseat\ta\nat\t1700000000000\n\
+        let text = "label\tthe stopped landing\nseat\ta\nat\t1700000000000\n\
                     abreast\t1\n\
                     shot\timg/x.png\tapp.png\t1440\t900\tbefore\n\
                     shot\timg/y.png\tapp.png\t1440\t900\tafter\n";

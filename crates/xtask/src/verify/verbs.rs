@@ -34,10 +34,11 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "merge-stops" => {
             Some("merge_stopped wip=true conflicts=true error=false log=false msg=true cont=false")
         }
-        // The same landing for the two that step. `cont=` flips over from
-        // the merge above: their `--continue` is a step onward rather
-        // than the commit somebody is writing, so the row stays — and a
-        // card with a row missing frames exactly like one that has it.
+        // The same landing for the three that step. `cont=` flips over
+        // from the merge above: their `--continue` is a step onward
+        // rather than the commit somebody is writing, so the row stays —
+        // and a card with a row missing frames exactly like one that has
+        // it.
         "cherry-pick-stops" | "revert-stops" | "rebase-stops" => {
             Some("write_stopped wip=true conflicts=true error=false log=false cont=true")
         }

@@ -264,7 +264,6 @@ pub async fn opened(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
     (sink, session)
 }
 
-/// Waits for the write named `op` to finish and returns git's error, if any.
 /// Whether the session said this write came to rest on a stop rather
 /// than on a commit ([`SessionEvent::WriteStopped`]).
 ///
@@ -279,6 +278,7 @@ pub fn write_stopped(sink: &CaptureSink, op: &'static str) -> bool {
         .any(|e| matches!(e, SessionEvent::WriteStopped { op: got } if *got == op))
 }
 
+/// Waits for the write named `op` to finish and returns git's error, if any.
 pub async fn write_result(sink: &CaptureSink, op: &'static str) -> Option<String> {
     sink.wait_for(op, |evs| {
         evs.iter().find_map(|e| match e {
