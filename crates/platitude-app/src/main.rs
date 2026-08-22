@@ -102,6 +102,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/CommandsPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CommandsToggle.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DescriptionBox.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/DetailsChangesBand.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DetailsPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/BinarySizeLine.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ConflictSideLegend.qml", "qt/qml/platitude");

@@ -42,6 +42,7 @@ DescriptionBox 1.0 DescriptionBox.qml
 DetailsPane 1.0 DetailsPane.qml
 BinarySizeLine 1.0 BinarySizeLine.qml
 ConflictSideLegend 1.0 ConflictSideLegend.qml
+DetailsChangesBand 1.0 DetailsChangesBand.qml
 DiffCodeScroll 1.0 DiffCodeScroll.qml
 DiffFileNotices 1.0 DiffFileNotices.qml
 DiffPane 1.0 DiffPane.qml

@@ -436,39 +436,15 @@ ColumnLayout {
             }
         }
     }
-    // CHANGES header with the tree ⇄ path view toggle. Outside the block
-    // above: it is the list's own band, and a list whose heading has
-    // scrolled away is a list of nothing in particular.
-    Rectangle {
+    // Outside the block above: it is the list's own band, and a list whose
+    // heading has scrolled away is a list of nothing in particular.
+    DetailsChangesBand {
         id: changesBand
         visible: detailsPane.details.shaHex !== ""
         Layout.fillWidth: true
-        implicitHeight: Theme.headerHeight
-        color: Theme.bgElevated
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: Theme.spaceXs
-            anchors.rightMargin: Theme.spaceXs
-            spacing: Theme.spaceXs
-            Label {
-                text: qsTr("CHANGES")
-                font.pixelSize: Theme.fontMd
-                font.weight: Font.DemiBold
-                color: Theme.textSecondary
-            }
-            // The count stands at the caption's own step, the way every heading band in the window carries its own
-            // (NavHeader, CommandsPane, WipBucketHeader) — the weight and the colour say it is a count (規約 §タイポグラフィ).
-            Label {
-                text: "(" + detailsPane.details.fileTotal + ")"
-                font.pixelSize: Theme.fontMd
-                color: Theme.textMuted
-            }
-            Item { Layout.fillWidth: true }
-            TreeViewToggle {
-                treeView: detailsPane.details.treeView
-                onChosen: tree => detailsPane.details.setTreeView(tree)
-            }
-        }
+        count: detailsPane.details.fileTotal
+        treeView: detailsPane.details.treeView
+        onChosen: tree => detailsPane.details.setTreeView(tree)
     }
     AppListView {
         id: fileList
