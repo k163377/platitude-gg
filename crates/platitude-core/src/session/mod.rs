@@ -59,6 +59,7 @@ mod eol;
 mod event;
 mod feed;
 mod graph_refresh;
+mod head_reach;
 mod heap;
 #[cfg(test)]
 mod join_tests;
