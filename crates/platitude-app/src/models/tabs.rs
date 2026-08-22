@@ -22,6 +22,19 @@ pub struct TabItem {
 pub struct TabsModel {
     items: Vec<TabItem>,
     current_index: i32,
+    /// Which *tab* is in front, as opposed to which row it sits in.
+    ///
+    /// The window builds a page for the tab in front and takes it down
+    /// when that tab stops being in front (`Main.qml`), and that has to
+    /// key off the tab rather than the row: a row closed to the left of
+    /// the front one, or a tab carried across the strip, renumbers rows
+    /// under a `currentIndex` that has not moved yet. Read off the row,
+    /// the two disagree for as long as it takes both to settle, and the
+    /// page in front is destroyed and rebuilt for nothing — with its
+    /// session left open behind it, so the rebuilt page has an already
+    /// opened repository that will not read itself again (measured: the
+    /// graph stayed empty and `middle-close` waited out its watchdog).
+    current_tab_id: i32,
     /// Answers about folders the picker handed over. Attached on the
     /// first question rather than at startup: a window that never opens
     /// the picker never has one to hear.
@@ -36,6 +49,7 @@ impl Default for TabsModel {
             // No tab selected. Deriving this (0) points at a tab that does
             // not exist, and the UI reads "no repository open" as < 0.
             current_index: -1,
+            current_tab_id: -1,
             picks: Arc::new(Feed::default()),
             attached: false,
         }
@@ -71,9 +85,29 @@ impl TabsModel {
         Member = current_index,
         Notify = current_index_changed
     );
+    // Same signal as the row it is derived from: the two are settled
+    // together (`settle_current`), so a reader that watches one has
+    // already been told about the other.
+    qproperty!(
+        "currentTabId",
+        Member = current_tab_id,
+        Notify = current_index_changed
+    );
 
     #[qsignal]
     fn current_index_changed(&mut self);
+
+    /// The row at `index` is about to stop being the one in front.
+    ///
+    /// Emitted *before* `currentIndex` moves, which is the whole point of
+    /// having it: the page being left has to hand over the layout the next
+    /// one is laid out at and the words typed into its commit editor, and
+    /// by the time `currentIndex` has moved every binding that watches it
+    /// has already taken that page down. Nothing is emitted when the front
+    /// tab does not change — a tab closed to the left of it renumbers the
+    /// strip without the reader leaving anything.
+    #[qsignal]
+    fn leaving_tab(&mut self, index: i32);
 
     /// The folder picked in the dialog did not open. `kind` is `plain` /
     /// `bare` / `other`, `message` git's own words (`other` alone), and
@@ -169,6 +203,7 @@ impl TabsModel {
             title,
             repo_path: path,
         });
+        self.leave_front();
         self.current_index = self.items.len() as i32 - 1;
         self.current_index_changed();
         self.report();
@@ -239,8 +274,15 @@ impl TabsModel {
 
     #[qslot]
     fn close_tab(&mut self, tab_id: i32) {
+        let closing = self.items.iter().position(|t| t.tab_id == tab_id);
+        // The tab in front is being taken away along with its page, so it
+        // says its goodbyes first — and before the hub closes the session,
+        // so the page is still whole while it does (`leaving_tab`).
+        if closing.is_some() && closing == usize::try_from(self.current_index).ok() {
+            self.leave_front();
+        }
         Hub::with(|hub| hub.close_tab(tab_id));
-        if let Some(pos) = self.items.iter().position(|t| t.tab_id == tab_id) {
+        if let Some(pos) = closing {
             self.remove(pos);
             // Closing a tab left of the active one shifts the active row
             // down; the index has to follow it, or the visible repository
@@ -288,6 +330,7 @@ impl TabsModel {
     #[qslot]
     fn set_current_index(&mut self, index: i32) {
         if index != self.current_index && index >= -1 && index < self.items.len() as i32 {
+            self.leave_front();
             self.current_index = index;
             self.current_index_changed();
             self.report();
@@ -296,6 +339,15 @@ impl TabsModel {
 }
 
 impl TabsModel {
+    /// Announces that the row in front is about to stop being it
+    /// (`leaving_tab`). Silent with nothing in front, where there is no
+    /// page to hand anything over.
+    fn leave_front(&mut self) {
+        if self.current_index >= 0 {
+            self.leaving_tab(self.current_index);
+        }
+    }
+
     /// Where the repository at `path` already sits in the strip, if it
     /// does. **The one place that answers this** — both ways a tab can
     /// appear (opening and restoring) ask here, so the two cannot come
@@ -316,11 +368,30 @@ impl TabsModel {
             .position(|t| platitude_core::repo::open_key(&t.repo_path) == key)
     }
 
+    /// Names the tab the front row is holding (`current_tab_id`).
+    ///
+    /// Called from [`TabsModel::report`], which every act on the strip
+    /// ends with — so this cannot be left out of one. The signal goes out
+    /// only on a change of tab, which is what makes a row closed to the
+    /// left, or a tab carried past another, silent here: the strip
+    /// renumbered, and the same repository is still in front.
+    fn settle_current(&mut self) {
+        let id = usize::try_from(self.current_index)
+            .ok()
+            .and_then(|at| self.items.get(at))
+            .map_or(-1, |tab| tab.tab_id);
+        if id != self.current_tab_id {
+            self.current_tab_id = id;
+            self.current_index_changed();
+        }
+    }
+
     /// Hands the hub the tab strip as it stands. Opening, closing and
     /// switching are single acts rather than something that moves under a
     /// dragging hand, so they report as they happen; the file itself is
     /// still only written by the flush.
-    fn report(&self) {
+    fn report(&mut self) {
+        self.settle_current();
         // Named the way the file names it. The store normalises separators
         // on the way out anyway, so handing it the raw path would leave the
         // state held here unequal to the one on disk — harmless today only

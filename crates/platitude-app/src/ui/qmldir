@@ -110,6 +110,7 @@ RemoteRowMenu 1.0 RemoteRowMenu.qml
 RefusalBadge 1.0 RefusalBadge.qml
 RemoteDialog 1.0 RemoteDialog.qml
 RepoPage 1.0 RepoPage.qml
+RepoPageStack 1.0 RepoPageStack.qml
 RowHoverHost 1.0 RowHoverHost.qml
 SectionPeekPopup 1.0 SectionPeekPopup.qml
 SettingsDialog 1.0 SettingsDialog.qml

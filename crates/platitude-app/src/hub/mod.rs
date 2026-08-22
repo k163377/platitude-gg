@@ -41,15 +41,35 @@ pub use tabs::{from_session, with_session};
 // which sees what this module can see -- the block stays whole here
 // rather than being dealt out five ways.
 
+/// The commit message typed into a tab and not committed yet.
+///
+/// The one thing a tab holds that no repository can be asked for again,
+/// which is why it survives the release everything else goes through
+/// (`Hub::release_tab`). The amend flag travels with the words because it
+/// says what pressing the button under them would do: a message written
+/// for an amend, put back into a plain commit editor, would make a second
+/// commit rather than replace the first.
+#[derive(Debug, Clone, Default)]
+pub struct Draft {
+    pub subject: String,
+    pub body: String,
+    pub amending: bool,
+}
+
 struct Tab {
-    /// `None` until the tab is first looked at. Restoring a window full of
-    /// tabs must not spend a `RepoSession` — and the git it spawns — on
-    /// repositories nobody has asked to see yet.
+    /// `None` until the tab is first looked at, and again after it leaves
+    /// the front. Restoring a window full of tabs must not spend a
+    /// `RepoSession` — and the git it spawns — on repositories nobody has
+    /// asked to see yet, and a tab that has been switched away from goes
+    /// back to costing the same nothing (`Hub::release_tab`).
     session: Option<Arc<RepoSession>>,
     /// Kept after opening too: it is the name a per-repository setting is
     /// filed under (`reapply_settings`).
     path: PathBuf,
     feeds: Arc<Feeds>,
+    /// Held across a release, because it is the only thing here that
+    /// cannot be read again.
+    draft: Draft,
 }
 
 /// Application-wide state living on the Qt main thread.

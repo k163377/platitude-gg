@@ -251,11 +251,9 @@ ApplicationWindow {
         onChooseAnother: near => root.openRepositoryPicker(near)
     }
 
-    // The RepoPage of the active tab (the toolbar's right-side controls act on it).
-    readonly property var curPage: (pageRepeater.count > 0
-                                    && tabsModel.currentIndex >= 0
-                                    && tabsModel.currentIndex < pageRepeater.count)
-                                   ? pageRepeater.itemAt(tabsModel.currentIndex) : null
+    // The RepoPage of the active tab (the toolbar's right-side controls act on it). Only that tab has one
+    // (`RepoPageStack`).
+    readonly property var curPage: pages.curPage
 
     FolderDialog {
         id: folderDialog
@@ -288,7 +286,7 @@ ApplicationWindow {
         sourceComponent: WindowAutoActDriver {
             window: root
             tabsModel: tabsModel
-            pageRepeater: pageRepeater
+            pageRepeater: pages.seats
             topBar: topBar
             mainUi: mainUi
             gate: gate
@@ -457,33 +455,23 @@ ApplicationWindow {
             }
         }
 
-        // Repository pages (one per tab, kept alive for instant switching)
-        StackLayout {
+        // Repository pages — one row per tab, and a page only for the tab in front (`RepoPageStack`).
+        RepoPageStack {
             id: pages
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: tabsModel.currentIndex >= 0
-            currentIndex: Math.max(0, tabsModel.currentIndex)
-            Repeater {
-                id: pageRepeater
-                model: tabsModel
-                RepoPage {
-                    focusEpoch: root.focusEpoch
-                    onScreen: root.onScreen
-                    pageCurrent: index === tabsModel.currentIndex
-                    // The band this page's toolbar actions stand on (`RepoPage.pageBand`).
-                    pageBand: topBar
-                    onOpenRepositoryPicker: root.openRepositoryPicker()
-                    onOpenRepositoryPathRequested: path => tabsModel.openRepositoryPath(path)
-                    onSettingsDialogRequested: settingsDialog.open()
-                    // The same card, told whom it was opened on before it opens (デザイン規約 §アバターを与える).
-                    onAvatarSettingsRequested: (name, email) => {
-                        settingsDialog.prefillName = name
-                        settingsDialog.prefillEmail = email
-                        settingsDialog.open()
-                    }
-                    onCloseTabRequested: tabsModel.closeTab(tab_id)
-                }
+            tabsModel: tabsModel
+            pageBand: topBar
+            focusEpoch: root.focusEpoch
+            onScreen: root.onScreen
+            onOpenRepositoryPicker: root.openRepositoryPicker()
+            onSettingsDialogRequested: settingsDialog.open()
+            // The same card, told whom it was opened on before it opens (デザイン規約 §アバターを与える).
+            onAvatarSettingsRequested: (name, email) => {
+                settingsDialog.prefillName = name
+                settingsDialog.prefillEmail = email
+                settingsDialog.open()
             }
         }
 

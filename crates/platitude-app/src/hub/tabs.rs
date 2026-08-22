@@ -128,6 +128,7 @@ impl Hub {
                 session: None,
                 path,
                 feeds: Arc::new(Feeds::default()),
+                draft: Draft::default(),
             },
         );
         Some(id)
@@ -178,6 +179,55 @@ impl Hub {
                 &self.settings.for_repo(&tab.path.to_string_lossy()),
             );
         }
+    }
+
+    /// Lets go of everything a tab read while it was in front, leaving the
+    /// tab itself in the strip.
+    ///
+    /// What is left afterwards is a tab in exactly the state
+    /// [`Hub::reserve_tab`] leaves one in: a path, empty feeds, and no
+    /// session. Selecting it again runs [`Hub::ensure_open`], which opens
+    /// a new session and reads the repository from the start — so this is
+    /// only ever a matter of memory, never of what the reader can get
+    /// back to.
+    ///
+    /// **The models are the other half.** This releases what the *hub*
+    /// holds; the rows already handed to QML are released by the page
+    /// being taken down with the tab (`Main.qml`), which is also why the
+    /// memory report is told to forget this tab's models — their last
+    /// reported footprints describe objects that no longer exist.
+    ///
+    /// Does nothing to a tab that has no session, which is the normal
+    /// case for a tab nobody has looked at yet.
+    pub fn release_tab(&mut self, id: i32) {
+        let Some(tab) = self.tabs.get_mut(&id) else {
+            return;
+        };
+        let Some(session) = tab.session.take() else {
+            return;
+        };
+        session.close();
+        tab.feeds.release_all();
+        crate::memprobe::forget(id);
+        tracing::info!(tab = id, "released repository tab");
+    }
+
+    /// Puts the words typed into a tab's commit editor somewhere that
+    /// outlives its page (see [`Draft`]).
+    pub fn hold_draft(&mut self, id: i32, draft: Draft) {
+        if let Some(tab) = self.tabs.get_mut(&id) {
+            tab.draft = draft;
+        }
+    }
+
+    /// What was typed there, for the page that comes back. Empty for a tab
+    /// nobody has written in — which is also what an unknown tab answers,
+    /// since there is nothing to put back either way.
+    pub fn draft(&self, id: i32) -> Draft {
+        self.tabs
+            .get(&id)
+            .map(|tab| tab.draft.clone())
+            .unwrap_or_default()
     }
 
     /// Closes a tab and cancels its session.

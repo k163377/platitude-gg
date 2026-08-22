@@ -81,6 +81,21 @@ impl<T> Feed<T> {
     pub fn depth(&self) -> usize {
         self.lock().queue.len()
     }
+
+    /// Drops what is queued and lets go of the consumer — what a tab does
+    /// on its way off the front (`Hub::release_tab`).
+    ///
+    /// Both halves matter. The queue is where a snapshot of fifty
+    /// thousand refs sits waiting, and holding one for a page that has
+    /// been taken down is the very memory the release is for. The invoker
+    /// names a QML object that is about to be destroyed, so a message
+    /// racing the release would be waking something that is no longer
+    /// there; the page that comes back attaches its own.
+    pub fn release(&self) {
+        let mut s = self.lock();
+        s.queue.clear();
+        s.invoker = None;
+    }
 }
 
 /// All feeds of one tab. Each feed is independently `Arc`-shared with the
@@ -111,6 +126,30 @@ pub struct Feeds {
     pub details: Arc<Feed<platitude_core::details::CommitDetails>>,
     pub diff: Arc<Feed<DiffMsg>>,
     pub commands: Arc<Feed<CommandMsg>>,
+}
+
+impl Feeds {
+    /// Empties every queue and forgets every consumer (see
+    /// [`Feed::release`]). Listed out rather than walked, because there is
+    /// nothing to walk: each feed carries a different message type, so a
+    /// feed added here and left out of this list is a queue that goes on
+    /// holding a repository nobody is reading.
+    pub fn release_all(&self) {
+        self.tab.release();
+        self.graph.release();
+        self.refs_branches.release();
+        self.refs_remotes.release();
+        self.refs_tags.release();
+        self.status.release();
+        self.status_nav_conflicts.release();
+        self.status_nav_unstaged.release();
+        self.status_nav_staged.release();
+        self.stash.release();
+        self.worktrees.release();
+        self.details.release();
+        self.diff.release();
+        self.commands.release();
+    }
 }
 
 /// Hands `invoker` to `feed` and gives the caller its own handle on it.

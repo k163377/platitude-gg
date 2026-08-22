@@ -218,6 +218,46 @@ impl RepoTab {
         Hub::with(|hub| hub.ensure_open(id));
     }
 
+    /// Called on the way off the front: the repository behind this tab is
+    /// let go of, and read again the next time it is looked at
+    /// (`Hub::release_tab`).
+    #[qslot]
+    fn release(&mut self) {
+        let id = self.tab_id;
+        Hub::with(|hub| hub.release_tab(id));
+    }
+
+    /// Hands the commit editor's unsent words to the hub, which is what
+    /// holds them while this tab has no page (`hub::Draft`).
+    #[qslot]
+    fn hold_draft(&mut self, subject: String, body: String, amending: bool) {
+        let id = self.tab_id;
+        let draft = crate::hub::Draft {
+            subject,
+            body,
+            amending,
+        };
+        Hub::with(|hub| hub.hold_draft(id, draft));
+    }
+
+    // Read back one field at a time rather than as one packed string: a
+    // decode in QML would be data handling, which belongs on this side of
+    // the bridge (app-ui.md).
+    #[qslot]
+    fn draft_subject(&self) -> String {
+        Hub::with(|hub| hub.draft(self.tab_id).subject).unwrap_or_default()
+    }
+
+    #[qslot]
+    fn draft_body(&self) -> String {
+        Hub::with(|hub| hub.draft(self.tab_id).body).unwrap_or_default()
+    }
+
+    #[qslot]
+    fn draft_amending(&self) -> bool {
+        Hub::with(|hub| hub.draft(self.tab_id).amending).unwrap_or_default()
+    }
+
     #[qslot]
     fn drain(&mut self) {
         self.take_feed()

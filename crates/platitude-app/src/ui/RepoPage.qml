@@ -1166,6 +1166,11 @@ Item {
     /// (デザイン規約 §変更を退避する). Decided by the pane that owns the box, so the file row's `stash` reads the same one.
     readonly property string pageStashName: wipPane.stashName
     readonly property var pageCommands: commandsModel
+    /// The commit editor itself. Automation only, and only for the one verb that has to reach it from outside a page:
+    /// `tab-carry` writes words into one tab's boxes and reads them out of another's, which is a question about two
+    /// pages and so belongs to the window (`WindowAutoActDriver`). Everything a person does to these boxes goes
+    /// through the pane's own signals.
+    readonly property alias pageWip: wipPane
     /// For the settings card's avatar entry, which offers the authors of the repository being looked at.
     readonly property var pageGraph: graphModel
     /// Whether the refs listing has landed — the read that also settles how many remotes this repository has, and so
@@ -1217,12 +1222,57 @@ Item {
     NavSectionModel { id: stashesModel }
     NavSectionModel { id: tagsModel }
 
-    /// True on the one page the window is showing. A tab restored from the last session has no repository behind it
-    /// until this turns true — the session is what costs, and it is not spent on pages nobody has looked at.
+    /// True on the one page the window is showing, which is the only page there is: the window builds one for the tab
+    /// in front and takes it down when that tab stops being in front (`Main.qml`). The blank page is the exception —
+    /// it stands in for no tab at all.
+    ///
+    /// So this is set once, at construction, and `Component.onCompleted` is what acts on it. Nothing turns it over
+    /// afterwards; a page that would have to be told it is no longer current is a page that has already been
+    /// destroyed.
     property bool pageCurrent: false
-    onPageCurrentChanged: {
-        if (page.pageCurrent && !page.blank)
-            repoTab.activate()
+
+    /// Everything this page owes on its way off the front, in the order it is owed (`TabsModel::leaving_tab`).
+    ///
+    /// **Called while the page is still whole**, which is the only moment any of it can be read: the strip has not
+    /// moved yet, so nothing here has been taken down.
+    ///
+    /// The layout goes first because it is what the *next* tab is laid out at — one set for the whole application, so
+    /// leaving is the moment it is worth writing down (`PageLayout.reportLayout`). Then the words in the commit
+    /// editor, which are the one thing on this page no repository can be asked for again. Then the repository itself,
+    /// which can.
+    function leaveFront() {
+        pageLayout.reportLayout()
+        if (page.blank)
+            return
+        repoTab.holdDraft(wipPane.subjectText, wipPane.bodyText, page.amending)
+        repoTab.release()
+    }
+
+    /// …and the other half: what the last page on this tab was holding, put back into the boxes.
+    ///
+    /// **Before the repository says anything**, so that the two paths that fill these boxes on their own — a stopped
+    /// merge's message (`absorbOpMessage`) and a popped stash's name (`absorbPopLabel`) — find them already written
+    /// in and leave them alone, which is the rule those two keep anyway.
+    function restoreDraft() {
+        // The flag as well as the words: a message written for an amend, put back under a plain commit button, would
+        // make a second commit instead of replacing the first.
+        if (repoTab.draftAmending()) {
+            page.amending = true
+            wipPane.setAmendChecked(true)
+        }
+        const subject = repoTab.draftSubject()
+        const body = repoTab.draftBody()
+        if (subject === "" && body === "")
+            return
+        // Words put back into a pane nobody is looking at are only half of them being kept: the reader left this tab
+        // mid-sentence, and what they come back to has to be the sentence. This is also what holds the selection off —
+        // `trySelectDefault` leaves a page showing the working tree alone.
+        page.showWip()
+        // …and the graph stands on the working tree's own row as soon as the walk has put one there
+        // (`tryPendingWipSelect`), so the highlight agrees with the pane. A clean tree has no such row and nothing
+        // stands anywhere, which is what any page nobody has picked a row on looks like.
+        page.pendingWipSelect = true
+        wipPane.setMessage(subject, body)
     }
 
     // ---- what this page is laid out at ------------------------------
@@ -1287,6 +1337,7 @@ Item {
         worktreesModel.attachSection(page.tab_id, "worktrees")
         stashesModel.attachSection(page.tab_id, "stashes")
         tagsModel.attachSection(page.tab_id, "tags")
+        page.restoreDraft()
         if (autoActLoader.item)
             autoActLoader.item.begin()
     }

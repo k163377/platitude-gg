@@ -115,6 +115,18 @@ impl AppBackend {
         crate::memprobe::report(&label, &session_parts, &waiting);
     }
 
+    /// How many open tabs are holding a repository.
+    ///
+    /// One, however many tabs the strip has: a tab that is not in front
+    /// has let go of everything it read (`Hub::release_tab`), and one that
+    /// has never been in front never read anything. Read by the harness —
+    /// this is the whole of what a released tab looks like from outside,
+    /// and it is the one thing a picture cannot say.
+    #[qslot]
+    fn open_session_count(&self) -> i32 {
+        Hub::with(|hub| i32::try_from(hub.sessions().len()).unwrap_or(i32::MAX)).unwrap_or(0)
+    }
+
     #[qsignal]
     pub(super) fn git_state_changed(&mut self);
 
