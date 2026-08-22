@@ -266,10 +266,8 @@ Item {
     }
     // A write has two separate causal edges. `busyCount` proves the process was actually admitted, and `writeSeq`
     // proves its answer was absorbed. Both must precede the final rendered state.
-    Timer {
+    SampleTimer {
         id: writeBarrier
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
                 return
@@ -283,10 +281,8 @@ Item {
     // The rebuild that follows a write, read off the graph rather than off the clock: the row the write took away is
     // still in the model until the rebuilt one lands, so its absence is the edge — and the marks the rows wear are
     // only right once that has happened (see `graphGoneOid`).
-    Timer {
+    SampleTimer {
         id: graphBarrier
-        interval: 25
-        repeat: true
         onTriggered: {
             if (graphModel.rowOf(driver.graphGoneOid) >= 0
                     || stashesModel.total === driver.stashTotalBefore)
@@ -316,10 +312,8 @@ Item {
     // whatever is on the right has caught up with the page — the working tree's own pane, which needs nothing fetched,
     // or a commit whose details have arrived. Both are states the application rests in, and the run says which one it
     // reached rather than waiting out its watchdog on the wrong one.
-    Timer {
+    SampleTimer {
         id: stashLandTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (worktreeModel.total !== 0)
                 return
@@ -346,10 +340,8 @@ Item {
     // wide and its dashes are one pixel each, so which of them are dotted is not a question the photograph answers.
     // The row is put there by the pass behind the status read — the same read that says what a standing merge is
     // bringing in — so the wait is for the row itself to lead the graph, not for the tree to be loaded.
-    Timer {
+    SampleTimer {
         id: wipLanesTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (driver.graphTopKind() !== "wip")
                 return
@@ -360,10 +352,8 @@ Item {
         }
     }
 
-    Timer {
+    SampleTimer {
         id: autoActTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             // Tabs are constructed before their active index settles. The page that becomes current claims the one
             // process-wide verb; pages opened by that verb can never replay it.
@@ -383,10 +373,8 @@ Item {
     }
     // The offer to take HEAD's authorship over is only in the picture once HEAD's author has arrived, so the shot
     // waits for it rather than for a stretch of time.
-    Timer {
+    SampleTimer {
         id: amendAuthorTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.headAuthorName === "")
                 return
@@ -397,10 +385,8 @@ Item {
         }
     }
     // HEAD's author has to arrive before the offer to take it over can be there to tick.
-    Timer {
+    SampleTimer {
         id: resetAuthorTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.headAuthorName === "")
                 return
@@ -432,10 +418,8 @@ Item {
     // afterwards is its own business and it differs by repository — onto the new tip where the amended row led, back
     // onto the same commit where the graph still holds it — but either way the shot must not be taken while the pane
     // is still fetching, and `shown=` is then what says whose name the author line in the picture is.
-    Timer {
+    SampleTimer {
         id: resetAuthorLandedTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
                     || branchesModel.headOid === driver.headOidBefore
@@ -452,10 +436,8 @@ Item {
         }
     }
     // Staging has to land before the button can know what it carries.
-    Timer {
+    SampleTimer {
         id: eolCommitTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             // Only the card is waited for. The pointer is already on the button, so the tree settling is what is being
             // watched, and the card coming out is that — asking after the count first would be reading the input side.
@@ -469,10 +451,8 @@ Item {
         }
     }
     // The tick's line comes out on the shared delay, so the setting being on is not yet the line being up.
-    Timer {
+    SampleTimer {
         id: commitFaceTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!wipPane.signingTipShown)
                 return
@@ -483,10 +463,8 @@ Item {
         }
     }
     // The marks arrive with the status read, so the row named for its sentence has to be named again once they are in.
-    Timer {
+    SampleTimer {
         id: eolHoverTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             wipPane.pointEol(AppBackend.autoActArg)
             if (!wipPane.eolCardOpen)
@@ -637,10 +615,8 @@ Item {
     // rows are as they were), and staging the rest empties the side being read — where the pane follows the file to the
     // side it went to rather than closing on the reader (`RepoPage.followEmptySide`). Each step waits for its own write
     // to land *and* for the pane to say so — the rows and the key are the output, the write is only the cause.
-    Timer {
+    SampleTimer {
         id: lineBackTimer
-        interval: 25
-        repeat: true
         property int step: 0
         property int rows0: 0
         property int rows1: 0
@@ -710,10 +686,8 @@ Item {
     // still coming (`RepoPage.diffSettling`), so this waits for exactly that and no clock — which is also the thing
     // that broke: held on a signal the file list only sends when its rows differ, the pane went quiet for good at the
     // second line of a file already on both sides, and no `+` anywhere would go in again (2026-08-17 ユーザー報告).
-    Timer {
+    SampleTimer {
         id: lineRunTimer
-        interval: 25
-        repeat: true
         readonly property int want: 3
         property int done: 0
         /// How long the list has gone without a row to name, which is not the same as having none (see below).
@@ -765,10 +739,8 @@ Item {
     //
     // The argument names the file to open; the verb decides its own second step from what the tree holds afterwards,
     // and reports both.
-    Timer {
+    SampleTimer {
         id: followTimer
-        interval: 25
-        repeat: true
         property int step: 0
         property string was: ""
         property string landed: ""
@@ -821,10 +793,8 @@ Item {
     // only once the status says the tree is stacked on HEAD, and that status can arrive after the graph's first pass —
     // a repository opened onto a stopped merge is the case where it does. Read too early, the verb waits out its
     // watchdog on the newest *commit*, which was never going anywhere (2026-08-22 実測, `--preset conflict-staged`).
-    Timer {
+    SampleTimer {
         id: stashPressTimer
-        interval: 25
-        repeat: true
         /// Whether the press is made from the working tree's own row with the pane that describes it open — the seat
         /// `stash-lands` is about, taken here rather than at the dispatch so the row is there to sit on.
         property bool fromWip: false
@@ -848,10 +818,8 @@ Item {
     //
     // The heading is pressed rather than the slot behind it called, and what is read back is the list's own children —
     // a band bound to nothing would still be counted by the condition that asks for it.
-    Timer {
+    SampleTimer {
         id: bucketAllTimer
-        interval: 25
-        repeat: true
         /// Which bucket is being emptied, and whether the press went in.
         property string from: ""
         property bool pressed: false
@@ -906,10 +874,8 @@ Item {
     // laid out, and until it has, `codeMax` is measured against a width of nothing. A diff with nowhere sideways to go
     // says so and stops there rather than at the watchdog — a run over one photographs a pane that proves nothing
     // (app-ui.md §UI 自動化の因果性).
-    Timer {
+    SampleTimer {
         id: codeSendTimer
-        interval: 25
-        repeat: true
         property bool sent: false
         function begin() {
             codeSendTimer.sent = false
@@ -963,10 +929,8 @@ Item {
     // has nothing to undo. So what is waited for is the room the reading consumes, and a diff that is laid out and
     // still too short says so and stops there rather than at the watchdog: nothing that short can hold a place, and a
     // run over it photographs a pane that proves nothing (app-ui.md §UI 自動化の因果性).
-    Timer {
+    SampleTimer {
         id: keepPlaceTimer
-        interval: 25
-        repeat: true
         /// The line of the first hunk that gets staged, which is what rebuilds the diff under the reader.
         property int line: -1
         property bool wrote: false
@@ -1043,10 +1007,8 @@ Item {
         }
     }
     // git's refusal has to come back before the row it turns into a held one can be held — or photographed.
-    Timer {
+    SampleTimer {
         id: forceDeleteTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0 || refDeleteItem.holdMs <= 0)
                 return
@@ -1060,10 +1022,8 @@ Item {
     }
     // The splitter has to have handed the pane its new width before the width can be reported — the fold sets it, the
     // layout takes it.
-    Timer {
+    SampleTimer {
         id: navRailTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (sidebarPane.width <= 0 || sidebarPane.height <= 0)
                 return
@@ -1107,10 +1067,8 @@ Item {
     property bool tagEyeBack: false
     /// 0 = waiting for the tags to be in the graph to take out, 1 = for the row to go, 2 = for it to come back.
     property int tagEyeStep: 0
-    Timer {
+    SampleTimer {
         id: tagEyeTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             const there = graphModel.rowOf(driver.tagEyeOid) >= 0
             if (driver.tagEyeStep === 0) {
@@ -1153,10 +1111,8 @@ Item {
     property bool reclickAway: false
     property bool reclickArmed: false
     property int reclickStep: 0
-    Timer {
+    SampleTimer {
         id: reclickTimer
-        interval: 25
-        repeat: true
         /// Which section, and which of its rows. A section whose names fold into folders has no row to rename at the
         /// top of it, so the row travels with the argument (`branch:1`) and defaults to the first.
         readonly property string kind: {
@@ -1225,10 +1181,8 @@ Item {
     // asked for a box on that row. Each step waits for the one before to have landed — a list still building has no
     // height to scroll by, and a run that named the row before the scroll took would be watching the list stay put.
     property int farStep: 0
-    Timer {
+    SampleTimer {
         id: farTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             const section = sidebarPane.peekSection
             if (driver.farStep === 0) {
@@ -1263,10 +1217,8 @@ Item {
     /// pressed on — at 0 the band around it is unavailable, and that the form still came up is the half of this a
     /// picture of an empty section cannot hold either way. `collapsed=` says which of the two doors it came through,
     /// and that the folded one did not put the list back on its way (デザイン規約 §左メニューを畳む).
-    Timer {
+    SampleTimer {
         id: navAddRemoteTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!remoteDialog.visible)
                 return
@@ -1281,10 +1233,8 @@ Item {
     /// PG_AUTO_ACT=push-default: the mark lands on a remote and the run stops with the sidebar showing it. The write
     /// is the barrier — `pushDefault` only says the name once `git config` has run and the refresh behind it has
     /// republished the snapshot, so a picture taken here is of a repository that really is marked.
-    Timer {
+    SampleTimer {
         id: pushDefaultTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.pushDefault !== driver.markWanted || repoTab.busyCount > 0)
                 return
@@ -1300,10 +1250,8 @@ Item {
     /// PG_AUTO_ACT=publish-remotes-marked: the first push's destination list with the mark in it. The mark is put on
     /// first and waited for — the question reads the marked remote as it opens, so a list opened before the write
     /// landed would be the one from before.
-    Timer {
+    SampleTimer {
         id: publishMarkedTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.pushDefault !== driver.markWanted || repoTab.busyCount > 0)
                 return
@@ -1325,10 +1273,8 @@ Item {
     /// PG_AUTO_ACT=remote-menu: the menu a remote's own row raises, left standing (overlay.png). `rows=` is what it is
     /// offering — two on a remote that is not the destination, one on the remote that already is, since a row with
     /// nothing to do is gone rather than greyed (デザイン規約 §メニュー).
-    Timer {
+    SampleTimer {
         id: remoteMenuTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.pushDefault !== driver.markWanted || repoTab.busyCount > 0)
                 return
@@ -1346,10 +1292,8 @@ Item {
     }
     /// PG_AUTO_ACT=remote-url: the form that holds a remote's URL, left standing (overlay.png) — the other way to the
     /// mark. `box=` is whether the line is checked, which is the half a picture of a form cannot be trusted for.
-    Timer {
+    SampleTimer {
         id: remoteUrlTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.pushDefault !== driver.markWanted || repoTab.busyCount > 0)
                 return
@@ -1366,10 +1310,8 @@ Item {
         }
     }
     // The column has to be laid out again before the header that was closed can say where it ended up.
-    Timer {
+    SampleTimer {
         id: navSectionTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (sidebarPane.height <= 0)
                 return
@@ -1385,10 +1327,8 @@ Item {
     }
     /// What each section kept of what it holds. The rows a filter leaves are the ones the sections work out for
     /// themselves, so the counts are read off the models and the picture says what they drew.
-    Timer {
+    SampleTimer {
         id: navFilterTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (sidebarPane.width <= 0)
                 return
@@ -1405,10 +1345,8 @@ Item {
     // The blocked row's line, worn where the pointer would put it. Past `tipDelayMs`, like the other forced tooltips:
     // read any sooner and the attached ToolTip has not opened yet, so the line reports false while the picture taken at
     // quit holds it.
-    Timer {
+    SampleTimer {
         id: blockedTipTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!refDeleteItem.ToolTip.visible)
                 return
@@ -1423,10 +1361,8 @@ Item {
     // Where the move came to rest, and what the carry left in the stash list. The branch itself is the edge — the
     // status pass after the move is what writes it — so a run that never landed waits out the watchdog rather than
     // photographing the tree it started in.
-    Timer {
+    SampleTimer {
         id: moveAskTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!graphPane.askSettled)
                 return
@@ -1439,12 +1375,10 @@ Item {
             driver.complete()
         }
     }
-    Timer {
+    SampleTimer {
         id: switchLandsTimer
         property string branch: ""
         property int stashes: -1
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.busyCount !== 0 || workTree.branch !== switchLandsTimer.branch)
                 return
@@ -1466,11 +1400,9 @@ Item {
     // The bar that comes down instead of the move — waited on all the way down (`AskBar.settled`), not at the label
     // that starts it: the 200ms opening is 200ms of red line with no words in it, and that is what the first run of
     // this verb photographed.
-    Timer {
+    SampleTimer {
         id: switchStoppedTimer
         property bool go: false
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!graphPane.askSettled)
                 return
@@ -1500,11 +1432,9 @@ Item {
     // — it lands before the rebuild it asks for (core `AfterWrite::Graph`), so a run that read the branch there would
     // photograph the one it was leaving; and the stash list is read after that again (`switch-lands`), which is why
     // the count comes from the argument and is waited for.
-    Timer {
+    SampleTimer {
         id: switchStoppedLandedTimer
         property int stashes: -1
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
                     || workTree.opCommand !== "" || !graphPane.askShut)
@@ -1522,11 +1452,9 @@ Item {
             driver.complete()
         }
     }
-    Timer {
+    SampleTimer {
         id: switchMarkTimer
         property string want: ""
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!refMenu.opened)
                 return
@@ -1540,10 +1468,8 @@ Item {
             driver.complete()
         }
     }
-    Timer {
+    SampleTimer {
         id: chipMenuTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!refMenu.opened && !commitMenu.opened)
                 return
@@ -1556,10 +1482,8 @@ Item {
         }
     }
     // Waits on the early answer, not on a refusal: nothing here writes.
-    Timer {
+    SampleTimer {
         id: earlyDeleteTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             // The row's `code` is never empty on a branch, so it cannot tell "git has not answered yet" from "answered
             // merged" — both wear `branch --delete`. What readiness there is comes from the echo of the branch asked
@@ -1576,10 +1500,8 @@ Item {
             driver.complete()
         }
     }
-    Timer {
+    SampleTimer {
         id: refusedRowTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0)
                 return
@@ -1592,10 +1514,8 @@ Item {
     }
     // The row taken away ahead of git's answer. **Waited on the list, not on the write** — being ahead of the write
     // is the whole of what this photographs, so a barrier here would wait out the very state it is about.
-    Timer {
+    SampleTimer {
         id: goneRowTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (tagsModel.rowOfName(AppBackend.autoActArg) >= 0)
                 return
@@ -1614,10 +1534,8 @@ Item {
     // "not asked yet", not "the whole history is loaded" — app-ui.md §UI 自動化の因果性), the footer has to have been given a
     // height, and the view has to have actually arrived at the end rather than merely been told to go: `atYEnd` is the
     // output, `positionViewAtEnd()` only the ask.
-    Timer {
+    SampleTimer {
         id: graphTailTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (graphModel.loading || graphModel.rowTotal === 0)
                 return
@@ -1657,10 +1575,8 @@ Item {
     //
     // Nothing here is waited out: the walk has to have answered (`headRow` is -1 until it has), and the chips arrive a
     // pass behind the rows, so the row is found before it can say its own name.
-    Timer {
+    SampleTimer {
         id: graphHeadTimer
-        interval: 25
-        repeat: true
         /// Whether the second move — the press, or the scroll back — has been made. The first one is not latched: a
         /// view told to go to its end before it has laid two thousand rows out goes to the end it knows about and stays
         /// there, so the ask is repeated until the stand-in itself says it arrived (2026-08-22 実測 — one ask, and the
@@ -1725,10 +1641,8 @@ Item {
         }
     }
     // The lane column has to have taken its narrower width before there is anywhere to pan to, or a bar worth wanting.
-    Timer {
+    SampleTimer {
         id: graphPanTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (graphPane.graphXMax <= 0)
                 return
@@ -1767,10 +1681,8 @@ Item {
     // Not "wait for `autoPanning` to go false": the flag is kept for the whole gesture (デザイン規約 §グラフを横へ送る), and nothing
     // here ends the gesture, so the lane column's own case never completed (2026-08-16 実測: watchdog on both systems,
     // `message` passing beside it because that one never pans).
-    Timer {
+    SampleTimer {
         id: middleScrollTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (graphPane.autoPanning && graphPane.graphX < graphPane.graphXMax - 0.5)
                 return
@@ -1785,10 +1697,8 @@ Item {
     // The arrow keys, which no headless run can press: the walk enters where `Keys.onDownPressed` enters
     // (`GraphPane.stepRow`) after taking the keyboard the way a row click takes it. The selected commit's message has
     // to have arrived before it can be typed over, which is what the wait is for — the same one the reword verbs keep.
-    Timer {
+    SampleTimer {
         id: graphStepTimer
-        interval: 25
-        repeat: true
         /// How many rows, and which way. The refusing runs fix their own.
         property int steps: 1
         /// The one ground a step is refused on that a run can stand up: a name box open on the row. (The other — a
@@ -1824,10 +1734,8 @@ Item {
     }
     // A beat between the setup and the walk: the layout swaps the graph away in its own pass, so a step taken in the
     // same tick as the diff opened would still find the pane on screen.
-    Timer {
+    SampleTimer {
         id: graphStepWalk
-        interval: 25
-        repeat: true
         onTriggered: {
             if (graphStepTimer.diffPath !== "" && !page.diffShown)
                 return
@@ -1851,10 +1759,8 @@ Item {
     // key would get: a run that moved the highlight and never landed the selection has to be told apart from one that
     // did, and both frame alike from the waist down — the picture holds the lit row, not which commit the panes on the
     // right ended up on.
-    Timer {
+    SampleTimer {
         id: graphStepReport
-        interval: 25
-        repeat: true
         property int from: -1
         property real wasY: 0
         property int refused: 0
@@ -1888,10 +1794,8 @@ Item {
     //
     // Nothing here reaches for the keyboard, and that is the point: the diff opened without taking it, so an arrow
     // still belongs to the list.
-    Timer {
+    SampleTimer {
         id: fileStepTimer
-        interval: 25
-        repeat: true
         /// Which list, `changes` or `wip`, and how far to walk. `overrun` asks for more files than the list holds,
         /// which is how the end it stops at is reached — the count is only known once the commit's details have
         /// arrived, so it cannot be a number set up here.
@@ -1946,10 +1850,8 @@ Item {
     // Longer than the settle behind the walk (`keyStepSettleMs`), because what is read is the reading a hand coming off
     // the key gets: the light runs at the key's rate and the diff catches up after it, so a run that moved the light
     // and never moved the diff has to be told apart from one that did (規約 §diff のファイル一覧).
-    Timer {
+    SampleTimer {
         id: fileStepReport
-        interval: 25
-        repeat: true
         onTriggered: {
             const walk = fileStepTimer.walk
             // The diff the walk landed on has been asked for, has arrived, and the row that says which file it is has
@@ -1982,10 +1884,8 @@ Item {
     // `contentHeight` 0 at the step and 216 by the time it was reported). So what is waited for is the output the step
     // consumes: a view with room to be sent, which is `atEnd` answering false over a laid-out height (app-ui.md §UI
     // 自動化の因果性「まだ答えが無い」と値を分ける).
-    Timer {
+    SampleTimer {
         id: diffStepTimer
-        interval: 25
-        repeat: true
         /// How many rows, and which way.
         property int steps: 1
         onTriggered: {
@@ -2005,10 +1905,8 @@ Item {
             diffStepReport.start()
         }
     }
-    Timer {
+    SampleTimer {
         id: diffStepReport
-        interval: 25
-        repeat: true
         property int from: -1
         property bool stopped: false
         onTriggered: {
@@ -2032,10 +1930,8 @@ Item {
         return Math.round(diffPane.view.contentY / Theme.rowHeight)
     }
     // The fetch has to land, and its answer reach the chips, before the stacked ones are worth unstacking.
-    Timer {
+    SampleTimer {
         id: fetchedRefListTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
                 return
@@ -2051,10 +1947,8 @@ Item {
     }
     // The refusal has to be back and on the button before the second go is sent, and the report is what says it ever
     // got there — the mark is gone again by the time the screenshot is taken.
-    Timer {
+    SampleTimer {
         id: pushRetryTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!page.pushFailed || repoTab.busyCount !== 0)
                 return
@@ -2069,10 +1963,8 @@ Item {
     // Where an operation that answers at the tip left the reader — one report for the three of them. The write, its
     // refresh and the beat the viewport waits out all have to be behind it, and the picture cannot answer the second
     // half: a row can be selected and still be somewhere nobody can see.
-    Timer {
+    SampleTimer {
         id: tipLandedTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             const row = graphModel.rowOf(page.selectedOid)
             if (repoTab.busyCount !== 0 || row < 0
@@ -2093,10 +1985,8 @@ Item {
     // Where a merge that stopped on conflicts left the reader. The other half of `tipLandedTimer`: there is no commit
     // at the tip to land on, and what the press is answered with is the working tree — so this waits for the rows the
     // stop wrote to be on screen, and says in the same breath that nothing called it a failure.
-    Timer {
+    SampleTimer {
         id: mergeStoppedTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (repoTab.busyCount !== 0 || !page.wipShown || workTree.conflictCount === 0)
                 return
@@ -2120,10 +2010,8 @@ Item {
     // What the picture cannot hold is the same pair — that nothing wrote a red line over an ordinary conflict, and
     // that the command log stayed down — plus the row the merge does not have: these keep `--continue`, because for
     // them it is a step onward and not the commit somebody is writing (規約 §進行中の操作から出る).
-    Timer {
+    SampleTimer {
         id: opStoppedTimer
-        interval: 25
-        repeat: true
         // Whether a carry is part of this landing. The stash section is refreshed *after* the graph, so reading it
         // at the write barrier answers 0 for a tree whose work is sitting in an entry — and where the entry is the
         // whole claim, that is the answer arriving too early rather than the truth.
@@ -2155,10 +2043,8 @@ Item {
     // The merge finished from the button under the exit card, with nothing typed in the box. Two waits in one timer:
     // the write has to land, and then HEAD's own message has to come back — the claim is that the empty box committed
     // the merge's words, and only the commit that now exists can say so.
-    Timer {
+    SampleTimer {
         id: mergeCommitTimer
-        interval: 25
-        repeat: true
         property string wanted: ""
         property bool typed: false
         property int seenHead: -1
@@ -2202,10 +2088,8 @@ Item {
     }
     // The message has to arrive before it can be typed over, and the "is this commit ours to rewrite?" answer before it
     // may be saved.
-    Timer {
+    SampleTimer {
         id: rewordTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (detailsModel.shaHex !== page.selectedOid)
                 return
@@ -2239,10 +2123,8 @@ Item {
     }
     // gpg / ssh-keygen have to finish before the mark they decide can be on screen, so the shot and the report both
     // wait for them.
-    Timer {
+    SampleTimer {
         id: signatureTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!page.signatureIsForSelection)
                 return
@@ -2256,10 +2138,8 @@ Item {
     // The tooltip halves of signature-tip / stash-tip: the state has to land (gpg's verdict, the stash's details)
     // before the target is pointed at, and the report then waits out Metrics.tipDelayMs so what it reads is the tip on
     // screen.
-    Timer {
+    SampleTimer {
         id: signatureTipTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!page.signatureIsForSelection)
                 return
@@ -2268,10 +2148,8 @@ Item {
             signatureTipReport.start()
         }
     }
-    Timer {
+    SampleTimer {
         id: signatureTipReport
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!detailsPane.signatureTipShown)
                 return
@@ -2281,10 +2159,8 @@ Item {
             driver.complete()
         }
     }
-    Timer {
+    SampleTimer {
         id: stashTipTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (detailsModel.shaHex !== page.selectedOid)
                 return
@@ -2293,10 +2169,8 @@ Item {
             stashTipReport.start()
         }
     }
-    Timer {
+    SampleTimer {
         id: stashTipReport
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!detailsPane.summaryTipShown)
                 return
@@ -2310,11 +2184,9 @@ Item {
     // The tooltip half of path-tip: the list has to land before a row can be pointed at, and the report then waits out
     // tipDelayMs so what it reads is the tip on screen. It reads the shared instance itself — the one thing that can
     // also say the words on it.
-    Timer {
+    SampleTimer {
         id: pathTipTimer
         property bool wipSide: true
-        interval: 25
-        repeat: true
         onTriggered: {
             if (pathTipTimer.wipSide && worktreeModel.total === 0)
                 return
@@ -2328,10 +2200,8 @@ Item {
             pathTipReport.start()
         }
     }
-    Timer {
+    SampleTimer {
         id: pathTipReport
-        interval: 25
-        repeat: true
         onTriggered: {
             const tip = page.ToolTip.toolTip
             if (!tip.visible)
@@ -2349,7 +2219,7 @@ Item {
     // WORKTREES row always says where it leads — so a run that photographs an empty overlay has said in the same line
     // that the pointer and the shared instance were both working. Without that, "nothing came out" and "nothing was
     // pointed at" are one picture.
-    Timer {
+    SampleTimer {
         id: navTipTimer
         property string kind: "branch"
         property int row: 0
@@ -2359,8 +2229,6 @@ Item {
         /// row off — the two ways it has no row are a filter and a folded folder (`HeadPinRow`).
         property string hide: ""
         property bool lit: false
-        interval: 25
-        repeat: true
         function begin(arg) {
             const parts = ("" + arg).split(":")
             navTipTimer.head = parts[0] === "head"
@@ -2421,7 +2289,7 @@ Item {
     // is given a box, and the box is left standing for the shot. One timer for both, because what the shot is about —
     // how wide the box comes out on a row of that depth in a pane of that width — is one question asked of the two
     // things the box is opened for.
-    Timer {
+    SampleTimer {
         id: navNameBoxTimer
         property string mode: "branch"
         property string kind: "branch"
@@ -2430,8 +2298,6 @@ Item {
         /// the floor is asking what the floor looks like and the answer to that is the floor.
         property real want: 0
         property int step: 0
-        interval: 25
-        repeat: true
         readonly property NavSectionModel section:
             navNameBoxTimer.kind === "tag" ? tagsModel
             : navNameBoxTimer.kind === "remote" ? remotesModel : branchesModel
@@ -2536,10 +2402,8 @@ Item {
     }
     // Automation: the details have to land before the author card can be worked, since it is that author the picture is
     // filed against.
-    Timer {
+    SampleTimer {
         id: avatarAssignTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (detailsModel.authorEmail === "")
                 return
@@ -2550,10 +2414,8 @@ Item {
             avatarReportTimer.start()
         }
     }
-    Timer {
+    SampleTimer {
         id: avatarBadgeTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (detailsModel.shaHex !== page.selectedOid)
                 return
@@ -2565,10 +2427,8 @@ Item {
     // What the graph did about the find bar, read after it finished doing it. The step down out from under the card is
     // animated, so the value in the same call stack as the verb is always the one before it moved — reporting that
     // would be reporting the intent, which the line above already carries as `clears=`.
-    Timer {
+    SampleTimer {
         id: findSettled
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!graphPane.findCard.open)
                 return
@@ -2580,10 +2440,8 @@ Item {
     }
     // The card fades in and out, so both halves of `find-drop` are photographed at one end of that fade or the other:
     // caught in between, the card that stayed and the card that went away frame the same.
-    Timer {
+    SampleTimer {
         id: findDropSettled
-        interval: 25
-        repeat: true
         onTriggered: {
             if (graphPane.findCard.opacity > 0 && graphPane.findCard.opacity < 1)
                 return
@@ -2595,10 +2453,8 @@ Item {
         }
     }
     // The store starts empty in every run, so the card's own verbs put a picture in it before opening on it.
-    Timer {
+    SampleTimer {
         id: avatarSeedTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (detailsModel.authorEmail === "")
                 return
@@ -2611,10 +2467,8 @@ Item {
     }
     // The picture is read off disk asynchronously, so what the shot wants is a beat after the write rather than the
     // instant it returns.
-    Timer {
+    SampleTimer {
         id: avatarReportTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (detailsModel.avatarUrl === "" && AppBackend.avatarError === "")
                 return
@@ -2628,10 +2482,8 @@ Item {
         }
     }
     // The card is opened synchronously; this just lets the layout settle before it is measured and photographed.
-    Timer {
+    SampleTimer {
         id: rowCardTimer
-        interval: 25
-        repeat: true
         /// The row the card was asked of, so the report can ask it back whether it is still lit. Read off the row
         /// rather than off the host that wrote it — the whole point is that the row got the answer.
         property int row: 0
@@ -2663,10 +2515,8 @@ Item {
     // Waits for either card rather than for the one that was expected: a boundary that moved opens the other one, and
     // waiting for the right answer would spend the whole watchdog finding that out. The rest is a real `tipDelayMs`,
     // which this samples through — the verb is judged on `agrees`, not on how long it took.
-    Timer {
+    SampleTimer {
         id: rowPartTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!refList.opened && !rowCard.opened)
                 return
@@ -2690,10 +2540,8 @@ Item {
     // The request goes in only once the menu is actually up — before that there is nothing for the card to be behind —
     // and the answer is read a sampler turn later, since a card that was going to open opens synchronously
     // (`rowCardTimer`).
-    Timer {
+    SampleTimer {
         id: menuHoverTimer
-        interval: 25
-        repeat: true
         property string oidHex: ""
         property bool asked: false
         onTriggered: {
@@ -2716,10 +2564,8 @@ Item {
         }
     }
     // The details have to arrive before the name can name anybody.
-    Timer {
+    SampleTimer {
         id: authorCardTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (detailsModel.shaHex !== page.selectedOid)
                 return
@@ -2738,10 +2584,8 @@ Item {
         }
     }
     // The details have to arrive before the credit line they carry can be opened or counted.
-    Timer {
+    SampleTimer {
         id: coAuthorTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (detailsModel.shaHex !== page.selectedOid)
                 return
@@ -2760,10 +2604,8 @@ Item {
         }
     }
     // The details have to arrive, and the column has to be laid out with them, before there is anything to measure.
-    Timer {
+    SampleTimer {
         id: detailsFitTimer
-        interval: 25
-        repeat: true
         // A pane width the splitter left on a fraction can put a fraction in the answer; what this verb is about is
         // tens of pixels.
         onTriggered: {
@@ -2783,10 +2625,8 @@ Item {
         }
     }
     // The rows have to arrive, and the list be laid out with them, before what they leave bare is worth measuring.
-    Timer {
+    SampleTimer {
         id: cornerTimer
-        interval: 25
-        repeat: true
         // `shown=` is the label's own visibility, not the room that decided it: reporting what was asked for would go
         // green with the binding cut.
         onTriggered: {
@@ -2803,10 +2643,8 @@ Item {
     }
     // Same wait as details-fit, for the same reason: the message has to be in the box, and the box laid out with it,
     // before there is a ceiling to pull on.
-    Timer {
+    SampleTimer {
         id: descGrowTimer
-        interval: 25
-        repeat: true
         // Pulled past everything, so where it stops is the bound itself rather than a number this verb chose.
         readonly property int pull: 1000
         /// Which pane's box to pull. The two carry the same box and hooks under the same names, so this verb is written
@@ -2843,10 +2681,8 @@ Item {
     // `grip=` says the corner was offered at all, `keeps=` that what the box borrowed room from is still on screen —
     // the author card in the details pane, the commit button in the editor — which the picture cannot answer, because
     // the overflow draws over the window's own footer.
-    Timer {
+    SampleTimer {
         id: descGrowSettle
-        interval: 25
-        repeat: true
         onTriggered: {
             if (page.Window.window.frameCounter <= descGrowTimer.frameBefore)
                 return
@@ -2877,10 +2713,8 @@ Item {
     /// the remote had (`--preset behind`), so a graph that reaches this many rows without anything being pressed is
     /// the fetch itself, said in the only place a headless run can read it.
     property int openFetchRows: 0
-    Timer {
+    SampleTimer {
         id: openFetchTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             // A state to sample, not a length of time to wait: rows only reach the count after the fetch has landed and
             // the graph has been rebuilt over it, and a run where that never happens has nothing to report.
@@ -2919,10 +2753,8 @@ Item {
     property bool fetchStopped: false
     /// The whole of a run of failed fetches and the resume on the end of it. Asking for the next fetch and judging
     /// that the run is over are the same owner, so the two cannot disagree about whether it is.
-    Timer {
+    SampleTimer {
         id: fetchFailTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             // Nothing is read while git is out — the fetch an opening fires comes through `autoFetchRunning`, the
             // rest through `busyCount` — and nothing is read off an ask still waiting for its answer (`fetchAskSeq`).
@@ -4074,10 +3906,8 @@ Item {
 
     /// The first-push surface is either the standing question (a remote exists) or the add-remote dialog (none does).
     /// Do not wait for a remote check in the latter case: there is no target to check yet.
-    Timer {
+    SampleTimer {
         id: publishSurfaceTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!remoteDialog.visible && !publishFlow.publishChecked)
                 return
@@ -4087,10 +3917,8 @@ Item {
     }
     /// `publish-remotes` is about the popup, not merely the call which requested it. The form is created asynchronously
     /// with the ask bar.
-    Timer {
+    SampleTimer {
         id: publishRemotesTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!publishFlow.publishRemotesOpen()) {
                 publishFlow.openPublishRemotes()
@@ -4102,10 +3930,8 @@ Item {
     }
     /// `publish-add` stops with the real dialog on screen. A check that happens to finish behind it is unrelated and
     /// must not end the run.
-    Timer {
+    SampleTimer {
         id: publishDialogTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!remoteDialog.visible)
                 return
@@ -4115,10 +3941,8 @@ Item {
     }
     /// Automation: the dialog's own button, once it is both visible and valid. This is the `-go` path; an empty URL
     /// cannot be submitted.
-    Timer {
+    SampleTimer {
         id: publishNewTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!remoteDialog.visible || remoteDialog.wantedName === "" || remoteDialog.wantedUrl === "")
                 return
@@ -4129,10 +3953,8 @@ Item {
         }
     }
     /// Automation: what the far side turned out to hold, once the remote has had time to answer.
-    Timer {
+    SampleTimer {
         id: publishSettleTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!publishFlow.publishChecked)
                 return
@@ -4148,10 +3970,8 @@ Item {
         }
     }
     /// Automation: the answer, given after the remote has had time to say what it has — the pill is dead until it has.
-    Timer {
+    SampleTimer {
         id: publishAnswerTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!publishFlow.publishChecked || !graphPane.askAnswerable)
                 return
@@ -4172,10 +3992,8 @@ Item {
         }
     }
     // The log has to be on screen and laid out before the bar above it has a place to be measured from.
-    Timer {
+    SampleTimer {
         id: splitRefuseTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!page.commandsOpen || !page.commandsShown)
                 return

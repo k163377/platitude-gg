@@ -61,9 +61,7 @@ Item {
     }
 
     // The platform picker completes only once its own window is open.
-    Timer {
-        interval: 25
-        repeat: true
+    SampleTimer {
         running: AppBackend.autoAct === "open-picker"
         onTriggered: {
             if (!folderDialog.opened)
@@ -75,9 +73,7 @@ Item {
     }
 
     // The tools popup has two separately latched output states: a real loading edge and the populated, settled choices.
-    Timer {
-        interval: 25
-        repeat: true
+    SampleTimer {
         running: AppBackend.autoAct === "settings-tools"
                  || AppBackend.autoAct === "settings-tools-loading"
         onTriggered: {
@@ -96,10 +92,8 @@ Item {
     // produced: the row the store answered the filing with and the picture inside it, that row's `lit`, the candidate
     // list's `opened`, and — for the removal — the row leaving the store on the far side of a hold that runs at its own
     // length (`Metrics.holdMs`). Nothing here reads a clock.
-    Timer {
+    SampleTimer {
         id: avatarCardTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "avatar-settings" || AppBackend.autoAct === "avatar-row-lit"
                  || AppBackend.autoAct === "avatar-combo" || AppBackend.autoAct === "avatar-remove"
         /// Raised once this verb's own move has been made, so nothing after it re-reads what had to be true before it.
@@ -150,10 +144,8 @@ Item {
     // What remains after a middle-click is the output under test. Wait for the tab-model count edge rather than
     // allowing a fixed delay to stand in for it. The two tabs this verb needs are a precondition of the press and
     // nothing else: read again after it, they turn the verb's own answer — one tab fewer — into a wait nothing can end.
-    Timer {
+    SampleTimer {
         id: middleCloseTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "middle-close"
         property bool requested: false
         property int beforeCount: -1
@@ -198,10 +190,8 @@ Item {
     // items rather than the model: the drag settles itself against where the tabs actually sit, so the walk is what
     // says the two agree. The tabs it needs are a precondition of the carry and are read in that branch alone —
     // afterwards, "the order is not the one it started as" is this verb's own answer.
-    Timer {
+    SampleTimer {
         id: tabDragTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "tab-drag"
         property bool requested: false
         property string before: ""
@@ -251,10 +241,8 @@ Item {
     // And the half of the carry that ends in no order at all: a tab drawn away from its own row while the hand is
     // still on it. The settled strip photographs the same whether it was ever drawn under the hand or only ever
     // jumped between rows, so the offset the transform is carrying says itself.
-    Timer {
+    SampleTimer {
         id: tabHoldTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "tab-hold"
         property bool requested: false
         onTriggered: {
@@ -286,10 +274,8 @@ Item {
     // not on screen when the hand took hold. The window goes down on its floor first: whether a given number of tabs
     // overflows at all is a question about the installed fonts and the band's own furniture (`tab-widths` answers it
     // differently on each OS), and this verb needs a strip that overflows on every machine.
-    Timer {
+    SampleTimer {
         id: tabEdgeTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "tab-edge"
         property bool sized: false
         property bool requested: false
@@ -332,10 +318,8 @@ Item {
     }
 
     // Reopening an existing path must select its tab without adding one.
-    Timer {
+    SampleTimer {
         id: openAgainTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "open-again"
         property bool requested: false
         property string asked: ""
@@ -398,10 +382,8 @@ Item {
     // rather than a guess. And the page read at each landing is a *different object* every time — the page in front is
     // built for the tab in front and taken down with it — so nothing here may be held across a landing but the words
     // themselves.
-    Timer {
+    SampleTimer {
         id: tabCarryTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "tab-carry"
         /// 0 = mark the first tab, 1 = read the second, 2 = read the first again.
         property int step: 0
@@ -467,9 +449,7 @@ Item {
 
     // Capture the communication ring from a real busy edge. TopBar latches the visual only after RepoTab actually
     // enters `push`, so a fast child cannot clear it before the image callback runs.
-    Timer {
-        interval: 25
-        repeat: true
+    SampleTimer {
         running: AppBackend.autoAct === "force-push-hold"
         property bool requested: false
         onTriggered: {
@@ -490,9 +470,7 @@ Item {
 
     // The same edge on the button the wait is drawn for: bare, unframed, and the one a timer can start on its own. The
     // fetch itself is fired by the page's driver; all this waits for is the band's latch.
-    Timer {
-        interval: 25
-        repeat: true
+    SampleTimer {
         running: AppBackend.autoAct === "fetch-busy"
         onTriggered: {
             if (!topBar.autoFetchBusyLatched)
@@ -510,9 +488,7 @@ Item {
     // The two wait for different things because "not pressable" has two reasons and only one of them is the subject:
     // the live side waits for the button itself, the dim side for a repository that has finished landing with nothing
     // running on it, so a band read before the remotes arrived cannot pass for either.
-    Timer {
-        interval: 25
-        repeat: true
+    SampleTimer {
         running: AppBackend.autoAct === "fetch-tip"
         onTriggered: {
             // The graph as well as the refs, for the picture rather than for the answer: the band settles first, and a
@@ -543,9 +519,7 @@ Item {
     //
     // Four runs, because a dim button frames the same whichever refusal put it there: only the set says that the
     // conditions are told apart at all (デザイン規約 §変更を退避する).
-    Timer {
-        interval: 25
-        repeat: true
+    SampleTimer {
         running: AppBackend.autoAct === "stash-state"
         onTriggered: {
             // The graph as well, for the picture rather than for the answer — the same reason `fetch-tip` waits on it.
@@ -570,9 +544,7 @@ Item {
                                     || AppBackend.autoAct === "open-not-a-repo-retry"
                                     || AppBackend.autoAct === "open-not-a-repo-cancel"
     property bool pickStarted: false
-    Timer {
-        interval: 25
-        repeat: true
+    SampleTimer {
         running: driver.pickAct
         onTriggered: {
             if (driver.pickStarted || !window.visible)
@@ -583,10 +555,8 @@ Item {
         }
     }
     // Poll the dialog's observable answer. The 25ms cadence is sampling only; it is not a correctness deadline.
-    Timer {
+    SampleTimer {
         id: pickAnswerTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!openFailedDialog.opened)
                 return
@@ -604,10 +574,8 @@ Item {
             pickSettleTimer.start()
         }
     }
-    Timer {
+    SampleTimer {
         id: pickSettleTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (openFailedDialog.opened)
                 return
@@ -620,10 +588,8 @@ Item {
     // Smoke hooks (PG_AUTO_ACT=open-fail-tab / -bare / -log): the road that keeps its tab. Nothing checks the folder
     // first there, so the page itself is what says so (`kind=` reports which). The `-log` half goes on to open the
     // command log the way the toolbar's `>_` does.
-    Timer {
+    SampleTimer {
         id: failTabActTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "open-fail-tab"
                  || AppBackend.autoAct === "open-fail-tab-bare"
                  || AppBackend.autoAct === "open-fail-tab-log"
@@ -635,10 +601,8 @@ Item {
             failTabTimer.start()
         }
     }
-    Timer {
+    SampleTimer {
         id: failTabTimer
-        interval: 25
-        repeat: true
         property bool commandsRequested: false
         onTriggered: {
             if (window.curPage === null || window.curPage.pageTab.state !== "error"
@@ -673,9 +637,7 @@ Item {
     }
     // PG_AUTO_ACT=identity / identity-half: "which half landed" is a pair of booleans, and a dialog that stayed open
     // because the save did not take looks exactly like one nobody has answered yet. Read the two verbs as a pair.
-    Timer {
-        interval: 25
-        repeat: true
+    SampleTimer {
         running: AppBackend.autoAct === "identity" || AppBackend.autoAct === "identity-half"
         onTriggered: {
             const wholeReady = AppBackend.autoAct === "identity"
@@ -703,9 +665,7 @@ Item {
     // PG_AUTO_ACT=identity-tip: the mark's reason, read where the pointer cannot go. `tip=` is the card's own `opened`;
     // `badge=` is the group in whichever shape the width left it — reading the mark alone would fail a band that is
     // saying exactly what it should.
-    Timer {
-        interval: 25
-        repeat: true
+    SampleTimer {
         running: AppBackend.autoAct === "identity-tip"
         onTriggered: {
             if (!identityDialog.opened && !AppBackend.identityUnsaved)
@@ -715,10 +675,8 @@ Item {
             identityTipTimer.start()
         }
     }
-    Timer {
+    SampleTimer {
         id: identityTipTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (identityDialog.opened)
                 return
@@ -729,10 +687,8 @@ Item {
     }
     // The attached card intentionally has a visual tip delay. Completion is still gated by its opened property, never
     // by that duration.
-    Timer {
+    SampleTimer {
         id: identityTipReport
-        interval: 25
-        repeat: true
         onTriggered: {
             if (!topBar.stateCardOpen)
                 return
@@ -753,10 +709,8 @@ Item {
     // The panel the press takes down with them is the other half. Which is why the standing-panel half of the
     // preconditions is read in the branch that presses and nowhere else (規約 §UI 自動化の因果性): every tick, it would be
     // this verb's own answer — the panel gone — barring the way to the report.
-    Timer {
+    SampleTimer {
         id: commandsClearActTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "commands-clear"
         property bool clearRequested: false
         property bool was: false
@@ -788,10 +742,8 @@ Item {
     // PG_AUTO_ACT=fetch-recover: recovery, not the reader, is what retires fetch news. This waits for the refusal,
     // reads the mark, fires the fetch that can land, and reads the same mark again — the picture can only hold the
     // quiet half.
-    Timer {
+    SampleTimer {
         id: fetchRecoverActTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "fetch-recover"
         property bool fetchRequested: false
         property bool was: false
@@ -827,10 +779,8 @@ Item {
 
     // PG_AUTO_ACT=band: numbers rather than a screenshot — the headless platform draws no window buttons of its own, so
     // a band that lost the grab run or pushed its buttons off the end looks fine in the picture.
-    Timer {
+    SampleTimer {
         id: bandActTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "band"
         onTriggered: {
             // No tabs is a valid laid-out band, not an unanswered one. Read readiness from the window and bar
@@ -852,10 +802,8 @@ Item {
 
     // PG_AUTO_ACT=tab-widths: numbers for the band's reason — a strip that narrowed the wrong tabs comes out looking
     // like one that got it right. `widths=` is the answer.
-    Timer {
+    SampleTimer {
         id: tabWidthActTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "tab-widths"
         onTriggered: {
             if (topBar.bandTabCount <= 0 || topBar.bandTabRun <= 0)
@@ -877,10 +825,8 @@ Item {
 
     // PG_AUTO_ACT=tab-mark: the argument is which tab the hand is on — one that is not in front, or the run says
     // nothing the picture of any other verb does not already say.
-    Timer {
+    SampleTimer {
         id: tabMarkActTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "tab-mark"
         property bool requested: false
         property string beforeMarks: ""
@@ -908,10 +854,8 @@ Item {
 
     // PG_AUTO_ACT=window-fill: whether the window's contents reach all four edges while maximised. Numbers rather than
     // a picture: the app is the whole screen, so there is no desktop left beside it to show a gap against.
-    Timer {
+    SampleTimer {
         id: fillActTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "window-fill"
         property bool maximizeRequested: false
         onTriggered: {
@@ -930,10 +874,8 @@ Item {
     }
     // The window has to have taken the state, and the layout to have run inside the new size, before either can be read
     // back.
-    Timer {
+    SampleTimer {
         id: fillReportTimer
-        interval: 25
-        repeat: true
         // Measured in scene coordinates rather than from the margins that were asked for, because a margin that misses
         // is exactly what this is looking for.
         onTriggered: {
@@ -958,10 +900,8 @@ Item {
 
     // PG_AUTO_ACT=solo: the harness holds the real lock on the config directory before starting this process, so the
     // picture is of the mechanism and not of a flag that imitates it.
-    Timer {
+    SampleTimer {
         id: soloActTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "solo"
         onTriggered: {
             if (!AppBackend.alreadyRunning || !gate.visible)
@@ -980,10 +920,8 @@ Item {
     // at 320x240 — under every floor there is, so what comes up says whether the way in lifts it fold folded, put down
     // exactly on that floor, then the list put back: the floor rises under a window already standing on it log the same
     // rise the other way — put down on the floor without the log, then the log opened
-    Timer {
+    SampleTimer {
         id: floorActTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "window-floor"
         property bool shapeRequested: false
         onTriggered: {
@@ -1016,10 +954,8 @@ Item {
         }
     }
     // Poll until the requested size has actually reached the window floor.
-    Timer {
+    SampleTimer {
         id: floorShrinkTimer
-        interval: 25
-        repeat: true
         property bool resized: false
         onTriggered: {
             if (!floorShrinkTimer.resized
@@ -1044,10 +980,8 @@ Item {
     /// Automation: where the window was standing before the floor moved under it — a window that came back up cannot
     /// otherwise be told from one that was never let down.
     property string floorStoodAt: ""
-    Timer {
+    SampleTimer {
         id: floorRaiseTimer
-        interval: 25
-        repeat: true
         property bool raised: false
         onTriggered: {
             if (!floorRaiseTimer.raised && AppBackend.autoActArg === "fold") {
@@ -1070,10 +1004,8 @@ Item {
             floorReportTimer.start()
         }
     }
-    Timer {
+    SampleTimer {
         id: floorReportTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (window.width < Math.ceil(window.floorWidth)
                     || window.height < Math.ceil(window.floorHeight))
@@ -1127,10 +1059,8 @@ Item {
     // PG_AUTO_ACT=badges: all three of the band's state badges at once — the widest the band ever asks for, and the
     // floor is the only thing between that and a `>_` pushed off the end (デザイン規約 §ウィンドウの縁). The argument is the window
     // width; `floor` puts it down on the floor the three badges leave.
-    Timer {
+    SampleTimer {
         id: badgesActTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "badges"
                  || AppBackend.autoAct === "badges-hover"
         property bool stateRequested: false
@@ -1217,10 +1147,8 @@ Item {
     // PG_AUTO_ACT=old-git / old-git-card / old-git-fold. Nothing here stages the state — the run is handed a git that
     // answers `--version` with an older number (`verify-ui --old-git`), so the badge is answering a real reading of a
     // real program.
-    Timer {
+    SampleTimer {
         id: oldGitActTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "old-git"
                  || AppBackend.autoAct === "old-git-card"
                  || AppBackend.autoAct === "old-git-fold"
@@ -1287,10 +1215,8 @@ Item {
 
     // PG_AUTO_ACT=state: two runs sharing one --config-dir are what actually tests this — a single run can only ever
     // agree with itself.
-    Timer {
+    SampleTimer {
         id: stateActTimer
-        interval: 25
-        repeat: true
         running: AppBackend.autoAct === "state"
         property bool stateRequested: false
         onTriggered: {
@@ -1316,10 +1242,8 @@ Item {
         }
     }
     // The splitters have to have taken the new sizes before they can be read back off the panes.
-    Timer {
+    SampleTimer {
         id: stateReportTimer
-        interval: 25
-        repeat: true
         onTriggered: {
             if (AppBackend.autoActArg === "minimize" && window.visibility !== Window.Maximized)
                 return
