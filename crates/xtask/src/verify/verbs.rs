@@ -544,6 +544,15 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // either side photographs exactly like a file with nothing to
         // tell apart.
         "conflict-sides" => Some("conflict_sides combined=true told=true both=true"),
+        // The tick that asks whether the open file still reads the way it
+        // did. What it is asking about did not move during the run, so
+        // the read is answered with silence — the ask is the only edge
+        // there is, and `asked=true` is the whole of what this side can
+        // claim: the slot resolved, the pane owned the file it named, and
+        // the session took the read. `loading=false` is the other half of
+        // the wiring: a tick that put the pane back into a click's state
+        // would blank it once a poll (`RepoSession::refresh_diff`).
+        "diff-tick" => Some("diff_tick asked=true loading=false"),
         "line-tools" => Some("diff_row act=line-tools ready=true"),
         "hunk-tools" => Some("diff_row act=hunk-tools ready=true"),
         "stage-hunk" => Some("diff_row act=stage-hunk ready=true"),

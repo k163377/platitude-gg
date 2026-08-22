@@ -140,7 +140,7 @@ Item {
                 "publish-go", "publish-new-go", "amend-reset-author", "amend-author",
                 "eol-commit", "eol-hover", "commit-face",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
-                "diff-file", "conflict-sides", "line-tools", "hunk-tools",
+                "diff-file", "conflict-sides", "diff-tick", "line-tools", "hunk-tools",
                 // The write barrier is behind these, not in front of them: five land on the working tree's own
                 // row, which the graph pass after the write is what puts there, and the last has to read the
                 // commit it just made.
@@ -514,7 +514,8 @@ Item {
             // "diff-file" alone reads the model instead of a row, and "conflict-sides" reads every row there is — the
             // one it is about (a side's own line, once it has been typed over) is a removal, which is not a changed
             // line of the first hunk.
-            if (AppBackend.autoAct === "diff-file" || AppBackend.autoAct === "conflict-sides")
+            if (AppBackend.autoAct === "diff-file" || AppBackend.autoAct === "conflict-sides"
+                || AppBackend.autoAct === "diff-tick")
                 return diffPane.diffSettled()
             return diffPane.firstChangedLine(0) >= 0
         }
@@ -551,6 +552,18 @@ Item {
             // should have carried one" is not — and a resolved conflict is exactly where none of them did.
             if (act === "conflict-sides") {
                 AppBackend.report("conflict_sides " + diffPane.sideTally())
+                driver.complete()
+                return
+            }
+            // The page's tick, fired here rather than waited for. What it asks about is a file this run has not
+            // touched, so core answers it with nothing (`RepoSession::refresh_diff`) and there is no arrival to
+            // observe — the ask is the edge, and it is read in the same beat it is made. `loading=` is the other half
+            // of the claim: a tick must not put the pane back into the state a click does.
+            if (act === "diff-tick") {
+                const asked = page.pollDiff()
+                AppBackend.report("diff_tick asked=" + asked
+                                  + " loading=" + diffPane.diffModel.loading
+                                  + " rows=" + diffPane.view.count)
                 driver.complete()
                 return
             }
@@ -3735,7 +3748,7 @@ Item {
         } else if (act === "stage-hunk" || act === "stage-line"
                    || act === "discard-hunk" || act === "discard-hunk-go"
                    || act === "diff-file" || act === "conflict-sides" || act === "line-tools"
-                   || act === "hunk-tools" || act === "keep-place"
+                   || act === "hunk-tools" || act === "keep-place" || act === "diff-tick"
                    || act === "code-send" || act === "line-back"
                    || act === "diff-follow" || act === "line-run") {
             // All enter through one file's diff and act on its first hunk. The bucket rides in front of the path

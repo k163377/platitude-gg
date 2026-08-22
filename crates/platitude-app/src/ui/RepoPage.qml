@@ -1126,10 +1126,26 @@ Item {
     function reloadDiff() {
         if (!page.diffShown || page.diffKind === "commit")
             return
-        // Held here rather than beside each write: the rows on screen do not move until the answer lands, so this is
-        // still the place the reader was at (`DiffScrollPlace`).
-        diffPane.holdScroll()
         diffModel.requestWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
+    }
+    /// Asks whether the file on screen still reads the way it did. Run on the page's tick, beside the repository's own
+    /// re-read.
+    ///
+    /// **The tree moving is not the only way the file moves.** The counts below say a stage or an unstage happened, and
+    /// the file list says a file changed state; neither hears an edit that leaves both where they were — a conflict
+    /// resolved in another window keeps its two stage letters until it is added, so the pane went on drawing the
+    /// conflict it was opened on (2026-08-22 ユーザー報告). Core answers this with silence unless the bytes moved
+    /// (`RepoSession::refresh_diff`), so a quiet file costs one read and no repaint.
+    ///
+    /// A commit's diff is not asked: what a commit holds is settled. Nor is one still catching up with a write — that
+    /// answer is already on its way.
+    ///
+    /// Answers whether a read went out, for the automation to latch on (`diff-tick`): the read itself is answered with
+    /// silence on a file nobody touched, so the ask is the only edge this side of it has.
+    function pollDiff() {
+        if (!page.diffShown || page.diffKind === "commit" || page.diffSettling)
+            return false
+        return diffModel.refreshWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
     }
 
     function closeDiff() {
@@ -1278,8 +1294,12 @@ Item {
     /// The window's focus epoch (bumped when the window regains focus) triggers a quick refresh of the visible page.
     property int focusEpoch: 0
     onFocusEpochChanged: {
-        if (page.visible && repoTab.state === "open")
+        if (page.visible && repoTab.state === "open") {
             repoTab.refreshQuick()
+            // The window coming back is the moment an outside change is most likely to be waiting, so the file on
+            // screen is asked as well rather than waiting out the rest of the tick.
+            page.pollDiff()
+        }
     }
 
     /// True while the window is on screen (see Main.qml): the page shown there re-reads its repository on a tick, so a
@@ -1291,7 +1311,13 @@ Item {
         // Only the tab in front — the others catch up when switched to, and reading every open repository on every tick
         // is what makes polling expensive elsewhere.
         running: page.onScreen && page.visible && repoTab.state === "open"
-        onTriggered: repoTab.refreshPoll()
+        onTriggered: page.pollRepo()
+    }
+    /// One tick: the repository, and the file the diff pane is holding. The two are separate reads because they answer
+    /// different questions — refs and status say what the tree is, the diff says what the file says.
+    function pollRepo() {
+        repoTab.refreshPoll()
+        page.pollDiff()
     }
 
     // Where the selection stands, kept so a commit that disappears from under it can be followed to whatever took its
@@ -1504,6 +1530,17 @@ Item {
             // The listing the delete was waiting on: the rows it took away are gone from the model itself now, so the
             // window stops standing in for it (デザイン規約 §消す操作は先に画面から消す).
             page.refsProvedGone()
+        }
+    }
+    Connections {
+        target: diffModel
+        // The rows are about to be swapped for a re-read of the same file — a write of ours, or an edit made outside
+        // this window that the tick caught. Held here rather than beside whoever asked, because this is the moment the
+        // view is still standing where the reader left it, and the two askers cannot both be trusted to say so: the
+        // tick asks on files that turn out not to have moved, and holding a place for a swap that never comes would
+        // put the next one back somewhere the reader has since left (`DiffScrollPlace`).
+        function onRowsReplacing() {
+            diffPane.holdScroll()
         }
     }
     // The stashes arrive on a word of their own, later than the refs — read off the refs' arrival, a dropped stash

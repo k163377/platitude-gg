@@ -41,6 +41,16 @@ impl DiffModel {
     #[qsignal]
     pub(super) fn changed(&mut self);
 
+    /// The rows on screen are about to be swapped for a re-read of the
+    /// same file. Said before the first of them moves, so that whoever
+    /// keeps the reader's place takes it off a view that is still standing
+    /// where they left it (`DiffScrollPlace`).
+    ///
+    /// **Nothing on the other end may call back into this model.** It goes
+    /// out from inside `drain`, which is holding the borrow.
+    #[qsignal]
+    fn rows_replacing(&mut self);
+
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
@@ -74,16 +84,33 @@ impl DiffModel {
     /// conflicts).
     #[qslot]
     fn request_work_tree(&mut self, bucket: String, path: String, orig_path: String) {
-        let target = match bucket.as_str() {
-            "staged" => DiffTarget::Staged {
-                path: path.clone(),
-                orig_path: (!orig_path.is_empty()).then_some(orig_path),
-            },
-            "untracked" => DiffTarget::Untracked { path: path.clone() },
-            // Conflicted files show their working-tree state.
-            _ => DiffTarget::Unstaged { path: path.clone() },
-        };
+        let target = work_tree_target(&bucket, &path, orig_path);
         self.begin_request(path, target);
+    }
+
+    /// Asks whether the working-tree file on screen still reads the way it
+    /// did — the page's tick, while a diff of one is open.
+    ///
+    /// Not a request: nothing is put down and nothing is said to be
+    /// loading, because most ticks find the file where they left it and
+    /// core answers those with silence (`RepoSession::refresh_diff`). A
+    /// tick for some other file is not this pane's, and one that arrives
+    /// while a read is already out has nothing to add to it.
+    ///
+    /// Answers whether a read went out, which is all this side of it can
+    /// be asked: the usual answer to the read itself is silence, so the
+    /// automation reads the ask (`diff-tick`) rather than waiting for a
+    /// reply that a file nobody touched never sends.
+    #[qslot]
+    fn refresh_work_tree(&mut self, bucket: String, path: String, orig_path: String) -> bool {
+        if self.loading {
+            return false;
+        }
+        let target = work_tree_target(&bucket, &path, orig_path);
+        if diff_key(&target) != self.current_key {
+            return false;
+        }
+        crate::hub::from_session(self.tab_id, |s| s.refresh_diff(target)).is_some()
     }
 
     /// The marker columns of one row, for the smoke hook that counts how
@@ -128,6 +155,12 @@ impl DiffModel {
         let mine = wanted(feed.drain(), &self.current_key);
         if mine.is_empty() {
             return;
+        }
+        // Before the first of them is applied, and only where there is a
+        // place to lose: rows arriving for a file with none on screen are
+        // a pane opening, not a reader being moved.
+        if !self.lines.is_empty() && mine.iter().any(|m| matches!(m, DiffMsg::Loaded { .. })) {
+            self.rows_replacing();
         }
         for msg in mine {
             match msg {

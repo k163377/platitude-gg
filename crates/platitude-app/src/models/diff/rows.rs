@@ -174,6 +174,25 @@ impl DiffModel {
     }
 }
 
+/// Which diff one of the working tree's four buckets asks for. Read by
+/// both the request a click makes and the re-read the tick makes, so the
+/// two can never address different files under one name.
+pub(super) fn work_tree_target(bucket: &str, path: &str, orig_path: String) -> DiffTarget {
+    match bucket {
+        "staged" => DiffTarget::Staged {
+            path: path.to_string(),
+            orig_path: (!orig_path.is_empty()).then_some(orig_path),
+        },
+        "untracked" => DiffTarget::Untracked {
+            path: path.to_string(),
+        },
+        // Conflicted files show their working-tree state.
+        _ => DiffTarget::Unstaged {
+            path: path.to_string(),
+        },
+    }
+}
+
 /// Everything about the file that is open, in arrival order.
 ///
 /// Not simply the newest arrival, for two reasons. One diff now sends two
