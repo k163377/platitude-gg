@@ -29,6 +29,11 @@ pub struct WorkTreeModel {
     ahead: i32,
     behind: i32,
     op_text: String,
+    /// The same operation in git's own spelling (`cherry-pick`), for the
+    /// one place a pill has to say the whole command rather than a word
+    /// on a badge (§git 用語のコード表記). Core answers it, so the pill
+    /// and the exit card cannot come to name two different operations.
+    op_command: String,
     /// The second name, when bisect is running alongside something else.
     /// Two fields rather than one joined string: what goes between them
     /// is a mark the showing side draws (規約 §余白), and `op_text` stays
@@ -105,6 +110,7 @@ impl WorkTreeModel {
     qproperty!("ahead", Member = ahead, Notify = changed);
     qproperty!("behind", Member = behind, Notify = changed);
     qproperty!("opText", Member = op_text, Notify = changed);
+    qproperty!("opCommand", Member = op_command, Notify = changed);
     qproperty!("opAlso", Member = op_also, Notify = changed);
     qproperty!("hasConflicts", Member = has_conflicts, Notify = changed);
     qproperty!("stagedCount", Member = staged_count, Notify = changed);
@@ -184,6 +190,10 @@ impl WorkTreeModel {
         // the same answer the continuations act on.
         use platitude_core::integrate::InProgress;
         let mut ops: Vec<&str> = Vec::new();
+        self.op_command = InProgress::from_state(&op_state)
+            .map(InProgress::command)
+            .unwrap_or_default()
+            .to_string();
         if let Some(op) = InProgress::from_state(&op_state) {
             ops.push(match op {
                 InProgress::Rebase => "REBASING",

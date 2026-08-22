@@ -171,8 +171,14 @@ impl RepoTab {
 
     /// Moves HEAD, taking uncommitted work along — through a stash when
     /// git will not carry it itself, which needs nothing asked here.
-    pub(super) fn move_head(&self, target: platitude_core::branch::CheckoutTarget) {
-        self.with_session(|s| s.checkout(target.clone()));
+    pub(super) fn move_head(&self, target: platitude_core::branch::CheckoutTarget, leaving: bool) {
+        self.with_session(|s| {
+            if leaving {
+                s.checkout_leaving_operation(target.clone());
+            } else {
+                s.checkout(target.clone());
+            }
+        });
     }
 
     /// The commit slot's two fields, joined and optioned for core.

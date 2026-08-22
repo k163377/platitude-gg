@@ -33,6 +33,10 @@ Item {
 
     /// What this menu offers, decided as it opens (see the note above).
     property bool canSwitch: false
+    /// Whether that row will raise a question rather than move — an operation standing, files still waiting on a
+    /// decision, or the branch out in another working copy. Worn as the `!` in the row's mark seat, so the press is
+    /// read for what it is before it is made (デザイン規約 §進行中の操作から出る).
+    property bool switchAsks: false
     property bool canBranchHere: false
     property bool canIntegrateFrom: false
     property bool canDelete: false
@@ -41,8 +45,10 @@ Item {
     property string remoteCounterpart: ""
     property bool canDeleteRemote: false
     /// The other working copy holding this row's local branch, empty when none does. **git refuses both `switch` and
-    /// `branch --delete` for a branch another worktree has out** (実測), so the two rows read it and not the lock — a
-    /// lock stops `worktree remove` and `worktree move`, which is a different question the WORKTREES row answers.
+    /// `branch --delete` for a branch another worktree has out** (実測), so this is read and not the lock — a lock
+    /// stops `worktree remove` and `worktree move`, which is a different question the WORKTREES row answers. The
+    /// delete rows go out on it; `switch` presses through to the question that opens that copy instead
+    /// (`RepoPage.askOpenHolder`).
     property string heldByWorktree: ""
     /// The folder that copy is listed under in WORKTREES. The whole path is what git answers with and is the only
     /// unambiguous form, but nobody reads a tooltip that wide — and the list the reader goes to next shows the leaf.
@@ -61,6 +67,10 @@ Item {
     //: %1 is the folder of the other working copy that has this branch checked out.
     readonly property string blockedByWorktree:
         qsTr("Checked out in another working copy — %1").arg(refRowMenu.heldByWorktreeName)
+    // **The delete rows are the only ones this blocks now.** `switch` used to be greyed here too — for a branch
+    // another copy holds and for a tree with unmerged files — and both of those press through to a question instead
+    // (デザイン規約 §進行中の操作から出る): a row that cannot be pressed says why only on hover, and the reader who
+    // reached for it is the one who needs to read it (2026-08-22 ユーザー判断).
 
     // ---- bringing two lines of history together --------------------
     /// The live condition the row above is read off as the menu opens.
@@ -129,6 +139,10 @@ Item {
         // be read, and a `switch` that quietly stopped being offered reads as a menu that lost it (2026-08-21 ユーザー判断).
         refRowMenu.canSwitch = (kind === "branch" || kind === "remote")
             && full !== refRowMenu.workTree.branch
+        refRowMenu.switchAsks =
+            refRowMenu.heldByWorktree !== ""
+            || refRowMenu.workTree.opText !== ""
+            || refRowMenu.workTree.conflictCount > 0
         // Every ref that names a commit can have a new branch started on it — the current branch included, which is
         // where one is most often started. A stash is the exception: it is nobody's history to carry on from
         // (デザイン規約 §グラフ行の右クリック).
@@ -192,7 +206,10 @@ Item {
             id: refSwitchItem
             code: "switch"
             offered: refRowMenu.canSwitch
-            blockedReason: refRowMenu.heldByWorktree === "" ? "" : refRowMenu.blockedByWorktree
+            // Never blocked: everything that stands in a move's way is answered by the question the press raises — and
+            // the mark says that a question is what this press raises.
+            blockedReason: ""
+            asks: refRowMenu.switchAsks
             // Through the chips' dispatcher: a remote branch whose local one already exists cannot simply be created.
             onTriggered: refRowMenu.switchRequested(refRowMenu.kind === "remote" ? "R" : "L", refRowMenu.refId)
         }

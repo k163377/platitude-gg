@@ -233,20 +233,69 @@ Item {
     property string moveLocal: ""
     property string moveStart: ""
 
-    function switchTo(kind, target, local, start) {
+    function switchTo(kind, target, local, start, leaving) {
         page.moveKind = kind
         page.moveTarget = target
         page.moveLocal = local
         page.moveStart = start === undefined ? "" : start
-        page.runSwitch()
+        if (page.standsInTheWay(leaving)) {
+            page.askLeaveOperation(function () { page.runSwitch(true) })
+            return
+        }
+        page.runSwitch(leaving === true)
     }
-    function runSwitch() {
+    function runSwitch(leaving) {
         if (page.moveKind === "branch")
-            repoTab.checkoutBranch(page.moveTarget)
+            repoTab.checkoutBranch(page.moveTarget, leaving === true)
         else if (page.moveKind === "remote")
-            repoTab.checkoutRemote(page.moveTarget, page.moveLocal)
+            repoTab.checkoutRemote(page.moveTarget, page.moveLocal, leaving === true)
         else if (page.moveKind === "force")
-            repoTab.checkoutForceCreate(page.moveTarget, page.moveStart)
+            repoTab.checkoutForceCreate(page.moveTarget, page.moveStart, leaving === true)
+    }
+
+    // ---- moving out of what stands in a move's way --------------------
+    // **git refuses every move while a merge / rebase / cherry-pick / revert stands** — clean tree, conflicted tree and
+    // resolved-and-staged tree all get the same `cannot switch branch while …` (実測 2.55) — and it refuses one over an
+    // unmerged index too, which is what `--quit` leaves when the reader takes that row themselves. So the move has to
+    // clear the way first, and that is a question rather than a side effect (デザイン規約 §進行中の操作から出る).
+    //
+    // **One question for both.** The second needs no operation put down, and everything after that is the same two
+    // commands, so it is the same question with one clause fewer (2026-08-22 ユーザー判断).
+    //
+    // **Asked before anything is sent.** The screen already knows what is standing, so letting git refuse would put a
+    // red line in the command log where a question belongs — and leave the reader where they were with nothing to
+    // press (2026-08-22 ユーザー報告).
+    function standsInTheWay(leaving) {
+        return leaving !== true && (workTree.opText !== "" || workTree.conflictCount > 0)
+    }
+    /// Whether putting this operation down costs anything, which is what decides the whole shape of the question.
+    ///
+    /// **A rebase is the one that does.** `git rebase --quit` leaves HEAD detached at the half-rewritten line with
+    /// every copy it already made unreferenced (実測 2.55), so the way out is `--abort` — and an abort throws away work
+    /// in hand, which is `danger` and a hold (§状態, §長押し). The other three take `--quit`: the commits an earlier
+    /// step already made stay, and the tree goes into a stash rather than into the reflog, so **nothing is destroyed**
+    /// and the question is the ordinary `warning` one with a click (2026-08-22 ユーザー判断).
+    readonly property bool leavingUndoes: workTree.opCommand === "rebase"
+    readonly property string leaveHeading:
+        page.leavingUndoes ? qsTr("Undo it and go?") : qsTr("Put it aside and go?")
+    readonly property string leaveDetail:
+        page.leavingUndoes ? qsTr("Nothing it did since it started is kept.")
+        // Nothing standing: the files are the whole of what is in the way, and there is no operation to name.
+        : workTree.opCommand === ""
+        ? qsTr("The files waiting on a decision go to the stash, markers and all.")
+        //: %1 is the standing operation in git's own spelling, e.g. cherry-pick.
+        : qsTr("The %1 stops; its files go to the stash, markers and all.").arg(workTree.opCommand)
+    /// The command opens the line, so the words do not say it again (§git 用語のコード表記). The rebase's is the exit
+    /// card's own row for the same act, which is where the hand learnt it; the rest name the stash, because **that is
+    /// where the reader goes to find their work afterwards** and the app calls it `stash` everywhere (§変更を退避する).
+    readonly property string leaveCode:
+        page.leavingUndoes ? workTree.opCommand + " --abort" : "stash"
+    function askLeaveOperation(retry) {
+        // Marked on the row HEAD stands on — a rebase runs detached, so that is the only name the tree has for where
+        // it is (デザイン規約 §立っている質問は 1 か所で聞く).
+        page.startRowAsk(workTree.headOid, page.leaveHeading, page.leaveDetail,
+                         page.leavingUndoes, "", retry, page.leavingUndoes, "", null,
+                         page.leaveCode)
     }
 
     // ---- what a chip leads to --------------------------------------
@@ -256,18 +305,52 @@ Item {
             page.switchToRef(record[0], record.substring(6).split("\u001E")[0])
     }
     // git keeps a branch to one working copy: moving onto one another worktree already has out is refused outright
-    // (`fatal: '<branch>' is already used by worktree at …`, 2026-08-21 実測), whether or not that copy is locked. The
-    // menu keeps its `switch` row and greys it, which is where the reason is read; this is the same answer for the
-    // ways in that have no row to say it on — the double-click on a sidebar row, and a chip on the graph.
+    // (`fatal: '<branch>' is already used by worktree at …`, 2026-08-21 実測), whether or not that copy is locked.
+    //
+    // **The only branch nothing here can clear.** No stash gets past it and no operation is standing to put down —
+    // the branch is simply somewhere else, and the way to it is that copy. So the press raises a bar like every other
+    // refusal does, and the pill goes there instead: the same road the WORKTREES row takes
+    // (`openRepositoryPathRequested`). **The `!` after the word is what says the pill is not the switch that was
+    // pressed** (デザイン規約 §進行中の操作から出る, 2026-08-22 ユーザー判断).
     function heldElsewhere(local) {
         return worktreesModel.worktreeHolding(local) !== ""
     }
-    function switchToRef(kind, name) {
+    function askOpenHolder(local) {
+        const held = worktreesModel.worktreeHolding(local)
+        if (held === "")
+            return
+        const leaf = held.replace(/\\/g, "/").split("/").pop()
+        page.startRowAsk(
+            branchesModel.oidOfName(local),
+            //: %1 is the folder of the working copy that has the branch checked out.
+            qsTr("Open %1 instead?").arg(leaf),
+            //: %1 is a branch name.
+            qsTr("%1 is checked out there, so nothing here can move onto it.").arg(local),
+            false,
+            qsTr("Open"),
+            function () { page.openRepositoryPathRequested(held) },
+            false,
+            "",
+            null,
+            "")
+        graphPane.askAlert = true
+    }
+    function switchToRef(kind, name, leaving) {
         if (repoTab.state !== "open" || repoTab.busyCount > 0)
             return
+        // Ahead of the branches below rather than inside them: the one that lands on an existing local branch asks git
+        // what the move would cost before it moves, and that read is worth nothing while an operation is standing.
+        if (page.standsInTheWay(leaving)) {
+            page.askLeaveOperation(function () { page.switchToRef(kind, name, true) })
+            return
+        }
         if (kind === "L") {
-            if (name !== workTree.branch && !page.heldElsewhere(name))
-                page.switchTo("branch", name, name, "")
+            if (name === workTree.branch)
+                return
+            if (page.heldElsewhere(name))
+                page.askOpenHolder(name)
+            else
+                page.switchTo("branch", name, name, "", leaving)
             return
         }
         // The detached-HEAD marker names no branch, and moving onto a tag could only detach HEAD — a tag's row offers a
@@ -276,14 +359,17 @@ Item {
             return
         const local = remotesModel.localNameFor(name)
         // The local branch a remote row lands on is the one another copy can be holding.
-        if (page.heldElsewhere(local))
+        if (page.heldElsewhere(local)) {
+            page.askOpenHolder(local)
             return
+        }
         if (branchesModel.oidOfName(local) === "")
-            page.switchTo("remote", name, local, "")
+            page.switchTo("remote", name, local, "", leaving)
         else
             // Whether to ask is git's to answer — a branch that only fell behind loses nothing by moving. The question
-            // comes back as `moveAskSeq` when something would be lost.
-            repoTab.checkoutMovingBranch(local, name)
+            // comes back as `moveAskSeq` when something would be lost, and the operation is left standing for the
+            // answer to that one to undo (core asks before it aborts, never the other way round).
+            repoTab.checkoutMovingBranch(local, name, leaving === true)
     }
 
     // Landing on the remote branch moves the existing local one onto it — the one move here that can leave commits

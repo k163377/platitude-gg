@@ -431,17 +431,21 @@ impl RepoTab {
     // Every move is one job, whichever way it gets there: a failed half
     // cannot let the switch happen regardless.
 
+    /// `leaving` says the reader has already agreed to undo the operation
+    /// standing in the move's way — git refuses every move while one
+    /// stands, so that agreement travels with the move rather than
+    /// running ahead of it (デザイン規約 §進行中の操作から出る).
     #[qslot]
-    fn checkout_branch(&mut self, name: String) {
+    fn checkout_branch(&mut self, name: String, leaving: bool) {
         let target = platitude_core::branch::CheckoutTarget::Branch { name };
-        self.move_head(target);
+        self.move_head(target, leaving);
     }
 
     /// Creates a local branch tracking a remote-tracking ref and switches.
     #[qslot]
-    fn checkout_remote(&mut self, remote_ref: String, local: String) {
+    fn checkout_remote(&mut self, remote_ref: String, local: String, leaving: bool) {
         let target = platitude_core::branch::CheckoutTarget::Track { remote_ref, local };
-        self.move_head(target);
+        self.move_head(target, leaving);
     }
 
     /// Moves an existing local branch to `start` and lands on it, but only
@@ -449,16 +453,16 @@ impl RepoTab {
     /// fast-forwards straight away, and one holding commits of its own
     /// comes back as `moveAskSeq` for the UI to ask about.
     #[qslot]
-    fn checkout_moving_branch(&mut self, local: String, start: String) {
-        self.with_session(|s| s.checkout_moving_branch(local.clone(), start.clone()));
+    fn checkout_moving_branch(&mut self, local: String, start: String, leaving: bool) {
+        self.with_session(|s| s.checkout_moving_branch(local.clone(), start.clone(), leaving));
     }
 
     /// Moves an existing local branch to `start` and lands on it. What the
     /// branch alone had is left unreferenced, so the UI asks first.
     #[qslot]
-    fn checkout_force_create(&mut self, local: String, start: String) {
+    fn checkout_force_create(&mut self, local: String, start: String, leaving: bool) {
         let target = platitude_core::branch::CheckoutTarget::ForceCreate { local, start };
-        self.move_head(target);
+        self.move_head(target, leaving);
     }
 
     /// Moves the current branch to `rev`. `mode` says what becomes of the

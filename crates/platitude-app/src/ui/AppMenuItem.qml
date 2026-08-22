@@ -54,6 +54,10 @@ MenuItem {
     /// The row says so with the mark ahead of its words, not in them: the menu leaves the same seat for it on every
     /// row, so a held row reads down the same column as the rest (`AppMenu.holdIndent`).
     property int holdMs: 0
+    /// Whether pressing this row raises a question instead of doing what it says — a `!` in the mark's seat, which is
+    /// the row's one place for "read this before you press" (デザイン規約 §進行中の操作から出る). Never both this and a
+    /// hold: the hold is how a row that acts is confirmed, and a row that asks is confirmed on the bar it raises.
+    property bool asks: false
     /// How far into the hold the press has got, 0 to 1.
     readonly property alias holdProgress: holdDrive.progress
     /// The colour the hold fills the row with.
@@ -123,6 +127,25 @@ MenuItem {
         progress: menuItem.holdProgress
         tint: menuItem.wordColor
         visible: menuItem.holdMs > 0
+    }
+    // **The other thing that can stand in that seat**: this row does not do what it says on its own — it raises a
+    // question first. A row cannot be both (a question is not answered by holding the row that raises it), so the two
+    // share the seat rather than crowding it (デザイン規約 §進行中の操作から出る).
+    //
+    // **It is not drawn the way the ring is, though — it is drawn the way every other `!` in this app is**: raised by
+    // a gap and half a gap into the word's own bearing, hanging off the words rather than sitting centred in a column
+    // of its own (`ActionButtonLabel`, `NameCell`, the toolbar's `push -f`). A mark that reads the same wherever it is
+    // met is the whole point of having one shape for it (2026-08-22 ユーザー判断). At the head of the row because the
+    // words run to the right of it — the same end `ActionButtonLabel` puts it on for a phrase.
+    NavIcon {
+        x: Theme.spaceXs / 2
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: Metrics.opticalDrop - Theme.spaceXs
+        kind: "bang"
+        tint: Theme.warning
+        width: Theme.iconSm
+        height: Theme.iconSm
+        visible: menuItem.asks && menuItem.holdMs <= 0
     }
 
     contentItem: RowLayout {

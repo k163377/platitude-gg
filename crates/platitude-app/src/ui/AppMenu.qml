@@ -88,7 +88,10 @@ Menu {
     readonly property real holdIndent: {
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
-            if (row && row.offered && row.holdMs !== undefined && row.holdMs > 0)
+            if (!row || !row.offered)
+                continue
+            // Either mark takes the same seat, so either one opens it (`AppMenuItem.asks`).
+            if ((row.holdMs !== undefined && row.holdMs > 0) || row.asks === true)
                 return Theme.spaceSm
         }
         return 0
