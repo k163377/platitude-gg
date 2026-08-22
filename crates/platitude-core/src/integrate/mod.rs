@@ -16,9 +16,34 @@ mod resolve;
 
 use crate::opstate;
 
-pub use merge::{MergeOptions, MergeOutcome, merge, stopped_message};
+pub use merge::{MergeOptions, merge, stopped_message};
 pub use pick::{cherry_pick, revert};
 pub use rebase::{RebaseOptions, RebaseOutcome, rebase};
 pub use resolve::{Continuation, InProgress, resolve, resolve_current};
 
 pub(crate) use rebase::{rebase_command, refusal_or};
+
+/// Where an operation that can stop part-way came to rest.
+///
+/// Reading the two apart is the whole point: an operation that stops on a
+/// conflict is where merging a branch that moved on — or copying a commit
+/// onto one — normally ends up, and calling that a failure puts a red line
+/// over an ordinary afternoon (2026-08-22 ユーザー報告).
+///
+/// **No exit code tells them apart**, so each command below asks the
+/// repository instead: the operation left standing is the stop, and
+/// anything else that exited non-zero is the failure it looks like.
+///
+/// `rebase` answers with [`RebaseOutcome`] rather than this: it has a
+/// third thing to say (the refusal a stash gets past), and whether a
+/// stopped one lands here too is not settled (internal-docs/P3-確認事項).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Landing {
+    /// git took the operation to the end: a commit, a fast-forward, a
+    /// branch that was already in, or a sequence walked to its last step.
+    Done,
+    /// git stopped and left the operation standing — its marker, the
+    /// markers in the tree, the conflicted rows. Nothing failed; the way
+    /// on is the exit card (デザイン規約 §進行中の操作から出る).
+    Stopped,
+}

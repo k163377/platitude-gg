@@ -3,7 +3,7 @@
 use crate::support::TestRepo;
 use crate::support::exec::{env, observed_env};
 use crate::support::integrate::current_op;
-use platitude_core::integrate::{self, Continuation, InProgress};
+use platitude_core::integrate::{self, Continuation, InProgress, Landing};
 use platitude_core::opstate;
 
 /// Nothing of the operation is left on disk: not the marker a badge
@@ -197,25 +197,102 @@ async fn the_commits_around_an_empty_revert_still_land() {
     nothing_in_progress(&repo).await;
 }
 
-#[tokio::test]
-async fn a_conflicting_cherry_pick_is_routed_to_the_right_command() {
+/// Two branches that changed the same line, so replaying either onto the
+/// other stops.
+fn conflicting_sides() -> (TestRepo, String) {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "base\n", "root");
     repo.git(&["checkout", "-b", "side"]);
     let picked = repo.commit_file("f.txt", "side\n", "side change");
     repo.git(&["checkout", "main"]);
     repo.commit_file("f.txt", "main\n", "main change");
+    (repo, picked)
+}
+
+#[tokio::test]
+async fn a_conflicting_cherry_pick_is_routed_to_the_right_command() {
+    let (repo, picked) = conflicting_sides();
     let (exec, cancel) = env();
 
-    integrate::cherry_pick(&exec, &repo.path, &[picked], &cancel)
-        .await
-        .expect_err("conflict");
+    // Not an error: git stopped and left the cherry-pick standing, which
+    // is a landing of its own — copying a commit onto a branch that has
+    // moved on ends here as ordinarily as a merge does
+    // (デザイン規約 §進行中の操作から出る).
+    assert_eq!(
+        integrate::cherry_pick(&exec, &repo.path, &[picked], &cancel)
+            .await
+            .expect("a conflict is an answer, not a failure"),
+        Landing::Stopped
+    );
     assert_eq!(current_op(&repo).await, Some(InProgress::CherryPick));
 
     integrate::resolve_current(&exec, &repo.path, Continuation::Abort, &cancel)
         .await
         .expect("abort");
     assert_eq!(current_op(&repo).await, None);
+}
+
+/// The revert half of the same answer, and the command log's side of it:
+/// the stop is recorded as an answer, so nothing raises the panel over a
+/// conflict there is a card for (規約 §終了コードで答える問い合わせ).
+#[tokio::test]
+async fn a_conflicting_revert_stops_rather_than_failing() {
+    use crate::support::Ends;
+    use platitude_core::process::CommandEnd;
+    use std::sync::Arc;
+
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\n", "root");
+    let added = repo.commit_file("f.txt", "one\ntwo\n", "adds the line");
+    // The line the revert wants to take away is not the line that is
+    // there any more, so undoing that commit collides.
+    repo.commit_file("f.txt", "one\nrewritten\n", "says it another way");
+
+    let ends = Arc::new(Ends::default());
+    let (exec, cancel) = observed_env(ends.clone(), true);
+    assert_eq!(
+        integrate::revert(&exec, &repo.path, &[added], &cancel)
+            .await
+            .expect("a conflict is an answer, not a failure"),
+        Landing::Stopped
+    );
+    assert_eq!(current_op(&repo).await, Some(InProgress::Revert));
+
+    let recorded = ends.0.lock().unwrap().clone();
+    assert!(
+        !recorded
+            .iter()
+            .any(|end| matches!(end, CommandEnd::Exited(code) if *code != 0)),
+        "nothing here failed: {recorded:?}"
+    );
+
+    integrate::resolve_current(&exec, &repo.path, Continuation::Abort, &cancel)
+        .await
+        .expect("abort");
+    assert_eq!(current_op(&repo).await, None);
+}
+
+/// A stop is the one failure that turns into a landing. Everything else
+/// travels on as the failure it looks like — git leaves nothing standing
+/// for those (実測 2.55: exit 128 and no marker of any kind), so the
+/// screen gets git's own words.
+#[tokio::test]
+async fn a_failure_that_left_nothing_standing_is_still_a_failure() {
+    let (repo, _) = conflicting_sides();
+    let (exec, cancel) = env();
+
+    integrate::cherry_pick(&exec, &repo.path, &["no-such-rev".into()], &cancel)
+        .await
+        .expect_err("a name git cannot read is a failure");
+    nothing_in_progress(&repo).await;
+
+    // A tree in the way is refused before anything is replayed, which is
+    // not the operation standing there either.
+    std::fs::write(repo.path.join("f.txt"), "still being typed\n").expect("dirty the tree");
+    integrate::revert(&exec, &repo.path, &["HEAD".into()], &cancel)
+        .await
+        .expect_err("work in the way is a failure");
+    nothing_in_progress(&repo).await;
 }
 
 #[tokio::test]

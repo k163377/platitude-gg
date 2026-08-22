@@ -115,7 +115,7 @@ Item {
                 "branch-at-tag", "dbl-local", "dbl-remote", "move-branch",
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
-                "merge-stops",
+                "merge-stops", "cherry-pick-stops", "revert-stops",
                 "rebase-onto", "revert-commit", "op-exit-go", "stage-hunk",
                 "stage-line", "keep-place", "discard-hunk-go", "line-back", "diff-follow",
                 "line-run",
@@ -134,10 +134,10 @@ Item {
                 "eol-commit", "eol-hover", "commit-face",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "conflict-sides", "line-tools", "hunk-tools",
-                // The write barrier is behind these two, not in front of them: one lands on the working tree's own
-                // row, which the graph pass after the write is what puts there, and the other has to read the
+                // The write barrier is behind these, not in front of them: three land on the working tree's own
+                // row, which the graph pass after the write is what puts there, and the last has to read the
                 // commit it just made.
-                "merge-stops", "merge-commit",
+                "merge-stops", "cherry-pick-stops", "revert-stops", "merge-commit",
                 "code-send", "line-back", "diff-follow", "line-run",
                 "stage-all", "unstage-all",
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
@@ -1867,6 +1867,30 @@ Item {
             driver.complete()
         }
     }
+    // Where a cherry-pick or a revert that stopped on conflicts left the reader. `mergeStoppedTimer`'s twin, for the
+    // two that step: the same press with no new commit at the tip to land on, answered by the working tree. What the
+    // picture cannot hold is the same pair — that nothing wrote a red line over an ordinary conflict, and that the
+    // command log stayed down — plus the row the merge does not have: these keep `--continue`, because for them it is
+    // a step onward and not the commit somebody is writing (規約 §進行中の操作から出る).
+    Timer {
+        id: opStoppedTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (repoTab.busyCount !== 0 || !page.wipShown || workTree.conflictCount === 0)
+                return
+            opStoppedTimer.stop()
+            AppBackend.report(
+                "write_stopped wip=" + page.wipShown
+                + " conflicts=" + (workTree.conflictCount > 0)
+                + " error=" + (repoTab.lastError !== "")
+                + " log=" + page.commandsOpen
+                + " cont=" + wipPane.offersOpExit("--continue")
+                + " op=" + workTree.opText
+                + " files=" + workTree.conflictCount)
+            driver.complete()
+        }
+    }
     // The merge finished from the button under the exit card, with nothing typed in the box. Two waits in one timer:
     // the write has to land, and then HEAD's own message has to come back — the claim is that the empty box committed
     // the merge's words, and only the commit that now exists can say so.
@@ -3371,14 +3395,19 @@ Item {
             // Detached there is no branch tip to name, so the newest row stands in — a commit other than HEAD.
             page.jumpToRef(branchesModel.headOid !== "" ? branchesModel.headOid : graphModel.oidAt(0))
             rewordTimer.start()
-        } else if (act === "cherry-pick") {
+        } else if (act === "cherry-pick" || act === "cherry-pick-stops") {
             const pickOid = driver.autoActOid(arg)
             const pickRow = graphModel.rowOf(pickOid)
             if (pickRow >= 0) {
                 graphPane.jumpToRow(pickRow)
                 page.activateRow(pickOid)
             }
-            tipLandedTimer.start()
+            // Two landings, one press: a copy that goes through answers at the tip, one that stops answers in the
+            // working tree (規約 §履歴を合流させる / §進行中の操作から出る).
+            if (act === "cherry-pick-stops")
+                opStoppedTimer.start()
+            else
+                tipLandedTimer.start()
             repoTab.cherryPick(pickOid)
         } else if (act === "reset-soft" || act === "reset-mixed") {
             // With nothing given, the row under HEAD's: a reset to where the branch already stands moves nothing, and
@@ -3457,16 +3486,20 @@ Item {
                     page.dropCommit(commitMenuState.menuOid)
             }
         } else if (act === "merge-branch" || act === "merge-stops" || act === "rebase-onto"
-                   || act === "revert-commit" || act === "integrate-menu") {
+                   || act === "revert-commit" || act === "revert-stops" || act === "integrate-menu") {
             // Through the menus a right-click opens, so the rows' own gating decides whether anything runs.
-            if (act === "revert-commit") {
+            if (act === "revert-commit" || act === "revert-stops") {
                 // The click that opens this menu selects the row too (GraphRowDelegate), so the hook takes both steps a
                 // right-click takes.
                 const oidHex = driver.autoActOid(arg)
                 graphPane.jumpToRow(graphModel.rowOf(oidHex))
                 page.activateRow(oidHex)
                 page.openRowMenu(oidHex)
-                tipLandedTimer.start()
+                // The undo's two landings, read like the copy's above.
+                if (act === "revert-stops")
+                    opStoppedTimer.start()
+                else
+                    tipLandedTimer.start()
                 repoTab.revert(oidHex)
             } else {
                 page.openRefMenu("branch", arg, arg,

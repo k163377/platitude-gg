@@ -5,25 +5,30 @@ use super::build::{Replay, Rewrite, rewrite_carrying, run_plan};
 use super::*;
 
 impl RepoSession {
-    /// `git merge <rev>`.
+    /// Says a write came to rest on a stop rather than on a commit, when
+    /// that is what git did ([`SessionEvent::WriteStopped`]).
     ///
-    /// A merge that stops on a conflict is reported as the landing it is
-    /// ([`SessionEvent::WriteStopped`]), not as a failed write: git left
-    /// the merge standing and everything it did is on screen — the badge,
-    /// the exit card, the conflicted rows (デザイン規約 §進行中の操作から出る).
+    /// A stop is not a failed write: git left the operation standing and
+    /// everything it did is on screen — the badge, the exit card, the
+    /// conflicted rows (デザイン規約 §進行中の操作から出る). The event
+    /// says the one thing the write's own answer cannot, that the press
+    /// is answered by the working tree and not by a commit at the tip.
+    fn note_landing(&self, op: &'static str, landing: integrate::Landing) {
+        if landing == integrate::Landing::Stopped {
+            self.sink.event(SessionEvent::WriteStopped { op });
+        }
+    }
+
+    /// `git merge <rev>`.
     pub fn merge(self: &Arc<Self>, rev: String, options: integrate::MergeOptions) {
         let session = Arc::clone(self);
         self.write(
             "merge",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let outcome =
+                let landing =
                     integrate::merge(&exec, &repo.workdir, &rev, &options, &cancel).await?;
-                if outcome == integrate::MergeOutcome::Stopped {
-                    session
-                        .sink
-                        .event(SessionEvent::WriteStopped { op: "merge" });
-                }
+                session.note_landing("merge", landing);
                 Ok(())
             },
         );
@@ -137,22 +142,28 @@ impl RepoSession {
 
     /// `git cherry-pick <revs>`.
     pub fn cherry_pick(self: &Arc<Self>, revs: Vec<String>) {
+        let session = Arc::clone(self);
         self.write(
             "cherry-pick",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                integrate::cherry_pick(&exec, &repo.workdir, &revs, &cancel).await
+                let landing = integrate::cherry_pick(&exec, &repo.workdir, &revs, &cancel).await?;
+                session.note_landing("cherry-pick", landing);
+                Ok(())
             },
         );
     }
 
     /// `git revert <revs>`.
     pub fn revert(self: &Arc<Self>, revs: Vec<String>) {
+        let session = Arc::clone(self);
         self.write(
             "revert",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                integrate::revert(&exec, &repo.workdir, &revs, &cancel).await
+                let landing = integrate::revert(&exec, &repo.workdir, &revs, &cancel).await?;
+                session.note_landing("revert", landing);
+                Ok(())
             },
         );
     }

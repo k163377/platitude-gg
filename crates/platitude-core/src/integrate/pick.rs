@@ -4,7 +4,7 @@ use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
 
-use super::{InProgress, opstate};
+use super::{InProgress, Landing, opstate};
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
@@ -15,14 +15,18 @@ use crate::process::{GitCommand, GitExecutor};
 /// instead of stopping to ask. Without the flag git stops on those too,
 /// in the same words it uses for the commit that turns out to add
 /// nothing — and those two are not the same answer (実測 2.55).
+///
+/// A conflict is [`Landing::Stopped`], not a failure: copying a commit
+/// onto a branch that has moved on ends there as ordinarily as merging
+/// one does (デザイン規約 §進行中の操作から出る).
 pub async fn cherry_pick(
     executor: &GitExecutor,
     workdir: &Path,
     revs: &[String],
     cancel: &CancellationToken,
-) -> Result<(), GitError> {
+) -> Result<Landing, GitError> {
     if revs.is_empty() {
-        return Ok(());
+        return Ok(Landing::Done);
     }
     let cmd = GitCommand::new()
         .cwd(workdir)
@@ -44,15 +48,16 @@ pub async fn cherry_pick(
 ///
 /// `--allow-empty` has no counterpart here (git rejects it outright), so
 /// a revert of a commit whose undoing is already in the branch is the
-/// one empty case, and it is walked past like the cherry-pick above.
+/// one empty case, and it is walked past like the cherry-pick above. A
+/// conflict lands the same way that one's does.
 pub async fn revert(
     executor: &GitExecutor,
     workdir: &Path,
     revs: &[String],
     cancel: &CancellationToken,
-) -> Result<(), GitError> {
+) -> Result<Landing, GitError> {
     if revs.is_empty() {
-        return Ok(());
+        return Ok(Landing::Done);
     }
     let cmd = GitCommand::new()
         .cwd(workdir)
@@ -96,18 +101,18 @@ async fn skip_past_empty_commits(
     first: GitCommand,
     revs: usize,
     cancel: &CancellationToken,
-) -> Result<(), GitError> {
+) -> Result<Landing, GitError> {
     let mut outcome = executor.run(first, cancel).await.map(drop);
     for _ in 0..revs {
         match &outcome {
             Err(error) if left_nothing_to_record(op, error) => {}
-            _ => return outcome,
+            _ => return landed(executor, workdir, op, outcome, cancel).await,
         }
         // A stop that left nothing standing has nothing to skip, and
         // `--skip` would answer "no revert in progress" with 128 — a red
         // row in the log for a repository that is perfectly in order.
         if !still_stepping(executor, workdir, op, cancel).await? {
-            return Ok(());
+            return Ok(Landing::Done);
         }
         let skip = GitCommand::new()
             .cwd(workdir)
@@ -115,7 +120,48 @@ async fn skip_past_empty_commits(
             .answers_by_code(1);
         outcome = executor.run(skip, cancel).await.map(drop);
     }
-    outcome
+    landed(executor, workdir, op, outcome, cancel).await
+}
+
+/// Where the sequence came to rest: through to the end, standing there
+/// for someone to finish, or failed.
+///
+/// The empty stops are already behind this — the loop above answers those
+/// itself — so what arrives here is a conflict, a name git could not
+/// read, or a tree it would not write over. Only the first leaves the
+/// operation standing (実測 2.55: the other two exit 128 with no marker
+/// of any kind), and that one is the landing the working tree is the
+/// answer to (デザイン規約 §進行中の操作から出る).
+///
+/// A read that fails answers "no", for the reason merge's does: this is a
+/// question *about* the failure, and letting it replace the answer would
+/// report a `rev-parse` where git said why it would not copy the commit.
+async fn landed(
+    executor: &GitExecutor,
+    workdir: &Path,
+    op: InProgress,
+    outcome: Result<(), GitError>,
+    cancel: &CancellationToken,
+) -> Result<Landing, GitError> {
+    let Err(error) = outcome else {
+        return Ok(Landing::Done);
+    };
+    if !matches!(error, GitError::Failed { .. }) {
+        return Err(error);
+    }
+    // The operation standing has to be *this* one: a rebase stopped on a
+    // conflicting pick owns `CHERRY_PICK_HEAD` too, and a cherry-pick
+    // asked for over a stopped merge is refused by git rather than
+    // stopped — the marker on disk then belongs to the merge (実測 2.55).
+    let standing = opstate::detect(executor, workdir, cancel)
+        .await
+        .ok()
+        .and_then(|state| InProgress::from_state(&state));
+    if standing == Some(op) {
+        Ok(Landing::Stopped)
+    } else {
+        Err(error)
+    }
 }
 
 /// Whether git still holds this operation open, by either of the two

@@ -110,7 +110,7 @@ async fn sides_names_each_side_by_what_it_actually_is() {
     let repo = conflicting_branches();
     integrate::cherry_pick(&exec, &repo.path, &["side".into()], &cancel)
         .await
-        .expect_err("conflict");
+        .expect("a conflict is a landing, not a failure");
     let s = conflict::sides(&exec, &repo.path, InProgress::CherryPick, &cancel)
         .await
         .expect("sides");
@@ -135,7 +135,7 @@ async fn a_side_no_branch_reaches_is_left_unnamed() {
 
     integrate::cherry_pick(&exec, &repo.path, &[orphan], &cancel)
         .await
-        .expect_err("conflict");
+        .expect("a conflict is a landing, not a failure");
     let s = conflict::sides(&exec, &repo.path, InProgress::CherryPick, &cancel)
         .await
         .expect("sides");

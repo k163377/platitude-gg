@@ -54,6 +54,31 @@ pub(super) fn clashing(repo: &mut DemoRepo) -> Result<(), String> {
     two_sides_of_one_line(repo)
 }
 
+/// A commit whose undoing collides with the branch that carried on past
+/// it, with the revert **not yet made** — pressing `revert` in the window
+/// is what stops it (`revert-stops`), the way [`clashing`] serves the
+/// merge and the copy.
+///
+/// The row to revert is `row:1`: the tree is clean, so the newest commit
+/// stands at row 0 and the one under it is the one that reworded the
+/// line. Taking it back would put the wording from before it where
+/// neither side's wording is now, and git stops on that one path.
+pub(super) fn revert_clashes(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("shared.txt", BASE, "feat: shared base")?;
+    repo.commit("other.txt", "calm\n", "feat: untouched elsewhere")?;
+    repo.commit(
+        "shared.txt",
+        &BASE.replace("- pick the version number", "- agree the version number"),
+        "docs: say how the version is chosen",
+    )?;
+    repo.commit(
+        "shared.txt",
+        &BASE.replace("- pick the version number", "- decide the version number"),
+        "docs: say it another way",
+    )?;
+    Ok(())
+}
+
 /// A merge stopped on conflicts: MERGE_HEAD present, one unmerged path.
 pub(super) fn conflict(repo: &mut DemoRepo) -> Result<(), String> {
     two_sides_of_one_line(repo)?;

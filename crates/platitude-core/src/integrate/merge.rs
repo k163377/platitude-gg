@@ -4,7 +4,7 @@ use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
 
-use super::opstate;
+use super::{Landing, opstate};
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
@@ -18,23 +18,6 @@ pub struct MergeOptions {
     pub squash: bool,
     /// Replaces the generated merge message.
     pub message: Option<String>,
-}
-
-/// What a merge did.
-///
-/// Reading the two apart is the whole point: a merge that stops on a
-/// conflict is where merging a branch that moved on normally ends up, and
-/// calling that a failure puts a red line over an ordinary afternoon
-/// (2026-08-22 ユーザー報告).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MergeOutcome {
-    /// git took the merge to the end: a merge commit, a fast-forward, or
-    /// a branch that was already in.
-    Done,
-    /// git stopped and left the merge standing — `MERGE_HEAD`, the
-    /// markers in the tree, the conflicted rows. Nothing failed; the way
-    /// on is the exit card (デザイン規約 §進行中の操作から出る).
-    Stopped,
 }
 
 /// `git merge <rev>`.
@@ -51,7 +34,7 @@ pub async fn merge(
     rev: &str,
     options: &MergeOptions,
     cancel: &CancellationToken,
-) -> Result<MergeOutcome, GitError> {
+) -> Result<Landing, GitError> {
     let mut cmd = GitCommand::new().cwd(workdir).args(["merge", "--no-edit"]);
     if options.no_ff {
         cmd = cmd.arg("--no-ff");
@@ -71,9 +54,9 @@ pub async fn merge(
     // (デザイン規約 §git が言ったことを読む場所).
     let cmd = cmd.args(["--", rev]).answers_by_code(1);
     match executor.run(cmd, cancel).await {
-        Ok(_) => Ok(MergeOutcome::Done),
+        Ok(_) => Ok(Landing::Done),
         Err(error) if stopped_on_a_conflict(executor, workdir, &error, cancel).await => {
-            Ok(MergeOutcome::Stopped)
+            Ok(Landing::Stopped)
         }
         Err(error) => Err(error),
     }

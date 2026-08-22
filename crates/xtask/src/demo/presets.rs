@@ -7,7 +7,7 @@ use super::authorship::{authorship, co_authors};
 use super::basic::{basic, detached, dirty, eol, noremote, stashes};
 use super::conflict::{
     cherry_pick_conflict, clashing, conflict, conflict_kinds, conflict_staged, conflict_typed,
-    drop_collides, drop_stops, rebase_conflict, rebase_empty, rebase_staged,
+    drop_collides, drop_stops, rebase_conflict, rebase_empty, rebase_staged, revert_clashes,
 };
 use super::deep::{deep, deep_detached};
 use super::remote::{behind, diverged, unpublished};
@@ -60,6 +60,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "dirty" => dirty(&mut repo)?,
         "eol" => eol(&mut repo)?,
         "clashing" => clashing(&mut repo)?,
+        "revert-clashes" => revert_clashes(&mut repo)?,
         "conflict" => conflict(&mut repo)?,
         "conflict-typed" => conflict_typed(&mut repo)?,
         "conflict-staged" => conflict_staged(&mut repo)?,

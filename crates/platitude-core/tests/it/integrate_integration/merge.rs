@@ -6,7 +6,7 @@ use crate::support::exec::env;
 use crate::support::integrate::{conflicting_branches, current_op};
 use platitude_core::commit;
 use platitude_core::conflict::{self, ConflictKind, Side};
-use platitude_core::integrate::{self, Continuation, InProgress, MergeOptions, MergeOutcome};
+use platitude_core::integrate::{self, Continuation, InProgress, Landing, MergeOptions};
 use platitude_core::status;
 
 #[tokio::test]
@@ -22,7 +22,7 @@ async fn merge_fast_forward_and_no_ff() {
         integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
             .await
             .expect("fast-forward merge"),
-        MergeOutcome::Done
+        Landing::Done
     );
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "side work");
     assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]), "2");
@@ -43,7 +43,7 @@ async fn merge_fast_forward_and_no_ff() {
         )
         .await
         .expect("no-ff merge"),
-        MergeOutcome::Done
+        Landing::Done
     );
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "explicit merge");
     assert_eq!(
@@ -130,7 +130,7 @@ async fn a_conflicting_merge_is_reported_then_aborted() {
         integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
             .await
             .expect("a conflict is an answer, not a failure"),
-        MergeOutcome::Stopped
+        Landing::Stopped
     );
 
     assert_eq!(current_op(&repo).await, Some(InProgress::Merge));
