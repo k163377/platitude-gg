@@ -76,6 +76,7 @@ mod repo_session;
 mod rows;
 mod snapshot;
 mod state;
+mod walk;
 mod write;
 
 pub use auto_fetch::OpenFetch;

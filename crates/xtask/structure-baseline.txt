@@ -16,6 +16,5 @@
 758 crates/platitude-core/src/patch.rs
 620 crates/platitude-core/src/process.rs
 664 crates/platitude-core/src/sequencer.rs
-546 crates/platitude-core/src/session/log.rs
 542 crates/platitude-core/src/status.rs
 610 crates/xtask/src/linux.rs
