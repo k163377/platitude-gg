@@ -9,9 +9,10 @@ use super::conflict::{
     cherry_pick_conflict, conflict, conflict_kinds, drop_collides, drop_stops, rebase_conflict,
     rebase_empty, rebase_staged,
 };
+use super::deep::deep;
 use super::remote::{behind, diverged, unpublished};
 use super::repo::DemoRepo;
-use super::scale::{deep, edges, long, longpaths, manyhunks, widelines};
+use super::scale::{edges, long, longpaths, manyhunks, widelines};
 use super::signing::{errsig, signed};
 use super::tags::{manytags, tags};
 use super::worktrees::worktrees;
