@@ -108,7 +108,7 @@ Item {
     // reached for, so the face's sentence stands down while it is there.
     ToolTip.visible: avatarBox.showBadge && !sigMark.pointed
     ToolTip.delay: Metrics.tipDelayMs
-    // The one word the whole feature goes by (デザイン規約 §アバターを 与える). The article is what splits the two states, not a
+    // The one word the whole feature goes by (デザイン規約 §アバターを与える). The article is what splits the two states, not a
     // second noun: the one being changed is the face under the pointer, the one being chosen does not exist yet (§長さ).
     ToolTip.text: avatarBox.faceUrl !== "" ? qsTr("Change the avatar for %1").arg(avatarBox.email)
                   : qsTr("Choose avatar for %1").arg(avatarBox.email)

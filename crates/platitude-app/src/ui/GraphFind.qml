@@ -78,7 +78,7 @@ FindBar {
 
     loaded: find.graphModel.rowTotal
     // Bound, not assigned when a key is pressed: a background refresh re-marks the rows without anybody typing
-    // (app-ui.md §QML バイン ディングはプロパティにしか反応しない), and the count has to be the rows' count rather than the last
+    // (app-ui.md §QML バインディングはプロパティにしか反応しない), and the count has to be the rows' count rather than the last
     // keystroke's.
     matches: find.graphModel.matchCount
     atMatch: find.graphModel.matchCount > 0 ? find.graphModel.matchOrdinal(find.view.currentIndex) : 0

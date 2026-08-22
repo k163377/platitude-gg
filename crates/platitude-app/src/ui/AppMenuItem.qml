@@ -98,7 +98,7 @@ MenuItem {
                    + (menuItem.note !== "" ? noteLabel.implicitWidth + Theme.spaceSm : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
-    // The words no longer say the gesture, so this is where it is left for a reader who cannot see the mark.
+    // The words do not say the gesture, so this is where it is left for a reader who cannot see the mark.
     Accessible.description: menuItem.holdMs > 0 ? qsTr("Hold to activate") : ""
 
     // The one colour every word in the row follows, so the chip cannot disagree with the sentence it sits in. A held

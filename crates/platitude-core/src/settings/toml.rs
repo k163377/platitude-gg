@@ -119,7 +119,7 @@ pub(super) fn int_in(
 /// A column width inside the graph: `AUTO_WIDTH` for "nobody moved this
 /// one", or a width wide enough to be one. Everything between the two —
 /// a stored 3, a stored 0 — is as unusable as a string would be, and
-/// falls back the same way (規約 §読みは Table からキーごとに取る).
+/// falls back the same way (rules-refs/core.md §読みは `toml::Table` からキーごとに取る).
 pub(super) fn width_or_auto(table: &Table, key: &str) -> i32 {
     /// Narrower than this and the column cannot hold what it is for: one
     /// lane, or a chip clipped to nothing.

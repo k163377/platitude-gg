@@ -139,7 +139,7 @@ pub enum AfterWrite {
     /// `config --get-regexp remote` 25ms). On a repository with fifty
     /// thousand refs the first of those is the whole of the wait.
     ///
-    /// **What it gives up**: a write no longer doubles as a poll for ref
+    /// **What it gives up**: a write does not double as a poll for ref
     /// moves made outside this window. Those land on the next refresh
     /// instead — and staging is done with the graph off screen, where
     /// there is nothing for a poll to keep current

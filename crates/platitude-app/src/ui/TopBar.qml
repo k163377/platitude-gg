@@ -400,7 +400,7 @@ Rectangle {
         }
         // Everything uncommitted, set aside in one entry, on the press (デザイン規約 §変更を退避する). It stands on the band
         // rather than over the file list: what it sets aside is the working tree, which is there whichever pane is
-        // open, and the pane it used to stand in is one row's selection away most of the time.
+        // open, and the pane that could otherwise host it is one row's selection away most of the time.
         ActionButton {
             id: stashButton
             /// What the working tree lets this button do (デザイン規約 §変更を退避する). Every refusal is git's own, measured

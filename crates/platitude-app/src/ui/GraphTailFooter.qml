@@ -53,10 +53,10 @@ Item {
                     const lane = parseInt(t.substring(1, dot))
                     const color = parseInt(t.substring(dot + 1))
                     const x = Metrics.laneInset + lane * Metrics.laneW + Metrics.laneW / 2
-                    // **The lanes go out rather than stop.** They used to be drawn flat at `dimFade`, which put a step
-                    // between the last row and this one exactly where the eye is following a line down (2026-08-22
-                    // ユーザー報告: 一気に変化している点で少し違和感). Full strength where the last row leaves off, gone by the
-                    // bottom — the history past the cut is not there to be drawn, so what stands for it fades out.
+                    // **The lanes go out rather than stop.** Drawn flat at `dimFade` they put a step between the last
+                    // row and this one exactly where the eye is following a line down (2026-08-22 ユーザー報告). Full
+                    // strength where the last row leaves off, gone by the bottom — the history past the cut is not
+                    // there to be drawn, so what stands for it fades out.
                     const fade = ctx.createLinearGradient(0, 0, 0, height)
                     const hex = Theme.graphLane[color % Theme.graphLane.length]
                     fade.addColorStop(0, tailCanvas.faded(hex, 1))

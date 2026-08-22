@@ -82,9 +82,9 @@ QtObject {
     readonly property real labelColWMin: chipNameMinW + chipFurnitureW + Theme.spaceSm
     readonly property real labelColWMax: Math.max(labelColWMin, paneW - graphColWMin - Metrics.messageMinW)
     // The chip column does not give when the pane narrows — the lanes do (`graphColWMax`), and the window's floor holds
-    // this one's width in reserve (規約 §窓の床). Squeezing it was tried and taken back out: a column narrower than a chip
-    // draws a crushed one, and a column that follows the pane changes width whenever the left menu folds, which is a
-    // thing moving on screen that nobody asked to move (2026-08-09 ユーザー報告 — 3 つの症状が全部これだった).
+    // this one's width in reserve (規約 §窓の床). Squeezing it is ruled out: a column narrower than a chip draws a
+    // crushed one, and a column that follows the pane changes width whenever the left menu folds, which is a thing
+    // moving on screen that nobody asked to move (2026-08-09 ユーザー報告 — all three reported symptoms traced here).
     //
     // A column somebody dragged is still held inside what the pane can lay out: that one is as wide as a hand made it,
     // and the message column has to survive the window being narrowed afterwards.

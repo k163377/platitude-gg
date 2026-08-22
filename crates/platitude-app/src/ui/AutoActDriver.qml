@@ -629,9 +629,9 @@ Item {
             }
         }
     }
-    // One line staged from the diff, then the same file moved from the file list — the diff has to follow both, and it
-    // used to follow only the first (2026-08-17 ユーザー報告: the line was gone from the unstaged side and never came back
-    // when the file was unstaged).
+    // One line staged from the diff, then the same file moved from the file list — the diff has to follow both, and
+    // following only the first is the observed failure this verb pins (2026-08-17 ユーザー報告: the line was gone from
+    // the unstaged side and never came back when the file was unstaged).
     //
     // Three answers in one run, because they are one story: the line goes (the rows shrink), the line comes back (the
     // rows are as they were), and staging the rest empties the side being read — where the pane follows the file to the
@@ -962,7 +962,7 @@ Item {
     // rows the list has laid out, and until it has there is no place to lose — the scroll goes nowhere and the restore
     // has nothing to undo. So what is waited for is the room the reading consumes, and a diff that is laid out and
     // still too short says so and stops there rather than at the watchdog: nothing that short can hold a place, and a
-    // run over it photographs a pane that proves nothing (app-ui.md §UI 自動化の 因果性).
+    // run over it photographs a pane that proves nothing (app-ui.md §UI 自動化の因果性).
     Timer {
         id: keepPlaceTimer
         interval: 25

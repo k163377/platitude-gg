@@ -195,7 +195,7 @@ HoverToolButton {
         // wait lasted.
         //
         // A button with no frame of its own grows none: the ring already says the wait has started, and a frame drawn
-        // around a button that has never worn one reads as a box laid over the band (2026-08-10 報告「ちょっと浮いて見えた」).
+        // around a button that has never worn one reads as a box laid over the band (2026-08-10 報告).
         border.color: actionBtn.busy && actionBtn.framed ? actionBtn.toneDim : actionBtn.frameColor
         border.width: Theme.borderWidth
         radius: Theme.radiusSm
@@ -222,7 +222,7 @@ HoverToolButton {
         //
         // `visualFocus`, which is focus that arrived from the keyboard — not `activeFocus`, which a press gives it as
         // well (`focusPolicy` is StrongFocus and nothing on this band takes it back, so an `activeFocus` ring would
-        // come up on a click and stay — 2026-08-10 報告「押したら色が解除されなくなった」).
+        // come up on a click and stay — 2026-08-10 報告).
         Rectangle {
             anchors.fill: parent
             anchors.margins: -Theme.spaceXs / 2

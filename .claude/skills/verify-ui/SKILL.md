@@ -5,7 +5,7 @@ description: platitude-gg の UI 動作確認・スクリーンショット検�
 
 # UI 動作確認(ヘッドレス検証)
 
-**ヘッドレス動確は `cargo xtask verify-ui <動詞> [引数]`** — release ビルド → 使い捨て demo リポジトリ生成 → offscreen 起動 → `PG_AUTO_ACT` の因果的完了 → `screenshot saved=true` 判定と PNG 保存まで 1 コマンド。`--no-build` で連続実行、`--preset` / `--repo` で対象指定、素材だけ欲しければ `cargo xtask demo-repo <preset>`。**UI 配線の Done は、これと `cargo xtask linux verify-ui` が同じ動詞で PASS し、両方の PNG を目視するまで**(CLAUDE.md ビルド・テスト。Linux 側の差分は §Linux での動確)。
+**ヘッドレス動確は `cargo xtask verify-ui <動詞> [引数]`** — release ビルド → 使い捨て demo リポジトリ生成 → offscreen 起動 → `PG_AUTO_ACT` の因果的完了 → `screenshot saved=true` 判定と PNG 保存まで 1 コマンド。`--no-build` で連続実行、`--preset` / `--repo` で対象指定、素材だけ欲しければ `cargo xtask demo-repo <preset>`。**UI 配線の Done は、これと `cargo xtask linux verify-ui` が同じ動詞で PASS し、両方の PNG を目視するまで**(CLAUDE.md ビルド・テスト。Linux 側の差分は §Linux(コンテナ)での動確)。
 
 presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正。
 
@@ -19,7 +19,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 ## 壊れない動詞の実装と反復
 
-- **時間は成功条件にしない**。動詞は実際の入力経路を通し、対象の `loaded` / popup `visible` / tooltip `visible` / busy edge と終了 / write sequence / model output 等、その操作が生む観測可能な出力を待って `finishAutoAct()` する。25ms 等の Timer は状態 sampler であり、回数・経過時間で先へ進めない。`--quit-ms` は廃止済みで指定すると fail fast する
+- **時間は成功条件にしない**。動詞は実際の入力経路を通し、対象の `loaded` / popup `visible` / tooltip `visible` / busy edge と終了 / write sequence / model output 等、その操作が生む観測可能な出力を待って `finishAutoAct()` する。25ms 等の Timer は状態 sampler であり、回数・経過時間で先へ進めない。`--quit-ms` という旗は無い(指定すると fail fast する)
 - **`--watchdog-ms` は診断用の外側の天井だけ**。性能が落ちても正しい run の撮影時点を変えないよう通常は既定 120s のまま使う。短くして「通信中」や「起動途中」を狙わない。**watchdog 到達はそれだけで FAIL** — アプリは自分で `Qt.quit()` するので exit 0 で戻り、2 枚のうち app.png だけ書けた run は「screenshot saved=true」も持つ。判定は `auto-act watchdog expired` の行そのもの
 - **非因果の寿命管理を因果完了へ混ぜない**。性能測定の 12 秒窓は測定入力なので保持するが、起動からの固定 quit は成功条件にしない。`perf_done` と親 watchdog で perf の終了・kill を判定し、raw worktree app 起動は offscreen 環境変数だけでは許可しない。Windows の直接起動ではなく `cargo xtask verify-ui <verb>`、Linux では `cargo xtask linux verify-ui <verb>` を使う
 - **owner は 1 run に 1 つ**。page 内は `AutoActDriver.qml`、window 横断は `WindowAutoActDriver.qml` が完了を持ち、後者の動詞は page completion を defer する。`AutoShotDriver.claimPageAct()` より前に page 動詞を始めず、新規 tab に同じ動詞を replay させない。最終撮影は `AutoShotDriver` だけが行う

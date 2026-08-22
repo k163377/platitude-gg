@@ -70,7 +70,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--no-board" => opts.no_board = true,
             "--quit-ms" => {
                 return Err(
-                    "unknown verify-ui option: --quit-ms (wall-clock shot selection was removed; use --watchdog-ms only as a diagnostic ceiling)"
+                    "unknown verify-ui option: --quit-ms (shots are not picked by wall clock; use --watchdog-ms only as a diagnostic ceiling)"
                         .into(),
                 );
             }

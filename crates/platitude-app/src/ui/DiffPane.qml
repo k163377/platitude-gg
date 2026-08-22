@@ -75,7 +75,7 @@ Rectangle {
     }
     /// How many rows each side is named on, for the automation (`conflict-sides`). The bands are a few pixels wide and
     /// a picture cannot be asked whether the ones that should be there are — least of all on a file that has been
-    /// typed over, where the answer used to be "none at all".
+    /// typed over, where the bands can drop to none at all.
     function sideTally() {
         let ours = 0
         let theirs = 0

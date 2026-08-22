@@ -229,10 +229,10 @@ Item {
     // opens, and the two menus a right-click opens. The division is the chip column's own edge: on that side of it is
     // the chip, on the other side the commit.
     //
-    // It used to be the chip's frame, and the frame is the wrong line to divide on. It is drawn eighteen pixels tall in
-    // a row of twenty-eight and stops where the name stops, so the margin around it — inside the column, plainly part
-    // of "the branch" to anyone looking — answered with the commit's card instead (2026-08-21 ユーザー報告: ギリギリの余白に
-    // 重ねるとコミットが出てしまう). **The column's edge is a line that is actually drawn** (the divider), which is what makes
+    // The chip's frame is the wrong line to divide on: it is drawn eighteen pixels tall in a row of twenty-eight and
+    // stops where the name stops, so the margin around it — inside the column, plainly part of "the branch" to anyone
+    // looking — answers with the commit's card instead (2026-08-21 ユーザー報告). **The column's edge is a line that is
+    // actually drawn** (the divider), which is what makes
     // it a boundary a reader can hold. The chip is alone in that column, so opening from the whole of it costs nothing
     // — the exception デザイン規約 §hover のツールチップ「開けるのは的、保つのはその的が属する区画」 now names.
 

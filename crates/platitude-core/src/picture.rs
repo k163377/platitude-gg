@@ -22,11 +22,11 @@
 //! **Shape.** The face is drawn into a square, so a picture that is not
 //! square is squashed into one. The centre square is taken here instead.
 //!
-//! **Refusal.** A file nobody can decode used to be accepted and then
-//! drawn as an empty ring, because the drawing end has no way to say
-//! what went wrong. Decoding on the way in means everything in the store
-//! can be drawn, and everything else was refused while a person was
-//! still standing there.
+//! **Refusal.** A file nobody can decode is refused on the way in:
+//! accepted, it would be drawn as an empty ring, because the drawing end
+//! has no way to say what went wrong. Decoding here means everything in
+//! the store can be drawn, and everything else was refused while a
+//! person was still standing there.
 //!
 //! Reading is deliberately narrow — PNG and JPEG, by content rather than
 //! by file name. Every tool that makes pictures writes one of the two,

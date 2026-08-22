@@ -16,7 +16,7 @@ import platitude.ui
 /// **And then it dissolves.** From the node's own edge the graph goes out into the ground; half a row past the row it
 /// is gone and nothing has come back yet; and over the row after that the ground itself goes, so the real rows return
 /// a little at a time. That is what the space between two places in a history looks like, and it is what keeps a hard
-/// edge from cutting the row underneath in two (2026-08-22 ユーザー判断: 背景に溶けて消える).
+/// edge from cutting the row underneath in two (2026-08-22 ユーザー判断).
 ///
 /// **The pane adopts this, and not the list** (`GraphPane`), which is the other way round from the sidebar's. The lane
 /// column has a press-taking strip of its own over the list (`GraphLanePan`), so a stand-in inside the list would hand
@@ -76,15 +76,15 @@ Rectangle {
     // off these four numbers, and each of them flips with the edge this rides.
 
     /// How far past the row the ground stays whole. **The graph has to be gone before the rows start coming back**
-    /// (2026-08-22 ユーザー判断: 濃く残り過ぎ) — without this the two overlap and neither reads, and what is left below the
+    /// (2026-08-22 ユーザー判断) — without this the two overlap and neither reads, and what is left below the
     /// stand-in is a row at half strength rather than a stretch of nothing.
     readonly property real hold: Theme.graphRowHeight / 2
     /// And how long they take coming back: a whole row, or the one they land on is cut across.
     readonly property real fadeRoom: Theme.graphRowHeight
     readonly property real rowY: pin.rowAbove ? 0 : pin.hold + pin.fadeRoom
     readonly property real rowMidY: pin.rowY + Theme.graphRowHeight / 2
-    /// Where the lane leaves the node — **a hairline past its edge, not the row's** (2026-08-22 ユーザー判断: 暗くなりはじめが
-    /// 遅い). The row's own cell is cut here and the going-out takes over, so the last full-strength pixel of graph is the
+    /// Where the lane leaves the node — **a hairline past its edge, not the row's** (2026-08-22 ユーザー判断). The row's
+    /// own cell is cut here and the going-out takes over, so the last full-strength pixel of graph is the
     /// one against the face rather than one at the bottom of a row that is mostly air.
     readonly property real nodeOutY: pin.rowMidY
         + (pin.rowAbove ? 1 : -1) * (Metrics.nodeIcon / 2 + Theme.borderWidth)
@@ -101,7 +101,7 @@ Rectangle {
     // **The graph's own ground, and nothing more.** Opaque it has to be where this stands — the rows run under it, and
     // a stand-in they showed through would read as two commits in one band — but a lighter band would be an emphasis
     // that is up for as long as the branch is off screen, and the only thing worth emphasising here is one line of it
-    // (2026-08-22 ユーザー判断: 背景での常時強調はしない). What says "this one is yours" is the colour of its words.
+    // (2026-08-22 ユーザー判断). What says "this one is yours" is the colour of its words.
     //
     // It holds through the row and half a row past it — the stretch where the graph has gone and nothing has come back
     // yet, which is what makes the two read as one movement rather than as a crossfade — and lets go over the row after
@@ -258,7 +258,7 @@ Rectangle {
         color: Theme.textLink
     }
 
-    // **No rule along the edge the rows pass under** (2026-08-22 ユーザー判断: 横線とかも入れないで). The graph has no horizontal
+    // **No rule along the edge the rows pass under** (2026-08-22 ユーザー判断). The graph has no horizontal
     // lines anywhere, and one drawn here would be the loudest thing on the pane for as long as the branch is off
     // screen. What this row is is said by the chip, the colour of its words and the graph going out under them.
 

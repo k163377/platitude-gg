@@ -422,7 +422,7 @@ Item {
     // (measured on Windows, offscreen: 8px against `iconSm`'s 8.25), so the band reads as it did.
     //
     // The seat that ink sits in runs the band top to bottom, so a hand coming down the strip lands on the mark anywhere
-    // in the band's depth — the `iconLg` box it used to be had to be aimed at (2026-08-22 ユーザー報告「当たり判定が狭すぎる」).
+    // in the band's depth — a bare `iconLg` box has to be aimed at (2026-08-22 ユーザー報告).
     // The one part of that depth the scene never sees is the resize edge Windows keeps at the top of a window that is
     // not maximised, which is the band's own affair rather than this button's (`winframe::hit_test`).
     // Only the hit area reaches that far: the wash keeps a square box of its own, since paint carried to the band's

@@ -161,10 +161,10 @@ Rectangle {
         // here — the mark, the name, the count, the badge — is one phrase about one commit, and the frame's own padding
         // is the only wide space in the box; at a whole gap throughout, the `+N` stood off from the name it counts for
         // as far as the name stands off from the frame. The two marks are then seated to their plain ink, since it is
-        // this spacing that is already the half gap they used to take out of a whole one.
+        // this spacing that is already the half gap their box-air would otherwise take out of a whole one.
         spacing: Theme.spaceXs / 2
         // Ahead of the name, and only when there is one to draw: another working copy has this branch out (2026-08-21
-        // ユーザー判断 — 「必要な時だけ左側に追加する」). Same mark and same meaning as the sidebar row's
+        // ユーザー判断 — the seat is added on the left only when it applies). Same mark and same meaning as the sidebar row's
         // (`NavItemDelegate`), which is the WORKTREES section's own.
         //
         // **The seat is not held open** the way the sidebar row's is: a chip is measured to its own contents rather
@@ -223,9 +223,9 @@ Rectangle {
         // Remote / PR badge: reserved width above, so it survives any elision.
         //
         // **Seated to its ink, like the mark at the other end**, and for the reason that one is: a square seat hands
-        // the mark's own air to the gaps on both sides of it, and the cloud carries two of the sixteen on its left. The
-        // gap before it then read as the row's spacing **plus** that — the one place in the chip where two spacings
-        // added up, and wider than the same token spends anywhere else in the same frame (デザイン規約 §余白; 2026-08-22
+        // the mark's own air to the gaps on both sides of it, and the cloud carries two of the sixteen on its left.
+        // The gap before it would then read as the row's spacing **plus** that — the one place in the chip where two
+        // spacings add up, wider than the same token spends anywhere else in the same frame (デザイン規約 §余白; 2026-08-22
         // ユーザー報告).
         Item {
             visible: chip.hasBadge

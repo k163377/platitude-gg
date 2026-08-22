@@ -78,7 +78,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
                     .map_err(|_| "--watchdog-ms takes a number".to_string())?;
             }
             "--quit-ms" => return Err(
-                "--quit-ms is no longer a correctness clock; use --watchdog-ms as the outer hang ceiling"
+                "--quit-ms is not supported; use --watchdog-ms as the outer hang ceiling"
                     .into(),
             ),
             "--no-scroll" => opts.scroll = false,

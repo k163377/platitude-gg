@@ -67,10 +67,10 @@ Item {
     //: %1 is the folder of the other working copy that has this branch checked out.
     readonly property string blockedByWorktree:
         qsTr("Checked out in another working copy — %1").arg(refRowMenu.heldByWorktreeName)
-    // **The delete rows are the only ones this blocks now.** `switch` used to be greyed here too — for a branch
-    // another copy holds and for a tree with unmerged files — and both of those press through to a question instead
-    // (デザイン規約 §進行中の操作から出る): a row that cannot be pressed says why only on hover, and the reader who
-    // reached for it is the one who needs to read it (2026-08-22 ユーザー判断).
+    // **The delete rows are the only ones this blocks.** `switch` is never greyed here — a branch another copy holds
+    // and a tree with unmerged files both press through to a question instead (デザイン規約 §進行中の操作から出る): a row
+    // that cannot be pressed says why only on hover, and the reader who reached for it is the one who needs to read
+    // it (2026-08-22 ユーザー判断).
 
     // ---- bringing two lines of history together --------------------
     /// The live condition the row above is read off as the menu opens.

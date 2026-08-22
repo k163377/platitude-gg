@@ -12,9 +12,9 @@ import platitude.ui
 // A card rather than a `ToolTip`, for the reason `EolHoverCard` is one: a tooltip's ground is the Fusion default from
 // outside this theme, and what stands on it here is a badge whose whole meaning is its colour.
 //
-// Each row is the badge the band used to draw, with the one thing that badge had no room for beside it (規約 §hover
+// Each row is one of the band's badges, with the one thing that badge had no room for beside it (規約 §hover
 // のツールチップ = ラベルに入らなかった 1 点だけを足す). The badges keep their own shapes — the frame and the fill are what says which of them
-// is the one that stops work — so this is the same picture the band drew, only stacked.
+// is the one that stops work — so this is the picture the band stands for, only stacked.
 //
 // Owned by the band rather than by the mark: a popup parented to something that can be laid out away takes the card
 // with it (app-ui.md).

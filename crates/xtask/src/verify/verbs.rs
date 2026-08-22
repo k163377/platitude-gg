@@ -48,9 +48,9 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // one that says nothing was stashed is half of the pair.
         //
         // **`log=false` is on all three of the move claims.** A move the
-        // screen knew git would refuse used to be sent anyway, and the
-        // refusal raised the command log — a red panel under a press that
-        // had a way out on screen the whole time (2026-08-22 ユーザー判断).
+        // screen knows git would refuse is never sent, so no refusal can
+        // raise the command log — a red panel under a press that has a
+        // way out on screen the whole time (2026-08-22 ユーザー判断).
         // A shut panel and a panel that was never raised are the same
         // picture, so this is the half only the report can carry.
         "switch-lands" if arg.starts_with("feature/topic-a") => {
