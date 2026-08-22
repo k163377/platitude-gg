@@ -4,6 +4,51 @@
 use super::*;
 use crate::eol;
 
+/// What one re-read of the diff on screen established.
+///
+/// A completion boundary rather than a convenience, because the ordinary
+/// answer is silence: a file nobody has touched sends no event at all, and
+/// waiting cannot tell "none yet" from "none coming"
+/// (core.md §非同期・並行テスト).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffRefreshOutcome {
+    /// The repository is not open, so nothing was read.
+    Unavailable,
+    /// Reading the diff failed; the failure went out as one.
+    Failed,
+    /// The file is byte for byte the one the pane already holds.
+    Unchanged,
+    /// The file moved, and the diff of it went out.
+    Sent,
+    /// The session closed before the read could answer.
+    Cancelled,
+}
+
+/// Completion of one explicitly tracked diff re-read.
+pub struct DiffRefreshTask(tokio::sync::oneshot::Receiver<DiffRefreshOutcome>);
+
+impl DiffRefreshTask {
+    fn pending() -> (tokio::sync::oneshot::Sender<DiffRefreshOutcome>, Self) {
+        let (send, receive) = tokio::sync::oneshot::channel();
+        (send, Self(receive))
+    }
+
+    fn ready(outcome: DiffRefreshOutcome) -> Self {
+        let (send, task) = Self::pending();
+        if send.send(outcome).is_err() {
+            tracing::trace!("diff re-read completion was not observed");
+        }
+        task
+    }
+
+    /// Waits for the re-read itself to finish. A dropped runtime is the
+    /// same observable result as cancellation: no later answer from this
+    /// read can arrive.
+    pub async fn outcome(self) -> DiffRefreshOutcome {
+        self.0.await.unwrap_or(DiffRefreshOutcome::Cancelled)
+    }
+}
+
 impl RepoSession {
     /// Asks how much of `range` a remote already has, so the UI can warn
     /// before rewriting published history. A read, not a write.
@@ -59,59 +104,166 @@ impl RepoSession {
         let s = Arc::clone(self);
         // Claimed before anything is read, so the colouring below can ask
         // whether this is still the file being read (see `diff_epoch`).
-        let epoch = s
-            .diff_epoch
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
-            + 1;
+        let epoch = s.claim_diff_epoch();
+        self.runtime.spawn(async move {
+            s.publish_diff(workdir, target, None, epoch).await;
+        });
+    }
+
+    /// Re-reads the diff the pane is holding and answers only if the bytes
+    /// under it moved.
+    ///
+    /// What the poll runs while a working-tree file is open, and the only
+    /// thing that notices a file changed outside this window without also
+    /// changing its status. A conflict is the shape that shows it: git
+    /// reports the same two stage letters whether or not the markers are
+    /// still in the file, so a conflict resolved in another tool left the
+    /// pane drawing the conflict it was opened on (2026-08-22 ユーザー報告).
+    ///
+    /// One process on a tick that finds nothing moved — the raw diff, and
+    /// the fingerprint that says it is the one already on screen. Only a
+    /// file that really moved pays for the rest of a read.
+    pub fn refresh_diff(self: &Arc<Self>, target: DiffTarget) {
+        drop(self.start_refresh_diff(target));
+    }
+
+    /// The same re-read with its completion boundary, for tests and for
+    /// callers that have to tell "nothing moved" from "not finished".
+    pub fn refresh_diff_tracked(self: &Arc<Self>, target: DiffTarget) -> DiffRefreshTask {
+        self.start_refresh_diff(target)
+    }
+
+    fn start_refresh_diff(self: &Arc<Self>, target: DiffTarget) -> DiffRefreshTask {
+        let Some(workdir) = self.workdir() else {
+            return DiffRefreshTask::ready(DiffRefreshOutcome::Unavailable);
+        };
+        let s = Arc::clone(self);
+        let (finished, task) = DiffRefreshTask::pending();
         self.runtime.spawn(async move {
             let cancel = s.root_cancel.clone();
-            // What git's settings say, and the neighbours if they are the
-            // only answer, are read **beside** the diff rather than after
-            // it: a notice that turns up a moment later is one the reader
-            // has already scrolled past.
-            // The file the diff is of, fetched beside it rather than
-            // after: the colours are read against it (`highlight`), and a
-            // second round trip would land after the rows are on screen.
-            // Only for a language something can be said about — otherwise
-            // it is a process spent on a file nobody will colour.
-            let wants_source = crate::highlight::knows(preview::target_path(&target));
-            let (diff, endings, source) = tokio::join!(
-                details::file_diff_raw(&s.executor, &workdir, &target, &cancel),
-                s.ending_context(&workdir, &target, &cancel),
-                async {
-                    match wants_source {
-                        true => preview::source_text(&s.executor, &workdir, &target, &cancel).await,
-                        false => None,
+            let outcome =
+                match details::file_diff_raw(&s.executor, &workdir, &target, &cancel).await {
+                    Err(e) => {
+                        s.fail("diff", e);
+                        DiffRefreshOutcome::Failed
                     }
-                },
-            );
-            match diff {
-                Ok(raw) => {
-                    let patches = crate::parse::diff::parse_patch(&raw);
-                    let fingerprint = details::fingerprint(&raw);
-                    let endings = match endings {
-                        EndingContext::Excluded => None,
-                        EndingContext::Open(baseline) => {
-                            eol::settle(eol::read_one(&raw), baseline.as_ref())
+                    Ok(raw) if s.diff_seen(&target) == Some(details::fingerprint(&raw)) => {
+                        DiffRefreshOutcome::Unchanged
+                    }
+                    Ok(raw) => {
+                        // Claimed only now, and not before the read above: a
+                        // tick that found the file where it left it must not
+                        // take the epoch from the read a click has in flight
+                        // (see `diff_epoch`).
+                        let epoch = s.claim_diff_epoch();
+                        match s.publish_diff(workdir, target, Some(raw), epoch).await {
+                            true => DiffRefreshOutcome::Sent,
+                            false => DiffRefreshOutcome::Failed,
                         }
-                    };
-                    let patches = Arc::new(patches);
-                    let is_binary = patches.iter().any(|p| p.is_binary);
-                    let preview =
-                        preview::file_preview(&s.executor, &workdir, &target, is_binary, &cancel)
-                            .await;
-                    s.sink.event(SessionEvent::DiffLoaded {
-                        target: target.clone(),
-                        patches: Arc::clone(&patches),
-                        preview,
-                        fingerprint,
-                        endings,
-                    });
-                    s.paint_diff(target, patches, source, epoch);
-                }
-                Err(e) => s.fail("diff", e),
+                    }
+                };
+            if finished.send(outcome).is_err() {
+                tracing::trace!("diff re-read completion was not observed");
             }
         });
+        task
+    }
+
+    /// Sends one diff and starts the colours behind it, answering whether
+    /// it went out. `known` is the raw diff a caller has already read, so a
+    /// re-read that found it moved spends no second process on the same
+    /// bytes.
+    async fn publish_diff(
+        self: &Arc<Self>,
+        workdir: PathBuf,
+        target: DiffTarget,
+        known: Option<Vec<u8>>,
+        epoch: u64,
+    ) -> bool {
+        let s = self;
+        let cancel = s.root_cancel.clone();
+        // What git's settings say, and the neighbours if they are the
+        // only answer, are read **beside** the diff rather than after
+        // it: a notice that turns up a moment later is one the reader
+        // has already scrolled past.
+        // The file the diff is of, fetched beside it rather than
+        // after: the colours are read against it (`highlight`), and a
+        // second round trip would land after the rows are on screen.
+        // Only for a language something can be said about — otherwise
+        // it is a process spent on a file nobody will colour.
+        let wants_source = crate::highlight::knows(preview::target_path(&target));
+        let (diff, endings, source) = tokio::join!(
+            async {
+                match known {
+                    Some(raw) => Ok(raw),
+                    None => details::file_diff_raw(&s.executor, &workdir, &target, &cancel).await,
+                }
+            },
+            s.ending_context(&workdir, &target, &cancel),
+            async {
+                match wants_source {
+                    true => preview::source_text(&s.executor, &workdir, &target, &cancel).await,
+                    false => None,
+                }
+            },
+        );
+        match diff {
+            Ok(raw) => {
+                let patches = crate::parse::diff::parse_patch(&raw);
+                let fingerprint = details::fingerprint(&raw);
+                let endings = match endings {
+                    EndingContext::Excluded => None,
+                    EndingContext::Open(baseline) => {
+                        eol::settle(eol::read_one(&raw), baseline.as_ref())
+                    }
+                };
+                let patches = Arc::new(patches);
+                let is_binary = patches.iter().any(|p| p.is_binary);
+                let preview =
+                    preview::file_preview(&s.executor, &workdir, &target, is_binary, &cancel).await;
+                // Noted before the event and not after it: what the next
+                // re-read compares against is what the pane was handed.
+                s.note_diff(&target, fingerprint);
+                s.sink.event(SessionEvent::DiffLoaded {
+                    target: target.clone(),
+                    patches: Arc::clone(&patches),
+                    preview,
+                    fingerprint,
+                    endings,
+                });
+                s.paint_diff(target, patches, source, epoch);
+                true
+            }
+            Err(e) => {
+                s.fail("diff", e);
+                false
+            }
+        }
+    }
+
+    /// Takes the next diff epoch (see [`RepoSession::diff_epoch`]).
+    fn claim_diff_epoch(&self) -> u64 {
+        self.diff_epoch.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    /// The fingerprint the pane was last handed for `target`, or `None`
+    /// when what it holds is a diff of something else.
+    fn diff_seen(&self, target: &DiffTarget) -> Option<u64> {
+        let slot = match self.last_diff.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        slot.as_ref()
+            .filter(|(held, _)| held == target)
+            .map(|(_, fingerprint)| *fingerprint)
+    }
+
+    fn note_diff(&self, target: &DiffTarget, fingerprint: u64) {
+        let mut slot = match self.last_diff.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        *slot = Some((target.clone(), fingerprint));
     }
 
     /// Works out the colours for a diff already on its way to the pane and

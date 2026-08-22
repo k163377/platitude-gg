@@ -29,6 +29,18 @@ pub struct RepoSession {
     /// any more are worth not doing at all. The rows are unaffected —
     /// those are cheap, and a stale one is dropped by the pane on arrival.
     pub(super) diff_epoch: AtomicU64,
+    /// The diff last published and the fingerprint of the bytes it was
+    /// read from — what [`RepoSession::refresh_diff`] compares against, so
+    /// a poll tick over a file nobody has touched sends nothing at all.
+    ///
+    /// One slot, because one pane asks: `load_diff` is reached from the
+    /// diff view alone. A read for some other target therefore reads as
+    /// "not the one held", which is the safe direction — it publishes.
+    ///
+    /// Written where the event goes out rather than where the bytes are
+    /// read: recording a fingerprint the pane never received would leave
+    /// it stale for as long as the file stayed that way.
+    pub(super) last_diff: Mutex<Option<(DiffTarget, u64)>>,
     /// Dirty working tree — one of the two halves that put a synthetic WIP
     /// row in front of the log stream (the other is below).
     pub(super) wip_dirty: std::sync::atomic::AtomicBool,
@@ -201,6 +213,7 @@ impl RepoSession {
             log_options: Mutex::new(LogOptions::default()),
             log_gen: AtomicU64::new(0),
             diff_epoch: AtomicU64::new(0),
+            last_diff: Mutex::new(None),
             log_cancel: Mutex::new(None),
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
             merge_incoming: Mutex::new(Vec::new()),
