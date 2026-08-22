@@ -486,10 +486,14 @@ ColumnLayout {
     /// The label a stash made now would take: the summary already standing in the box, when git would have it as one
     /// (デザイン規約 §変更を退避する). Empty means the entry goes unnamed, which is what git writes its own `WIP on …` for.
     ///
-    /// **The typed line only, never `outgoingSubject`'s fallback.** A stopped merge's message is git's sentence about
-    /// the commit that merge is going to make, not a name the reader gave these changes. **And never in amend mode**,
-    /// where the box is holding the message of a commit that already exists (`absorbHeadMessage`) — a stash called
-    /// after it would be naming someone else's work.
+    /// **The typed line only, never a merge's own sentence.** That sentence is about the commit the merge is going to
+    /// make, not a name the reader gave these changes — and it reaches the box two ways, as `outgoingSubject`'s
+    /// fallback under an empty one *and as text*, put there by `absorbOpMessage` so the press can read it. So it is
+    /// held against the standing message rather than against emptiness: a stash pressed over a stopped merge is a
+    /// stash of the work, and the entry git names itself says more about it than a merge that no longer exists
+    /// (2026-08-22 実測: the press takes `MERGE_HEAD` with it). One word typed over it makes it the reader's again.
+    /// **And never in amend mode**, where the box is holding the message of a commit that already exists
+    /// (`absorbHeadMessage`) — a stash called after it would be naming someone else's work.
     ///
     /// The text is not taken away by the write that reads it: the boxes are the one thing here that cannot be read
     /// back off disk (see `absorbOpMessage`), and a stash is undone by a `pop` that lands the work back in a tree
@@ -499,7 +503,8 @@ ColumnLayout {
     /// Asked of core per keystroke, the same pure function the rename box asks — one line with something on it, and no
     /// rule of this pane's own on top (規約 §同名).
     readonly property string stashName:
-        !wipPane.amending && wipPane.repoTab.validStashMessage(msgEditor.subjectText)
+        !wipPane.amending && msgEditor.subjectText !== wipPane.standingSubject
+        && wipPane.repoTab.validStashMessage(msgEditor.subjectText)
         ? msgEditor.subjectText : ""
     // Whether the amend should also put the current identity on the commit it replaces (git keeps the original author
     // otherwise).
