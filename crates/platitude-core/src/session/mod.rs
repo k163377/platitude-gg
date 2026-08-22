@@ -59,11 +59,13 @@ mod eol;
 mod event;
 mod feed;
 mod graph_refresh;
+mod heap;
 #[cfg(test)]
 mod join_tests;
 mod joins;
 mod log;
 mod model;
+mod open;
 mod ops_integrate;
 mod ops_remote;
 mod ops_tree;

@@ -2,7 +2,6 @@
 //! opened, and what it cancels on the way out.
 
 use super::*;
-use crate::repo;
 
 pub struct RepoSession {
     /// Reads and refreshes: recorded in the command log only while
@@ -190,119 +189,6 @@ pub struct RepoSession {
 }
 
 impl RepoSession {
-    /// Creates the session and starts opening `path` in the background.
-    /// On success everything loads: log stream, refs, status, stashes.
-    pub fn open(
-        executor: GitExecutor,
-        runtime: tokio::runtime::Handle,
-        path: PathBuf,
-        sink: Arc<dyn SessionSink>,
-    ) -> Arc<Self> {
-        let (write_tx, write_rx) = tokio::sync::mpsc::unbounded_channel();
-        let commands = Arc::new(CommandFeed::new(Arc::clone(&sink)));
-        let observer: Arc<dyn crate::process::CommandObserver> = Arc::clone(&commands) as _;
-        let session = Arc::new(Self {
-            executor: executor.observed(Arc::clone(&observer), false),
-            exec_user: executor.observed(observer, true),
-            commands,
-            runtime: runtime.clone(),
-            sink,
-            root_cancel: CancellationToken::new(),
-            info: Mutex::new(None),
-            shared: Arc::new(Mutex::new(Shared::default())),
-            log_options: Mutex::new(LogOptions::default()),
-            log_gen: AtomicU64::new(0),
-            diff_epoch: AtomicU64::new(0),
-            last_diff: Mutex::new(None),
-            log_cancel: Mutex::new(None),
-            wip_dirty: std::sync::atomic::AtomicBool::new(false),
-            merge_incoming: Mutex::new(Vec::new()),
-            merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),
-            merge_tool_seen: Mutex::new(String::new()),
-            eol_baselines: Mutex::new(HashMap::new()),
-            eol_normalises: Derived::default(),
-            remotes: Derived::default(),
-            eol_marks: Mutex::new(Arc::new(Vec::new())),
-            eol_marks_stale: std::sync::atomic::AtomicBool::new(true),
-            status_key: Mutex::new(None),
-            refs_key: Mutex::new(None),
-            join_key: Mutex::new(None),
-            last_snapshot: Mutex::new(None),
-            write_busy: std::sync::atomic::AtomicBool::new(false),
-            poll_slot: Arc::new(tokio::sync::Semaphore::new(1)),
-            refs_read: ReadSlot::default(),
-            status_read: ReadSlot::default(),
-            stash_read: ReadSlot::default(),
-            worktrees_read: ReadSlot::default(),
-            write_tx,
-            network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
-            config_stamp: Mutex::new(None),
-            remote_tag_index: Mutex::new(Arc::new(RemoteTagIndex::default())),
-            remote_tag_gen: AtomicU64::new(0),
-            worktree_holders: Mutex::new(Arc::new(super::joins::WorktreeHolders::default())),
-            worktree_gen: AtomicU64::new(0),
-            remote_tags_slot: Arc::new(tokio::sync::Semaphore::new(1)),
-            head_hold: Mutex::new(None),
-            head_tip: Mutex::new(None),
-            head_reach_seen: Mutex::new(None),
-            head_reach_slot: Arc::new(tokio::sync::Semaphore::new(1)),
-            merge_tools_slot: Arc::new(tokio::sync::Semaphore::new(1)),
-            auto_fetch: Mutex::new(None),
-            auto_fetch_interval: Mutex::new(None),
-            auto_fetch_slot: Arc::new(tokio::sync::Semaphore::new(1)),
-            open_fetch: Mutex::new(OpenFetchState::Unasked),
-            refs_gate: OpGate::default(),
-            status_gate: OpGate::default(),
-            stash_gate: OpGate::default(),
-            worktrees_gate: OpGate::default(),
-        });
-        runtime.spawn(Arc::clone(&session).write_loop(write_rx));
-
-        let s = Arc::clone(&session);
-        runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            match repo::open(&s.executor, &path, &cancel).await {
-                Ok(info) => {
-                    let workdir = info.workdir.clone();
-                    s.set_info(info.clone());
-                    s.sink.event(SessionEvent::Opened { info });
-                    // The network before the reads: a round trip is the
-                    // longest thing an opening starts, and starting it
-                    // first is what lets the reads below run inside it
-                    // rather than in front of it. It holds nothing up —
-                    // the reads do not wait on the write queue, and what
-                    // the fetch brings down is published by its own
-                    // refresh rather than read a second time
-                    // (`AfterWrite::Graph`).
-                    let fetching = s.take_open_fetch(&workdir).await;
-                    // Before anything else: a missing identity turns the
-                    // first commit into a wall of git text, and the UI can
-                    // ask for one instead.
-                    s.refresh_author();
-                    s.restart_log();
-                    s.refresh_quick();
-                    // A fetch reads what the remotes carry under
-                    // `refs/tags/` on its way out, so only an opening
-                    // without one has anything left to ask. Not from
-                    // `set_auto_fetch`, which the application calls the
-                    // instant this session is handed over — there is no
-                    // workdir to read from until the lines above, and the
-                    // interval it installs is what grants permission to
-                    // look at all.
-                    if !fetching {
-                        s.catch_up_remote_tags();
-                    }
-                }
-                Err(error) => {
-                    if !error.is_cancelled() {
-                        s.sink.event(SessionEvent::OpenFailed { path, error });
-                    }
-                }
-            }
-        });
-        session
-    }
-
     /// Workdir of the opened repository (None until `Opened`).
     pub fn workdir(&self) -> Option<PathBuf> {
         self.lock_info().as_ref().map(|i| i.workdir.clone())
@@ -410,68 +296,6 @@ impl RepoSession {
             Ok(g) => g,
             Err(e) => e.into_inner(),
         }
-    }
-
-    /// What this session is holding on to, part by part.
-    ///
-    /// Everything named here outlives the operation that filled it: it is
-    /// still there when the window is idle, which is what the memory budget
-    /// is about. `refs-snapshot` is an `Arc` the sidebar models hold too —
-    /// counted in full on both sides, and the app's report says so.
-    pub fn heap_report(&self) -> Vec<crate::mem::Part> {
-        use crate::mem::{Footprint as _, Part};
-        let shared = self.lock_shared();
-        let mut parts = vec![
-            Part::of("sent-rows", &shared.sent_rows),
-            Part::new(
-                "label-map",
-                shared.label_map.heap_bytes(),
-                shared.label_map.len(),
-            ),
-            Part::new("applied", shared.applied.heap_bytes(), shared.applied.len()),
-            Part::new(
-                "graph-builder",
-                shared.builder.heap_bytes(),
-                shared.builder.tracked_oids(),
-            ),
-        ];
-        drop(shared);
-
-        let snapshot = match self.last_snapshot.lock() {
-            Ok(g) => g.clone(),
-            Err(e) => e.into_inner().clone(),
-        };
-        let (snap_bytes, snap_refs) = match &snapshot {
-            Some(s) => (
-                s.heap_bytes(),
-                s.locals.len() + s.remotes.len() + s.tags.len(),
-            ),
-            None => (0, 0),
-        };
-        parts.push(Part::new("refs-snapshot", snap_bytes, snap_refs));
-
-        let index = self.remote_tag_index();
-        parts.push(Part::new(
-            "remote-tag-index",
-            index.heap_bytes(),
-            index.len(),
-        ));
-
-        let marks = match self.eol_marks.lock() {
-            Ok(g) => Arc::clone(&g),
-            Err(e) => Arc::clone(&e.into_inner()),
-        };
-        parts.push(Part::new("eol-marks", marks.heap_bytes(), marks.len()));
-
-        let (base_bytes, base_count) = match self.eol_baselines.lock() {
-            Ok(g) => (g.heap_bytes(), g.len()),
-            Err(e) => {
-                let g = e.into_inner();
-                (g.heap_bytes(), g.len())
-            }
-        };
-        parts.push(Part::new("eol-baselines", base_bytes, base_count));
-        parts
     }
 }
 
