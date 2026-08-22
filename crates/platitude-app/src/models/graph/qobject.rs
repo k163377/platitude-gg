@@ -412,6 +412,19 @@ impl GraphModel {
             .map(|r| r.oid_hex.clone())
             .unwrap_or_default()
     }
+
+    /// The draw tokens of a row (`encode::encode_geometry`) — the same
+    /// string its delegate paints from. For the smoke hooks: a lane is a
+    /// stroke a couple of pixels wide, and whether one of them is dotted
+    /// is not a question a screenshot answers.
+    #[qslot]
+    fn geometry_at(&self, row: i32) -> String {
+        usize::try_from(row)
+            .ok()
+            .and_then(|i| self.rows.get(i))
+            .map(|r| r.geometry.clone())
+            .unwrap_or_default()
+    }
 }
 impl GraphModel {
     /// Shared by the two slots above, so the pair is decided once.

@@ -358,6 +358,14 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // are what the verb is for, and only neighbours are caught in one
         // substring.
         "graph-tail" => Some("graph_tail truncated=true shown=true"),
+        // The dotted edges under the uncommitted row, in the tokens the
+        // delegate paints from (uppercase = dashed). Under `--preset
+        // conflict` a merge is standing, so the row leashes HEAD and the
+        // side being brought in: two lanes, both dotted. A lane is a
+        // couple of pixels wide and its dashes are one each, so a row
+        // that leashed only HEAD photographs as very nearly the same
+        // picture.
+        "wip-lanes" => Some("wip_lanes geometry=O0.0;O1.1"),
         // The stand-in for a HEAD scrolled off. The five read as one set:
         // a band that is there and a band that is gone frame the same
         // way, and which edge it took is a difference of a few hundred

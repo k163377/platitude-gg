@@ -168,7 +168,7 @@ Item {
                 "diff-step-edge", "changes-step", "changes-step-edge", "wip-step",
                 "graph-bar", "graph-bar-away", "middle-scroll",
                 "graph-tail", "graph-head", "graph-head-below", "graph-head-back",
-                "graph-head-go", "graph-head-lit",
+                "graph-head-go", "graph-head-lit", "wip-lanes",
                 "divider-refuse", "cherry-pick", "reword", "edit-message",
                 "edit-message-leave", "edit-message-focus",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
@@ -294,6 +294,23 @@ Item {
                               + " rows=" + graphModel.rowTotal
                               + " stashes=" + stashesModel.total)
             renderedBarrier.begin()
+        }
+    }
+    // The lanes of the uncommitted row, in the tokens its delegate paints from. A lane is a stroke a couple of pixels
+    // wide and its dashes are one pixel each, so which of them are dotted is not a question the photograph answers.
+    // The row is put there by the pass behind the status read — the same read that says what a standing merge is
+    // bringing in — so the wait is for the row itself to lead the graph, not for the tree to be loaded.
+    Timer {
+        id: wipLanesTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (driver.graphTopKind() !== "wip")
+                return
+            wipLanesTimer.stop()
+            AppBackend.report("wip_lanes geometry=" + graphModel.geometryAt(0)
+                              + " lanes=" + graphModel.maxLanes)
+            driver.complete()
         }
     }
 
@@ -3510,6 +3527,8 @@ Item {
             menuHoverTimer.start()
         } else if (act === "wip") {
             page.showWip()
+        } else if (act === "wip-lanes") {
+            wipLanesTimer.start()
         } else if (act === "wip-tally") {
             // Read the two together: `status::Kinds` counts rows, so the kinds have to add up to `rows` — a drift means
             // one of the two stopped reading the same status.
