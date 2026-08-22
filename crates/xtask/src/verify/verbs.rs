@@ -405,6 +405,18 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // is caught by nothing else. How many are left is not judged: the
         // verb takes as many repositories as it is given.
         "middle-close" => Some("middle_close gone=true"),
+        // What a tab switch carries and what it drops, in one line
+        // because neither half means anything alone. `sessions=1` with
+        // two tabs open is the release itself — the tab left behind is
+        // holding no repository — and it is the one thing here no picture
+        // can say. `folded=` / `log=` are the layout the reader left the
+        // last tab in, found on the next one; `empty=` is that tab's own
+        // commit editor, which the words did *not* follow into; `back=`
+        // is those words still standing where they were typed, after
+        // everything else on that page was thrown away and read again;
+        // `wip=` is the pane holding them being the one on screen, which
+        // is the half of "kept" that a report about text alone misses.
+        "tab-carry" => Some("sessions=1 folded=true log=true empty=true back=true wip=true"),
         // Which tab was carried and where it came to rest. A strip whose
         // order merely changed passes with any two tabs swapped, and one
         // where the carry never took hold photographs the order it

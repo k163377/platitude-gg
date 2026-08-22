@@ -387,6 +387,84 @@ Item {
         }
     }
 
+    // What a tab switch carries and what it drops — the two halves of one answer, so one verb reports both.
+    //
+    // The strip is walked in three landings: leave a mark on the tab in front, go to the other one and read what
+    // arrived there, come back and read what was kept. Each landing waits for the page it is about to read to be
+    // whole, because a page still opening answers every question here the same way an emptied one does.
+    //
+    // **The tab is what is waited on, not the row.** Rows renumber; `currentTabId` is the tab that is actually in
+    // front (`TabsModel::current_tab_id`), and comparing against it is what makes "the switch has happened" a fact
+    // rather than a guess. And the page read at each landing is a *different object* every time — the page in front is
+    // built for the tab in front and taken down with it — so nothing here may be held across a landing but the words
+    // themselves.
+    Timer {
+        id: tabCarryTimer
+        interval: 25
+        repeat: true
+        running: AppBackend.autoAct === "tab-carry"
+        /// 0 = mark the first tab, 1 = read the second, 2 = read the first again.
+        property int step: 0
+        /// The tab the mark was left on, so the walk knows which landing it is at without counting rows.
+        property int firstTab: -1
+        /// Words no repository can produce, so finding them again cannot be anything but this page having kept them.
+        readonly property string typed: "chore: words that outlived a tab switch"
+        /// Read at the second landing and reported at the third: the layout followed the reader, the words did not.
+        property bool folded: false
+        property bool log: false
+        property bool otherEmpty: false
+        function whole(page) {
+            return page !== null && page.pageTab.state === "open"
+                   && page.pageWt.loaded && page.pageGraph.finishCount > 0
+        }
+        onTriggered: {
+            const page = window.curPage
+            if (!tabCarryTimer.whole(page))
+                return
+            if (tabCarryTimer.step === 0) {
+                // Two tabs are what this verb is about, and they are a precondition of the first landing alone: read
+                // again afterwards they would be read against a strip this verb has already moved.
+                if (pageRepeater.count < 2)
+                    return
+                // A layout nobody starts in, so "it followed" cannot be read off a page that was already like this.
+                page.foldByHand(true)
+                page.commandsOpen = true
+                page.pageWip.setMessage(tabCarryTimer.typed, "")
+                tabCarryTimer.firstTab = tabsModel.currentTabId
+                tabCarryTimer.step = 1
+                tabsModel.setCurrentIndex(tabsModel.currentIndex === 0 ? 1 : 0)
+                return
+            }
+            if (tabCarryTimer.step === 1) {
+                if (tabsModel.currentTabId === tabCarryTimer.firstTab)
+                    return
+                tabCarryTimer.folded = page.sidebarCollapsed
+                tabCarryTimer.log = page.commandsOpen
+                tabCarryTimer.otherEmpty = page.pageWip.subjectText === ""
+                                           && page.pageWip.bodyText === ""
+                tabCarryTimer.step = 2
+                tabsModel.setCurrentIndex(tabsModel.currentIndex === 0 ? 1 : 0)
+                return
+            }
+            if (tabsModel.currentTabId !== tabCarryTimer.firstTab)
+                return
+            stop()
+            // `sessions=` is the release itself, and the only thing here a picture cannot say: two tabs in the strip,
+            // one repository in memory. `finishCount` being above zero on a page built after the switch is the other
+            // side of the same coin — the graph read itself again from nothing.
+            AppBackend.report("tab_carry tabs=" + pageRepeater.count
+                              + " sessions=" + AppBackend.openSessionCount()
+                              + " folded=" + tabCarryTimer.folded
+                              + " log=" + tabCarryTimer.log
+                              + " empty=" + tabCarryTimer.otherEmpty
+                              + " back=" + (page.pageWip.subjectText === tabCarryTimer.typed)
+                              // …and the pane holding them is the one on screen: words put back behind the commit
+                              // details are only half of them being kept.
+                              + " wip=" + page.wipShown)
+            window.finishAutoAct()
+        }
+    }
+
     // Capture the communication ring from a real busy edge. TopBar latches the visual only after RepoTab actually
     // enters `push`, so a fast child cannot clear it before the image callback runs.
     Timer {
