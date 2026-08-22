@@ -170,16 +170,24 @@ pub(super) fn lock_reason(cwd: &str) -> Option<String> {
     Some(reason.trim().to_string())
 }
 
-/// SessionEnd: a seat claimed by this session is handed back. A lock
+/// SessionEnd: a seat claimed by this session is handed back, and the
+/// pictures this session put on the shot board go with it. A lock
 /// somebody else wrote stays — ending inside a seat that was never ours
 /// is the collision case, not a reason to free it.
 pub(super) fn session_end(input: &str) -> Result<(), String> {
-    let cwd = string_field(input, "cwd").unwrap_or_default();
-    if roster_seat(&cwd).is_none() {
-        return Ok(());
-    }
     let session = string_field(input, "session_id").unwrap_or_default();
     if session.is_empty() {
+        return Ok(());
+    }
+    // The board first, and by session rather than by seat: a session in
+    // the primary checkout holds no seat to release and still leaves
+    // pictures behind, and a seat outlives whoever sat in it (shots).
+    if let Err(_unheard) = crate::shots::session_ended(&session) {
+        // Nobody is left to tell — the session is over. What stayed on
+        // the board is what `cargo xtask shots prune` is for.
+    }
+    let cwd = string_field(input, "cwd").unwrap_or_default();
+    if roster_seat(&cwd).is_none() {
         return Ok(());
     }
     if lock_reason(&cwd).is_some_and(|reason| reason.contains(&session))

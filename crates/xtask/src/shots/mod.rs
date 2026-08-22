@@ -20,6 +20,7 @@ mod sweep;
 
 pub(crate) use board::{record, record_dir, shown};
 pub(crate) use cli::run;
+pub(crate) use sweep::{seat_freed, session_ended};
 
 /// One `add`: the pictures taken for one thing, under the name that says
 /// what to look at in them.
@@ -33,6 +34,12 @@ pub(crate) struct Run {
     /// The tree that took them: a roster letter a-f, or `main` for the
     /// primary checkout.
     pub(crate) seat: String,
+    /// The session that took them, empty when nobody was named. It is
+    /// what a session's own runs are found by when it ends (`sweep`):
+    /// the seat cannot answer for that, because a seat outlives every
+    /// session that passes through it and the next one is already
+    /// sitting there.
+    pub(crate) session: String,
     /// Milliseconds since the epoch. The page formats it — it has a
     /// calendar, and xtask depends on std alone (CLAUDE.md 技術スタック).
     pub(crate) at: u128,

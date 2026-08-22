@@ -63,7 +63,34 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let after = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
     println!("landed {branch}: main {before} -> {after} ({ahead} commit(s)).");
     release_claim(&here, &trees, &branch);
+    clear_the_board(&listing, &branch);
     Ok(())
+}
+
+/// The seat's pictures go with its claim (CLAUDE.md ビルド・テスト): the
+/// work they were taken to show is on main and has been read, and a
+/// board that keeps them makes the next session hunt through spent
+/// evidence for the picture that is current. Only this seat's — the runs
+/// beside them belong to seats still working.
+///
+/// The board is not what a land turns on, so a sweep that cannot happen
+/// says so and leaves the merge reported as the success it was.
+fn clear_the_board(listing: &str, branch: &str) {
+    let Some(seat) = crate::seats::seat_entries(listing)
+        .into_iter()
+        .find(|entry| entry.tree.branch == branch)
+        .map(|entry| entry.seat)
+    else {
+        return;
+    };
+    match crate::shots::seat_freed(seat) {
+        Ok((0, _)) => {}
+        Ok((gone, page)) => println!(
+            "board: took seat {seat}'s {gone} run(s) off {}",
+            crate::shots::shown(&page)
+        ),
+        Err(message) => println!("board: seat {seat}'s runs were left on it ({message})"),
+    }
 }
 
 /// The claim's release point (CLAUDE.md ビルド・テスト): the reflection

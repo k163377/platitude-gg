@@ -14,12 +14,18 @@ cargo xtask shots <command>
       pictures under no name leave nobody able to say which file was
       which change.
 
-  prune [--seat <letter>]...
+  prune [--seat <letter>]... [--label \"<label>\"]
       Take runs off the board — their pictures and all — and rebuild the
       page. Without --seat it reaches this seat's own runs and nobody
       else's: the board is shared, and the runs beside yours belong to a
       session that may be showing them right now. Name others to include
-      them, or `--seat all` to sweep the board.
+      them, or `--seat all` to sweep the board. --label narrows it to one
+      name, which is how the pictures of an approach that was abandoned
+      leave without taking the rest of the seat's work with them.
+
+      Most runs need none of this: a retake replaces the picture it was
+      taken to replace, a landed seat's runs go with `land`, and a
+      session's own runs go when it ends (shots/sweep.rs).
 
   open        Open the board in a window of its own.
   list        One line per run: when, seat, count, label.
@@ -104,6 +110,7 @@ fn add(args: &[String]) -> Result<(), String> {
 fn prune(args: &[String]) -> Result<(), String> {
     let mut seats: Vec<String> = Vec::new();
     let mut every = false;
+    let mut label = None;
     let mut rest = args.iter();
     while let Some(arg) = rest.next() {
         match arg.as_str() {
@@ -116,21 +123,34 @@ fn prune(args: &[String]) -> Result<(), String> {
                 Some(seat) => seats.push(seat.to_string()),
                 None => return Err("shots prune: --seat wants a letter, or `all`".to_string()),
             },
+            "--label" => match rest.next() {
+                Some(named) => label = Some(named.clone()),
+                None => return Err("shots prune: --label wants a run's name".to_string()),
+            },
             other => return Err(format!("shots prune: unknown argument {other}")),
         }
     }
     if seats.is_empty() && !every {
         seats.push(board::seat_here());
     }
-    let (gone, page) = sweep::prune(if every { None } else { Some(&seats) })?;
+    let whose = if every {
+        sweep::Whose::Everything
+    } else {
+        sweep::Whose::Seats(seats.clone())
+    };
+    let (gone, page) = sweep::prune(&sweep::Scope {
+        whose,
+        label: label.clone(),
+    })?;
     println!(
-        "board: {} (-{gone} run(s) {})",
+        "board: {} (-{gone} run(s) {}{})",
         board::shown(&page),
         if every {
             "from every seat".to_string()
         } else {
             format!("from seat {}", seats.join(", "))
-        }
+        },
+        label.map_or(String::new(), |label| format!(" named \"{label}\"")),
     );
     Ok(())
 }

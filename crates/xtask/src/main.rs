@@ -286,14 +286,19 @@ commands:
       its width and cannot zoom it, so a 1440x900 window is unreadable
       there and shooting it larger changes nothing. `verify-ui` puts its
       own pair on the board as it goes, so the usual reason to reach for
-      `add` is a crop or a comparison sheet made by hand — and the
-      reason for `prune` is that a working session leaves a run per
-      shot, which buries the few worth looking at. All six seats write
-      to one board beside the primary checkout's .git (.shots/,
+      `add` is a crop or a comparison sheet made by hand. All six seats
+      write to one board beside the primary checkout's .git (.shots/,
       gitignored) and every run carries the seat that took it — a
       picture from another tree proves nothing about this one, which is
       also why `prune` reaches this seat's runs and no others unless it
       is told to.
+
+      The board keeps itself to what is being looked at now, and the
+      three rules that do it are in shots/sweep.rs: a picture retaken
+      replaces the one before it, a seat's runs go when its branch
+      lands, and a session's runs go when it ends. `prune` is what
+      reaches the rest — an approach abandoned under a name nobody
+      retakes (--label), or a seat whose session is long gone.
 
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads

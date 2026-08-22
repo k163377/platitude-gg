@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::{Run, Shot, page};
+use super::{Run, Shot, sweep};
 use crate::seats::worktree_root;
 
 /// Field separator inside a run file. Tabs and newlines are stripped
@@ -64,6 +64,21 @@ pub(super) fn seat_here() -> String {
     root.rsplit('/').next().unwrap_or("?").to_string()
 }
 
+/// The session this process was run by, empty when nothing said.
+///
+/// Claude Code puts the session id in the environment of everything it
+/// runs and in the payload of every hook, so a run taken by a session
+/// and the SessionEnd that ends it agree on one string without either
+/// being told (CLAUDE.md ビルド・テスト: the seat is a session's, for as
+/// long as the session lasts). Nothing here depends on it being there —
+/// a run taken by hand in a terminal carries no session, and the sweeps
+/// that go by session leave it alone.
+pub(super) fn session_here() -> String {
+    std::env::var("CLAUDE_CODE_SESSION_ID")
+        .map(|id| one_line(&id))
+        .unwrap_or_default()
+}
+
 /// Puts one run on the board and rebuilds the page, answering where the
 /// page is. An empty label is refused here rather than at the command
 /// line, so the rule holds for `verify-ui`'s own calls too.
@@ -92,6 +107,7 @@ pub(crate) fn record(label: &str, verb: &str, pngs: &[PathBuf]) -> Result<PathBu
         label,
         verb: one_line(verb),
         seat,
+        session: session_here(),
         at,
         shots: Vec::new(),
     };
@@ -112,10 +128,11 @@ pub(crate) fn record(label: &str, verb: &str, pngs: &[PathBuf]) -> Result<PathBu
         });
     }
     write_run(&runs, &stem, &run)?;
-    let page = board.join("index.html");
-    std::fs::write(&page, page::render(&load_runs(&runs)))
-        .map_err(|e| format!("could not write {}: {e}", page.display()))?;
-    Ok(page)
+    // The new run first, then what it replaces: interrupted between the
+    // two the board holds one picture too many, where the other order
+    // could leave it holding none.
+    sweep::supersede(&board, &run, &stem)?;
+    sweep::rebuild(&board)
 }
 
 /// Every picture in a directory, onto the board under one name.
@@ -165,6 +182,7 @@ fn write_run(runs: &Path, stem: &str, run: &Run) -> Result<(), String> {
         ("label", run.label.as_str()),
         ("verb", run.verb.as_str()),
         ("seat", run.seat.as_str()),
+        ("session", run.session.as_str()),
     ] {
         text.push_str(&format!("{key}{SEP}{value}\n"));
     }
@@ -190,6 +208,7 @@ pub(super) fn parse_run(text: &str) -> Option<Run> {
         label: String::new(),
         verb: String::new(),
         seat: String::new(),
+        session: String::new(),
         at: 0,
         shots: Vec::new(),
     };
@@ -199,6 +218,10 @@ pub(super) fn parse_run(text: &str) -> Option<Run> {
             Some("label") => run.label = parts.next().unwrap_or_default().to_string(),
             Some("verb") => run.verb = parts.next().unwrap_or_default().to_string(),
             Some("seat") => run.seat = parts.next().unwrap_or_default().to_string(),
+            // Runs written before the board knew about sessions carry no
+            // such line, and read back as belonging to no session — which
+            // is what they are: nothing that ends can claim them.
+            Some("session") => run.session = parts.next().unwrap_or_default().to_string(),
             Some("at") => run.at = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0),
             Some("shot") => {
                 let file = parts.next()?.to_string();
@@ -271,14 +294,26 @@ mod tests {
 
     #[test]
     fn a_run_survives_the_round_trip() {
-        let text = "label\tthe chip's badge\nverb\trow-card\nseat\ta\nat\t1700000000000\n\
-                    shot\timg/x.png\tapp.png\t1440\t900\n";
+        let text = "label\tthe chip's badge\nverb\trow-card\nseat\ta\nsession\ts-1\n\
+                    at\t1700000000000\nshot\timg/x.png\tapp.png\t1440\t900\n";
         let run = parse_run(text).expect("a whole run parses");
         assert_eq!(run.label, "the chip's badge");
         assert_eq!(run.seat, "a");
+        assert_eq!(run.session, "s-1");
         assert_eq!(run.at, 1_700_000_000_000);
         assert_eq!(run.shots.len(), 1);
         assert_eq!(run.shots[0].width, 1440);
+    }
+
+    /// A run written before the board carried sessions is still a run —
+    /// one that belongs to no session, which is the reading that keeps a
+    /// session's sweep off it.
+    #[test]
+    fn a_run_from_before_sessions_belongs_to_none() {
+        let text = "label\tthe chip's badge\nseat\ta\nat\t1700000000000\n\
+                    shot\timg/x.png\tapp.png\t1440\t900\n";
+        let run = parse_run(text).expect("a whole run parses");
+        assert!(run.session.is_empty());
     }
 
     /// A file missing what a run *is* is skipped, not guessed at.
@@ -311,6 +346,7 @@ mod tests {
             label: "x".to_string(),
             verb: String::new(),
             seat: "a".to_string(),
+            session: String::new(),
             at,
             shots: vec![Shot {
                 file: "img/x.png".to_string(),
