@@ -45,7 +45,11 @@ async fn tag_only_commits_follow_the_include_tags_option() {
         "the tags are drawn while they are in the graph: {drawn:?}"
     );
 
-    // Two-phase streaming: a fast tag-less pass must have painted first.
+    // Two-phase streaming: when the fast tag-less pass lands, it lands
+    // before the tag-inclusive swap. Its landing is not guaranteed — an
+    // opening rebuild that takes the log token mid-stream swallows it
+    // without a word (`pass_of`) — so only the order is asserted, never
+    // the existence.
     {
         let events = sink.events.lock().unwrap();
         let fast_pass = events.iter().find_map(|e| match e {
@@ -55,8 +59,8 @@ async fn tag_only_commits_follow_the_include_tags_option() {
             _ => None,
         });
         assert!(
-            fast_pass.is_some_and(|g| g < first_gen),
-            "expected a tag-less fast pass before the tag-inclusive swap"
+            fast_pass.is_none_or(|g| g < first_gen),
+            "the tag-less fast pass painted after the tag-inclusive swap"
         );
     }
 
@@ -113,18 +117,13 @@ async fn log_limit_truncates_the_window() {
         sink.clone(),
     );
 
-    sink.wait_for("full LogFinished", |evs| {
-        evs.iter().find_map(|e| match e {
-            SessionEvent::LogFinished {
-                total, truncated, ..
-            } if *total == 3 => {
-                assert!(!truncated, "3 commits fit in the default window");
-                Some(())
-            }
-            _ => None,
+    // Whichever shape lands the full graph (`pass_of`), it is untruncated.
+    let full = sink
+        .wait_for("the full pass", |evs| {
+            evs.iter().filter_map(pass_of).find(|p| p.total == 3)
         })
-    })
-    .await;
+        .await;
+    assert!(!full.truncated, "3 commits fit in the default window");
     let first_gen = sink.opened_graph_gen(&session, 3).await;
 
     session.set_log_limit(Some(2));
@@ -156,19 +155,14 @@ async fn truncation_follows_the_walk_not_the_shown_rows() {
         sink.clone(),
     );
 
-    // Full pass first: stash row + three commits, nothing truncated.
-    sink.wait_for("full LogFinished", |evs| {
-        evs.iter().find_map(|e| match e {
-            SessionEvent::LogFinished {
-                total, truncated, ..
-            } if *total == 4 => {
-                assert!(!truncated);
-                Some(())
-            }
-            _ => None,
+    // Full pass first: stash row + three commits, nothing truncated —
+    // whichever shape landed it (`pass_of`).
+    let full = sink
+        .wait_for("the full pass", |evs| {
+            evs.iter().filter_map(pass_of).find(|p| p.total == 4)
         })
-    })
-    .await;
+        .await;
+    assert!(!full.truncated);
     let first_gen = sink.opened_graph_gen(&session, 4).await;
 
     // The walk emits 4 rows (stash, its index parent, "three", "two") and
@@ -244,7 +238,10 @@ async fn the_wip_row_does_not_trigger_truncation() {
 /// stream cannot reach its cancel check until the rebuild behind it has
 /// taken its place. Left to the scheduler it is rare — it turned up as a
 /// flake on a machine running three other builds, not as a test.
-#[tokio::test(flavor = "multi_thread")]
+// `worker_threads = 2` is the test's own premise: the hook below parks a
+// worker on a blocking `recv`, and a pool inherited from the host can be
+// one thread on a small runner — the parked hook then owns it all.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "1\n", "one");
@@ -318,7 +315,9 @@ async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
 /// that can say the history is no longer cut — and a comparison that only
 /// looks at rows finds nothing to do, leaving the notice claiming history
 /// the user just asked to see.
-#[tokio::test(flavor = "multi_thread")]
+// `worker_threads = 2`: the parked hook must not own the only worker
+// (see the sibling above).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_window_change_only_the_footer_notices_still_lands() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "1\n", "one");

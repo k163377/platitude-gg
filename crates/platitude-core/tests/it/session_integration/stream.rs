@@ -1,7 +1,7 @@
 //! Opening a repository, and the log stream that comes out of it.
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, scenario};
+use crate::support::session::{CaptureSink, pass_of, scenario};
 use platitude_core::session::{RepoSession, SessionEvent};
 
 #[tokio::test(flavor = "multi_thread")]
@@ -23,26 +23,29 @@ async fn open_streams_the_full_pipeline() {
     })
     .await;
 
-    let total = sink
-        .wait_for("LogFinished", |evs| {
-            evs.iter().find_map(|e| match e {
-                SessionEvent::LogFinished { total, .. } => Some(*total),
-                _ => None,
-            })
-        })
-        .await;
-    assert_eq!(total, 5, "root + side + main + merge + stash row");
+    // Root + side + main + merge + stash row. Which shape lands it — a
+    // stream or a replacement — is a scheduling accident (`pass_of`), so
+    // the wait names the outcome: a 5-row pass, whichever generation
+    // carries it.
+    let pass_gen = sink.settled_stream_gen(5).await;
 
     // All rows delivered, topo-consistent; the stash (newest child of the
-    // merge) streams first, the head commit right after.
+    // merge) streams first, the head commit right after. Only that pass's
+    // own rows count — a concurrent pass must not bleed rows into the
+    // tally, so the accumulation is scoped to its generation.
     let rows = sink
-        .wait_for("chunk rows", |evs| {
-            let mut rows = Vec::new();
-            for e in evs {
-                if let SessionEvent::LogChunk { rows: r, .. } = e {
-                    rows.extend(r.iter().cloned());
-                }
-            }
+        .wait_for("the pass's rows", move |evs| {
+            let rows: Vec<_> = evs
+                .iter()
+                .filter_map(|e| match e {
+                    SessionEvent::LogChunk { generation, rows }
+                    | SessionEvent::LogReplaced {
+                        generation, rows, ..
+                    } if *generation == pass_gen => Some(rows.iter().cloned()),
+                    _ => None,
+                })
+                .flatten()
+                .collect();
             (rows.len() == 5).then_some(rows)
         })
         .await;
@@ -124,38 +127,29 @@ async fn restart_log_delivers_a_new_generation() {
         sink.clone(),
     );
 
+    // Either pass may land as a stream or as a replacement (`pass_of`),
+    // so both waits go by "a pass landed", not by one event shape.
     let first_gen = sink
-        .wait_for("first LogFinished", |evs| {
-            evs.iter().find_map(|e| match e {
-                SessionEvent::LogFinished { generation, .. } => Some(*generation),
-                _ => None,
-            })
+        .wait_for("first pass", |evs| {
+            evs.iter().filter_map(pass_of).map(|p| p.generation).max()
         })
         .await;
 
     session.restart_log();
 
-    let second_gen = sink
-        .wait_for("second LogFinished", |evs| {
-            evs.iter().find_map(|e| match e {
-                SessionEvent::LogFinished { generation, .. } if *generation > first_gen => {
-                    Some(*generation)
-                }
-                _ => None,
-            })
-        })
-        .await;
-    assert!(second_gen > first_gen);
+    let second = sink.pass_after("the restarted pass", first_gen).await;
+    let second_gen = second.generation;
 
-    // The restarted stream re-delivers all rows under the new generation
-    // (4 commits + the stash row).
-    sink.wait_for("second-generation rows", |evs| {
+    // The restarted pass re-delivers all rows under the new generation
+    // (4 commits + the stash row), in whichever shape carried it.
+    sink.wait_for("second-generation rows", move |evs| {
         let count: usize = evs
             .iter()
             .filter_map(|e| match e {
-                SessionEvent::LogChunk { generation, rows } if *generation == second_gen => {
-                    Some(rows.len())
-                }
+                SessionEvent::LogChunk { generation, rows }
+                | SessionEvent::LogReplaced {
+                    generation, rows, ..
+                } if *generation == second_gen => Some(rows.len()),
                 _ => None,
             })
             .sum();
@@ -177,15 +171,10 @@ async fn unborn_repository_finishes_with_zero_rows() {
         sink.clone(),
     );
 
-    let total = sink
-        .wait_for("LogFinished", |evs| {
-            evs.iter().find_map(|e| match e {
-                SessionEvent::LogFinished { total, .. } => Some(*total),
-                _ => None,
-            })
-        })
+    let pass = sink
+        .wait_for("the opening pass", |evs| evs.iter().find_map(pass_of))
         .await;
-    assert_eq!(total, 0);
+    assert_eq!(pass.total, 0);
 
     sink.wait_for("StatusLoaded", |evs| {
         evs.iter().find_map(|e| match e {
@@ -260,15 +249,10 @@ async fn an_independent_history_sits_where_its_date_puts_it() {
         repo.path.clone(),
         sink.clone(),
     );
-    let total = sink
-        .wait_for("LogFinished", |evs| {
-            evs.iter().find_map(|e| match e {
-                SessionEvent::LogFinished { total, .. } => Some(*total),
-                _ => None,
-            })
-        })
+    let pass = sink
+        .wait_for("the opening pass", |evs| evs.iter().find_map(pass_of))
         .await;
-    assert_eq!(total, 5, "four on main plus the orphan");
+    assert_eq!(pass.total, 5, "four on main plus the orphan");
 
     // Chips are what make a row unreachable from every branch findable at
     // all, so the row number and the chip are asserted together.
