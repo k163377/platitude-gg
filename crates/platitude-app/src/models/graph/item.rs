@@ -63,7 +63,11 @@ impl platitude_core::mem::Footprint for GraphRowItem {
     }
 }
 
-pub(super) fn to_row_item(row: &LogRow, avatars: &crate::hub::AvatarUrls) -> GraphRowItem {
+pub(super) fn to_row_item(
+    row: &LogRow,
+    avatars: &crate::hub::AvatarUrls,
+    pr: &std::collections::HashSet<String>,
+) -> GraphRowItem {
     GraphRowItem {
         oid_hex: row.oid_hex.clone(),
         author: row.author.clone(),
@@ -77,7 +81,7 @@ pub(super) fn to_row_item(row: &LogRow, avatars: &crate::hub::AvatarUrls) -> Gra
         co_authors: crate::encode::encode_co_authors(&row.co_authors),
         body: row.body.clone(),
         geometry: encode_geometry(&row.segments),
-        labels: encode_labels(&row.labels, crate::encode::fake_pr_set()),
+        labels: encode_labels(&row.labels, pr),
         stash_ref: row.stash_ref.clone(),
         // Set by the marking pass that runs before anyone sees the row
         // (`mark_incoming`), so a chunk arriving under a standing query

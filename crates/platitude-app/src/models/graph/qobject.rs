@@ -138,8 +138,11 @@ impl GraphModel {
                         tracing::info!(first_chunk_ms = self.first_chunk_ms, "graph first chunk");
                     }
                     let avatars = crate::hub::AvatarUrls::current();
-                    let mut items: Vec<GraphRowItem> =
-                        rows.iter().map(|row| to_row_item(row, &avatars)).collect();
+                    let pr = crate::encode::fake_pr_set();
+                    let mut items: Vec<GraphRowItem> = rows
+                        .iter()
+                        .map(|row| to_row_item(row, &avatars, pr))
+                        .collect();
                     for row in &rows {
                         self.max_lanes = self.max_lanes.max(i32::from(row.width));
                     }
@@ -155,11 +158,12 @@ impl GraphModel {
                         // shows: the chips belong to other commits here.
                         continue;
                     }
+                    let pr = crate::encode::fake_pr_set();
                     for (row, labels) in rows {
                         let idx = row as usize;
                         if let Some(existing) = self.rows.get(idx) {
                             let mut updated = existing.clone();
-                            updated.labels = encode_labels(&labels, crate::encode::fake_pr_set());
+                            updated.labels = encode_labels(&labels, pr);
                             // The names on the row are searched, so the
                             // second pass that puts the chips on can turn
                             // a row's light on or off.
@@ -198,8 +202,11 @@ impl GraphModel {
                     }
                     self.generation = generation;
                     let avatars = crate::hub::AvatarUrls::current();
-                    let mut items: Vec<GraphRowItem> =
-                        rows.iter().map(|row| to_row_item(row, &avatars)).collect();
+                    let pr = crate::encode::fake_pr_set();
+                    let mut items: Vec<GraphRowItem> = rows
+                        .iter()
+                        .map(|row| to_row_item(row, &avatars, pr))
+                        .collect();
                     // Before the splice, so a rebuild under a standing
                     // query notifies each row once — with its light
                     // already right — instead of twice.

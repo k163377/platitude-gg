@@ -195,6 +195,12 @@ pub fn co_author_pairs(encoded: &str) -> impl Iterator<Item = (&str, &str)> {
 mod tests {
     use super::*;
 
+    /// [`encode_labels`] with no branch wearing the PR badge — what every
+    /// test here means when the set is not its subject.
+    fn encode_no_pr(labels: &[RefLabel]) -> String {
+        encode_labels(labels, &Default::default())
+    }
+
     #[test]
     fn label_records_have_fixed_prefix() {
         let labels = [
@@ -217,10 +223,7 @@ mod tests {
                 held_elsewhere: false,
             },
         ];
-        assert_eq!(
-            encode_labels(&labels, &Default::default()),
-            "L11010main\u{1f}T00010v1.0"
-        );
+        assert_eq!(encode_no_pr(&labels), "L11010main\u{1f}T00010v1.0");
         // The seat the head flag is read by, from either end of the list.
         assert!(labels_head("L11010main\u{1f}T00010v1.0"));
         assert!(labels_head("T00010v1.0\u{1f}L11010main"));
@@ -241,10 +244,7 @@ mod tests {
             remote: String::new(),
             held_elsewhere: true,
         }];
-        assert_eq!(
-            encode_labels(&labels, &Default::default()),
-            "L00011feature/topic-a"
-        );
+        assert_eq!(encode_no_pr(&labels), "L00011feature/topic-a");
         // And the name still starts where the readers look for it.
         assert_eq!(
             label_names("L00011feature/topic-a").collect::<Vec<_>>(),
@@ -298,7 +298,7 @@ mod tests {
             remote: String::new(),
             held_elsewhere: false,
         }];
-        assert_eq!(encode_labels(&labels, &Default::default()), "T01010v1.0");
+        assert_eq!(encode_no_pr(&labels), "T01010v1.0");
     }
 
     /// The PR digit answers the set the caller passed — only a local
@@ -338,10 +338,7 @@ mod tests {
             remote: "origin, fork".into(),
             held_elsewhere: false,
         }];
-        assert_eq!(
-            encode_labels(&labels, &Default::default()),
-            "T01000v9.9\u{1e}origin, fork"
-        );
+        assert_eq!(encode_no_pr(&labels), "T01000v9.9\u{1e}origin, fork");
     }
 
     #[test]
@@ -366,7 +363,7 @@ mod tests {
                 held_elsewhere: false,
             },
         ];
-        let encoded = encode_labels(&labels, &Default::default());
+        let encoded = encode_no_pr(&labels);
         assert_eq!(
             label_names(&encoded).collect::<Vec<_>>(),
             vec!["main", "v9.9"],
@@ -387,7 +384,7 @@ mod tests {
             remote: String::new(),
             held_elsewhere: false,
         }];
-        assert!(!encode_labels(&labels, &Default::default()).contains(FIELD_SEP));
+        assert!(!encode_no_pr(&labels).contains(FIELD_SEP));
     }
 
     #[test]

@@ -265,12 +265,6 @@ impl Registry {
     }
 }
 
-impl Default for Registry {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// The process's registry — what the running models file into.
 static REGISTRY: Registry = Registry::new();
 
