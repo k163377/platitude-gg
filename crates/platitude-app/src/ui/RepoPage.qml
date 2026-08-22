@@ -181,12 +181,37 @@ Item {
     /// words. Empty for one git named itself (`WIP on …`) — that line names the commit the work was standing on,
     /// not the work.
     property string pendingPopLabel: ""
+    /// What `writeSeq` stood at when it was armed, so the answer it is waiting for can be told from any other.
+    ///
+    /// **Every stash operation answers under the same `lastWriteOp`**, so the op alone does not say whose answer this
+    /// is: the details pane's band leaves its buttons live, and an `apply` pressed just before a pop would take the
+    /// pop's name with it — and drop it if that apply were refused. Only the very next answer is this one's, and
+    /// anything else disarms it: a name put back off the wrong write is worse than one not put back at all.
+    property int pendingPopSeq: -1
     /// Both ways in to a pop — the graph row's menu and the details pane's band — so the name comes back from one
     /// place (デザイン規約 §変更を退避する).
     function popStash(selector) {
         page.pendingPopLabel = repoTab.stashLabel(stashesModel.nameOfFull(selector))
+        page.pendingPopSeq = repoTab.writeSeq
         repoTab.popStash(selector)
         page.selectedStashRef = ""
+    }
+    /// The answer to that pop, whichever way it went. Read before the refusal branch below so both landings pass
+    /// through here — and the words only go in where the pop is what answered, and it landed
+    /// (デザイン規約 §変更を退避する. 2026-08-22 ユーザー指示).
+    ///
+    /// **Never over what is already typed.** Text in these boxes is the one thing on this page that cannot be read
+    /// back off disk (`absorbOpMessage`), and both are asked: a description with no summary is not an empty editor.
+    function absorbPopLabel() {
+        if (page.pendingPopSeq < 0 || repoTab.writeSeq <= page.pendingPopSeq)
+            return
+        const carried = page.pendingPopLabel
+        const mine = repoTab.writeSeq === page.pendingPopSeq + 1
+                     && repoTab.lastWriteOp === "stash" && repoTab.lastWriteError === ""
+        page.pendingPopLabel = ""
+        page.pendingPopSeq = -1
+        if (mine && carried !== "" && wipPane.subjectText === "" && wipPane.bodyText === "")
+            wipPane.setMessage(carried, "")
     }
 
     // Not confirmed even when HEAD is already on a remote: amending rewrites nothing that a switch or a reset cannot
@@ -835,9 +860,10 @@ Item {
         page.diffAwaits = false
         // A push this button sent has come back; what it means for the toolbar's button is the flow's to work out.
         publishFlow.noteWriteAnswer(repoTab.lastWriteOp, repoTab.lastWriteError)
+        // A pop that did not happen leaves its entry, and its name, where they were — so this is read on both
+        // landings, above the refusal branch and its early returns.
+        page.absorbPopLabel()
         if (repoTab.lastWriteError !== "") {
-            // A pop that did not happen leaves its entry, and its name, where they were.
-            page.pendingPopLabel = ""
             // Whatever the window took away for this write is still there — git would not do it, or could not reach
             // the far side to. Put back before anything below answers for the refusal, so the row the question is
             // about is on screen when the question is (デザイン規約 §消す操作は先に画面から消す).
@@ -891,17 +917,6 @@ Item {
             page.clearCommitEditor()
             wipPane.setAmendChecked(false)
             page.amending = false
-        }
-        // The work is back in the tree, so the words that named it go back in the box they were written in — the entry
-        // is gone and nothing else is holding them (デザイン規約 §変更を退避する. 2026-08-22 ユーザー指示).
-        //
-        // **Never over what is already typed.** Text in these boxes is the one thing on this page that cannot be read
-        // back off disk (`absorbOpMessage`), and both are asked: a description with no summary is not an empty editor.
-        if (repoTab.lastWriteOp === "stash" && page.pendingPopLabel !== "") {
-            const carried = page.pendingPopLabel
-            page.pendingPopLabel = ""
-            if (wipPane.subjectText === "" && wipPane.bodyText === "")
-                wipPane.setMessage(carried, "")
         }
         // git stopped part-way and left the operation standing, so there is no commit at the tip to land on and the
         // answer to the press is the working tree: the conflicted rows, and the way out under them (デザイン規約

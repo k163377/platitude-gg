@@ -229,9 +229,12 @@ pub fn is_valid_message(message: &str) -> bool {
 /// - `<label>` — an entry put on the reflog by `stash store`, which is
 ///   what [`rename`] is built out of; there is no branch for it to name.
 ///
-/// A label that itself opens `On …: ` is read as the second shape and
-/// loses its first words. git cannot tell those two apart either — the
-/// reflog holds one line, with nothing marking where a prefix ends.
+/// The reflog holds one line with nothing marking where a prefix ends, so
+/// git cannot tell a label that opens like one of its own from the prefix
+/// it writes, and neither can this: `On second thought: …` loses its first
+/// words, and a label opening `WIP on ` answers empty. Both are recorded
+/// rather than fixed — the caller reads an empty answer as "nobody named
+/// this one", which is what an entry pushed without a message is.
 #[must_use]
 pub fn label_in(message: &str) -> &str {
     if message.starts_with("WIP on ") {
@@ -495,7 +498,9 @@ mod tests {
             label_in("On its own with no colon"),
             "On its own with no colon"
         );
-        // The ambiguity, recorded rather than fixed.
+        // The two ambiguities, recorded rather than fixed: a label that
+        // opens the way one of git's prefixes does is read as one.
         assert_eq!(label_in("On second thought: revert it"), "revert it");
+        assert_eq!(label_in("WIP on the parser"), "");
     }
 }

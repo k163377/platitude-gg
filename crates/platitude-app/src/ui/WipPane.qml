@@ -492,7 +492,9 @@ ColumnLayout {
     /// after it would be naming someone else's work.
     ///
     /// The text is not taken away by the write that reads it: the boxes are the one thing here that cannot be read
-    /// back off disk, and `pop` does not put a message back (see `absorbOpMessage`).
+    /// back off disk (see `absorbOpMessage`), and a stash is undone by a `pop` that lands the work back in a tree
+    /// this pane is already describing. What a pop does put back is the *entry's* name, and only into an empty box
+    /// (`RepoPage.absorbPopLabel`).
     ///
     /// Asked of core per keystroke, the same pure function the rename box asks — one line with something on it, and no
     /// rule of this pane's own on top (規約 §同名).
