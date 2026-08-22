@@ -1726,8 +1726,12 @@ Item {
                 page.reloadDiff()
             page.absorbOpMessage()
             // The status can be the half a detached landing was waiting on (`tryPendingHeadSelect`'s fallback reads
-            // this model, and only a status younger than the arming may answer).
-            page.tryPendingHeadSelect()
+            // this model, and only a status younger than the arming may answer). **Only the detached half**: with a
+            // branch name standing, resolution stays with the refs/graph events — a status that arrives first would
+            // otherwise hand the still-stale `branchesModel.headOid` a row to land on, which is the exact stale read
+            // the pending flag exists to wait out.
+            if (branchesModel.headOid === "")
+                page.tryPendingHeadSelect()
         }
     }
     Connections {
