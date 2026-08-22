@@ -16,7 +16,9 @@ mod window;
 
 pub(super) use frame::{set_caption_strip, take_frame_hit_test};
 pub(super) use icon::set_icon;
-pub(super) use window::{fit_to_work_area, keep_system_gestures, set_maximized, square_corners};
+pub(super) use window::{
+    fit_to_work_area, keep_system_gestures, minimize, set_maximized, square_corners,
+};
 
 /// `RECT` (windef.h).
 #[repr(C)]

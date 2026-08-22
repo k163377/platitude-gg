@@ -30,13 +30,23 @@ pub(crate) fn square_corners() {
     }
 }
 
-/// `SC_MAXIMIZE` / `SC_RESTORE` (winuser.h), the two the band's
-/// double-click and the window menu send.
+/// `SC_MAXIMIZE` / `SC_RESTORE` / `SC_MINIMIZE` (winuser.h), the three
+/// the band's double-click, its buttons and the window menu send.
 const SC_MAXIMIZE: usize = 0xF030;
 const SC_RESTORE: usize = 0xF120;
+const SC_MINIMIZE: usize = 0xF020;
 
 pub(crate) fn set_maximized(maximized: bool) {
-    WANT_MAXIMIZED.set(maximized);
+    post_command(if maximized { SC_MAXIMIZE } else { SC_RESTORE });
+}
+
+pub(crate) fn minimize() {
+    post_command(SC_MINIMIZE);
+}
+
+/// Hands one system command to every top-level window the thread owns.
+fn post_command(command: usize) {
+    COMMAND.set(command);
     // SAFETY: as in `square_corners` — the same walk, and the callback
     // only posts a message to the window it is handed.
     unsafe {
@@ -45,8 +55,8 @@ pub(crate) fn set_maximized(maximized: bool) {
 }
 
 thread_local! {
-    /// Which of the two commands the walk is carrying.
-    static WANT_MAXIMIZED: Cell<bool> = const { Cell::new(false) };
+    /// Which command the walk is carrying.
+    static COMMAND: Cell<usize> = const { Cell::new(0) };
 }
 
 /// Runs for every top-level window the thread owns. Posted rather
@@ -60,12 +70,7 @@ extern "system" fn command_one(window: *mut c_void, _param: isize) -> i32 {
         if IsWindowVisible(window) == 0 {
             return 1;
         }
-        let command = if WANT_MAXIMIZED.get() {
-            SC_MAXIMIZE
-        } else {
-            SC_RESTORE
-        };
-        PostMessageW(window, WM_SYSCOMMAND, command, 0);
+        PostMessageW(window, WM_SYSCOMMAND, COMMAND.get(), 0);
     }
     1
 }

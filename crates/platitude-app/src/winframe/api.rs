@@ -1,4 +1,4 @@
-//! The seven the rest of the application calls. Each one is the whole
+//! The few the rest of the application calls. Each one is the whole
 //! story on mac and Ubuntu, where there is nothing to say.
 
 #[cfg(windows)]
@@ -53,6 +53,24 @@ pub fn set_maximized(maximized: bool) {
     win32::set_maximized(maximized);
     #[cfg(not(windows))]
     let _ = maximized;
+}
+
+/// Puts the window down onto the taskbar through the platform's own
+/// command — again the same one the window menu sends.
+///
+/// Not the scene's `visibility` either, and for a sharper reason than
+/// the maximise: `QWindow::setVisibility(Minimized)` carries a window
+/// state of *minimised alone*, so Qt reads the maximise as being given
+/// up at the same moment and clears `WPF_RESTORETOMAXIMIZED` off the
+/// placement to match (`QWindowsWindow::setWindowState_sys`, Qt 6.10).
+/// The window goes down maximised and comes back an ordinary one
+/// (reported 2026-08-22). Windows minimises on its own command without
+/// touching the flag, and Qt keeps the maximised bit when it sees the
+/// resize (`SIZE_MINIMIZED` adds to the state it holds rather than
+/// replacing it), so both sides still agree on the way back up.
+pub fn minimize() {
+    #[cfg(windows)]
+    win32::minimize();
 }
 
 /// Pulls the window back inside the work area of the monitor it came up

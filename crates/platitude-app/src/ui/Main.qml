@@ -80,8 +80,15 @@ ApplicationWindow {
         else
             root.visibility = wanted ? Window.Maximized : Window.Windowed
     }
+    /// Down onto the taskbar — and through the platform for the same reason the maximise is, only sharper: assigning
+    /// `Minimized` hands Qt a state that is *only* minimised, so it reads the maximise as given up and clears the
+    /// platform's restore-to-maximised flag on the way down. The window came back an ordinary one (reported
+    /// 2026-08-22). `visibility` still carries it where there is no platform command.
     function minimizeWindow() {
-        root.visibility = Window.Minimized
+        if (root.captionMerged)
+            AppBackend.minimizeWindow()
+        else
+            root.visibility = Window.Minimized
     }
     /// Tells the hit test where the band's grab-run is, in scene coordinates — the one stretch it answers HTCAPTION
     /// for, which gives the band drag, snap, double-click maximise and the window menu as the platform's own

@@ -231,6 +231,16 @@ impl AppBackend {
         crate::winframe::set_maximized(maximized);
     }
 
+    /// Puts the window down onto the taskbar, again through the platform
+    /// rather than through `visibility`: assigning `Minimized` tells Qt
+    /// the maximise is over too, and it clears the platform's
+    /// restore-to-maximised flag to match — so a maximised window came
+    /// back an ordinary one (`winframe::minimize`).
+    #[qslot]
+    fn minimize_window(&self) {
+        crate::winframe::minimize();
+    }
+
     /// Pulls a restored window back inside the screen it came up on, and
     /// answers whether it had to. The scene cannot do this itself: what
     /// has to fit is the frame, which is wider than the window says it
