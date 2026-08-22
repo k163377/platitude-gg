@@ -863,6 +863,11 @@ Item {
         // A pop that did not happen leaves its entry, and its name, where they were — so this is read on both
         // landings, above the refusal branch and its early returns.
         page.absorbPopLabel()
+        // Whether the working tree emptying next is this window's own doing. Every stash operation answers under the
+        // same op, and only one of them can empty a tree — so the count arriving at zero is what says it was a push,
+        // and this only says whose. Written on every answer rather than armed and cleared, so nothing can be left
+        // standing for a later write to trip over; a refusal writes `false` the same way.
+        page.stashLanded = repoTab.lastWriteOp === "stash" && repoTab.lastWriteError === ""
         if (repoTab.lastWriteError !== "") {
             // Whatever the window took away for this write is still there — git would not do it, or could not reach
             // the far side to. Put back before anything below answers for the refusal, so the row the question is
@@ -1328,6 +1333,9 @@ Item {
     // background pass that moves rows under a reader may not also move their view
     // (§ListView.highlightFollowsCurrentItem).
     property bool pendingHeadAsked: false
+    /// Whether the last write this window sent was a stash that landed — read where the working tree turns out to be
+    /// empty, which is the moment that says the entry took all of it (`worktreeModel.onChanged`).
+    property bool stashLanded: false
     function tryPendingHeadSelect() {
         if (!page.pendingHeadSelect || !branchesModel.refsLoaded)
             return
@@ -1548,9 +1556,22 @@ Item {
             // else committed these changes it happens with no warning, so a message being written stays on screen with
             // its text — it is the one thing here that cannot be read back off disk. Otherwise land on the commit that
             // now holds the changes rather than on nothing.
-            if (worktreeModel.total === 0 && page.wipShown && wipPane.subjectText === "" && wipPane.bodyText === "") {
+            //
+            // **A stash pressed here is not held by that.** The press *is* the decision to empty the tree, so the box
+            // is not a reason to stay: the words are still in it when the working tree comes back (the pane is hidden,
+            // not unloaded) and the entry took them for its own name on the way out. Left to the message alone, the
+            // one press that always has words in front of it — a stopped merge fills the box itself
+            // (`absorbOpMessage`) — is the one that never lands, and the pane stands over a tree it no longer
+            // describes while the highlight the working-tree row left behind is inherited by whatever slid into its
+            // place, which after this press is the entry it just made (2026-08-22 ユーザー報告).
+            const ourStash = page.stashLanded
+            if (worktreeModel.total === 0 && page.wipShown
+                    && (ourStash || (wipPane.subjectText === "" && wipPane.bodyText === ""))) {
+                page.stashLanded = false
                 page.wipShown = false
                 page.pendingHeadSelect = true
+                // Only ours is a landing anybody asked for, so only ours takes the viewport along.
+                page.pendingHeadAsked = ourStash
             }
             // Smoke hook (PG_AUTO_WIP=1): open the WIP view once uncommitted changes are known.
             if (AppBackend.autoWip && worktreeModel.total > 0 && !page.wipShown) {

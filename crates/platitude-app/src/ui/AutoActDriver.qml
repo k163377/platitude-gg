@@ -110,7 +110,7 @@ Item {
     function isWriteAct(act) {
         return ["publish", "publish-taken", "publish-add", "publish-go",
                 "publish-new-go", "commit", "amend", "amend-reset-author",
-                "stash", "stash-file", "stage-many-go",
+                "stash", "stash-lands", "stash-file", "stage-many-go",
                 "discard-many-go", "take-side-ours", "take-side-theirs",
                 "open-mergetool", "discard-file-go", "delete-file-go",
                 "discard-staged-go", "switch", "switch-remote", "nav-dbl",
@@ -293,6 +293,48 @@ Item {
                               + " back=" + driver.stashCameBack()
                               + " rows=" + graphModel.rowTotal
                               + " stashes=" + stashesModel.total)
+            if (AppBackend.autoAct === "stash-lands")
+                stashLandTimer.start()
+            else
+                renderedBarrier.begin()
+        }
+    }
+    // Where the press left the reader, once the graph the row went out of has settled. The selection is the whole
+    // subject, so it is waited for on the far side of the rebuild and read the way the reader would: the pane that was
+    // describing the working tree is gone, the commit under it is the one the branch points at, the details pane is
+    // showing that commit rather than the one before it, and the row is on screen.
+    //
+    // **The row being lit is not enough** — a highlight left on an index the working-tree row vacated lights whatever
+    // slid into it, and in this run that is the entry the press just made. `follows=` is the identity the picture
+    // cannot hold: two rows a couple of lines apart look alike at this width.
+    //
+    // **Waited out on the pane, not on the landing**, so a build that never lands still answers: the tree is empty and
+    // whatever is on the right has caught up with the page — the working tree's own pane, which needs nothing fetched,
+    // or a commit whose details have arrived. Both are states the application rests in, and the run says which one it
+    // reached rather than waiting out its watchdog on the wrong one.
+    Timer {
+        id: stashLandTimer
+        interval: 25
+        repeat: true
+        onTriggered: {
+            if (worktreeModel.total !== 0)
+                return
+            if (!page.wipShown && (page.selectedOid === "" || detailsModel.shaHex !== page.selectedOid))
+                return
+            stashLandTimer.stop()
+            const row = graphModel.rowOf(branchesModel.headOid)
+            AppBackend.report("stash_landed wip=" + page.wipShown
+                              + " follows=" + (page.selectedOid === branchesModel.headOid)
+                              + " onscreen=" + graphPane.rowOnScreen(row)
+                              + " lit=" + (graphPane.view.currentIndex === row)
+                              + " head=" + branchesModel.headOid.substring(0, 8)
+                              + " selected=" + page.selectedOid.substring(0, 8)
+                              + " row=" + row + " rows=" + graphModel.rowTotal
+                              // What the entry ended up called, last because it is the one field with spaces in it.
+                              // The other half of the same press: a box filled by the merge that was standing
+                              // (`absorbOpMessage`) is not a name anybody gave these changes, and an entry wearing it
+                              // would be promising a merge it does not hold (`WipPane.stashName`).
+                              + " entry=" + stashesModel.nameAt(0))
             renderedBarrier.begin()
         }
     }
@@ -742,13 +784,30 @@ Item {
     // repository does on the way open outlives the baseline the verb starts on — so a single shot lands on nothing and
     // the run waits out its watchdog on a graph nobody asked to change. What follows the press is the graph barrier
     // (`graphGoneOid`), which is why nothing else is read here.
+    //
+    // **The row that has to go is read here rather than at the dispatch.** The walk prepends the working tree's row
+    // only once the status says the tree is stacked on HEAD, and that status can arrive after the graph's first pass —
+    // a repository opened onto a stopped merge is the case where it does. Read too early, the verb waits out its
+    // watchdog on the newest *commit*, which was never going anywhere (2026-08-22 実測, `--preset conflict-staged`).
     Timer {
         id: stashPressTimer
         interval: 25
         repeat: true
+        /// Whether the press is made from the working tree's own row with the pane that describes it open — the seat
+        /// `stash-lands` is about, taken here rather than at the dispatch so the row is there to sit on.
+        property bool fromWip: false
         onTriggered: {
-            if (page.pageBand !== null && page.pageBand.stashNow())
-                stashPressTimer.stop()
+            if (driver.graphTopKind() !== "wip" || page.pageBand === null)
+                return
+            const going = graphModel.oidAt(0)
+            if (stashPressTimer.fromWip) {
+                graphPane.setCurrentRow(0)
+                page.showWip()
+            }
+            if (!page.pageBand.stashNow())
+                return
+            driver.graphGoneOid = going
+            stashPressTimer.stop()
         }
     }
     // Emptying one whole bucket from its own heading, and reading back which headings the list is left with. The two
@@ -2839,10 +2898,14 @@ Item {
             wipPane.setAmendChecked(true)
             page.amendToggled(true)
             resetAuthorTimer.start()
-        } else if (act === "stash") {
+        } else if (act === "stash" || act === "stash-lands") {
             // Through the band's button, which is the whole of it: nothing is asked before the write. The WIP pane is
             // left where it is — the button stands on the window's band now, so a run that opened that pane first
             // would be proving the reach of a pane the button no longer needs (デザイン規約 §変更を退避する).
+            //
+            // **`stash-lands` is the one that opens it**, because where the reader is standing is its whole subject:
+            // the press empties the tree the pane is describing, and the row it is standing on leaves the graph with
+            // the highlight still on it (2026-08-22 ユーザー報告). Pressed from the same button all the same.
             //
             // Everything goes, so the working-tree row goes with it and the new stash takes the lead — the row whose
             // absence says the rebuild has landed. The one-path verb leaves the row where it is and keeps the plain
@@ -2857,7 +2920,7 @@ Item {
                 driver.stashWanted = "feat: write the summary"
                 wipPane.setMessage(driver.stashWanted, "")
             }
-            driver.graphGoneOid = graphModel.oidAt(0)
+            stashPressTimer.fromWip = act === "stash-lands"
             stashPressTimer.start()
         } else if (act === "stash-file") {
             wipPane.chooseOnly("unstaged", arg)

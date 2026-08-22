@@ -93,6 +93,14 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // it, at a width that elides most of it.
         "stash" if arg == "named" => Some("graph_settled gone=true top=stash named=true"),
         "stash" => Some("graph_settled gone=true top=stash named=false"),
+        // The same press, made from the working tree's own row with the
+        // pane that describes it open — so the row the press takes away is
+        // the one the reader is standing on. Where they are put instead is
+        // the claim, and the picture holds none of it: the highlight left
+        // on a vacated index lights the entry the press just made, which
+        // at this width is a row like any other, and a viewport that never
+        // moved frames the same way in a history this short.
+        "stash-lands" => Some("stash_landed wip=false follows=true onscreen=true"),
         // `back=` is the other half of the same press: the entry's name is
         // in the commit box, where the entry is not there to hold it any
         // more. Read off the box, and invisible in the picture at any
