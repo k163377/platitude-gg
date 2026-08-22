@@ -8,6 +8,7 @@
 //!   killed when either fires
 //! - on Windows no console window is shown
 
+mod child;
 mod command;
 mod executor;
 
