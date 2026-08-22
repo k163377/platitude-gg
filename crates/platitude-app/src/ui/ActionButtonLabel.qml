@@ -58,6 +58,14 @@ Item {
     property string phraseCount: ""
     property string phraseTail: ""
     property color phraseTailTint: btnLabel.tint
+    /// The hold's mark, when the phrase is on a button that is held rather than clicked.
+    ///
+    /// **Inside the phrase rather than in the button's own seat.** The seat stands at the row's left edge, and a
+    /// phrase is centred in a cell that fills the row — so a mark left out there ends up alone against the far edge,
+    /// with the words it is meant to introduce adrift in the middle. §長押し puts the mark immediately ahead of the
+    /// word; here that means ahead of the first chip (2026-08-22 実測: the stranded mark).
+    property int phraseHoldMs: 0
+    property real phraseHoldProgress: 0
     /// Whom the phrase's action will be attributed to, at its end (`… by <face>`). -1 draws nothing at all — this is
     /// the commit button's own ending, and no other button has one (デザイン規約 §アバターを与える).
     property int phraseFace: -1
@@ -89,7 +97,8 @@ Item {
     /// What the parts that never give are holding, each with the gap that follows it. Counted per part rather than as
     /// a lump: a `Row` charges a gap for every visible child, so a part that is not there does not owe one.
     readonly property real phraseFixed:
-        headChip.implicitWidth + phraseRow.spacing
+        (btnLabel.phraseHoldMs > 0 ? Theme.iconSm + phraseRow.spacing : 0)
+        + headChip.implicitWidth + phraseRow.spacing
         + (countWord.visible ? countWord.implicitWidth + phraseRow.spacing : 0)
         + (btnLabel.phraseFace >= 0 ? byWord.implicitWidth + phraseAvatar.width + 2 * phraseRow.spacing : 0)
     /// What is left for the three that do.
@@ -170,6 +179,13 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.spaceXs
+        HoldIcon {
+            visible: btnLabel.phraseHoldMs > 0
+            progress: btnLabel.phraseHoldProgress
+            tint: btnLabel.tint
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: Metrics.opticalDrop
+        }
         CodeChip {
             id: headChip
             word: btnLabel.phraseHead

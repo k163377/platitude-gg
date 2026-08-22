@@ -45,6 +45,8 @@ Rectangle {
     /// Automation: whether the card offers a row at all. A row that is not there and a row that is there and down
     /// crop to the same picture (the card sizes itself to what it holds).
     function offersOpExit(code) {
+        if (code === "--abort" && abortButton.visible)
+            return true
         for (let i = 0; i < opExitCol.children.length; i++) {
             const row = opExitCol.children[i]
             if (row && row.code === code)
@@ -55,6 +57,10 @@ Rectangle {
 
     /// Automation: run one of the held rows to its end, named by its flag.
     function completeOpExit(code) {
+        if (code === "--abort" && abortButton.visible) {
+            abortButton.completeHold()
+            return true
+        }
         for (let i = 0; i < opExitCol.children.length; i++) {
             const row = opExitCol.children[i]
             if (row && row.code === code) {
@@ -65,18 +71,30 @@ Rectangle {
         return false
     }
 
+    /// A stopped merge has no card left — it is one button, and the button is the whole of it.
+    ///
+    /// **A card is what holds a column together**: the frame gathers the rows, and the heading says which operation
+    /// they belong to. One button gathers nothing, and its own chip already names the operation, so both would only
+    /// draw a box around a box and say `MERGING` twice (the toolbar badge says it first — デザイン規約 §長さ).
+    /// What is left is a red button standing under the one that finishes things, which is what it is
+    /// (2026-08-22 ユーザー判断).
+    readonly property bool bare: opExitCard.workTree.opMerging
+
     visible: opExitCard.workTree.opText !== ""
-    implicitHeight: opExitCol.implicitHeight + 2 * Theme.spaceXs
-    color: Theme.bgBase
+    implicitHeight: opExitCol.implicitHeight + (opExitCard.bare ? 0 : 2 * Theme.spaceXs)
+    color: opExitCard.bare ? "transparent" : Theme.bgBase
     radius: Theme.radiusMd
-    border.color: Theme.warning
-    border.width: Theme.borderWidth
+    border.color: opExitCard.bare ? "transparent" : Theme.warning
+    border.width: opExitCard.bare ? 0 : Theme.borderWidth
     ColumnLayout {
         id: opExitCol
         anchors.fill: parent
-        anchors.margins: Theme.spaceXs
+        // Nothing of its own to inset by when the button is all there is: it lines up with the commit button above,
+        // which is the pane's own column and pays its own margins.
+        anchors.margins: opExitCard.bare ? 0 : Theme.spaceXs
         spacing: 0
         RowLayout {
+            visible: !opExitCard.bare
             Layout.fillWidth: true
             Layout.leftMargin: Theme.spaceXs
             Layout.bottomMargin: Theme.spaceXs
@@ -162,9 +180,39 @@ Rectangle {
             holdIndent: opExitCard.holdIndent
             code: "--abort"
             text: qsTr("Undo it all and go back")
+            visible: !opExitCard.workTree.opMerging
             enabled: opExitCard.repoTab.busyCount === 0
             holdMs: Metrics.holdMs
             onPicked: opExitCard.repoTab.resolveOperation("abort")
+        }
+        // **A merge's only way out is a button, not a row.** A column of rows is what the other three are — the hand
+        // that learned the reset submenu reads them down their first letters, and the chip column is what lines those
+        // letters up. One row has no column and nothing to line up with (デザイン規約 §進行中の操作から出る).
+        //
+        // **The shape is the commit button's, in red**: a frame of its own, the phrase centred inside it, the hold
+        // filling the frame it drew. The two then read as the pair they are — the one that finishes the merge and the
+        // one that puts it back — and neither is a box drawn inside another box (2026-08-22 ユーザー判断).
+        //
+        // **The word is red because the gesture is a hold.** Colour on a word is this application's mark of a press
+        // that has to be held (§長押し), and taking the hold away would take the colour with it.
+        ActionButton {
+            id: abortButton
+            Layout.fillWidth: true
+            visible: opExitCard.bare
+            centred: true
+            tone: Theme.danger
+            frameColor: Theme.danger
+            holdMs: Metrics.holdMs
+            // The command in git's own spelling, whole rather than as a bare flag: the chip is the row's only name
+            // now, and `merge --abort` is what a terminal would be told (§git 用語のコード表記 — the same shape the
+            // commit button's `commit --amend` takes).
+            phraseHead: "merge --abort"
+            // **What happens, not what is lost in general.** The hold's mark already says something goes; the words
+            // say where it lands, and that landing is the whole of the answer — nothing done since the merge began
+            // survives it (2026-08-22 ユーザー判断).
+            text: qsTr("Back to before it started")
+            enabled: opExitCard.repoTab.busyCount === 0
+            onHeld: opExitCard.repoTab.resolveOperation("abort")
         }
     }
 }

@@ -274,7 +274,9 @@ HoverToolButton {
             ActionButtonSeat {
                 id: seat
                 kind: actionBtn.kind
-                holdMs: actionBtn.holdMs
+                // A phrase carries the hold's mark itself, ahead of its first chip: this seat is at the row's left
+                // edge and the phrase is centred, so the two would stand apart (`ActionButtonLabel.phraseHoldMs`).
+                holdMs: btnLabel.phrased ? 0 : actionBtn.holdMs
                 besideWord: actionBtn.besideWord
                 holdProgress: actionBtn.holdProgress
                 busy: actionBtn.busy
@@ -295,6 +297,8 @@ HoverToolButton {
                 alertTight: actionBtn.alertTight
                 fontSize: actionBtn.font.pixelSize
                 phraseHead: actionBtn.phraseHead
+                phraseHoldMs: actionBtn.holdMs
+                phraseHoldProgress: actionBtn.holdProgress
                 phraseCount: actionBtn.phraseCount
                 phraseTail: actionBtn.phraseTail
                 phraseTailTint: actionBtn.phraseTailTint
