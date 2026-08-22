@@ -20,9 +20,9 @@ impl RepoSession {
             Some(tip) => tip,
             None => refs::head_state(&self.executor, workdir, cancel).await?.oid,
         };
-        if head_tip.is_none() {
+        let Some(head_tip) = head_tip else {
             return Ok(LogTotals::default());
-        }
+        };
 
         // Stashes are part of the graph: their oids join the walk and the
         // synthetic index/untracked parents are sifted out below.
@@ -31,12 +31,15 @@ impl RepoSession {
             .map(|list| list.into_iter().map(|s| (s.oid, s.name)).collect())
             .unwrap_or_default();
 
-        // What a standing merge is bringing in: the WIP row leashes it,
-        // and the walk is told to start there so the leash has a node to
-        // land on even when no branch or remote points at it any more.
-        let incoming = self.merge_incoming();
+        // The row at the top and the walk under it, decided once (see
+        // `pending_commit`): the sides a standing merge brings in are
+        // leashed by that row, and the walk is told to start there so
+        // each leash has a node to land on even when no branch or remote
+        // points at it any more.
+        let pending_row = self.pending_commit();
+        let incoming = pending_row.as_deref().unwrap_or_default();
 
-        let cmd = walk_command(workdir, options, &stash_refs, &incoming);
+        let cmd = walk_command(workdir, options, &stash_refs, incoming);
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
@@ -45,12 +48,10 @@ impl RepoSession {
         let mut parse_error: Option<String> = None;
         let mut totals = LogTotals::default();
 
-        // Dirty working tree: prepend the synthetic WIP row so the current
-        // chain owns lane 0 from the very first paint.
-        if self.wip_dirty.load(Ordering::SeqCst)
-            && let Some(head_oid) = head_tip
-        {
-            self.emit_wip_row(generation, &head_oid, &incoming);
+        // Something to commit: prepend the synthetic WIP row so the
+        // current chain owns lane 0 from the very first paint.
+        if pending_row.is_some() {
+            self.emit_wip_row(generation, &head_tip, incoming);
             totals.shown += 1;
         }
 
@@ -113,20 +114,18 @@ impl RepoSession {
             Some(tip) => tip,
             None => refs::head_state(&self.executor, workdir, cancel).await?.oid,
         };
-        if head_tip.is_none() {
+        let Some(head_tip) = head_tip else {
             return Ok(0);
-        }
+        };
 
-        // A standing merge's sides join the row and the walk here too (see
-        // stream_log).
-        let incoming = self.merge_incoming();
+        // The row and the sides it leashes, decided once (see stream_log).
+        let pending_row = self.pending_commit();
+        let incoming = pending_row.as_deref().unwrap_or_default();
 
-        // Dirty working tree: prepend the synthetic WIP row (mirrors
+        // Something to commit: prepend the synthetic WIP row (mirrors
         // stream_log).
-        if self.wip_dirty.load(Ordering::SeqCst)
-            && let Some(head_oid) = head_tip
-        {
-            out.push(wip_row(&head_oid, &incoming, builder));
+        if pending_row.is_some() {
+            out.push(wip_row(&head_tip, incoming, builder));
         }
 
         // Stashes join the walk here too (see stream_log).
@@ -135,7 +134,7 @@ impl RepoSession {
             .map(|list| list.into_iter().map(|s| (s.oid, s.name)).collect())
             .unwrap_or_default();
 
-        let cmd = walk_command(workdir, options, &stash_refs, &incoming);
+        let cmd = walk_command(workdir, options, &stash_refs, incoming);
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
@@ -170,7 +169,30 @@ impl RepoSession {
         Ok(sifter.walked)
     }
 
-    /// Sends the synthetic WIP row (dirty working tree) as its own chunk.
+    /// The sides the uncommitted row would leash, or `None` when there is
+    /// no such row because nothing is stacked on HEAD.
+    ///
+    /// A different question from "is the tree dirty". Resolving every
+    /// conflict of a merge as ours and staging it leaves `git status`
+    /// empty with `MERGE_HEAD` still standing, and the commit written
+    /// there is still a merge carrying both parents (実測 2.55 — a
+    /// cherry-pick in the same state refuses the commit instead, which is
+    /// why a stopped sequence is not this row). The row draws the commit
+    /// that is about to be written, so it is there whenever there is one.
+    ///
+    /// One answer for the row and for the walk, because they are one
+    /// decision: the sides join the walk only to give the row's dotted
+    /// edges something to land on, so a walk that reached `MERGE_HEAD`
+    /// with no row above it would leave a commit on screen that no tip
+    /// names and no edge reaches — appearing and vanishing with a merge
+    /// the graph never mentions.
+    fn pending_commit(&self) -> Option<Vec<Oid>> {
+        let incoming = self.merge_incoming();
+        let stacked = self.wip_dirty.load(Ordering::SeqCst) || !incoming.is_empty();
+        stacked.then_some(incoming)
+    }
+
+    /// Sends the synthetic WIP row as its own chunk.
     fn emit_wip_row(&self, generation: u64, head: &Oid, incoming: &[Oid]) {
         let mut guard = self.lock_shared();
         if guard.generation != generation {

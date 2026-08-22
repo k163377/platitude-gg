@@ -356,6 +356,92 @@ async fn a_standing_merge_dots_the_side_it_is_bringing_in() {
     session.close();
 }
 
+/// A merge whose conflicts are all resolved as ours: `git status` comes
+/// back empty with `MERGE_HEAD` still standing, and committing there still
+/// writes a merge (実測 2.55). The row is the commit about to be written,
+/// so a clean tree does not take it away — nothing else on screen would
+/// say the next commit has two parents.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_merge_resolved_as_ours_keeps_the_row_a_clean_tree_would_not() {
+    let mut repo = crate::support::integrate::conflicting_branches();
+    let theirs = repo.git(&["rev-parse", "side"]);
+    repo.git_expect_failure(&["merge", "side"]);
+    repo.write_file("f.txt", "main\n");
+    repo.git(&["add", "--", "f.txt"]);
+    assert_eq!(
+        repo.git(&["status", "--porcelain"]),
+        "",
+        "the point of the case is a clean tree under a standing merge"
+    );
+
+    let (sink, session) = crate::support::session::opened(&repo).await;
+    sink.opened_graph_gen(&session, 4).await;
+    let rows = sink
+        .wait_for("the four-row graph", |evs| {
+            let rows = crate::support::replay_rows(evs);
+            (rows.len() == 4).then_some(rows)
+        })
+        .await;
+
+    let wip = &rows[&0];
+    assert!(
+        wip.oid_hex.bytes().all(|b| b == b'0'),
+        "the uncommitted row leads: {:?}",
+        wip.oid_hex
+    );
+    let outs: Vec<(u16, bool)> = wip
+        .segments
+        .iter()
+        .filter(|s| s.kind == platitude_core::graph::SegmentKind::OutOfNode)
+        .map(|s| (s.lane, s.dashed))
+        .collect();
+    assert_eq!(
+        outs,
+        vec![(0, true), (1, true)],
+        "both parents of the pending merge leave the row dotted: {:?}",
+        wip.segments
+    );
+    assert_eq!(rows[&2].oid_hex, theirs, "the side the leash reaches");
+    session.close();
+}
+
+/// The same clean tree, with the side reachable by nothing but
+/// `MERGE_HEAD`. The walk starts there for one reason — the row above it
+/// has a dotted edge to land — so the two are one decision: whatever
+/// reaches the graph this way arrives leashed, never as a commit no tip
+/// names and no edge touches, blinking in and out with the merge.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_side_only_merge_head_names_is_never_on_screen_unleashed() {
+    let mut repo = crate::support::integrate::conflicting_branches();
+    let theirs = repo.git(&["rev-parse", "side"]);
+    repo.git(&["branch", "-D", "side"]);
+    repo.git_expect_failure(&["merge", &theirs]);
+    repo.write_file("f.txt", "main\n");
+    repo.git(&["add", "--", "f.txt"]);
+    assert_eq!(repo.git(&["status", "--porcelain"]), "", "a clean tree");
+
+    let (sink, session) = crate::support::session::opened(&repo).await;
+    sink.opened_graph_gen(&session, 4).await;
+    let rows = sink
+        .wait_for("the four-row graph", |evs| {
+            let rows = crate::support::replay_rows(evs);
+            (rows.len() == 4).then_some(rows)
+        })
+        .await;
+    assert_eq!(rows[&2].oid_hex, theirs, "the side is on screen");
+    assert!(
+        rows[&2]
+            .segments
+            .iter()
+            .any(|s| s.kind == platitude_core::graph::SegmentKind::IntoNode
+                && s.lane == 1
+                && s.dashed),
+        "and something reaches it: {:?}",
+        rows[&2].segments
+    );
+    session.close();
+}
+
 /// A side no ref names — `git merge <sha>`, or the `FETCH_HEAD` of a
 /// one-off fetch — is still a parent of the commit being written, so the
 /// walk is told to start there. Nothing else would offer it, and a dotted

@@ -29,13 +29,16 @@ pub struct RepoSession {
     /// any more are worth not doing at all. The rows are unaffected —
     /// those are cheap, and a stale one is dropped by the pane on arrival.
     pub(super) diff_epoch: AtomicU64,
-    /// Dirty working tree → the log stream prepends a synthetic WIP row.
+    /// Dirty working tree — one of the two halves that put a synthetic WIP
+    /// row in front of the log stream (the other is below).
     pub(super) wip_dirty: std::sync::atomic::AtomicBool,
     /// What a standing merge is bringing in (`MERGE_HEAD`), empty the rest
     /// of the time: the WIP row leashes these as well as HEAD, so it draws
     /// the fork the merge commit is about to have. Kept beside
-    /// [`RepoSession::wip_dirty`] because the two decide the same row, and
-    /// either moving is a graph to rebuild.
+    /// [`RepoSession::wip_dirty`] because the two decide the same row —
+    /// either one makes it (a merge resolved as ours has a merge commit to
+    /// write with nothing dirty left to show for it), and either moving is
+    /// a graph to rebuild.
     pub(super) merge_incoming: Mutex<Vec<Oid>>,
     /// Set by [`RepoSession::ask_merge_tool`] to have the next status read
     /// name the merge tool even with nothing conflicted. Cleared by that
