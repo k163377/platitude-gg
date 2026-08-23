@@ -3,7 +3,7 @@
 //! rather than in it, so the ceiling the model sits under stays about the
 //! model (.claude/rules/structure.md).
 
-use super::details::{DetailsModel, FileItem};
+use super::{DetailsModel, FileItem};
 use crate::encode::FIELD_SEP;
 
 fn commit(paths: &[&str]) -> DetailsModel {

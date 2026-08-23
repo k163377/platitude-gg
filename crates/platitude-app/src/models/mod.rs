@@ -11,8 +11,6 @@
 mod app_backend;
 mod commands;
 mod details;
-#[cfg(test)]
-mod details_tests;
 mod diff;
 #[cfg(test)]
 mod diff_tests;
