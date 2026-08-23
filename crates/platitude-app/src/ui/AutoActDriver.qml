@@ -932,8 +932,13 @@ Item {
             wipPane.chooseOnly("conflicts", arg)
             page.openFileMenu("conflicts", arg, "")
             fileMenu.close()
+            // The name comes from config and the paths from the choice, so the name alone cannot say whether
+            // anything was handed over. A file that is already resolved — a fixture a previous run consumed —
+            // chooses nothing, and `openInMergeTool` then returns without queueing a write, leaving the run to
+            // the watchdog with the tool's name reported all the same. The count is what tells the two apart.
+            const handed = fileRowMenu.chosenConflicts().length
             fileRowMenu.openInMergeTool()
-            AppBackend.report("merge_tool " + wipPane.workTree.mergeTool)
+            AppBackend.report("merge_tool " + wipPane.workTree.mergeTool + " paths=" + handed)
         } else if (act === "discard-file" || act === "discard-file-go"
                    || act === "delete-file" || act === "delete-file-go"
                    || act === "discard-staged" || act === "discard-staged-go") {
