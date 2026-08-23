@@ -1,7 +1,7 @@
 //! The theme's runs laid over one line as the markup
 //! `Text.StyledText` reads.
 
-use super::columns::step_of;
+use super::columns::{is_wide, step_of};
 use platitude_core::highlight::Span;
 
 /// Lays the theme's runs over one line and writes what `Text.StyledText`
@@ -78,13 +78,31 @@ fn push_hex(out: &mut String, byte: u8) {
     }
 }
 
+/// How far along the row a walk of it stands: the display column reached,
+/// and how many of the glyphs behind it were drawn wide. The two travel
+/// together because it takes both to reach a pixel — a column is one
+/// advance of the mono font, and a wide glyph is drawn from whatever
+/// fallback carries it, which need not advance two of them.
+#[derive(Clone, Copy)]
+struct Stand {
+    col: usize,
+    wide: usize,
+}
+
 /// The display columns `ranges` (byte ranges into `text`,
 /// `platitude_core::intraline`) land on, as the row is actually drawn:
 /// this walks the line by [`step_of`], the same steps [`push_escaped`]
 /// spells it in, so the expanded tabs and the double-width glyphs are
 /// counted here exactly where they are drawn.
-/// `"col:width,col:width"`, empty where there is nothing — what
-/// `DiffRow::emph` carries and the pane turns into the stronger wash.
+///
+/// `"col:wides:width:wides,…"`, empty where there is nothing — where the
+/// run starts and how far it runs, each said twice: in columns, and in the
+/// wide glyphs standing in them. The pane needs the second number to place
+/// the first: where the mono family is Latin-only, a wide glyph comes from
+/// a fallback that advances one em rather than two mono columns
+/// (`DiffPane.wideDelta`), and a wash placed on columns alone slid right of
+/// the characters it names by that difference a glyph. What `DiffRow::emph`
+/// carries and the pane turns into the stronger wash.
 pub(super) fn display_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
     if ranges.is_empty() {
         return String::new();
@@ -92,44 +110,55 @@ pub(super) fn display_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
     let mut out = String::new();
     let mut iter = ranges.iter().copied();
     let mut current = iter.next();
-    let mut open: Option<usize> = None;
-    let mut col = 0usize;
+    let mut open: Option<Stand> = None;
+    let mut here = Stand { col: 0, wide: 0 };
     for (at, ch) in text.char_indices() {
         if let Some((start, len)) = current {
             if open.is_none() && at == start {
-                open = Some(col);
+                open = Some(here);
             }
             if at == start + len {
                 if let Some(from) = open.take() {
-                    push_pair(&mut out, from, col);
+                    push_run(&mut out, from, here);
                 }
                 current = iter.next();
                 if let Some((next_start, _)) = current
                     && at == next_start
                 {
-                    open = Some(col);
+                    open = Some(here);
                 }
             }
         }
-        col += step_of(ch, col, TAB_WIDTH);
+        here.col += step_of(ch, here.col, TAB_WIDTH);
+        here.wide += usize::from(is_wide(ch));
     }
     // A range that runs to the line's end closes here.
     if let Some(from) = open {
-        push_pair(&mut out, from, col);
+        push_run(&mut out, from, here);
     }
     out
 }
 
-fn push_pair(out: &mut String, from: usize, to: usize) {
-    if to <= from {
+fn push_run(out: &mut String, from: Stand, to: Stand) {
+    if to.col <= from.col {
         return;
     }
     if !out.is_empty() {
         out.push(',');
     }
-    out.push_str(&from.to_string());
-    out.push(':');
-    out.push_str(&(to - from).to_string());
+    let mut first = true;
+    for number in [
+        from.col,
+        from.wide,
+        to.col - from.col,
+        to.wide - from.wide,
+    ] {
+        if !first {
+            out.push(':');
+        }
+        first = false;
+        out.push_str(&number.to_string());
+    }
 }
 
 #[cfg(test)]
@@ -187,12 +216,25 @@ mod tests {
     fn the_wash_falls_on_the_columns_the_row_is_drawn_at() {
         // "日\tab" is drawn 日 on 0..2, the tab's two `&nbsp;` on 2..4,
         // then ab on 4..6 — byte ranges 0..3, 3..4 and 4..6 of the source.
+        // Each run says where it starts and how far it runs, in columns
+        // and in the wide glyphs standing in them.
         let text = "日\tab";
-        assert_eq!(display_ranges(text, &[(0, 3)]), "0:2");
-        assert_eq!(display_ranges(text, &[(3, 1)]), "2:2");
-        assert_eq!(display_ranges(text, &[(4, 2)]), "4:2");
-        assert_eq!(display_ranges(text, &[(0, 6)]), "0:6");
-        assert_eq!(display_ranges(text, &[(0, 3), (4, 1)]), "0:2,4:1");
+        assert_eq!(display_ranges(text, &[(0, 3)]), "0:0:2:1");
+        assert_eq!(display_ranges(text, &[(3, 1)]), "2:1:2:0");
+        assert_eq!(display_ranges(text, &[(4, 2)]), "4:1:2:0");
+        assert_eq!(display_ranges(text, &[(0, 6)]), "0:0:6:1");
+        assert_eq!(display_ranges(text, &[(0, 3), (4, 1)]), "0:0:2:1,4:1:1:0");
+    }
+
+    #[test]
+    fn a_run_says_how_many_of_its_columns_wide_glyphs_took() {
+        // Columns alone do not reach pixels: 日本語 is six columns but
+        // three fallback advances, so a run that stands behind it starts
+        // three of those differences to the left of where six columns of
+        // the mono font would put it (`DiffPane.wideDelta`).
+        let text = "日本語value";
+        assert_eq!(display_ranges(text, &[(0, 9)]), "0:0:6:3");
+        assert_eq!(display_ranges(text, &[(9, 5)]), "6:3:5:0");
     }
 
     #[test]

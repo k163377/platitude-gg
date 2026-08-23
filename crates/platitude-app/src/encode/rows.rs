@@ -23,10 +23,14 @@ pub struct DiffRow {
     /// heading, git's own `\ No newline` note, a conflict marker.
     pub rich: bool,
     /// Display columns of what changed inside this row —
-    /// `"col:width,col:width"` in the mono font's columns, empty where
-    /// nothing is emphasised (`platitude_core::intraline`, laid out by
-    /// [`display_ranges`]). The pane draws these as the stronger wash
-    /// under the text (デザイン規約 §シンタックスハイライト).
+    /// `"col:wides:width:wides,…"`: where each run starts and how far it
+    /// runs, said in the mono font's columns and in the wide glyphs
+    /// standing in them. Empty where nothing is emphasised
+    /// (`platitude_core::intraline`, laid out by [`display_ranges`]). The
+    /// pane draws these as the stronger wash under the text
+    /// (デザイン規約 §シンタックスハイライト), and needs the second number
+    /// to place the first — a wide glyph is drawn from a fallback font
+    /// whose advance need not be two of the mono one's.
     pub emph: String,
     /// One of git's conflict fences (`<<<<<<<` / `|||||||` / `=======` /
     /// `>>>>>>>`); the pane drops its voice for these

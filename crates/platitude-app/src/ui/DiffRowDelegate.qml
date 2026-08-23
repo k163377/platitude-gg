@@ -24,9 +24,10 @@ Rectangle {
     /// Whether `text` is markup rather than the line itself (`encode::DiffRow`). Read from the row rather than guessed
     /// at: a line of C++ is full of `<` and `>`.
     required property bool rich
-    /// Display columns of what changed inside this row — `"col:width,col:width"`, empty for nothing
-    /// (`encode::DiffRow.emph`). Drawn as the stronger wash under the text; the quiet parts of the row keep the
-    /// line's own background (デザイン規約 §シンタックスハイライト).
+    /// Display columns of what changed inside this row — `"col:wides:width:wides,…"`, where each run says where it
+    /// starts and how far it runs in columns, then how many wide glyphs stand in each of those (`encode::DiffRow.emph`).
+    /// Empty for nothing. Drawn as the stronger wash under the text; the quiet parts of the row keep the line's own
+    /// background (デザイン規約 §シンタックスハイライト).
     required property string emph
     /// One of git's conflict fences (`encode::DiffRow`).
     required property bool fence
@@ -43,6 +44,9 @@ Rectangle {
     required property real codeX
     /// One measured column of the mono font (`DiffPane.charMeasure`), which is what turns `emph`'s columns into x.
     required property real charW
+    /// What a wide glyph costs beyond the two columns it is counted as (`DiffPane.wideDelta`, measured — zero where
+    /// the mono family carries them itself). `emph` says how many stand in each run, and this is what those are worth.
+    required property real wideDelta
     /// The room held between the two numbers for the mark, as the pane
     /// works it out once for every row (`DiffPane.seatW`).
     required property int seatW
@@ -170,9 +174,13 @@ Rectangle {
             model: diffRow.emph === "" ? [] : diffRow.emph.split(",")
             delegate: Rectangle {
                 required property string modelData
+                // `col:wides:width:wides`. A column is one advance of the mono font, and each wide glyph standing
+                // among them is worth `wideDelta` more than the two columns it was counted as — zero on a family
+                // that draws the wide glyphs itself. Laid on columns alone, the wash sat right of the characters it
+                // names by that much a glyph (measured 2026-08-24 on Windows: −3px each).
                 readonly property var run: modelData.split(":")
-                x: -diffRow.codeX + Number(run[0]) * diffRow.charW
-                width: Number(run[1]) * diffRow.charW
+                x: -diffRow.codeX + Number(run[0]) * diffRow.charW + Number(run[1]) * diffRow.wideDelta
+                width: Number(run[2]) * diffRow.charW + Number(run[3]) * diffRow.wideDelta
                 height: parent.height
                 color: diffRow.kind === "add" ? Theme.diffAddedEmphBg : Theme.diffRemovedEmphBg
             }

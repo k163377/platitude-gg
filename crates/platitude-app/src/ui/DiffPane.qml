@@ -259,6 +259,23 @@ Rectangle {
         font.family: Theme.monoFamily
         font.pixelSize: Theme.fontCode
     }
+    /// What a wide glyph costs on top of the two columns `encode::columns::step_of` counts it as. Zero wherever the
+    /// mono family carries the wide glyphs itself at two of its own advances; where it is Latin-only they arrive from
+    /// a fallback that advances one em instead, and the two do not agree — measured 2026-08-24 on Windows
+    /// (Cascadia Mono, `fontCode`): charW 8px against a wide advance of 13px, so −3px a glyph. Laying the wash on
+    /// columns alone slid it that far right of the characters it names for every wide glyph behind it. Measured
+    /// rather than assumed, because it is a property of whichever fallback this OS hands the glyphs to.
+    readonly property real wideDelta: wideMeasure.implicitWidth / wideMeasure.text.length - 2 * diffPane.charW
+    Label {
+        id: wideMeasure
+        visible: false
+        // Ten U+65E5, for the same reason charMeasure holds ten. Built from the code point rather than written as
+        // the glyph: this is a ruler and not a word, and a line of Japanese sitting in a `text:` reads like the
+        // hardcoded wording the rules forbid (CLAUDE.md 絶対制約).
+        text: String.fromCharCode(0x65e5).repeat(10)
+        font.family: Theme.monoFamily
+        font.pixelSize: Theme.fontCode
+    }
 
     color: Theme.bgSurface
     ColumnLayout {
@@ -346,6 +363,7 @@ Rectangle {
                 rowWidth: diffList.width
                 codeX: codeScroll.offset
                 charW: diffPane.charW
+                wideDelta: diffPane.wideDelta
                 seatW: diffPane.seatW
                 partial: diffPane.partial
                 staged: diffPane.staged

@@ -66,7 +66,14 @@ pub(super) fn step_of(ch: char, col: usize, tab_width: usize) -> usize {
 /// are the East Asian Wide and Fullwidth blocks plus the emoji that share
 /// their advance — read off Unicode's own table rather than derived, so
 /// the list is what it is.
-fn is_wide(ch: char) -> bool {
+///
+/// `markup::display_ranges` asks this as well as [`step_of`], because two
+/// columns is not two of the mono font's advances: a Latin-only mono
+/// family hands these glyphs to a fallback that advances one em, so the
+/// pane has to know how many of them a run stands on before it can put the
+/// wash in pixels. `step_of(..) == 2` is a different question — a tab
+/// reaches its stop in two columns as well.
+pub(super) fn is_wide(ch: char) -> bool {
     matches!(u32::from(ch),
         0x1100..=0x115F
         | 0x2E80..=0x303E
