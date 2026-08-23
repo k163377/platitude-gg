@@ -1,6 +1,7 @@
 //! The theme's runs laid over one line as the markup
 //! `Text.StyledText` reads.
 
+use super::columns::step_of;
 use platitude_core::highlight::Span;
 
 /// Lays the theme's runs over one line and writes what `Text.StyledText`
@@ -48,24 +49,26 @@ const TAB_WIDTH: usize = 4;
 /// but Qt renders what is inside it in a substituted font: thinner
 /// strokes, washed-out colours next to the window's own words
 /// (measured 2026-08-13).
+///
+/// `col` is the column the next character is drawn at, carried across the
+/// calls one line is spelled in; [`step_of`] moves it, so a tab is spelled
+/// as exactly the `&nbsp;` that reach its stop.
 fn push_escaped(out: &mut String, text: &str, col: &mut usize) {
     for ch in text.chars() {
+        let step = step_of(ch, *col, TAB_WIDTH);
         match ch {
             '&' => out.push_str("&amp;"),
             '<' => out.push_str("&lt;"),
             '>' => out.push_str("&gt;"),
             ' ' => out.push_str("&nbsp;"),
             '\t' => {
-                let stop = TAB_WIDTH - (*col % TAB_WIDTH);
-                for _ in 0..stop {
+                for _ in 0..step {
                     out.push_str("&nbsp;");
                 }
-                *col += stop;
-                continue;
             }
             _ => out.push(ch),
         }
-        *col += 1;
+        *col += step;
     }
 }
 
@@ -77,8 +80,9 @@ fn push_hex(out: &mut String, byte: u8) {
 
 /// The display columns `ranges` (byte ranges into `text`,
 /// `platitude_core::intraline`) land on, as the row is actually drawn:
-/// tabs expand exactly as [`push_escaped`] expands them, and the glyphs
-/// a mono font draws double width count two (`super::columns`'s rule).
+/// this walks the line by [`step_of`], the same steps [`push_escaped`]
+/// spells it in, so the expanded tabs and the double-width glyphs are
+/// counted here exactly where they are drawn.
 /// `"col:width,col:width"`, empty where there is nothing — what
 /// `DiffRow::emph` carries and the pane turns into the stronger wash.
 pub(super) fn display_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
@@ -90,36 +94,28 @@ pub(super) fn display_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
     let mut current = iter.next();
     let mut open: Option<usize> = None;
     let mut col = 0usize;
-    let mut draw = 0usize;
     for (at, ch) in text.char_indices() {
         if let Some((start, len)) = current {
             if open.is_none() && at == start {
-                open = Some(draw);
+                open = Some(col);
             }
             if at == start + len {
                 if let Some(from) = open.take() {
-                    push_pair(&mut out, from, draw);
+                    push_pair(&mut out, from, col);
                 }
                 current = iter.next();
                 if let Some((next_start, _)) = current
                     && at == next_start
                 {
-                    open = Some(draw);
+                    open = Some(col);
                 }
             }
         }
-        if ch == '\t' {
-            let stop = TAB_WIDTH - (col % TAB_WIDTH);
-            col += stop;
-            draw += stop;
-        } else {
-            col += 1;
-            draw += 1 + usize::from(super::columns::is_wide(ch));
-        }
+        col += step_of(ch, col, TAB_WIDTH);
     }
     // A range that runs to the line's end closes here.
     if let Some(from) = open {
-        push_pair(&mut out, from, draw);
+        push_pair(&mut out, from, col);
     }
     out
 }
@@ -177,5 +173,30 @@ mod tests {
     fn a_line_the_runs_fall_short_of_is_still_whole() {
         let out = styled("ab cd", &[run(2, 0, 0, 0)]);
         assert!(out.ends_with("&nbsp;cd"), "{out}");
+    }
+
+    #[test]
+    fn a_tab_behind_a_wide_glyph_spells_only_what_is_left_of_its_stop() {
+        // 日 is drawn two columns wide, so two `&nbsp;` reach the stop at
+        // 4 and `x` stands on it. Three would carry `x` past it.
+        let out = styled("日\tx", &[run(5, 0, 0, 0)]);
+        assert_eq!(out, "<font color=\"#000000\">日&nbsp;&nbsp;x</font>");
+    }
+
+    #[test]
+    fn the_wash_falls_on_the_columns_the_row_is_drawn_at() {
+        // "日\tab" is drawn 日 on 0..2, the tab's two `&nbsp;` on 2..4,
+        // then ab on 4..6 — byte ranges 0..3, 3..4 and 4..6 of the source.
+        let text = "日\tab";
+        assert_eq!(display_ranges(text, &[(0, 3)]), "0:2");
+        assert_eq!(display_ranges(text, &[(3, 1)]), "2:2");
+        assert_eq!(display_ranges(text, &[(4, 2)]), "4:2");
+        assert_eq!(display_ranges(text, &[(0, 6)]), "0:6");
+        assert_eq!(display_ranges(text, &[(0, 3), (4, 1)]), "0:2,4:1");
+    }
+
+    #[test]
+    fn a_line_nothing_changed_in_carries_no_wash() {
+        assert!(display_ranges("日\tab", &[]).is_empty());
     }
 }

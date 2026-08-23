@@ -27,29 +27,46 @@ pub fn widest_columns(patches: &[FilePatch]) -> i32 {
     i32::try_from(widest).unwrap_or(i32::MAX)
 }
 
-/// How many columns one line takes: a tab reaches the next stop, a glyph
-/// the East Asian blocks draw full width takes two, everything else takes
-/// one. An approximation on purpose — it decides how far the reader may
-/// send the text, and being a column out at the end of the longest line in
-/// a file costs nothing that eliding it cost.
+/// How many columns one line takes, walked a character at a time by
+/// [`step_of`]. An approximation on purpose — it decides how far the
+/// reader may send the text, and being a column out at the end of the
+/// longest line in a file costs nothing that eliding it cost.
 fn columns_of(text: &str) -> usize {
     let mut cols = 0usize;
     for ch in text.chars() {
-        cols = if ch == '\t' {
-            (cols / TAB_COLUMNS + 1) * TAB_COLUMNS
-        } else {
-            cols + usize::from(is_wide(ch)) + 1
-        };
+        cols += step_of(ch, cols, TAB_COLUMNS);
     }
     cols
+}
+
+/// How far one character carries a line that has already reached `col`: a
+/// tab reaches the next stop, a glyph the East Asian blocks draw full
+/// width takes two columns, everything else takes one.
+///
+/// The single rule for it, because three walks of a line have to arrive
+/// at the same columns: [`columns_of`] measures how far sideways the pane
+/// may send the text, `markup::push_escaped` spells a tab as that many
+/// `&nbsp;`, and `markup::display_ranges` re-walks the row to lay the
+/// emphasis wash on the columns those `&nbsp;` and glyphs land on. A wash
+/// walked by any other rule would sit beside the characters it names
+/// rather than on them.
+///
+/// Only the stop is the caller's to choose — the pane draws at
+/// `markup::TAB_WIDTH` and measures at [`TAB_COLUMNS`] — so `tab_width`
+/// comes in as an argument, and nothing else here does.
+pub(super) fn step_of(ch: char, col: usize, tab_width: usize) -> usize {
+    if ch == '\t' {
+        tab_width - (col % tab_width)
+    } else {
+        1 + usize::from(is_wide(ch))
+    }
 }
 
 /// Whether the glyph is one a mono font draws two columns wide. The ranges
 /// are the East Asian Wide and Fullwidth blocks plus the emoji that share
 /// their advance — read off Unicode's own table rather than derived, so
-/// the list is what it is. Shared with `markup::display_ranges`, which
-/// places the emphasis wash under the same glyphs.
-pub(super) fn is_wide(ch: char) -> bool {
+/// the list is what it is.
+fn is_wide(ch: char) -> bool {
     matches!(u32::from(ch),
         0x1100..=0x115F
         | 0x2E80..=0x303E
@@ -102,6 +119,16 @@ mod tests {
         assert_eq!(columns_of("\t"), TAB_COLUMNS);
         assert_eq!(columns_of("1234567\t"), TAB_COLUMNS);
         assert_eq!(columns_of("12345678\t"), 2 * TAB_COLUMNS);
+    }
+
+    #[test]
+    fn the_columns_a_wide_glyph_took_are_columns_the_tab_need_not_walk() {
+        // 日本語 stands on 0..6, so one tab is enough to reach the stop
+        // at 8 — the same three glyphs counted as one each would send it
+        // to 8 with five columns to spare.
+        assert_eq!(step_of('日', 0, TAB_COLUMNS), 2);
+        assert_eq!(columns_of("日本語\t"), TAB_COLUMNS);
+        assert_eq!(columns_of("日本語版\t"), 2 * TAB_COLUMNS);
     }
 
     #[test]
