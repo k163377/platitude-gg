@@ -81,10 +81,25 @@ pub(super) fn body_for(verb: &str) -> Option<String> {
 /// Named rather than found: `git mergetool --tool-help` is an inventory
 /// of the machine, and a container built to run tests has no windowed
 /// merge tool on it at all.
-const SEEDED_TOOL: &str = "mergetool.demo-editor.cmd";
+const SEEDED_TOOL: &str = "demo-editor";
+
+/// What the seeded tool does once it is launched for real: nothing, out
+/// loud, for long enough to be waited on.
+///
+/// `sleep` is the blocking command all three machines agree on — git runs
+/// a tool's `cmd` through its own shell, which on Windows is Git for
+/// Windows' `sh` and its `/usr/bin/sleep` (2026-08-23 実測).
+///
+/// Two seconds, not the thirty the recipe this replaced typed by hand.
+/// The verb is a write act, so its one picture is taken behind
+/// `AutoActDriver.writeBarrier` — after the tool has exited — and no
+/// length buys a frame of the wait. What is left for the number to be is
+/// a wait a person watching a windowed run can see, against time every
+/// `cargo xtask check` pays on both sides.
+const TOOL_CMD: &str = "sleep 2";
 
 /// Puts a tool in the repository's own config, for the verbs whose
-/// picture is the list of them.
+/// picture is the list of them and the one that hands a file over.
 ///
 /// The candidates arrive in two waves — names written in config, then
 /// the installed sweep — and only the first is the run's to decide. Where
@@ -93,28 +108,57 @@ const SEEDED_TOOL: &str = "mergetool.demo-editor.cmd";
 /// verb waiting on a popup that will not open again. So the run brings
 /// its own row, and the first wave carries the picture on every machine.
 ///
-/// The command is never run — what is being photographed is the name.
+/// For the settings verbs that is the whole of it: the command is never
+/// run, and no tool is named as the one to launch — `merge.guitool` would
+/// land in the dialog's own field, which is the thing they photograph.
+///
+/// `open-mergetool` needs the name launchable rather than merely listed,
+/// so it gets that key and one more. Without `merge.guitool` there is
+/// nothing for `conflict::configured_tool` to answer with, the menu row
+/// becomes the door to the settings instead, and the verb queues no
+/// write. Without `trustExitCode` git asks a closed stdin whether the
+/// merge went well, reads EOF, and calls the file failed (実測).
+///
+/// Whatever repositories the run is about are written to, a `--repo` of
+/// one's own included: the run owns them for its length
+/// (`claim_resource`), and a merge tool named in one is overwritten.
 pub(super) fn seed_merge_tool(
     verb: &str,
     repos: &[PathBuf],
     path: &std::ffi::OsStr,
 ) -> Result<(), String> {
-    if verb != "settings-tools" && verb != "settings-tools-loading" {
-        return Ok(());
+    let launched = match verb {
+        "settings-tools" | "settings-tools-loading" => false,
+        "open-mergetool" => true,
+        _ => return Ok(()),
+    };
+    let mut keys = vec![(format!("mergetool.{SEEDED_TOOL}.cmd"), TOOL_CMD.to_string())];
+    if launched {
+        keys.push((
+            format!("mergetool.{SEEDED_TOOL}.trustExitCode"),
+            "true".to_string(),
+        ));
+        keys.push(("merge.guitool".to_string(), SEEDED_TOOL.to_string()));
     }
     for repo in repos {
-        let status = Command::new("git")
-            .arg("-C")
-            .arg(repo)
-            .args(["config", SEEDED_TOOL, "true"])
-            .env("PATH", path)
-            .status()
-            .map_err(|e| format!("failed to run git: {e}"))?;
-        if !status.success() {
-            return Err(format!("could not name a merge tool in {}", repo.display()));
+        for (key, value) in &keys {
+            let status = Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(["config", key, value])
+                .env("PATH", path)
+                .status()
+                .map_err(|e| format!("failed to run git: {e}"))?;
+            if !status.success() {
+                return Err(format!("could not name a merge tool in {}", repo.display()));
+            }
         }
     }
-    println!("merge editor named in config: {SEEDED_TOOL} (the list's first wave)");
+    if launched {
+        println!("merge editor seeded: {SEEDED_TOOL} runs {TOOL_CMD:?}, and git would launch it");
+    } else {
+        println!("merge editor named in config: {SEEDED_TOOL} (the list's first wave)");
+    }
     Ok(())
 }
 
