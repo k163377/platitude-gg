@@ -53,7 +53,17 @@ Rectangle {
     // band's own step away, the way a section's count sits from its caption.
     implicitWidth: toggle.captioned ? toggle.captionX + commandsName.implicitWidth : Theme.railWidth
     implicitHeight: toggle.captioned ? Theme.rowHeight : Theme.headerHeight
-    color: commandsMouse.containsMouse ? Theme.bgHover : "transparent"
+    // A band's ground, which is what both the seats it stands in are: the sections' headers and the fold control's
+    // block are `bgElevated`, and this row is read against them (2026-08-23 ユーザー指示). In the panel's own band it
+    // repaints the value that band already carries, so the row reads the same there without a case for it.
+    color: Theme.bgElevated
+    // The wash goes over that ground rather than instead of it — `bgHover` is a white at 8% and has nothing of its own
+    // to sit on (`NavHeader` layers the same two).
+    Rectangle {
+        anchors.fill: parent
+        color: Theme.bgHover
+        visible: commandsMouse.containsMouse
+    }
     Rectangle {
         visible: toggle.ruled
         anchors.left: parent.left

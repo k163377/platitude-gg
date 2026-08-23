@@ -204,7 +204,8 @@ Item {
                 "graph-bar", "graph-bar-away", "middle-scroll",
                 "graph-tail", "graph-head", "graph-head-below", "graph-head-back",
                 "graph-head-go", "graph-head-lit", "wip-lanes",
-                "divider-refuse", "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",
+                "divider-refuse", "commands-fail-shut",
+                "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",
                 "edit-message-leave", "edit-message-focus",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
                 "find", "find-next", "find-prev", "find-drop",
@@ -4176,10 +4177,15 @@ Item {
             repoTab.stageAll()
             repoTab.unstageAll()
             page.toggleCommands()
-        } else if (act === "commands-fail" || act === "commands-clear") {
+        } else if (act === "commands-fail" || act === "commands-clear" || act === "commands-fail-shut") {
             // A real refusal in git's own words, raising the panel by itself. The clearing verb starts from the same
-            // failure (`Main` waits for it, presses Clear, and reads the band).
+            // failure (`Main` waits for it, presses Clear, and reads the band); the shutting one takes the panel back
+            // down with the `>_` instead, which leaves the error line standing and the mark red.
+            if (arg === "fold")
+                page.foldByHand(true)
             repoTab.checkoutBranch("pg-no-such-branch", false)
+            if (act === "commands-fail-shut")
+                commandsShutTimer.start()
         } else if (act === "fetch-recover") {
             // A fetch that cannot land leaves a failure standing; `Main` then fires one that can and reads what the
             // success takes down by itself.
@@ -4297,6 +4303,33 @@ Item {
             else
                 page.answerRowAsk()
             writeBarrier.start()
+        }
+    }
+    // PG_AUTO_ACT=commands-fail-shut: the mark's red with the panel out of the way, which is the state no other verb
+    // can photograph — `commands-fail` leaves the panel standing over it and `commands-clear` takes the red away with
+    // the rows. The press goes in at the `>_`'s own function rather than at `commandsOpen`, so a build where that
+    // press stopped reaching the page waits here instead of passing.
+    SampleTimer {
+        id: commandsShutTimer
+        property bool pressed: false
+        onTriggered: {
+            // Both halves are the refusal landing: red mark, panel raised by it. Read again after the press, the
+            // panel's going away would bar the way to the report (規約 §UI 自動化の因果性).
+            if (!commandsShutTimer.pressed) {
+                if (!page.commandsWrong || !page.commandsShown)
+                    return
+                commandsShutTimer.pressed = true
+                page.toggleCommands()
+                return
+            }
+            if (page.commandsShown)
+                return
+            commandsShutTimer.stop()
+            AppBackend.report("commands_shut wrong=" + page.commandsWrong
+                              + " open=" + page.commandsShown
+                              + " folded=" + page.sidebarCollapsed
+                              + " mark=" + page.commandsMarkColor)
+            renderedBarrier.begin()
         }
     }
     // The log has to be on screen and laid out before the bar above it has a place to be measured from.

@@ -15,6 +15,17 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "commands_clear was=true wrong=false open=false",
     },
+    // The panel taken down without being emptied, which is the only
+    // way the mark's red is on screen with nothing standing over it.
+    // A run whose refusal never landed comes to rest looking exactly
+    // like one where it did and the press missed: both are a window
+    // with no panel in it. `wrong=true` is the half the picture holds
+    // in 12 pixels, `open=false` the half it cannot hold at all.
+    Verb {
+        name: "commands-fail-shut",
+        when: &[],
+        plain: "commands_shut wrong=true open=false",
+    },
     // Recovery is the show, and the picture can only hold its quiet
     // half: a band that failed and healed ends the run looking like
     // one that never failed at all. `was=`/`hadline=` are the red
