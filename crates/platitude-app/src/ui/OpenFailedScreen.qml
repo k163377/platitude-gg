@@ -62,10 +62,15 @@ Item {
         }
     }
 
+    // Named rather than left as a mark: this screen has no list for the mark to stand at the foot of, so the band it
+    // would have been read against is not here either.
     CommandsToggle {
         id: commandsSeat
         anchors.left: parent.left
+        anchors.right: parent.right
         anchors.bottom: parent.bottom
+        height: Theme.rowHeight
+        captioned: true
         visible: screen.commandsPage !== null && !commandsSeat.open
         curPage: screen.commandsPage
     }

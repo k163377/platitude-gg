@@ -40,15 +40,33 @@ Item {
         anchors.bottom: parent.bottom
         width: Theme.railWidth
         color: Theme.bgSurface
-        CommandsToggle {
-            id: seat
-            curPage: band.curPage
+        // The panel's own header band, carried across the strip: the same ground, the same hairline under it, and no
+        // edge between them — so what is on screen is the mark standing to the left of the name that band already
+        // carries, rather than a block of its own beside a panel (2026-08-23 ユーザー指示).
+        Rectangle {
+            id: stripHead
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: Theme.headerHeight
+            color: Theme.bgElevated
+            BandRule { z: 1 }
+            CommandsToggle {
+                id: seat
+                anchors.fill: parent
+                ruled: false
+                // One step up from the sections' marks: this seat is a block filling a band on its own, the way the
+                // fold control is (デザイン規約 §寸法).
+                markSize: Theme.iconLg
+                curPage: band.curPage
+            }
         }
-        // The hairline the block starts, carried on down the strip so the panel beside it has an edge for its whole
-        // height (the two grounds are one value — `CommandsToggle`).
+        // What divides the strip from the panel under that band. Only under it: the two grounds are one value
+        // (`bgBase` = `bgSurface`), so nothing else draws this edge — and drawn up through the band it would cut the
+        // mark off from the name.
         Rectangle {
             anchors.right: parent.right
-            anchors.top: seat.bottom
+            anchors.top: stripHead.bottom
             anchors.bottom: parent.bottom
             width: Theme.borderWidth
             color: Theme.borderSubtle

@@ -268,15 +268,19 @@ Rectangle {
     }
 
     // ---- the log's seat ----------------------------------------------
-    // The foot of the pane, mirroring the block at the head of it: the
-    // list and the rail alike stop above this one, so the `>_` keeps the
-    // same corner whichever of the two is standing, and pressing it takes
-    // the whole band away to the panel's strip (デザイン規約 §git が言った
+    // The foot of the pane: a band in the sections' own columns while the
+    // list is open, a cell of the rail's own reach while it is folded, and
+    // gone once the panel is up — from then on the mark stands at the head
+    // of the strip the panel left of this pane (デザイン規約 §git が言った
     // ことを読む場所).
     CommandsToggle {
         id: commandsSeat
         anchors.left: parent.left
+        anchors.right: parent.right
         anchors.bottom: parent.bottom
+        height: sidebar.collapsed ? Theme.toolbarHeight : Theme.rowHeight
+        captioned: !sidebar.collapsed
+        markSize: sidebar.collapsed ? Theme.iconXl : Theme.iconMd
         visible: sidebar.commandsPage !== null && !commandsSeat.open
         curPage: sidebar.commandsPage
     }

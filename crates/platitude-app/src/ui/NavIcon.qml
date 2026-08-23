@@ -34,6 +34,8 @@ Canvas {
         // Two rotated pieces: the body and the point, turned 45° about the middle, so what they span sideways is their
         // diagonal.
         case "pen": return 10
+        // The prompt's chevron and the cursor under it, 3.0 to 13.0 with a gap between them.
+        case "terminal": return 10
         // The two commit rings, each 1.7 either side of its own centre (4.5 and 11.5). The elbow and the arrowhead it
         // carries both stand inside them.
         case "pr": return 10.4
@@ -65,6 +67,8 @@ Canvas {
         // kinds that stand in that slot answer here.
         case "pr": return 13.2
         case "remote": return 14.72
+        // The cursor's far end; the chevron behind it stops well short.
+        case "terminal": return 13
         default: return 16
         }
     }
@@ -326,6 +330,21 @@ Canvas {
                 ctx.lineTo(x * s, 12 * s)
                 ctx.stroke()
             }
+        } else if (icon.kind === "terminal") {
+            // The shell prompt the command log is read at. Typed in the mono family it sat in a line's own box, which
+            // left it low and a third the weight of the marks it now stands among (デザイン規約 §git が言ったことを読む
+            // 場所). The chevron is `chevron`'s own geometry moved left to make room for the cursor, so the two read as
+            // one hand at the same seat.
+            ctx.lineJoin = "round"
+            ctx.beginPath()
+            ctx.moveTo(3 * s, 4 * s)
+            ctx.lineTo(7 * s, 8 * s)
+            ctx.lineTo(3 * s, 12 * s)
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.moveTo(9 * s, 12 * s)
+            ctx.lineTo(13 * s, 12 * s)
+            ctx.stroke()
         } else if (icon.kind === "grip") {
             // The corner a box is pulled by, drawn as the two rules every browser puts there. The pair of chevrons one
             // mark over also moves an edge, but by pressing it: that one swaps a pane between two shapes, this one is
