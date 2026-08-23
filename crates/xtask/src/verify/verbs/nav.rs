@@ -112,6 +112,25 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[(Arg::Ends(":away"), "open=true focused=true shown=false")],
         plain: "open=true focused=true shown=true",
     },
+    // A tag that was made. The write answers before the read that puts
+    // the row in TAGS, so a run judged at the write barrier photographs
+    // a sidebar with nothing new in it and passes — and the count alone
+    // would pass for a tag left on whatever HEAD happened to be, which
+    // is why the commit it was asked for is echoed too.
+    Verb {
+        name: "create-tag",
+        when: &[(Arg::Ends(":box"), "create_tag box=true mode=tag")],
+        plain: "create_tag tag=v9.9-new row=1 total=4 at=true",
+    },
+    // The third mode of that same field, judged on the same line for
+    // the same reasons. Which mode it came up in is the one thing
+    // here the picture *does* answer: the question is written in the
+    // box (`Create tag here?`), and it is all an empty box holds.
+    Verb {
+        name: "nav-tag-box",
+        when: &[],
+        plain: "open=true focused=true shown=true",
+    },
     // The same walking away, over the graph: a press that landed
     // somewhere else takes an empty box with it and leaves one with
     // something typed in it standing. Both halves are read off the

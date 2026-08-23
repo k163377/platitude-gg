@@ -37,6 +37,8 @@ Rectangle {
     signal refSwitchRequested(string kind, string name)
     /// A name was typed for a new branch on a tag's commit.
     signal branchAtRequested(string oidHex, string name)
+    /// And the same for a tag on the commit whatever row was met stands on.
+    signal tagAtRequested(string oidHex, string name)
     /// A row was renamed. `kind` is the section ("branch" / "tag" /
     /// "stash"), `id` what git knows the row by.
     signal renameSubmitted(string kind, string id, string name)
@@ -75,6 +77,9 @@ Rectangle {
     }
     function beginBranchAt(kind, id, oidHex) {
         rowGestures.beginBranchAt(kind, id, oidHex)
+    }
+    function beginTagAt(kind, id, oidHex) {
+        rowGestures.beginTagAt(kind, id, oidHex)
     }
     function activateRow(kind, name, full, oidHex) {
         rowGestures.activateRow(kind, name, full, oidHex)

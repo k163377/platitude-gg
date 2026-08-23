@@ -63,6 +63,9 @@ AppListView {
     // delegate: the delegate is recycled the moment its row scrolls off.
     property string namingOid: ""
     property string namingText: ""
+    // Which of the two the box is asking for ("branch" / "tag"). The field is the same one either way — what is typed
+    // is a ref name for both — and the question it stands there holding is the whole of what tells them apart.
+    property string namingMode: "branch"
     // Which row the standing question is about, and in which tone — held here for the same recycling reason. The
     // words are on the bar; the row only marks itself.
     property string askOid: ""
@@ -82,7 +85,7 @@ AppListView {
     signal rowHoverRequested(var row, bool inside)
     property var chipListAnchor: null
     property string rowCardOid: ""
-    signal namingSubmitted(string oidHex, string name)
+    signal namingSubmitted(string oidHex, string name, string mode)
     signal namingCancelled()
     /// The wheel took the view over: whatever gesture was carrying it ends here.
     signal wheelTaken()

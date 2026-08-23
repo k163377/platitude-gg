@@ -499,6 +499,21 @@ impl RepoTab {
         self.with_session(|s| s.rename_branch(from.clone(), to.clone(), force));
     }
 
+    /// Puts a lightweight tag on `commit` (HEAD when empty). Never
+    /// forced: a name already taken is git's to refuse.
+    #[qslot]
+    fn create_tag(&mut self, name: String, commit: String) {
+        self.with_session(|s| s.create_tag(name.clone(), commit.clone()));
+    }
+
+    /// Sends one tag to one remote. `lease_expect` pins a leased
+    /// overwrite to the commit that remote was last seen holding the name
+    /// on; empty sends it plain.
+    #[qslot]
+    fn push_tag(&mut self, remote: String, tag: String, lease_expect: String) {
+        self.with_session(|s| s.push_tag(remote.clone(), tag.clone(), lease_expect.clone()));
+    }
+
     /// Renames a tag. git has none, so core builds it out of a new name on
     /// the same object and a delete of the old one.
     #[qslot]

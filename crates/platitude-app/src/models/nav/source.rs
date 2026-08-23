@@ -78,6 +78,31 @@ impl Source {
         }
     }
 
+    /// Where `remote` carries `name` when that is not where this
+    /// repository has the tag; empty when the two agree, when that remote
+    /// does not carry the name, or when nothing has read the remotes yet.
+    ///
+    /// Off the snapshot's own sorted run rather than the rows: a drift is
+    /// listed once for the local tag, and no row of the sidebar is the
+    /// remote's reading of a name that is here as well.
+    pub(super) fn tag_drift(&self, name: &str, remote: &str) -> String {
+        let Self::Tags(snapshot) = self else {
+            return String::new();
+        };
+        snapshot
+            .tag_drifts
+            .binary_search_by(|d| {
+                d.name
+                    .as_str()
+                    .cmp(name)
+                    .then(d.remote.as_str().cmp(remote))
+            })
+            .map_or_else(
+                |_| String::new(),
+                |at| snapshot.tag_drifts[at].commit.to_hex(),
+            )
+    }
+
     /// Whether the entry at `at` is one of `names` — the names being
     /// what git is asked about rather than what a row shows, so a stash
     /// answers to its selector and every other row to the name it shows

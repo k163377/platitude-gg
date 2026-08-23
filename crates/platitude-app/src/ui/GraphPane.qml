@@ -38,13 +38,25 @@ Rectangle {
     /// The pointer left that chip — put it back, unless it went into the list itself (only the owner can tell).
     signal chipCollapseRequested()
     signal createBranchRequested(string oidHex, string name)
+    /// The same box, answered with a tag instead. Two signals rather than one with a word in it: what the page does
+    /// with the answer is a different command, and the pane has already read which box it was.
+    signal createTagRequested(string oidHex, string name)
     signal openRepositoryRequested()
 
-    // ---- naming a branch on a row that has none --------------------
-    /// Puts the chip column of one row into a branch-name box.
+    // ---- naming a branch or a tag on a row -------------------------
+    /// Puts the chip column of one row into a name box. `startNaming` asks for a branch — the answer to a row with
+    /// nowhere to move to — and `startTagging` for a tag on the same commit; the mode goes in before the row that
+    /// carries it, so the box comes up already holding its own question.
     function startNaming(oidHex) {
+        graphArea.openNameBox(oidHex, "branch")
+    }
+    function startTagging(oidHex) {
+        graphArea.openNameBox(oidHex, "tag")
+    }
+    function openNameBox(oidHex, mode) {
         graphList.askOid = ""
         graphList.namingText = ""
+        graphList.namingMode = mode
         graphList.namingOid = oidHex
     }
     function stopNaming() {
@@ -267,10 +279,14 @@ Rectangle {
         onChipExpandRequested: (records, anchor) => graphArea.chipExpandRequested(records, anchor)
         onChipCollapseRequested: graphArea.chipCollapseRequested()
         onRowHoverRequested: (row, inside) => graphArea.rowHoverRequested(row, inside)
-        onNamingSubmitted: (oidHex, name) => {
+        onNamingSubmitted: (oidHex, name, mode) => {
             graphArea.stopNaming()
-            // An empty box is the way out of the offer, not a branch called nothing.
-            if (name !== "")
+            // An empty box is the way out of the offer, not a branch or a tag called nothing.
+            if (name === "")
+                return
+            if (mode === "tag")
+                graphArea.createTagRequested(oidHex, name)
+            else
                 graphArea.createBranchRequested(oidHex, name)
         }
         onNamingCancelled: graphArea.stopNaming()

@@ -21,6 +21,8 @@ Item {
     required property NavSectionModel branchesModel
     /// Which other working copy has a branch checked out (`worktreeHolding`) — the list lives in this section alone.
     required property NavSectionModel worktreesModel
+    /// Where a remote last had a tag that is here as well (`remoteTagDrift`) — the readings live in this section alone.
+    required property NavSectionModel tagsModel
 
     /// The row the menu stands on. `refName` is what the row shows, `refId` what git knows it by (they differ for a
     /// stash: a message and a selector).
@@ -44,6 +46,16 @@ Item {
     /// delete rows name.
     property string remoteCounterpart: ""
     property bool canDeleteRemote: false
+    /// A tag sent to the remote this repository pushes to, and where that remote already has the name when it has it
+    /// somewhere else. **Both are read as the menu opens**: the drift is what decides whether the row is a plain push
+    /// or the leased overwrite, and a row that changed from a click to a hold while the card stood would be a row that
+    /// moved under the hand (デザイン規約 §メニュー「開いている間は動かさない」). The commit is what the lease is pinned to, so a
+    /// remote that has moved since is refused rather than flattened (§相手の履歴を置き換える).
+    property bool canPushTag: false
+    property string tagDriftOid: ""
+    /// Where this repository's pushes go. Not read per row — it is the repository's answer — but latched with the rest
+    /// so the row that names it cannot be renamed out from under the hand.
+    property string pushRemote: ""
     /// The other working copy holding this row's local branch, empty when none does. **git refuses both `switch` and
     /// `branch --delete` for a branch another worktree has out** (実測), so this is read and not the lock — a lock
     /// stops `worktree remove` and `worktree move`, which is a different question the WORKTREES row answers. The
@@ -87,6 +99,8 @@ Item {
     /// (app-ui.md).
     readonly property alias menu: refMenu
     readonly property alias branchHereItem: refBranchHereItem
+    readonly property alias tagHereItem: refTagHereItem
+    readonly property alias pushTagItem: refPushTagItem
     readonly property alias deleteItem: refDeleteItem
     readonly property alias switchItem: refSwitchItem
 
@@ -96,6 +110,8 @@ Item {
     /// A new branch on whatever commit this row stands on — the page owns where the box for its name opens, which is
     /// wherever the menu was opened from.
     signal branchHereRequested(string oidHex)
+    /// A tag on this row's commit — the same box, opened where the menu was.
+    signal tagHereRequested(string oidHex)
     signal deleteRequested(string kind, string id, string name, string oidHex)
     signal dropStashRequested(string selector)
     /// A ref this menu has just asked git to delete, so the window can show it as gone while the write is out
@@ -118,6 +134,11 @@ Item {
         refRowMenu.refOid = oidHex
         refRowMenu.forceDeleteBranch = ""
         refRowMenu.rebasePublished = false
+        // Where a push would go, and what that remote already has under this name. Both settle before the offers are
+        // asked for, so the push row's whole shape is decided by the time the card is on screen.
+        refRowMenu.pushRemote = refRowMenu.repoTab.defaultRemote
+        refRowMenu.tagDriftOid = kind === "tag"
+            ? refRowMenu.tagsModel.remoteTagDrift(full, refRowMenu.pushRemote) : ""
         // A remote row lands on the local branch of the same name, so it is that one another copy can be holding.
         refRowMenu.heldByWorktree =
             kind === "branch" ? refRowMenu.worktreesModel.worktreeHolding(full)
@@ -133,13 +154,15 @@ Item {
             refRowMenu.repoTab.state === "open", refRowMenu.repoTab.busyCount,
             refRowMenu.workTree.branch, refRowMenu.workTree.detached,
             refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
-            refRowMenu.heldByWorktree, refRowMenu.remoteCounterpart).split(" ")
+            refRowMenu.heldByWorktree, refRowMenu.remoteCounterpart,
+            refRowMenu.pushRemote).split(" ")
         refRowMenu.canSwitch = offers.includes("switch")
         refRowMenu.switchAsks = offers.includes("asks")
         refRowMenu.canBranchHere = offers.includes("branch-here")
         refRowMenu.canIntegrateFrom = offers.includes("integrate")
         refRowMenu.canDelete = offers.includes("delete")
         refRowMenu.canDeleteRemote = offers.includes("delete-remote")
+        refRowMenu.canPushTag = offers.includes("push-tag")
         refRowMenu.onCurrentBranch = offers.includes("current")
         if (refRowMenu.repoTab.state === "open" && refRowMenu.rebaseRange !== "")
             refRowMenu.repoTab.checkPublish(refRowMenu.rebaseRange)
@@ -185,6 +208,15 @@ Item {
             offered: refRowMenu.canBranchHere
             onTriggered: refRowMenu.branchHereRequested(refRowMenu.refOid)
         }
+        // The mark, beside the place to carry on from. Same seat, same words as the commit menu's pair (デザイン規約
+        // §メニュー: 入口が違っても同じ操作は同じ文), and offered on the same answer: every row that names a commit takes one,
+        // a stash — nobody's history — takes neither.
+        AppMenuItem {
+            id: refTagHereItem
+            text: qsTr("Create tag here…")
+            offered: refRowMenu.canBranchHere
+            onTriggered: refRowMenu.tagHereRequested(refRowMenu.refOid)
+        }
         AppMenuSeparator {}
         AppMenuItem {
             id: refSwitchItem
@@ -217,6 +249,33 @@ Item {
             // remote-tracking ref, only as fresh as the last fetch.
             note: refRowMenu.rebasePublished ? qsTr("rewrites pushed commits") : ""
             onTriggered: refRowMenu.repoTab.rebase(refRowMenu.refId, "", true)
+        }
+        // A tag sent to where this repository pushes. Last of the rows that run a command on this ref, and the only one
+        // of them that leaves the machine — the branches' own push is the toolbar's, which is where the counts that
+        // decide how hard it may push live (デザイン規約 §リモートへ送る).
+        //
+        // **Two forms, chosen as the menu opens.** A name the remote already has on another commit is refused outright
+        // by a plain push, so that case comes up as the leased overwrite instead: warning-coloured, held, and pinned to
+        // the commit that was being shown (§相手の履歴を置き換える — the same reason the toolbar's `push` and `push -f` are
+        // never both live). The plain form is an ordinary row: it adds a name over there and takes nothing away, and
+        // where the remote already has it on this very commit git answers that there was nothing to send. The long
+        // spelling because a menu row is measured against the widest row (§git 用語のコード表記 — the toolbar's pill is
+        // where `-f` belongs).
+        AppMenuItem {
+            id: refPushTagItem
+            code: refRowMenu.tagDriftOid === "" ? "push" : "push --force"
+            //: Follows the `push` chip: "push to origin".
+            text: qsTr("to %1").arg(refRowMenu.pushRemote)
+            offered: refRowMenu.canPushTag
+            holdMs: refRowMenu.tagDriftOid === "" ? 0 : Metrics.holdMs
+            // Reaching past this machine is the warning tone, as it is on the remote-branch delete (デザイン規約 §状態).
+            holdTone: Theme.warning
+            onTriggered: refRowMenu.repoTab.pushTag(refRowMenu.pushRemote, refRowMenu.refId, "")
+            onHeld: {
+                refMenu.close()
+                refRowMenu.repoTab.pushTag(refRowMenu.pushRemote, refRowMenu.refId,
+                                           refRowMenu.tagDriftOid)
+            }
         }
         AppMenuSeparator {}
         AppMenuItem {

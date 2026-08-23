@@ -45,7 +45,8 @@ QtObject {
     /// a box that comes up already turned down is turning down the reader's arrival. A rename rubbed out to nothing is
     /// the other thing: a name was there and has been taken away, which git would refuse.
     readonly property bool editUnanswered:
-        gestures.editMode === "branch" && gestures.editText.trim() === ""
+        (gestures.editMode === "branch" || gestures.editMode === "tag")
+        && gestures.editText.trim() === ""
     /// What is typed cannot be accepted. The rules are git's own, asked of core (a stash's label is free text, not a
     /// ref name).
     readonly property bool editRefused: gestures.editKey !== "" && !gestures.editUnanswered
@@ -86,7 +87,7 @@ QtObject {
         const mode = gestures.editMode
         // Enter on a box nobody has typed in leaves it standing, the same as Enter on a refused one: it has not been
         // answered, and closing it would be answering for the reader (`editUnanswered`).
-        if (mode === "branch" && text.trim() === "")
+        if ((mode === "branch" || mode === "tag") && text.trim() === "")
             return
         // What the box opened with: a remote branch is typed without the remote it is on, so the name it answers to is
         // not what it shows.
@@ -94,6 +95,8 @@ QtObject {
         gestures.stopEdit()
         if (mode === "branch")
             gestures.host.branchAtRequested(oid, text.trim())
+        else if (mode === "tag")
+            gestures.host.tagAtRequested(oid, text.trim())
         else if (text.trim() !== was)
             gestures.host.renameSubmitted(kind, id, text.trim())
     }
@@ -127,5 +130,10 @@ QtObject {
     /// already stands.
     function beginBranchAt(kind, id, oidHex) {
         gestures.startEdit(kind, kind + ":" + id, "branch", id, oidHex, "")
+    }
+    /// And the same box again for a tag on that commit. One field, three modes: what is typed is a ref name either
+    /// way, and the placeholder is the whole of what tells them apart (`NavNameBox`).
+    function beginTagAt(kind, id, oidHex) {
+        gestures.startEdit(kind, kind + ":" + id, "tag", id, oidHex, "")
     }
 }

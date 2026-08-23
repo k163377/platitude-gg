@@ -42,6 +42,8 @@ Item {
     property AppMenu refMenu
     property AppMenuItem refDeleteItem
     property AppMenuItem refSwitchItem
+    property AppMenuItem refPushTagItem
+    property AppMenuItem refTagHereItem
     property FileRowMenu fileRowMenu
     property AppMenu fileMenu
     property AppMenuItem fileDiscardItem
@@ -50,6 +52,7 @@ Item {
     property CommitMenuState commitMenuState
     property AppMenu commitMenu
     property AppMenuItem dropCommitItem
+    property AppMenuItem tagHereCommitItem
     property AppMenuItem stashDeleteItem
     property AppMenu resetMenu
     property AppMenuItem hardResetItem
@@ -179,7 +182,13 @@ Item {
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
                 "nav-filter", "nav-tip", "nav-reclick", "nav-reclick-away", "nav-rename-far",
-                "nav-branch-box", "nav-rename-box",
+                "nav-branch-box", "nav-rename-box", "nav-tag-box",
+                // The write barrier is behind this one: the row it makes is put in the sidebar by the read that
+                // follows the write, and the write answers first.
+                "create-tag",
+                // Both wait for the readings that decide the push row's shape, and the second runs its press from
+                // there — so the barrier is behind the wait rather than in front of it.
+                "tag-menu", "push-tag",
                 "nav-add-remote", "push-default", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "chip-menu", "chip-menu-current",
@@ -1712,6 +1721,81 @@ Item {
             driver.complete()
         }
     }
+    // A tag that has been made is a row in TAGS, and **the write answers before the read that puts it there** (core
+    // `AfterWrite::Graph` — verify-ui §壊れない動詞). Stopping at the write barrier photographs the sidebar as it was a
+    // moment before, which is a picture of nothing having happened; what this waits for is the name itself.
+    SampleTimer {
+        id: createTagTimer
+        onTriggered: {
+            const oid = tagsModel.oidOfName(AppBackend.autoActArg)
+            if (oid === "" || repoTab.busyCount !== 0)
+                return
+            createTagTimer.stop()
+            AppBackend.report("create_tag tag=" + AppBackend.autoActArg
+                              + " row=" + tagsModel.rowOfName(AppBackend.autoActArg)
+                              + " total=" + tagsModel.total
+                              + " at=" + (oid === driver.createTagOid))
+            renderedBarrier.begin()
+        }
+    }
+    /// The commit the run asked for the tag on, so the report can say the tag landed on that one rather than on
+    /// wherever HEAD happened to be.
+    property string createTagOid: ""
+
+    // The tag menu's push row, which is the one row in this application whose whole shape — chip, hold, colour — is
+    // decided by what a remote was last heard to carry (`RefRowMenu`). Two states to photograph and they are told
+    // apart by nothing but that reading, so the report spells it out: a picture of `push` and a picture of
+    // `push --force` differ by five glyphs in a card that is otherwise identical.
+    //
+    // **`want` is what the run is waiting for, not what it asserts.** The drifted side needs the remotes read
+    // (`ls-remote --tags` is the only carrier — core.md タグのリモート状態), and that read lands well after the fetch it
+    // rides out with; waiting on the fetch alone photographs the plain row and calls it the forced one.
+    SampleTimer {
+        id: tagMenuTimer
+        /// The tag the menu is to stand on, and whether this run wants the drifted reading first.
+        property string tag: ""
+        property bool drift: false
+        /// Run the hold out once the row is the forced one — `push-tag-go`, which is the only way that push is sent.
+        property bool go: false
+        function begin(arg, running) {
+            const parts = arg.split(":")
+            tagMenuTimer.tag = parts[0]
+            tagMenuTimer.drift = parts.length > 1 && parts[1] === "drift"
+            tagMenuTimer.go = running
+            if (tagMenuTimer.drift)
+                repoTab.fetch("")
+            tagMenuTimer.start()
+        }
+        onTriggered: {
+            // What the drifted side is waiting on, asked of the same lookup the menu asks (`NavSectionModel`): the
+            // readings are in or they are not, and no count of fetches says which.
+            if (tagMenuTimer.drift
+                && tagsModel.remoteTagDrift(tagMenuTimer.tag, repoTab.defaultRemote) === "")
+                return
+            if (repoTab.busyCount !== 0)
+                return
+            tagMenuTimer.stop()
+            page.openRefMenu("tag", tagMenuTimer.tag, tagMenuTimer.tag,
+                             tagsModel.oidOfName(tagMenuTimer.tag), true)
+            AppBackend.report("tag_menu tag=" + tagMenuTimer.tag
+                              + " tag_here=" + refTagHereItem.offered
+                              + " push=" + refPushTagItem.offered
+                              + " code=" + refPushTagItem.code
+                              + " held=" + (refPushTagItem.holdMs > 0)
+                              + " lease=" + refRowMenu.tagDriftOid
+                              + " text=" + refPushTagItem.text)
+            if (!tagMenuTimer.go) {
+                driver.complete()
+                return
+            }
+            driver.writeSeqBefore = repoTab.writeSeq
+            if (refPushTagItem.holdMs > 0)
+                refPushTagItem.completeHold()
+            else
+                refPushTagItem.triggered()
+            writeBarrier.start()
+        }
+    }
     // Waits on the early answer, not on a refusal: nothing here writes.
     SampleTimer {
         id: earlyDeleteTimer
@@ -2694,7 +2778,10 @@ Item {
                 // to the whole name; the menu wants both, and only the second is what git was given.
                 page.openRefMenu(navNameBoxTimer.kind, navNameBoxTimer.ref,
                                  navNameBoxTimer.ref, oid, true)
-                page.startBranchAt(oid)
+                if (navNameBoxTimer.mode === "tag")
+                    page.startTagAt(oid)
+                else
+                    page.startBranchAt(oid)
                 // Dismissed the way choosing a row dismisses it: the box it leaves behind is the subject, and a menu
                 // still standing is drawn over the rows beside it.
                 refMenu.close()
@@ -3575,13 +3662,39 @@ Item {
             sidebarPane.beginBranchAt("tag", tagsModel.nameAt(0),
                                       tagsModel.oidOfName(tagsModel.nameAt(0)))
             sidebarPane.submitEdit(arg)
-        } else if (act === "nav-branch-box" || act === "nav-rename-box") {
+        } else if (act === "create-tag") {
+            // The graph's road, all the way through: the commit menu's row opens the box in the chip column, and what
+            // is typed there is what git is finally spawned with. Nothing about it is a shortcut — the row is the one
+            // the pointer would press, and the submit is the field's own.
+            //
+            // The row under HEAD's, counted the way `commit-menu` counts it: the rows above HEAD are whatever else the
+            // graph is showing (the working tree, a stash), and neither of them opens this menu at all.
+            driver.createTagOid = graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
+            page.openRowMenu(driver.createTagOid)
+            tagHereCommitItem.triggered()
+            // `<name>:box` stops at the box the row opened, which is the other half of what this verb wires up: the
+            // chip column asking the second of its two questions (`GraphRowChips`).
+            if (arg.endsWith(":box")) {
+                graphPane.view.namingText = arg.slice(0, -4)
+                AppBackend.report("create_tag box=" + (graphPane.view.namingOid !== "")
+                                  + " mode=" + graphPane.view.namingMode)
+                renderedBarrier.begin()
+            } else {
+                graphPane.view.namingSubmitted(driver.createTagOid, arg, "tag")
+                createTagTimer.start()
+            }
+        } else if (act === "tag-menu" || act === "push-tag") {
+            // The push row's two forms, and the press that sends one of them. `<tag>:drift` fetches first and waits
+            // for the remotes' readings, which is the only thing that tells the forms apart.
+            tagMenuTimer.begin(arg, act === "push-tag")
+        } else if (act === "nav-branch-box" || act === "nav-rename-box" || act === "nav-tag-box") {
             // The two boxes the left menu opens on a row, left standing instead of submitted — the copy of the chip
             // column's box on the side with no lanes to grow into, and the rename box that shares the field with it.
             // The argument is `<section>:<ref>[:<幅>][:away]`: the width is what a hand would drag the pane's own bar
             // to, since what the box is drawn at is the row's share of it and the indent under a folder comes out of
             // that share; `away` walks the list on past the row afterwards.
-            navNameBoxTimer.begin(act === "nav-rename-box" ? "rename" : "branch", arg)
+            navNameBoxTimer.begin(act === "nav-rename-box" ? "rename"
+                                : act === "nav-tag-box" ? "tag" : "branch", arg)
         } else if (act === "dbl-local" || act === "dbl-remote") {
             // The record is the chip as drawn (kind letter, four flags, name — see encode.rs).
             page.activateRecord(
@@ -3591,7 +3704,7 @@ Item {
             page.switchTo("force", repoTab.localNameFor(arg),
                           repoTab.localNameFor(arg), arg)
         } else if (act === "name-branch") {
-            graphPane.view.namingSubmitted(graphModel.oidAt(0), arg)
+            graphPane.view.namingSubmitted(graphModel.oidAt(0), arg, "branch")
         } else if (act === "row-part") {
             // Where the row divides, asked at a point along it. Hover cannot be injected, so this writes the one
             // property a real pointer writes (`GraphRowDelegate.pointerRowX`) and leaves every decision after that to

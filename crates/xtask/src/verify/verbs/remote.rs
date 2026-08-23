@@ -23,6 +23,35 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "nav_add_remote dialog=true",
     },
+    // The tag menu's push row, whose whole shape — chip, hold, colour —
+    // comes off what a remote was last heard to carry. The two forms
+    // differ by five glyphs in an otherwise identical card, and the one
+    // thing no picture holds is the commit the lease is pinned to: a
+    // forced push wearing an empty lease is a plain force, which is the
+    // failure this row exists to prevent (デザイン規約 §相手の履歴を置き換える).
+    //
+    // **`:drift` is a wait, not a claim.** The readings come from
+    // `ls-remote --tags` well after the fetch they ride out with, so a
+    // run that stopped at the fetch would photograph the plain row and
+    // call it the forced one. Both halves are needed: the plain side
+    // alone passes for an implementation that never reads the remotes,
+    // and the drifted side alone for one that always forces.
+    Verb {
+        name: "tag-menu",
+        when: &[(
+            Arg::Ends(":drift"),
+            "tag_here=true push=true code=push --force held=true lease=",
+        )],
+        plain: "tag_here=true push=true code=push held=false lease= ",
+    },
+    Verb {
+        name: "push-tag",
+        when: &[(
+            Arg::Ends(":drift"),
+            "tag_here=true push=true code=push --force held=true lease=",
+        )],
+        plain: "tag_here=true push=true code=push held=false lease= ",
+    },
     // Which remote a push goes to. The mark is one badge on one row:
     // a picture of the band cannot tell "marked" from "the badge was
     // never wired", and `local=true` is what says the repository's own

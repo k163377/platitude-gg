@@ -32,8 +32,8 @@ SlimField {
     property real rowsY: 0
     property real rowsTop: 0
     property real rowsHeight: 0
-    /// Whether this row is the one being typed into, what the box is being opened for ("branch" / "rename"), and what
-    /// it is carrying — all of it the sidebar's, since a delegate is recycled the moment its row scrolls off.
+    /// Whether this row is the one being typed into, what the box is being opened for ("branch" / "tag" / "rename"),
+    /// and what it is carrying — all of it the sidebar's, since a delegate is recycled the moment its row scrolls off.
     property bool editing: false
     property string mode: ""
     property string carried: ""
@@ -97,7 +97,8 @@ SlimField {
          : Math.max(box.seat.width,
                     Math.min(box.wantWidth, box.Window.width - box.x - Theme.spaceXxl))
     font.pixelSize: Theme.fontMd
-    placeholderText: box.mode === "branch" ? qsTr("Create branch here?") : ""
+    placeholderText: box.mode === "branch" ? qsTr("Create branch here?")
+                   : box.mode === "tag" ? qsTr("Create tag here?") : ""
     onTextEdited: box.typed(box.text)
     // Refused text stays in the box: Enter that does nothing is the answer, and the frame and its tooltip say why.
     onAccepted: {

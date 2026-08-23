@@ -38,6 +38,7 @@ Item {
     /// The rows the page owns the answer to: they rewrite history or move the selection, which is the page's to do
     /// (`RepoPage`).
     signal branchHereRequested(string oidHex)
+    signal tagHereRequested(string oidHex)
     signal squashRequested(string oidHex)
     signal dropRequested(string oidHex)
     signal resetRequested(string mode)
@@ -53,6 +54,7 @@ Item {
     /// (app-ui.md).
     readonly property alias menu: commitMenu
     readonly property alias branchHereItem: branchHereCommitItem
+    readonly property alias tagHereItem: tagHereCommitItem
     readonly property alias dropItem: dropCommitItem
     readonly property alias stashDropItem: stashDeleteItem
     readonly property alias resetSubmenu: resetMenu
@@ -108,6 +110,19 @@ Item {
             text: qsTr("Create branch here…")
             offered: rowMenu.canBranchHere
             onTriggered: rowMenu.branchHereRequested(rowMenu.oid)
+        }
+        // Beside it, in the same paragraph and for the same reasons: it opens the same box on the same commit, and what
+        // git is finally spawned with depends on what is typed into it. The one thing the two rows do not share is what
+        // happens next — a branch is somewhere to carry on from, a tag is a mark left behind — and that is what the two
+        // nouns say. Nothing else in this menu is offered on the same terms, so they stand together above the rule
+        // (§git 用語のコード表記「区切り線の外へ出す」).
+        AppMenuItem {
+            id: tagHereCommitItem
+            text: qsTr("Create tag here…")
+            // The same answer the row above reads: both ask only that this row names a commit and that nothing else is
+            // running (`offers::commit_menu`).
+            offered: rowMenu.canBranchHere
+            onTriggered: rowMenu.tagHereRequested(rowMenu.oid)
         }
         AppMenuSeparator {}
         AppMenuItem {

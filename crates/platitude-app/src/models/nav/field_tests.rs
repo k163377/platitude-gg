@@ -27,6 +27,61 @@ fn a_tag_row_reads_out_of_the_snapshot() {
     assert!(!flags(&model, 1, Role::Folder));
     assert_eq!(depth_of(&model, 1), 0);
 }
+
+/// What decides the shape of the tag menu's push row, asked the way the
+/// menu asks it: by name **and by the remote the push is going to**. A
+/// name two remotes disagree about has one answer per remote, and the
+/// destination is the only one that bears on the push.
+#[test]
+fn a_drifted_tag_answers_for_the_remote_the_push_would_go_to() {
+    let mut model = section(
+        "tags",
+        Source::Tags(drifted(
+            Vec::new(),
+            vec![tag("v1.0", true, true), tag("v2.0", true, true)],
+            vec![
+                drift("v1.0", "mirror", "c"),
+                drift("v1.0", "origin", "b"),
+                drift("v2.0", "mirror", "d"),
+            ],
+        )),
+    );
+    model.arrange();
+
+    assert_eq!(
+        model.remote_tag_drift("v1.0".into(), "origin".into()),
+        oid("b").to_hex(),
+        "the commit the lease has to be pinned to"
+    );
+    assert_eq!(
+        model.remote_tag_drift("v1.0".into(), "mirror".into()),
+        oid("c").to_hex(),
+        "a second remote is a second answer, not the same one"
+    );
+    assert_eq!(
+        model.remote_tag_drift("v2.0".into(), "origin".into()),
+        "",
+        "the destination agrees, whatever some other remote says"
+    );
+    assert_eq!(
+        model.remote_tag_drift("v3.0".into(), "origin".into()),
+        "",
+        "no remote carries the name at all"
+    );
+    // The row is decided as the menu opens, so a half-formed question
+    // has to answer "no drift" rather than the first entry in the run.
+    assert_eq!(model.remote_tag_drift("v1.0".into(), String::new()), "");
+    assert_eq!(model.remote_tag_drift(String::new(), "origin".into()), "");
+}
+
+/// A section that holds no readings answers nothing — the branches and
+/// the stashes are asked the same question by the same shared row.
+#[test]
+fn only_the_tags_section_answers_for_a_drift() {
+    let mut model = section("branches", Source::Locals(snapshot(Vec::new(), Vec::new())));
+    model.arrange();
+    assert_eq!(model.remote_tag_drift("v1.0".into(), "origin".into()), "");
+}
 #[test]
 fn a_file_row_reads_out_of_the_status() {
     let mut model = section("worktree", Source::files(pending()));
@@ -211,6 +266,7 @@ fn a_branch_another_copy_holds_wears_the_state_in_the_shared_slot() {
         locals: vec![local("main", false), local("feature/topic-a", true)],
         remotes: Vec::new(),
         tags: Vec::new(),
+        tag_drifts: Vec::new(),
         head: None,
         remote_names: Vec::new(),
         remote_urls: Vec::new(),

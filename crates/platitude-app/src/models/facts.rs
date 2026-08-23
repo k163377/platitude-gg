@@ -170,6 +170,7 @@ impl GitFacts {
         conflict_count: i32,
         held_by_worktree: String,
         remote_counterpart: String,
+        default_remote: String,
     ) -> String {
         let Some(kind) = platitude_core::offers::RefKind::from_word(&kind) else {
             return String::new();
@@ -186,6 +187,7 @@ impl GitFacts {
             conflict_count,
             &held_by_worktree,
             &remote_counterpart,
+            &default_remote,
         )
         .words()
     }

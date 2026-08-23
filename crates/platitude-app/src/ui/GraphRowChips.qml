@@ -14,8 +14,10 @@ Item {
     /// How wide the column is. The chip and the box are laid out from it rather than from `width`, which a layout
     /// settles a frame later.
     required property real columnWidth
-    /// This column is a branch-name box right now.
+    /// This column is a name box right now, and which of the two names it is asking for ("branch" / "tag"). One field
+    /// for both — what is typed is a ref name either way — and the question it holds is the whole of the difference.
     required property bool naming
+    required property string namingMode
 
     /// The chip itself — what a stacked one is unstacked under.
     readonly property alias chipItem: rowChip
@@ -87,7 +89,8 @@ Item {
         // chip's: what is typed here becomes the chip that stands in this column, so it is read at the size it will be
         // read at — but the box is an offer before it is a name, and one that cannot be read is not an offer.
         width: Math.max(chipColumn.columnWidth - 2 * Theme.spaceXs, chipColumn.nameBoxMinW)
-        placeholderText: qsTr("Create branch here?")
+        placeholderText: chipColumn.namingMode === "tag" ? qsTr("Create tag here?")
+                                                         : qsTr("Create branch here?")
         onAccepted: chipColumn.namingSubmitted(nameField.text.trim())
         // Held on the view, not here: this delegate is recycled the moment the row scrolls off, and half a name is
         // still worth not losing.

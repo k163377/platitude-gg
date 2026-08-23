@@ -443,8 +443,10 @@ Item {
         workTree: workTree
         branchesModel: branchesModel
         worktreesModel: worktreesModel
+        tagsModel: tagsModel
         onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
         onBranchHereRequested: oidHex => page.startBranchAt(oidHex)
+        onTagHereRequested: oidHex => page.startTagAt(oidHex)
         onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
         onDropStashRequested: selector => page.dropStashNow(selector)
         onDeleting: (kind, id) => page.showGone(kind, id)
@@ -484,6 +486,15 @@ Item {
             sidebarPane.beginBranchAt(refRowMenu.kind, refRowMenu.refId, oidHex)
         else
             graphPane.startNaming(oidHex)
+    }
+    /// And a tag on that commit, through the same two doors and on the same terms.
+    function startTagAt(oidHex) {
+        if (oidHex === "")
+            return
+        if (page.refMenuInSidebar)
+            sidebarPane.beginTagAt(refRowMenu.kind, refRowMenu.refId, oidHex)
+        else
+            graphPane.startTagging(oidHex)
     }
 
     /// A chip's right-click: the ref menu for the name the chip shows. A chip that names nothing to act on — the
@@ -739,6 +750,7 @@ Item {
         stashCanWrite: commitMenuState.menuStashCanWrite
         // Straight to the graph row: this menu is only ever raised on one.
         onBranchHereRequested: oidHex => graphPane.startNaming(oidHex)
+        onTagHereRequested: oidHex => graphPane.startTagging(oidHex)
         onSquashRequested: oidHex => page.squashCommit(oidHex)
         onDropRequested: oidHex => page.dropCommit(oidHex)
         onResetRequested: mode => page.moveBranchHere(mode)
@@ -896,12 +908,15 @@ Item {
             refMenu: refRowMenu.menu
             refDeleteItem: refRowMenu.deleteItem
             refSwitchItem: refRowMenu.switchItem
+            refPushTagItem: refRowMenu.pushTagItem
+            refTagHereItem: refRowMenu.tagHereItem
             fileRowMenu: fileRowMenu
             fileMenu: fileRowMenu.menu
             fileDiscardItem: fileRowMenu.discardItem
             commitMenuState: commitMenuState
             commitMenu: commitRowMenu.menu
             dropCommitItem: commitRowMenu.dropItem
+            tagHereCommitItem: commitRowMenu.tagHereItem
             stashDeleteItem: commitRowMenu.stashDropItem
             resetMenu: commitRowMenu.resetSubmenu
             hardResetItem: commitRowMenu.hardResetRow
@@ -1888,6 +1903,10 @@ Item {
                         if (name !== "")
                             repoTab.createBranch(name, oidHex, true)
                     }
+                    onTagAtRequested: (oidHex, name) => {
+                        if (name !== "")
+                            repoTab.createTag(name, oidHex)
+                    }
                     onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
                     onAddRemoteRequested: publishFlow.startAddRemote()
                 }
@@ -1928,6 +1947,8 @@ Item {
                                 rowHost.settleRowCard()
                         }
                         onCreateBranchRequested: (oidHex, name) => repoTab.createBranch(name, oidHex, true)
+                        // Nothing moves: a tag is left on the commit and the tree stays where it is.
+                        onCreateTagRequested: (oidHex, name) => repoTab.createTag(name, oidHex)
                         onOpenRepositoryRequested: page.openRepositoryPicker()
                         onAskConfirmed: page.answerRowAsk()
                         onAskCancelled: page.stopRowAsk()

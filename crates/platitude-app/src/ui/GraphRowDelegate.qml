@@ -131,7 +131,9 @@ Item {
             records: rowItem.labelRecords
             columnWidth: rowItem.labelsW
             naming: rowItem.naming
-            onNamingSubmitted: name => rowItem.ListView.view.namingSubmitted(rowItem.oid_hex, name)
+            namingMode: rowItem.ListView.view ? rowItem.ListView.view.namingMode : "branch"
+            onNamingSubmitted: name => rowItem.ListView.view.namingSubmitted(
+                rowItem.oid_hex, name, rowItem.ListView.view.namingMode)
             onNamingEdited: text => rowItem.ListView.view.namingText = text
             onNamingCancelled: rowItem.ListView.view.namingCancelled()
         }

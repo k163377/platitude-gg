@@ -206,6 +206,24 @@ impl NavSectionModel {
         self.told(Role::Name, &name, Role::Upstream)
     }
 
+    /// Where `remote` carries this tag when that is not where this
+    /// repository has it; empty when they agree or that remote has never
+    /// been heard to carry the name.
+    ///
+    /// **What decides the shape of the menu's push row**, and it has to
+    /// be answerable as the menu opens: a plain push to a name the remote
+    /// already has elsewhere is refused outright, so the row comes up as
+    /// the leased overwrite instead and this is the commit the lease is
+    /// pinned to (デザイン規約 §相手の履歴を置き換える). Asked of the tags
+    /// section, the only one holding the readings.
+    #[qslot]
+    pub(super) fn remote_tag_drift(&self, name: String, remote: String) -> String {
+        if name.is_empty() || remote.is_empty() {
+            return String::new();
+        }
+        self.all.tag_drift(&name, &remote)
+    }
+
     /// The other working copy holding this branch, by the path git lists
     /// it under; empty when no other one has it out.
     ///

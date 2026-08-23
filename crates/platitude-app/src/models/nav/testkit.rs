@@ -15,6 +15,14 @@ pub(super) fn tag(short: &str, has_remote: bool, here: bool) -> platitude_core::
     }
 }
 
+pub(super) fn drift(name: &str, remote: &str, digit: &str) -> platitude_core::session::TagDrift {
+    platitude_core::session::TagDrift {
+        name: name.into(),
+        remote: remote.into(),
+        commit: oid(digit),
+    }
+}
+
 pub(super) fn remote(short: &str) -> platitude_core::session::BranchItem {
     platitude_core::session::BranchItem {
         short: short.into(),
@@ -31,10 +39,20 @@ pub(super) fn snapshot(
     remotes: Vec<platitude_core::session::BranchItem>,
     tags: Vec<platitude_core::session::TagItem>,
 ) -> Arc<platitude_core::session::RefsSnapshot> {
+    drifted(remotes, tags, Vec::new())
+}
+
+/// The same, with the run the tag menu's push row reads (`remote_tag_drift`).
+pub(super) fn drifted(
+    remotes: Vec<platitude_core::session::BranchItem>,
+    tags: Vec<platitude_core::session::TagItem>,
+    tag_drifts: Vec<platitude_core::session::TagDrift>,
+) -> Arc<platitude_core::session::RefsSnapshot> {
     Arc::new(platitude_core::session::RefsSnapshot {
         locals: Vec::new(),
         remotes,
         tags,
+        tag_drifts,
         head: None,
         remote_names: Vec::new(),
         remote_urls: Vec::new(),
