@@ -293,23 +293,64 @@ impl RepoSession {
             if !s.diff_is_current(epoch) {
                 return;
             }
-            let colors = match tokio::task::spawn_blocking(move || {
-                crate::highlight::colors(&patches, source.as_deref())
+            // Where the full reading will keep the reader waiting, a
+            // quick one goes out first: no file walked, a fraction of
+            // the budget, on screen in tens of milliseconds. Marked
+            // unsettled — the full answer follows it whatever it says,
+            // so whoever waits for "the colours" has a true to wait on.
+            if source.is_some() && crate::highlight::deep(&patches) {
+                let p = Arc::clone(&patches);
+                match tokio::task::spawn_blocking(move || crate::highlight::colors_quick(&p)).await
+                {
+                    Ok(colors) => {
+                        if !s.diff_is_current(epoch) {
+                            return;
+                        }
+                        s.sink.event(SessionEvent::DiffColoured {
+                            target: target.clone(),
+                            colors,
+                            settled: false,
+                        });
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "quick colours failed; waiting for the full read");
+                    }
+                }
+            }
+            // The lexer states the last reading of this file left behind
+            // (`RepoSession::lex_cache`) ride along and come back grown.
+            let cache = match s.lex_cache.lock() {
+                Ok(mut g) => g.take(),
+                Err(e) => e.into_inner().take(),
+            };
+            let (colors, cache) = match tokio::task::spawn_blocking(move || {
+                crate::highlight::colors_cached(&patches, source.as_deref(), cache)
             })
             .await
             {
-                Ok(colors) => colors,
+                Ok(pair) => pair,
                 Err(e) => {
                     tracing::warn!(error = %e, "syntax colours failed; the diff stays plain");
                     return;
                 }
             };
+            // Kept even where the answer is not wanted any more: the
+            // states are about the file, not about who asked, and the
+            // cache tells a stale source apart on its own.
+            match s.lex_cache.lock() {
+                Ok(mut g) => *g = cache,
+                Err(e) => *e.into_inner() = cache,
+            }
             // Asked again: a long colouring can be overtaken while it runs,
             // and the pane would drop the answer anyway.
             if !s.diff_is_current(epoch) {
                 return;
             }
-            s.sink.event(SessionEvent::DiffColoured { target, colors });
+            s.sink.event(SessionEvent::DiffColoured {
+                target,
+                colors,
+                settled: true,
+            });
         });
     }
 

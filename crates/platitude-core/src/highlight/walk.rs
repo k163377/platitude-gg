@@ -1,6 +1,9 @@
-//! Where the reading of one hunk has got to, and how a conflict's
-//! two sides are stood beside each other rather than after one
-//! another.
+//! Where the reading of one hunk of a combined diff has got to, and how
+//! a conflict's two sides are stood beside each other rather than after
+//! one another. An ordinary diff reads elsewhere (a grammar in
+//! [`super::tree`], or the fallback walk `super::patch` drives); only a
+//! combined one — the form git prints for a path it stopped on — has
+//! its markers read as structure, and only it comes here.
 
 use syntect::highlighting::{HighlightIterator, HighlightState, Highlighter};
 use syntect::parsing::{ParseState, ScopeStack, SyntaxReference};
@@ -17,16 +20,15 @@ pub(super) struct Walk<'a> {
     /// `None` for a language the set does not know — the fences are still
     /// read, the words are simply left the colour they were.
     state: Option<LineState>,
-    /// Only a combined diff — the form git prints for a path it stopped
-    /// on — has its markers read as structure. See the module note.
-    combined: bool,
     region: Option<Region>,
 }
 
 /// A lexer's place between two lines. Cloned to stand a conflict's sides
-/// beside each other rather than after one another.
+/// beside each other rather than after one another, and remembered down
+/// a file so the next reading of the same text can start near its hunks
+/// ([`super::LexCache`]).
 #[derive(Clone)]
-struct LineState {
+pub(super) struct LineState {
     parse: ParseState,
     highlight: HighlightState,
 }
@@ -63,7 +65,6 @@ impl<'a> Walk<'a> {
         assets: &'a Assets,
         highlighter: &'a Highlighter<'a>,
         syntax: Option<&SyntaxReference>,
-        combined: bool,
     ) -> Self {
         Self {
             assets,
@@ -72,7 +73,6 @@ impl<'a> Walk<'a> {
                 parse: ParseState::new(syntax),
                 highlight: HighlightState::new(highlighter, ScopeStack::new()),
             }),
-            combined,
             region: None,
         }
     }
@@ -84,8 +84,31 @@ impl<'a> Walk<'a> {
             assets: self.assets,
             highlighter: self.highlighter,
             state: self.state.clone(),
-            combined: self.combined,
             region: self.region.clone(),
+        }
+    }
+
+    /// The lexer's place as a value that outlives this walk — what a
+    /// checkpoint keeps. `None` mid-conflict: a region's fork state is
+    /// not a place a later reading can stand alone on.
+    pub(super) fn snapshot(&self) -> Option<LineState> {
+        if self.region.is_some() {
+            return None;
+        }
+        self.state.clone()
+    }
+
+    /// A walk standing where a snapshot was taken.
+    pub(super) fn resume(
+        assets: &'a Assets,
+        highlighter: &'a Highlighter<'a>,
+        state: LineState,
+    ) -> Self {
+        Self {
+            assets,
+            highlighter,
+            state: Some(state),
+            region: None,
         }
     }
 
@@ -94,9 +117,7 @@ impl<'a> Walk<'a> {
         if line.kind == DiffLineKind::NoNewline {
             return LineColors::nothing();
         }
-        if self.combined
-            && let Some(marker) = conflict_marker(&line.text)
-        {
+        if let Some(marker) = conflict_marker(&line.text) {
             self.cross(marker);
             return LineColors {
                 spans: Vec::new(),
@@ -331,13 +352,15 @@ diff --cc notes.qqq
     #[test]
     fn markers_outside_a_conflict_are_ordinary_text() {
         // The same shapes in a unified diff — a file that merely writes
-        // about conflicts. Nothing here is structure.
+        // about conflicts. Nothing here is structure. A fallback-lexer
+        // language on purpose: `.md` reads through its grammar now, and
+        // this test is about the road that shares `Walk`'s module.
         let patch = "\
-diff --git a/README.md b/README.md
---- a/README.md
-+++ b/README.md
+diff --git a/notes.groovy b/notes.groovy
+--- a/notes.groovy
++++ b/notes.groovy
 @@ -1,3 +1,3 @@
- Resolve it by hand:
+ def resolve = 1
 -<<<<<<< HEAD
 +<<<<<<< main
  =======
@@ -345,7 +368,9 @@ diff --git a/README.md b/README.md
         let parsed = patches(patch);
         assert!(!parsed[0].is_combined);
         let colors = colors(&parsed, None);
-        let line = colors.line(0, 0, 1);
+        // The context line whose text is exactly a marker's shape — seven
+        // `=` — which only a combined diff may read as one.
+        let line = colors.line(0, 0, 3);
         assert!(!line.fence, "nothing here is a fence");
         assert!(
             !line.spans.is_empty(),

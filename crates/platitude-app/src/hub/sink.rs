@@ -160,8 +160,16 @@ impl SessionSink for BridgeSink {
                     endings,
                 });
             }
-            SessionEvent::DiffColoured { target, colors } => {
-                self.feeds.diff.push(DiffMsg::Coloured { target, colors });
+            SessionEvent::DiffColoured {
+                target,
+                colors,
+                settled,
+            } => {
+                self.feeds.diff.push(DiffMsg::Coloured {
+                    target,
+                    colors,
+                    settled,
+                });
             }
             SessionEvent::CommandStarted {
                 id,

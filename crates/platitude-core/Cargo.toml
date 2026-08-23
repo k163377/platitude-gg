@@ -20,21 +20,68 @@ zune-jpeg = "0.5"
 zune-core = "0.5"
 compact_str = { version = "0.10.0", default-features = false, features = ["std"] }
 smallvec = { version = "1.15.2", features = ["union"] }
-# Syntax colours for the lines a diff shows (`highlight`). fancy-regex
-# rather than syntect's default Oniguruma: a build script that wants a C
-# compiler is the one thing this crate's dependencies are kept clear of
-# (see png above), and the whole price is four syntaxes fancy cannot
-# compile — ARM assembly, Babel JavaScript, PowerShell, Salt.
+# Syntax colours, the fast path (`highlight::grammar`): tree-sitter and
+# one grammar crate per language. Licenses surveyed on crates.io
+# 2026-08-23: every grammar below is MIT except Elixir (Apache-2.0) —
+# both in the allowed set. These are C build scripts, which this
+# crate's dependencies were once kept clear of; that ban was lifted
+# 2026-08-23 (user decision): the toolchain already demands a C++
+# compiler for Qt, the parsers ship as generated C inside the crates
+# (offline-friendly), and the measured 11x over the regex lexer is what
+# makes the first paint immediate. syntect below stays as the fallback
+# for languages with no grammar crate.
+tree-sitter = "0.26"
+tree-sitter-highlight = "0.26"
+tree-sitter-bash = "0.25"
+tree-sitter-c = "0.24"
+tree-sitter-c-sharp = "0.23"
+tree-sitter-cmake = "0.7"
+tree-sitter-cpp = "0.23"
+tree-sitter-css = "0.25"
+tree-sitter-diff = "0.1"
+tree-sitter-elixir = "0.3"
+tree-sitter-go = "0.25"
+tree-sitter-haskell = "0.23"
+tree-sitter-html = "0.23"
+tree-sitter-java = "0.23"
+tree-sitter-javascript = "0.25"
+tree-sitter-json = "0.24"
+# Its crate ships the parser but no highlight query (and fwcd's crate,
+# which has one upstream, drags in a second tree-sitter C runtime —
+# LNK1169), so the query is hand-written in `highlight/queries/`.
+tree-sitter-kotlin-ng = "1.1"
+tree-sitter-lua = "0.5"
+tree-sitter-md = "0.5"
+tree-sitter-nix = "0.3"
+tree-sitter-objc = "3.0"
+tree-sitter-ocaml = "0.25"
+tree-sitter-php = "0.24"
+tree-sitter-powershell = "0.26"
+tree-sitter-properties = "0.3"
+tree-sitter-python = "0.25"
+tree-sitter-qmljs = "0.3"
+tree-sitter-ruby = "0.23"
+tree-sitter-rust = "0.24"
+tree-sitter-scala = "0.26"
+tree-sitter-sequel = "0.3"
+tree-sitter-swift = "0.7"
+tree-sitter-toml-ng = "0.7"
+tree-sitter-typescript = "0.23"
+tree-sitter-xml = "0.7"
+tree-sitter-yaml = "0.7"
+tree-sitter-zig = "1.1"
+# The regex-based fallback (`highlight` outside `grammar`), for
+# languages with no grammar crate above. fancy-regex rather than
+# syntect's default Oniguruma — onig's Regex is not Send (tried
+# 2026-08-23, 112 Send-bound errors), so it could not leave the UI's
+# runtime at all.
 syntect = { version = "5.3", default-features = false, features = [
     "parsing",
     "regex-fancy",
     "dump-load",
     "default-syntaxes",
 ] }
-# The languages Sublime's own set leaves out, Kotlin among them. Its
-# Kotlin is the Sublime Text 2-era one (Apache-2.0): it knows `suspend`
-# and `sealed` but not `lateinit`, and it leaves `@Annotation` plain.
-# Replacing or patching it is a P5 item (P5-確認事項 §同梱する構文定義).
+# The fallback languages Sublime's own set leaves out.
 two-face = { version = "0.5", default-features = false, features = [
     "syntect-fancy",
 ] }

@@ -40,6 +40,12 @@ pub struct RepoSession {
     /// read: recording a fingerprint the pane never received would leave
     /// it stale for as long as the file stayed that way.
     pub(super) last_diff: Mutex<Option<(DiffTarget, u64)>>,
+    /// Lexer states remembered down the file the last diff's colours
+    /// were read against (`highlight::LexCache`) — what lets the re-read
+    /// after every partial stage start near its hunks instead of at
+    /// line 1. Self-invalidating: the cache carries the source text's
+    /// hash and is dropped by the reader when the text has changed.
+    pub(super) lex_cache: Mutex<Option<crate::highlight::LexCache>>,
     /// Dirty working tree — one of the two halves that put a synthetic WIP
     /// row in front of the log stream (the other is below).
     pub(super) wip_dirty: std::sync::atomic::AtomicBool,

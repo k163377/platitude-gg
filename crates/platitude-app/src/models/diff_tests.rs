@@ -30,6 +30,7 @@ fn colours(path: &str) -> DiffMsg {
     DiffMsg::Coloured {
         target: target(path),
         colors: platitude_core::highlight::DiffColors::default(),
+        settled: true,
     }
 }
 

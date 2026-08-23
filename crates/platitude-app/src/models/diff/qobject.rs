@@ -191,8 +191,16 @@ impl DiffModel {
                     self.coloured = false;
                     self.lay_out_rows(&Default::default());
                 }
-                DiffMsg::Coloured { colors, .. } => {
-                    self.coloured = true;
+                DiffMsg::Coloured {
+                    colors, settled, ..
+                } => {
+                    // Only the colours the diff ends on set the flag: a
+                    // deep diff's quick first answer is a stand-in, and
+                    // anything waiting for "the colours" must not latch
+                    // a shot of the interim (app-ui.md §UI 自動化の因果性).
+                    if settled {
+                        self.coloured = true;
+                    }
                     self.repaint_rows(&colors);
                 }
             }

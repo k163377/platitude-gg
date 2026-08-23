@@ -260,6 +260,9 @@ pub enum DiffMsg {
     Coloured {
         target: DiffTarget,
         colors: platitude_core::highlight::DiffColors,
+        /// Whether these are the colours the diff ends on (see
+        /// `SessionEvent::DiffColoured`).
+        settled: bool,
     },
 }
 

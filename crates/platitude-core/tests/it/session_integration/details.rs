@@ -70,15 +70,16 @@ async fn details_and_diff_round_trip_through_the_session() {
 /// Colours arrive behind the rows they belong to, not with them.
 ///
 /// The order is the whole of it: a diff that waits for its colours is a
-/// diff that shows nothing for as long as the colouring takes, which on a
-/// file of any size is most of a second (`SessionEvent::DiffColoured`).
+/// diff that shows nothing for as long as the colouring takes, which on
+/// a file of any size is hundreds of milliseconds
+/// (`SessionEvent::DiffColoured`).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_diff_arrives_before_the_colours_for_it() {
     let mut repo = TestRepo::init();
     // A language the set has rules for, or there would be nothing to say
     // about the lines and no second event at all.
-    repo.commit_file("src/f.rs", "fn one() -> u32 { 1 }\n", "add f");
-    repo.write_file("src/f.rs", "fn one() -> u32 { 2 }\n");
+    repo.commit_file("src/f.rs", "fn one() -> u32 {\n    1\n}\n", "add f");
+    repo.write_file("src/f.rs", "fn one() -> u32 {\n    2\n}\n");
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
@@ -133,10 +134,10 @@ async fn a_diff_arrives_before_the_colours_for_it() {
 #[tokio::test(flavor = "multi_thread")]
 async fn colours_are_skipped_for_a_diff_the_reader_has_left() {
     let mut repo = TestRepo::init();
-    repo.commit_file("src/a.rs", "fn a() -> u32 { 1 }\n", "add a");
-    repo.commit_file("src/b.rs", "fn b() -> u32 { 1 }\n", "add b");
-    repo.write_file("src/a.rs", "fn a() -> u32 { 2 }\n");
-    repo.write_file("src/b.rs", "fn b() -> u32 { 2 }\n");
+    repo.commit_file("src/a.rs", "fn a() -> u32 {\n    1\n}\n", "add a");
+    repo.commit_file("src/b.rs", "fn b() -> u32 {\n    1\n}\n", "add b");
+    repo.write_file("src/a.rs", "fn a() -> u32 {\n    2\n}\n");
+    repo.write_file("src/b.rs", "fn b() -> u32 {\n    2\n}\n");
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(

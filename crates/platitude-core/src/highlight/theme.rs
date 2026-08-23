@@ -12,6 +12,10 @@ use syntect::parsing::{SyntaxReference, SyntaxSet};
 /// (デザイン規約 §シンタックスハイライト).
 const PLAIN: u32 = 0xE2E8F0;
 
+/// The same colour as [`PLAIN`], in the form the grammar path paints
+/// with (`grammar::PLAIN` re-exports it).
+pub(super) const PLAIN_RGB: super::Rgb = super::Rgb::of(PLAIN);
+
 /// Scope → colour, in the app's palette rather than a theme's. Every
 /// value here is in デザイン規約's table; the mapping is what that
 /// section owns, and this array is its mirror (same rule as `Theme.qml`).
@@ -51,10 +55,9 @@ const PALETTE: [(&str, u32); 19] = [
     ("variable.annotation", 0xFDA4AF),
 ];
 
-/// Whether the set has a language for this path. Asked before the file
-/// behind a diff is fetched: reading it costs a process, and a file
-/// nothing can be said about is not worth one.
-pub fn knows(path: &str) -> bool {
+/// Whether the fallback set has a language for this path (the public
+/// question, grammars included, is `patch::knows`).
+pub(super) fn knows(path: &str) -> bool {
     syntax_for(&assets().syntaxes, path).is_some()
 }
 
@@ -132,9 +135,10 @@ mod tests {
 diff --git a/A.kt b/A.kt
 --- a/A.kt
 +++ b/A.kt
-@@ -1,1 +1,1 @@
--fun a(): Int = 1
-+fun b(): Int = 2
+@@ -1,2 +1,2 @@
+ fun a(): Int = 1
+-fun b(): Int = 2
++fun b(): Int = 3
 ";
         let colors = colors(&patches(patch), None);
         assert!(
@@ -149,7 +153,8 @@ diff --git a/A.kt b/A.kt
 diff --git a/notes.qqq b/notes.qqq
 --- a/notes.qqq
 +++ b/notes.qqq
-@@ -1,1 +1,1 @@
+@@ -1,2 +1,2 @@
+ zero
 -one
 +two
 ";

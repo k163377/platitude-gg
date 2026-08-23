@@ -47,6 +47,7 @@ impl RepoSession {
             log_gen: AtomicU64::new(0),
             diff_epoch: AtomicU64::new(0),
             last_diff: Mutex::new(None),
+            lex_cache: Mutex::new(None),
             log_cancel: Mutex::new(None),
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
             merge_incoming: Mutex::new(Vec::new()),

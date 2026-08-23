@@ -50,6 +50,20 @@ pub enum DiffLineKind {
     NoNewline,
 }
 
+impl DiffLineKind {
+    /// Whether a line of this kind is on the side `new_side` names —
+    /// the side whose line numbers a reading counts in. `NoNewline` is
+    /// on neither: it is git talking, not the file.
+    pub fn on_side(self, new_side: bool) -> bool {
+        match self {
+            DiffLineKind::Context => true,
+            DiffLineKind::Addition => new_side,
+            DiffLineKind::Deletion => !new_side,
+            DiffLineKind::NoNewline => false,
+        }
+    }
+}
+
 /// One rendered line of a hunk (text without its marker char).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffLine {

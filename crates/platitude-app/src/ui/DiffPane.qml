@@ -243,7 +243,13 @@ Rectangle {
     /// measured character is what turns them into pixels, and the font is mono so the one character speaks for all of
     /// them. Measured with a Label that is never drawn, the way the numbers above are — a metric read off a method
     /// would be taken once, before this Label's own font arrived (app-ui.md).
-    readonly property real codeW: diffPane.diffModel.widestColumns * charMeasure.implicitWidth / 10 + Theme.spaceSm
+    readonly property real codeW: diffPane.diffModel.widestColumns * diffPane.charW + Theme.spaceSm
+    /// One measured column of the mono font. The divisor is however many characters `charMeasure` holds, so the two
+    /// cannot drift apart; everything column-addressed — the code width above, the emphasis wash in the rows —
+    /// multiplies this one number. Measured at regular weight: changed rows draw bold, which JetBrains Mono advances
+    /// identically (the wash sat exactly under bold glyphs, 2026-08-23 目視) — a mono family whose bold face advances
+    /// differently would drift the wash, so a swap of `Theme.monoFamily` re-checks that.
+    readonly property real charW: charMeasure.implicitWidth / charMeasure.text.length
     Label {
         id: charMeasure
         visible: false
@@ -339,6 +345,7 @@ Rectangle {
                 id: diffRow
                 rowWidth: diffList.width
                 codeX: codeScroll.offset
+                charW: diffPane.charW
                 seatW: diffPane.seatW
                 partial: diffPane.partial
                 staged: diffPane.staged

@@ -37,6 +37,8 @@ Rectangle {
     /// do not travel with it: the numbers, the mark and the pane's own words are about the row rather than in it
     /// (デザイン規約 §diff を横へ送る).
     required property real codeX
+    /// One measured column of the mono font (`DiffPane.charMeasure`), which is what turns `emph`'s columns into x.
+    required property real charW
     /// The room held between the two numbers for the mark, as the pane
     /// works it out once for every row (`DiffPane.seatW`).
     required property int seatW
@@ -176,20 +178,24 @@ Rectangle {
             // source would read its `<T>` as a tag and drop it (規約 §シンタックスハイライト).
             textFormat: diffRow.rich ? Text.StyledText : Text.PlainText
             font.family: Theme.monoFamily
+            // A changed line is bold (規約 §シンタックスハイライト) — the wash says which side it is, the weight is what
+            // makes it stand off the context around it. Not the fences: git's scaffolding is not a change to read.
+            font.bold: !diffRow.fence && (diffRow.kind === "add" || diffRow.kind === "del")
             // The size an editor puts source at rather than a step in the UI's scale — `fontCode`, matched to
             // IntelliJ's default (デザイン規約 §タイポグラフィ).
             //
             // The hunk heading is smaller still: it is the pane's own words rather than the file's, and at the file's
             // size its `@@` line runs under the two words sitting at the right of the same row.
             font.pixelSize: diffRow.kind === "hunk" ? Theme.fontSm : Theme.fontCode
-            // Where the theme said nothing — an uncoloured language, a hunk heading — this is still the whole of the
-            // row's colour.
+            // Where the theme said nothing — an uncoloured language, a row past the lexer's budget, the moment before
+            // the colours land — this is still the whole of the row's colour. A changed line reads in the window's own
+            // words (規約 §シンタックスハイライト): the wash and the weight already name it, and green-on-green said the
+            // same thing twice while reading worse.
             //
             // A fence drops its voice: `<<<<<<<` is git's scaffolding round the two sides, not a line the file has
             // anything to say with, and painting it the added-line green puts the loudest thing in the pane on the part
             // nobody is reading (デザイン規約 §シンタックスハイライト). It keeps its background — it really is in the file.
             color: diffRow.fence ? Theme.textMuted
-                   : diffRow.kind === "add" ? Theme.diffAddedFg : diffRow.kind === "del" ? Theme.diffRemovedFg
                    : diffRow.kind === "hunk" ? Theme.diffHunkHeaderFg : diffRow.kind === "meta" ? Theme.textMuted
                    : Theme.textPrimary
         }
