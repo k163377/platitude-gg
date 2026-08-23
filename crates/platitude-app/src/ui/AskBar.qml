@@ -225,21 +225,11 @@ Rectangle {
             Accessible.role: Accessible.Button
             Accessible.name: bar.code !== "" ? bar.code : bar.accept
             Accessible.description: bar.hold ? Words.holdToActivate : ""
-            // The hold filling the frame from the left, inset by the border so the frame stays a frame while it fills:
-            // that the fill reaches the end is the whole progress report.
-            Rectangle {
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                anchors.margins: Theme.borderWidth
-                // Never thinner than `holdFillMin` while it runs — see ActionButton for why the proportional start is
-                // no good.
-                width: bar.holdProgress > 0
-                       ? Math.max(Metrics.holdFillMin,
-                                  (parent.width - 2 * Theme.borderWidth) * bar.holdProgress)
-                       : 0
-                color: bar.tone
-                visible: bar.holdProgress > 0
+            // That the fill reaches the end is the whole progress report.
+            HoldFill {
+                progress: bar.holdProgress
+                tone: bar.tone
+                inset: Theme.borderWidth
             }
             // Outside the frame: the frame's colour says what answering costs, and focus must not be able to take that
             // over. **Outside is still over it** — a blue ring around a warning or a danger frame reads as one more
@@ -335,22 +325,18 @@ Rectangle {
                         holdDrive.letUp()
                 }
             }
-            // The same answer without a pointer: Space or Enter, held where the question asks for a hold and simply
-            // pressed where it does not. Auto-repeat is dropped on both edges — see ActionButton.
+            // The same answer without a pointer: Space or Enter, held where the question asks for a hold
+            // (`HoldDriver.pressKey`, which is disarmed here when it does not) and simply pressed where it does not —
+            // the key is the pill's either way, and a plain press lands its answer as it comes back up.
             Keys.onPressed: event => {
-                if (event.isAutoRepeat || !holdDrive.holdKey(event.key))
+                if (holdDrive.pressKey(event) || !holdDrive.ownsKey(event))
                     return
-                if (bar.hold)
-                    holdDrive.begin()
                 event.accepted = true
             }
             Keys.onReleased: event => {
-                if (event.isAutoRepeat || !holdDrive.holdKey(event.key))
+                if (holdDrive.releaseKey(event) || !holdDrive.ownsKey(event))
                     return
-                if (bar.hold)
-                    holdDrive.letUp()
-                else
-                    bar.confirmed()
+                bar.confirmed()
                 event.accepted = true
             }
         }

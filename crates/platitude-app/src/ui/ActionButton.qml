@@ -158,23 +158,15 @@ HoverToolButton {
         else
             holdDrive.letUp()
     }
-    // The hold's other hand: focus it, then hold Space or Enter. Accepting the key keeps AbstractButton from also
-    // taking Space as a press, which would drive the same fill from `down` a second time.
-    //
-    // Auto-repeat is dropped on both edges. A held key repeats its press on every platform and its release on some, and
-    // either edge would restart the fill from zero for as long as the key was held — the hold could then never
-    // complete.
+    // The hold's other hand (`HoldDriver.pressKey`), offered only while the button is one a press can reach at all: a
+    // button waiting on git answers no key any more than it answers a click.
     Keys.onPressed: event => {
-        if (actionBtn.holdMs <= 0 || !actionBtn.live || event.isAutoRepeat || !holdDrive.holdKey(event.key))
-            return
-        holdDrive.begin()
-        event.accepted = true
+        if (actionBtn.live)
+            holdDrive.pressKey(event)
     }
     Keys.onReleased: event => {
-        if (actionBtn.holdMs <= 0 || !actionBtn.live || event.isAutoRepeat || !holdDrive.holdKey(event.key))
-            return
-        holdDrive.letUp()
-        event.accepted = true
+        if (actionBtn.live)
+            holdDrive.releaseKey(event)
     }
     HoldDriver {
         id: holdDrive
@@ -199,23 +191,10 @@ HoverToolButton {
         border.color: actionBtn.busy && actionBtn.framed ? actionBtn.toneDim : actionBtn.frameColor
         border.width: Theme.borderWidth
         radius: Theme.radiusSm
-        // The hold, filling from the left. Inset by the border where there is one, so the frame stays a frame while it
-        // fills; a bare button fills edge to edge, the way a held menu row does.
-        Rectangle {
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            anchors.margins: actionBtn.framed ? Theme.borderWidth : 0
-            radius: Theme.radiusSm
-            // Never thinner than `holdFillMin` while it runs: proportional from zero, the first tenth of the hold is a
-            // sub-pixel sliver, so the press reads as not having taken and the whole gesture feels longer than it is
-            // (デザイン規約 §進行中・長押しの定数).
-            width: actionBtn.holdProgress > 0
-                   ? Math.max(Metrics.holdFillMin,
-                              (parent.width - 2 * anchors.margins) * actionBtn.holdProgress)
-                   : 0
-            color: actionBtn.holdTone
-            visible: actionBtn.holdProgress > 0
+        HoldFill {
+            progress: actionBtn.holdProgress
+            tone: actionBtn.holdTone
+            inset: actionBtn.framed ? Theme.borderWidth : 0
         }
         // Drawn outside the frame rather than in it: the frame's colour is already saying this button is the dangerous
         // one, and focus must not be able to take that over.

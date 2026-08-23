@@ -226,18 +226,9 @@ MenuItem {
         // the pointer arrives — and one menu holding two strengths of highlight read as two different states rather
         // than one pointer (2026-08-11 ユーザー報告). The list the combo drops has said it this way all along (§選ぶ欄と打つ欄).
         color: menuItem.highlighted ? Theme.bgHover : "transparent"
-        // The hold filling the row from the left, the same report the pill and the toolbar button give (デザイン規約 §長押し),
-        // and never thinner than `holdFillMin` while it runs.
-        Rectangle {
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            width: menuItem.holding
-                   ? Math.max(Metrics.holdFillMin, parent.width * menuItem.holdProgress)
-                   : 0
-            radius: Theme.radiusSm
-            color: menuItem.holdTone
-            visible: menuItem.holding
+        HoldFill {
+            progress: menuItem.holdProgress
+            tone: menuItem.holdTone
         }
     }
 
@@ -276,15 +267,7 @@ MenuItem {
             event.accepted = holdDrive.holdKey(event.key)
             return
         }
-        if (menuItem.holdMs <= 0 || event.isAutoRepeat || !holdDrive.holdKey(event.key))
-            return
-        holdDrive.begin()
-        event.accepted = true
+        holdDrive.pressKey(event)
     }
-    Keys.onReleased: event => {
-        if (menuItem.holdMs <= 0 || event.isAutoRepeat || !holdDrive.holdKey(event.key))
-            return
-        holdDrive.letUp()
-        event.accepted = true
-    }
+    Keys.onReleased: event => holdDrive.releaseKey(event)
 }

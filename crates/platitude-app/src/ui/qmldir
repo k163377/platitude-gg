@@ -79,6 +79,7 @@ HashPlate 1.0 HashPlate.qml
 HeadPinRow 1.0 HeadPinRow.qml
 HeadTrack 1.0 HeadTrack.qml
 HoldDriver 1.0 HoldDriver.qml
+HoldFill 1.0 HoldFill.qml
 HoldIcon 1.0 HoldIcon.qml
 HoverCardHost 1.0 HoverCardHost.qml
 HoverToolButton 1.0 HoverToolButton.qml

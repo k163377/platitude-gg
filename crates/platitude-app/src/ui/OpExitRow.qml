@@ -67,15 +67,9 @@ Item {
         anchors.fill: parent
         radius: Theme.radiusSm
         color: rowHover.containsMouse && opRow.enabled && !opRow.holding ? Theme.bgHover : "transparent"
-        // The hold filling the row from the left, the report every held control in this app gives (デザイン規約 §長押し).
-        Rectangle {
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            width: opRow.holding ? Math.max(Metrics.holdFillMin, parent.width * opRow.holdProgress) : 0
-            radius: Theme.radiusSm
-            color: opRow.holdTone
-            visible: opRow.holding
+        HoldFill {
+            progress: opRow.holdProgress
+            tone: opRow.holdTone
         }
     }
 
@@ -157,26 +151,18 @@ Item {
         onPositionChanged: if (!containsMouse) holdDrive.letUp()
     }
     // The same row from the keyboard, the one alternative a hold has anywhere in this app: focus it, then hold Space or
-    // Enter. Auto-repeat is dropped on both edges, or the fill restarts from zero for as long as the key is down and
-    // can never complete.
+    // Enter (`HoldDriver.pressKey`).
     activeFocusOnTab: opRow.enabled
     Keys.onPressed: event => {
-        if (!holdDrive.holdKey(event.key) || event.isAutoRepeat)
+        if (holdDrive.pressKey(event))
             return
-        if (opRow.holdMs <= 0) {
+        // A row with no hold on it runs on the same key, outright.
+        if (holdDrive.ownsKey(event)) {
             opRow.picked()
             event.accepted = true
-            return
         }
-        holdDrive.begin()
-        event.accepted = true
     }
-    Keys.onReleased: event => {
-        if (opRow.holdMs <= 0 || event.isAutoRepeat || !holdDrive.holdKey(event.key))
-            return
-        holdDrive.letUp()
-        event.accepted = true
-    }
+    Keys.onReleased: event => holdDrive.releaseKey(event)
 
     HoldDriver {
         id: holdDrive

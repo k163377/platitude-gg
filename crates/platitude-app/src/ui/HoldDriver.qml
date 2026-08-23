@@ -38,6 +38,32 @@ QtObject {
     function holdKey(key) {
         return key === Qt.Key_Space || key === Qt.Key_Return || key === Qt.Key_Enter
     }
+    /// Whether a key event is one of those arriving fresh. Auto-repeat is dropped on both edges: a held key repeats its
+    /// press on every platform and its release on some, and either edge would restart the fill from zero for as long as
+    /// the key was down — the hold could then never complete. Owners with their own answer for the same key read this
+    /// to ask it the same question the hold does.
+    function ownsKey(event) {
+        return !event.isAutoRepeat && drive.holdKey(event.key)
+    }
+    /// The hold's other hand: focus the control, then hold Space or Enter. Fills from zero and takes the event when the
+    /// hold is armed and the key is its own — and answers whether it did, so an owner that also has a use for the key
+    /// can tell "held" from "not ours". Accepting it is what keeps `AbstractButton` from reading Space as a press as
+    /// well, which would drive the same fill from `down` a second time.
+    function pressKey(event) {
+        if (drive.holdMs <= 0 || !drive.ownsKey(event))
+            return false
+        drive.begin()
+        event.accepted = true
+        return true
+    }
+    /// And the release. Same gate, so a disarmed hold answers no key at all and the owner's own reading of it stands.
+    function releaseKey(event) {
+        if (drive.holdMs <= 0 || !drive.ownsKey(event))
+            return false
+        drive.letUp()
+        event.accepted = true
+        return true
+    }
 
     readonly property NumberAnimation fill: NumberAnimation {
         target: drive
