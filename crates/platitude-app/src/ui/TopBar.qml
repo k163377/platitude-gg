@@ -281,67 +281,13 @@ Rectangle {
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
         }
-        // Push, in whichever shape this branch's standing with its remote allows (デザイン規約 §リモートへ送る). The counts behind
-        // it are from the last fetch, so they are believed only where they refuse.
-        ActionButton {
+        // Push, in whichever shape this branch's standing with its remote allows (`BandPushButton`).
+        BandPushButton {
             id: pushButton
-            readonly property string mode: topBar.curPage !== null ? topBar.curPage.pushState : "closed"
-            /// The last go at sending this branch came back refused. No stopped step past it: nothing sends on its own
-            /// to be stopped (デザイン規約 §リモートへ送る).
-            readonly property bool failed: topBar.curPage !== null && topBar.curPage.pushFailed
-            /// The frame's warning colour, for either of the two things that call for it: what an overwrite would do,
-            /// and what the last go did. The word takes it for only one of them (below).
-            readonly property bool warned: pushButton.mode === "diverged" || pushButton.failed
-            kind: "push"
-            busy: topBar.autoPushBusyLatched || (topBar.curPage !== null && topBar.curPage.pageTab.busyOp === "push")
-            // Two fixed wordings, no counts: a number here would make the button a different width for every value it
-            // took (デザイン規約 §リモートへ送る).
-            text: mode === "diverged" ? "push -f" : "push"
-            code: true
+            curPage: topBar.curPage
+            busyLatched: topBar.autoPushBusyLatched
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
-            // The overwrite colours its word; the refusal does not — only one of them changes what the press costs
-            // (デザイン規約 §長押し — 警告の色は語ではなく枠と印が持つ).
-            tone: pushButton.mode === "diverged" ? Theme.warning : Theme.textPrimary
-            // The ring and the frame keep the warning through the wait, a step down. The word does not follow them: it
-            // takes the disabled step, which is the one way a word says "not now" (デザイン規約 §暗く落とした段 / §無効).
-            toneDim: pushButton.warned ? Theme.warningDim : Theme.textMuted
-            frameColor: pushButton.warned ? Theme.warning : "transparent"
-            // The frame's colour is worn by the diverged shape as well, so on its own it would not tell "cannot land
-            // plainly" from "did not land".
-            alert: pushButton.failed
-            alertTone: Theme.warning
-            holdMs: mode === "diverged" ? Metrics.holdMs : 0
-            enabled: topBar.curPage !== null
-                     && (topBar.curPage.canPush || (mode === "diverged" && topBar.curPage.canForcePush))
-            onHeld: topBar.curPage.forcePush()
-            tip: {
-                if (topBar.curPage === null)
-                    return ""
-                const to = topBar.curPage.pushTargetLabel
-                const what = pushButton.mode === "publish"
-                             ? qsTr("This branch has not been sent anywhere yet — asks where it goes")
-                           // No count: the marked remote is not the one this branch tracks, so `ahead` is the
-                           // standing with somewhere else (デザイン規約 §リモートへ送る).
-                           : pushButton.mode === "elsewhere"
-                             ? qsTr("Push to %1").arg(to)
-                           : pushButton.mode === "ready"
-                             ? qsTr("Push %n commit(s) to %1", "", topBar.curPage.pageWt.ahead).arg(to)
-                           : pushButton.mode === "clean"
-                             ? qsTr("Nothing to push — %1 is up to date").arg(to)
-                           : pushButton.mode === "behind"
-                             ? qsTr("Nothing to push — %1 has moved ahead").arg(to)
-                           : pushButton.mode === "diverged"
-                             ? qsTr("Hold to overwrite %1, dropping %n commit(s) it has (as of the last fetch)", "",
-                                    topBar.curPage.pageWt.behind).arg(to)
-                           : ""
-                // What git said, under what the button would do next — this is the one place with room for why.
-                const why = topBar.curPage.pushFailReason
-                if (pushButton.failed && why !== "")
-                    return what + "\n\n" + why
-                return what
-            }
-            onActivated: topBar.curPage.pushNow()
         }
         // Everything uncommitted, set aside in one entry, on the press (デザイン規約 §変更を退避する). It stands on the band
         // rather than over the file list: what it sets aside is the working tree, which is there whichever pane is
