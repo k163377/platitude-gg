@@ -51,8 +51,8 @@ QtObject {
     readonly property bool editRefused: gestures.editKey !== "" && !gestures.editUnanswered
         && (gestures.editTaken
             || !(gestures.editKind === "stash"
-                 ? gestures.repoTab.validStashMessage(gestures.editText)
-                 : gestures.repoTab.validRefName(gestures.editText)))
+                 ? GitFacts.validStashMessage(gestures.editText)
+                 : GitFacts.validRefName(gestures.editText)))
     readonly property string editRefusedWhy: !gestures.editRefused ? ""
         : gestures.editText.trim() === ""
           ? qsTr("A name is needed")

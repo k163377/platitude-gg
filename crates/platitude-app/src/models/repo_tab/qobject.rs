@@ -171,19 +171,6 @@ impl RepoTab {
         }
     }
 
-    /// Whoever a message being typed credits, packed the way a commit's
-    /// own trailers are packed for the details pane
-    /// (`encode::encode_co_authors`).
-    ///
-    /// A slot rather than a property: the message is the editor's, not
-    /// this tab's, and what a binding follows is the box's own text.
-    /// Whether a line counts is `platitude_core::trailers` — the one
-    /// place that rule is written.
-    #[qslot]
-    fn co_authors_of(&self, body: String) -> String {
-        crate::encode::encode_co_authors(&platitude_core::trailers::co_authors_in(&body))
-    }
-
     /// Name of one remote (a list property would need a model of its own
     /// for three strings).
     #[qslot]
@@ -510,28 +497,6 @@ impl RepoTab {
     #[qslot]
     fn rename_stash(&mut self, selector: String, message: String) {
         self.with_session(|s| s.rename_stash(selector.clone(), message.clone()));
-    }
-
-    /// Whether a name is one git would take for a branch or a tag — asked
-    /// per keystroke by the rename box, so it never runs git.
-    #[qslot]
-    fn valid_ref_name(&self, name: String) -> bool {
-        platitude_core::tag::is_valid_name(&name)
-    }
-
-    /// The same question for a stash's label, which is free text on one
-    /// line rather than a ref name.
-    #[qslot]
-    fn valid_stash_message(&self, message: String) -> bool {
-        platitude_core::stash::is_valid_message(&message)
-    }
-
-    /// What somebody called a stash, out of the line the list shows —
-    /// empty where the whole line is git's own (`WIP on …`). Asked before
-    /// a pop, which is the last moment the entry is there to ask.
-    #[qslot]
-    fn stash_label(&self, message: String) -> String {
-        platitude_core::stash::label_in(&message).to_string()
     }
 
     /// `git stash push -u` over the whole working tree, on the press —

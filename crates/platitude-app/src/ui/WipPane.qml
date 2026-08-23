@@ -39,8 +39,8 @@ ColumnLayout {
     /// (`encode::encode_co_authors`). Nothing has been committed, so the only place a trailer exists is the text.
     ///
     /// A binding over a slot: what it follows is the box's own `bodyText`, which is a property, so every keystroke
-    /// re-asks — and the rule for what counts as a trailer stays in one place, on the Rust side (`co_authors_of`).
-    readonly property string messageMates: wipPane.repoTab.coAuthorsOf(msgEditor.bodyText)
+    /// re-asks — and the rule for what counts as a trailer stays in one place, on the Rust side (`GitFacts.coAuthorsOf`).
+    readonly property string messageMates: GitFacts.coAuthorsOf(msgEditor.bodyText)
     /// How many of them there are — one record per person, counted where the record shape lives
     /// (`GitFacts.recordCount` / `encode::RECORD_SEP`).
     readonly property int mateCount: GitFacts.recordCount(wipPane.messageMates)
@@ -505,7 +505,7 @@ ColumnLayout {
     /// rule of this pane's own on top (規約 §同名).
     readonly property string stashName:
         !wipPane.amending && msgEditor.subjectText !== wipPane.standingSubject
-        && wipPane.repoTab.validStashMessage(msgEditor.subjectText)
+        && GitFacts.validStashMessage(msgEditor.subjectText)
         ? msgEditor.subjectText : ""
     // Whether the amend should also put the current identity on the commit it replaces (git keeps the original author
     // otherwise).

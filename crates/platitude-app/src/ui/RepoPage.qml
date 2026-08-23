@@ -191,7 +191,7 @@ Item {
     /// Both ways in to a pop — the graph row's menu and the details pane's band — so the name comes back from one
     /// place (デザイン規約 §変更を退避する).
     function popStash(selector) {
-        page.pendingPopLabel = repoTab.stashLabel(stashesModel.nameOfFull(selector))
+        page.pendingPopLabel = GitFacts.stashLabel(stashesModel.nameOfFull(selector))
         page.pendingPopSeq = repoTab.writeSeq
         repoTab.popStash(selector)
         page.selectedStashRef = ""

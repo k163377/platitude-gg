@@ -3282,7 +3282,7 @@ Item {
                 driver.graphGoneOid = stashOid
                 // Through the page, which is where the entry's name is read before it goes (`popStash`) — the menu's
                 // own road. What the box has to be holding afterwards is read back at the barrier (`back=`).
-                driver.popWanted = repoTab.stashLabel(stashesModel.nameAt(0))
+                driver.popWanted = GitFacts.stashLabel(stashesModel.nameAt(0))
                 page.popStash(commitMenuState.menuStashRef)
             }
         } else if (act === "branch-at-tag") {

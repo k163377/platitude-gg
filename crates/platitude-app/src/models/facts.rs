@@ -11,7 +11,8 @@ use super::qml_register;
 /// The singleton every QML file can ask a rule of without wiring a model
 /// through: which id is the synthetic WIP row's, which chips a gone set
 /// leaves standing, what a remote ref or a typed identity splits into,
-/// what a push can do.
+/// what a push can do, which names git would take, what a stash line
+/// was called.
 #[derive(Default)]
 pub struct GitFacts;
 
@@ -137,6 +138,37 @@ impl GitFacts {
     #[qslot]
     fn path_leaf(&self, path: String) -> String {
         crate::urlpath::path_leaf(&path).to_string()
+    }
+
+    /// Whoever a message being typed credits, packed the way a commit's
+    /// own trailers are packed for the details pane
+    /// (`encode::encode_co_authors`). Whether a line counts is
+    /// `platitude_core::trailers` — the one place that rule is written.
+    #[qslot]
+    fn co_authors_of(&self, body: String) -> String {
+        crate::encode::encode_co_authors(&platitude_core::trailers::co_authors_in(&body))
+    }
+
+    /// Whether a name is one git would take for a branch or a tag —
+    /// asked per keystroke by the rename box, so it never runs git.
+    #[qslot]
+    fn valid_ref_name(&self, name: String) -> bool {
+        platitude_core::tag::is_valid_name(&name)
+    }
+
+    /// The same question for a stash's label, which is free text on one
+    /// line rather than a ref name.
+    #[qslot]
+    fn valid_stash_message(&self, message: String) -> bool {
+        platitude_core::stash::is_valid_message(&message)
+    }
+
+    /// What somebody called a stash, out of the line the list shows —
+    /// empty where the whole line is git's own (`WIP on …`). Asked
+    /// before a pop, which is the last moment the entry is there to ask.
+    #[qslot]
+    fn stash_label(&self, message: String) -> String {
+        platitude_core::stash::label_in(&message).to_string()
     }
 }
 
