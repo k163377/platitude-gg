@@ -12,7 +12,8 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-use super::list::{branch_push_remote, config_value, current_branch, push_default};
+use super::list::{config_value, current_branch};
+use super::marks::{branch_push_remote, push_default};
 
 /// How hard a push may overwrite the remote.
 #[derive(Debug, Clone, PartialEq, Eq)]
