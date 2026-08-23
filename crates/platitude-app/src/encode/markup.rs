@@ -147,12 +147,7 @@ fn push_run(out: &mut String, from: Stand, to: Stand) {
         out.push(',');
     }
     let mut first = true;
-    for number in [
-        from.col,
-        from.wide,
-        to.col - from.col,
-        to.wide - from.wide,
-    ] {
+    for number in [from.col, from.wide, to.col - from.col, to.wide - from.wide] {
         if !first {
             out.push(':');
         }
