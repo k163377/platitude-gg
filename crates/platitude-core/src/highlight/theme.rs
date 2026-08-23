@@ -16,43 +16,67 @@ const PLAIN: u32 = 0xE2E8F0;
 /// with (`grammar::PLAIN` re-exports it).
 pub(super) const PLAIN_RGB: super::Rgb = super::Rgb::of(PLAIN);
 
-/// Scope → colour, in the app's palette rather than a theme's. Every
-/// value here is in デザイン規約's table; the mapping is what that
-/// section owns, and this array is its mirror (same rule as `Theme.qml`).
+// The rest of デザイン規約 §シンタックスハイライト's table, one const per
+// row of it. Two arrays name these — `PALETTE` in syntect's scopes,
+// `grammar::CAPTURES` in tree-sitter's captures — and the two
+// vocabularies differ by design; the values do not, so they are written
+// once here and referred to from both. Written twice they would drift
+// silently, and one file would then wear two colourings: a path a
+// grammar claims still reads through syntect when it is conflicted
+// (`patch::patch_colors` takes the combined branch first).
+
+/// Context, not content — the colour the app gives every secondary
+/// word. Emphatically not `textMuted`: dimming text is how this app
+/// says "disabled" (規約 §無効), and a comment is not disabled.
+pub(super) const COMMENT: u32 = 0x94A3B8;
+
+/// The words that make it a language.
+pub(super) const KEYWORD: u32 = 0x60A5FA;
+
+/// What things are.
+pub(super) const TYPE: u32 = 0x7DD3FC;
+
+/// What things do.
+pub(super) const FUNCTION: u32 = 0xA78BFA;
+
+/// What is written down literally.
+pub(super) const STRING: u32 = 0xFCD34D;
+
+/// Numbers, and the constants a language names itself — `true`, `null`.
+pub(super) const CONSTANT: u32 = 0xF0ABFC;
+
+/// What is said *about* the code — annotations, attributes, macros.
+pub(super) const ANNOTATION: u32 = 0xFDA4AF;
+
+/// Scope → one of the colours above, in the app's palette rather than a
+/// theme's. The mapping is what this array owns; デザイン規約's table
+/// owns the values (same rule as `Theme.qml`).
 ///
 /// syntect scores selectors and takes the best match, so a broad name
 /// sits safely beside a narrow one — `keyword` and `keyword.operator`
 /// both belong here and the narrower one wins where it applies.
 const PALETTE: [(&str, u32); 19] = [
-    // Context, not content — the colour the app gives every secondary
-    // word. Emphatically not `textMuted`: dimming text is how this app
-    // says "disabled" (規約 §無効), and a comment is not disabled.
-    ("comment", 0x94A3B8),
-    ("punctuation.definition.comment", 0x94A3B8),
-    // The words that make it a language.
-    ("keyword", 0x60A5FA),
-    ("storage", 0x60A5FA),
-    // …but not its operators: `=` and `+` in accent blue turns every
-    // line into a row of lights.
+    ("comment", COMMENT),
+    ("punctuation.definition.comment", COMMENT),
+    ("keyword", KEYWORD),
+    ("storage", KEYWORD),
+    // Keywords, but not their operators: `=` and `+` in accent blue
+    // turns every line into a row of lights.
     ("keyword.operator", PLAIN),
     ("punctuation", PLAIN),
-    // What things are.
-    ("entity.name.type", 0x7DD3FC),
-    ("entity.name.class", 0x7DD3FC),
-    ("entity.other.inherited-class", 0x7DD3FC),
-    ("support.type", 0x7DD3FC),
-    ("support.class", 0x7DD3FC),
-    // What things do.
-    ("entity.name.function", 0xA78BFA),
-    ("support.function", 0xA78BFA),
-    ("variable.function", 0xA78BFA),
-    // What is written down literally.
-    ("string", 0xFCD34D),
-    ("constant.numeric", 0xF0ABFC),
-    ("constant.language", 0xF0ABFC),
-    // What is said *about* the code — annotations, attributes, macros.
-    ("meta.annotation", 0xFDA4AF),
-    ("variable.annotation", 0xFDA4AF),
+    ("entity.name.type", TYPE),
+    ("entity.name.class", TYPE),
+    ("entity.other.inherited-class", TYPE),
+    ("support.type", TYPE),
+    ("support.class", TYPE),
+    ("entity.name.function", FUNCTION),
+    ("support.function", FUNCTION),
+    ("variable.function", FUNCTION),
+    ("string", STRING),
+    ("constant.numeric", CONSTANT),
+    ("constant.language", CONSTANT),
+    ("meta.annotation", ANNOTATION),
+    ("variable.annotation", ANNOTATION),
 ];
 
 /// Whether the fallback set has a language for this path (the public
@@ -84,11 +108,12 @@ pub(super) fn assets() -> &'static Assets {
 /// (2026-08-13 実測 — base16-ocean, Catppuccin Mocha, Dracula, Monokai
 /// were all tried against the real thing).
 fn palette() -> Theme {
-    let color = |rgb: u32| Color {
-        r: ((rgb >> 16) & 0xff) as u8,
-        g: ((rgb >> 8) & 0xff) as u8,
-        b: (rgb & 0xff) as u8,
-        a: 0xff,
+    // Through `super::Rgb::of`, the one place `0xRRGGBB` is taken
+    // apart, and then into syntect's own colour — opaque, since the
+    // palette is foreground only.
+    let color = |rgb: u32| {
+        let super::Rgb { r, g, b } = super::Rgb::of(rgb);
+        Color { r, g, b, a: 0xff }
     };
     Theme {
         name: Some("platitude".to_string()),

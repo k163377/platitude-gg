@@ -8,40 +8,43 @@ use tree_sitter::Language;
 use tree_sitter_highlight::HighlightConfiguration;
 
 use super::Rgb;
-use super::theme::PLAIN_RGB;
+use super::theme::{ANNOTATION, COMMENT, CONSTANT, FUNCTION, KEYWORD, PLAIN_RGB, STRING, TYPE};
 
 /// The colour a run gets when no capture below claims it — the same
 /// `textPrimary` the regex lexer falls back to.
 pub(super) const PLAIN: Rgb = PLAIN_RGB;
 
 /// Capture name → colour, デザイン規約 §シンタックスハイライト's table said in
-/// tree-sitter's capture vocabulary (the syntect mirror is
-/// `theme::PALETTE`). Only coloured names are listed: a capture nothing
-/// here matches — operators, punctuation, variables — comes out
-/// [`PLAIN`]. tree-sitter resolves a capture to the **longest listed
-/// dot-prefix**, so `keyword` covers `keyword.control` and the narrow
-/// `constant.builtin` stands beside the unlisted broad `constant`.
+/// tree-sitter's capture vocabulary. The colours themselves live in
+/// `theme`, which the syntect mirror (`theme::PALETTE`) reads too, so
+/// the two vocabularies cannot disagree about a value.
+///
+/// Only coloured names are listed: a capture nothing here matches —
+/// operators, punctuation, variables — comes out [`PLAIN`]. tree-sitter
+/// resolves a capture to the **longest listed dot-prefix**, so `keyword`
+/// covers `keyword.control` and the narrow `constant.builtin` stands
+/// beside the unlisted broad `constant`.
 const CAPTURES: [(&str, u32); 20] = [
-    ("comment", 0x94A3B8),
-    ("keyword", 0x60A5FA),
-    ("storage", 0x60A5FA),
-    ("type", 0x7DD3FC),
-    ("constructor", 0x7DD3FC),
-    ("function", 0xA78BFA),
-    ("method", 0xA78BFA),
-    ("string", 0xFCD34D),
-    ("number", 0xF0ABFC),
-    ("float", 0xF0ABFC),
-    ("boolean", 0xF0ABFC),
-    ("constant.builtin", 0xF0ABFC),
-    ("constant.numeric", 0xF0ABFC),
-    ("attribute", 0xFDA4AF),
-    ("decorator", 0xFDA4AF),
-    ("tag", 0x60A5FA),
-    ("text.title", 0x60A5FA),
-    ("text.literal", 0xFCD34D),
-    ("text.uri", 0x60A5FA),
-    ("text.reference", 0x7DD3FC),
+    ("comment", COMMENT),
+    ("keyword", KEYWORD),
+    ("storage", KEYWORD),
+    ("type", TYPE),
+    ("constructor", TYPE),
+    ("function", FUNCTION),
+    ("method", FUNCTION),
+    ("string", STRING),
+    ("number", CONSTANT),
+    ("float", CONSTANT),
+    ("boolean", CONSTANT),
+    ("constant.builtin", CONSTANT),
+    ("constant.numeric", CONSTANT),
+    ("attribute", ANNOTATION),
+    ("decorator", ANNOTATION),
+    ("tag", KEYWORD),
+    ("text.title", KEYWORD),
+    ("text.literal", STRING),
+    ("text.uri", KEYWORD),
+    ("text.reference", TYPE),
 ];
 
 /// The colour behind one highlight index — the same order
