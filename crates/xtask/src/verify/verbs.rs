@@ -520,14 +520,14 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // fails silently.
         "old-git-fold" => Some("mark=true tint=warning"),
         // Walking the graph with the arrows. The picture holds which row
-        // is lit and whose commit fills the right-hand pane, but not the
-        // three things that make the walk work: that the keyboard was on
-        // the list at all, that the settle behind a held key landed the
-        // selection, and that the viewport carried the row it stepped
-        // onto. A walk that moved nothing frames as a graph sitting still,
-        // which is what a graph does most of the time.
+        // is lit and, once `card=true`, whose commit fills the right-hand
+        // pane — the two catch up one after the other, and a shot between
+        // them holds a different commit in each. What it cannot hold is
+        // the walk working at all: the keyboard on the list, the settle
+        // behind a held key landing the selection, the viewport carrying
+        // the row stepped onto. A walk that moved nothing sits still.
         "graph-step" => Some(
-            "landing=in back=false refused=0 focused=true diff=false onscreen=true selected=true",
+            "landing=in back=false refused=0 focused=true diff=false onscreen=true selected=true card=true",
         ),
         // The other two landings, which no picture holds: a row brought in
         // flush against the bottom one step at a time, and a row centered
@@ -545,7 +545,7 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         // draft, and the arrows walk off it the way a click does — so
         // what it has to say is a plain step's answer, word for word.
         "graph-step-dirty" => Some(
-            "landing=in back=false refused=0 focused=true diff=false onscreen=true selected=true",
+            "landing=in back=false refused=0 focused=true diff=false onscreen=true selected=true card=true",
         ),
         // A diff opened over the graph. `focused=false` is the mechanism —
         // Qt leaves active focus on a pane it has just swapped away, and

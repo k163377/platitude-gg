@@ -1970,8 +1970,13 @@ Item {
     }
     // Longer than the settle behind the walk (`keyStepSettleMs`), so what is read is the reading a hand coming off the
     // key would get: a run that moved the highlight and never landed the selection has to be told apart from one that
-    // did, and both frame alike from the waist down — the picture holds the lit row, not which commit the panes on the
-    // right ended up on.
+    // did, and both frame alike from the waist down.
+    //
+    // Two edges, because a walk asks twice: a held arrow is read where it set off and again where it stopped
+    // (`GraphRowWalk.noteStep`), so the first row's details are still in flight when the last row's request goes out.
+    // `selected=` is the selection reaching the lit row, `card=` the pane on the right reaching the selection —
+    // waiting the first out alone photographs the highlight on the row the walk stopped on beside a card still
+    // holding one it passed through (observed 2026-08-23 on Windows), the wait `file_step` keeps on the diff side.
     SampleTimer {
         id: graphStepReport
         property int from: -1
@@ -1980,7 +1985,8 @@ Item {
         onTriggered: {
             const row = graphPane.view.currentIndex
             if (row < 0 || (graphStepTimer.diffPath === "" && page.selectedOid
-                            !== graphModel.oidAt(row)))
+                            !== graphModel.oidAt(row))
+                    || detailsModel.shaHex !== page.selectedOid)
                 return
             graphStepReport.stop()
             AppBackend.report(
@@ -1993,7 +1999,8 @@ Item {
                 + " focused=" + graphPane.view.activeFocus
                 + " diff=" + page.diffShown
                 + " onscreen=" + graphPane.rowOnScreen(row)
-                + " selected=" + (page.selectedOid === graphModel.oidAt(row)))
+                + " selected=" + (page.selectedOid === graphModel.oidAt(row))
+                + " card=" + (detailsModel.shaHex === page.selectedOid))
             driver.complete()
         }
     }
