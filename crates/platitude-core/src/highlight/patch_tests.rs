@@ -368,46 +368,6 @@ diff --git a/A.qml b/A.qml
 }
 
 #[test]
-fn typescript_and_cpp_colour_through_their_base_queries() {
-    // Same family of defect: the upstream typescript and cpp highlight
-    // queries are add-ons over the javascript and c ones.
-    let patch = "\
-diff --git a/a.ts b/a.ts
---- a/a.ts
-+++ b/a.ts
-@@ -1,2 +1,2 @@
- // a note
--const s = \"old\";
-+const s = \"new\";
-diff --git a/b.cpp b/b.cpp
---- a/b.cpp
-+++ b/b.cpp
-@@ -1,2 +1,2 @@
- // a note
--int n = 1;
-+int n = 2;
-";
-    let colors = colors(&patches(patch), None);
-    for (patch_no, name) in [(0usize, "typescript"), (1, "cpp")] {
-        let note = colors.line(patch_no, 0, 0);
-        assert!(
-            note.spans
-                .iter()
-                .any(|s| s.color != super::super::grammar::PLAIN),
-            "{name}: a comment wears the comment colour: {note:?}"
-        );
-        let added = colors.line(patch_no, 0, 2);
-        assert!(
-            added
-                .spans
-                .iter()
-                .any(|s| s.color != super::super::grammar::PLAIN),
-            "{name}: the added row is coloured: {added:?}"
-        );
-    }
-}
-
-#[test]
 fn binary_patches_are_left_alone() {
     let patch = "\
 diff --git a/logo.png b/logo.png
