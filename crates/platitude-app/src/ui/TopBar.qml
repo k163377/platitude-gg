@@ -172,43 +172,16 @@ Rectangle {
     property string widestAction: ""
     property bool widestActionCode: false
     Component.onCompleted: {
-        let best = fetchCodeWidest
-        for (const m of [fetchWordWidest, pushCodeWidest, stashCodeWidest])
+        let best = widest.fetchCodeWidest
+        for (const m of [widest.fetchWordWidest, widest.pushCodeWidest, widest.stashCodeWidest])
             if (m.implicitWidth > best.implicitWidth)
                 best = m
         topBar.widestAction = best.text
         topBar.widestActionCode = best.code
     }
-    // `push` is inside `push -f`, fetch says the command in every shape but the stopped one, and stash has the one
-    // wording, so four cover all seven states. `stash` never wins — five monospaced cells is what `fetch` already is —
-    // but it is measured rather than reasoned about, so re-wording any of them cannot leave the box short. Labels
-    // rather than TextMetrics: TextMetrics reports a few pixels tighter than a Label — the set could be ranked on one
-    // measure and sized by another, and the loser could then be the wider of them.
-    component Widest: Label {
-        visible: false
-        property bool code: false
-        font.family: code ? Theme.monoFamily : Theme.uiFamily
-        font.wordSpacing: code ? -Theme.spaceXs : 0
-        font.pixelSize: Theme.fontMd
-    }
-    Widest {
-        id: fetchCodeWidest
-        code: true
-        text: "fetch"
-    }
-    Widest {
-        id: fetchWordWidest
-        text: qsTr("Resume")
-    }
-    Widest {
-        id: pushCodeWidest
-        code: true
-        text: "push -f"
-    }
-    Widest {
-        id: stashCodeWidest
-        code: true
-        text: "stash"
+    // The four candidate wordings, drawn invisibly the way a button would draw them (`BandWidest`).
+    BandWidest {
+        id: widest
     }
 
     /// Automation: what the strip made of the run it was handed, and the two ends it was settled between
