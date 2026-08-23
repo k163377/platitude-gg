@@ -101,6 +101,7 @@ impl SessionSink for BridgeSink {
                 sides,
                 op_message,
                 merge_tool,
+                push_remote,
                 eol_marks,
             } => {
                 // One copy per bucket run: each of the WIP pane's lists
@@ -118,6 +119,7 @@ impl SessionSink for BridgeSink {
                         sides: sides.clone(),
                         op_message: op_message.clone(),
                         merge_tool: merge_tool.clone(),
+                        push_remote: push_remote.clone(),
                         eol_marks: Arc::clone(&eol_marks),
                     });
                 }
@@ -128,6 +130,7 @@ impl SessionSink for BridgeSink {
                     sides,
                     op_message,
                     merge_tool,
+                    push_remote,
                     eol_marks,
                 });
             }

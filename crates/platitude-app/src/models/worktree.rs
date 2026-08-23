@@ -28,6 +28,13 @@ pub struct WorkTreeModel {
     upstream_tracked: bool,
     ahead: i32,
     behind: i32,
+    /// Where this branch's own mark sends a push
+    /// (`branch.<branch>.pushRemote`), empty where it marks none. It beats
+    /// the repository's `RepoTab.pushDefault`, so the toolbar's
+    /// destination and standing both have to read it — it rides here
+    /// rather than on the tab because it belongs to the branch above,
+    /// and arrives with it.
+    push_remote: String,
     op_text: String,
     /// The same operation in git's own spelling (`cherry-pick`), for the
     /// one place a pill has to say the whole command rather than a word
@@ -142,6 +149,7 @@ impl WorkTreeModel {
     );
     qproperty!("ahead", Member = ahead, Notify = changed);
     qproperty!("behind", Member = behind, Notify = changed);
+    qproperty!("pushRemote", Member = push_remote, Notify = changed);
     qproperty!("opText", Member = op_text, Notify = changed);
     qproperty!("opCommand", Member = op_command, Notify = changed);
     qproperty!("opAlso", Member = op_also, Notify = changed);
@@ -199,6 +207,7 @@ impl WorkTreeModel {
             sides,
             op_message,
             merge_tool,
+            push_remote,
             eol_marks,
         }) = feed.drain().pop()
         else {
@@ -222,6 +231,7 @@ impl WorkTreeModel {
         self.upstream_tracked = status.upstream_tracked;
         self.ahead = status.ahead;
         self.behind = status.behind;
+        self.push_remote = push_remote;
         self.has_conflicts = status.has_conflicts();
         // One name, not every flag that happens to be set: a rebase
         // stopped on a pick writes CHERRY_PICK_HEAD too, and joining the

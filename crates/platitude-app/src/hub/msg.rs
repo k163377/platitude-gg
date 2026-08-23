@@ -231,6 +231,11 @@ pub struct StatusMsg {
     /// while nothing is conflicted. Names the menu row; the launch reads
     /// the config again rather than trusting this.
     pub merge_tool: String,
+    /// Where this branch's own mark sends a push
+    /// (`branch.<branch>.pushRemote`), empty where it marks none. Rides
+    /// the status because it is per-branch: the branch it was read for is
+    /// the one in `status`.
+    pub push_remote: String,
     /// Pending files whose change has something to say about line endings.
     pub eol_marks: Arc<Vec<platitude_core::session::EolMark>>,
 }

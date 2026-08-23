@@ -35,11 +35,14 @@ Item {
     /// Where the button would send this branch. **A marked remote takes the push from the upstream** — every branch
     /// goes there under its own name, whatever it tracks (デザイン規約 §リモートを書き留める; git's own order, 実測). Only where
     /// nothing is marked does the upstream answer.
+    ///
+    /// The order is core's (`platitude_core::remote::push_target`, through the pure `GitFacts` slot), the same table
+    /// the send itself reads: **the branch's own mark first**, then the repository's, then what the branch tracks.
+    /// Spelling it out here instead is how a fork's label named the repository it forked from.
     readonly property string pushTargetLabel:
-        publishFlow.repoTab.pushDefault !== ""
-        ? publishFlow.repoTab.pushDefault + "/" + publishFlow.workTree.branch
-        : publishFlow.workTree.upstream !== "" ? publishFlow.workTree.upstream
-        : publishFlow.repoTab.defaultRemote + "/" + publishFlow.workTree.branch
+        GitFacts.pushTarget(publishFlow.workTree.branch, publishFlow.workTree.upstream,
+                            publishFlow.workTree.pushRemote, publishFlow.repoTab.pushDefault,
+                            publishFlow.repoTab.defaultRemote, publishFlow.repoTab.remoteNames)
     /// What the branch can do with its remote, worked out before anything is sent (デザイン規約 §リモートへ送る):
     ///
     /// - `closed`   — there is no branch here to send
@@ -58,14 +61,16 @@ Item {
     /// The decision table itself lives in core (`platitude_core::remote::push_standing`, called through the pure
     /// `GitFacts` slot — every input is a property of this binding, so it re-reads when any of them moves). The
     /// tab-lifecycle half of `closed` is this side's own; whether the marked remote is the one the branch tracks is
-    /// answered by the configured names, not the first slash. The counts behind this come from the last fetch, so
-    /// they prove the negative only: a push may still be refused when they say it fits.
+    /// answered by the configured names, not the first slash, and the branch's own mark is weighed before the
+    /// repository's — `elsewhere` is about wherever `pushTargetLabel` says the push is going. The counts behind this
+    /// come from the last fetch, so they prove the negative only: a push may still be refused when they say it fits.
     readonly property string pushState:
         publishFlow.repoTab.state !== "open" ? "closed"
         : GitFacts.pushStanding(publishFlow.workTree.detached, publishFlow.workTree.branch,
                                 publishFlow.workTree.upstream, publishFlow.workTree.upstreamTracked,
                                 publishFlow.workTree.ahead, publishFlow.workTree.behind,
-                                publishFlow.repoTab.pushDefault, publishFlow.repoTab.remoteNames)
+                                publishFlow.workTree.pushRemote, publishFlow.repoTab.pushDefault,
+                                publishFlow.repoTab.remoteNames)
     readonly property bool canPush: (publishFlow.pushState === "publish"
                                      || publishFlow.pushState === "elsewhere"
                                      || publishFlow.pushState === "ready")

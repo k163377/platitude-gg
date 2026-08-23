@@ -218,6 +218,29 @@ fn parse_push_default(bytes: &[u8]) -> Option<PushDefault> {
     })
 }
 
+/// Reads `branch.<branch>.pushRemote` — the branch's own answer to where
+/// its pushes go, and the one that beats every other (git-config(5); the
+/// order is [`super::plan_current_push`]'s, 実測 2.55).
+///
+/// The one reader of the key. [`super::plan_current_push`] runs it before
+/// a send, and the session snapshot runs it so the toolbar can name the
+/// same destination — a second, separate reading of it is how the label
+/// comes to name a remote the push never goes to.
+pub async fn branch_push_remote(
+    executor: &GitExecutor,
+    workdir: &Path,
+    branch: &str,
+    cancel: &CancellationToken,
+) -> Result<Option<String>, GitError> {
+    config_value(
+        executor,
+        workdir,
+        &format!("branch.{branch}.pushRemote"),
+        cancel,
+    )
+    .await
+}
+
 /// `git config remote.pushDefault <name>` — marks where pushes go.
 ///
 /// The old spelling on purpose (規約 git最低バージョン整合: `git config

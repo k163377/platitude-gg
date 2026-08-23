@@ -185,6 +185,142 @@ async fn the_mark_reads_back_with_the_level_that_set_it() {
         .expect("clearing a mark that is already gone is the state asked for");
 }
 
+/// **The label and the send must name the same remote.** The toolbar
+/// says where a push is going from configuration the snapshot carries
+/// (`remote::push_target`); the send works it out again from git
+/// (`remote::plan_current_push`). Two spellings of one order is how the
+/// first came to read `remote.pushDefault` while the second read the
+/// branch's own mark first — so this walks every arrangement of the
+/// three keys and holds the two answers against each other.
+#[tokio::test]
+async fn the_label_names_the_remote_the_send_uses() {
+    let (_origin, _fork, mut repo) = origin_fork_and_clone();
+    let (exec, cancel) = env();
+    let remotes = ["fork", "origin"];
+
+    // (branch.main.pushRemote, remote.pushDefault) — unset written as "".
+    for (push_remote, push_default) in [
+        ("", ""),
+        ("", "fork"),
+        ("fork", ""),
+        ("fork", "origin"),
+        ("origin", "fork"),
+        ("origin", ""),
+    ] {
+        // Exit 5 where the key was never there, which is the state asked
+        // for rather than a failure (実測).
+        repo.git_ok(&["config", "--unset", "branch.main.pushRemote"]);
+        remote::clear_push_default(&exec, &repo.path, &cancel)
+            .await
+            .expect("clear the mark");
+        if !push_remote.is_empty() {
+            repo.git(&["config", "branch.main.pushRemote", push_remote]);
+        }
+        if !push_default.is_empty() {
+            remote::set_push_default(&exec, &repo.path, push_default, &cancel)
+                .await
+                .expect("mark");
+        }
+
+        let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
+            .await
+            .expect("a plan");
+        let label = remote::push_target(
+            "main",
+            "origin/main",
+            push_remote,
+            push_default,
+            "origin",
+            remotes,
+        );
+        assert_eq!(
+            label,
+            format!("{}/{}", plan.remote, plan.remote_branch),
+            "pushRemote={push_remote:?} pushDefault={push_default:?}: \
+             the label and the send disagree"
+        );
+    }
+}
+
+/// The fork arrangement the label used to get wrong: the branch marks its
+/// own destination, the repository marks none, and the counts on screen
+/// are about the remote the branch tracks rather than the one it is going
+/// to.
+#[tokio::test]
+async fn a_branch_marked_at_a_fork_says_so() {
+    let (_origin, _fork, mut repo) = origin_fork_and_clone();
+    let (exec, cancel) = env();
+    let remotes = ["fork", "origin"];
+
+    repo.git(&["config", "branch.main.pushRemote", "fork"]);
+
+    let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
+        .await
+        .expect("a plan");
+    assert_eq!(plan.remote, "fork");
+
+    assert_eq!(
+        remote::push_target("main", "origin/main", "fork", "", "origin", remotes),
+        "fork/main"
+    );
+    assert_eq!(
+        remote::push_standing(
+            false,
+            "main",
+            "origin/main",
+            true,
+            2,
+            0,
+            "fork",
+            "",
+            remotes
+        ),
+        remote::PushStanding::Elsewhere,
+        "the counts are about origin, and the push is going to the fork"
+    );
+
+    remote::push(&exec, &repo.path, &plan, NET, &cancel)
+        .await
+        .expect("the push lands");
+    assert_eq!(
+        repo.git(&["config", "--get", "branch.main.remote"]).trim(),
+        "origin",
+        "where the branch fetches from is untouched"
+    );
+}
+
+/// The key the snapshot reads, through the one reader both halves share.
+#[tokio::test]
+async fn a_branchs_mark_reads_back_and_unset_is_an_answer() {
+    let (_origin, _fork, mut repo) = origin_fork_and_clone();
+    let (exec, cancel) = env();
+
+    assert!(
+        remote::branch_push_remote(&exec, &repo.path, "main", &cancel)
+            .await
+            .expect("an answer")
+            .is_none(),
+        "unset is an answer, not a failure"
+    );
+
+    repo.git(&["config", "branch.main.pushRemote", "fork"]);
+    assert_eq!(
+        remote::branch_push_remote(&exec, &repo.path, "main", &cancel)
+            .await
+            .expect("an answer")
+            .as_deref(),
+        Some("fork")
+    );
+
+    assert!(
+        remote::branch_push_remote(&exec, &repo.path, "topic", &cancel)
+            .await
+            .expect("an answer")
+            .is_none(),
+        "another branch's mark is not this one's"
+    );
+}
+
 /// The list and the mark come back from one read, which is what the
 /// session keeps.
 #[tokio::test]

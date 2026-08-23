@@ -86,6 +86,17 @@ pub enum SessionEvent {
         /// or when nothing is conflicted. Display only — the launch reads
         /// the config again, so a stale name here cannot start anything.
         merge_tool: String,
+        /// `branch.<branch>.pushRemote` for the branch named above, empty
+        /// where the branch does not mark one (and where there is no
+        /// branch at all).
+        ///
+        /// Rides the status rather than the refs so it cannot be read
+        /// against a different branch than the one it was asked for: it
+        /// is per-branch configuration, and the branch, its upstream and
+        /// its counts arrive here together. Display and standing only —
+        /// [`crate::remote::plan_current_push`] reads the key again
+        /// before a send, so a stale name here cannot misdirect one.
+        push_remote: String,
         /// Pending paths whose change has something to say about line
         /// endings. Shared rather than copied: most status reads repeat the
         /// previous answer unchanged, and every open tab does it.

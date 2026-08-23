@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-use super::list::{config_value, current_branch, push_default};
+use super::list::{branch_push_remote, config_value, current_branch, push_default};
 
 /// How hard a push may overwrite the remote.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,14 +82,7 @@ pub async fn plan_current_push(
     // it now, and the mark can be moved from a terminal between two of this
     // application's reads. Two short local `git config` calls in front of a
     // command that reaches the network.
-    let pushes_to = match config_value(
-        executor,
-        workdir,
-        &format!("branch.{branch}.pushRemote"),
-        cancel,
-    )
-    .await?
-    {
+    let pushes_to = match branch_push_remote(executor, workdir, &branch, cancel).await? {
         Some(name) => Some(name),
         None => push_default(executor, workdir, cancel)
             .await?

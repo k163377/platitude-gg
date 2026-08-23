@@ -101,6 +101,7 @@ impl GitFacts {
         upstream_tracked: bool,
         ahead: i32,
         behind: i32,
+        push_remote: String,
         push_default: String,
         remote_names: String,
     ) -> String {
@@ -111,11 +112,41 @@ impl GitFacts {
             upstream_tracked,
             ahead,
             behind,
+            &push_remote,
             &push_default,
             packed_names(&remote_names),
         )
         .as_str()
         .to_string()
+    }
+
+    /// Where the toolbar's push button would send this branch
+    /// (`platitude_core::remote::push_target`), spelled as the label shows
+    /// it. Empty where there is no branch to send or nowhere to send it.
+    ///
+    /// Asked rather than worked out in QML: the order the two marks and
+    /// the upstream are weighed in is git's, and the send
+    /// (`remote::plan_current_push`) reads it off the same table. A second
+    /// spelling of it in a binding is how the label came to name the
+    /// remote a branch tracks while the push went to the one it marks.
+    #[qslot]
+    fn push_target(
+        &self,
+        branch: String,
+        upstream: String,
+        push_remote: String,
+        push_default: String,
+        default_remote: String,
+        remote_names: String,
+    ) -> String {
+        platitude_core::remote::push_target(
+            &branch,
+            &upstream,
+            &push_remote,
+            &push_default,
+            &default_remote,
+            packed_names(&remote_names),
+        )
     }
 
     /// What the right-click menu on a ref may offer

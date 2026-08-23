@@ -264,6 +264,24 @@ impl RepoSession {
                     // takes the name out of the pane it was just used in.
                     self.merge_tool_seen()
                 };
+                // Where this branch's own mark sends a push. One short
+                // local `git config` per tick, and only where there is a
+                // branch to ask about — a detached HEAD marks nothing.
+                // Not gated on anything else: it is what the toolbar
+                // names its destination by, so a mark moved from a
+                // terminal has to turn up on the following tick rather
+                // than at the next thing that happens to invalidate a
+                // cache.
+                let push_remote = match &status.branch_head {
+                    Some(branch) => {
+                        remote::branch_push_remote(&self.executor, &workdir, branch, &cancel)
+                            .await
+                            .ok()
+                            .flatten()
+                            .unwrap_or_default()
+                    }
+                    None => String::new(),
+                };
                 if !self.status_gate.is_current(op_gen) {
                     return false;
                 }
@@ -306,6 +324,7 @@ impl RepoSession {
                     sides,
                     op_message,
                     merge_tool,
+                    push_remote,
                     eol_marks,
                 });
                 flipped
