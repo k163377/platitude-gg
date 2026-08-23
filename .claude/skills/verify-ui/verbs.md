@@ -182,6 +182,7 @@
 - `identity-tip`(半端 save の後の帯の状態カード。overlay.png 側。must_say)
 - `solo`(2 個目の起動が断られる報告。must_say `solo blocked=true`)
 - `band`(タブ行がタイトルバーを兼ねる帯 — 数字で読む。報告行 `band`)
+- `app-menu` / `app-menu-reclick`(☰ を 1 回押して立てたまま / 2 回押して閉じる。**対で読む**。must_say)
 - `window-fill`(最大化が四隅まで届く報告。must_say `fills=true`)
 - `window-floor`(窓の床 = これ以上小さくできない大きさ。must_say)
 - `details-fit`(詳細ペインの列が収まる報告。must_say `details_fit fits=true`)
@@ -237,6 +238,8 @@
 **2 つ目のプロセスが出す窓は `solo`** — **xtask 自身が `--config-dir` の `lock` を握ってから**アプリを起動するので、起動するのは本物の 2 つ目(状態を真似るフラグは無い)。報告行 `solo blocked= held= gate= main=` で、**`blocked=true` を言わなかった run は FAIL**(仕込みが効かないと絵は普通の窓になり、普通の窓は普通に撮れてしまう)。`--config-dir` を渡さない既定でよい。
 
 **タブ行がタイトルバーを兼ねる帯の形は `band`**(報告行 `band merged= plain= grabRun= buttonsX= width= tabsW= rightMargin=`。offscreen は窓ボタンを OS が描かない = 絵では欠けが見えないため、数字で読む。**`tabsW=` が NaN / 0 はタブ列が丸ごと消えている**(幅式の項が壊れた時の形 — id が同名プロパティをシャドウすると NaN になる)。`PG_PLAIN_CHROME=1` を立てて撃つと兼ねない側の形 = mac / Linux のレイアウトがこの機械からも出る — `merged=false grabRun=0` が正)。
+
+**☰ の開け閉めは `app-menu` / `app-menu-reclick` の対** — 引数なし。どちらも報告行 `app_menu open= yield= strip= merged=` 1 本で、`must_say` は前者 `app_menu open=true yield=true` / 後者 `app_menu open=false yield=false`。**絵では判定できない 2 つを持っている**: ①押し直しで開き直したカードと閉じなかったカードは同じ写真(2026-08-23 ユーザー報告の形)/ ②帯の空き run をどちら側が持っているかは描かれない。**`strip=` が hit test に最後に渡した run**で、カードが立っている間は `none`(= 掴み代を場面へ返している = `WindowChrome.captionYielded`。実測 Windows: 立っている間 `strip=none`・閉じた後 `strip=120-1020`)。**Linux では `merged=false` = 帯がタイトルバーではないので `strip=` は常に `none`** — この 2 動詞の Linux 側は toggle の配線だけを見る。押下は `TopBar.clickAppMenu()` = ☰ 自身の `clicked` へ入れる(カードを直に開くと、押下の配線を切っても同じ絵が撮れる)。**`closePolicy` の側は動詞では撮れない** — press は注入できないので、そちらは使い捨ての qmltestrunner シーンで測る(§Windows での実行・デバッグの罠)。
 
 **最大化した窓の中身が四隅まで届いているかは `window-fill`**(最大化 → 申告 → 撮影のために windowed へ戻す。報告行 `window_fill fills= maximized= at= size= window=` で、**合格条件は `fills=true`**(`Outcome::must_say`)。読むのは**中身の scene 座標と窓の寸法**で、頼んだ margin ではなく着地の方。**両 OS が同じ答えを返す**(窓は frameless = 窓とクライアントが同一で、埋める相手は `merged` に関係ない)。**絵では読めない** — 最大化した窓は画面いっぱいなので、端が足りないことを見せる相手のデスクトップが隣に無い。**offscreen の最大化は 800×800** — 正は `at=0,0 size=800x800`(FAIL でも `screenshot saved=true` は出る)。**窓の縁が画面の外へ出るかはヘッドレスでは判定できない**(実モニタが無い)ので、縁の規則は実窓の画素実測が正本 = rules-refs/app-ui.md)
 
