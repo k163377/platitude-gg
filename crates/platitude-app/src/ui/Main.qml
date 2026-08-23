@@ -144,31 +144,10 @@ ApplicationWindow {
         }
     }
 
-    // Identity dialog: opens on startup when git has no name and email to put on a commit, and on demand from the app
-    // menu or the toolbar badge.
-    property bool identityDismissed: false
-    property bool identityEditing: false
-    // A half-landed save leaves an identity that *is* set, so `missing` alone takes the screen away at the one moment
-    // it has something to say (measured: the state flipped to `ready` on the name that did land, and this window
-    // closed the dialog out from under the answer). What holds it open is `identityUnsaved` — the flag the marks read.
-    readonly property bool identityWanted: AppBackend.gitState === "ok"
-                                           && (identityEditing
-                                               || ((AppBackend.identityState === "missing"
-                                                    || AppBackend.identityUnsaved)
-                                                   && !identityDismissed))
+    // Identity: the dialog and the state that opens it live in the gate below (`IdentityGate`). The way in keeps its
+    // name on the window — the harness calls it here (`WindowAutoActDriver`).
     function dismissIdentity() {
-        identityEditing = false
-        identityDismissed = true
-    }
-    // Screenshot hook: PG_AUTO_IDENTITY="edit" opens the dialog on an identity that is already set, which is otherwise
-    // a menu action.
-    Connections {
-        target: AppBackend
-        function onIdentityChanged() {
-            if (AppBackend.autoIdentity === "edit" && AppBackend.identityState === "ready"
-                    && !root.identityDismissed)
-                root.identityEditing = true
-        }
+        identityGate.dismissIdentity()
     }
 
     Shortcut {
@@ -249,7 +228,7 @@ ApplicationWindow {
             mainUi: mainUi
             gate: gate
             openFailedDialog: openFailedDialog
-            identityDialog: identityDialog
+            identityDialog: identityGate.dialog
             folderDialog: folderDialog
             settingsDialog: settingsDialog
         }
@@ -320,22 +299,9 @@ ApplicationWindow {
     }
 
     // ---- identity dialog -------------------------------------------------
-    // Opened and closed from the state above rather than by binding `visible`: Escape closes a popup imperatively,
-    // which would overwrite such a binding and leave the menu entry unable to open it again. Every close answers the
-    // state, so the two stay in step.
-    IdentityDialog {
-        id: identityDialog
-        editing: root.identityEditing
-        onDismissed: root.dismissIdentity()
-        Connections {
-            target: root
-            function onIdentityWantedChanged() {
-                if (root.identityWanted)
-                    identityDialog.open()
-                else
-                    identityDialog.close()
-            }
-        }
+    IdentityGate {
+        id: identityGate
+        anchors.fill: parent
     }
 
     // ---- settings --------------------------------------------------------
@@ -383,7 +349,7 @@ ApplicationWindow {
             // the page's.
             windowAtFloor: root.width <= Math.ceil(root.floorWidth)
             onOpenRepositoryRequested: root.openRepositoryPicker()
-            onIdentityEditRequested: root.identityEditing = true
+            onIdentityEditRequested: identityGate.identityEditing = true
             onSettingsRequested: settingsDialog.open()
             onMaximizeToggleRequested: chrome.toggleMaximized()
             onMinimizeRequested: chrome.minimizeWindow()

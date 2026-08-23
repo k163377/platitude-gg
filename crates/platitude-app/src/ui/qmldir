@@ -90,6 +90,7 @@ HoverCardHost 1.0 HoverCardHost.qml
 HoverToolButton 1.0 HoverToolButton.qml
 IdentIcon 1.0 IdentIcon.qml
 IdentityDialog 1.0 IdentityDialog.qml
+IdentityGate 1.0 IdentityGate.qml
 ImagePreviewCell 1.0 ImagePreviewCell.qml
 LabeledField 1.0 LabeledField.qml
 MessageActionsRow 1.0 MessageActionsRow.qml
