@@ -95,6 +95,20 @@ pub struct WorkTreeModel {
     /// `clean` / `ready` (`platitude_core::stash::standing`). Empty until
     /// `loaded`, like every count here.
     stash_standing: String,
+    /// Whether a move has to clear the way first — an operation standing
+    /// or unmerged paths (`platitude_core::offers::moves_blocked`). What
+    /// `RepoPage.standsInTheWay` reads, less the consent already given.
+    moves_blocked: bool,
+    /// Whether putting the standing operation down costs anything, and
+    /// the command the question opens with — `rebase --abort` where it
+    /// does, `stash` everywhere else (`offers::leaving_undoes` /
+    /// `offers::leave_code`). The pair the blocked-move question is
+    /// shaped by.
+    leave_undoes: bool,
+    leave_code: String,
+    /// Whether the exit card's `--skip` loses nothing: the stop is on a
+    /// commit that came out empty (`offers::skip_is_free`).
+    op_skip_free: bool,
     /// Bumped when a status moves any of the four bucket counts — what
     /// "somebody moved the tree" is read off, so a status that moved no
     /// count (the answer to this window's own poll) does not re-read an
@@ -156,6 +170,10 @@ impl WorkTreeModel {
     qproperty!("wipRenamed", Member = wip_renamed, Notify = changed);
     qproperty!("wipCopied", Member = wip_copied, Notify = changed);
     qproperty!("stashStanding", Member = stash_standing, Notify = changed);
+    qproperty!("movesBlocked", Member = moves_blocked, Notify = changed);
+    qproperty!("leaveUndoes", Member = leave_undoes, Notify = changed);
+    qproperty!("leaveCode", Member = leave_code, Notify = changed);
+    qproperty!("opSkipFree", Member = op_skip_free, Notify = changed);
     qproperty!("treeRevision", Member = tree_revision, Notify = changed);
     qproperty!("statusSeq", Member = status_seq, Notify = changed);
 
@@ -258,6 +276,12 @@ impl WorkTreeModel {
         self.stash_standing = platitude_core::stash::standing(self.head_oid.is_empty(), &counts)
             .as_str()
             .to_string();
+        self.moves_blocked = platitude_core::offers::moves_blocked(&op_state, &counts);
+        self.leave_undoes =
+            platitude_core::offers::leaving_undoes(InProgress::from_state(&op_state));
+        self.leave_code =
+            platitude_core::offers::leave_code(InProgress::from_state(&op_state)).to_string();
+        self.op_skip_free = platitude_core::offers::skip_is_free(&counts);
         let tally = (
             self.staged_count,
             self.unstaged_count,

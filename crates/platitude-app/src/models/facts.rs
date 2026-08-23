@@ -118,6 +118,101 @@ impl GitFacts {
         .to_string()
     }
 
+    /// What the right-click menu on a ref may offer
+    /// (`platitude_core::offers::ref_menu`), as the packed words
+    /// `RefRowMenu.offerOn` splits back apart — asked once as the menu
+    /// opens, so the answers freeze while it stands (app-ui.md §メニュー).
+    /// The lookups behind `held_by_worktree` / `remote_counterpart` stay
+    /// the models'; this only weighs what they answered.
+    #[qslot]
+    #[expect(clippy::too_many_arguments)]
+    fn ref_menu_offers(
+        &self,
+        kind: String,
+        full: String,
+        oid_hex: String,
+        open: bool,
+        busy_count: i32,
+        current_branch: String,
+        detached: bool,
+        op_text: String,
+        conflict_count: i32,
+        held_by_worktree: String,
+        remote_counterpart: String,
+    ) -> String {
+        let Some(kind) = platitude_core::offers::RefKind::from_word(&kind) else {
+            return String::new();
+        };
+        platitude_core::offers::ref_menu(
+            kind,
+            &full,
+            &oid_hex,
+            open,
+            busy_count,
+            &current_branch,
+            detached,
+            &op_text,
+            conflict_count,
+            &held_by_worktree,
+            &remote_counterpart,
+        )
+        .words()
+    }
+
+    /// What the right-click menu on a commit row may offer
+    /// (`platitude_core::offers::commit_menu`), the same packed-words
+    /// shape and the same freeze-at-open contract
+    /// (`CommitMenuState.openRowMenu`).
+    #[qslot]
+    #[expect(clippy::too_many_arguments)]
+    fn commit_menu_offers(
+        &self,
+        open: bool,
+        busy_count: i32,
+        current_branch: String,
+        detached: bool,
+        op_text: String,
+        oid_hex: String,
+        head_oid: String,
+        stash_ref: String,
+    ) -> String {
+        platitude_core::offers::commit_menu(
+            open,
+            busy_count,
+            &current_branch,
+            detached,
+            &op_text,
+            &oid_hex,
+            &head_oid,
+            &stash_ref,
+        )
+        .words()
+    }
+
+    /// The move a press on a ref adds up to
+    /// (`platitude_core::offers::switch_action`), in the word
+    /// `RepoPage.switchToRef` branches on: `switch` / `materialize` /
+    /// `move` / `holder`, `""` for a ref nothing moves onto.
+    #[qslot]
+    fn switch_action(
+        &self,
+        kind_letter: String,
+        local: String,
+        current_branch: String,
+        held_by_worktree: String,
+        local_oid: String,
+    ) -> String {
+        platitude_core::offers::switch_action(
+            &kind_letter,
+            &local,
+            &current_branch,
+            &held_by_worktree,
+            &local_oid,
+        )
+        .as_str()
+        .to_string()
+    }
+
     /// The address half of a typed identity
     /// (`platitude_core::trailers::split_identity`); `""` where nothing
     /// in the text reads as one.

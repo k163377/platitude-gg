@@ -254,10 +254,9 @@ Item {
     }
 
     // ---- moving out of what stands in a move's way --------------------
-    // **git refuses every move while a merge / rebase / cherry-pick / revert stands** — clean tree, conflicted tree and
-    // resolved-and-staged tree all get the same `cannot switch branch while …` (実測 2.55) — and it refuses one over an
-    // unmerged index too, which is what `--quit` leaves when the reader takes that row themselves. So the move has to
-    // clear the way first, and that is a question rather than a side effect (デザイン規約 §進行中の操作から出る).
+    // What blocks a move — an operation standing or unmerged paths — is core's measured rule
+    // (offers::moves_blocked → `workTree.movesBlocked`). The move has to clear the way first, and that is a question
+    // rather than a side effect (デザイン規約 §進行中の操作から出る).
     //
     // **One question for both.** The second needs no operation put down, and everything after that is the same two
     // commands, so it is the same question with one clause fewer (2026-08-22 ユーザー判断).
@@ -266,36 +265,25 @@ Item {
     // red line in the command log where a question belongs — and leave the reader where they were with nothing to
     // press (2026-08-22 ユーザー報告).
     function standsInTheWay(leaving) {
-        return leaving !== true && (workTree.opText !== "" || workTree.conflictCount > 0)
+        return leaving !== true && workTree.movesBlocked
     }
-    /// Whether putting this operation down costs anything, which is what decides the whole shape of the question.
-    ///
-    /// **A rebase is the one that does.** `git rebase --quit` leaves HEAD detached at the half-rewritten line with
-    /// every copy it already made unreferenced (実測 2.55), so the way out is `--abort` — and an abort throws away work
-    /// in hand, which is `danger` and a hold (§状態, §長押し). The other three take `--quit`: the commits an earlier
-    /// step already made stay, and the tree goes into a stash rather than into the reflog, so **nothing is destroyed**
-    /// and the question is the ordinary `warning` one with a click (2026-08-22 ユーザー判断).
-    readonly property bool leavingUndoes: workTree.opCommand === "rebase"
     readonly property string leaveHeading:
-        page.leavingUndoes ? qsTr("Undo it and go?") : qsTr("Put it aside and go?")
+        workTree.leaveUndoes ? qsTr("Undo it and go?") : qsTr("Put it aside and go?")
     readonly property string leaveDetail:
-        page.leavingUndoes ? qsTr("Nothing it did since it started is kept.")
+        workTree.leaveUndoes ? qsTr("Nothing it did since it started is kept.")
         // Nothing standing: the files are the whole of what is in the way, and there is no operation to name.
         : workTree.opCommand === ""
         ? qsTr("The files waiting on a decision go to the stash, markers and all.")
         //: %1 is the standing operation in git's own spelling, e.g. cherry-pick.
         : qsTr("The %1 stops; its files go to the stash, markers and all.").arg(workTree.opCommand)
-    /// The command opens the line, so the words do not say it again (§git 用語のコード表記). The rebase's is the exit
-    /// card's own row for the same act, which is where the hand learnt it; the rest name the stash, because **that is
-    /// where the reader goes to find their work afterwards** and the app calls it `stash` everywhere (§変更を退避する).
-    readonly property string leaveCode:
-        page.leavingUndoes ? workTree.opCommand + " --abort" : "stash"
     function askLeaveOperation(retry) {
         // Marked on the row HEAD stands on — a rebase runs detached, so that is the only name the tree has for where
-        // it is (デザイン規約 §立っている質問は 1 か所で聞く).
+        // it is (デザイン規約 §立っている質問は 1 か所で聞く). Whether leaving undoes anything — the rebase, whose abort throws away
+        // work in hand: `danger` and a hold (§状態, §長押し) — and the command that opens the question's line are core's
+        // answers (offers::leaving_undoes / leave_code → `workTree.leaveUndoes` / `leaveCode`).
         page.startRowAsk(workTree.headOid, page.leaveHeading, page.leaveDetail,
-                         page.leavingUndoes, "", retry, page.leavingUndoes, "", null,
-                         page.leaveCode)
+                         workTree.leaveUndoes, "", retry, workTree.leaveUndoes, "", null,
+                         workTree.leaveCode)
     }
 
     // ---- what a chip leads to --------------------------------------
@@ -304,17 +292,11 @@ Item {
         if (record !== "")
             page.switchToRef(record[0], GitFacts.recordName(record))
     }
-    // git keeps a branch to one working copy: moving onto one another worktree already has out is refused outright
-    // (`fatal: '<branch>' is already used by worktree at …`, 2026-08-21 実測), whether or not that copy is locked.
-    //
-    // **The only branch nothing here can clear.** No stash gets past it and no operation is standing to put down —
-    // the branch is simply somewhere else, and the way to it is that copy. So the press raises a bar like every other
-    // refusal does, and the pill goes there instead: the same road the WORKTREES row takes
-    // (`openRepositoryPathRequested`). **The `!` after the word is what says the pill is not the switch that was
-    // pressed** (デザイン規約 §進行中の操作から出る, 2026-08-22 ユーザー判断).
-    function heldElsewhere(local) {
-        return worktreesModel.worktreeHolding(local) !== ""
-    }
+    // A branch another working copy holds is the one refusal no stash gets past and no operation put down can clear
+    // (offers::SwitchAction) — the branch is simply somewhere else, and the way to it is that copy. So the press
+    // raises a bar like every other refusal does, and the pill goes there instead: the same road the WORKTREES row
+    // takes (`openRepositoryPathRequested`). **The `!` after the word is what says the pill is not the switch that
+    // was pressed** (デザイン規約 §進行中の操作から出る, 2026-08-22 ユーザー判断).
     function askOpenHolder(local) {
         const held = worktreesModel.worktreeHolding(local)
         if (held === "")
@@ -344,28 +326,20 @@ Item {
             page.askLeaveOperation(function () { page.switchToRef(kind, name, true) })
             return
         }
-        if (kind === "L") {
-            if (name === workTree.branch)
-                return
-            if (page.heldElsewhere(name))
-                page.askOpenHolder(name)
-            else
-                page.switchTo("branch", name, name, "", leaving)
-            return
-        }
-        // The detached-HEAD marker names no branch, and moving onto a tag could only detach HEAD — a tag's row offers a
-        // branch at that commit instead (`startNaming`).
-        if (kind !== "R")
-            return
-        const local = remotesModel.localNameFor(name)
-        // The local branch a remote row lands on is the one another copy can be holding.
-        if (page.heldElsewhere(local)) {
+        // The models hold the lookups — the local branch a remote row lands on is the one another copy can be holding
+        // — and which move they add up to is core's rule (offers::switch_action): a tag or the detached marker moves
+        // nothing, a tag's row offering a branch at its commit instead (`startNaming`).
+        const local = kind === "R" ? remotesModel.localNameFor(name) : name
+        const action = GitFacts.switchAction(kind, local, workTree.branch,
+                                             worktreesModel.worktreeHolding(local),
+                                             branchesModel.oidOfName(local))
+        if (action === "holder")
             page.askOpenHolder(local)
-            return
-        }
-        if (branchesModel.oidOfName(local) === "")
+        else if (action === "switch")
+            page.switchTo("branch", name, name, "", leaving)
+        else if (action === "materialize")
             page.switchTo("remote", name, local, "", leaving)
-        else
+        else if (action === "move")
             // Whether to ask is git's to answer — a branch that only fell behind loses nothing by moving. The question
             // comes back as `moveAskSeq` when something would be lost, and the operation is left standing for the
             // answer to that one to undo (core asks before it aborts, never the other way round).

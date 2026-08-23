@@ -19,19 +19,10 @@ Rectangle {
     // menu's exactly: narrower than the mark, which overhangs it into the row padding on one side and the word gap on
     // the other (デザイン規約 §長押し — 語が払う字下げは印 1 個分より小さい).
     readonly property real holdIndent: Theme.iconMd - 2 * Theme.spaceXs
-    /// Whether leaving the stopped commit out costs nothing.
-    ///
-    /// An interactive rebase stops on a commit that came out empty and names `--skip` as the way past it (measured —
-    /// `an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip`). Nothing is conflicted or staged while it
-    /// stands there, and a clean tree under a stopped operation is what tells that stop from every other one this app
-    /// can reach today.
-    ///
-    /// **Revisit when `edit` steps land** (full interactive rebase): an `edit` stop is clean too, and skipping one does
-    /// lose the commit. Distinguishing them needs core to say why git stopped (P3-確認事項).
-    readonly property bool skipIsFree:
-        opExitCard.workTree.conflictCount === 0
-        && opExitCard.workTree.stagedCount === 0
-        && opExitCard.workTree.unstagedCount === 0
+    /// Whether leaving the stopped commit out costs nothing — the stop is on a commit that came out empty, which a
+    /// clean tree under a stopped operation is what tells. The rule, its measurement and the revisit note for `edit`
+    /// stops are core's (offers::skip_is_free).
+    readonly property bool skipIsFree: opExitCard.workTree.opSkipFree
     readonly property real codeColW: {
         let widest = 0
         for (let i = 0; i < opExitCol.children.length; i++) {

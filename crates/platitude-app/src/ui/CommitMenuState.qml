@@ -27,8 +27,8 @@ QtObject {
     // — but デザイン規約 「push 済みの範囲は尋ねずに言う」 wants it said, so the squash row carries a tag the way the amend editor does.
     // The answer lands a frame after the menu opens.
     property bool menuPublished: false
-    /// What these menus offer, held still for as long as they stand (`menuCanSwitch` and the rest). `menuCanSequence`
-    /// is the pair that only add a commit, and so ask less of the repository than the rest.
+    /// What these menus offer, held still for as long as they stand. What each stands for, and the state it asks of
+    /// the repository, is core's rule (offers::commit_menu — the doc there carries the measured refusals).
     property bool menuCanSequence: false
     property bool menuCanIntegrate: false
     property bool menuCanEditHistory: false
@@ -38,43 +38,23 @@ QtObject {
     function openRowMenu(oidHex) {
         menuState.menuOid = oidHex
         menuState.menuStashRef = menuState.graphModel.stashRefOf(oidHex)
+        const offers = GitFacts.commitMenuOffers(
+            menuState.repoTab.state === "open", menuState.repoTab.busyCount,
+            menuState.workTree.branch, menuState.workTree.detached, menuState.workTree.opText,
+            oidHex, menuState.workTree.headOid, menuState.menuStashRef).split(" ")
         if (menuState.menuStashRef !== "") {
-            menuState.menuStashCanWrite = menuState.repoTab.busyCount === 0
+            menuState.menuStashCanWrite = offers.includes("stash-write")
             menuState.menu.offerStash()
             return
         }
         menuState.menuPublished = false
-        menuState.menuCanSequence = menuState.repoTab.busyCount === 0 && menuState.workTree.opText === ""
-        menuState.menuCanIntegrate = menuState.canIntegrateHere
-        menuState.menuCanEditHistory = menuState.canEditHistoryHere
-        menuState.menuCanMoveBranch = menuState.canMoveBranchHere
-        menuState.menuCanBranchHere = menuState.canBranchHere
+        menuState.menuCanSequence = offers.includes("sequence")
+        menuState.menuCanIntegrate = offers.includes("integrate")
+        menuState.menuCanEditHistory = offers.includes("edit-history")
+        menuState.menuCanMoveBranch = offers.includes("move-branch")
+        menuState.menuCanBranchHere = offers.includes("branch-here")
         if (menuState.repoTab.state === "open")
             menuState.repoTab.checkPublish(oidHex + "^!")
         menuState.menu.offerCommit()
     }
-
-    // ---- taking the branch back to an earlier commit ----------------
-    // Not offered mid-operation: mid-merge a soft reset refuses outright and the other two abandon the merge without a
-    // word.
-    /// Rewriting this commit's place in the history. Unlike the two above it, the newest commit is fair game — that is
-    /// the one a fold or a drop most often means.
-    readonly property bool canEditHistoryHere:
-        menuState.repoTab.state === "open" && menuState.repoTab.busyCount === 0 && !menuState.workTree.detached
-        && menuState.workTree.branch !== "" && menuState.workTree.opText === "" && menuState.menuOid !== ""
-        && menuState.menuStashRef === ""
-    readonly property bool canIntegrateHere:
-        menuState.repoTab.state === "open" && menuState.repoTab.busyCount === 0 && !menuState.workTree.detached
-        && menuState.workTree.branch !== "" && menuState.workTree.opText === "" && menuState.menuOid !== ""
-        && menuState.menuOid !== menuState.workTree.headOid && menuState.menuStashRef === ""
-    readonly property bool canMoveBranchHere:
-        menuState.repoTab.state === "open" && menuState.repoTab.busyCount === 0 && !menuState.workTree.detached
-        && menuState.workTree.branch !== "" && menuState.workTree.opText === "" && menuState.menuOid !== ""
-        && menuState.menuOid !== menuState.workTree.headOid && menuState.menuStashRef === ""
-    /// Putting a new branch on this commit and standing on it. The one row here that asks nothing of where the working
-    /// tree is now: a detached HEAD may take it — it is the way back out (デザイン規約 §ブランチ・コミットへの移動) — and so may the
-    /// commit the tree is already standing on, which is where a branch is most often started.
-    readonly property bool canBranchHere:
-        menuState.repoTab.state === "open" && menuState.repoTab.busyCount === 0
-        && menuState.workTree.opText === "" && menuState.menuOid !== "" && menuState.menuStashRef === ""
 }

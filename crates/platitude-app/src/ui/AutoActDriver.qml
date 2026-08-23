@@ -2328,7 +2328,7 @@ Item {
             // menu to be raised on.
             if (navNameBoxTimer.kind === "remote")
                 remotesModel.toggleFolder(
-                    navNameBoxTimer.ref.substring(0, navNameBoxTimer.ref.indexOf("/")))
+                    GitFacts.remoteOfRef(navNameBoxTimer.ref, repoTab.remoteNames))
             navNameBoxTimer.step = 0
             navNameBoxTimer.start()
         }
@@ -2345,7 +2345,7 @@ Item {
                     // What a second click puts in the box, by the same rule the row itself follows (`NavList`): a
                     // remote branch is typed without the remote it lives on, everything else answers to what it shows.
                     const shown = navNameBoxTimer.kind === "remote"
-                        ? navNameBoxTimer.ref.substring(navNameBoxTimer.ref.indexOf("/") + 1)
+                        ? GitFacts.branchOfRef(navNameBoxTimer.ref, repoTab.remoteNames)
                         : navNameBoxTimer.ref
                     sidebarPane.beginRename(navNameBoxTimer.kind, navNameBoxTimer.ref, shown)
                     navNameBoxTimer.step = 1
@@ -3175,12 +3175,12 @@ Item {
             // the box standing, the plain act stops at the question, "-go" holds the pill to the end.
             const parts = arg.split(":")
             const ref = parts[0]
-            const was = ref.substring(ref.indexOf("/") + 1)
+            const was = GitFacts.branchOfRef(ref, repoTab.remoteNames)
             // "-box" opens with the argument already in it, so a name the remote already carries can be photographed
             // being refused — and the remote's fold has to come open for the row to be there at all (a remote root
             // starts closed).
             if (act === "rename-remote-box")
-                remotesModel.toggleFolder(ref.substring(0, ref.indexOf("/")))
+                remotesModel.toggleFolder(GitFacts.remoteOfRef(ref, repoTab.remoteNames))
             sidebarPane.beginRename("remote", ref,
                                     act === "rename-remote-box" ? parts[1] : was)
             if (act === "rename-remote-box") {
@@ -3222,8 +3222,9 @@ Item {
                 refDeleteItem.completeHold()
         } else if (act === "delete-remote" || act === "delete-remote-go") {
             // Named outright (`origin/feature/x`) because those rows sit behind a fold — opened here so the row is
-            // under the menu.
-            remotesModel.toggleFolder(arg.substring(0, arg.indexOf("/")))
+            // under the menu. The remote's own name may hold `/`, so the cut is the configured one
+            // (`GitFacts.remoteOfRef`), the same as the rows the verbs drive.
+            remotesModel.toggleFolder(GitFacts.remoteOfRef(arg, repoTab.remoteNames))
             page.openRefMenu("remote", arg, arg, remotesModel.oidOfName(arg))
             AppBackend.report("ref_menu kind=remote delete=" + refDeleteItem.code
                               + " " + refDeleteItem.text)

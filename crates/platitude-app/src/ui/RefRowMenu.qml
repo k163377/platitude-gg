@@ -70,13 +70,6 @@ Item {
     // it (2026-08-22 ユーザー判断).
 
     // ---- bringing two lines of history together --------------------
-    /// The live condition the row above is read off as the menu opens.
-    readonly property bool integrateAllowed:
-        refRowMenu.repoTab.state === "open" && refRowMenu.repoTab.busyCount === 0
-        && !refRowMenu.workTree.detached && refRowMenu.workTree.branch !== ""
-        && refRowMenu.workTree.opText === ""
-        && refRowMenu.refId !== ""
-        && refRowMenu.refId !== refRowMenu.workTree.branch
     /// The commits a rebase onto this row would rewrite. Asked as the menu opens — the answer is a whole git call away,
     /// and it lands in the page's one answer slot (`RepoPage`).
     readonly property string rebaseRange:
@@ -131,31 +124,23 @@ Item {
             : kind === "remote" ? refRowMenu.worktreesModel.worktreeHolding(
                                       refRowMenu.repoTab.localNameFor(full))
                                 : ""
-        // **Held elsewhere keeps its row.** Everywhere else in this menu a row that cannot be chosen is left away
-        // (§メニュー), and the exception is the same one the delete table gets: the row is the only place the reason can
-        // be read, and a `switch` that quietly stopped being offered reads as a menu that lost it (2026-08-21 ユーザー判断).
-        refRowMenu.canSwitch = (kind === "branch" || kind === "remote")
-            && full !== refRowMenu.workTree.branch
-        refRowMenu.switchAsks =
-            refRowMenu.heldByWorktree !== ""
-            || refRowMenu.workTree.opText !== ""
-            || refRowMenu.workTree.conflictCount > 0
-        // Every ref that names a commit can have a new branch started on it — the current branch included, which is
-        // where one is most often started. A stash is the exception: it is nobody's history to carry on from
-        // (デザイン規約 §グラフ行の右クリック).
-        refRowMenu.canBranchHere =
-            kind !== "stash" && oidHex !== "" && refRowMenu.repoTab.busyCount === 0
-            && refRowMenu.workTree.opText === ""
-        refRowMenu.canIntegrateFrom = refRowMenu.integrateAllowed
-        // git refuses to delete the branch the working tree is on — or the one any other working copy is on; its
-        // remote reading can still be deleted in either case.
-        refRowMenu.canDelete =
-            refRowMenu.repoTab.busyCount === 0
-            && !(kind === "branch"
-                 && (full === refRowMenu.workTree.branch || refRowMenu.heldByWorktree !== ""))
         refRowMenu.remoteCounterpart = kind === "branch" ? refRowMenu.branchesModel.upstreamOf(full) : ""
-        refRowMenu.canDeleteRemote = refRowMenu.repoTab.busyCount === 0 && refRowMenu.remoteCounterpart !== ""
-        refRowMenu.onCurrentBranch = kind === "branch" && full === refRowMenu.workTree.branch
+        // The lookups above are the models'; what the rows may offer on them is core's rule, with the measured
+        // refusals it encodes — held elsewhere keeps the switch row, the current branch its delete table
+        // (offers::ref_menu). Asked the once, so the answers stand while the menu does (see the note above).
+        const offers = GitFacts.refMenuOffers(
+            kind, full, oidHex,
+            refRowMenu.repoTab.state === "open", refRowMenu.repoTab.busyCount,
+            refRowMenu.workTree.branch, refRowMenu.workTree.detached,
+            refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
+            refRowMenu.heldByWorktree, refRowMenu.remoteCounterpart).split(" ")
+        refRowMenu.canSwitch = offers.includes("switch")
+        refRowMenu.switchAsks = offers.includes("asks")
+        refRowMenu.canBranchHere = offers.includes("branch-here")
+        refRowMenu.canIntegrateFrom = offers.includes("integrate")
+        refRowMenu.canDelete = offers.includes("delete")
+        refRowMenu.canDeleteRemote = offers.includes("delete-remote")
+        refRowMenu.onCurrentBranch = offers.includes("current")
         if (refRowMenu.repoTab.state === "open" && refRowMenu.rebaseRange !== "")
             refRowMenu.repoTab.checkPublish(refRowMenu.rebaseRange)
         // Whether the everyday delete would be refused, asked as the menu opens: the unmerged answer usually lands
