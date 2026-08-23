@@ -11,7 +11,7 @@
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 use crate::support::TestRepo;
-use crate::support::exec::env;
+use crate::support::exec::{env, logged_global};
 use platitude_core::remote::{self, PushForce};
 
 /// A `file://` remote answers instantly; the budget just has to exist.
@@ -289,36 +289,131 @@ async fn a_branch_marked_at_a_fork_says_so() {
     );
 }
 
-/// The key the snapshot reads, through the one reader both halves share.
+/// The keys the snapshot reads, through the one reader both halves share
+/// — and one process for the pair.
 #[tokio::test]
-async fn a_branchs_mark_reads_back_and_unset_is_an_answer() {
+async fn the_marks_read_back_and_unset_is_an_answer() {
     let (_origin, _fork, mut repo) = origin_fork_and_clone();
     let (exec, cancel) = env();
 
+    let marks = remote::push_marks(&exec, &repo.path, "main", &cancel)
+        .await
+        .expect("an answer");
     assert!(
-        remote::branch_push_remote(&exec, &repo.path, "main", &cancel)
-            .await
-            .expect("an answer")
-            .is_none(),
+        marks.push_remote.is_none() && marks.push_default.is_none(),
         "unset is an answer, not a failure"
     );
 
     repo.git(&["config", "branch.main.pushRemote", "fork"]);
-    assert_eq!(
-        remote::branch_push_remote(&exec, &repo.path, "main", &cancel)
-            .await
-            .expect("an answer")
-            .as_deref(),
-        Some("fork")
-    );
+    let marks = remote::push_marks(&exec, &repo.path, "main", &cancel)
+        .await
+        .expect("an answer");
+    assert_eq!(marks.push_remote.as_deref(), Some("fork"));
 
     assert!(
-        remote::branch_push_remote(&exec, &repo.path, "topic", &cancel)
+        remote::push_marks(&exec, &repo.path, "topic", &cancel)
             .await
             .expect("an answer")
+            .push_remote
             .is_none(),
         "another branch's mark is not this one's"
     );
+}
+
+/// A branch named with regex metacharacters reads its own mark and nobody
+/// else's: the name goes into the `--get-regexp` pattern escaped (実測
+/// 2.55: unescaped, `wip.v2+x` answers with `wipAv22x`'s mark), and the
+/// send resolves the same way.
+#[tokio::test]
+async fn a_metacharacter_branch_reads_its_own_mark() {
+    let (_origin, _fork, mut repo) = origin_fork_and_clone();
+    let (exec, cancel) = env();
+
+    repo.git(&["switch", "--create", "wip.v2+x"]);
+    repo.git(&["config", "branch.wip.v2+x.pushRemote", "fork"]);
+    repo.git(&["config", "branch.wipAv22x.pushRemote", "origin"]);
+
+    let marks = remote::push_marks(&exec, &repo.path, "wip.v2+x", &cancel)
+        .await
+        .expect("an answer");
+    assert_eq!(marks.push_remote.as_deref(), Some("fork"));
+    let decoy = remote::push_marks(&exec, &repo.path, "wipAv22x", &cancel)
+        .await
+        .expect("an answer");
+    assert_eq!(
+        decoy.push_remote.as_deref(),
+        Some("origin"),
+        "the decoy keeps its own mark"
+    );
+
+    let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
+        .await
+        .expect("a plan");
+    assert_eq!(plan.remote, "fork");
+    assert_eq!(plan.remote_branch, "wip.v2+x", "the branch's own name");
+}
+
+/// The scope the label used to go stale in: a mark written into the
+/// user's global configuration. The read sees it with its level, the
+/// label spells the same destination the send resolves, and the marks
+/// git weighs above it still win.
+#[tokio::test]
+async fn a_global_mark_is_read_and_sent_alike() {
+    let (_origin, _fork, mut repo) = origin_fork_and_clone();
+    let (exec, _log, cancel) = logged_global(repo.global_config());
+    let remotes = ["fork", "origin"];
+
+    repo.git(&["config", "--global", "remote.pushDefault", "fork"]);
+
+    let marks = remote::push_marks(&exec, &repo.path, "main", &cancel)
+        .await
+        .expect("an answer");
+    let marked = marks.push_default.clone().expect("the global mark is read");
+    assert_eq!(marked.remote, "fork");
+    assert!(
+        !marked.local,
+        "another level set it; it cannot be unset here"
+    );
+
+    let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
+        .await
+        .expect("a plan");
+    let label = remote::push_target(
+        "main",
+        "origin/main",
+        marks.push_remote.as_deref().unwrap_or(""),
+        &marked.remote,
+        "origin",
+        remotes,
+    );
+    assert_eq!(
+        label,
+        format!("{}/{}", plan.remote, plan.remote_branch),
+        "the label and the send disagree at global scope"
+    );
+
+    // This repository's own mark beats the global one…
+    remote::set_push_default(&exec, &repo.path, "home", &cancel)
+        .await
+        .expect("mark home locally");
+    let marks = remote::push_marks(&exec, &repo.path, "main", &cancel)
+        .await
+        .expect("an answer");
+    let marked = marks.push_default.expect("a mark");
+    assert_eq!(marked.remote, "home");
+    assert!(marked.local, "the repository's own config decided");
+
+    // …and the branch's own mark beats them both, for the read and the
+    // send alike.
+    repo.git(&["config", "branch.main.pushRemote", "origin"]);
+    let marks = remote::push_marks(&exec, &repo.path, "main", &cancel)
+        .await
+        .expect("an answer");
+    assert_eq!(marks.push_remote.as_deref(), Some("origin"));
+    let plan = remote::plan_current_push(&exec, &repo.path, "fork", PushForce::None, &cancel)
+        .await
+        .expect("a plan");
+    assert_eq!(plan.remote, "origin");
 }
 
 /// The list and the mark come back from one read, which is what the

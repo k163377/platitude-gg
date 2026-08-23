@@ -93,9 +93,12 @@ pub enum SessionEvent {
         /// Rides the status rather than the refs so it cannot be read
         /// against a different branch than the one it was asked for: it
         /// is per-branch configuration, and the branch, its upstream and
-        /// its counts arrive here together. Display and standing only —
-        /// [`crate::remote::plan_current_push`] reads the key again
-        /// before a send, so a stale name here cannot misdirect one.
+        /// its counts arrive here together. The same read carries the
+        /// repository's own mark, which flows through the refs snapshot
+        /// instead (`RepoSession::note_push_default`). Display and
+        /// standing only — [`crate::remote::plan_current_push`] reads
+        /// the keys again before a send, so a stale name here cannot
+        /// misdirect one.
         push_remote: String,
         /// Pending paths whose change has something to say about line
         /// endings. Shared rather than copied: most status reads repeat the

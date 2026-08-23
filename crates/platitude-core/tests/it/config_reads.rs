@@ -123,12 +123,11 @@ async fn planning_a_push_answers_by_code() {
     );
     assert_eq!(
         config_reads(&log),
-        // `branch.<name>.remote`, `branch.<name>.merge`,
-        // `branch.<name>.pushRemote`, `remote.pushDefault` — every one of
-        // them unset, and every one of them an answer rather than a
-        // failure the command log would raise itself over.
+        // `branch.<name>.remote`, `branch.<name>.merge`, and the marks
+        // read (`branch.<name>.pushRemote` and `remote.pushDefault` in
+        // one process) — every key unset, and every read an answer
+        // rather than a failure the command log would raise itself over.
         vec![
-            CommandEnd::Answered(1),
             CommandEnd::Answered(1),
             CommandEnd::Answered(1),
             CommandEnd::Answered(1)

@@ -23,7 +23,7 @@ pub use self::branch::{RemoteBranchState, branch_tip, delete_remote_branch, rena
 pub use self::fetch::fetch;
 pub use self::list::{Remote, Remotes, add, list, read, set_url};
 pub use self::marks::{
-    PushDefault, branch_push_remote, clear_push_default, push_default, set_push_default,
+    PushDefault, PushMarks, clear_push_default, push_default, push_marks, set_push_default,
 };
 pub use self::push::{PushForce, PushSpec, plan_current_push, plan_publish, push};
 pub use self::standing::{PushStanding, push_standing, push_target};

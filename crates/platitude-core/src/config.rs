@@ -50,6 +50,27 @@ pub async fn get_regexp(
     }
 }
 
+/// `name` escaped to match itself inside a `--get-regexp` pattern.
+///
+/// The pattern is a POSIX ERE (the remotes read relies on `(url|pushurl)`
+/// grouping), and a branch name may hold characters it gives meaning to —
+/// `.` in any dotted name, `+`, braces. 実測 2.55: asking for
+/// `branch.wip.v2+x.pushremote` unescaped answers with
+/// `branch.wipAv22x.pushremote`, another branch's mark.
+pub(crate) fn regexp_literal(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for c in name.chars() {
+        if matches!(
+            c,
+            '\\' | '^' | '$' | '.' | '[' | ']' | '|' | '(' | ')' | '*' | '+' | '?' | '{' | '}'
+        ) {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// The records of a `-z` read, in the order git printed them.
 ///
 /// **That order is part of the answer.** git prints what every
@@ -165,5 +186,17 @@ mod tests {
     #[test]
     fn an_empty_read_has_no_records() {
         assert!(split(b"").is_empty());
+    }
+
+    /// Every ERE metacharacter a ref name can carry, spelled literally.
+    /// Names that carry none pass through untouched.
+    #[test]
+    fn a_regexp_literal_spells_a_name_as_itself() {
+        assert_eq!(regexp_literal("wip.v2+x"), r"wip\.v2\+x");
+        assert_eq!(regexp_literal("a(b)|c{d}$e"), r"a\(b\)\|c\{d\}\$e");
+        assert_eq!(
+            regexp_literal("feature/plain-name_1"),
+            "feature/plain-name_1"
+        );
     }
 }

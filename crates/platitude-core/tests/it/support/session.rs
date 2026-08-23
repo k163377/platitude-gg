@@ -288,9 +288,19 @@ pub fn scenario() -> (TestRepo, String) {
 }
 
 pub async fn opened(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
+    opened_with(repo, crate::support::exec::isolated()).await
+}
+
+/// [`opened`] on an executor of the caller's own — for a session that has
+/// to see the repository's private `--global` file
+/// (`exec::isolated_global`), or one watched by an observer.
+pub async fn opened_with(
+    repo: &TestRepo,
+    exec: platitude_core::process::GitExecutor,
+) -> (Arc<CaptureSink>, Arc<RepoSession>) {
     let sink = CaptureSink::new();
     let session = RepoSession::open(
-        crate::support::exec::isolated(),
+        exec,
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),

@@ -6,10 +6,9 @@ use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
 
+use crate::config;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
-
-use super::list::config_value;
 
 /// The remote a push goes to when no branch says otherwise
 /// (`remote.pushDefault`).
@@ -84,27 +83,99 @@ fn parse_push_default(bytes: &[u8]) -> Option<PushDefault> {
     })
 }
 
-/// Reads `branch.<branch>.pushRemote` — the branch's own answer to where
-/// its pushes go, and the one that beats every other (git-config(5); the
-/// order is [`super::plan_current_push`]'s, 実測 2.55).
+/// Both marks at once: the branch's own `branch.<branch>.pushRemote`, and
+/// the repository's [`PushDefault`] beside it.
 ///
-/// The one reader of the key. [`super::plan_current_push`] runs it before
-/// a send, and the session snapshot runs it so the toolbar can name the
-/// same destination — a second, separate reading of it is how the label
-/// comes to name a remote the push never goes to.
-pub async fn branch_push_remote(
+/// The one reader of the branch key, and one process for the pair.
+/// [`super::plan_current_push`] runs it before a send, and the status tick
+/// runs it so the toolbar names the same destination and the refs snapshot
+/// hears about a mark moved from a terminal — in **any** scope, which is
+/// what the remotes cache cannot see on its own (its invalidation stats
+/// the repository's config file alone, and `git config --global
+/// remote.pushDefault` writes a different one). A second, separate
+/// spelling of either key is how the label comes to name a remote the
+/// push never goes to.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PushMarks {
+    /// The branch's own mark, which beats every other (git-config(5); the
+    /// order is [`super::plan_current_push`]'s, 実測 2.55). `None` where
+    /// the branch does not mark one.
+    pub push_remote: Option<String>,
+    /// The repository's mark, with the level that set it.
+    pub push_default: Option<PushDefault>,
+}
+
+/// Reads both marks with one `--get-regexp` over the two exact keys.
+///
+/// `-z --show-scope --get-regexp` writes `<scope>\0<key>\n<value>\0` per
+/// record, every level in precedence order, so the last record per key is
+/// the effective value (実測 2.55:
+/// `global\0remote.pushdefault\nfork\0local\0remote.pushdefault\nhome\0`
+/// — `home` wins). Keys arrive with section and variable lower-cased and
+/// the branch name spelled as it was written; the pattern embeds the
+/// branch name escaped, because the pattern is a regex and the name may
+/// hold `.` or `+` (`config::regexp_literal` — 実測: unescaped,
+/// `wip.v2+x` answers with `wipAv22x`'s mark). Neither key set is exit 1,
+/// which is an answer.
+pub async fn push_marks(
     executor: &GitExecutor,
     workdir: &Path,
     branch: &str,
     cancel: &CancellationToken,
-) -> Result<Option<String>, GitError> {
-    config_value(
-        executor,
-        workdir,
-        &format!("branch.{branch}.pushRemote"),
-        cancel,
-    )
-    .await
+) -> Result<PushMarks, GitError> {
+    let pattern = format!(
+        r"^(branch\.{}\.pushremote|remote\.pushdefault)$",
+        config::regexp_literal(branch)
+    );
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .answers_by_code(1)
+        .args(["config", "-z", "--show-scope", "--get-regexp"])
+        .arg(pattern);
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    match out.code {
+        0 => Ok(parse_push_marks(branch, &out.stdout)),
+        1 => Ok(PushMarks::default()),
+        code => Err(GitError::Failed {
+            command: format!(
+                "git config --get-regexp branch.{branch}.pushRemote remote.pushDefault"
+            ),
+            code,
+            stderr: out.failure_message(),
+        }),
+    }
+}
+
+fn parse_push_marks(branch: &str, bytes: &[u8]) -> PushMarks {
+    let branch_key = format!("branch.{branch}.pushremote");
+    let mut marks = PushMarks::default();
+    let mut fields = bytes
+        .split(|b| *b == 0)
+        .filter(|field| !field.is_empty())
+        .map(String::from_utf8_lossy);
+    while let (Some(scope), Some(record)) = (fields.next(), fields.next()) {
+        // The separating newline is inside the record; a key written with
+        // no value at all has no newline in its record (実測 2.55: a bare
+        // `pushDefault` line arrives as `local\0remote.pushdefault\0`).
+        let (key, value) = match record.as_ref().split_once('\n') {
+            Some((key, value)) => (key, Some(value)),
+            None => (record.as_ref(), None),
+        };
+        let value = value.map(str::trim).filter(|value| !value.is_empty());
+        // Later records overwrite earlier ones on purpose: levels arrive
+        // lowest first, and the last one per key is the effective value.
+        if key == branch_key {
+            marks.push_remote = value.map(str::to_string);
+        } else if key == "remote.pushdefault" {
+            marks.push_default = value.map(|remote| PushDefault {
+                remote: remote.to_string(),
+                // Every other level — global, system, worktree, a `-c` on
+                // the command line — is one this repository cannot unset.
+                local: scope == "local",
+            });
+        }
+    }
+    marks
 }
 
 /// `git config remote.pushDefault <name>` — marks where pushes go.
@@ -189,5 +260,90 @@ mod tests {
         assert!(parse_push_default(b"local\0\0").is_none());
         assert!(parse_push_default(b"local\0").is_none());
         assert!(parse_push_default(b"").is_none());
+    }
+
+    /// Recorded from git 2.55: `config -z --show-scope --get-regexp`
+    /// writes `<scope>\0<key>\n<value>\0` per record, section and
+    /// variable lower-cased, the branch name as written.
+    #[test]
+    fn the_marks_read_takes_both_keys_from_one_answer() {
+        let marks = parse_push_marks(
+            "main",
+            b"global\0remote.pushdefault\nfork\0local\0branch.main.pushremote\norigin\0",
+        );
+        assert_eq!(marks.push_remote.as_deref(), Some("origin"));
+        let marked = marks.push_default.expect("a mark");
+        assert_eq!(marked.remote, "fork");
+        assert!(!marked.local, "the global level set it");
+    }
+
+    /// Levels arrive lowest first, so the last record per key is the
+    /// effective value (実測: local `home` prints after global `fork`).
+    #[test]
+    fn the_last_record_per_key_is_the_effective_one() {
+        let marks = parse_push_marks(
+            "main",
+            b"global\0remote.pushdefault\nfork\0local\0branch.main.pushremote\norigin\0\
+              local\0remote.pushdefault\nhome\0",
+        );
+        let marked = marks.push_default.expect("a mark");
+        assert_eq!(marked.remote, "home");
+        assert!(marked.local);
+    }
+
+    /// The two spellings of "nothing here": an empty local value (the
+    /// "no destination at all" state) and a key written bare, which
+    /// arrives as a record with no newline in it (実測 2.55). Both must
+    /// override a level below rather than fall back to it.
+    #[test]
+    fn an_empty_or_bare_key_names_nothing_and_still_overrides() {
+        let empty = parse_push_marks(
+            "main",
+            b"global\0remote.pushdefault\nfork\0local\0remote.pushdefault\n\0",
+        );
+        assert!(empty.push_default.is_none());
+        let bare = parse_push_marks(
+            "main",
+            b"global\0remote.pushdefault\nfork\0local\0remote.pushdefault\0",
+        );
+        assert!(bare.push_default.is_none());
+        assert!(parse_push_marks("main", b"").push_remote.is_none());
+    }
+
+    /// The branch name keeps its case in the key, and the match is exact:
+    /// `Topic`'s mark is not `topic`'s (実測 2.55).
+    #[test]
+    fn a_branch_keeps_its_case_and_another_case_is_another_branch() {
+        let bytes: &[u8] = b"local\0branch.Topic.pushremote\nfork\0";
+        assert_eq!(
+            parse_push_marks("Topic", bytes).push_remote.as_deref(),
+            Some("fork")
+        );
+        assert!(parse_push_marks("topic", bytes).push_remote.is_none());
+    }
+
+    /// A branch name holding regex metacharacters is compared literally —
+    /// the escaping lives in the pattern, the parse must not re-interpret.
+    #[test]
+    fn a_metacharacter_branch_name_is_matched_literally() {
+        let bytes: &[u8] = b"local\0branch.wip.v2+x.pushremote\nfork\0";
+        assert_eq!(
+            parse_push_marks("wip.v2+x", bytes).push_remote.as_deref(),
+            Some("fork")
+        );
+        assert!(parse_push_marks("wip", bytes).push_remote.is_none());
+    }
+
+    /// The separating newline is inside the record, so a value holding
+    /// newlines of its own cannot shift the scope/record pairing
+    /// (実測 2.55: `local\0remote.pushdefault\nfork\nx\0`).
+    #[test]
+    fn a_value_holding_a_newline_does_not_shift_the_pairing() {
+        let marks = parse_push_marks(
+            "main",
+            b"local\0remote.pushdefault\nfork\nx\0local\0branch.main.pushremote\norigin\0",
+        );
+        assert_eq!(marks.push_default.expect("a mark").remote, "fork\nx");
+        assert_eq!(marks.push_remote.as_deref(), Some("origin"));
     }
 }

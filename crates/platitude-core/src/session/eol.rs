@@ -92,6 +92,8 @@ impl RepoSession {
     /// own config (a linked worktree shares the common one, which is what
     /// `--git-path config` answers) — a remote written into the user's
     /// global config is still only seen on the next write or ref move.
+    /// The push mark is the exception: the status tick reads it in every
+    /// scope and hands it to [`RepoSession::note_push_default`].
     fn forget_remotes_if_config_moved(&self) {
         let Some(path) = self.config_path() else {
             return;
@@ -110,6 +112,30 @@ impl RepoSession {
             self.remotes.forget();
         }
         *seen = Some(stamp);
+    }
+
+    /// Drops the remote answer when the repository's push mark moved under
+    /// it, and sends the refs listing out to say the new one.
+    ///
+    /// `seen` is what the status tick just read out of the effective
+    /// configuration ([`crate::remote::push_marks`]). The stat above never
+    /// sees a `git config --global remote.pushDefault` — it writes a file
+    /// the stat does not watch — so without this the toolbar keeps naming
+    /// the old destination while the send (`plan_current_push`, which
+    /// reads the effective configuration) already goes to the new one.
+    ///
+    /// Only a held answer is compared: no answer yet means the next refs
+    /// listing is already going to read the current state. The re-read
+    /// converges — it puts the fresh mark in the cache, and the following
+    /// tick finds the two equal. The refs pass it asks for re-hashes the
+    /// mark into its inputs (`join_key`), so the snapshot goes out fresh
+    /// even though no ref moved.
+    pub(super) fn note_push_default(self: &Arc<Self>, seen: &Option<remote::PushDefault>) {
+        let held = self.remotes.peek(|remotes| remotes.push_default.clone());
+        if held.is_some_and(|held| held != *seen) {
+            self.remotes.forget();
+            self.refresh_refs();
+        }
     }
 
     /// The cached baseline for a path's (directory, extension), sampling it

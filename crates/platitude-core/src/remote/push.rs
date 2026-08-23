@@ -13,7 +13,7 @@ use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
 use super::list::{config_value, current_branch};
-use super::marks::{branch_push_remote, push_default};
+use super::marks::push_marks;
 
 /// How hard a push may overwrite the remote.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,15 +80,14 @@ pub async fn plan_current_push(
     let merge = config_value(executor, workdir, &format!("branch.{branch}.merge"), cancel).await?;
 
     // Read here rather than handed in: a push must go where git would send
-    // it now, and the mark can be moved from a terminal between two of this
-    // application's reads. Two short local `git config` calls in front of a
-    // command that reaches the network.
-    let pushes_to = match branch_push_remote(executor, workdir, &branch, cancel).await? {
-        Some(name) => Some(name),
-        None => push_default(executor, workdir, cancel)
-            .await?
-            .map(|marked| marked.remote),
-    };
+    // it now, and the marks can be moved from a terminal between two of
+    // this application's reads. One short local `git config` in front of a
+    // command that reaches the network — the same read the status tick
+    // makes, so the two cannot drift apart.
+    let marks = push_marks(executor, workdir, &branch, cancel).await?;
+    let pushes_to = marks
+        .push_remote
+        .or_else(|| marks.push_default.map(|marked| marked.remote));
 
     let remote = match pushes_to.or_else(|| tracks.clone()) {
         Some(remote) => remote,

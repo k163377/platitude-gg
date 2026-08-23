@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, opened, write_result};
+use crate::support::session::{CaptureSink, opened, opened_with, write_result};
 use platitude_core::details::DiffTarget;
 use platitude_core::session::{DiffRefreshOutcome, Recording, RepoSession, SessionEvent};
 
@@ -298,6 +298,78 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
         settle(from + n).await;
     }
     assert_eq!(reads(&sink), 1, "still the one: {:?}", commands_of(&sink));
+    session.close();
+}
+
+/// A push mark written into the user's global configuration reaches the
+/// refs snapshot by the poll. `git config --global remote.pushDefault` in
+/// a terminal moves no ref, lands no write in here, and leaves the
+/// repository's own config file — the one the remotes cache stats —
+/// untouched, so the status tick's marks read is what has to notice, and
+/// send the refs out to publish the new destination
+/// (`RepoSession::note_push_default`). Without that, the toolbar keeps
+/// naming the old destination while the send (`plan_current_push`, which
+/// reads the effective configuration) already obeys the new mark.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    let exec = crate::support::exec::isolated_global(repo.global_config());
+    let (sink, session) = opened_with(&repo, exec).await;
+    sink.opened_graph(&session, 1).await;
+    session.set_recording(Recording::WithBackground);
+    let listed = |sink: &CaptureSink| {
+        commands_of(sink)
+            .iter()
+            .filter(|c| c.contains("remote\\..*\\.(url|pushurl)"))
+            .count()
+    };
+
+    repo.git(&["config", "--global", "remote.pushDefault", "fork"]);
+
+    // A poll that was refused (busy, or a write in front of it) would
+    // prove nothing about what it reads.
+    let polled = session.refresh_poll_tracked().outcome().await;
+    assert!(
+        matches!(
+            polled,
+            platitude_core::session::RefreshOutcome::Changed
+                | platitude_core::session::RefreshOutcome::Unchanged
+        ),
+        "the poll ran: {polled:?}"
+    );
+    sink.wait_for("the global mark in the snapshot", |evs| {
+        evs.iter()
+            .any(|e| match e {
+                SessionEvent::RefsLoaded { snapshot } => snapshot
+                    .push_default
+                    .as_ref()
+                    .is_some_and(|marked| marked.remote == "fork" && !marked.local),
+                _ => false,
+            })
+            .then_some(())
+    })
+    .await;
+
+    // The move re-read the remotes once, not once per tick: the next poll
+    // reads the same marks, finds the held answer equal, and asks git for
+    // no listing of its own.
+    assert_eq!(listed(&sink), 1, "{:?}", commands_of(&sink));
+    let polled = session.refresh_poll_tracked().outcome().await;
+    assert!(
+        matches!(
+            polled,
+            platitude_core::session::RefreshOutcome::Changed
+                | platitude_core::session::RefreshOutcome::Unchanged
+        ),
+        "the second poll ran: {polled:?}"
+    );
+    assert_eq!(
+        listed(&sink),
+        1,
+        "a settled mark is not re-read: {:?}",
+        commands_of(&sink)
+    );
     session.close();
 }
 

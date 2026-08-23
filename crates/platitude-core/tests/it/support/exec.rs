@@ -130,26 +130,29 @@ pub fn logged() -> (GitExecutor, Arc<Log>, CancellationToken) {
     (exec, log, cancel)
 }
 
-/// [`logged`] with `--global` pointed at a file of the caller's own — for
-/// the writes that reach outside a repository (`TestRepo::global_config`
-/// is one such file per repository). The isolation [`isolated`] gives is a
-/// single file for the whole suite, and the suite runs in parallel.
+/// [`isolated`] with `--global` pointed at a file of the caller's own —
+/// for the reads and writes that reach outside a repository
+/// (`TestRepo::global_config` is one such file per repository). The
+/// isolation [`isolated`] gives is a single file for the whole suite, and
+/// the suite runs in parallel.
+pub fn isolated_global(global_config: &Path) -> GitExecutor {
+    GitExecutor::new().without_stock_timeouts().with_env(vec![
+        (
+            OsString::from("GIT_CONFIG_GLOBAL"),
+            global_config.to_path_buf().into_os_string(),
+        ),
+        (OsString::from("GIT_CONFIG_NOSYSTEM"), OsString::from("1")),
+        (
+            OsString::from("XDG_CONFIG_HOME"),
+            isolated_git().xdg_config.clone().into_os_string(),
+        ),
+    ])
+}
+
+/// [`isolated_global`] watched by a fresh [`Log`], on the user handle.
 pub fn logged_global(global_config: &Path) -> (GitExecutor, Arc<Log>, CancellationToken) {
     let log = Arc::new(Log::default());
-    let exec = GitExecutor::new()
-        .without_stock_timeouts()
-        .with_env(vec![
-            (
-                OsString::from("GIT_CONFIG_GLOBAL"),
-                global_config.to_path_buf().into_os_string(),
-            ),
-            (OsString::from("GIT_CONFIG_NOSYSTEM"), OsString::from("1")),
-            (
-                OsString::from("XDG_CONFIG_HOME"),
-                isolated_git().xdg_config.clone().into_os_string(),
-            ),
-        ])
-        .observed(log.clone(), true);
+    let exec = isolated_global(global_config).observed(log.clone(), true);
     (exec, log, CancellationToken::new())
 }
 
