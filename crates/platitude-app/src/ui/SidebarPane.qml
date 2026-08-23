@@ -79,8 +79,8 @@ Rectangle {
     /// Written into the field itself, so what the sections are asked is
     /// what a typist asks them.
     function typeFilter(text) {
-        refFilter.text = text
-        return refFilter.text
+        sections.filterText = text
+        return sections.filterText
     }
 
     /// Smoke hook (PG_AUTO_ACT=nav-peek): rest on one section's cell.
@@ -125,22 +125,18 @@ Rectangle {
             head.tap()
     }
     function headOf(kind) {
-        return kind === "branch" ? branchHead
-            : kind === "remote" ? remoteHead
-            : kind === "worktree" ? worktreeHead
-            : kind === "stash" ? stashHead
-            : kind === "tag" ? tagHead : null
+        return sections.headOf(kind)
     }
     /// Smoke hook (PG_AUTO_ACT=nav-add-remote): press the `+` at the end
     /// of the REMOTES band. It goes in at the band's own signal, so what
     /// answers is the page's wiring and not a second way in.
     function tapAddRemote() {
-        remoteHead.addRemoteRequested()
+        sections.headOf("remote").addRemoteRequested()
     }
     /// Smoke hook (PG_AUTO_ACT=tags-eye): press the eye at the end of the
     /// TAGS band, at the button's own press (`NavHeader.tapTags`).
     function tapTagEye() {
-        tagHead.tapTags()
+        sections.headOf("tag").tapTags()
     }
     /// Where a section's header band has come to rest, and where the
     /// ground under the last section begins — what PG_AUTO_ACT=nav-close
@@ -149,7 +145,7 @@ Rectangle {
         const head = sidebar.headOf(kind)
         return head ? head.y : -1
     }
-    readonly property real groundTop: ground.y
+    readonly property real groundTop: sections.groundTop
     /// Where the section the folded rail has open begins and ends, for the
     /// smoke hooks (PG_AUTO_ACT=nav-peek). The panel is a popup, so a
     /// headless run reads its placement here rather than off the picture:
@@ -164,11 +160,7 @@ Rectangle {
     /// at the same `pointedTipRow` the file lists carry, and what comes
     /// out is the row's own attached ToolTip and the shared instance.
     function listOf(kind) {
-        return kind === "branch" ? branchList
-            : kind === "remote" ? remoteList
-            : kind === "worktree" ? worktreeList
-            : kind === "stash" ? stashList
-            : kind === "tag" ? tagList : null
+        return sections.listOf(kind)
     }
     function pointTipAt(kind, row) {
         const list = sidebar.listOf(kind)
@@ -189,14 +181,14 @@ Rectangle {
     /// row it stands for has no place in the list at all while a filter
     /// hides it — which is one of the two ways the stand-in is on screen.
     property bool headPinPointed: false
-    readonly property bool headPinLit: headPin.visible && headPin.pointed
-    readonly property string headPinWords: headPin.tipWords
+    readonly property bool headPinLit: sections.headPinLit
+    readonly property string headPinWords: sections.headPinWords
 
     /// Smoke hook (PG_SCROLL_TO=nav-bottom): jump the branches list to
     /// its end. The current branch's sticky row only changes edges
     /// under scroll, which a headless run cannot produce otherwise.
     function scrollBranchesToEnd() {
-        branchList.contentY = Math.max(0, branchList.contentHeight - branchList.height)
+        sections.scrollBranchesToEnd()
     }
 
     // The width the list goes back to. Read off the pane as it folds
@@ -255,178 +247,49 @@ Rectangle {
     property bool expStashes: true
     property bool expTags: true
 
-    // How the height nobody needs is handed out. Every section takes
-    // what its own rows want and no more; the ground at the foot of the
-    // column takes the rest — spare height inside a section would push
-    // everything under it down. Both ends have to name a pull: Qt reads
-    // an unset one as a zero and hands it nothing at all. At this
-    // distance the ground keeps none of the height while any section
-    // still has rows it cannot show, on a pane of any height (measured).
-    readonly property int sectionPull: 10000
-    readonly property int groundPull: 1
+    /// What a click on one of the column's header bands flips (`NavSections.sectionToggled`). Held beside the flags
+    /// rather than in the column, so the pane stays the one writer of its own fold state.
+    function toggleSection(kind) {
+        if (kind === "branch")
+            sidebar.expBranches = !sidebar.expBranches
+        else if (kind === "remote")
+            sidebar.expRemotes = !sidebar.expRemotes
+        else if (kind === "worktree")
+            sidebar.expWorktree = !sidebar.expWorktree
+        else if (kind === "stash")
+            sidebar.expStashes = !sidebar.expStashes
+        else if (kind === "tag")
+            sidebar.expTags = !sidebar.expTags
+    }
 
-    ColumnLayout {
+    // ---- the open list ----------------------------------------------
+    // The filter band, the five sections and the ground under them, as
+    // one column (`NavSections`). The column reports upward; the pane
+    // answers with the state it owns.
+    NavSections {
+        id: sections
         anchors.fill: parent
-        spacing: 0
         visible: !sidebar.collapsed
-        SidebarFilterRow {
-            id: refFilter
-            Layout.fillWidth: true
-            onTextChanged: {
-                sidebar.branchesModel.setFilter(refFilter.text)
-                sidebar.remotesModel.setFilter(refFilter.text)
-                sidebar.worktreesModel.setFilter(refFilter.text)
-                sidebar.stashesModel.setFilter(refFilter.text)
-                sidebar.tagsModel.setFilter(refFilter.text)
-            }
-            onFoldRequested: sidebar.foldRequested(true)
-        }
-
-        NavHeader {
-            id: branchHead
-            caption: qsTr("BRANCHES")
-            iconKind: "branch"
-            iconTint: Theme.accent
-            count: sidebar.branchesModel.total
-            expanded: sidebar.expBranches || refFilter.text !== ""
-            onToggled: sidebar.expBranches = !sidebar.expBranches
-        }
-        NavList {
-            id: branchList
-            sectionModel: sidebar.branchesModel
-            expanded: branchHead.showsRows
-            kindHint: "branch"
-            gestures: rowGestures
-            Layout.verticalStretchFactor: sidebar.sectionPull
-            headTracks: sidebar.workTree.upstream !== ""
-            headAhead: sidebar.workTree.ahead
-            headBehind: sidebar.workTree.behind
-            onRefActivated: oidHex => sidebar.refActivated(oidHex)
-            onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
-
-            HeadPinRow {
-                id: headPin
-                // The list is a Flickable: children declared in one are
-                // adopted by its content item and scroll away with it.
-                // Parenting to the list itself is what keeps this still,
-                // so the adoption is written here rather than inside the
-                // component (app-ui.md).
-                parent: branchList
-                pointed: sidebar.headPinPointed
-                         || (branchList.pointedTipRow >= 0
-                             && branchList.pointedTipRow === sidebar.branchesModel.headRow)
-                branchesModel: sidebar.branchesModel
-                workTree: sidebar.workTree
-                contentY: branchList.contentY
-                viewHeight: branchList.height
-                width: branchList.width
-                onActivated: oidHex => sidebar.refActivated(oidHex)
-            }
-        }
-
-        NavHeader {
-            id: remoteHead
-            caption: qsTr("REMOTES")
-            iconKind: "remote"
-            iconTint: Theme.textSecondary
-            count: sidebar.remotesModel.total
-            expanded: sidebar.expRemotes || refFilter.text !== ""
-            onToggled: sidebar.expRemotes = !sidebar.expRemotes
-            // The only band that carries a way to make its own rows, and
-            // the only one whose control outlives the section going
-            // unavailable (デザイン規約 §左メニューの所作).
-            showAddRemote: true
-            onAddRemoteRequested: sidebar.addRemoteRequested()
-        }
-        NavList {
-            id: remoteList
-            sectionModel: sidebar.remotesModel
-            expanded: remoteHead.showsRows
-            kindHint: "remote"
-            gestures: rowGestures
-            remotesPacked: sidebar.repoTab.remoteNames
-            markedRemote: sidebar.repoTab.pushDefault
-            Layout.verticalStretchFactor: sidebar.sectionPull
-            onRefActivated: oidHex => sidebar.refActivated(oidHex)
-            onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
-            onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name)
-        }
-
-        // git worktrees (checkouts); the changed-file lists live in the
-        // right pane's WIP view. Clicking one opens it as a new tab.
-        NavHeader {
-            id: worktreeHead
-            caption: qsTr("WORKTREES")
-            iconKind: "tree"
-            iconTint: Theme.success
-            count: sidebar.worktreesModel.total
-            expanded: sidebar.expWorktree || refFilter.text !== ""
-            onToggled: sidebar.expWorktree = !sidebar.expWorktree
-        }
-        NavList {
-            id: worktreeList
-            sectionModel: sidebar.worktreesModel
-            expanded: worktreeHead.showsRows
-            kindHint: "worktree"
-            gestures: rowGestures
-            Layout.verticalStretchFactor: sidebar.sectionPull
-        }
-
-        NavHeader {
-            id: stashHead
-            caption: qsTr("STASHES")
-            iconKind: "stash"
-            iconTint: Theme.textSecondary
-            count: sidebar.stashesModel.total
-            expanded: sidebar.expStashes || refFilter.text !== ""
-            onToggled: sidebar.expStashes = !sidebar.expStashes
-        }
-        NavList {
-            id: stashList
-            sectionModel: sidebar.stashesModel
-            expanded: stashHead.showsRows
-            kindHint: "stash"
-            gestures: rowGestures
-            Layout.verticalStretchFactor: sidebar.sectionPull
-            // A stash is a commit: clicking shows its stashed changes
-            // in the details pane.
-            onRefActivated: oidHex => sidebar.refActivated(oidHex)
-            onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
-        }
-
-        NavHeader {
-            id: tagHead
-            caption: qsTr("TAGS")
-            iconKind: "tag"
-            iconTint: Theme.refTag
-            count: sidebar.tagsModel.total
-            expanded: sidebar.expTags || refFilter.text !== ""
-            onToggled: sidebar.expTags = !sidebar.expTags
-            showTagToggle: true
-            tagsShown: sidebar.repoTab.tagsShown
-            onTagsToggled: shown => sidebar.repoTab.setTagsShown(shown)
-        }
-        NavList {
-            id: tagList
-            sectionModel: sidebar.tagsModel
-            expanded: tagHead.showsRows
-            kindHint: "tag"
-            gestures: rowGestures
-            Layout.verticalStretchFactor: sidebar.sectionPull
-            onRefActivated: oidHex => sidebar.refActivated(oidHex)
-            onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
-        }
-
-        // The ground under the last section. Nothing stands on it — it
-        // is here to be given the height the sections have no rows for,
-        // so that they stay packed against the top whichever of them
-        // are closed.
-        Item {
-            id: ground
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.verticalStretchFactor: sidebar.groundPull
-        }
+        repoTab: sidebar.repoTab
+        workTree: sidebar.workTree
+        branchesModel: sidebar.branchesModel
+        remotesModel: sidebar.remotesModel
+        worktreesModel: sidebar.worktreesModel
+        stashesModel: sidebar.stashesModel
+        tagsModel: sidebar.tagsModel
+        gestures: rowGestures
+        expBranches: sidebar.expBranches
+        expRemotes: sidebar.expRemotes
+        expWorktree: sidebar.expWorktree
+        expStashes: sidebar.expStashes
+        expTags: sidebar.expTags
+        headPinPointed: sidebar.headPinPointed
+        onSectionToggled: kind => sidebar.toggleSection(kind)
+        onFoldRequested: collapse => sidebar.foldRequested(collapse)
+        onRefActivated: oidHex => sidebar.refActivated(oidHex)
+        onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
+        onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name)
+        onAddRemoteRequested: sidebar.addRemoteRequested()
     }
 
     // ---- folded ------------------------------------------------------
