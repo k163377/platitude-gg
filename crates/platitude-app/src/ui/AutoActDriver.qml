@@ -970,6 +970,7 @@ Item {
                 return
             fileRowsTimer.stop()
             driver.runFileRowAct(act, AppBackend.autoActArg)
+            driver.dispatchFinished()
         }
     }
     // Sending the diff's code sideways, by the bar's own path and then by the hand that carries the rows with it. What
@@ -3967,7 +3968,11 @@ Item {
             openFetchTimer.start()
         }
         AppBackend.report("auto_act ran=" + act)
-        driver.dispatchFinished()
+        // The file-row acts have not acted yet — they are waiting on their rows (`fileRowsTimer`),
+        // and finishing here would photograph the scene before the menu is up. Their sampler
+        // finishes the dispatch after `runFileRowAct` has run.
+        if (driver.fileRowActs.indexOf(act) < 0)
+            driver.dispatchFinished()
     }
 
     /// The first-push surface is either the standing question (a remote exists) or the add-remote dialog (none does).
