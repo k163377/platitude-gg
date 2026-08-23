@@ -106,6 +106,15 @@ Item {
     /// `AfterWrite::Graph` ordering applies: at the write barrier the panes still frame the commit that was replaced,
     /// wearing the author it was replaced for — which is the whole subject of `amend-reset-author`.
     property string headOidBefore: ""
+    /// The acts that name rows of the WIP lists, and so run only once those rows are walkable
+    /// (`fileRowsTimer` holds them until they are).
+    readonly property var fileRowActs: [
+        "stage-many", "stage-many-go", "discard-many", "discard-many-go",
+        "file-menu", "file-menu-untracked", "file-menu-staged", "file-menu-conflict",
+        "take-side-ours", "take-side-theirs", "open-mergetool",
+        "discard-file", "discard-file-go", "delete-file", "delete-file-go",
+        "discard-staged", "discard-staged-go"
+    ]
 
     function isWriteAct(act) {
         return ["publish", "publish-taken", "publish-add", "publish-go",
@@ -867,6 +876,100 @@ Item {
                               + " staged_count=" + workTree.stagedCount
                               + " conflict_count=" + workTree.conflictCount)
             renderedBarrier.begin()
+        }
+    }
+    /// The file-row acts, run once the rows they name are walkable (`fileRowsTimer` holds them
+    /// until then; `runAutoAct` has already put the WIP pane up).
+    function runFileRowAct(act, arg) {
+        if (act === "stage-many" || act === "stage-many-go") {
+            const head = wipPane.rowAt(0)
+            if (head)
+                wipPane.chooseOnly(head.bucket, head.fullName)
+            const mate = wipPane.rowFor(arg)
+            if (mate)
+                wipPane.applyClick(mate.bucket, mate.fullName, Qt.ControlModifier)
+            AppBackend.report("chosen count=" + wipPane.chosenCount)
+            if (head) {
+                wipPane.showStageTools(head.bucket, head.fullName)
+                if (act.endsWith("-go")) {
+                    const row = wipPane.rowAt(0)
+                    if (row)
+                        row.stageClicked(head.bucket, head.fullName)
+                }
+            }
+        } else if (act === "discard-many" || act === "discard-many-go") {
+            const first = wipPane.rowAt(0)
+            if (first)
+                wipPane.chooseOnly(first.bucket, first.fullName)
+            const other = wipPane.rowFor(arg)
+            if (other)
+                wipPane.applyClick(other.bucket, other.fullName, Qt.ControlModifier)
+            AppBackend.report("chosen count=" + wipPane.chosenCount)
+            page.openFileMenu(other ? other.bucket : "unstaged", arg, "")
+            AppBackend.report("discard_row " + fileDiscardItem.text)
+            if (act.endsWith("-go"))
+                fileDiscardItem.completeHold()
+        } else if (act === "file-menu" || act === "file-menu-untracked"
+                   || act === "file-menu-staged" || act === "file-menu-conflict") {
+            const menuBucket = act === "file-menu" ? "unstaged" : act === "file-menu-staged" ? "staged"
+                             : act === "file-menu-conflict" ? "conflicts" : "untracked"
+            wipPane.chooseOnly(menuBucket, arg)
+            page.openFileMenu(menuBucket, arg, "")
+            if (menuBucket === "conflicts") {
+                const row = wipPane.rowFor(arg)
+                AppBackend.report("conflict_kind " + (row ? row.conflictWords() : "-"))
+            } else {
+                AppBackend.report("discard_row " + fileDiscardItem.text)
+            }
+        } else if (act === "take-side-ours" || act === "take-side-theirs") {
+            wipPane.chooseOnly("conflicts", arg)
+            page.openFileMenu("conflicts", arg, "")
+            fileMenu.close()
+            fileRowMenu.takeSideNow(act === "take-side-ours" ? "ours" : "theirs")
+        } else if (act === "open-mergetool") {
+            // With a tool configured this holds the write queue until it exits, so a demo tool that blocks leaves the
+            // wait on screen.
+            wipPane.chooseOnly("conflicts", arg)
+            page.openFileMenu("conflicts", arg, "")
+            fileMenu.close()
+            fileRowMenu.openInMergeTool()
+            AppBackend.report("merge_tool " + wipPane.workTree.mergeTool)
+        } else if (act === "discard-file" || act === "discard-file-go"
+                   || act === "delete-file" || act === "delete-file-go"
+                   || act === "discard-staged" || act === "discard-staged-go") {
+            // Which row follows the verb: "delete-file" an untracked one, "discard-staged" the staged side, otherwise
+            // the unstaged one. The plain verb leaves the menu standing for the shot; "-go" runs the hold to its end.
+            const bucket = act.startsWith("delete-file") ? "untracked"
+                         : act.startsWith("discard-staged") ? "staged" : "unstaged"
+            wipPane.chooseOnly(bucket, arg)
+            page.openFileMenu(bucket, arg)
+            AppBackend.report("discard_row " + fileDiscardItem.text)
+            if (act.endsWith("-go"))
+                fileDiscardItem.completeHold()
+        }
+    }
+    // Every file-row act resolves the rows it names through the pane's walk — `rowAt` / `rowFor` /
+    // `chosenRows` — and the walk reads delegates, which are born a layout after the model has the
+    // rows. Fired on arrival the walk answers nothing: the choice stays empty, the menu opens over
+    // it with an empty discard row, and a "-go" with nothing to write leaves the run to the
+    // watchdog (2026-08-23 実測: Windows wedged this way while the same build walked on Linux).
+    // So the acting waits for the row it is about to name, the way `bucketAllTimer` waits for the
+    // headings; a row that never lands leaves the run to the watchdog, which is the diagnosis.
+    SampleTimer {
+        id: fileRowsTimer
+        onTriggered: {
+            const act = AppBackend.autoAct
+            // The named row has to be walkable — and for the pairs that start from the head row,
+            // that row too. One walk answering is every walk answering: they read the same
+            // delegates.
+            if (wipPane.rowFor(AppBackend.autoActArg) === null)
+                return
+            if ((act === "stage-many" || act === "stage-many-go"
+                 || act === "discard-many" || act === "discard-many-go")
+                && wipPane.rowAt(0) === null)
+                return
+            fileRowsTimer.stop()
+            driver.runFileRowAct(act, AppBackend.autoActArg)
         }
     }
     // Sending the diff's code sideways, by the bar's own path and then by the hand that carries the rows with it. What
@@ -2926,77 +3029,11 @@ Item {
             page.showWip()
             bucketAllTimer.begin(act === "stage-all" ? "unstaged"
                                  : act === "unstage-all" ? "staged" : "conflicts")
-        } else if (act === "stage-many" || act === "stage-many-go") {
+        } else if (driver.fileRowActs.indexOf(act) >= 0) {
+            // Rows first: every one of these names a row of the WIP lists, and the walk that
+            // resolves a name reads delegates (`fileRowsTimer`, which then runs `runFileRowAct`).
             page.showWip()
-            const head = wipPane.rowAt(0)
-            if (head)
-                wipPane.chooseOnly(head.bucket, head.fullName)
-            const mate = wipPane.rowFor(arg)
-            if (mate)
-                wipPane.applyClick(mate.bucket, mate.fullName, Qt.ControlModifier)
-            AppBackend.report("chosen count=" + wipPane.chosenCount)
-            if (head) {
-                wipPane.showStageTools(head.bucket, head.fullName)
-                if (act.endsWith("-go")) {
-                    const row = wipPane.rowAt(0)
-                    if (row)
-                        row.stageClicked(head.bucket, head.fullName)
-                }
-            }
-        } else if (act === "discard-many" || act === "discard-many-go") {
-            page.showWip()
-            const first = wipPane.rowAt(0)
-            if (first)
-                wipPane.chooseOnly(first.bucket, first.fullName)
-            const other = wipPane.rowFor(arg)
-            if (other)
-                wipPane.applyClick(other.bucket, other.fullName, Qt.ControlModifier)
-            AppBackend.report("chosen count=" + wipPane.chosenCount)
-            page.openFileMenu(other ? other.bucket : "unstaged", arg, "")
-            AppBackend.report("discard_row " + fileDiscardItem.text)
-            if (act.endsWith("-go"))
-                fileDiscardItem.completeHold()
-        } else if (act === "file-menu" || act === "file-menu-untracked"
-                   || act === "file-menu-staged" || act === "file-menu-conflict") {
-            const menuBucket = act === "file-menu" ? "unstaged" : act === "file-menu-staged" ? "staged"
-                             : act === "file-menu-conflict" ? "conflicts" : "untracked"
-            page.showWip()
-            wipPane.chooseOnly(menuBucket, arg)
-            page.openFileMenu(menuBucket, arg, "")
-            if (menuBucket === "conflicts") {
-                const row = wipPane.rowFor(arg)
-                AppBackend.report("conflict_kind " + (row ? row.conflictWords() : "-"))
-            } else {
-                AppBackend.report("discard_row " + fileDiscardItem.text)
-            }
-        } else if (act === "take-side-ours" || act === "take-side-theirs") {
-            page.showWip()
-            wipPane.chooseOnly("conflicts", arg)
-            page.openFileMenu("conflicts", arg, "")
-            fileMenu.close()
-            fileRowMenu.takeSideNow(act === "take-side-ours" ? "ours" : "theirs")
-        } else if (act === "open-mergetool") {
-            // With a tool configured this holds the write queue until it exits, so a demo tool that blocks leaves the
-            // wait on screen.
-            page.showWip()
-            wipPane.chooseOnly("conflicts", arg)
-            page.openFileMenu("conflicts", arg, "")
-            fileMenu.close()
-            fileRowMenu.openInMergeTool()
-            AppBackend.report("merge_tool " + wipPane.workTree.mergeTool)
-        } else if (act === "discard-file" || act === "discard-file-go"
-                   || act === "delete-file" || act === "delete-file-go"
-                   || act === "discard-staged" || act === "discard-staged-go") {
-            // Which row follows the verb: "delete-file" an untracked one, "discard-staged" the staged side, otherwise
-            // the unstaged one. The plain verb leaves the menu standing for the shot; "-go" runs the hold to its end.
-            page.showWip()
-            const bucket = act.startsWith("delete-file") ? "untracked"
-                         : act.startsWith("discard-staged") ? "staged" : "unstaged"
-            wipPane.chooseOnly(bucket, arg)
-            page.openFileMenu(bucket, arg)
-            AppBackend.report("discard_row " + fileDiscardItem.text)
-            if (act.endsWith("-go"))
-                fileDiscardItem.completeHold()
+            fileRowsTimer.start()
         } else if (act === "amend-author") {
             // The boxes live in the commit editor, which is only on screen while the uncommitted row is the selected
             // one — without this the run photographs the details pane and says nothing about the amend row.
