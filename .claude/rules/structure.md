@@ -12,7 +12,7 @@ paths:
 - **src 1 ファイル 500 行 / fn 100 行**(clippy `too_many_lines` 相当)**/ tests 1 ファイル 1000 行** — **機械化済み: `cargo xtask structure`(check に内蔵)**。ファイルは物理行を数え、fn は clippy(workspace lints + clippy.toml の閾値)
 - 既存超過の固定先: ファイルは `crates/xtask/structure-baseline.txt`(縮めば自動追従・伸ばせば fail)、fn は `#[expect(clippy::too_many_lines)]`。**どちらも縮めた時に外す必要がある** — 基準線は書き換わったファイルを commit、`#[expect]` は剥がす(貼ったまま fn が 100 行を切ると unfulfilled で赤くなる)
 - **上限超過ファイルへ追記しない** — 先にその責務を切り出す。切り出しが今の変更を膨らませすぎる時だけ追記し、分割タスクを積んで報告する(黙認しない)
-- 分割しない判断をした超過ファイルは [rules-refs/structure.md](../rules-refs/structure.md) へ理由 1 行(記載の無い超過は違反)
+- 分割しない判断をした超過ファイルは [rules-refs/structure.md](../rules-refs/structure.md) へ**理由 1 行 + その時の物理行数 `(N 行)`**(記載の無い超過は違反)。**免除されるのは 500 行の上限だけで、`(N 行)` が代わりの上限**(縮めば自動追従・伸ばせば fail — 基準線と同じラチェット)。**数字を書き直す時は同じ行の理由が今も立つか読み直す** — 台帳は恒久免除なので、測らなければ免除は青天井になる
 
 ## 分割
 
