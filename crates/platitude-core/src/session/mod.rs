@@ -96,7 +96,7 @@ pub use query::{DiffRefreshOutcome, DiffRefreshTask};
 use read_slot::{ReadSlot, SlotHeld};
 pub(crate) use remote_tags::RemoteTagIndex;
 pub use repo_session::RepoSession;
-pub use snapshot::{BranchItem, RefsSnapshot, TagItem};
+pub use snapshot::{BranchItem, RefsSnapshot, TagDrift, TagItem};
 pub use state::AutoFetchTicker;
 use state::{
     AutoFetch, ConfigStamp, Derived, EndingContext, Footer, HeadHold, OpGate, OpenFetchState,

@@ -306,6 +306,18 @@ impl RepoSession {
         );
     }
 
+    /// Puts a tag on a commit. Lightweight, and never forced: an existing
+    /// name is git's to refuse (see [`crate::tag::create`]).
+    pub fn create_tag(self: &Arc<Self>, name: String, commit: String) {
+        self.write(
+            "tag",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                tag::create(&exec, &repo.workdir, &name, &commit, &cancel).await
+            },
+        );
+    }
+
     /// Renames a tag: a new name on the same object, then the old name
     /// dropped (git has no rename of its own — see [`crate::tag`]).
     pub fn rename_tag(self: &Arc<Self>, from: String, to: String) {

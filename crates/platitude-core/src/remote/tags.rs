@@ -40,6 +40,50 @@ pub async fn list_tags(
     Ok(parse_ls_remote_tags(&out.stdout))
 }
 
+/// Sends one tag to one remote.
+///
+/// `expect` turns the push into a leased overwrite pinned to the commit
+/// the remote was last seen holding this tag on — empty sends it plain,
+/// which git refuses outright where the name is already over there on
+/// something else.
+///
+/// **A refusal here is not the one a fetch answers.** A branch that is
+/// turned down for being behind is put right by fetching; a tag is not —
+/// `--prune` leaves the local tag where it is and `--prune-tags` exits 1
+/// (実測) — so this returns [`GitError::Failed`] whatever the refusal was
+/// and nothing is queued behind it. `git push` for branches is
+/// [`super::push::push`]; the two share no refspec, since a tag's is
+/// `refs/tags/` on both sides.
+pub async fn push_tag(
+    executor: &GitExecutor,
+    workdir: &Path,
+    remote: &str,
+    tag: &str,
+    expect: &str,
+    timeout: Duration,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let refspec = format!("refs/tags/{tag}:refs/tags/{tag}");
+    let mut cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["push", "--porcelain"])
+        .timeout(timeout);
+    if !expect.is_empty() {
+        cmd = cmd.arg(format!("--force-with-lease=refs/tags/{tag}:{expect}"));
+    }
+    cmd = cmd.args(["--", remote, &refspec]);
+    let command = cmd.describe();
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    if out.code == 0 {
+        return Ok(());
+    }
+    Err(GitError::Failed {
+        command,
+        code: out.code,
+        stderr: out.failure_message(),
+    })
+}
+
 /// One tag as a remote advertises it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteTag {

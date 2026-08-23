@@ -54,6 +54,32 @@ pub async fn rename(
     delete(executor, workdir, from, cancel).await
 }
 
+/// Puts `name` on `commit` — a lightweight tag, which is what `git tag`
+/// makes when nothing asks for more.
+///
+/// Never forced, for the reason [`rename`] is not: git refuses when the
+/// name is taken, and a release mark that moves without anybody saying so
+/// is the accident that refusal exists to stop.
+///
+/// `commit` is anything git resolves — the row's oid is what the menus
+/// hand over — and an empty one leaves the tag on HEAD, which is what git
+/// does with the argument left off.
+pub async fn create(
+    executor: &GitExecutor,
+    workdir: &Path,
+    name: &str,
+    commit: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let mut cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["tag", "--end-of-options", name]);
+    if !commit.is_empty() {
+        cmd = cmd.arg(commit);
+    }
+    executor.run(cmd, cancel).await.map(drop)
+}
+
 /// Deletes a tag. Only the name goes: whatever it marked is still in the
 /// repository, reachable or not.
 pub async fn delete(

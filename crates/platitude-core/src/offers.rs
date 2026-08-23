@@ -67,6 +67,13 @@ pub struct RefMenuOffers {
     /// The branch's remote reading, deleted without touching the local
     /// one — still possible in both of the refused cases above.
     pub delete_remote: bool,
+    /// The tag sent to the remote this repository pushes to. Only a tag:
+    /// a branch goes out through the toolbar, which is where the counts
+    /// that decide how hard it may push are (デザイン規約 §リモートへ送る),
+    /// and a remote-tracking ref is a reading of what is already there.
+    /// Nothing about the working tree stands in its way — a tag names a
+    /// commit, and where HEAD is has no bearing on sending it.
+    pub push_tag: bool,
     /// The row is the branch HEAD is on — what the delete rows' refusal
     /// names first.
     pub on_current_branch: bool,
@@ -74,8 +81,9 @@ pub struct RefMenuOffers {
 
 impl RefMenuOffers {
     /// The offers as packed words (`switch asks branch-here integrate
-    /// delete delete-remote current`), the shape `GitFacts.refMenuOffers`
-    /// answers with and the opening function decodes mechanically.
+    /// delete delete-remote push-tag current`), the shape
+    /// `GitFacts.refMenuOffers` answers with and the opening function
+    /// decodes mechanically.
     pub fn words(&self) -> String {
         let mut words: Vec<&str> = Vec::new();
         if self.switch_to {
@@ -96,6 +104,9 @@ impl RefMenuOffers {
         if self.delete_remote {
             words.push("delete-remote");
         }
+        if self.push_tag {
+            words.push("push-tag");
+        }
         if self.on_current_branch {
             words.push("current");
         }
@@ -111,8 +122,10 @@ impl RefMenuOffers {
 /// counts; `held_by_worktree` is the path of the other working copy
 /// holding the branch this row lands on, empty when none does;
 /// `remote_counterpart` is the remote reading a local branch also
-/// carries, empty where it has none. Per-row kind choices (a tag's row
-/// keeping rebase for the tag's own gestures) stay with the rows.
+/// carries, empty where it has none; `default_remote` is where this
+/// repository's pushes go, empty where it has no remote at all. Per-row
+/// kind choices (a tag's row keeping rebase for the tag's own gestures)
+/// stay with the rows.
 #[expect(clippy::too_many_arguments)]
 pub fn ref_menu(
     kind: RefKind,
@@ -126,6 +139,7 @@ pub fn ref_menu(
     conflict_count: i32,
     held_by_worktree: &str,
     remote_counterpart: &str,
+    default_remote: &str,
 ) -> RefMenuOffers {
     let branchy = matches!(kind, RefKind::Branch | RefKind::Remote);
     let busy = busy_count > 0;
@@ -145,6 +159,7 @@ pub fn ref_menu(
             && full != current_branch,
         delete: !busy && !(kind == RefKind::Branch && (full == current_branch || held)),
         delete_remote: !busy && !remote_counterpart.is_empty(),
+        push_tag: kind == RefKind::Tag && !busy && !default_remote.is_empty(),
         on_current_branch,
     }
 }

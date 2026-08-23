@@ -289,7 +289,20 @@ pub(super) fn build_snapshot(
         }
     }
     for (name, readings) in remote_tags.names() {
-        if joins.tag_commit.contains_key(name) {
+        if let Some(here) = joins.tag_commit.get(name).copied() {
+            // Held on both sides. The row is already listed; what is
+            // collected here is every remote that has the name somewhere
+            // else, which is what turns the menu's push row into a leased
+            // overwrite (`TagDrift`).
+            for reading in readings.iter().filter(|r| r.commit != here) {
+                snapshot
+                    .tag_drifts
+                    .extend(reading.remotes.iter().map(|carrier| TagDrift {
+                        name: name.into(),
+                        remote: carrier.remote.clone(),
+                        commit: reading.commit,
+                    }));
+            }
             continue;
         }
         // Remotes that disagree about a name still name one tag, and the
@@ -322,6 +335,12 @@ pub(super) fn build_snapshot(
     snapshot.locals.shrink_to_fit();
     snapshot.remotes.shrink_to_fit();
     snapshot.tags.shrink_to_fit();
+    // Looked up by name and remote when a menu opens over a tag, so it is
+    // sorted the once here rather than scanned every time.
+    snapshot
+        .tag_drifts
+        .sort_by(|a, b| a.name.cmp(&b.name).then(a.remote.cmp(&b.remote)));
+    snapshot.tag_drifts.shrink_to_fit();
     snapshot
 }
 

@@ -3,7 +3,9 @@ use super::*;
 /// The inputs of an idle, open repository standing on `main`, which the
 /// cases below bend one at a time.
 fn offers_on(kind: RefKind, full: &str) -> RefMenuOffers {
-    ref_menu(kind, full, "abc123", true, 0, "main", false, "", 0, "", "")
+    ref_menu(
+        kind, full, "abc123", true, 0, "main", false, "", 0, "", "", "origin",
+    )
 }
 
 #[test]
@@ -20,6 +22,7 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
         0,
         "",
         "origin/feat",
+        "origin",
     );
     assert_eq!(
         offers,
@@ -30,6 +33,8 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
             integrate_from: true,
             delete: true,
             delete_remote: true,
+            // A branch goes out through the toolbar, not this menu.
+            push_tag: false,
             on_current_branch: false,
         }
     );
@@ -63,6 +68,7 @@ fn a_branch_out_in_another_copy_keeps_switch_but_it_asks() {
         0,
         "C:/work/other",
         "",
+        "origin",
     );
     assert!(offers.switch_to, "the press goes through to the question");
     assert!(offers.switch_asks);
@@ -88,6 +94,7 @@ fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
         0,
         "C:/work/other",
         "",
+        "origin",
     );
     assert!(offers.delete);
     assert!(
@@ -110,6 +117,7 @@ fn a_standing_operation_asks_and_holds_back_new_history_but_not_deletes() {
         0,
         "",
         "",
+        "origin",
     );
     assert!(offers.switch_asks);
     assert!(!offers.branch_here);
@@ -131,6 +139,7 @@ fn conflicts_alone_make_the_move_ask() {
         2,
         "",
         "",
+        "origin",
     );
     assert!(offers.switch_asks);
     assert!(offers.branch_here, "conflicts gate moves, not new branches");
@@ -150,6 +159,7 @@ fn a_running_command_holds_back_every_write_but_not_the_switch() {
         0,
         "",
         "origin/feat",
+        "origin",
     );
     assert!(offers.switch_to);
     assert!(!offers.branch_here);
@@ -172,6 +182,7 @@ fn detached_or_unborn_has_no_branch_to_integrate_into() {
         0,
         "",
         "",
+        "origin",
     );
     assert!(!detached.integrate_from);
     assert!(detached.switch_to, "the way back out of detached");
@@ -187,6 +198,7 @@ fn detached_or_unborn_has_no_branch_to_integrate_into() {
         0,
         "",
         "",
+        "origin",
     );
     assert!(!unborn.integrate_from);
 }
@@ -197,6 +209,81 @@ fn a_tag_moves_nowhere_but_starts_branches_and_deletes() {
     assert!(!offers.switch_to);
     assert!(offers.branch_here);
     assert!(offers.delete);
+}
+
+/// The push row is the tag's alone, and it needs somewhere to send it.
+#[test]
+fn only_a_tag_is_pushed_from_this_menu_and_only_with_a_remote_to_send_it_to() {
+    assert!(offers_on(RefKind::Tag, "v1.0").push_tag);
+    for kind in [RefKind::Branch, RefKind::Remote, RefKind::Stash] {
+        assert!(
+            !ref_menu(
+                kind, "feat", "abc123", true, 0, "main", false, "", 0, "", "", "origin"
+            )
+            .push_tag,
+            "a branch goes out through the toolbar; a stash goes nowhere"
+        );
+    }
+    assert!(
+        !ref_menu(
+            RefKind::Tag,
+            "v1.0",
+            "abc123",
+            true,
+            0,
+            "main",
+            false,
+            "",
+            0,
+            "",
+            "",
+            "",
+        )
+        .push_tag,
+        "no remote is no destination"
+    );
+    assert!(
+        !ref_menu(
+            RefKind::Tag,
+            "v1.0",
+            "abc123",
+            true,
+            2,
+            "main",
+            false,
+            "",
+            0,
+            "",
+            "",
+            "origin",
+        )
+        .push_tag,
+        "another git command is still running"
+    );
+}
+
+/// Nothing about where the working tree is stops a tag going out: it
+/// names a commit, and a stopped operation or unmerged files have no
+/// bearing on sending that commit somewhere.
+#[test]
+fn a_stopped_operation_does_not_hold_a_tag_back() {
+    assert!(
+        ref_menu(
+            RefKind::Tag,
+            "v1.0",
+            "abc123",
+            true,
+            0,
+            "main",
+            false,
+            "REBASING",
+            3,
+            "",
+            "",
+            "origin",
+        )
+        .push_tag
+    );
 }
 
 #[test]

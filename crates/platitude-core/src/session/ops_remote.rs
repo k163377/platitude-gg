@@ -350,6 +350,48 @@ impl RepoSession {
         });
     }
 
+    /// Sends one tag to one remote. `expect` pins a leased overwrite to
+    /// the commit that remote was last seen holding the tag on; empty
+    /// sends it plain (see [`remote::push_tag`]).
+    ///
+    /// **The badge is re-read before this write is done.** What the
+    /// remotes carry under `refs/tags/` has no local record, so nothing
+    /// else would notice that this push changed it — the refresh that
+    /// follows reads `refs/`, and this tag was already there. Inside the
+    /// write for the same reason [`Self::fetch_and_read_tags`] is: the
+    /// press has already agreed to reach the network, which is what the
+    /// unasked catch-up may not do (core.md タグのリモート状態). Only the
+    /// remote that just moved is asked, and a push git refused moved
+    /// nothing, so a failure leaves the last answer standing.
+    ///
+    /// **Nothing is refreshed from in here.** `AfterWrite::Graph` reads
+    /// the refs once the closure returns, and a read asked for from
+    /// inside would be a second pass over every ref — the longest read
+    /// this application makes on a repository that has them.
+    pub fn push_tag(self: &Arc<Self>, remote_name: String, tag: String, expect: String) {
+        let timeout = self.network_timeout();
+        let s = Arc::clone(self);
+        self.write(
+            "push",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                remote::push_tag(
+                    &exec,
+                    &repo.workdir,
+                    &remote_name,
+                    &tag,
+                    &expect,
+                    timeout,
+                    &cancel,
+                )
+                .await?;
+                s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
+                    .await;
+                Ok(())
+            },
+        );
+    }
+
     /// `git push <remote> --delete <branch>`.
     pub fn delete_remote_branch(self: &Arc<Self>, remote_name: String, branch_name: String) {
         let timeout = self.network_timeout();

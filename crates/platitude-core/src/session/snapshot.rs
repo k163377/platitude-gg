@@ -9,6 +9,12 @@ pub struct RefsSnapshot {
     pub locals: Vec<BranchItem>,
     pub remotes: Vec<BranchItem>,
     pub tags: Vec<TagItem>,
+    /// Tags this repository holds that a remote carries on some other
+    /// commit. A run of its own rather than a field on every
+    /// [`TagItem`]: a name standing on two commits is rare, and 45,901
+    /// tags would each pay for the field (CLAUDE.md 性能予算 — refs の
+    /// 本数に比例させない).
+    pub tag_drifts: Vec<TagDrift>,
     pub head: Option<HeadState>,
     /// Names of the configured remotes, sorted. A branch with no upstream
     /// has to be told where to go, and this is the list to offer.
@@ -70,4 +76,20 @@ pub struct TagItem {
     /// remote has — the sidebar is where it can be read at all, since no
     /// local ref puts it on a graph row.
     pub here: bool,
+}
+
+/// One remote holding one tag on a commit this repository does not have
+/// it on.
+///
+/// What the menu's push row is decided by: a plain push to a name the
+/// remote already has elsewhere is refused outright, so that row comes up
+/// as the leased overwrite instead — and [`Self::commit`] is the commit
+/// the lease is pinned to, which is the one the reader was being shown
+/// (デザイン規約 §相手の履歴を置き換える).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TagDrift {
+    pub name: crate::Name,
+    pub remote: crate::Name,
+    /// Where that remote has it, peeled the same way the local reading is.
+    pub commit: Oid,
 }

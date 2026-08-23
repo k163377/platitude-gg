@@ -117,6 +117,88 @@ async fn a_remote_is_read_at_the_commits_its_tags_peel_to() {
     );
 }
 
+/// The two forms of the menu's push row, against the remote they are
+/// about. **A plain push cannot move a name the remote already has
+/// somewhere else** — git refuses it outright — which is the whole reason
+/// the drifted row comes up as the leased overwrite instead
+/// (デザイン規約 §相手の履歴を置き換える).
+#[tokio::test]
+async fn a_tag_the_remote_has_not_got_goes_plainly_and_a_drifted_one_needs_the_lease() {
+    let (_bare, mut work, root, head) = tag_scenario();
+    let exec = crate::support::exec::isolated();
+    let cancel = CancellationToken::new();
+    let path = work.path.clone();
+
+    remote::push_tag(&exec, &path, "origin", "v-local", "", NET, &cancel)
+        .await
+        .expect("a name the remote has not got needs nothing");
+    assert_eq!(
+        at_origin(&mut work, "v-local"),
+        head,
+        "it is over there now"
+    );
+
+    let refused = remote::push_tag(&exec, &path, "origin", "v-drift", "", NET, &cancel).await;
+    assert!(
+        refused.is_err(),
+        "a plain push will not move a tag the remote has elsewhere"
+    );
+    assert_eq!(
+        at_origin(&mut work, "v-drift"),
+        root,
+        "and nothing over there moved"
+    );
+
+    remote::push_tag(&exec, &path, "origin", "v-drift", &root, NET, &cancel)
+        .await
+        .expect("the lease names the commit the remote is actually on");
+    assert_eq!(
+        at_origin(&mut work, "v-drift"),
+        head,
+        "the name follows this repository"
+    );
+}
+
+/// What the remote holds one tag on, straight from the remote.
+fn at_origin(work: &mut TestRepo, name: &str) -> String {
+    let out = work.git(&["ls-remote", "origin", &format!("refs/tags/{name}")]);
+    out.split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// The lease is what makes the hold safe to offer without a dialog: it is
+/// pinned to the commit the reader was being shown, so a remote that has
+/// moved since is refused rather than flattened.
+#[tokio::test]
+async fn a_lease_pinned_to_a_commit_the_remote_has_left_is_refused() {
+    let (_bare, mut work, root, _head) = tag_scenario();
+    let exec = crate::support::exec::isolated();
+    let cancel = CancellationToken::new();
+    let path = work.path.clone();
+
+    // Somebody else moves it while the menu stands, and to a third commit
+    // — not to where this repository has it, which would leave the push
+    // with nothing to send and exit 0 on those grounds instead.
+    let third = work.commit_file("c.txt", "three\n", "third");
+    work.git(&[
+        "push",
+        "--force",
+        "origin",
+        &format!("{third}:refs/tags/v-drift"),
+    ]);
+
+    let refused = remote::push_tag(&exec, &path, "origin", "v-drift", &root, NET, &cancel).await;
+
+    assert!(refused.is_err(), "the lease is stale, so git turns it down");
+    assert_eq!(
+        at_origin(&mut work, "v-drift"),
+        third,
+        "and what the other push left is still there"
+    );
+}
+
 // --- through the session ------------------------------------------------
 
 /// The refs snapshot published after the fetch landed. Opening
@@ -447,4 +529,39 @@ async fn a_drifted_tag_puts_its_name_on_both_rows() {
         Some(())
     })
     .await;
+}
+
+/// The same disagreement, in the form the menu reads it: which remote,
+/// and the commit the lease has to be pinned to. Off its own run rather
+/// than off the rows — the sidebar lists a name that is here once, so a
+/// drift leaves no row of its own to read it from.
+#[tokio::test]
+async fn a_drift_is_listed_by_remote_with_the_commit_a_lease_would_name() {
+    let (_bare, work, root, _head) = tag_scenario();
+    let (sink, session) = opened(&work).await;
+    session.fetch(Some("origin".into()));
+    let snapshot = snapshot_after_the_fetch(&sink).await;
+
+    let drifts: Vec<(&str, &str, String)> = snapshot
+        .tag_drifts
+        .iter()
+        .map(|d| (d.name.as_str(), d.remote.as_str(), d.commit.to_hex()))
+        .collect();
+    assert_eq!(
+        drifts,
+        vec![("v-drift", "origin", root.clone())],
+        "only the name the two sides disagree about, and only where the \
+         remote actually has it"
+    );
+    assert!(
+        snapshot.tags.iter().any(|t| t.short == "v-drift" && t.here),
+        "the drifted tag still gets the one row it has always had"
+    );
+    assert!(
+        !snapshot
+            .tags
+            .iter()
+            .any(|t| t.short == "v-local" && !t.here),
+        "a name only this repository has is nobody's drift"
+    );
 }
