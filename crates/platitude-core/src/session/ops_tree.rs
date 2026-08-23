@@ -78,41 +78,6 @@ impl RepoSession {
         );
     }
 
-    /// Throws away unstaged modifications of tracked files.
-    pub fn discard_paths(self: &Arc<Self>, paths: Vec<String>) {
-        self.write(
-            "discard",
-            AfterWrite::Tree,
-            move |exec, repo, cancel| async move {
-                stage::discard_worktree(&exec, &repo.workdir, &paths, &cancel).await
-            },
-        );
-    }
-
-    /// Throws away both sides of a path at once, back to HEAD: what is
-    /// staged and what is on disk. A rename must be given both of its
-    /// names (see [`stage::discard_to_head`]).
-    pub fn discard_paths_to_head(self: &Arc<Self>, paths: Vec<String>) {
-        self.write(
-            "discard",
-            AfterWrite::Tree,
-            move |exec, repo, cancel| async move {
-                stage::discard_to_head(&exec, &repo.workdir, &paths, &cancel).await
-            },
-        );
-    }
-
-    /// Deletes untracked files.
-    pub fn remove_untracked(self: &Arc<Self>, paths: Vec<String>) {
-        self.write(
-            "clean",
-            AfterWrite::Tree,
-            move |exec, repo, cancel| async move {
-                stage::remove_untracked(&exec, &repo.workdir, &paths, &cancel).await
-            },
-        );
-    }
-
     /// Discards a chosen set of rows as one queued write: unstaged edits,
     /// untracked files and staged changes each go by their own command,
     /// and a staged rename takes the name it came from with it — read
