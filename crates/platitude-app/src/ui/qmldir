@@ -28,6 +28,7 @@ CloseToolButton 1.0 CloseToolButton.qml
 BandFetchButton 1.0 BandFetchButton.qml
 BandPushButton 1.0 BandPushButton.qml
 BandRule 1.0 BandRule.qml
+BandStashButton 1.0 BandStashButton.qml
 BandStateCard 1.0 BandStateCard.qml
 BandStateGroup 1.0 BandStateGroup.qml
 CoAuthorCard 1.0 CoAuthorCard.qml
