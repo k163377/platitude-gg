@@ -26,15 +26,9 @@ Item {
     required property int depth
     required property bool folder
     required property bool eol_mark
-    /// The pointed row's line-ending words, handed down by the pane — the section model keeps one copy rather than
-    /// every row keeping its own.
+    /// The pointed row's path, handed down by the pane — the model keeps the line-ending words once rather than on
+    /// every row, and a row checks the answer is its own before reading them (`eolPointedAt`).
     property string pointedEolPath: ""
-    property string pointedEolKind: ""
-    property string pointedEolFrom: ""
-    property string pointedEolTo: ""
-    property int pointedEolLines: 0
-    property string pointedEolScope: ""
-    property string pointedEolExt: ""
     /// The pointer arrived at, or left, a row carrying the mark.
     signal eolPointed(string path, bool on)
     /// Stands in for the pointer where headless cannot put one, so a cut-down row's tooltip can be photographed

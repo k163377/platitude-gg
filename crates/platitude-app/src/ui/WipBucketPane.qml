@@ -78,12 +78,6 @@ ColumnLayout {
             pointedTipRow: bucketPane.tipRow
             menuStanding: bucketPane.pane.menuStanding
             pointedEolPath: bucketPane.pane.pointedEolPath
-            pointedEolKind: bucketPane.pane.pointedEolKind
-            pointedEolFrom: bucketPane.pane.pointedEolFrom
-            pointedEolTo: bucketPane.pane.pointedEolTo
-            pointedEolLines: bucketPane.pane.pointedEolLines
-            pointedEolScope: bucketPane.pane.pointedEolScope
-            pointedEolExt: bucketPane.pane.pointedEolExt
             onEolPointed: (path, on) => bucketPane.pane.pointEol(on ? path : "")
             onFileClicked: (bucket, path, origPath, modifiers) => {
                 // Choosing rows is not reading one: only a plain click moves the diff. Either way the press landed in
