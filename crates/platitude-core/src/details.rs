@@ -230,6 +230,15 @@ pub async fn file_diff_with_fingerprint(
 /// Stable fingerprint of a raw diff. Drift detection, not cryptography:
 /// two runs of the same command over an unchanged file produce the same
 /// bytes, and any edit in between changes them.
+///
+/// Stable *within one run*: `DefaultHasher`'s algorithm is not promised
+/// across std releases, which is enough here because every value is
+/// compared against one the same binary made. Persisting a fingerprint, or
+/// comparing across processes, needs a digest that promises more — and
+/// that change stops at this function. The crate's other staleness hashes
+/// stay their own on purpose, the nearest being
+/// [`crate::highlight::LexCache`]'s source hash, which can never be asked
+/// to outlive the run it was made in (rules-refs/core.md).
 pub fn fingerprint(raw: &[u8]) -> u64 {
     use std::hash::{DefaultHasher, Hash, Hasher};
     let mut hasher = DefaultHasher::new();

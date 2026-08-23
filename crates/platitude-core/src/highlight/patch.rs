@@ -137,6 +137,17 @@ pub fn colors_cached(
     (colors, Some(store))
 }
 
+/// Whether a [`LexCache`] was walked down this same text.
+///
+/// **Deliberately not [`crate::details::fingerprint`]** (rules-refs/core.md
+/// holds the decision). That one hashes the bytes of a `git diff`, goes out
+/// to the pane as hex and comes back attached to a hunk selection, so a
+/// wrong "unchanged" there lets a partial write land on bytes that moved.
+/// This one hashes the file's text, never leaves the struct
+/// (`LexCache::source` is private and the type is neither `Clone` nor
+/// serialisable), and both sides of every comparison are made by the same
+/// binary in the same run — so a wrong answer costs a repaint, and
+/// `DefaultHasher`'s freedom to change between std releases cannot reach it.
 fn source_hash(text: &str) -> u64 {
     let mut hasher = std::hash::DefaultHasher::new();
     text.hash(&mut hasher);
