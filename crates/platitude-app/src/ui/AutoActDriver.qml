@@ -162,6 +162,7 @@ Item {
                 "eol-commit", "eol-hover", "commit-face",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "conflict-sides", "diff-tick", "line-tools", "hunk-tools",
+                "preview", "preview-unstaged", "preview-staged",
                 // The write barrier is behind these, not in front of them: five land on the working tree's own
                 // row, which the graph pass after the write is what puts there, and the last has to read the
                 // commit it just made.
@@ -552,9 +553,10 @@ Item {
         function ready() {
             // "diff-file" alone reads the model instead of a row, and "conflict-sides" reads every row there is — the
             // one it is about (a side's own line, once it has been typed over) is a removal, which is not a changed
-            // line of the first hunk.
-            if (AppBackend.autoAct === "diff-file" || AppBackend.autoAct === "conflict-sides"
-                || AppBackend.autoAct === "diff-tick")
+            // line of the first hunk. The previews take the settled form too: what they open can be all picture or
+            // binary notice and no rows, and no row of it is theirs to name.
+            if (["diff-file", "conflict-sides", "diff-tick",
+                 "preview", "preview-unstaged", "preview-staged"].indexOf(AppBackend.autoAct) >= 0)
                 return diffPane.diffSettled()
             return diffPane.firstChangedLine(0) >= 0
         }
@@ -603,6 +605,15 @@ Item {
                 AppBackend.report("diff_tick asked=" + asked
                                   + " loading=" + diffPane.diffModel.loading
                                   + " rows=" + diffPane.view.count)
+                driver.complete()
+                return
+            }
+            // A preview's settled form — rows, a picture, or a binary notice — is the shot; `kind=` is said because
+            // the picture cannot say it (a pane the read never reached photographs as the same black under the same
+            // DIFF header).
+            if (act === "preview" || act === "preview-unstaged" || act === "preview-staged") {
+                AppBackend.report("preview_pane kind=" + diffPane.diffModel.previewKind
+                                  + " binary=" + diffPane.diffModel.isBinary)
                 driver.complete()
                 return
             }
@@ -4007,12 +4018,18 @@ Item {
             // steps are one verb.
             repoTab.fetch("")
             fetchedRefListTimer.start()
-        } else if (act === "preview") {
-            page.toggleDiff("untracked", arg, "")
-        } else if (act === "preview-unstaged") {
-            page.toggleDiff("unstaged", arg, "")
-        } else if (act === "preview-staged") {
-            page.toggleDiff("staged", arg, "")
+        } else if (act === "preview" || act === "preview-unstaged" || act === "preview-staged") {
+            // The toggle only asks; the read is a git subprocess away, so completion is the pane settling
+            // (`stageRowTimer`), not the ask. No path is a run with nothing to open: said and stopped on the rendered
+            // surface, rather than holding a wait no read will answer — the wanted line is what fails it.
+            if (arg === "") {
+                AppBackend.report("diff_arg act=" + act + " named=false")
+                renderedBarrier.begin()
+            } else {
+                page.toggleDiff(act === "preview" ? "untracked"
+                                : act === "preview-unstaged" ? "unstaged" : "staged", arg, "")
+                stageRowTimer.begin()
+            }
         } else if (act === "open-picker") {
             page.openRepositoryPicker()
         } else if (act === "settings" || act === "settings-tools"

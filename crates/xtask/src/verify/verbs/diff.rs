@@ -72,6 +72,29 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "diff_row act=diff-file ready=true",
     },
+    // The three buckets a file can be previewed from. `ready=` is the
+    // pane's settled form arriving — the toggle only asks, the read is
+    // a git subprocess away, and a pane the answer never reached
+    // photographs as a black pane under a DIFF header, which
+    // `screenshot saved=true` is perfectly happy with (2026-08-23 実測:
+    // with the toggle as the completion, every run shot the header
+    // alone). A run fired with no path never opens anything and says
+    // `diff_arg named=false` instead, so it fails here too.
+    Verb {
+        name: "preview",
+        when: &[],
+        plain: "diff_row act=preview ready=true",
+    },
+    Verb {
+        name: "preview-unstaged",
+        when: &[],
+        plain: "diff_row act=preview-unstaged ready=true",
+    },
+    Verb {
+        name: "preview-staged",
+        when: &[],
+        plain: "diff_row act=preview-staged ready=true",
+    },
     // Both sides have to be named on some row, and on a file that has
     // been typed over both of them are removals — the half that used
     // to be dropped, which left the legend explaining a distinction
