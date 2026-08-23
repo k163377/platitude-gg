@@ -192,8 +192,12 @@ impl DiffColors {
             .unwrap_or(&NOTHING)
     }
 
-    /// Whether nothing in this diff was read — the pane then draws its
-    /// rows uncoloured.
+    /// Whether nothing anywhere in this diff was read. A question about
+    /// the whole diff, which is not how a pane draws one: rows are
+    /// coloured one at a time from [`Self::line`]'s spans, so nobody has
+    /// to ask this to know what to do with a row. It answers for a
+    /// colouring as a whole instead — tests, and any caller outside this
+    /// crate wanting to know whether the set found anything at all.
     pub fn is_empty(&self) -> bool {
         self.patches
             .iter()
