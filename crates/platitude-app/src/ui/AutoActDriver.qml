@@ -4181,7 +4181,7 @@ Item {
             // A real refusal in git's own words, raising the panel by itself. The clearing verb starts from the same
             // failure (`Main` waits for it, presses Clear, and reads the band); the shutting one takes the panel back
             // down with the `>_` instead, which leaves the error line standing and the mark red.
-            if (arg === "fold")
+            if (act === "commands-fail-shut" && arg === "fold")
                 page.foldByHand(true)
             repoTab.checkoutBranch("pg-no-such-branch", false)
             if (act === "commands-fail-shut")

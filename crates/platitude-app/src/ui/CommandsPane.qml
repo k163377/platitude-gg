@@ -36,8 +36,19 @@ Rectangle {
     readonly property alias markColor: seat.markColor
 
     // The panel opens on its newest row, wherever it was raised from — the row that has just been added is the one
-    // somebody came here to read.
+    // somebody came here to read. The page raises it; where it is looking when it comes up is this panel's own answer.
     onVisibleChanged: if (pane.visible) pane.showLatest()
+    // …and a failure that arrives with the panel already up puts it back at the end as well, over a reader who had
+    // scrolled away from it. The rows follow on their own while nobody has (`list.follow`), so this is only about the
+    // reader who has: a failure is the one row worth taking them back to, which is the same call the page makes when
+    // it raises the panel for one.
+    Connections {
+        target: pane.commandsModel
+        function onFailure() {
+            if (pane.visible)
+                pane.showLatest()
+        }
+    }
 
     /// Puts the newest row back in view — what the panel opens on.
     function showLatest() {
@@ -68,10 +79,10 @@ Rectangle {
             implicitHeight: Theme.headerHeight
             color: Theme.bgElevated
             BandRule { z: 1 }
+            // No inset of its own at the near end — the seat carries the pane's, so the mark and the name stand in the
+            // columns they stood in at the foot of the list (2026-08-23 ユーザー指示).
             RowLayout {
                 anchors.fill: parent
-                // No inset of its own at this end: the seat carries the pane's, so the mark and the name stand in the
-                // columns they stood in at the foot of the list (2026-08-23 ユーザー指示).
                 anchors.rightMargin: Theme.spaceMd
                 // The sections' own step, now that this band opens with one of their rows: at `spaceSm` the count sat
                 // twice as far from the name here as `(2)` does from `BRANCHES` (2026-08-23 ユーザー指示).

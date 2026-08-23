@@ -4,21 +4,21 @@ import platitude.ui
 
 // The seat that opens the git commands this tab ran, at the foot of the left menu (デザイン規約 §git が言ったことを読む場所).
 //
-// It wears whatever the pane it stands in wears: a band with the mark and the name in the sections' own columns while
-// the list is open, a cell of the rail's own reach while the list is folded, and — once the panel is up — the left end
-// of the panel's header band, where the mark stands beside the name that band was already carrying. Three shapes, one
-// control, so the mark says the same thing in the same words wherever the pane put it.
+// It wears whatever the pane it stands in wears: one of the sections' own bands while the list is open, the fold
+// control's own block at the other end of the rail while the list is folded, and the left end of the log's header band
+// once the panel is up — where that band is this same row, run the width of the window. One control, so the mark says
+// the same thing in the same words wherever the pane put it.
 //
-// It answers the pointer with the wash the rows, headers and rail cells beside it answer with, and nothing else: no
-// ground of its own, no corner, no frame. What is left to say the state is the mark itself (デザイン規約 §git が言った
-// ことを読む場所 — 通常 / 実行中 / 直近が失敗 / 開いている間).
+// It takes the ground those three seats are on (`bgElevated`) and answers the pointer with the wash they answer with,
+// and nothing else: no corner, no frame, no fill of its own for being open. What says the state is the mark
+// (デザイン規約 §git が言ったことを読む場所 — 通常 / 実行中 / 直近が失敗 / 開いている間).
 Rectangle {
     id: toggle
 
     /// The RepoPage this seat belongs to (null while no tab is open).
     property var curPage: null
-    /// Whether the seat carries the log's name beside the mark. False in the two seats where a name would be said
-    /// twice or not fit: the folded rail (where no section carries one either) and the panel's own band.
+    /// Whether the seat carries the log's name beside the mark. False in the one seat with no room for it — the folded
+    /// rail, where no section carries a name either.
     property bool captioned: false
     /// Whether the seat closes itself off from what stands above it — the hairline the rail's own head block draws
     /// under itself. False in the panel's band, where the seat is part of that band rather than under it.
@@ -53,9 +53,9 @@ Rectangle {
     // band's own step away, the way a section's count sits from its caption.
     implicitWidth: toggle.captioned ? toggle.captionX + commandsName.implicitWidth : Theme.railWidth
     implicitHeight: toggle.captioned ? Theme.rowHeight : Theme.headerHeight
-    // A band's ground, which is what both the seats it stands in are: the sections' headers and the fold control's
-    // block are `bgElevated`, and this row is read against them (2026-08-23 ユーザー指示). In the panel's own band it
-    // repaints the value that band already carries, so the row reads the same there without a case for it.
+    // A band's ground, which is what all three of its seats stand on: the sections' headers, the fold control's block
+    // and the log's own band are `bgElevated`, and this row is read against them (2026-08-23 ユーザー指示). In the
+    // log's band it repaints the value that band already carries, so the row reads the same there with no case for it.
     color: Theme.bgElevated
     // The wash goes over that ground rather than instead of it — `bgHover` is a white at 8% and has nothing of its own
     // to sit on (`NavHeader` layers the same two).
@@ -76,7 +76,7 @@ Rectangle {
         id: commandsMark
         kind: "terminal"
         // In the sections' mark column when the name is beside it; in the middle of the rail's width when it stands
-        // alone, which is where every cell and block up that column puts its own.
+        // alone, which is where the fold control and every cell between them put theirs.
         width: toggle.markSize
         height: toggle.markSize
         x: toggle.captioned ? toggle.markX + (Theme.iconMd - toggle.markSize) / 2

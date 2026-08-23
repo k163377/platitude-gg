@@ -17,10 +17,11 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The panel taken down without being emptied, which is the only
     // way the mark's red is on screen with nothing standing over it.
-    // A run whose refusal never landed comes to rest looking exactly
-    // like one where it did and the press missed: both are a window
-    // with no panel in it. `wrong=true` is the half the picture holds
-    // in 12 pixels, `open=false` the half it cannot hold at all.
+    // The picture does hold the red — the row goes red with the mark —
+    // but only a reader can see that, and this is the judgement: a run
+    // whose refusal never landed ends on the same resting row, and one
+    // that landed it and never pressed ends with the panel still up.
+    // The two halves are named so neither can pass as the other.
     Verb {
         name: "commands-fail-shut",
         when: &[],

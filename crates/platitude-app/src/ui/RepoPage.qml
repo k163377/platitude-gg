@@ -1247,7 +1247,7 @@ Item {
     }
     /// One mark for a failed command and for this tab's error line both. The page's rule, since the mark moves seats.
     readonly property bool commandsWrong: commandsModel.failed || repoTab.lastError !== ""
-    /// Automation: the colour the `>_` painted, from whichever of its seats is standing (`PG_AUTO_ACT=commands-clear`).
+    /// Automation: the colour the `>_` painted — the log's own band while it is up, the pane's foot while it is down.
     readonly property color commandsMarkColor: page.commandsOpen ? commandsPane.markColor : sidebarPane.commandsMarkColor
     /// What the panel is doing rather than what was asked of it — automation reads this one, so a cut binding fails.
     readonly property bool commandsShown: commandsPane.visible

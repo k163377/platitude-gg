@@ -587,7 +587,7 @@ Item {
 
     // Smoke hooks (PG_AUTO_ACT=open-fail-tab / -bare / -log): the road that keeps its tab. Nothing checks the folder
     // first there, so the page itself is what says so (`kind=` reports which). The `-log` half goes on to open the
-    // command log the way the toolbar's `>_` does.
+    // command log the way the `>_` at the foot of that screen does.
     SampleTimer {
         id: failTabActTimer
         running: AppBackend.autoAct === "open-fail-tab"

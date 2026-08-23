@@ -21,10 +21,10 @@ Rectangle {
     /// Folded down to the rail. Held by the page: what folds it is going
     /// to include opening a diff, and that is the page's to know.
     required property bool collapsed
-    /// The page whose command log the block at the foot of this pane
-    /// opens (`CommandsToggle`). Null while no tab is open — and the
-    /// whole seat goes once the log is up, since from then on the block
-    /// stands at the head of the panel's own strip (`CommandsBand`).
+    /// The page whose command log the row at the foot of this pane opens
+    /// (`CommandsToggle`). Null while no tab is open — and the whole row
+    /// goes once the log is up, since from then on it is the log's own
+    /// header band (`CommandsPane`).
     property var commandsPage: null
 
     signal refActivated(string oidHex)
@@ -268,11 +268,11 @@ Rectangle {
     }
 
     // ---- the log's seat ----------------------------------------------
-    // The foot of the pane: a band in the sections' own columns while the
-    // list is open, a cell of the rail's own reach while it is folded, and
-    // gone once the panel is up — from then on the mark stands at the head
-    // of the strip the panel left of this pane (デザイン規約 §git が言った
-    // ことを読む場所).
+    // The foot of the pane: one of the sections' own bands while the list
+    // is open, the fold control's own block at the other end of the rail
+    // while it is folded, and gone once the panel is up — from then on
+    // this row is the log's own header band, run the width of the window
+    // (デザイン規約 §git が言ったことを読む場所).
     CommandsToggle {
         id: commandsSeat
         anchors.left: parent.left
