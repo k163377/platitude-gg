@@ -20,6 +20,9 @@ Item {
     /// addresses a diff.
     readonly property string origNameText: model.orig_name ?? ""
     readonly property bool isFolder: (model.folder ?? false) === true
+    /// A shut folder row. This list keeps the answer in a field of its own, where the sidebar's packs it into the
+    /// change code (`NameCell.folded`).
+    readonly property bool isFolded: (model.collapsed ?? false) === true
     /// The path the middle pane is reading, handed down by the pane — one copy there rather than one per row. A folder
     /// is never it: a folder has no diff, and its own path is the fold key.
     property string readPath: ""
@@ -30,6 +33,9 @@ Item {
     /// That name while the row is painted as the one being read, empty otherwise — what a headless run reads off the
     /// list. The rectangle's own `visible`, since reading the condition back would go green with the rectangle unwired.
     readonly property string litKey: selectedBox.visible ? fileRow.walkKey : ""
+    /// The turn this row's fold arrow is drawn at, -1 on a file row — what a headless run reads instead of the flag
+    /// behind it, since reading the flag back would go green with the arrow unwired (`NameCell.foldTurn`).
+    readonly property real foldTurn: nameCell.foldTurn
 
     /// Stands in for the pointer where headless cannot put one, so a cut-down row's tooltip can be photographed
     /// (PG_AUTO_ACT=path-tip). -1 points at no row.
@@ -66,12 +72,14 @@ Item {
     // between its two names. The whole of this row is that part; what a click means is the only thing it keeps to
     // itself.
     NameCell {
+        id: nameCell
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceXs + (fileRow.model.depth ?? 0) * Theme.spaceMd
         // Not padding: the gutter the list's own scroll bar is drawn in. At the pane's own inset the thumb takes the
         // last glyph of an elided name (measured: the thumb ends 2px inside the list's right edge and reaches 8 in).
         anchors.rightMargin: Theme.spaceSm
         folder: fileRow.isFolder
+        folded: fileRow.isFolded
         change: fileRow.changeText
         name: fileRow.nameText
         origPath: fileRow.origNameText

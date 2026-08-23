@@ -15,9 +15,14 @@ RowLayout {
     /// A directory row: the seat holds a fold arrow instead of a change mark, and the name speaks in the quieter colour
     /// — it is the shape of the names under it rather than a name git knows.
     property bool folder: false
-    /// The change code git reports for the file (`M`, `??`, `UU`, …). A folder row has none, so it keeps its fold state
-    /// in the same field (`models::nav::FOLDED`) and this reads it back.
+    /// The change code git reports for the file (`M`, `??`, `UU`, …). A folder row has none, and the sidebar's rows
+    /// keep their fold state in this same field to spare a `NavItem` a second one (`models::nav::FOLDED`).
     property string change: ""
+    /// Whether a folder row is shut — which way its arrow points. **Asked as its own question**, because the two lists
+    /// do not keep the answer in the same place: the sidebar packs it into `change` (above), a commit's changed files
+    /// have a field of their own (`models::details::FileItem.collapsed`). Reading only the sidebar's is what left the
+    /// commit list's arrow lying open in both states.
+    property bool folded: false
     /// Whether a change mark belongs in the seat at all — a ref row has no change to report. **The seat is held open
     /// either way**: letting it collapse is what put a leaf's name to the *left* of the folder it sits under (layouts
     /// drop invisible children entirely), and at a given depth every name has to begin in the same column.
@@ -44,6 +49,10 @@ RowLayout {
     /// (`NavItemDelegate`'s rename) must not walk the row's other columns sideways. The owner takes the slack back the
     /// same way it gives it — `Layout.fillWidth` follows this.
     property bool showName: true
+    /// Automation: the turn the fold arrow is drawn at, -1 on a row that has none. Read off the icon rather than off
+    /// the condition behind it, so a run cannot go green with the arrow unwired (verify-ui — the same reading as
+    /// `FileRowDelegate.litKey`).
+    readonly property real foldTurn: foldArrow.visible ? foldArrow.rotation : -1
 
     spacing: Theme.spaceXs
 
@@ -53,12 +62,13 @@ RowLayout {
         Layout.preferredHeight: Theme.iconMd
         Layout.alignment: Qt.AlignVCenter
         NavIcon {
+            id: foldArrow
             anchors.centerIn: parent
             visible: nameCell.folder
             width: Theme.iconSm
             height: Theme.iconSm
             kind: "chevron"
-            rotation: nameCell.change === "FOLDED" ? 0 : 90
+            rotation: nameCell.folded ? 0 : 90
             tint: Theme.textSecondary
         }
         ChangeIcon {

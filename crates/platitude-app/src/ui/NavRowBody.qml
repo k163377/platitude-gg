@@ -31,6 +31,8 @@ RowLayout {
         showName: !body.row.editing
         folder: body.row.folder
         change: body.row.change
+        // A sidebar folder keeps its fold state in the change slot it has no change code for (`models::nav::item`).
+        folded: body.row.change === "FOLDED"
         showChange: body.row.kindHint === "wt"
         // A worktree row has no change code, so the seat carries the state of the checkout instead — the same
         // shared slot a folder keeps its fold state in (`models::nav::item`). A lock is somebody's choice and
