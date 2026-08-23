@@ -12,6 +12,3 @@ name = "Ada Lovelace"
 [defaults]
 auto_fetch_minutes = 5
 network_timeout_secs = 300
-
-[repo."C:/Users/me/huge-repo"]
-auto_fetch_minutes = 0

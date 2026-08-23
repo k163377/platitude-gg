@@ -156,7 +156,7 @@ impl Hub {
         // (`Feed::clear_queued`).
         tab.feeds.clear_queued_all();
         let feeds = Arc::clone(&tab.feeds);
-        let applied = self.settings.for_repo(&path.to_string_lossy());
+        let applied = self.settings.defaults.clone();
         let sink = Arc::new(BridgeSink { feeds });
         let session = RepoSession::open(executor, handle, path, sink);
         apply_repo_settings(&session, &applied);
@@ -180,17 +180,15 @@ impl Hub {
         );
     }
 
-    /// Puts the settings in force on every open tab. A repository with a
-    /// setting of its own keeps it.
+    /// Puts the settings in force on every open tab. One set of values, so
+    /// every tab is left saying the same thing about the network as the
+    /// settings screen does.
     pub(super) fn reapply_settings(&self) {
         for tab in self.tabs.values() {
             let Some(session) = &tab.session else {
                 continue;
             };
-            apply_repo_settings(
-                session,
-                &self.settings.for_repo(&tab.path.to_string_lossy()),
-            );
+            apply_repo_settings(session, &self.settings.defaults);
         }
     }
 
@@ -323,13 +321,10 @@ fn minutes_to_interval(minutes: u32) -> Option<std::time::Duration> {
     (minutes > 0).then(|| std::time::Duration::from_secs(u64::from(minutes) * 60))
 }
 
-/// Puts one repository's settings in force on its session. Every value the
-/// settings file holds passes through here, so a key that is written but
-/// never applied cannot go unnoticed.
-fn apply_repo_settings(
-    session: &Arc<RepoSession>,
-    applied: &platitude_core::settings::RepoSettings,
-) {
+/// Puts the settings in force on one session. Every value the settings file
+/// holds passes through here, so a key that is written but never applied
+/// cannot go unnoticed.
+fn apply_repo_settings(session: &Arc<RepoSession>, applied: &platitude_core::settings::Defaults) {
     session.set_auto_fetch(minutes_to_interval(applied.auto_fetch_minutes));
     session.set_network_timeout(std::time::Duration::from_secs(applied.network_timeout_secs));
 }

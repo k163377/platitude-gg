@@ -117,10 +117,25 @@ pub const AUTO_FETCH_OP: &str = "auto-fetch";
 /// (デザイン規約 §リモートから取り込む).
 pub const OPEN_FETCH_OP: &str = "open-fetch";
 
-/// Longest auto-fetch interval the UI offers, in minutes.
+/// Longest auto-fetch interval there is, in minutes: past an hour the
+/// automatic fetch has no point left. The settings input offers up to
+/// this, and [`auto_fetch_minutes`] is what everything else goes through.
 pub const AUTO_FETCH_MAX_MINUTES: u32 = 60;
 
 pub const AUTO_FETCH_DEFAULT_MINUTES: u32 = 1;
+
+/// The interval that will actually run, for a number a person asked for.
+/// Zero is off; past the ceiling, the ceiling is what a larger number
+/// means — nearer to what was asked for than the default is.
+///
+/// The one place the ceiling is applied. A number typed into the settings
+/// screen and a number written into `settings.toml` by hand reach the same
+/// field, so anything either door decides on its own is a difference
+/// nothing on screen would show.
+#[must_use]
+pub fn auto_fetch_minutes(minutes: u32) -> u32 {
+    minutes.min(AUTO_FETCH_MAX_MINUTES)
+}
 
 /// Default cap on the graph window (GitKraken-like initial view). Bounds
 /// memory and stream time on 100k+ commit repositories; the UI shows a

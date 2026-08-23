@@ -183,9 +183,7 @@ mod tests {
     use toml::{Table, Value};
 
     use crate::settings::testkit::dir_store;
-    use crate::settings::{
-        Claim, LayoutState, RepoOverride, RepoSettings, Sections, TabsState, WindowState, repo_key,
-    };
+    use crate::settings::{Claim, Defaults, LayoutState, Sections, TabsState, WindowState};
     #[test]
     fn round_trips_everything() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -194,11 +192,6 @@ mod tests {
         let mut settings = Settings::default();
         settings.defaults.auto_fetch_minutes = 5;
         settings.defaults.network_timeout_secs = 300;
-        settings.repos.push(RepoOverride {
-            key: repo_key(r"C:\Users\me\huge-repo"),
-            auto_fetch_minutes: Some(0),
-            network_timeout_secs: None,
-        });
 
         let state = State {
             window: WindowState {
@@ -245,15 +238,10 @@ mod tests {
     #[test]
     fn the_files_read_the_way_a_person_would_write_them() {
         let settings = Settings {
-            defaults: RepoSettings {
+            defaults: Defaults {
                 auto_fetch_minutes: 5,
                 network_timeout_secs: 300,
             },
-            repos: vec![RepoOverride {
-                key: repo_key(r"C:\Users\me\huge-repo"),
-                auto_fetch_minutes: Some(0),
-                network_timeout_secs: None,
-            }],
             avatars: crate::avatar::Avatars::from_values(&[toml::Value::Table({
                 let mut t = Table::new();
                 t.insert("email".into(), Value::String("ada@example.com".into()));

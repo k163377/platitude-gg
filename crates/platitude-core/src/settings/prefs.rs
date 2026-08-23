@@ -3,17 +3,24 @@
 use toml::{Table, Value};
 
 use super::SCHEMA_VERSION;
-use super::toml::{clamp_to_i64, minutes, repo_key, sub_table, timeout_secs};
+use super::toml::{clamp_to_i64, minutes, sub_table, timeout_secs};
 
-/// The values that apply to a repository. One set is the application's
-/// defaults; a repository may override any of them.
+/// The values that decide how the application talks to remotes, read from
+/// and written back to the `[defaults]` table this is named after.
+///
+/// **One set, for every repository.** How often this computer reaches the
+/// network, and how long it waits when it does, are answers about the
+/// machine and the line it is on rather than about whichever repository is
+/// in front. A person who wants to be left alone turns the interval off,
+/// and that is the whole of the vocabulary — there is no way to say it
+/// about one repository and not another.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RepoSettings {
+pub struct Defaults {
     pub auto_fetch_minutes: u32,
     pub network_timeout_secs: u64,
 }
 
-impl Default for RepoSettings {
+impl Default for Defaults {
     fn default() -> Self {
         Self {
             auto_fetch_minutes: crate::session::AUTO_FETCH_DEFAULT_MINUTES,
@@ -22,39 +29,16 @@ impl Default for RepoSettings {
     }
 }
 
-/// What one repository asked to differ on. Absent fields take the default.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RepoOverride {
-    /// The work tree path, as [`repo_key`] writes it.
-    pub key: String,
-    pub auto_fetch_minutes: Option<u32>,
-    pub network_timeout_secs: Option<u64>,
-}
-
-impl RepoOverride {
-    pub fn new(path: &str) -> Self {
-        Self {
-            key: repo_key(path),
-            auto_fetch_minutes: None,
-            network_timeout_secs: None,
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.auto_fetch_minutes.is_none() && self.network_timeout_secs.is_none()
-    }
-}
-
 /// `settings.toml`.
 ///
-/// Per-repository overrides are only for values the application owns. What
-/// git already remembers per repository — the identity on a commit, the
-/// merge tool — stays in that repository's own config, where git put it and
-/// where every other tool can see it.
+/// Nothing in here is kept per repository. What git already remembers per
+/// repository — the identity on a commit, the merge tool — stays in that
+/// repository's own config, where git put it and where every other tool
+/// can see it; and what is left over is about this computer rather than
+/// about one repository ([`Defaults`]).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Settings {
-    pub defaults: RepoSettings,
-    pub repos: Vec<RepoOverride>,
+    pub defaults: Defaults,
     /// Pictures put against authors. Kept here rather than in a third file
     /// because the split between the two is a write-rate one: an avatar is
     /// assigned about as often as an interval is changed, and neither
@@ -63,26 +47,10 @@ pub struct Settings {
 }
 
 impl Settings {
-    /// The values in force for one repository.
-    pub fn for_repo(&self, path: &str) -> RepoSettings {
-        let key = repo_key(path);
-        let Some(over) = self.repos.iter().find(|r| r.key == key) else {
-            return self.defaults.clone();
-        };
-        RepoSettings {
-            auto_fetch_minutes: over
-                .auto_fetch_minutes
-                .unwrap_or(self.defaults.auto_fetch_minutes),
-            network_timeout_secs: over
-                .network_timeout_secs
-                .unwrap_or(self.defaults.network_timeout_secs),
-        }
-    }
-
     pub(super) fn from_table(table: &Table) -> Self {
-        let fallback = RepoSettings::default();
+        let fallback = Defaults::default();
         let defaults = match sub_table(table, "defaults") {
-            Some(t) => RepoSettings {
+            Some(t) => Defaults {
                 auto_fetch_minutes: minutes(t, "auto_fetch_minutes")
                     .unwrap_or(fallback.auto_fetch_minutes),
                 network_timeout_secs: timeout_secs(t, "network_timeout_secs")
@@ -90,32 +58,12 @@ impl Settings {
             },
             None => fallback,
         };
-        let mut repos = Vec::new();
-        if let Some(by_repo) = sub_table(table, "repo") {
-            for (key, value) in by_repo {
-                let Some(entry) = value.as_table() else {
-                    continue;
-                };
-                let over = RepoOverride {
-                    key: repo_key(key),
-                    auto_fetch_minutes: minutes(entry, "auto_fetch_minutes"),
-                    network_timeout_secs: timeout_secs(entry, "network_timeout_secs"),
-                };
-                if !over.is_empty() {
-                    repos.push(over);
-                }
-            }
-        }
         let avatars = table
             .get("avatar")
             .and_then(Value::as_array)
             .map(|values| crate::avatar::Avatars::from_values(values))
             .unwrap_or_default();
-        Self {
-            defaults,
-            repos,
-            avatars,
-        }
+        Self { defaults, avatars }
     }
 
     pub(super) fn to_table(&self) -> Table {
@@ -133,26 +81,6 @@ impl Settings {
         );
         root.insert("defaults".into(), Value::Table(defaults));
 
-        let mut by_repo = Table::new();
-        for over in &self.repos {
-            if over.is_empty() || over.key.is_empty() {
-                continue;
-            }
-            let mut entry = Table::new();
-            if let Some(minutes) = over.auto_fetch_minutes {
-                entry.insert("auto_fetch_minutes".into(), Value::Integer(minutes.into()));
-            }
-            if let Some(secs) = over.network_timeout_secs {
-                entry.insert(
-                    "network_timeout_secs".into(),
-                    Value::Integer(clamp_to_i64(secs)),
-                );
-            }
-            by_repo.insert(over.key.clone(), Value::Table(entry));
-        }
-        if !by_repo.is_empty() {
-            root.insert("repo".into(), Value::Table(by_repo));
-        }
         if !self.avatars.is_empty() {
             root.insert("avatar".into(), Value::Array(self.avatars.to_values()));
         }
@@ -163,23 +91,63 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A file written while repositories could differ still parses, and the
+    /// table that carried the difference decides nothing. Pinned because the
+    /// alternative is silent: a `[repo.…]` heading read again later would put
+    /// one repository back on an interval of its own, and the only place that
+    /// would show is a tooltip disagreeing with the timer.
     #[test]
-    fn a_repository_takes_its_own_values_and_the_defaults_for_the_rest() {
-        let settings = Settings {
-            defaults: RepoSettings {
-                auto_fetch_minutes: 5,
-                network_timeout_secs: 300,
-            },
-            avatars: crate::avatar::Avatars::default(),
-            repos: vec![RepoOverride {
-                key: "C:/big".into(),
-                auto_fetch_minutes: Some(0),
-                network_timeout_secs: None,
-            }],
-        };
-        let big = settings.for_repo(r"C:\big");
-        assert_eq!(big.auto_fetch_minutes, 0, "separators do not matter");
-        assert_eq!(big.network_timeout_secs, 300, "the rest is the default");
-        assert_eq!(settings.for_repo("C:/other"), settings.defaults);
+    fn a_per_repository_table_left_in_a_file_decides_nothing() {
+        let text = r#"
+version = 1
+
+[defaults]
+auto_fetch_minutes = 5
+
+[repo."C:/big"]
+auto_fetch_minutes = 0
+network_timeout_secs = 9
+"#;
+        let settings = Settings::from_table(&text.parse::<Table>().expect("parse"));
+        assert_eq!(settings.defaults.auto_fetch_minutes, 5);
+        assert_eq!(
+            settings.defaults.network_timeout_secs,
+            Defaults::default().network_timeout_secs,
+        );
+        let written = settings.to_table();
+        assert!(
+            !written.contains_key("repo"),
+            "and it is not written back out:\n{written}"
+        );
+    }
+
+    /// An interval longer than the ceiling means the ceiling, whichever door
+    /// it arrived through. The settings screen cannot offer one, so a file
+    /// written by hand is the only door there is.
+    #[test]
+    fn an_interval_past_the_ceiling_is_the_ceiling() {
+        let text = format!(
+            "[defaults]\nauto_fetch_minutes = {}\n",
+            crate::session::AUTO_FETCH_MAX_MINUTES + 1
+        );
+        let settings = Settings::from_table(&text.parse::<Table>().expect("parse"));
+        assert_eq!(
+            settings.defaults.auto_fetch_minutes,
+            crate::session::AUTO_FETCH_MAX_MINUTES
+        );
+    }
+
+    /// A number that is not an interval at all still falls back on its own,
+    /// so one mistyped key costs only itself (rules-refs/core.md §読みは
+    /// `toml::Table` からキーごとに取る).
+    #[test]
+    fn a_negative_interval_falls_back_to_the_default() {
+        let text = "[defaults]\nauto_fetch_minutes = -5\n";
+        let settings = Settings::from_table(&text.parse::<Table>().expect("parse"));
+        assert_eq!(
+            settings.defaults.auto_fetch_minutes,
+            Defaults::default().auto_fetch_minutes
+        );
     }
 }

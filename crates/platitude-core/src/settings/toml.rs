@@ -8,12 +8,12 @@ use toml::{Table, Value};
 use super::{AUTO_WIDTH, StoreError};
 
 /// The name a repository is filed under: separators the way git writes
-/// them, and no trailing one. A repository that moves loses its overrides —
-/// its path is the only name the application has for it.
+/// them, and no trailing one. Its path is the only name the application
+/// has for it, so a repository that moves is a different one.
 ///
-/// Every path in both files goes through this, so the same repository reads
-/// the same in a `[repo.…]` heading and in the tab list, and so nothing in
-/// either file ever needs a backslash escape.
+/// Every path either file holds goes through this, so the same repository
+/// reads the same wherever it is written down, and so nothing in either
+/// file ever needs a backslash escape.
 pub fn repo_key(path: &str) -> String {
     // `\\?\` and `\\.\` mean the backslashes to Windows itself: the prefix
     // is what turns off path parsing, and rewriting it addresses somewhere
@@ -142,12 +142,16 @@ pub(super) fn coord(table: &Table, key: &str) -> Option<i32> {
         .and_then(|v| i32::try_from(v).ok())
 }
 
+/// An interval in minutes. Anything that is not one — a negative number,
+/// a string — falls back like every other key here; a number past the
+/// ceiling is one, and `session::auto_fetch_minutes` is what says so, so
+/// the file and the settings screen cannot decide it differently.
 pub(super) fn minutes(table: &Table, key: &str) -> Option<u32> {
     table
         .get(key)
         .and_then(Value::as_integer)
-        .filter(|v| (0..=i64::from(crate::session::AUTO_FETCH_MAX_MINUTES)).contains(v))
         .and_then(|v| u32::try_from(v).ok())
+        .map(crate::session::auto_fetch_minutes)
 }
 
 pub(super) fn timeout_secs(table: &Table, key: &str) -> Option<u64> {

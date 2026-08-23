@@ -42,8 +42,11 @@ impl Hub {
         &self.held_elsewhere
     }
 
-    /// Records the auto-fetch interval and puts it in force. Written out
-    /// at once rather than on the state timer.
+    /// Records the auto-fetch interval and puts it in force on every open
+    /// tab. Written out at once rather than on the state timer.
+    ///
+    /// Takes a number that has already been through
+    /// `session::auto_fetch_minutes`, which is where the ceiling lives.
     pub fn set_auto_fetch_minutes(&mut self, minutes: u32) {
         self.settings.defaults.auto_fetch_minutes = minutes;
         self.reapply_settings();

@@ -181,17 +181,19 @@ impl AppBackend {
     }
 
     /// Sets how often every open repository fetches, in minutes. Zero (the
-    /// blank input) turns it off; anything above the ceiling is clamped,
-    /// because past an hour the automatic fetch has no point left.
+    /// blank input) turns it off, and the ceiling is core's to apply
+    /// (`session::auto_fetch_minutes`) — the field this writes is the one a
+    /// hand-written `settings.toml` writes, so a limit spelled out here as
+    /// well would be a second answer to the same question.
     #[qslot]
     fn set_auto_fetch_minutes(&mut self, minutes: i32) {
-        let max = platitude_core::session::AUTO_FETCH_MAX_MINUTES as i32;
-        let minutes = minutes.clamp(0, max);
+        let asked = platitude_core::session::auto_fetch_minutes(minutes.max(0).unsigned_abs());
+        let minutes = asked as i32;
         if self.auto_fetch_minutes == minutes {
             return;
         }
         self.auto_fetch_minutes = minutes;
-        Hub::with(|hub| hub.set_auto_fetch_minutes(minutes.unsigned_abs()));
+        Hub::with(|hub| hub.set_auto_fetch_minutes(asked));
         self.settings_changed();
     }
 
