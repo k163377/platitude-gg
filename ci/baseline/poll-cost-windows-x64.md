@@ -4,11 +4,14 @@
 
 1 tick で走るのは refs 側の `for-each-ref` 1 本(HEAD は listing の `%(HEAD)` から
 読み、リモート一覧はキャッシュ — rules-refs/core.md「同じ答えを 2 度 git に
-訊かない」項)と status 側 2 本(`status --porcelain=v2 -z --branch -uall` /
-進行中操作の検出)。両側は `tokio::join!` で並走するため、体感コストは
-**遅い方の側**で決まる。ウォームキャッシュ、3 回の最小値。下表の refs 側は
-`symbolic-ref` / `config --get-regexp` も 1 tick ごとに撃っていた時の値 =
-現在は上限。
+訊かない」項)と status 側 3 本(`status --porcelain=v2 -z --branch -uall` /
+進行中操作の検出 / push の印 2 キーを 1 プロセスで読む `config --get-regexp` —
+ブランチがある時だけ。rules-refs/core.md「push の印の読み」項)。両側は
+`tokio::join!` で並走するため、体感コストは**遅い方の側**で決まる。
+ウォームキャッシュ、3 回の最小値。下表の refs 側は `symbolic-ref` /
+`config --get-regexp` も 1 tick ごとに撃っていた時の値 = 現在は上限。
+status 側の実測は 2 本の時のもので、印の読みはその後に載った短い
+ローカル config 1 本(spawn 支配)— 支配項は変わらない。
 
 | リポジトリ | commits | refs | 1 tick の実時間 |
 |---|---|---|---|
