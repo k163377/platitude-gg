@@ -13,7 +13,7 @@ use super::conflict::{
 use super::deep::{deep, deep_detached};
 use super::remote::{behind, diverged, forkmark, unpublished};
 use super::repo::DemoRepo;
-use super::scale::{edges, long, longpaths, manyhunks, widelines};
+use super::scale::{edges, long, longpaths, manyhunks, widechars, widelines};
 use super::signing::{errsig, signed};
 use super::tags::{manytags, tags};
 use super::worktrees::worktrees;
@@ -94,6 +94,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "long" => long(&mut repo)?,
         "longpaths" => longpaths(&mut repo)?,
         "manyhunks" => manyhunks(&mut repo)?,
+        "widechars" => widechars(&mut repo)?,
         "widelines" => widelines(&mut repo)?,
         "worktrees" => worktrees(&mut repo)?,
         "empty" => {}

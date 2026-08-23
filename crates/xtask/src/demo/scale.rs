@@ -261,6 +261,35 @@ fn wide(word: &str) -> String {
     out
 }
 
+/// One unstaged file whose changed lines carry full-width glyphs: the one
+/// shape in which a display column is not one advance of the mono font.
+/// The row counts a wide glyph as two columns
+/// (`encode::columns::step_of`), but a Latin-only mono family hands the
+/// glyph to a fallback that advances one em instead, so a wash laid on
+/// columns alone stands right of the characters it names (measured
+/// 2026-08-24 on Windows: charW 8px against 13px, three of them a glyph).
+///
+/// Three lines, because it takes three to say it: one with nothing wide in
+/// it, one whose change stands behind wide glyphs, and one whose change is
+/// wide glyphs standing behind more of them.
+pub(super) fn widechars(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nLines a column is not a character in.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit(
+        "columns.txt",
+        "plain kept plain\n日本語 kept 日本語\n日本語の中の日本語 kept\n",
+        "docs: write the wide lines down",
+    )?;
+    repo.write(
+        "columns.txt",
+        "plain torn plain\n日本語 torn 日本語\n日本語の中の英単語 kept\n",
+    )?;
+    Ok(())
+}
+
 /// One file under a path wider than any pane, committed and then changed
 /// again: the flat paths views (the commit's file list and the working
 /// tree's) each hold a row that middle-elides at any sane width, and the
