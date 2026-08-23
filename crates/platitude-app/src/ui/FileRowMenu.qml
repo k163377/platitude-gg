@@ -62,31 +62,23 @@ Item {
             AppBackend.report("file_menu bucket=" + bucket + " rows=" + fileMenu.offeredRows)
     }
 
-    /// What the chosen rows' discard costs, by the bucket the row was opened on (デザイン規約 §その他の操作):
-    ///
-    /// - unstaged — the edits on disk go, and what is staged stays
-    /// - untracked — the file goes; there the file *is* the change
-    /// - staged — both sides go, back to HEAD, and a rename takes the name it came from with it or leaves half of
-    ///   itself staged
-    ///
-    /// git refuses to restore a conflicted path until told how it was resolved, so a conflicted row rides along
-    /// untouched and uncounted.
+    /// What the chosen rows' discard would cost, asked across the bridge: the rows go over keyed `<bucket>:<path>` —
+    /// which row was chosen is the choice's to say, since a file changed on both sides has a row in each bucket — and
+    /// the sorting into commands, a staged rename's second name and the conflicted rows' exemption are all Rust's
+    /// (`RepoTab.planDiscard` / `discardRows`, 規約 §その他の操作). The keys are kept on the plan so the words the
+    /// row says and the write it runs read off the same choice.
     function planDiscard() {
         const rows = fileRowMenu.wipPane.chosenRows()
-        const plan = { count: 0, unstaged: [], untracked: [], staged: [] }
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i]
-            if (row.bucket === "conflicts")
-                continue
-            plan.count++
-            const bag = row.bucket === "untracked" ? plan.untracked
-                      : row.bucket === "staged" ? plan.staged : plan.unstaged
-            bag.push(row.fullName)
-            // A rename is undone by both of its names at once.
-            if (row.bucket === "staged" && row.orig_path !== "")
-                bag.push(row.orig_path)
+        const keys = []
+        for (let i = 0; i < rows.length; i++)
+            keys.push(rows[i].bucket + ":" + rows[i].fullName)
+        fileRowMenu.sendPaths(keys)
+        fileRowMenu.repoTab.planDiscard()
+        return {
+            keys: keys,
+            count: fileRowMenu.repoTab.discardCount,
+            only: fileRowMenu.repoTab.discardOnly
         }
-        return plan
     }
     function discardWords(plan) {
         return !plan || plan.count === 0 ? "" : qsTr("Discard")
@@ -96,9 +88,9 @@ Item {
             return ""
         if (plan.count > 1)
             return qsTr("%n files", "", plan.count)
-        if (plan.untracked.length > 0)
+        if (plan.only === "untracked")
             return qsTr("the file goes")
-        if (plan.staged.length > 0)
+        if (plan.only === "staged")
             return qsTr("both sides")
         return ""
     }
@@ -106,20 +98,8 @@ Item {
     function discardChosenNow(plan) {
         if (!plan || plan.count === 0)
             return
-        // One git command per bucket, however many rows were chosen: the paths cross the bridge one at a time and the
-        // write takes the whole set (デザイン規約 §その他の操作).
-        if (plan.unstaged.length > 0) {
-            fileRowMenu.sendPaths(plan.unstaged)
-            fileRowMenu.repoTab.discardPaths()
-        }
-        if (plan.untracked.length > 0) {
-            fileRowMenu.sendPaths(plan.untracked)
-            fileRowMenu.repoTab.removeUntrackedPaths()
-        }
-        if (plan.staged.length > 0) {
-            fileRowMenu.sendPaths(plan.staged)
-            fileRowMenu.repoTab.discardPathsToHead()
-        }
+        fileRowMenu.sendPaths(plan.keys)
+        fileRowMenu.repoTab.discardRows()
     }
     /// Hands a set of paths to the bridge for the write that follows.
     function sendPaths(paths) {

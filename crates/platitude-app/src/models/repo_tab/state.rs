@@ -49,6 +49,8 @@ impl Default for RepoTab {
             signature_code: String::new(),
             signature_signer: String::new(),
             pending_paths: Vec::new(),
+            discard_count: 0,
+            discard_only: String::new(),
             remotes: Vec::new(),
             remote_urls: Vec::new(),
             remote_count: 0,

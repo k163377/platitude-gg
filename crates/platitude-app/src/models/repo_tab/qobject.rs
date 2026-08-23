@@ -163,6 +163,8 @@ impl RepoTab {
         Member = auto_fetch_suspended,
         Notify = changed
     );
+    qproperty!("discardCount", Member = discard_count, Notify = changed);
+    qproperty!("discardOnly", Member = discard_only, Notify = changed);
 
     #[qsignal]
     pub(super) fn changed(&mut self);
@@ -341,25 +343,24 @@ impl RepoTab {
         self.pending_paths.push(path);
     }
 
-    /// Throws away unstaged modifications of the gathered files
-    /// (destructive).
+    /// Works out what a discard of the gathered rows would take, before
+    /// anything is written; the answer lands on `discardCount` /
+    /// `discardOnly`. Rows arrive as `<bucket>:<path>` — the key the
+    /// pane's choice already speaks — because which row was chosen is
+    /// the choice's to say, not status's (`ops_stage::chosen_row`).
     #[qslot]
-    fn discard_paths(&mut self) {
-        self.drain_paths(|s, paths| s.discard_paths(paths));
+    fn plan_discard(&mut self) {
+        self.plan_discard_rows();
+        self.changed();
     }
 
-    /// Throws away both sides of the gathered files, back to HEAD
-    /// (destructive). A rename's old name is one of the gathered paths:
-    /// restoring only the new one leaves the old staged as a deletion.
+    /// Discards the gathered rows, keyed the same way (destructive).
+    /// Unstaged edits, untracked files and staged changes each go by
+    /// their own command, and a staged rename takes the name it came
+    /// from with it (`RepoSession::discard_chosen`).
     #[qslot]
-    fn discard_paths_to_head(&mut self) {
-        self.drain_paths(|s, paths| s.discard_paths_to_head(paths));
-    }
-
-    /// Deletes the gathered untracked files (destructive).
-    #[qslot]
-    fn remove_untracked_paths(&mut self) {
-        self.drain_paths(|s, paths| s.remove_untracked(paths));
+    fn discard_rows(&mut self) {
+        self.discard_chosen_rows()
     }
 
     #[qslot]

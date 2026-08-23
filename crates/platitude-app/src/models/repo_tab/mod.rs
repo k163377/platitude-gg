@@ -126,6 +126,13 @@ pub struct RepoTab {
     /// (デザイン規約 §その他の操作). Emptied by whichever write consumes it, so a set
     /// left behind by an abandoned question cannot be spent later.
     pending_paths: Vec<String>,
+    /// What the file menu's discard row would take, worked out as the menu
+    /// opens (`planDiscard` over the gathered rows): how many rows it
+    /// would touch — a conflicted row rides along untouched and uncounted
+    /// — and, when that is exactly one, the bucket that row was on, which
+    /// picks the tag the menu row wears (デザイン規約 §その他の操作).
+    discard_count: i32,
+    discard_only: String,
     /// Configured remote names — where a branch with no upstream can go —
     /// and their fetch URLs in the same order, which is what the form that
     /// corrects one opens with.
