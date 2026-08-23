@@ -82,7 +82,10 @@ RowLayout {
             authorRow.settleAuthorRequested()
     }
 
-    spacing: Theme.spaceSm
+    // The pane's own inset, not the default step: the face stands `spaceXs` off the pane's edge, so a wider gap on its
+    // other side reads as the name having been pushed away from a face that is where it belongs (デザイン規約 §余白 —
+    // 行内の詰め).
+    spacing: Theme.spaceXs
 
     // The face carries the signature in its top-right corner (デザイン規約 §署名の表示): the mark is about the person
     // whose commit this is, and the corner is where the editor's own face carries the same thing.

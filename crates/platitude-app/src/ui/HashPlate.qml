@@ -26,7 +26,10 @@ ColumnLayout {
         hoverEnabled: true
         text: plate.sha8
         leftPadding: Theme.spaceXs
-        rightPadding: Theme.spaceXs
+        // Nothing on this side. The mark's ink is seated on the plate's own right edge below (`copyMark`), which is
+        // where the parent hash ends and where the message box's frame under it stands — a padding here would hold the
+        // one row of the pane's right column short of the line every other row is cut to.
+        rightPadding: 0
         topPadding: 0
         bottomPadding: 0
         readonly property bool lit: hovered || visualFocus
@@ -64,10 +67,20 @@ ColumnLayout {
                 color: Theme.textPrimary
                 Layout.alignment: Qt.AlignVCenter
             }
-            NavIcon {
-                kind: "copyicon"
-                tint: hashCopy.lit ? Theme.textPrimary : Theme.textSecondary
+            // A seat drawn to the mark's ink rather than its box: the two squares fill nine of the sixteen, so the box
+            // holds air either side of them and that air is what the eye measures (デザイン規約 §余白). Unseated it was
+            // spent twice — once doubling the step after the hash, and once holding the mark short of the right edge
+            // the parent hash under it is cut to.
+            Item {
+                Layout.preferredWidth: copyMark.inkWidth
+                Layout.preferredHeight: Theme.iconMd
                 Layout.alignment: Qt.AlignVCenter
+                NavIcon {
+                    id: copyMark
+                    anchors.centerIn: parent
+                    kind: "copyicon"
+                    tint: hashCopy.lit ? Theme.textPrimary : Theme.textSecondary
+                }
             }
         }
     }
