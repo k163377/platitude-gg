@@ -92,10 +92,11 @@ const SEEDED_TOOL: &str = "demo-editor";
 ///
 /// Two seconds, not the thirty the recipe this replaced typed by hand.
 /// The verb is a write act, so its one picture is taken behind
-/// `AutoActDriver.writeBarrier` — after the tool has exited — and no
-/// length buys a frame of the wait. What is left for the number to be is
-/// a wait a person watching a windowed run can see, against time every
-/// `cargo xtask check` pays on both sides.
+/// `AutoActDriver.writeBarrier` and the `treeBarrier` after it — after
+/// the tool has exited and the file it resolved has left the conflicted
+/// bucket — and no length buys a frame of the wait. What is left for the
+/// number to be is a wait a person watching a windowed run can see,
+/// against time every `cargo xtask check` pays on both sides.
 const TOOL_CMD: &str = "sleep 2";
 
 /// Puts a tool in the repository's own config, for the verbs whose

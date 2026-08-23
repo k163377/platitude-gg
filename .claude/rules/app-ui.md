@@ -46,6 +46,7 @@ UI の色・寸法・用語の正本は [デザイン規約.md](../../internal-d
 - **harness は親の自動化状態を継承しない** — 起動前に全 `PG_AUTO_*` と関連する automation env を除去し、その harness が所有する値だけを設定する。repo / config / shot は run 固有にし、別 harness や並行 session の入力・状態・出力を合成しない
 - **1 run の完了 owner は 1 つ** — page が動詞を原子的に claim し、window-level 動詞は page completion を defer する。新しく開いた tab が同じ動詞を再実行してはならない。撮影は owner が `finishAutoAct()` を 1 回通知した後だけ
 - **前提条件を完了判定に混ぜない** — 動詞が動く前に要る状態(タブが 2 本ある・行が選べる)は**入力を出す枝の中だけ**で読む。毎 tick 読み直すと、その動詞自身の答え(1 本減った)が前提を割って完了へ進めなくなり、watchdog まで無言で待つ。**入力が届いたことも確かめてから latch する** — ビュー(ListView 等)の item はモデルが行を得た次のレイアウトで生まれるので、`itemAtIndex` は空振りしうる。空振りを押下として latch すると同じ無限待ちになる(入力経路の関数に「押せたか」を答えさせる)
+- **書き込みの答えは、その書き込みが無効化した読み直しより先に来る** — core は `WriteFinished` を出してから status / refs / グラフを publish する(`session::write::run_write`)ので、**書き込み境界で撮った絵は撃つ前の画面**。動詞の見せ物が「書き込みの後の画面」なら、書き込みの後段にもう 1 段のバリアを置き、**その書き込みが動かす当のモデルの行を待つ**(グラフは `graphGoneOid`、作業ツリーの一覧は `treeGoneRow`)。**カウンタで待たない** — status / refs の seq は誰も頼んでいない読み直しでも進むので、この書き込みが動かしたことの証拠にならない
 - **「まだ答えが無い」と値 0 / false を分ける** — 非同期モデルは `loaded` / request generation / sequence 等の readiness を公開し、自動化は readiness の後で値を読む。初期値 0 を clean・空・完了と判定しない
 - **一瞬だけ立つ状態は signal で観測して latch する** — error / busy / loading が polling 1 周より短くても、その実 edge を見た証拠を保持し、非同期 `grabToImage` が終わるまで意図した中間表示を保つ。入力フラグを立てただけで出力状態を偽装しない
 - **描画境界は画像 callback が答える** — completion 後に `requestUpdate()` と event-loop turn を通し、app / overlay 両方の `grabToImage` callback が返ってから終了する。静止した offscreen scene は `frameSwapped` を出さないことがあるため、それ単独を完了条件にしない

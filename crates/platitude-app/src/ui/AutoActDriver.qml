@@ -82,6 +82,18 @@ Item {
     /// ends between two looks at it — which the container did and the host did not, and which taking work out of the
     /// post-write refresh made likelier still (2026-08-17 実測: `line-back`, then `keep-place`).
     property int writeSeqBefore: 0
+    /// The working-tree row this run's write takes out of its bucket, as `<bucket>:<path>` — or "" for the verbs the
+    /// write barrier alone answers for.
+    ///
+    /// A write answers before the status it invalidated has been read again: core reports `WriteFinished` and *then*
+    /// publishes status and refs (`session::write::run_write`), and `writeSeq` is counted off that report
+    /// (`drain::settle_write`). So a shot taken at the write barrier is a shot of the file list as it was — the same
+    /// shape `graphGoneOid` below answers for on the graph. That is how a run whose merge editor resolved a file and a
+    /// run whose editor never started came to save the same picture, down to the sha256 (2026-08-23 ユーザー報告).
+    ///
+    /// Waited out on the row itself rather than on a status counter, for the reason the graph gives: a counter also
+    /// moves for statuses nobody here asked for, while this row moves only for this write.
+    property string treeGoneRow: ""
     /// The graph row this run's write takes off the graph, or "" for the verbs the write barrier alone answers for.
     ///
     /// A write answers before the rebuild it asks for is even started (core's `AfterWrite::Graph`), so a shot taken at
@@ -212,6 +224,7 @@ Item {
         driver.completionDeferred = driver.defersCompletion(act)
         driver.writeExpected = driver.isWriteAct(act)
         driver.writeSeqBefore = repoTab.writeSeq
+        driver.treeGoneRow = ""
         driver.graphGoneOid = ""
         driver.stashTotalBefore = stashesModel.total
         driver.stashWanted = ""
@@ -284,10 +297,42 @@ Item {
             if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
                 return
             writeBarrier.stop()
-            if (driver.graphGoneOid === "")
-                renderedBarrier.begin()
+            if (driver.treeGoneRow === "")
+                driver.afterTreeSettled()
             else
-                graphBarrier.start()
+                treeBarrier.start()
+        }
+    }
+    /// What the chain does once the working tree has answered — or straight away, for the verbs that name no row of
+    /// it: the graph rebuild for the verbs whose write takes a row off the graph, and the shot for everyone else.
+    function afterTreeSettled() {
+        if (driver.graphGoneOid === "")
+            renderedBarrier.begin()
+        else
+            graphBarrier.start()
+    }
+    // The status that follows a write, read off the file list rather than off the clock: the row the write moves is
+    // still in the model until the new status lands, so its leaving the bucket it was named in is the edge (see
+    // `treeGoneRow`). A write git refused leaves the row where it was and the run to the watchdog, which is the
+    // diagnosis — the same bargain every barrier here makes.
+    SampleTimer {
+        id: treeBarrier
+        onTriggered: {
+            const cut = driver.treeGoneRow.indexOf(":")
+            const from = driver.treeGoneRow.substring(0, cut)
+            const path = driver.treeGoneRow.substring(cut + 1)
+            if (worktreeModel.holdsPath(from, path))
+                return
+            treeBarrier.stop()
+            // Where the row went is the other half of the claim: a file resolved into the index and a file discarded
+            // out of the tree both leave the bucket they were named in, and the two are told apart by what holds them
+            // afterwards ("" being nothing at all).
+            AppBackend.report("tree_settled from=" + from
+                              + " landed=" + worktreeModel.bucketOf(path)
+                              + " conflicts=" + workTree.conflictCount
+                              + " staged=" + workTree.stagedCount
+                              + " unstaged=" + (workTree.unstagedCount + workTree.untrackedCount))
+            driver.afterTreeSettled()
         }
     }
     // The rebuild that follows a write, read off the graph rather than off the clock: the row the write took away is
@@ -886,6 +931,9 @@ Item {
             if (head)
                 wipPane.chooseOnly(head.bucket, head.fullName)
             const mate = wipPane.rowFor(arg)
+            // Named off the row while it is still in hand: the barrier waits on a bucket and a path, and a delegate
+            // read back after the press is one the list has had a chance to take away.
+            const moved = mate ? mate.bucket + ":" + mate.fullName : ""
             if (mate)
                 wipPane.applyClick(mate.bucket, mate.fullName, Qt.ControlModifier)
             AppBackend.report("chosen count=" + wipPane.chosenCount)
@@ -895,6 +943,7 @@ Item {
                     const row = wipPane.rowAt(0)
                     if (row)
                         row.stageClicked(head.bucket, head.fullName)
+                    driver.treeGoneRow = moved
                 }
             }
         } else if (act === "discard-many" || act === "discard-many-go") {
@@ -902,13 +951,17 @@ Item {
             if (first)
                 wipPane.chooseOnly(first.bucket, first.fullName)
             const other = wipPane.rowFor(arg)
+            // Read while the row is in hand, for the reason `stage-many` gives above.
+            const dropped = other ? other.bucket + ":" + other.fullName : ""
             if (other)
                 wipPane.applyClick(other.bucket, other.fullName, Qt.ControlModifier)
             AppBackend.report("chosen count=" + wipPane.chosenCount)
             page.openFileMenu(other ? other.bucket : "unstaged", arg, "")
             AppBackend.report("discard_row " + fileDiscardItem.text)
-            if (act.endsWith("-go"))
+            if (act.endsWith("-go")) {
                 fileDiscardItem.completeHold()
+                driver.treeGoneRow = dropped
+            }
         } else if (act === "file-menu" || act === "file-menu-untracked"
                    || act === "file-menu-staged" || act === "file-menu-conflict") {
             const menuBucket = act === "file-menu" ? "unstaged" : act === "file-menu-staged" ? "staged"
@@ -925,7 +978,12 @@ Item {
             wipPane.chooseOnly("conflicts", arg)
             page.openFileMenu("conflicts", arg, "")
             fileMenu.close()
+            // Read before the press, for the reason the merge editor below gives: a row that is not conflicted takes
+            // no side, and a barrier armed anyway waits on a bucket this run never wrote to.
+            const taken = fileRowMenu.chosenConflicts().length
             fileRowMenu.takeSideNow(act === "take-side-ours" ? "ours" : "theirs")
+            if (taken > 0)
+                driver.treeGoneRow = "conflicts:" + arg
         } else if (act === "open-mergetool") {
             // With a tool configured this holds the write queue until it exits, so a demo tool that blocks leaves the
             // wait on screen.
@@ -939,6 +997,11 @@ Item {
             const handed = fileRowMenu.chosenConflicts().length
             fileRowMenu.openInMergeTool()
             AppBackend.report("merge_tool " + wipPane.workTree.mergeTool + " paths=" + handed)
+            // Named only where something was actually handed over: a fixture a previous run consumed queues no write
+            // at all, and a barrier waiting for a row that left the bucket before this run began would report a
+            // landing nothing here caused.
+            if (handed > 0)
+                driver.treeGoneRow = "conflicts:" + arg
         } else if (act === "discard-file" || act === "discard-file-go"
                    || act === "delete-file" || act === "delete-file-go"
                    || act === "discard-staged" || act === "discard-staged-go") {
@@ -949,8 +1012,10 @@ Item {
             wipPane.chooseOnly(bucket, arg)
             page.openFileMenu(bucket, arg)
             AppBackend.report("discard_row " + fileDiscardItem.text)
-            if (act.endsWith("-go"))
+            if (act.endsWith("-go")) {
                 fileDiscardItem.completeHold()
+                driver.treeGoneRow = bucket + ":" + arg
+            }
         }
     }
     // Every file-row act resolves the rows it names through the pane's walk — `rowAt` / `rowFor` /
