@@ -4,6 +4,7 @@
 //! `--`, each wrapped as `:(literal)` ([`crate::process::literal_pathspec`]),
 //! so a file literally named `:(glob)x` cannot turn into a pathspec.
 
+use std::collections::HashSet;
 use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
@@ -15,6 +16,7 @@ use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 use crate::refs;
 use crate::repo::RepoInfo;
 use crate::scratch::ScratchFile;
+use crate::status::{self, StatusItem};
 
 /// Runs `cmd` over `paths`, each wrapped as a literal pathspec, and runs
 /// nothing at all when there are none.
@@ -194,6 +196,72 @@ pub async fn remove_untracked(
         .cwd(workdir)
         .args(["clean", "-f", "-d", "--"]);
     run_over_paths(executor, cmd, paths, cancel).await
+}
+
+/// Which side of the working tree a chosen row was standing on. Carried
+/// with the path rather than looked up again: a file changed on both
+/// sides has a row in each bucket, and which of them was chosen decides
+/// whether what is staged survives the discard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiscardSide {
+    /// An unstaged edit: the disk goes back to the index, what is staged
+    /// stays.
+    Unstaged,
+    /// An untracked file: there the file itself is the change, so it goes.
+    Untracked,
+    /// A staged change: both sides go, back to HEAD.
+    Staged,
+}
+
+/// Discards a chosen set of rows: each side goes by its own command — at
+/// most three for the lot, however many rows were chosen (デザイン規約
+/// §その他の操作) — and a side that stops the run stops it before the
+/// next side is touched.
+///
+/// A staged rename is undone by both of its names at once (see
+/// [`discard_to_head`]). Which staged paths are renames is read from
+/// status here, in the same write as the commands, rather than gathered
+/// by the caller: a list made in the UI predates whatever writes are
+/// queued ahead of this one — the reasoning
+/// [`stage_conflicted`](crate::session::RepoSession::stage_conflicted)
+/// spells out.
+///
+/// Destructive — the caller confirms first.
+pub async fn discard_chosen(
+    executor: &GitExecutor,
+    workdir: &Path,
+    choices: &[(String, DiscardSide)],
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let mut unstaged = Vec::new();
+    let mut untracked = Vec::new();
+    let mut staged = Vec::new();
+    for (path, side) in choices {
+        match side {
+            DiscardSide::Unstaged => unstaged.push(path.clone()),
+            DiscardSide::Untracked => untracked.push(path.clone()),
+            DiscardSide::Staged => staged.push(path.clone()),
+        }
+    }
+    if !staged.is_empty() {
+        let current = status::load(executor, workdir, cancel).await?;
+        let chosen: HashSet<&str> = staged.iter().map(String::as_str).collect();
+        let old_names: Vec<String> = current
+            .staged()
+            .filter_map(|item| match item {
+                StatusItem::Tracked {
+                    path,
+                    orig_path: Some(orig),
+                    ..
+                } if chosen.contains(path.as_str()) => Some(orig.clone()),
+                _ => None,
+            })
+            .collect();
+        staged.extend(old_names);
+    }
+    discard_worktree(executor, workdir, &unstaged, cancel).await?;
+    remove_untracked(executor, workdir, &untracked, cancel).await?;
+    discard_to_head(executor, workdir, &staged, cancel).await
 }
 
 /// Stages or unstages part of one file's diff.

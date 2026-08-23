@@ -2,10 +2,10 @@
 
 use std::sync::Arc;
 
-use crate::support::exec::{env, observed_env};
+use crate::support::exec::{env, logged, observed_env};
 use crate::support::stage::buckets;
 use crate::support::{Ends, TestRepo};
-use platitude_core::stage;
+use platitude_core::stage::{self, DiscardSide};
 
 /// An empty selection is not "every path": every command here reads a
 /// missing pathspec as the whole work tree, and `git clean -f -d --` on
@@ -38,6 +38,9 @@ async fn an_empty_selection_runs_nothing() {
     stage::remove_untracked(&exec, &repo.path, &none, &cancel)
         .await
         .expect("remove untracked");
+    stage::discard_chosen(&exec, &repo.path, &[], &cancel)
+        .await
+        .expect("discard chosen");
 
     let ran = ends.0.lock().unwrap().clone();
     assert!(ran.is_empty(), "git was run anyway: {ran:?}");
@@ -187,4 +190,111 @@ async fn discard_to_head_works_on_an_unborn_branch() {
     let (staged, _, untracked) = buckets(&repo).await;
     assert!(staged.is_empty() && untracked.is_empty());
     assert!(!repo.path.join("first.txt").exists());
+}
+
+/// One call over rows from every bucket: each side goes by its own
+/// command — one `restore --worktree`, one `clean`, one
+/// `restore --staged --worktree`, in that order, however many rows each
+/// side had (デザイン規約 §その他の操作).
+#[tokio::test]
+async fn discard_chosen_takes_each_side_by_its_own_command() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.commit_file("b.txt", "two\n", "second");
+    repo.write_file("a.txt", "unstaged edit\n");
+    repo.write_file("b.txt", "staged edit\n");
+    repo.git(&["add", "--", "b.txt"]);
+    repo.write_file("junk.txt", "junk\n");
+    let (exec, log, cancel) = logged();
+
+    stage::discard_chosen(
+        &exec,
+        &repo.path,
+        &[
+            ("a.txt".into(), DiscardSide::Unstaged),
+            ("junk.txt".into(), DiscardSide::Untracked),
+            ("b.txt".into(), DiscardSide::Staged),
+        ],
+        &cancel,
+    )
+    .await
+    .expect("discard chosen");
+
+    let (staged, unstaged, untracked) = buckets(&repo).await;
+    assert!(
+        staged.is_empty() && unstaged.is_empty() && untracked.is_empty(),
+        "something is left over: {staged:?} {unstaged:?} {untracked:?}"
+    );
+    assert!(!repo.path.join("junk.txt").exists());
+    let writes: Vec<String> = log
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(display, _)| display.clone())
+        .filter(|d| d.contains("restore") || d.contains("clean"))
+        .collect();
+    assert_eq!(writes.len(), 3, "one command per side: {writes:?}");
+    assert!(writes[0].contains("--worktree") && !writes[0].contains("--staged"));
+    assert!(writes[1].contains("clean"));
+    assert!(writes[2].contains("--staged") && writes[2].contains("--worktree"));
+}
+
+/// The staged row of a rename is chosen by its new name alone: the old
+/// name rides along from status, read inside the write, or its staged
+/// deletion would be left standing.
+#[tokio::test]
+async fn discard_chosen_pulls_a_staged_renames_old_name_from_status() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("moved.txt", "move me\n", "root");
+    repo.git(&["mv", "moved.txt", "elsewhere.txt"]);
+    let (exec, cancel) = env();
+
+    stage::discard_chosen(
+        &exec,
+        &repo.path,
+        &[("elsewhere.txt".into(), DiscardSide::Staged)],
+        &cancel,
+    )
+    .await
+    .expect("discard chosen");
+
+    let (staged, unstaged, untracked) = buckets(&repo).await;
+    assert!(
+        staged.is_empty() && unstaged.is_empty() && untracked.is_empty(),
+        "the old name stayed staged: {staged:?} {unstaged:?} {untracked:?}"
+    );
+    assert!(repo.path.join("moved.txt").exists(), "the rename is undone");
+    assert!(!repo.path.join("elsewhere.txt").exists());
+}
+
+/// A file changed on both sides has a row in each bucket, and the side
+/// rides with the chosen row rather than being looked up again: the
+/// unstaged row's discard must not grow into the staged row's.
+#[tokio::test]
+async fn discard_chosen_on_the_unstaged_row_keeps_what_is_staged() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("kept.txt", "one\n", "root");
+    repo.write_file("kept.txt", "staged\n");
+    repo.git(&["add", "--", "kept.txt"]);
+    repo.write_file("kept.txt", "and dirty\n");
+    let (exec, cancel) = env();
+
+    stage::discard_chosen(
+        &exec,
+        &repo.path,
+        &[("kept.txt".into(), DiscardSide::Unstaged)],
+        &cancel,
+    )
+    .await
+    .expect("discard chosen");
+
+    let (staged, unstaged, _) = buckets(&repo).await;
+    assert_eq!(staged, vec!["kept.txt"], "the staged half survives");
+    assert!(unstaged.is_empty());
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("kept.txt")).unwrap(),
+        "staged\n",
+        "the disk goes back to the index, not to HEAD"
+    );
 }

@@ -113,6 +113,20 @@ impl RepoSession {
         );
     }
 
+    /// Discards a chosen set of rows as one queued write: unstaged edits,
+    /// untracked files and staged changes each go by their own command,
+    /// and a staged rename takes the name it came from with it — read
+    /// from status inside the write (see [`stage::discard_chosen`]).
+    pub fn discard_chosen(self: &Arc<Self>, choices: Vec<(String, stage::DiscardSide)>) {
+        self.write(
+            "discard",
+            AfterWrite::Tree,
+            move |exec, repo, cancel| async move {
+                stage::discard_chosen(&exec, &repo.workdir, &choices, &cancel).await
+            },
+        );
+    }
+
     /// Throws away part of one file's unstaged diff (hunk / line level).
     /// The index keeps what is staged (see [`stage::discard_partial`]).
     pub fn discard_partial(
