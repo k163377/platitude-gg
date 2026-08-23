@@ -20,6 +20,7 @@ pub mod identity;
 pub mod integrate;
 pub mod mem;
 pub mod model;
+pub mod offers;
 pub mod oid;
 pub mod opstate;
 pub mod parse;
