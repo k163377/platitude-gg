@@ -31,6 +31,10 @@ Canvas {
         case "plus":
         case "minus":
         case "copyicon": return 9
+        // Two diagonals corner to corner of 4.5..11.5 — inset further than the straight-stroked marks are, because
+        // diagonals read heavier (`onPaint`). A tab seats its `✕` off this, so the air a caller has to take off is
+        // nearly half of what the box says (デザイン規約 §余白).
+        case "close": return 7
         // Two rotated pieces: the body and the point, turned 45° about the middle, so what they span sideways is their
         // diagonal.
         case "pen": return 10
@@ -63,6 +67,9 @@ Canvas {
         // The tick's high end, and the dot the stem hangs over (8 ± its own radius).
         case "check": return 12.5
         case "bang": return 9
+        // Square in its box, so this is `inkGrid`'s far end — said out loud because the tab that seats it asks this
+        // one rather than the span.
+        case "close": return 11.5
         // The far ring, and the far lobe: the badge a chip wears is set against the frame's right, so both of the
         // kinds that stand in that slot answer here.
         case "pr": return 13.2

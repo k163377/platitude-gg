@@ -858,6 +858,7 @@ Item {
                 + " run=" + Math.round(topBar.bandTabRun)
                 + " cap=" + Math.round(topBar.tabTitleCap)
                 + " floor=" + topBar.tabTitleMinW
+                + " ease=" + Math.round(topBar.tabTitleEaseW)
                 + " max=" + topBar.tabTitleMaxW
                 + " content=" + Math.round(topBar.bandTabContent)
                 + " view=" + Math.round(topBar.bandTabsWidth)

@@ -207,6 +207,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/SummaryArea.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TabCarry.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TabItemDelegate.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/TabMetrics.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TabStrip.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TopBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TreeViewToggle.qml", "qt/qml/platitude");

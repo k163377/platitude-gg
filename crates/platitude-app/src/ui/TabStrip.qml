@@ -34,13 +34,11 @@ Item {
     /// on the band's empty run reaches the scene and takes the card down (`WindowChrome.captionYielded`).
     readonly property bool appMenuOpen: appMenu.opened
 
-    /// The longest a tab's name is ever drawn (デザイン規約 レイアウト初期値).
-    readonly property int tabTitleMaxW: 180
-    /// The shortest, in characters rather than pixels (同表): the same count costs a different number of pixels in each
-    /// platform's UI font and at every scaling, so the length comes out of the font.
-    readonly property int tabTitleMinChars: 3
-    readonly property int tabTitleMinW:
-        Math.ceil(tabTitleFont.advanceWidth("…") + tabStrip.tabTitleMinChars * tabTitleFont.averageCharacterWidth)
+    /// The longest and shortest a name is drawn at (`TabMetrics`), aliased for the band, which reads the strip.
+    readonly property int tabTitleMaxW: tabMetrics.titleMaxW
+    readonly property int tabTitleMinW: tabMetrics.titleMinW
+    /// The length a name stops being eased at, pushed rather than bound (`TabMetrics.titleEaseW`).
+    property real tabTitleEaseW: 0
     /// What every tab's name is capped at right now — the strip's answer to how much room it was given
     /// (`settleTitleCap`).
     property real tabTitleCap: tabStrip.tabTitleMaxW
@@ -48,7 +46,7 @@ Item {
     /// not one (2026-08-11 ユーザー指示、規約 §ウィンドウの縁).
     property real tabsWantWidth: 0
     readonly property int tabStripFloorW:
-        menuButton.width + plusButton.width + tabs.grabRun + 2 * (tabs.tabFixedW + tabStrip.tabTitleMinW)
+        menuButton.width + plusButton.width + tabs.grabRun + 2 * (tabMetrics.tabFixedW + tabStrip.tabTitleMinW)
 
     signal openRepositoryRequested()
     signal identityEditRequested()
@@ -233,41 +231,46 @@ Item {
     /// over the run it was told to fit in, which is a strip that scrolls when nothing is out of room (実測 content=897
     /// against run=896 without the rounding).
     function settleTitleCap() {
-        let want = []
+        let nat = []
         for (let i = 0; i < titleMeasure.count; i++) {
             const label = titleMeasure.itemAt(i)
             if (label)
-                want.push(Math.min(Math.ceil(label.implicitWidth), tabStrip.tabTitleMaxW))
+                nat.push(Math.min(Math.ceil(label.implicitWidth), tabStrip.tabTitleMaxW))
         }
         // What the row is asked for, so the band's leftover is shared with the state group in proportion — asking for
         // the floor instead had the tabs down to three characters beside two whole badges (reported 2026-08-11).
         // Measured off the same hidden labels the cap is, so it does not move with the run it is about to be handed.
-        tabStrip.tabsWantWidth = menuButton.width + plusButton.width + tabs.grabRun
-            + want.reduce((sum, w) => sum + w, 0) + want.length * tabs.tabFixedW
-        if (want.length === 0) {
+        //
+        // The air a short name is eased with is counted here as a cost like the mark, not as part of what the names
+        // share out: it is spent whatever the cap comes to, and a name long enough to be cut has none of it.
+        tabStrip.tabTitleEaseW = tabMetrics.titleEaseW()
+        const eased = nat.reduce(
+            (sum, w) => sum + tabMetrics.titleEase(w, tabStrip.tabTitleMaxW, tabStrip.tabTitleEaseW), 0)
+        tabStrip.tabsWantWidth = menuButton.width + plusButton.width + tabs.grabRun + eased
+            + nat.reduce((sum, w) => sum + w, 0) + nat.length * tabMetrics.tabFixedW
+        if (nat.length === 0) {
             tabStrip.tabTitleCap = tabStrip.tabTitleMaxW
             return
         }
-        want.sort((a, b) => a - b)
-        let left = Math.floor(tabs.runAvail) - want.length * tabs.tabFixedW
+        nat.sort((a, b) => a - b)
+        let left = Math.floor(tabs.runAvail) - nat.length * tabMetrics.tabFixedW - eased
         let cap = tabStrip.tabTitleMaxW
-        for (let i = 0; i < want.length; i++) {
-            const share = Math.floor(left / (want.length - i))
-            if (want[i] > share) {
+        for (let i = 0; i < nat.length; i++) {
+            const share = Math.floor(left / (nat.length - i))
+            if (nat[i] > share) {
                 cap = share
                 break
             }
-            left -= want[i]
+            left -= nat[i]
         }
         tabStrip.tabTitleCap = Math.max(tabStrip.tabTitleMinW, Math.min(cap, tabStrip.tabTitleMaxW))
     }
 
     implicitWidth: tabStrip.tabsWantWidth
 
-    FontMetrics {
-        id: tabTitleFont
-        font.family: Theme.uiFamily
-        font.pixelSize: Theme.fontMd
+    /// Not declared inside `tabs`: a Flickable adopts its children into contentItem, where they travel with the scroll.
+    TabMetrics {
+        id: tabMetrics
     }
 
     /// The names at their natural width, off screen. The strip's own labels are the ones being capped, so they cannot
@@ -283,6 +286,9 @@ Item {
 
             visible: false
             text: title
+            // The tracking a short name is set in comes into what it measures, or the strip and the tab would be
+            // reading the same name at two different widths (`TabMetrics.titleTracking`).
+            font.letterSpacing: tabMetrics.titleTracking(title.length)
             font.weight: tabStrip.tabsModel.currentIndex === index ? Font.DemiBold : Font.Normal
             onImplicitWidthChanged: tabStrip.settleTitleCap()
             Component.onCompleted: tabStrip.settleTitleCap()
@@ -384,11 +390,6 @@ Item {
         readonly property real runAvail:
             Math.max(0, tabStrip.width - menuButton.width - plusButton.width - tabs.grabRun)
         onRunAvailChanged: tabStrip.settleTitleCap()
-        /// The air a tab is set in (デザイン規約 §余白; the delegate carries the reasoning).
-        readonly property int markAir: (Theme.iconLg - Theme.iconSm) / 2 + Theme.spaceXs
-        readonly property real tabPadW: Theme.spaceSm + (Theme.spaceSm - tabs.markAir)
-        /// What a tab costs before its name has a single letter in it — that air, and the mark at its end.
-        readonly property real tabFixedW: tabs.tabPadW + Theme.iconLg
         width: Math.max(0, Math.min(contentWidth, tabs.runAvail))
         orientation: ListView.Horizontal
         // Hard stop at the ends, as everywhere else that scrolls (デザイン規約 §QML 実装ルール).
@@ -414,9 +415,9 @@ Item {
         delegate: TabItemDelegate {
             id: tabItem
             tabsModel: tabStrip.tabsModel
+            metrics: tabMetrics
             titleCap: tabStrip.tabTitleCap
-            padW: tabs.tabPadW
-            markAir: tabs.markAir
+            titleEaseW: tabStrip.tabTitleEaseW
             stripHeight: tabs.height
             held: tabCarry.heldId === tabItem.tab_id
             heldX: tabCarry.heldX

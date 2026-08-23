@@ -90,6 +90,10 @@ QtObject {
     readonly property int fontLgLine: 24
     readonly property int fontXl: 20
     readonly property int fontXlLine: 28
+    // The one loosening in the app, and the most a word is ever set at (デザイン規約 §タイポグラフィ). Sub-pixel on purpose:
+    // this is air a short word is opened with, not a style — past about this the letters stop reading as the same
+    // word set wider and start reading as a different face.
+    readonly property real tracking: 0.5
     // Families each OS ships that also carry Japanese: a glyph missing from the named family falls back by OS locale,
     // which is where kanji turn Chinese (デザイン規約 §タイポグラフィ, 2026-08-08).
     readonly property var fontFamilyUi: ["Yu Gothic UI", "Hiragino Sans", "Noto Sans CJK JP", "Noto Sans JP", "Noto Sans", "DejaVu Sans"]

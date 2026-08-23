@@ -15,12 +15,17 @@ Rectangle {
     required property string repo_path
     /// The strip's own model: the one question a tab asks of it, and the one thing the mark does to it.
     required property var tabsModel
-    /// What every name in the strip is capped at right now (`TabStrip.settleTitleCap`).
+    /// What every name in the strip is capped at right now, and the length a name stops being eased at — both settled
+    /// in the same pass, off the same run (`TabStrip.settleTitleCap`).
     property real titleCap: 0
-    /// What a tab costs in air before its name has a letter in it, and the air the mark keeps inside its own box. Both
-    /// settled once for the whole strip (`TabStrip`), so this and the cap agree on what a tab costs.
-    property real padW: 0
-    property int markAir: 0
+    property real titleEaseW: 0
+    /// The strip's shared arithmetic (`TabMetrics`): what a tab costs, the seat its mark stands in, and how a short
+    /// name is eased. One object rather than a copy of each number, so the strip and the tab cannot disagree.
+    required property var metrics
+    /// The air this name is eased with, half of what it falls short by (`TabMetrics.titleEase`). Read off the label's
+    /// own hint, which is the name at its natural width — the cap is a maximum on the item and does not move it.
+    readonly property real titleEase:
+        tabItem.metrics.titleEase(tabTitle.implicitWidth, tabItem.titleCap, tabItem.titleEaseW)
     /// The strip's height, which every tab is drawn at.
     property real stripHeight: 0
     readonly property bool current: tabItem.tabsModel.currentIndex === tabItem.index
@@ -55,12 +60,11 @@ Rectangle {
     signal tabDragged(real sceneX)
     signal tabDropped()
 
-    // The mark's seat is given only the air it has not already taken (`spaceSm − markAir`) — otherwise both are spent
-    // twice and the gap inside the tab reads wider than the tab's own margins (実測 13px between name and mark against
-    // 9px to the edge). Exact fit: anything the layout cannot hand out lands on the right margin, where nobody wrote it
-    // down. Rounded up so this and `settleTitleCap` agree on what the tab costs, or the strip scrolls by the fractions
-    // they disagree about.
-    width: Math.ceil(tabContent.implicitWidth) + tabItem.padW
+    // The name, the two margins, and the half of the easing that falls outside the row (`tabContent` carries the other
+    // half in its spacing). Exact fit: anything the layout cannot hand out lands on the right margin, where nobody
+    // wrote it down. Rounded up so this and `settleTitleCap` agree on what the tab costs, or the strip scrolls by the
+    // fractions they disagree about.
+    width: Math.ceil(tabContent.implicitWidth) + tabItem.metrics.tabPadW + tabItem.titleEase / 2
     height: tabItem.stripHeight
     // Over the tabs it is being carried past: between one neighbour's half and the next one's, the tab in hand covers
     // the tab it has not displaced yet.
@@ -149,14 +153,30 @@ Rectangle {
     RowLayout {
         id: tabContent
         anchors.fill: parent
-        anchors.leftMargin: Theme.spaceSm
-        anchors.rightMargin: Theme.spaceSm - tabItem.markAir
-        spacing: 0
+        // A tab is a dense row, and its step is the dense one (デザイン規約 §余白「高密度な行の内側のみ 4」;
+        // 2026-08-23 ユーザー指示 = the `spaceSm` step it had was read as too much air on both sides of the name).
+        //
+        // The mark's two sides are seated off its ink rather than off its box (`TabStrip.markGap`), so all three gaps
+        // in a tab are the one step: the name from the near edge, the mark from the name, the far edge from the mark.
+        // A spacing of nothing is what the wider step could afford — there the box's own air was already the whole gap
+        // — and it is what left the mark sitting nearer both its neighbours than the name sat to the tab's edge.
+        //
+        // A short name's easing goes on either side of the **name** rather than at the tab's two edges: the mark keeps
+        // its own step off the far edge whatever the name does, so what opens up is the room the name is set in
+        // (2026-08-23 ユーザー指示 — the seat every short name was padded out to made a row of equal blanks).
+        anchors.leftMargin: Theme.spaceXs + tabItem.titleEase / 2
+        anchors.rightMargin: tabItem.metrics.markGap
+        spacing: tabItem.metrics.markGap + tabItem.titleEase / 2
         Label {
+            id: tabTitle
             text: tabItem.title
             elide: Text.ElideRight
             // The cap the whole strip shares; capping the hint is what narrows the tab.
             Layout.maximumWidth: tabItem.titleCap
+            // The other half of the easing: a short name is set with its letters a little apart, so the air it is
+            // given belongs to the word rather than standing beside it. Off the letter count, never off the width —
+            // the width is what the air is computed from (`TabMetrics.titleTracking`).
+            font.letterSpacing: tabItem.metrics.titleTracking(tabItem.title.length)
             Layout.fillHeight: true
             verticalAlignment: Text.AlignVCenter
             font.weight: tabItem.current ? Font.DemiBold : Font.Normal
@@ -168,6 +188,17 @@ Rectangle {
         CloseToolButton {
             id: closeMark
             Layout.alignment: Qt.AlignVCenter
+            // Narrower than the `iconLg` seat this mark stands in everywhere else (デザイン規約 §寸法). A seat is air the
+            // layout cannot see past: the `iconLg` one carried `(iconLg − iconSm) / 2` on each side, so the name and
+            // the tab's own edge were held further out than the margins beside them said, and at this step no margin
+            // could take it back without pushing the seat over the tab beside it. Cut to the mark's own box, the air
+            // left over is small enough for `markGap` to spend the rest and land the ink a whole step from both.
+            //
+            // Only the width comes in. The seat stays `iconLg` tall so a hand coming down the strip still lands on the
+            // mark, and the wash is inset back to a box on the ink — 広げるのは判定だけ (§当たり判定; 手本 `TabStrip`'s `+`).
+            implicitWidth: tabItem.metrics.markSeat
+            topInset: (Theme.iconLg - tabItem.metrics.markSeat) / 2
+            bottomInset: closeMark.topInset
             opacity: tabItem.current || tabItem.pointed ? 1 : 0
             onClicked: tabItem.tabsModel.closeTab(tabItem.tab_id)
         }

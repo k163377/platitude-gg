@@ -191,6 +191,7 @@ Rectangle {
     /// (`PG_AUTO_ACT=tab-widths` / `badges`). Re-exposed for the reason the band's other readings are.
     readonly property real tabTitleCap: tabStrip.tabTitleCap
     readonly property int tabTitleMinW: tabStrip.tabTitleMinW
+    readonly property real tabTitleEaseW: tabStrip.tabTitleEaseW
     readonly property int tabTitleMaxW: tabStrip.tabTitleMaxW
 
     implicitHeight: Theme.toolbarHeight
