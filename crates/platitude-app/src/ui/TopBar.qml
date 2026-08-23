@@ -273,68 +273,13 @@ Rectangle {
             controlPadding: fetchButton.padding
             controlHeight: fetchButton.implicitHeight
         }
-        // Fetch, and everything the network has to say about fetching (デザイン規約 §リモートから取り込む).
-        ActionButton {
+        // Fetch, and everything the network has to say about fetching (`BandFetchButton`).
+        BandFetchButton {
             id: fetchButton
-            /// Fetches that failed in a row, whoever asked for them.
-            readonly property int fails: topBar.curPage !== null ? topBar.curPage.pageTab.fetchFailures : 0
-            /// Enough of them that the timer was stopped. Only a hold on this button starts it again.
-            readonly property bool stopped: topBar.curPage !== null && topBar.curPage.pageTab.autoFetchSuspended
-
-            kind: "fetch"
-            text: fetchButton.stopped ? qsTr("Resume") : "fetch"
-            code: !fetchButton.stopped
+            curPage: topBar.curPage
+            busyLatched: topBar.autoFetchBusyLatched
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
-            // Only the stopped step takes a colour for its word: a run of failures is said by the frame and the mark
-            // while the word stays plain (デザイン規約 §長押し — 警告の色は語ではなく 枠と印が持つ).
-            tone: fetchButton.stopped ? Theme.danger : Theme.textPrimary
-            // Read off the state rather than off `tone`: through the wait the word takes the disabled step like any
-            // word that cannot be pressed, and the frame, the ring and the mark are what still say this is the fetch
-            // that has been failing (デザイン規約 §暗く落とした段).
-            toneDim: fetchButton.stopped ? Theme.dangerDim
-                     : fetchButton.fails > 0 ? Theme.warningDim
-                     : Theme.textMuted
-            frameColor: fetchButton.stopped ? Theme.danger
-                        : fetchButton.fails > 0 ? Theme.warning
-                        : "transparent"
-            // Only while the word is still `fetch`: once it reads `Resume`, the word is the news.
-            alert: fetchButton.fails > 0 && !fetchButton.stopped
-            alertTone: Theme.warning
-            holdMs: fetchButton.stopped ? Metrics.holdMs : 0
-            // Whoever asked for it, the network shows here: a fetch on the timer turns the button the way a clicked one
-            // does.
-            busy: topBar.autoFetchBusyLatched
-                  || (topBar.curPage !== null
-                      && (topBar.curPage.pageTab.busyOp === "fetch" || topBar.curPage.pageTab.autoFetchRunning))
-            enabled: topBar.curPage !== null
-                     && topBar.curPage.pageTab.remoteCount > 0
-                     && (fetchButton.stopped || topBar.curPage.pageTab.busyCount === 0)
-            tip: {
-                if (topBar.curPage === null)
-                    return ""
-                // Nothing under a pointer that cannot press this. What the button would do is not news while it cannot
-                // be done, and both states that grey it out are already said elsewhere on screen: REMOTES counts 0 in
-                // the left menu, and another git command running is on this band (デザイン規約 §無効 — ボタンの無効は
-                // ツールチップを持たない). Said out loud because a disabled control still takes hover and still opens its
-                // attached ToolTip (実測: rules-refs/app-ui.md §hover).
-                if (!fetchButton.enabled)
-                    return ""
-                const what = fetchButton.stopped
-                             ? qsTr("Automatic fetching stopped after %n failure(s). Hold to start it again.", "",
-                                    fetchButton.fails)
-                             : qsTr("Fetch all remotes and prune deleted branches")
-                const why = topBar.curPage.pageTab.autoFetchError
-                if (fetchButton.fails > 0 && why !== "")
-                    return what + "\n\n" + why
-                if (fetchButton.fails > 0)
-                    return what
-                return what + "\n" + (AppBackend.autoFetchMinutes > 0
-                                      ? qsTr("Automatically every %n minute(s)", "", AppBackend.autoFetchMinutes)
-                                      : qsTr("Automatic fetching is off"))
-            }
-            onActivated: topBar.curPage.pageTab.fetch("")
-            onHeld: topBar.curPage.pageTab.resumeAutoFetch()
         }
         // Push, in whichever shape this branch's standing with its remote allows (デザイン規約 §リモートへ送る). The counts behind
         // it are from the last fetch, so they are believed only where they refuse.
