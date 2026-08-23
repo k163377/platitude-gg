@@ -1,9 +1,10 @@
 //! Parsed patches flattened into the rows the diff pane draws.
 
 use platitude_core::highlight::DiffColors;
+use platitude_core::intraline::IntraMarks;
 use platitude_core::parse::diff::{DiffLineKind, FilePatch};
 
-use super::markup::styled;
+use super::markup::{display_ranges, styled};
 
 /// One flattened row of the diff pane.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,6 +22,12 @@ pub struct DiffRow {
     /// nothing to say — a language the set has never heard of, a hunk
     /// heading, git's own `\ No newline` note, a conflict marker.
     pub rich: bool,
+    /// Display columns of what changed inside this row —
+    /// `"col:width,col:width"` in the mono font's columns, empty where
+    /// nothing is emphasised (`platitude_core::intraline`, laid out by
+    /// [`display_ranges`]). The pane draws these as the stronger wash
+    /// under the text (デザイン規約 §シンタックスハイライト).
+    pub emph: String,
     /// One of git's conflict fences (`<<<<<<<` / `|||||||` / `=======` /
     /// `>>>>>>>`); the pane drops its voice for these
     /// (デザイン規約 §シンタックスハイライト).
@@ -81,10 +88,14 @@ pub fn is_unmerged_only(patches: &[FilePatch]) -> bool {
 /// Flattens parsed patches into displayable rows (hunk headers inline).
 /// `binary_note` inserts the "(binary file)" meta row; the caller turns it
 /// off when a preview (image / size summary) already covers that file.
+/// `marks` is `None` on the repaint that lays colours over rows already
+/// on screen — that pass keeps every row's `emph` as it is, so working
+/// the columns out again would be thrown away.
 pub fn flatten_patches(
     patches: &[FilePatch],
     binary_note: bool,
     colors: &DiffColors,
+    marks: Option<&IntraMarks>,
 ) -> Vec<DiffRow> {
     let mut rows = Vec::new();
     for (patch_index, patch) in patches.iter().enumerate() {
@@ -101,6 +112,7 @@ pub fn flatten_patches(
                     new_no: -1,
                     text: String::from("(binary file)"),
                     rich: false,
+                    emph: String::new(),
                     fence: false,
                     hunk: -1,
                     line: -1,
@@ -122,6 +134,7 @@ pub fn flatten_patches(
                 new_no: -1,
                 text: hunk_header(hunk, &heading),
                 rich: false,
+                emph: String::new(),
                 fence: false,
                 hunk: hunk_no,
                 line: -1,
@@ -143,6 +156,9 @@ pub fn flatten_patches(
                     new_no: line.new_no.map_or(-1, |n| n as i32),
                     text: if rich { markup } else { line.text.clone() },
                     rich,
+                    emph: marks.map_or_else(String::new, |marks| {
+                        display_ranges(&line.text, marks.line(patch_index, hunk_index, line_index))
+                    }),
                     fence: read.fence,
                     hunk: hunk_no,
                     line: i32::try_from(line_index).unwrap_or(-1),
@@ -190,6 +206,7 @@ diff --git a/src/a.rs b/src/a.rs
             &patches,
             true,
             &platitude_core::highlight::colors(&patches, None),
+            None,
         );
         assert!(
             rows.iter()
@@ -210,7 +227,12 @@ diff --git a/src/a.rs b/src/a.rs
 -old
 +new
 ";
-        let rows = flatten_patches(&parse_patch(patch.as_bytes()), true, &DiffColors::default());
+        let rows = flatten_patches(
+            &parse_patch(patch.as_bytes()),
+            true,
+            &DiffColors::default(),
+            None,
+        );
         assert_eq!(rows[0].kind, "hunk");
         assert!(rows[0].text.contains("@@ -1,2 +1,2 @@ heading"));
         assert_eq!(rows[1].kind, "ctx");
@@ -233,7 +255,12 @@ diff --git a/src/a.rs b/src/a.rs
 -removed
  tail
 ";
-        let rows = flatten_patches(&parse_patch(patch.as_bytes()), true, &DiffColors::default());
+        let rows = flatten_patches(
+            &parse_patch(patch.as_bytes()),
+            true,
+            &DiffColors::default(),
+            None,
+        );
         assert_eq!((rows[0].kind, rows[0].hunk, rows[0].line), ("hunk", 0, -1));
         assert_eq!((rows[1].kind, rows[1].hunk, rows[1].line), ("ctx", 0, 0));
         assert_eq!((rows[2].kind, rows[2].hunk, rows[2].line), ("add", 0, 1));
@@ -310,14 +337,20 @@ index bd43ee2..0000000
 diff --git a/x.png b/x.png
 Binary files a/x.png and b/x.png differ
 ";
-        let rows = flatten_patches(&parse_patch(patch.as_bytes()), true, &DiffColors::default());
+        let rows = flatten_patches(
+            &parse_patch(patch.as_bytes()),
+            true,
+            &DiffColors::default(),
+            None,
+        );
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].kind, "meta");
         assert!(
             flatten_patches(
                 &parse_patch(patch.as_bytes()),
                 false,
-                &DiffColors::default()
+                &DiffColors::default(),
+                None,
             )
             .is_empty()
         );
@@ -345,6 +378,7 @@ index 804ce7b,ba44bb1..0000000
             &parse_patch(CONFLICTED.as_bytes()),
             true,
             &DiffColors::default(),
+            None,
         );
         assert_eq!(rows[0].kind, "hunk");
         assert_eq!(rows[0].text, "@@@ -1,3 -1,3 +1,7 @@@ heading");
@@ -401,7 +435,7 @@ index 5b79a82,34a1fdf..0000000
         assert!(is_unmerged_only(&patches));
         assert!(!is_combined(&patches));
         assert!(!is_new_file(&patches), "it is not a new file either");
-        assert!(flatten_patches(&patches, true, &DiffColors::default()).is_empty());
+        assert!(flatten_patches(&patches, true, &DiffColors::default(), None).is_empty());
     }
 
     #[test]
@@ -410,6 +444,7 @@ index 5b79a82,34a1fdf..0000000
             &parse_patch(EDITED.as_bytes()),
             true,
             &DiffColors::default(),
+            None,
         );
         assert_eq!(rows[0].text, "@@ -1,2 +1,2 @@");
         assert!(rows.iter().all(|r| r.markers.is_empty()));

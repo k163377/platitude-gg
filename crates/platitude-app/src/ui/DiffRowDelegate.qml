@@ -24,6 +24,10 @@ Rectangle {
     /// Whether `text` is markup rather than the line itself (`encode::DiffRow`). Read from the row rather than guessed
     /// at: a line of C++ is full of `<` and `>`.
     required property bool rich
+    /// Display columns of what changed inside this row — `"col:width,col:width"`, empty for nothing
+    /// (`encode::DiffRow.emph`). Drawn as the stronger wash under the text; the quiet parts of the row keep the
+    /// line's own background (デザイン規約 §シンタックスハイライト).
+    required property string emph
     /// One of git's conflict fences (`encode::DiffRow`).
     required property bool fence
     required property int hunk
@@ -159,6 +163,20 @@ Rectangle {
         width: Math.max(0, diffRow.rowWidth - gutter.width - diffRow.toolsRoom)
         height: parent.height
         clip: true
+        // The stronger wash under what actually changed inside the row (`emph`), while the quiet parts keep the
+        // line's own background — the strong/weak split is these rectangles, not the text
+        // (デザイン規約 §シンタックスハイライト). Under the Label, travelling with the same send.
+        Repeater {
+            model: diffRow.emph === "" ? [] : diffRow.emph.split(",")
+            delegate: Rectangle {
+                required property string modelData
+                readonly property var run: modelData.split(":")
+                x: -diffRow.codeX + Number(run[0]) * diffRow.charW
+                width: Number(run[1]) * diffRow.charW
+                height: parent.height
+                color: diffRow.kind === "add" ? Theme.diffAddedEmphBg : Theme.diffRemovedEmphBg
+            }
+        }
         Label {
             // A hunk heading does not travel: it is the pane's own words about the rows below, and words that slid off
             // the left while the code was read would take with them the only thing saying which hunk this is. It gives

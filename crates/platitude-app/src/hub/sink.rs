@@ -145,6 +145,7 @@ impl SessionSink for BridgeSink {
                 preview,
                 fingerprint,
                 endings,
+                marks,
             } => {
                 // Kept rather than replaced, unlike every other feed here:
                 // rows and colours are two messages of one diff, and two
@@ -158,6 +159,7 @@ impl SessionSink for BridgeSink {
                     preview,
                     fingerprint,
                     endings,
+                    marks,
                 });
             }
             SessionEvent::DiffColoured {

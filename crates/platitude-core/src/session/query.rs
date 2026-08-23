@@ -219,6 +219,7 @@ impl RepoSession {
                     }
                 };
                 let patches = Arc::new(patches);
+                let marks = Arc::new(crate::intraline::marks(&patches));
                 let is_binary = patches.iter().any(|p| p.is_binary);
                 let preview =
                     preview::file_preview(&self.executor, &workdir, &target, is_binary, &cancel)
@@ -232,6 +233,7 @@ impl RepoSession {
                     preview,
                     fingerprint,
                     endings,
+                    marks,
                 });
                 self.paint_diff(target, patches, source, epoch);
                 true

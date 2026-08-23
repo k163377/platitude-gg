@@ -18,6 +18,7 @@ pub mod graph;
 pub mod highlight;
 pub mod identity;
 pub mod integrate;
+pub mod intraline;
 pub mod mem;
 pub mod model;
 pub mod offers;

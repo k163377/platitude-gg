@@ -57,8 +57,10 @@ QtObject {
     // ---- colors: git / diff ----
     readonly property color diffAddedFg: "#4ADE80"
     readonly property color diffAddedBg: "#14301D"
+    readonly property color diffAddedEmphBg: "#144927"
     readonly property color diffRemovedFg: "#F87171"
     readonly property color diffRemovedBg: "#351515"
+    readonly property color diffRemovedEmphBg: "#5B1E1F"
     readonly property color diffHunkHeaderFg: "#94A3B8"
     readonly property color diffHunkHeaderBg: "#0F172A"
     readonly property color statusStaged: "#16A34A"

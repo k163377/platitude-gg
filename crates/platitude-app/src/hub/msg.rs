@@ -254,6 +254,9 @@ pub enum DiffMsg {
         fingerprint: u64,
         /// What the same bytes said about line endings, if anything.
         endings: Option<platitude_core::eol::Notice>,
+        /// What changed inside each row (`intraline`) — rides with the
+        /// rows, not behind them like the colours.
+        marks: Arc<platitude_core::intraline::IntraMarks>,
     },
     /// Colours for the lines of the diff named by `target`, addressed the
     /// way the rows are. Never arrives for a diff nobody is on.

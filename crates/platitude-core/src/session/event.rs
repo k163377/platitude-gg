@@ -207,6 +207,11 @@ pub enum SessionEvent {
         /// with the diff rather than following it: a notice that appears
         /// after the reader has started is worse than none.
         endings: Option<crate::eol::Notice>,
+        /// What changed inside each row (`intraline`). With the rows, not
+        /// behind them like the colours: it is read off the rows alone,
+        /// costs milliseconds, and where a change is is the first thing a
+        /// reader looks for.
+        marks: Arc<crate::intraline::IntraMarks>,
     },
     /// Syntax colours for the lines of a diff that has already been sent.
     ///
@@ -226,6 +231,12 @@ pub enum SessionEvent {
     DiffColoured {
         target: DiffTarget,
         colors: crate::highlight::DiffColors,
+        /// Whether these are the colours the diff ends on. False on the
+        /// quick first answer a deep fallback-lexer diff sends ahead of
+        /// its full read — anything waiting for "the colours" waits for
+        /// true, or it latches a shot of the interim
+        /// (app-ui.md §UI 自動化の因果性).
+        settled: bool,
     },
     /// A background refresh/query failed (op is a stable identifier).
     OpFailed {

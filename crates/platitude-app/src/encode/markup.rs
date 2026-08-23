@@ -75,6 +75,67 @@ fn push_hex(out: &mut String, byte: u8) {
     }
 }
 
+/// The display columns `ranges` (byte ranges into `text`,
+/// `platitude_core::intraline`) land on, as the row is actually drawn:
+/// tabs expand exactly as [`push_escaped`] expands them, and the glyphs
+/// a mono font draws double width count two (`super::columns`'s rule).
+/// `"col:width,col:width"`, empty where there is nothing — what
+/// `DiffRow::emph` carries and the pane turns into the stronger wash.
+pub(super) fn display_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
+    if ranges.is_empty() {
+        return String::new();
+    }
+    let mut out = String::new();
+    let mut iter = ranges.iter().copied();
+    let mut current = iter.next();
+    let mut open: Option<usize> = None;
+    let mut col = 0usize;
+    let mut draw = 0usize;
+    for (at, ch) in text.char_indices() {
+        if let Some((start, len)) = current {
+            if open.is_none() && at == start {
+                open = Some(draw);
+            }
+            if at == start + len {
+                if let Some(from) = open.take() {
+                    push_pair(&mut out, from, draw);
+                }
+                current = iter.next();
+                if let Some((next_start, _)) = current
+                    && at == next_start
+                {
+                    open = Some(draw);
+                }
+            }
+        }
+        if ch == '\t' {
+            let stop = TAB_WIDTH - (col % TAB_WIDTH);
+            col += stop;
+            draw += stop;
+        } else {
+            col += 1;
+            draw += 1 + usize::from(super::columns::is_wide(ch));
+        }
+    }
+    // A range that runs to the line's end closes here.
+    if let Some(from) = open {
+        push_pair(&mut out, from, draw);
+    }
+    out
+}
+
+fn push_pair(out: &mut String, from: usize, to: usize) {
+    if to <= from {
+        return;
+    }
+    if !out.is_empty() {
+        out.push(',');
+    }
+    out.push_str(&from.to_string());
+    out.push(':');
+    out.push_str(&(to - from).to_string());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

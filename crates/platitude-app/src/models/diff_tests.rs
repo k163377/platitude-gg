@@ -23,6 +23,7 @@ fn rows(path: &str, fingerprint: u64) -> DiffMsg {
         preview: None,
         fingerprint,
         endings: None,
+        marks: Arc::default(),
     }
 }
 

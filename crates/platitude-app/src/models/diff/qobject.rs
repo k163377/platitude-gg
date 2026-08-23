@@ -173,6 +173,7 @@ impl DiffModel {
                     preview,
                     fingerprint,
                     endings,
+                    marks,
                     ..
                 } => {
                     self.loading = false;
@@ -185,6 +186,7 @@ impl DiffModel {
                     self.apply_preview(preview.as_ref());
                     self.shown_has_preview = preview.is_some();
                     self.shown = Some(patches);
+                    self.shown_marks = marks;
                     // Plain to begin with. The colours are a second
                     // message and may never come at all — a language the
                     // set has no rules for, a reader who has moved on.

@@ -47,8 +47,9 @@ fn columns_of(text: &str) -> usize {
 /// Whether the glyph is one a mono font draws two columns wide. The ranges
 /// are the East Asian Wide and Fullwidth blocks plus the emoji that share
 /// their advance — read off Unicode's own table rather than derived, so
-/// the list is what it is.
-fn is_wide(ch: char) -> bool {
+/// the list is what it is. Shared with `markup::display_ranges`, which
+/// places the emphasis wash under the same glyphs.
+pub(super) fn is_wide(ch: char) -> bool {
     matches!(u32::from(ch),
         0x1100..=0x115F
         | 0x2E80..=0x303E

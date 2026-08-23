@@ -19,7 +19,9 @@ impl DiffModel {
         let Some(patches) = self.shown.clone() else {
             return;
         };
-        let painted = flatten_patches(&patches, !self.shown_has_preview, colors);
+        // `None` for the marks: this pass rewrites `text`/`rich` only,
+        // so the emphasis columns it would compute go straight to waste.
+        let painted = flatten_patches(&patches, !self.shown_has_preview, colors, None);
         if painted.len() != self.lines.len() {
             // The same patches were walked both times, so this cannot
             // happen — but addressing rows by position is only safe while
@@ -56,20 +58,26 @@ impl DiffModel {
             return;
         };
         self.reset();
-        let rows: Vec<DiffLineItem> = flatten_patches(&patches, !self.shown_has_preview, colors)
-            .into_iter()
-            .map(|r: DiffRow| DiffLineItem {
-                kind: r.kind.to_string(),
-                old_no: r.old_no,
-                new_no: r.new_no,
-                text: r.text,
-                rich: r.rich,
-                fence: r.fence,
-                hunk: r.hunk,
-                line: r.line,
-                side: platitude_core::parse::diff::side_of_markers(&r.markers).to_string(),
-            })
-            .collect();
+        let rows: Vec<DiffLineItem> = flatten_patches(
+            &patches,
+            !self.shown_has_preview,
+            colors,
+            Some(&self.shown_marks),
+        )
+        .into_iter()
+        .map(|r: DiffRow| DiffLineItem {
+            kind: r.kind.to_string(),
+            old_no: r.old_no,
+            new_no: r.new_no,
+            text: r.text,
+            rich: r.rich,
+            emph: r.emph,
+            fence: r.fence,
+            hunk: r.hunk,
+            line: r.line,
+            side: platitude_core::parse::diff::side_of_markers(&r.markers).to_string(),
+        })
+        .collect();
         // Both sides at once: the two columns are laid out to one width,
         // and a file whose old side ran further than its new one would
         // otherwise hand the wider number to the narrower column.
@@ -119,6 +127,7 @@ impl DiffModel {
             self.unmerged = false;
             self.widest_no = 0;
             self.widest_columns = 0;
+            self.shown_marks = Default::default();
             self.apply_preview(None);
             self.reset();
         }
@@ -200,9 +209,10 @@ pub(super) fn work_tree_target(bucket: &str, path: &str, orig_path: String) -> D
 /// Not simply the newest arrival, for two reasons. One diff now sends two
 /// messages — its rows, then its colours — and taking only the last would
 /// leave the other unread. And two diffs started a moment apart need not
-/// finish in that order: colouring a file of source takes most of a second
-/// where a plain one takes none (`highlight::colors`), so a slower
-/// *earlier* request can land after the one the reader is waiting for.
+/// finish in that order: colouring a file of source can take hundreds of
+/// milliseconds where a plain one takes none (`highlight::colors`), so a
+/// slower *earlier* request can land after the one the reader is waiting
+/// for.
 /// Taking the last and testing it left the pane on the file it was on
 /// before, with no second chance — nothing else was ever going to arrive
 /// for that click (2026-08-13 実測).

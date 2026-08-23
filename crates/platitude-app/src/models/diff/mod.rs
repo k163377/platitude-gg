@@ -44,6 +44,10 @@ pub struct DiffLineItem {
     /// rather than sniffing the string — a line of C++ full of `<>` is
     /// not markup, and guessing would eventually decide it was.
     rich: bool,
+    /// Display columns of what changed inside this row —
+    /// `"col:width,col:width"`, empty where nothing is emphasised
+    /// (see `encode::DiffRow`).
+    emph: String,
     /// One of git's conflict fences. Not the same thing as `side`
     /// below: that says which side a line came from, this says the line
     /// is not the file talking at all (see `encode::DiffRow`).
@@ -62,7 +66,10 @@ pub struct DiffLineItem {
 
 impl platitude_core::mem::Footprint for DiffLineItem {
     fn heap_bytes(&self) -> usize {
-        self.kind.heap_bytes() + self.text.heap_bytes() + self.side.heap_bytes()
+        self.kind.heap_bytes()
+            + self.text.heap_bytes()
+            + self.side.heap_bytes()
+            + self.emph.heap_bytes()
     }
 }
 
@@ -133,6 +140,9 @@ pub struct DiffModel {
     /// 6,000-line diff, which is why the colours can afford to redo the
     /// whole list rather than address rows one at a time.
     shown: Option<Arc<Vec<FilePatch>>>,
+    /// What changed inside each shown row (`intraline`), kept beside
+    /// `shown` for the same rebuilds.
+    shown_marks: Arc<platitude_core::intraline::IntraMarks>,
     /// Whether the diff on screen is one a picture stands in for, which is
     /// the other half of what `flatten_patches` is told.
     shown_has_preview: bool,
