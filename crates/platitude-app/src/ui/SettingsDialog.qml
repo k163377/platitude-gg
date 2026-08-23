@@ -294,84 +294,12 @@ AppDialog {
                     return widest
                 }
                 model: settingsDialog.assigned
-                delegate: RowLayout {
-                    id: avatarRow
+                // One row per assignment (`AvatarAssignRow`); the shared name column and the pointer stand-in are
+                // handed down, the rest the row reads off its own record.
+                delegate: AvatarAssignRow {
                     Layout.fillWidth: true
-                    spacing: Theme.spaceSm
-                    /// The hand is on this row's Remove: the pointer on the
-                    /// button itself, the keyboard's focus (the hold's other
-                    /// hand — デザイン規約 §長押し), or headless having put it
-                    /// there for a shot.
-                    ///
-                    /// The button rather than the row it sits in: red says
-                    /// what the hand is about to lose, and a word that
-                    /// reddens while the pointer is still three columns of
-                    /// data away is about none of them (2026-08-21 ユーザー
-                    /// 選択).
-                    readonly property bool lit: unsetButton.hovered || unsetButton.activeFocus
-                        || settingsDialog.pointedAtRow === index
-                    /// Automation reads and works the row through these two rather than reaching inside it: the
-                    /// picture the list is photographed for, and the hold it has no hand to make.
-                    function pictureReady() {
-                        return rowFace.pictureReady()
-                    }
-                    function holdRemove() {
-                        unsetButton.completeHold()
-                    }
-                    IdentIcon {
-                        id: rowFace
-                        imageUrl: modelData.url
-                        width: Theme.iconLg
-                        height: Theme.iconLg
-                        Layout.preferredWidth: Theme.iconLg
-                        Layout.preferredHeight: Theme.iconLg
-                    }
-                    /// The width this row asks the shared name column to
-                    /// hold — its own glyphs, and nothing for the column's
-                    /// spare width, which stays air.
-                    readonly property real nameSeat: nameLabel.implicitWidth
-                    Label {
-                        id: nameLabel
-                        text: modelData.name
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontMd
-                        Layout.preferredWidth: avatarRepeater.nameColW
-                        elide: Text.ElideRight
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        text: modelData.email
-                        elide: Text.ElideRight
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fontSm
-                    }
-                    // Held, not clicked: this card writes as it is worked
-                    // rather than on a Save, so the gesture is the only
-                    // thing standing between a stray click and a picture
-                    // that has to be found again (デザイン規約 §長押し).
-                    //
-                    // Red only where the hand is (デザイン規約 §状態): a
-                    // standing state colour is for saying that the usual
-                    // move is not available, and everything a settings card
-                    // does is the usual move — a red word per row says
-                    // nothing and thins out the warnings that mean it. The
-                    // frame is what carries "this is a control" at rest:
-                    // the other three columns are data, and a bare word
-                    // among them reads as a fourth one. `*Dim` belongs on
-                    // that frame rather than on the word, which is the one
-                    // use §暗く落とした段 allows for it. Kept in the layout
-                    // either way, so the address beside it does not
-                    // re-elide as the pointer crosses the list.
-                    ActionButton {
-                        id: unsetButton
-                        text: qsTr("Remove")
-                        font.pixelSize: Theme.fontMd
-                        tone: avatarRow.lit ? Theme.danger : Theme.textSecondary
-                        frameColor: avatarRow.lit ? Theme.dangerDim : Theme.borderSubtle
-                        holdMs: Metrics.holdMs
-                        holdTone: Theme.danger
-                        onHeld: AppBackend.removeAvatar(modelData.email)
-                    }
+                    nameColW: avatarRepeater.nameColW
+                    pointedAtRow: settingsDialog.pointedAtRow
                 }
             }
             RowLayout {

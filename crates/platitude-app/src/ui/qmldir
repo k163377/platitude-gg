@@ -20,6 +20,7 @@ AutoActDriver 1.0 AutoActDriver.qml
 AutoScrollBar 1.0 AutoScrollBar.qml
 AutoShotDriver 1.0 AutoShotDriver.qml
 PagePerfDriver 1.0 PagePerfDriver.qml
+AvatarAssignRow 1.0 AvatarAssignRow.qml
 AvatarButton 1.0 AvatarButton.qml
 ChangeIcon 1.0 ChangeIcon.qml
 ClipboardHelper 1.0 ClipboardHelper.qml
