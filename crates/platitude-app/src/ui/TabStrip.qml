@@ -30,6 +30,9 @@ Item {
     /// Band the tabs may not grow into, and the run itself for `Main` to measure in scene coordinates.
     readonly property real grabRun: tabs.grabRun
     readonly property Item grabRunItem: grabArea
+    /// Whether the ☰'s card is standing. The grab run gives up being the window's caption while it is, so that a press
+    /// on the band's empty run reaches the scene and takes the card down (`WindowChrome.captionYielded`).
+    readonly property bool appMenuOpen: appMenu.opened
 
     /// The longest a tab's name is ever drawn (デザイン規約 レイアウト初期値).
     readonly property int tabTitleMaxW: 180
@@ -53,6 +56,13 @@ Item {
     /// The grab-run moved or changed size in the strip's own layout. `Main` folds in the shifts this strip cannot see
     /// from here (the maximised inset, the window resizing) and reports the strip on.
     signal captionStripMoved()
+
+    /// Automation: the ☰, pressed (`PG_AUTO_ACT=app-menu`). Put in at the button rather than at the card it opens, so
+    /// what answers is the band's real wiring and not a second way in written for the run (`TopBar.stashNow`) — the
+    /// toggle this verb is about lives on the button's own handler.
+    function clickAppMenu() {
+        menuButton.clicked()
+    }
 
     /// The left button moves to the tab — and leaves a hand on it that may go on to carry it (`takeTab`) — the middle
     /// one closes it (デザイン規約 §タブの所作). The real press and the smoke hook both come through here.
@@ -304,9 +314,20 @@ Item {
                 tint: Theme.textPrimary
             }
         }
-        onClicked: appMenu.open()
+        // The mark is the way in and the way out: a press on it while the card stands takes the card down, the way a
+        // press anywhere else in the window does. Written as a toggle rather than as `open()` because `open()` on a
+        // card that is already up does nothing at all — and under the default close policy the press had already taken
+        // it down, so the pair read as a mark that could never be pressed a second time (2026-08-23 ユーザー報告).
+        onClicked: appMenu.opened ? appMenu.close() : appMenu.open()
         AppMenu {
             id: appMenu
+            // Outside the ☰ itself, not outside the card. The default policy calls the mark's own press "outside" and
+            // closes on it — and the click that follows the same press opens the card again, so the second press never
+            // shuts anything (measured with an injected click — qmltestrunner, since a press cannot be put into the
+            // app itself; the same reading `AppCombo.popup` was written from). Every press elsewhere in the window
+            // still takes the card down, including the one on the band's own empty run: that run stops being the
+            // platform's caption while the card stands (`WindowChrome.captionYielded`).
+            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
             // A full-height cell ends where the band does, so the card would otherwise open on top of the divider.
             y: menuButton.height + Theme.splitterWidth
             AppMenuItem {

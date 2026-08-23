@@ -35,6 +35,23 @@ Item {
         else
             chrome.window.visibility = Window.Minimized
     }
+    /// Whether the scene wants its grab-run back for a while. The run is the one part of the window a press never
+    /// reaches — the hit test answers HTCAPTION for it, so the platform takes the press and the scene is told nothing
+    /// — and a card that is meant to close on a press outside it would stand through every click landing there
+    /// (2026-08-23 ユーザー報告: the ☰'s menu). While such a card is up the run is ordinary client area again, so the
+    /// press closes it; the band gives up drag, snap and the double-click for exactly that long, which is what a
+    /// platform menu does with the click that dismisses it.
+    ///
+    /// Only the cards that close on an outside press belong here. A modal dialog is not one of them — nothing about it
+    /// would close, and the window would merely stop being draggable while it stood.
+    readonly property bool captionYielded: chrome.topBar.appMenuOpen
+    onCaptionYieldedChanged: chrome.reportCaptionStrip()
+
+    /// Automation: what the platform was last told the run is, `none` while the scene has it back
+    /// (`PG_AUTO_ACT=app-menu`). Which side owns that run is not a thing a screenshot holds — the band frames the same
+    /// either way.
+    property string sentStrip: "none"
+
     /// Tells the hit test where the band's grab-run is, in scene coordinates — the one stretch it answers HTCAPTION
     /// for, which gives the band drag, snap, double-click maximise and the window menu as the platform's own
     /// gestures. Called from the strip's layout changes and from the one shift it cannot see: the window resizing,
@@ -42,8 +59,16 @@ Item {
     function reportCaptionStrip() {
         if (!chrome.window.captionMerged || chrome.topBar.grabRunItem === null)
             return
+        // An empty strip is how "there is no caption here" is said: the hit test takes `x1 > x0` as the question
+        // (`winframe::hit_test`), so nothing else has to know about the yield.
+        if (chrome.captionYielded) {
+            chrome.sentStrip = "none"
+            AppBackend.setCaptionStrip(0, 0, 0)
+            return
+        }
         const run = chrome.topBar.grabRunItem
         const at = run.mapToItem(null, 0, 0)
+        chrome.sentStrip = Math.round(at.x) + "-" + Math.round(at.x + run.width)
         AppBackend.setCaptionStrip(at.x, at.x + run.width, at.y + run.height)
     }
     /// What Windows has to be told about this window. A run that was turned away gets a window too, and undecorated

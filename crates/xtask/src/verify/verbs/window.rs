@@ -81,6 +81,25 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "tab_edge landed=true",
     },
+    // The ☰'s card, standing. `yield=true` is the half no picture holds:
+    // the band's empty run is the platform's caption, and while the card
+    // is up it has to stop being that or every press landing there is
+    // swallowed and the card never goes down. A run where the run was
+    // never handed back frames the same open card.
+    Verb {
+        name: "app-menu",
+        when: &[],
+        plain: "app_menu open=true yield=true",
+    },
+    // And the mark pressed a second time. The card that reopened on that
+    // press and the card that was never closed are the same photograph —
+    // which is how this went unnoticed — so what is judged is the card
+    // being down with the run back in the platform's hands.
+    Verb {
+        name: "app-menu-reclick",
+        when: &[],
+        plain: "app_menu open=false yield=false",
+    },
     // The three states themselves. A run where one of them never stood
     // photographs a band that was never crowded, and that picture
     // cannot be told from a band that gave the crowd room — so the

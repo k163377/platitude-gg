@@ -26,6 +26,7 @@ Item {
     property TabsModel tabsModel
     property Repeater pageRepeater
     property TopBar topBar
+    property WindowChrome chrome
     property ColumnLayout mainUi
     property Item gate
     property OpenFailedDialog openFailedDialog
@@ -796,6 +797,49 @@ Item {
                 + " width=" + topBar.width
                 + " tabsW=" + topBar.bandTabsWidth
                 + " rightMargin=" + topBar.bandRightMargin)
+            window.finishAutoAct()
+        }
+    }
+
+    // PG_AUTO_ACT=app-menu / app-menu-reclick: the ☰ pressed once and left standing, or pressed twice.
+    //
+    // Numbers as well as the card's picture, because the two things that were reported broken are both invisible to
+    // it: a second press that reopens the card frames exactly like one that never closed it, and which side of the
+    // band owns the grab run is not drawn at all. `strip=none` is the run handed back to the scene, which is what
+    // makes a press on the band's empty stretch reach the card (`WindowChrome.captionYielded`) — on a build where the
+    // band is not the window's title bar there is no strip either way, and `merged=` says which run this was.
+    SampleTimer {
+        id: appMenuActTimer
+        running: AppBackend.autoAct === "app-menu" || AppBackend.autoAct === "app-menu-reclick"
+        /// How many presses have gone in. The second one has to land on a card that was observed standing, or the
+        /// gesture being reported is not the one a hand makes.
+        property int pressed: 0
+        onTriggered: {
+            if (!window.visible || topBar.width <= 0)
+                return
+            const twice = AppBackend.autoAct === "app-menu-reclick"
+            if (appMenuActTimer.pressed === 0) {
+                appMenuActTimer.pressed = 1
+                topBar.clickAppMenu()
+                return
+            }
+            if (appMenuActTimer.pressed === 1) {
+                if (!topBar.appMenuOpen)
+                    return
+                if (twice) {
+                    appMenuActTimer.pressed = 2
+                    topBar.clickAppMenu()
+                    return
+                }
+            }
+            if (twice && topBar.appMenuOpen)
+                return
+            stop()
+            AppBackend.report(
+                "app_menu open=" + topBar.appMenuOpen
+                + " yield=" + chrome.captionYielded
+                + " strip=" + chrome.sentStrip
+                + " merged=" + window.captionMerged)
             window.finishAutoAct()
         }
     }

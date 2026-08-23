@@ -72,6 +72,9 @@ Rectangle {
     signal captionStripMoved()
     /// The run itself, for `Main` to measure in scene coordinates.
     readonly property Item grabRunItem: tabStrip.grabRunItem
+    /// Whether the ☰'s card is standing (`TabStrip`). The grab run is the one part of the band a press never reaches,
+    /// so it hands the run back to the scene while the card is up (`WindowChrome.captionYielded`).
+    readonly property bool appMenuOpen: tabStrip.appMenuOpen
 
     /// The narrowest this band can be laid out at — one of the two numbers the window's floor is the larger of
     /// (`Main.floorWidth`). Read off the row's *minimum* rather than summed here, so a control added to the band later
@@ -144,6 +147,7 @@ Rectangle {
 
     /// Automation: the strip's own hooks, handed on. What `Main` and `WindowAutoActDriver` hold is the band, so the way
     /// in stays here after the tabs themselves have gone (`TabStrip`).
+    function clickAppMenu() { tabStrip.clickAppMenu() }
     function middleClickTab(index) { return tabStrip.middleClickTab(index) }
     function dragTabTo(from, to) { return tabStrip.dragTabTo(from, to) }
     function holdTabAt(index) { return tabStrip.holdTabAt(index) }

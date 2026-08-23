@@ -217,7 +217,7 @@ Item {
                 "open-not-a-repo", "open-bare", "open-not-a-repo-retry",
                 "open-not-a-repo-cancel", "open-fail-tab",
                 "open-fail-tab-bare", "open-fail-tab-log", "identity",
-                "identity-half", "identity-tip", "band", "tab-widths",
+                "identity-half", "identity-tip", "band", "app-menu", "app-menu-reclick", "tab-widths",
                 "tab-mark", "tab-drag", "tab-hold", "tab-edge",
                 "window-fill", "solo", "window-floor",
                 "badges", "badges-hover", "old-git", "old-git-card",

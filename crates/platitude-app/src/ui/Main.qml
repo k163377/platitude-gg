@@ -225,6 +225,7 @@ ApplicationWindow {
             tabsModel: tabsModel
             pageRepeater: pages.seats
             topBar: topBar
+            chrome: chrome
             mainUi: mainUi
             gate: gate
             openFailedDialog: openFailedDialog
