@@ -88,6 +88,8 @@ commands:
         behind    remote has commits fetch would bring in
         diverged  the same, fetched, with a commit of our own on top
         unpublished  a branch never sent anywhere, two remotes, one taken name
+        forkmark  a fork checkout: fetches from origin, and the branch's
+                  own mark sends every push of it to the fork instead
         noremote  commits and no remote at all: the first push writes one down
         signed    ssh-signed commits: verified, unjudgeable, unsigned
         errsig    an embedded OpenPGP signature no key can verify: the E

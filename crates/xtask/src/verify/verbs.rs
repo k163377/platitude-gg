@@ -3,12 +3,18 @@
 //!
 //! A table rather than a branch in the run: a verb that fails invisibly
 //! is one line here, and the run stays about running.
+//!
+//! The verbs about remotes are a table of their own
+//! ([`super::remote_verbs`]), asked first.
 
 /// What `verb` has to say for its picture to be worth anything, or `None`
 /// when the picture is the whole of it. `arg` is the verb's own argument:
 /// one verb serves two panes and wants a different line for each.
 #[expect(clippy::too_many_lines)]
 pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
+    if let Some(line) = super::remote_verbs::must_say(verb, arg) {
+        return Some(line);
+    }
     match verb {
         "solo" => Some("solo blocked=true"),
         "details-fit" => Some("details_fit fits=true"),
@@ -307,34 +313,6 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "find-drop" => Some("find_drop open=true shown=true"),
         "name-box-drop" if arg.contains(':') => Some("name_drop box=true"),
         "name-box-drop" => Some("name_drop box=false"),
-        // The `+` on a REMOTES band that has gone unavailable around it.
-        // The picture holds the band; it cannot hold whether the mark
-        // still answers, and a `+` wired to nothing frames exactly like
-        // one that opened the form. Folded, `collapsed=` is the second
-        // half: the rail's own cell must reach the dialog without
-        // putting the list back over whatever the fold was made for.
-        "nav-add-remote" if arg == "folded" => Some("nav_add_remote dialog=true collapsed=true"),
-        "nav-add-remote" => Some("nav_add_remote dialog=true"),
-        // Which remote a push goes to. The mark is one badge on one row:
-        // a picture of the band cannot tell "marked" from "the badge was
-        // never wired", and `local=true` is what says the repository's own
-        // config holds it rather than the machine's.
-        "push-default" => Some("push_default local=true"),
-        // The row a remote's own menu is offering. `open=true` because a
-        // menu that never opened photographs as the sidebar it stands on,
-        // and the count because the row that is gone on the marked remote
-        // is the whole of what this reads.
-        "remote-menu" if arg.ends_with(":marked") => Some("remote_menu open=true rows=1"),
-        "remote-menu" => Some("remote_menu open=true rows=2"),
-        // The form, and whether its box came up in the state the
-        // repository is actually in.
-        "remote-url" if arg.ends_with(":marked") => Some("remote_url dialog=true box=true"),
-        "remote-url" => Some("remote_url dialog=true box=false"),
-        // The destination list with the mark in it. `marked=` is the field
-        // the rows read, not a row of its own — a list drawn with no mark
-        // and a list whose mark was never plumbed frame the same way, and
-        // the plain `publish-remotes` run is the half with nothing marked.
-        "publish-remotes-marked" => Some("publish_remotes open=true marked=true"),
         // A window whose panel the press took down and a window that
         // never raised one frame the same, and the mark the press also
         // quiets is 12 pixels of it in a corner. `was=` is judged with

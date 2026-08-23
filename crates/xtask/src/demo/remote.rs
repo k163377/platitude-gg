@@ -62,6 +62,36 @@ pub(super) fn unpublished(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// A fork workflow: the branch goes on fetching from `origin`, and its
+/// own mark (`branch.main.pushRemote`) sends every push of it to `fork`.
+///
+/// **The arrangement `remote.pushDefault` cannot stand in for.** git
+/// weighs the branch's mark first and the repository's second
+/// (git-config(5); 実測 2.55), so a destination worked out from the
+/// repository's alone names `origin` here while the push goes to the
+/// fork — and the counts beside it, which are about origin, are then
+/// about somewhere else entirely (`push-target`, デザイン規約 §リモートへ送る).
+///
+/// The commit of our own is what makes the button live and gives those
+/// counts a number to be wrong with.
+pub(super) fn forkmark(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+
+    let fork = repo.root.join("fork.git");
+    std::fs::create_dir_all(&fork).map_err(|e| e.to_string())?;
+    repo.git_at(&fork.clone(), &["init", "--bare", "-b", "main"])?;
+    let fork_url = file_url(&fork);
+    repo.git(&["remote", "add", "fork", &fork_url])?;
+    // Only where the pushes go. `branch.main.remote` goes on saying
+    // `origin`, which is the whole shape of a fork checkout.
+    repo.git(&["config", "branch.main.pushRemote", "fork"])?;
+
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    Ok(())
+}
+
 /// The remote holds commits a fetch would bring in (made by a second
 /// clone). This repo has not fetched yet.
 pub(super) fn behind(repo: &mut DemoRepo) -> Result<(), String> {

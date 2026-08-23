@@ -1354,6 +1354,27 @@ Item {
             driver.complete()
         }
     }
+    /// PG_AUTO_ACT=push-target: where the toolbar says this branch's push is going, and the standing beside it. Both
+    /// come off the page the button reads (`RepoPage.pushTargetLabel` / `pushState`), so what answers is the binding
+    /// the window uses rather than a second reading written for the run. The marks that decided it ride the same line:
+    /// the label alone cannot say **which** of them git would have followed.
+    ///
+    /// `workTree.loaded` is the barrier — before the first status lands the branch is empty and every mark reads as
+    /// unset, which is a destination of nothing rather than an answer.
+    SampleTimer {
+        id: pushTargetTimer
+        onTriggered: {
+            if (!workTree.loaded || repoTab.state !== "open" || repoTab.busyCount > 0)
+                return
+            pushTargetTimer.stop()
+            AppBackend.report("push_target label=" + page.pushTargetLabel
+                              + " state=" + page.pushState
+                              + " branch_mark=" + workTree.pushRemote
+                              + " repo_mark=" + repoTab.pushDefault
+                              + " tracks=" + workTree.upstream)
+            driver.complete()
+        }
+    }
     /// PG_AUTO_ACT=publish-remotes-marked: the first push's destination list with the mark in it. The mark is put on
     /// first and waited for — the question reads the marked remote as it opens, so a list opened before the write
     /// landed would be the one from before.
@@ -3218,6 +3239,10 @@ Item {
                 sidebarPane.tapAddRemote()
             }
             navAddRemoteTimer.start()
+        } else if (act === "push-target") {
+            // Nothing to press: the destination is a binding, and this run is about what it says once the repository
+            // it is about has finished arriving.
+            pushTargetTimer.start()
         } else if (act === "push-default" || act === "remote-menu" || act === "remote-url"
                    || act === "publish-remotes-marked") {
             // `<remote>`, or `<remote>:marked` to put the mark on it first. All three go in at the same doors a hand

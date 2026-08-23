@@ -11,7 +11,7 @@ use super::conflict::{
     rebase_empty, rebase_staged, revert_clashes,
 };
 use super::deep::{deep, deep_detached};
-use super::remote::{behind, diverged, unpublished};
+use super::remote::{behind, diverged, forkmark, unpublished};
 use super::repo::DemoRepo;
 use super::scale::{edges, long, longpaths, manyhunks, widelines};
 use super::signing::{errsig, signed};
@@ -80,6 +80,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "behind" => behind(&mut repo)?,
         "diverged" => diverged(&mut repo)?,
         "unpublished" => unpublished(&mut repo)?,
+        "forkmark" => forkmark(&mut repo)?,
         "noremote" => noremote(&mut repo)?,
         "signed" => signed(&mut repo)?,
         "errsig" => errsig(&mut repo)?,
