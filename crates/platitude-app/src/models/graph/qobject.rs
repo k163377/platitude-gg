@@ -73,7 +73,7 @@ impl GraphModel {
     qproperty!("error", Member = error, Notify = stats_changed);
 
     #[qsignal]
-    fn stats_changed(&mut self);
+    pub(super) fn stats_changed(&mut self);
 
     /// Names the refs whose chips are to be left undrawn — at most one
     /// per kind, since a delete touches at most one of each; empty
@@ -99,157 +99,8 @@ impl GraphModel {
     }
 
     #[qslot]
-    #[expect(clippy::too_many_lines)]
     fn drain(&mut self) {
-        let Some(feed) = self.feed.clone() else {
-            return;
-        };
-        for msg in feed.drain() {
-            match msg {
-                GraphMsg::Started { generation } => {
-                    if generation > self.generation {
-                        self.generation = generation;
-                        self.reset();
-                        self.reset_count += 1;
-                        self.loading = true;
-                        self.row_total = 0;
-                        self.walked_total = 0;
-                        // The query stands — a restart is the same
-                        // history read again — but its answers went with
-                        // the rows, and the chunks re-count them.
-                        self.match_count = 0;
-                        self.first_matched = false;
-                        self.max_lanes = 1;
-                        self.first_chunk_ms = -1;
-                        self.total_ms = -1;
-                        self.truncated = false;
-                        self.error = String::new();
-                        self.started_at = Some(Instant::now());
-                    }
-                }
-                GraphMsg::Chunk { generation, rows } => {
-                    if generation != self.generation {
-                        continue;
-                    }
-                    if self.first_chunk_ms < 0
-                        && let Some(t0) = self.started_at
-                    {
-                        self.first_chunk_ms = t0.elapsed().as_millis() as i32;
-                        tracing::info!(first_chunk_ms = self.first_chunk_ms, "graph first chunk");
-                    }
-                    let avatars = crate::hub::AvatarUrls::current();
-                    let pr = crate::encode::fake_pr_set();
-                    let mut items: Vec<GraphRowItem> = rows
-                        .iter()
-                        .map(|row| to_row_item(row, &avatars, pr))
-                        .collect();
-                    for row in &rows {
-                        self.max_lanes = self.max_lanes.max(i32::from(row.width));
-                    }
-                    self.mark_incoming(&mut items);
-                    self.match_count += items.iter().filter(|i| i.matched).count() as i32;
-                    self.extend_notified(items);
-                    self.settle_first();
-                    self.row_total = self.rows.len() as i32;
-                }
-                GraphMsg::Labels { generation, rows } => {
-                    if generation != self.generation {
-                        // Row numbers of a graph this model no longer
-                        // shows: the chips belong to other commits here.
-                        continue;
-                    }
-                    let pr = crate::encode::fake_pr_set();
-                    for (row, labels) in rows {
-                        let idx = row as usize;
-                        if let Some(existing) = self.rows.get(idx) {
-                            let mut updated = existing.clone();
-                            updated.labels = encode_labels(&labels, pr);
-                            // The names on the row are searched, so the
-                            // second pass that puts the chips on can turn
-                            // a row's light on or off.
-                            if let Some(query) = &self.query {
-                                updated.matched = Self::hits(query, &updated);
-                                self.match_count +=
-                                    i32::from(updated.matched) - i32::from(existing.matched);
-                            }
-                            self.set(idx, updated);
-                        }
-                    }
-                    self.settle_first();
-                }
-                GraphMsg::Finished {
-                    generation,
-                    total,
-                    elapsed_ms,
-                    walked,
-                    truncated,
-                } => {
-                    if generation == self.generation {
-                        self.settle_footer(total as i32, elapsed_ms, walked, truncated);
-                        self.rows.shrink_to_fit();
-                        tracing::info!(total, elapsed_ms, truncated, "graph stream finished");
-                    }
-                }
-                GraphMsg::Replaced {
-                    generation,
-                    rows,
-                    elapsed_ms,
-                    walked,
-                    truncated,
-                } => {
-                    if generation <= self.generation {
-                        continue; // superseded by a newer stream
-                    }
-                    self.generation = generation;
-                    let avatars = crate::hub::AvatarUrls::current();
-                    let pr = crate::encode::fake_pr_set();
-                    let mut items: Vec<GraphRowItem> = rows
-                        .iter()
-                        .map(|row| to_row_item(row, &avatars, pr))
-                        .collect();
-                    // Before the splice, so a rebuild under a standing
-                    // query notifies each row once — with its light
-                    // already right — instead of twice.
-                    self.mark_incoming(&mut items);
-                    self.match_count = items.iter().filter(|i| i.matched).count() as i32;
-                    self.first_matched = items.first().is_some_and(|i| i.matched);
-                    self.max_lanes = rows
-                        .iter()
-                        .map(|row| i32::from(row.width))
-                        .max()
-                        .unwrap_or(1)
-                        .max(1);
-                    self.splice_notified(items);
-                    let loaded = self.rows.len() as i32;
-                    self.settle_footer(loaded, elapsed_ms, walked, truncated);
-                    // Only a replacement zeroes these: it is one message
-                    // rather than a stream, so there was no first chunk to
-                    // time, and it is the answer to whatever failed last.
-                    self.first_chunk_ms = 0;
-                    self.error = String::new();
-                    tracing::info!(
-                        total = self.row_total,
-                        elapsed_ms,
-                        truncated,
-                        "graph replaced in place"
-                    );
-                }
-                GraphMsg::Failed {
-                    generation,
-                    message,
-                } => {
-                    if generation == self.generation {
-                        self.loading = false;
-                        self.error = message;
-                    }
-                }
-            }
-        }
-        self.settle_head();
-        if crate::memprobe::enabled() {
-            crate::memprobe::note("graph-rows", self.tab_id, &self.rows);
-        }
-        self.stats_changed();
+        self.take_feed();
     }
 
     /// Row index of a commit (sidebar jump); -1 when absent.
