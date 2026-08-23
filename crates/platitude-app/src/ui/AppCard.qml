@@ -26,6 +26,12 @@ Popup {
     /// content's, the card shuts in the width of its own padding, which the hand walking in over the border crosses
     /// first.
     readonly property bool pointerInside: cardFace.pointed || card.contentPointed
+    /// The ground, for a card that is a piece of something else rather than a card over it: `SectionPeekPopup` keeps
+    /// the sidebar's `bgSurface`, against which its header band would otherwise be lost (`AppCardFace`).
+    property alias faceColor: cardFace.color
+    /// And the corners, for a card that opens flush against the thing it comes out of — there is nothing for the two
+    /// corners on that side to round into.
+    property alias faceRadius: cardFace.radius
 
     padding: Theme.spaceSm
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside

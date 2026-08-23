@@ -454,7 +454,7 @@ Rectangle {
     // fold and the smoke hooks already call it by.
     property alias peekKind: peek.kind
     property alias peekTop: peek.top
-    property alias peekEntered: peek.entered
+    property alias peekEntered: peek.contentPointed
     /// The open section itself, for the smoke hooks alone (the shape
     /// `GraphPane.view` already has): clicks cannot be injected, so
     /// PG_AUTO_ACT=nav-reclick puts one in at a row in here.

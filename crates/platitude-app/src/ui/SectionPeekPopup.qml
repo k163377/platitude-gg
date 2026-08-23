@@ -9,7 +9,7 @@ import platitude.ui
 // when it is open. Which one it is, and whether it still has the
 // pointer, are held here rather than on a cell: the cell is left behind
 // the moment the pointer walks into what it opened.
-Popup {
+AppCard {
     id: peek
 
     required property var repoTab
@@ -33,27 +33,12 @@ Popup {
     property real top: 0
     /// The pointer is still on that cell.
     property bool wanted: false
-    /// The pointer is down in the open section itself. The popup's own
-    /// hover writes this and so do the smoke hooks, so a headless run and
-    /// a real pointer come to one answer (the same shape as the diff's
-    /// hunk hover — 規約 §diff の中のステージ). What happens when it goes
-    /// false hangs off the change rather than off the hover, so there is
-    /// no way to say "gone" without the settle that has to follow.
-    property bool entered: false
 
     signal refActivated(string oidHex)
     signal refMenuRequested(string kind, string name, string full, string oidHex)
     /// Right-click on the row a remote itself stands on — the same menu the open list raises.
     signal remoteMenuRequested(string name)
     signal addRemoteRequested()
-
-    onEnteredChanged: {
-        if (!peek.entered)
-            peek.settle()
-    }
-    // The menu that was standing over it has gone: whether the pointer
-    // came back in the meantime decides what happens now.
-    onPinnedChanged: peek.settle()
 
     readonly property var sectionModel: peek.kind === "" ? null : peek.rail.modelOf(peek.kind)
     // The section headers' own words, said again for the one section the
@@ -93,17 +78,23 @@ Popup {
             peek.wanted = false
         peek.settle()
     }
-    // The section opens flush against the rail, so walking into it takes
-    // the pointer off the cell, and walking back out puts it on again.
-    // The two hovers change in different frames and in no fixed order —
-    // between them the pointer is on neither, and `Qt.callLater` lands
-    // there and closes the section under the hand. So the answer waits
-    // a beat (デザイン規約 §hover のツールチップ), by which time
-    // whichever of the two now holds the pointer has said so.
+    /// Ask for the beat by hand, where the answer has changed somewhere
+    /// `lit` cannot see it — a cell saying the pointer left it.
     function settle() {
-        peekSettle.restart()
+        peekKeeper.settle()
     }
     function shut() {
+        peek.close()
+    }
+    // What the section leaves behind, whichever way it went: the beat
+    // running out, a click on the cell that opened it, Escape from
+    // inside it.
+    //
+    // `aboutToHide` rather than `closed`: `kind` has to be clear before
+    // the next click can arrive, and the popup is still visible for as
+    // long as it takes to go — `toggleAt` reads `kind` for exactly that
+    // reason.
+    onAboutToHide: {
         // The mark on the row a click last landed on goes with the rows
         // it was on: the rename gesture's second click has to be aimed
         // at a mark that stayed on screen (デザイン規約 §左メニューの所作),
@@ -114,12 +105,11 @@ Popup {
         // closing a tab takes the page's pieces down before this popup.
         if (peek.kind !== "" && peek.gestures)
             peek.gestures.activeKey = ""
-        peek.close()
         peek.kind = ""
         peek.wanted = false
         // The list it was in has gone, so the pointer is not in it
         // whatever the last hover said.
-        peek.entered = false
+        peek.contentPointed = false
     }
     /// Smoke hooks (PG_AUTO_ACT=nav-reclick): the three the open list
     /// answers, for the section standing beside the folded rail.
@@ -141,13 +131,17 @@ Popup {
     function scrollToEnd() {
         peekList.scrollToEnd()
     }
-    Timer {
-        id: peekSettle
-        interval: Metrics.hoverKeepMs
-        onTriggered: {
-            if (!peek.entered && !peek.wanted && !peek.pinned)
-                peek.shut()
-        }
+    // The section opens flush against the rail, so walking into it takes
+    // the pointer off the cell, and walking back out puts it on again —
+    // the beat between the two is the same one every hover card in the
+    // app waits (`HoverCardHost`, デザイン規約 §hover のツールチップ). What
+    // holds it up is the cell, the menu standing over it, or the pointer
+    // being down in the section itself (`pointerInside`).
+    HoverCardHost {
+        id: peekKeeper
+        card: peek
+        pointedAt: peek.wanted
+        grace: peek.pinned
     }
 
     // Flush against the rail, with nothing in between for the pointer
@@ -176,11 +170,8 @@ Popup {
     // `bgElevated`. The frame is what floats it (規約 §メニュー), and
     // there is no rounding on a panel that starts flush against the
     // rail.
-    background: Rectangle {
-        color: Theme.bgSurface
-        border.color: Theme.borderDefault
-        border.width: Theme.borderWidth
-    }
+    faceColor: Theme.bgSurface
+    faceRadius: 0
 
     contentItem: ColumnLayout {
         spacing: 0
@@ -191,7 +182,12 @@ Popup {
             // other way — right into the diff or the graph, or off
             // its top or bottom edge — is an exit no cell is told
             // about, and without this it raises no event at all.
-            onHoveredChanged: peek.entered = peekHover.hovered
+            //
+            // The card's own `contentPointed`, written rather than
+            // bound: the smoke hooks write the same one, so a headless
+            // run and a real pointer come to a single answer (the same
+            // shape as the diff's hunk hover — 規約 §diff の中のステージ).
+            onHoveredChanged: peek.contentPointed = peekHover.hovered
         }
         // The open list's own band, carrying what that section carries
         // wherever it stands — the tags eye, the `+` that writes a remote
