@@ -212,6 +212,52 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
+    /// The path of the other working copy holding `branch` — what
+    /// `worktree_holding` answers, and why it answers it, is on the slot.
+    ///
+    /// Two fields decide it, so this cannot go through `told`: the branch
+    /// a worktree row shows on its right, and the mark saying the row is
+    /// the copy this window is already in — that one is where a switch is
+    /// a no-op, not where it is refused.
+    pub(super) fn worktree_with(&self, branch: &str) -> String {
+        if branch.is_empty() || self.section != "worktrees" {
+            return String::new();
+        }
+        (0..self.all.len())
+            .filter_map(|at| self.all.entry(at))
+            .map(|of| Row::Shown {
+                of,
+                depth: 0,
+                from: 0,
+            })
+            .find(|row| {
+                self.field(*row, Role::Bucket).as_str() == branch
+                    && !self.field(*row, Role::IsHead).flag()
+            })
+            .map(|row| self.field(row, Role::Full).as_str().to_string())
+            .unwrap_or_default()
+    }
+
+    /// Where a renamed file came from, whole — what `orig_of` answers,
+    /// and why it answers it, is on the slot.
+    ///
+    /// The first row of that path that **names a source**, which is what
+    /// keeps it off `told`: that one answers with the first row of the
+    /// path whatever the row holds.
+    pub(super) fn orig_path_of(&self, path: &str) -> String {
+        (0..self.all.len())
+            .filter_map(|at| self.all.entry(at))
+            .map(|of| Row::Shown {
+                of,
+                depth: 0,
+                from: 0,
+            })
+            .filter(|row| self.field(*row, Role::Full).as_str() == path)
+            .map(|row| self.field(row, Role::OrigPath).as_str().to_string())
+            .find(|orig| !orig.is_empty())
+            .unwrap_or_default()
+    }
+
     /// Which of the rows on show a ref sits on, by the name git knows it
     /// by; -1 when it is on none.
     ///

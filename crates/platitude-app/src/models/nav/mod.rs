@@ -13,6 +13,8 @@ use crate::hub::{Feed, Hub, StatusMsg, attached};
 use super::pathtree::DirNode;
 use super::qml_register;
 
+mod attach;
+mod drain;
 mod field;
 #[cfg(test)]
 mod field_tests;

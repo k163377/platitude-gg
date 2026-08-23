@@ -73,7 +73,7 @@ impl NavSectionModel {
     }
 
     #[qsignal]
-    fn changed(&mut self);
+    pub(super) fn changed(&mut self);
 
     // A refs snapshot arrived, whether or not it moved anything.
     //
@@ -86,7 +86,7 @@ impl NavSectionModel {
     // landing would otherwise stay armed until something unrelated moved
     // them (`RepoPage.tryPendingHeadSelect`).
     #[qsignal]
-    fn refs_settled(&mut self);
+    pub(super) fn refs_settled(&mut self);
 
     /// A stash listing arrived, whether or not it moved anything.
     ///
@@ -97,7 +97,7 @@ impl NavSectionModel {
     /// dropped stash back on screen for the length of the rebuild
     /// (デザイン規約 §消す操作は先に画面から消す).
     #[qsignal]
-    fn stashes_settled(&mut self);
+    pub(super) fn stashes_settled(&mut self);
 
     /// Wires this instance to one section's data feed. `section`:
     /// `branches` / `remotes` / `worktrees` / `stashes` / `tags`. The
@@ -105,20 +105,7 @@ impl NavSectionModel {
     /// instead — that section is a list per bucket run, not one list.
     #[qslot]
     fn attach_section(&mut self, tab_id: i32, section: String) {
-        self.tab_id = tab_id;
-        self.section = section;
-        let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) else {
-            return;
-        };
-        let invoker = self.get_qml_method_invoker();
-        match self.section.as_str() {
-            "branches" => self.refs_feed = Some(attached(&feeds.refs_branches, invoker)),
-            "remotes" => self.refs_feed = Some(attached(&feeds.refs_remotes, invoker)),
-            "tags" => self.refs_feed = Some(attached(&feeds.refs_tags, invoker)),
-            "stashes" => self.stash_feed = Some(attached(&feeds.stash, invoker)),
-            "worktrees" => self.worktrees_feed = Some(attached(&feeds.worktrees, invoker)),
-            other => tracing::warn!(section = other, "unknown sidebar section"),
-        }
+        self.attach_section_feed(tab_id, section);
     }
 
     /// Wires this instance to one bucket run of the working tree's changed
@@ -130,110 +117,12 @@ impl NavSectionModel {
     /// status, so a page can ask any of them about any file.
     #[qslot]
     fn attach_worktree(&mut self, tab_id: i32, run: String) {
-        self.tab_id = tab_id;
-        self.section = "worktree".to_string();
-        self.run = run;
-        let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) else {
-            return;
-        };
-        let invoker = self.get_qml_method_invoker();
-        let feed = match self.run.as_str() {
-            "conflicts" => &feeds.status_nav_conflicts,
-            "staged" => &feeds.status_nav_staged,
-            "unstaged" => &feeds.status_nav_unstaged,
-            other => {
-                tracing::warn!(run = other, "unknown worktree bucket run");
-                return;
-            }
-        };
-        self.status_feed = Some(attached(feed, invoker));
+        self.attach_worktree_feed(tab_id, run);
     }
 
     #[qslot]
     fn drain(&mut self) {
-        // Every push queues its own `drain`, so a second call can find the
-        // queue already emptied by the first. Nothing arrived means
-        // nothing to rebuild.
-        let mut arrived = false;
-        // Whether refs were published at all, which is a different
-        // question from whether they moved (see `refs_settled`).
-        let mut settled = false;
-        if let Some(feed) = self.refs_feed.clone()
-            && let Some(snapshot) = feed.drain().pop()
-        {
-            settled = true;
-            // The first snapshot is news whatever it holds: the default
-            // selection is waiting on `refsLoaded`, and a section that is
-            // legitimately empty would otherwise never say so.
-            arrived |= !self.refs_loaded;
-            self.refs_loaded = true;
-            let fresh = !self
-                .last_refs
-                .as_ref()
-                .is_some_and(|last| Arc::ptr_eq(last, &snapshot));
-            if fresh {
-                self.last_refs = Some(Arc::clone(&snapshot));
-                arrived |= match self.section.as_str() {
-                    "branches" => {
-                        let head = snapshot.locals.iter().find(|b| b.is_head);
-                        self.head_name = head.map(|b| b.short.to_string()).unwrap_or_default();
-                        self.head_oid = head.map(|b| b.oid.to_hex()).unwrap_or_default();
-                        self.head_has_remote = head.is_some_and(|b| b.has_remote);
-                        self.head_has_pr = head.is_some_and(|b| {
-                            crate::encode::fake_pr_set().contains(b.short.as_str())
-                        });
-                        self.take(Source::Locals(snapshot))
-                    }
-                    "remotes" => self.take(Source::Remotes(snapshot)),
-                    _ => self.take(Source::Tags(snapshot)),
-                };
-            }
-        }
-        if let Some(feed) = self.status_feed.clone()
-            && let Some(StatusMsg {
-                status, eol_marks, ..
-            }) = feed.drain().pop()
-        {
-            // The marks are the other half of what a file row shows, and
-            // they can move on their own — a line-ending answer arrives
-            // after the status it is about.
-            let marked = self.eol_marks != eol_marks;
-            self.eol_marks = eol_marks;
-            arrived |= self.take(Source::files(status)) || marked;
-        }
-        if let Some(feed) = self.worktrees_feed.clone()
-            && let Some(list) = feed.drain().pop()
-        {
-            let current = crate::hub::from_session(self.tab_id, |s| s.workdir())
-                .flatten()
-                .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
-                .unwrap_or_default();
-            // A bare entry has no working copy to show.
-            let list = list.into_iter().filter(|w| !w.bare).collect();
-            arrived |= self.take(Source::Worktrees { list, current });
-        }
-        let mut stashes_arrived = false;
-        if let Some(feed) = self.stash_feed.clone()
-            && let Some(stashes) = feed.drain().pop()
-        {
-            stashes_arrived = true;
-            arrived |= self.take(Source::Stashes(stashes));
-        }
-        if arrived {
-            // `total` is settled by the arrange below, which is the one
-            // place that knows how many rows are being shown as gone.
-            self.reshape();
-            self.changed();
-        }
-        if settled {
-            self.refs_settled();
-        }
-        if stashes_arrived {
-            self.stashes_settled();
-        }
-        if crate::memprobe::enabled() {
-            self.note_footprint();
-        }
+        self.take_feeds();
     }
 
     /// Shows these rows as already gone: the page hands over the names of
@@ -333,25 +222,7 @@ impl NavSectionModel {
     /// same slot a worktree row keeps its branch in.
     #[qslot]
     pub(super) fn worktree_holding(&self, branch: String) -> String {
-        if branch.is_empty() || self.section != "worktrees" {
-            return String::new();
-        }
-        (0..self.all.len())
-            .filter_map(|at| self.all.entry(at))
-            .map(|of| Row::Shown {
-                of,
-                depth: 0,
-                from: 0,
-            })
-            // The branch a worktree row shows on its right, and the mark
-            // saying the row is the copy this window is already in — that
-            // one is where a switch is a no-op, not where it is refused.
-            .find(|row| {
-                self.field(*row, Role::Bucket).as_str() == branch
-                    && !self.field(*row, Role::IsHead).flag()
-            })
-            .map(|row| self.field(row, Role::Full).as_str().to_string())
-            .unwrap_or_default()
+        self.worktree_with(&branch)
     }
 
     /// What one row shows, and what git knows it by (empty out of range).
@@ -455,17 +326,7 @@ impl NavSectionModel {
     /// each side, and only the staged one knows where it came from.
     #[qslot]
     fn orig_of(&self, path: String) -> String {
-        (0..self.all.len())
-            .filter_map(|at| self.all.entry(at))
-            .map(|of| Row::Shown {
-                of,
-                depth: 0,
-                from: 0,
-            })
-            .filter(|row| self.field(*row, Role::Full).as_str() == path)
-            .map(|row| self.field(row, Role::OrigPath).as_str().to_string())
-            .find(|orig| !orig.is_empty())
-            .unwrap_or_default()
+        self.orig_path_of(&path)
     }
 }
 qml_register!(NavSectionModel, "NavSectionModel", singleton = false);
