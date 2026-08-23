@@ -20,6 +20,7 @@ impl DiffModel {
     qproperty!("previewKind", Member = preview_kind, Notify = changed);
     qproperty!("previewOldUrl", Member = preview_old_url, Notify = changed);
     qproperty!("previewNewUrl", Member = preview_new_url, Notify = changed);
+    qproperty!("previewVector", Member = preview_vector, Notify = changed);
     qproperty!(
         "previewOldSize",
         Member = preview_old_size,
@@ -113,22 +114,20 @@ impl DiffModel {
         crate::hub::from_session(self.tab_id, |s| s.refresh_diff(target)).is_some()
     }
 
-    /// How many rows each side is named on, packed `ours theirs` — for
-    /// the smoke hook (`conflict-sides`): which side a line came from is
-    /// drawn as a band a few pixels wide, and a picture cannot be asked
-    /// whether every band that should be there is.
+    /// How many rows one side is named on — `side` is the row role's own
+    /// word (`ours` / `theirs`). For the smoke hook (`conflict-sides`):
+    /// which side a line came from is drawn as a band a few pixels wide,
+    /// and a picture cannot be asked whether every band that should be
+    /// there is.
     #[qslot]
-    fn side_counts(&self) -> String {
-        let mut ours = 0;
-        let mut theirs = 0;
+    fn side_count(&self, side: String) -> i32 {
+        let mut count = 0;
         for line in &self.lines {
-            match line.side.as_str() {
-                "ours" => ours += 1,
-                "theirs" => theirs += 1,
-                _ => {}
+            if line.side == side {
+                count += 1;
             }
         }
-        format!("{ours} {theirs}")
+        count
     }
 
     #[qslot]

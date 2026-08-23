@@ -102,6 +102,11 @@ pub struct DiffModel {
     /// data: URLs for the image sides ("" = no renderable image there).
     preview_old_url: String,
     preview_new_url: String,
+    /// Whether the previewed image is a vector one (`image/svg+xml`).
+    /// Which smoothing an upscale gets is the cell's choice, but what the
+    /// file is is the preview's own fact rather than something QML reads
+    /// back off the URL.
+    preview_vector: bool,
     /// Human-readable sizes ("" = the side does not exist).
     preview_old_size: String,
     preview_new_size: String,

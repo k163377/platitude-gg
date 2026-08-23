@@ -16,10 +16,11 @@ ColumnLayout {
     required property string caption
     required property string url
     required property string sizeText
+    /// Whether the image is a vector one — the model's word (`DiffModel.previewVector`), not something read back off
+    /// the URL. SVG rasters scale smoothly, pixel rasters must not.
+    required property bool isVector
     visible: sizeText !== ""
     spacing: Theme.spaceXs
-    // data: URLs carry the mime up front; SVG rasters scale smoothly, pixel rasters must not.
-    readonly property bool isVector: url.indexOf("data:image/svg") === 0
 
     // Image-preview zoom steps: a small image draws at a fixed integer scale picked from its natural size (never from
     // the window), then fit-to-frame shrinking still wins when space runs out. Small icons land in a readable 128-256px

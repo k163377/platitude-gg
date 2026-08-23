@@ -115,6 +115,7 @@ ColumnLayout {
             caption: qsTr("Before")
             url: notices.diffModel.previewOldUrl
             sizeText: notices.diffModel.previewOldSize
+            isVector: notices.diffModel.previewVector
         }
         ImagePreviewCell {
             Layout.fillWidth: true
@@ -122,6 +123,7 @@ ColumnLayout {
             caption: qsTr("After")
             url: notices.diffModel.previewNewUrl
             sizeText: notices.diffModel.previewNewSize
+            isVector: notices.diffModel.previewVector
         }
     }
 }

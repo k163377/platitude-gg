@@ -144,6 +144,7 @@ impl DiffModel {
             self.preview_kind.clear();
             self.preview_old_url.clear();
             self.preview_new_url.clear();
+            self.preview_vector = false;
             self.preview_old_size.clear();
             self.preview_new_size.clear();
             return;
@@ -153,6 +154,7 @@ impl DiffModel {
         } else {
             "binary".to_string()
         };
+        self.preview_vector = p.image_mime == Some("image/svg+xml");
         let url = |side: &Option<PreviewSide>| -> String {
             let (Some(mime), Some(s)) = (p.image_mime, side.as_ref()) else {
                 return String::new();

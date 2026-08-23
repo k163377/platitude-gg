@@ -56,11 +56,10 @@ Rectangle {
     /// How many rows each side is named on, for the automation (`conflict-sides`). The bands are a few pixels wide and
     /// a picture cannot be asked whether the ones that should be there are — least of all on a file that has been
     /// typed over, where the bands can drop to none at all. The rows are the model's, so the count is too
-    /// (`DiffModel.sideCounts`).
+    /// (`DiffModel.sideCount`).
     function sideTally() {
-        const counts = diffPane.diffModel.sideCounts().split(" ")
-        const ours = parseInt(counts[0])
-        const theirs = parseInt(counts[1])
+        const ours = diffPane.diffModel.sideCount("ours")
+        const theirs = diffPane.diffModel.sideCount("theirs")
         return "combined=" + diffPane.combined + " told=" + diffPane.sidesTold
              + " both=" + (ours > 0 && theirs > 0) + " ours=" + ours + " theirs=" + theirs
     }
