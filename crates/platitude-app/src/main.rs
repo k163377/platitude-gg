@@ -87,6 +87,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/AvatarButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ChangeIcon.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ClipboardHelper.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/BandRule.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/BandStateCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/BandStateGroup.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CoAuthorCard.qml", "qt/qml/platitude");

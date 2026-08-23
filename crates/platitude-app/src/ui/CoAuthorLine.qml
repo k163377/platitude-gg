@@ -92,12 +92,8 @@ Item {
     }
     // Drawn at rest one step down from the name it underlines (規約 §暗く落とした段 names borderStrong as textSecondary's step),
     // and up to the name's own value under the pointer.
-    Rectangle {
+    BandRule {
         visible: !line.plain
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: Theme.borderWidth
         color: line.lit ? Theme.textSecondary : Theme.borderStrong
     }
     HoverHandler {

@@ -45,11 +45,7 @@ Item {
             onActivated: filterRow.foldRequested()
         }
     }
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: Theme.borderWidth
+    BandRule {
         color: field.activeFocus ? Theme.borderFocus : Theme.borderSubtle
     }
 }

@@ -128,12 +128,8 @@ RowLayout {
                 // Drawn at rest one step down from the name it underlines, and up to the name's own value under the
                 // pointer — the same rule the credit line carries, because it says the same thing: there is more here,
                 // and hovering opens it (規約 §co-author の表示).
-                Rectangle {
+                BandRule {
                     visible: authorLabel.text !== ""
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: Theme.borderWidth
                     color: authorRow.authorLit ? Theme.textPrimary : Theme.borderStrong
                 }
                 // A handler, not a `MouseArea`: handlers are passive, so the card it opens keeps its own hover (規約

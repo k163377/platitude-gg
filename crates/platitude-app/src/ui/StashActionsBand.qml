@@ -30,15 +30,7 @@ Rectangle {
     visible: band.stashRef !== ""
     implicitHeight: Theme.headerHeight
     color: Theme.bgElevated
-    // The hairline every pane header closes with (see PaneHeader) — this band is one.
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: Theme.borderWidth
-        color: Theme.borderSubtle
-        z: 1
-    }
+    BandRule { z: 1 }
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceXs

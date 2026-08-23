@@ -118,11 +118,7 @@ Rectangle {
     Behavior on implicitHeight {
         NumberAnimation { duration: 200 }
     }
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: Theme.borderWidth
+    BandRule {
         color: bar.tone
     }
     RowLayout {

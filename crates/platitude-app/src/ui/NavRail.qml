@@ -149,13 +149,7 @@ Rectangle {
             onActivated: rail.unfoldRequested()
             // The hairline the filter's underline leaves behind, so the band reads as the same band it was before it
             // folded.
-            Rectangle {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                height: Theme.borderWidth
-                color: Theme.borderSubtle
-            }
+            BandRule {}
         }
 
         Repeater {

@@ -23,16 +23,8 @@ Rectangle {
 
     implicitHeight: Theme.headerHeight
     color: Theme.bgElevated
-    // The hairline every pane header closes with (see PaneHeader). This is the band it was written for: the row under
-    // it is a hunk heading of the same colour.
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: Theme.borderWidth
-        color: Theme.borderSubtle
-        z: 1
-    }
+    // This is the band the hairline was written for: the row under it is a hunk heading of the same colour.
+    BandRule { z: 1 }
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceSm
