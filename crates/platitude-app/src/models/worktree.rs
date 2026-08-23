@@ -233,41 +233,7 @@ impl WorkTreeModel {
         self.behind = status.behind;
         self.push_remote = push_remote;
         self.has_conflicts = status.has_conflicts();
-        // One name, not every flag that happens to be set: a rebase
-        // stopped on a pick writes CHERRY_PICK_HEAD too, and joining the
-        // two said `REBASING · CHERRY-PICKING` for what is one rebase.
-        // Core already answers which operation is the live one — it is
-        // the same answer the continuations act on.
-        use platitude_core::integrate::InProgress;
-        let mut ops: Vec<&str> = Vec::new();
-        self.op_command = InProgress::from_state(&op_state)
-            .map(InProgress::command)
-            .unwrap_or_default()
-            .to_string();
-        if let Some(op) = InProgress::from_state(&op_state) {
-            ops.push(match op {
-                InProgress::Rebase => "REBASING",
-                InProgress::Merge => "MERGING",
-                InProgress::CherryPick => "CHERRY-PICKING",
-                InProgress::Revert => "REVERTING",
-            });
-        }
-        // Bisect is not one of those — it runs alongside rather than
-        // instead, and it is the one thing here that can share the line.
-        if op_state.bisecting {
-            ops.push("BISECTING");
-        }
-        let mut named = ops.into_iter();
-        self.op_text = named.next().unwrap_or_default().to_string();
-        self.op_also = named.next().unwrap_or_default().to_string();
-        // A merge steps through nothing, so it takes neither skip nor
-        // quit; everything else here does.
-        self.op_stepping = !matches!(
-            InProgress::from_state(&op_state),
-            None | Some(InProgress::Merge)
-        );
-        self.op_merging = InProgress::from_state(&op_state) == Some(InProgress::Merge);
-        (self.op_subject, self.op_body) = platitude_core::commit::split_message(&op_message);
+        self.settle_op(&op_state, &op_message);
         // One pass, not five: `-uall` lists every untracked file, so the
         // list is as long as the working tree is dirty.
         // Same pass, same source: the kinds are the letters the file rows
@@ -287,10 +253,9 @@ impl WorkTreeModel {
             .as_str()
             .to_string();
         self.moves_blocked = platitude_core::offers::moves_blocked(&op_state, &counts);
-        self.leave_undoes =
-            platitude_core::offers::leaving_undoes(InProgress::from_state(&op_state));
-        self.leave_code =
-            platitude_core::offers::leave_code(InProgress::from_state(&op_state)).to_string();
+        let in_progress = platitude_core::integrate::InProgress::from_state(&op_state);
+        self.leave_undoes = platitude_core::offers::leaving_undoes(in_progress);
+        self.leave_code = platitude_core::offers::leave_code(in_progress).to_string();
         self.op_skip_free = platitude_core::offers::skip_is_free(&counts);
         let tally = (
             self.staged_count,
@@ -310,4 +275,47 @@ impl WorkTreeModel {
         self.changed();
     }
 }
+
+impl WorkTreeModel {
+    /// The operation banner's fields, off the op state in one place.
+    ///
+    /// One name, not every flag that happens to be set: a rebase stopped
+    /// on a pick writes CHERRY_PICK_HEAD too, and joining the two said
+    /// `REBASING · CHERRY-PICKING` for what is one rebase. Core already
+    /// answers which operation is the live one — it is the same answer
+    /// the continuations act on.
+    fn settle_op(&mut self, op_state: &platitude_core::opstate::OpState, op_message: &str) {
+        use platitude_core::integrate::InProgress;
+        let mut ops: Vec<&str> = Vec::new();
+        self.op_command = InProgress::from_state(op_state)
+            .map(InProgress::command)
+            .unwrap_or_default()
+            .to_string();
+        if let Some(op) = InProgress::from_state(op_state) {
+            ops.push(match op {
+                InProgress::Rebase => "REBASING",
+                InProgress::Merge => "MERGING",
+                InProgress::CherryPick => "CHERRY-PICKING",
+                InProgress::Revert => "REVERTING",
+            });
+        }
+        // Bisect is not one of those — it runs alongside rather than
+        // instead, and it is the one thing here that can share the line.
+        if op_state.bisecting {
+            ops.push("BISECTING");
+        }
+        let mut named = ops.into_iter();
+        self.op_text = named.next().unwrap_or_default().to_string();
+        self.op_also = named.next().unwrap_or_default().to_string();
+        // A merge steps through nothing, so it takes neither skip nor
+        // quit; everything else here does.
+        self.op_stepping = !matches!(
+            InProgress::from_state(op_state),
+            None | Some(InProgress::Merge)
+        );
+        self.op_merging = InProgress::from_state(op_state) == Some(InProgress::Merge);
+        (self.op_subject, self.op_body) = platitude_core::commit::split_message(op_message);
+    }
+}
+
 qml_register!(WorkTreeModel, "WorkTreeModel", singleton = false);

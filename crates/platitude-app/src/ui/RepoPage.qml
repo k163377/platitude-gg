@@ -320,12 +320,6 @@ Item {
     function switchToRef(kind, name, leaving) {
         if (repoTab.state !== "open" || repoTab.busyCount > 0)
             return
-        // Ahead of the branches below rather than inside them: the one that lands on an existing local branch asks git
-        // what the move would cost before it moves, and that read is worth nothing while an operation is standing.
-        if (page.standsInTheWay(leaving)) {
-            page.askLeaveOperation(function () { page.switchToRef(kind, name, true) })
-            return
-        }
         // The models hold the lookups — the local branch a remote row lands on is the one another copy can be holding
         // — and which move they add up to is core's rule (offers::switch_action): a tag or the detached marker moves
         // nothing, a tag's row offering a branch at its commit instead (`startNaming`).
@@ -333,9 +327,21 @@ Item {
         const action = GitFacts.switchAction(kind, local, workTree.branch,
                                              worktreesModel.worktreeHolding(local),
                                              branchesModel.oidOfName(local))
-        if (action === "holder")
+        // Before the leave question: the holder refusal is the one no
+        // operation put down can clear (offers::SwitchAction), so asking
+        // to undo a rebase first would spend the undo on a move that was
+        // never possible.
+        if (action === "holder") {
             page.askOpenHolder(local)
-        else if (action === "switch")
+            return
+        }
+        // Ahead of the branches below rather than inside them: the one that lands on an existing local branch asks git
+        // what the move would cost before it moves, and that read is worth nothing while an operation is standing.
+        if (page.standsInTheWay(leaving)) {
+            page.askLeaveOperation(function () { page.switchToRef(kind, name, true) })
+            return
+        }
+        if (action === "switch")
             page.switchTo("branch", name, name, "", leaving)
         else if (action === "materialize")
             page.switchTo("remote", name, local, "", leaving)

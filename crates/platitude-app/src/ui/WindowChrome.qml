@@ -3,10 +3,11 @@ import QtQuick.Window
 import platitude
 
 // What a title bar does, now that the band is one: maximise, minimise, where the grab-run is, and how the window is
-// dressed. Pure functions over the window and the band — a QtObject, because nothing here draws or owns children (if
-// something ever needs a child object, this becomes an Item — rules-refs/structure.md).
-QtObject {
+// dressed. Pure functions over the window and the band. An invisible Item, not a QtObject, so the first Timer or
+// Component someone adds does not take Main.qml down whole (rules-refs/structure.md §切り出した非表示のホスト).
+Item {
     id: chrome
+    visible: false
 
     /// The window these moves act on (`Main`).
     required property var window

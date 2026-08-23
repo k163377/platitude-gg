@@ -63,6 +63,11 @@ Item {
     property RefListPopup refList
     property CommitHoverCard rowCard
 
+    /// The details card has caught up with a real selection — the one readiness every card-reading sampler waits on.
+    /// Named once so no copy can drop the empty-selection half: the bare `!==` comparison is vacuously satisfied while
+    /// nothing is selected, and a sampler that copies it without a prior selection guard photographs a stale card.
+    readonly property bool cardSettled: page.selectedOid !== "" && detailsModel.shaHex === page.selectedOid
+
     /// Kicked off by the page once its models are attached: a verb that ran before them would act on a repository
     /// nothing has read yet.
     property bool claimed: false
@@ -375,7 +380,7 @@ Item {
         onTriggered: {
             if (worktreeModel.total !== 0)
                 return
-            if (!page.wipShown && (page.selectedOid === "" || detailsModel.shaHex !== page.selectedOid))
+            if (!page.wipShown && !driver.cardSettled)
                 return
             stashLandTimer.stop()
             const row = graphModel.rowOf(branchesModel.headOid)
@@ -482,7 +487,7 @@ Item {
             if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
                     || branchesModel.headOid === driver.headOidBefore
                     || graphModel.rowOf(branchesModel.headOid) < 0
-                    || detailsModel.shaHex !== page.selectedOid)
+                    || !driver.cardSettled)
                 return
             resetAuthorLandedTimer.stop()
             AppBackend.report("reset_author was=" + driver.headOidBefore.substring(0, 8)
@@ -1939,7 +1944,7 @@ Item {
         /// path is the argument — the file has to be one the selected commit touched.
         property string diffPath: ""
         onTriggered: {
-            if (detailsModel.shaHex !== page.selectedOid)
+            if (!driver.cardSettled)
                 return
             graphStepTimer.stop()
             if (graphStepTimer.dirty)
@@ -1997,7 +2002,7 @@ Item {
             const row = graphPane.view.currentIndex
             if (row < 0 || (graphStepTimer.diffPath === "" && page.selectedOid
                             !== graphModel.oidAt(row))
-                    || detailsModel.shaHex !== page.selectedOid)
+                    || !driver.cardSettled)
                 return
             graphStepReport.stop()
             AppBackend.report(
@@ -2224,7 +2229,7 @@ Item {
             if (tipLandedTimer.answeredOp === "" || page.pendingHeadSelect
                     || repoTab.busyCount !== 0 || row < 0
                     || !graphPane.rowOnScreen(row) || page.selectedOid !== branchesModel.headOid
-                    || detailsModel.shaHex !== page.selectedOid)
+                    || !driver.cardSettled)
                 return
             tipLandedTimer.stop()
             AppBackend.report(
@@ -2368,7 +2373,7 @@ Item {
     SampleTimer {
         id: rewordTimer
         onTriggered: {
-            if (detailsModel.shaHex !== page.selectedOid)
+            if (!driver.cardSettled)
                 return
             rewordTimer.stop()
             // "edit-message-focus" types nothing: the commit's own body is what the caret has to be photographed on top
@@ -2439,7 +2444,7 @@ Item {
     SampleTimer {
         id: stashTipTimer
         onTriggered: {
-            if (detailsModel.shaHex !== page.selectedOid)
+            if (!driver.cardSettled)
                 return
             stashTipTimer.stop()
             detailsPane.summaryPointedAt = true
@@ -2467,7 +2472,7 @@ Item {
         onTriggered: {
             if (pathTipTimer.wipSide && worktreeModel.total === 0)
                 return
-            if (!pathTipTimer.wipSide && detailsModel.shaHex !== page.selectedOid)
+            if (!pathTipTimer.wipSide && !driver.cardSettled)
                 return
             pathTipTimer.stop()
             if (pathTipTimer.wipSide)
@@ -2694,7 +2699,7 @@ Item {
     SampleTimer {
         id: avatarBadgeTimer
         onTriggered: {
-            if (detailsModel.shaHex !== page.selectedOid)
+            if (!driver.cardSettled)
                 return
             avatarBadgeTimer.stop()
             detailsPane.avatarClicked()
@@ -2844,7 +2849,7 @@ Item {
     SampleTimer {
         id: authorCardTimer
         onTriggered: {
-            if (detailsModel.shaHex !== page.selectedOid)
+            if (!driver.cardSettled)
                 return
             if (AppBackend.autoAct === "author-card-open")
                 detailsPane.showAuthor(true)
@@ -2864,7 +2869,7 @@ Item {
     SampleTimer {
         id: coAuthorTimer
         onTriggered: {
-            if (detailsModel.shaHex !== page.selectedOid)
+            if (!driver.cardSettled)
                 return
             if (AppBackend.autoAct === "co-authors-open")
                 detailsPane.showCoAuthors(true)
@@ -2886,7 +2891,7 @@ Item {
         // A pane width the splitter left on a fraction can put a fraction in the answer; what this verb is about is
         // tens of pixels.
         onTriggered: {
-            if (detailsModel.shaHex !== page.selectedOid || detailsPane.width <= 0 || detailsPane.height <= 0)
+            if (!driver.cardSettled || detailsPane.width <= 0 || detailsPane.height <= 0)
                 return
             detailsFitTimer.stop()
             AppBackend.report(
