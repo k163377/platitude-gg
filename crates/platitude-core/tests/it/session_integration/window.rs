@@ -159,64 +159,53 @@ fn drawn_at(events: &[SessionEvent], generation: u64) -> Vec<LabelKind> {
         .collect()
 }
 
-/// The walk does not wait for the refs read: whatever lands first lands
-/// bare, and the chips catch up as a `LabelsChanged` diff onto the very
-/// generation on screen — install and diff serialize on the graph lock,
-/// so there is no order in which they miss each other (`apply_refs`).
+/// The walk does not wait for the refs read: a rebuild draws only the
+/// chips the session has already read, and a ref it has not is invisible
+/// to it however many passes run. The refs read is what carries the
+/// chips — as a `LabelsChanged` diff onto the very generation on screen,
+/// with no pass in between — and the diff is mirrored into the
+/// delivered-rows record so the next rebuild does not swap an identical
+/// graph over it (`apply_refs`).
 ///
-/// Left to the scheduler the refs almost always win, and the loser's
-/// order went unexercised: it turned up as a full-suite flake (a bare
-/// 2-row swap read as "no tags drawn"), not as a test. Parking the refs
-/// delivery holds that order exactly.
-// `worker_threads = 2`: the parked hook must not own the only worker
-// (see the window-change siblings below).
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+/// The opening runs this same exchange with the scheduler picking the
+/// order, and the losing order — a pass landing before the opening refs
+/// read — turned up as a full-suite flake (a bare 2-row swap read as "no
+/// tags drawn"), not as a test. Here the order is held by construction:
+/// the ref arrives while nothing is in flight, and each half lands
+/// behind its own completion boundary.
+#[tokio::test(flavor = "multi_thread")]
 async fn chips_catch_up_when_the_refs_read_lands_last() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "0\n", "base");
-    repo.git(&["checkout", "--detach", "HEAD"]);
-    repo.commit_file("g.txt", "t\n", "tag only work");
-    repo.git(&["tag", "islet"]);
-    repo.git(&["checkout", "main"]);
 
     let sink = CaptureSink::new();
-    // Park inside the delivery of the opening refs snapshot: the event is
-    // recorded, but `apply_refs` — the line after it — cannot run until
-    // the release, so the label map stays empty for every pass landing
-    // meanwhile.
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    sink.hook_once(
-        |e| matches!(e, SessionEvent::RefsLoaded { .. }),
-        move || {
-            held.recv().expect("the test releases the refs read");
-        },
-    );
     let session = RepoSession::open(
         crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
     );
+    let base = sink.opened_graph(&session, 1).await;
 
-    // The tag-inclusive graph lands while the refs are parked. Bare rows
-    // are the premise, not a taste: chips here would mean the
-    // interleaving did not hold.
-    let (swap_gen, bare) = sink
-        .wait_for("the tag-inclusive swap", |evs| {
-            evs.iter().find_map(|e| match e {
-                SessionEvent::LogReplaced {
-                    generation, rows, ..
-                } if rows.len() == 2 => Some((*generation, chips_of(rows))),
-                _ => None,
-            })
-        })
-        .await;
-    assert!(
-        bare.is_empty(),
-        "the swap landed before the refs were applied: {bare:?}"
+    // A ref moves outside the session: the walk can reach it, the label
+    // map has never heard of it.
+    repo.git(&["tag", "fresh"]);
+
+    // The rebuild walks the same commit and draws the same chips: this is
+    // the half that lands bare under the opening race, said without a
+    // scheduler — no repaint carries a ref the session has not read.
+    let outcome = crate::support::wait::bounded(
+        "the rebuild before the refs read",
+        session.refresh_log_tracked().outcome(),
+    )
+    .await;
+    assert_eq!(
+        outcome,
+        RefreshOutcome::Unchanged,
+        "a rebuild cannot draw refs the session has not read"
     );
 
-    release.send(()).expect("let the refs read land");
+    session.refresh_refs();
     let (caught_gen, chips) = sink
         .wait_for("the chips catch up", |evs| {
             evs.iter().find_map(|e| match e {
@@ -225,22 +214,30 @@ async fn chips_catch_up_when_the_refs_read_lands_last() {
                         .iter()
                         .flat_map(|(_, labels)| labels.iter().map(|label| label.kind))
                         .collect();
-                    Some((*generation, kinds))
+                    kinds
+                        .contains(&LabelKind::Tag)
+                        .then_some((*generation, kinds))
                 }
                 _ => None,
             })
         })
         .await;
-    assert_eq!(caught_gen, swap_gen, "the diff names the graph on screen");
+    assert_eq!(
+        caught_gen, base.generation,
+        "the diff names the graph on screen"
+    );
     assert!(
-        chips.contains(&LabelKind::Tag) && chips.contains(&LabelKind::LocalBranch),
-        "the catch-up carries the whole join: {chips:?}"
+        chips.contains(&LabelKind::LocalBranch),
+        "the diff carries the row's whole chip set: {chips:?}"
     );
 
     // The catch-up also patched the delivered-rows record: the next
     // rebuild finds the picture it would draw already on screen, instead
     // of seeing a phantom difference and swapping an identical graph.
-    sink.opening_settled(&session).await;
+    // The slot boundary first: the refs reader asks for a rebuild of its
+    // own right after the diff, and the tracked one below must supersede
+    // it, not be superseded by it.
+    crate::support::wait::bounded("the refs read slot", session.wait_for_snapshot_reads()).await;
     let outcome = crate::support::wait::bounded(
         "the rebuild after the catch-up",
         session.refresh_log_tracked().outcome(),
