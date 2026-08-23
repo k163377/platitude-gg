@@ -268,6 +268,44 @@ async fn discard_chosen_pulls_a_staged_renames_old_name_from_status() {
     assert!(!repo.path.join("elsewhere.txt").exists());
 }
 
+/// A staged copy carries `orig_path` exactly like a rename, and its
+/// source must NOT ride along: the source is a live file with rows and
+/// choices of its own, and pulling it in would reset work the user
+/// never chose (実測: `status.renames=copies` + a copied-from-modified
+/// file reports `2 C.` with the source as `orig_path`).
+#[tokio::test]
+async fn discard_chosen_leaves_a_staged_copys_source_alone() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("src.txt", "line one\nline two\n", "root");
+    repo.git(&["config", "status.renames", "copies"]);
+    repo.write_file("src.txt", "line one\nline two\nline three\n");
+    std::fs::copy(repo.path.join("src.txt"), repo.path.join("dup.txt")).expect("copy the file");
+    repo.git(&["add", "--", "src.txt", "dup.txt"]);
+    let (exec, cancel) = env();
+
+    stage::discard_chosen(
+        &exec,
+        &repo.path,
+        &[("dup.txt".into(), DiscardSide::Staged)],
+        &cancel,
+    )
+    .await
+    .expect("discard chosen");
+
+    let (staged, unstaged, untracked) = buckets(&repo).await;
+    assert!(!repo.path.join("dup.txt").exists(), "the copy is gone");
+    assert_eq!(
+        staged,
+        vec!["src.txt"],
+        "the source keeps its own staged change: {unstaged:?} {untracked:?}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("src.txt")).unwrap(),
+        "line one\nline two\nline three\n",
+        "and its bytes on disk"
+    );
+}
+
 /// A file changed on both sides has a row in each bucket, and the side
 /// rides with the chosen row rather than being looked up again: the
 /// unstaged row's discard must not grow into the staged row's.

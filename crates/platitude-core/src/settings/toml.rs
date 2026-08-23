@@ -150,7 +150,11 @@ pub(super) fn minutes(table: &Table, key: &str) -> Option<u32> {
     table
         .get(key)
         .and_then(Value::as_integer)
-        .and_then(|v| u32::try_from(v).ok())
+        .filter(|v| *v >= 0)
+        // Saturating, not failing: a number past `u32` is still "past the
+        // ceiling", and falling back to the default here would answer the
+        // most aggressive interval to the value that asked for the least.
+        .map(|v| u32::try_from(v).unwrap_or(u32::MAX))
         .map(crate::session::auto_fetch_minutes)
 }
 

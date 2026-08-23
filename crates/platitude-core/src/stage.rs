@@ -246,12 +246,17 @@ pub async fn discard_chosen(
     if !staged.is_empty() {
         let current = status::load(executor, workdir, cancel).await?;
         let chosen: HashSet<&str> = staged.iter().map(String::as_str).collect();
+        // Renames only: undoing `R` needs both of its names or the old one
+        // stays staged as a deletion. A copy (`C`) carries `orig_path` too,
+        // but its source is a live file with rows of its own — pulling it
+        // in here would reset a file the user never chose.
         let old_names: Vec<String> = current
             .staged()
             .filter_map(|item| match item {
                 StatusItem::Tracked {
                     path,
                     orig_path: Some(orig),
+                    staged: 'R',
                     ..
                 } if chosen.contains(path.as_str()) => Some(orig.clone()),
                 _ => None,

@@ -138,6 +138,19 @@ network_timeout_secs = 9
         );
     }
 
+    /// And past `u32` is still "past the ceiling": falling back to the
+    /// default there would answer the most aggressive interval to the
+    /// value that asked for the least.
+    #[test]
+    fn an_interval_past_u32_is_still_the_ceiling() {
+        let text = format!("[defaults]\nauto_fetch_minutes = {}\n", i64::MAX);
+        let settings = Settings::from_table(&text.parse::<Table>().expect("parse"));
+        assert_eq!(
+            settings.defaults.auto_fetch_minutes,
+            crate::session::AUTO_FETCH_MAX_MINUTES
+        );
+    }
+
     /// A number that is not an interval at all still falls back on its own,
     /// so one mistyped key costs only itself (rules-refs/core.md §読みは
     /// `toml::Table` からキーごとに取る).
