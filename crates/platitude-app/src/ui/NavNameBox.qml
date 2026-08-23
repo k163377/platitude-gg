@@ -38,6 +38,11 @@ SlimField {
     property string mode: ""
     property string carried: ""
     property string refusedWhy: ""
+    /// What kind of ref this box is naming, so the frame can say it
+    /// (`SlimField.focusTone` — §ref の種別: 枠 = 種別). The row's kind
+    /// rather than the mode alone: a tag is being named whether it is
+    /// being made or renamed.
+    property string namesKind: ""
 
     /// Typed into, accepted, walked away from. **Not `accepted`** — that name is the field's own, for Enter landing in
     /// it, and this one is what the row does about it.
@@ -97,6 +102,9 @@ SlimField {
          : Math.max(box.seat.width,
                     Math.min(box.wantWidth, box.Window.width - box.x - Theme.spaceXxl))
     font.pixelSize: Theme.fontMd
+    // Only the tag has a colour of its own to say here. A branch's is the focus ring's own value, a remote's is grey
+    // and a stash names no kind at all — none of the three would read as anything but the ring they already are.
+    focusTone: box.namesKind === "tag" ? Theme.refTag : Theme.borderFocus
     placeholderText: box.mode === "branch" ? qsTr("Create branch here?")
                    : box.mode === "tag" ? qsTr("Create tag here?") : ""
     onTextEdited: box.typed(box.text)

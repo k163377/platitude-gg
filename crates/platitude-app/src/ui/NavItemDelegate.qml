@@ -193,6 +193,9 @@ Item {
         rowsHeight: navRow.boxRowsHeight
         editing: navRow.editing
         mode: navRow.editMode
+        // What the box is naming, which is not always what the row is: `Create tag here…` opens on a branch row too.
+        namesKind: navRow.editMode === "tag" ? "tag"
+                 : navRow.editMode === "branch" ? "branch" : navRow.kindHint
         carried: navRow.editText
         refused: navRow.editRefused
         refusedWhy: navRow.editRefusedWhy

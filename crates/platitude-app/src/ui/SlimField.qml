@@ -9,6 +9,13 @@ TextField {
     /// What is typed cannot be accepted (§可否・警告の出し場所: the frame
     /// says so where the typing is, and the reason waits in the tooltip).
     property bool refused: false
+    /// The frame's colour while the box has the keyboard. The plain focus
+    /// ring for a box that is only a box (the search band, a URL); the
+    /// **kind's own colour** for one that is naming a ref, which is the
+    /// rule the chip it becomes already follows (§ref の種別: 枠 = 種別).
+    /// A refusal outranks it — that is a different axis, and the one the
+    /// reader has to answer before anything else.
+    property color focusTone: Theme.borderFocus
     implicitHeight: Theme.iconLg
     font.pixelSize: Theme.fontMd
     leftPadding: Theme.spaceSm
@@ -18,7 +25,7 @@ TextField {
     background: Rectangle {
         color: Theme.bgBase
         radius: Theme.radiusSm
-        border.color: slim.refused ? Theme.warning : slim.activeFocus ? Theme.borderFocus : Theme.borderDefault
+        border.color: slim.refused ? Theme.warning : slim.activeFocus ? slim.focusTone : Theme.borderDefault
         border.width: Theme.borderWidth
     }
 }

@@ -89,6 +89,9 @@ Item {
         // chip's: what is typed here becomes the chip that stands in this column, so it is read at the size it will be
         // read at — but the box is an offer before it is a name, and one that cannot be read is not an offer.
         width: Math.max(chipColumn.columnWidth - 2 * Theme.spaceXs, chipColumn.nameBoxMinW)
+        // The frame says which kind is being named — the same rule the chip this box turns into follows
+        // (§ref の種別: 枠 = 種別). A branch's colour is the focus ring's own value, so only the tag has one to say.
+        focusTone: chipColumn.namingMode === "tag" ? Theme.refTag : Theme.borderFocus
         placeholderText: chipColumn.namingMode === "tag" ? qsTr("Create tag here?")
                                                          : qsTr("Create branch here?")
         onAccepted: chipColumn.namingSubmitted(nameField.text.trim())
