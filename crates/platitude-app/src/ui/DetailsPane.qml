@@ -85,6 +85,10 @@ ColumnLayout {
     function coAuthorName(i) {
         return authorRow.coAuthorName(i)
     }
+    /// The credit line ran out of room and was elided — the same thing
+    /// `authorNameClipped` says about the name above it
+    /// (`CommitAuthorRow.matesClipped`).
+    readonly property bool coAuthorsClipped: authorRow.matesClipped
     /// Smoke hook and hover handler both land here (`CommitAuthorRow`).
     function showCoAuthors(on) {
         authorRow.showCoAuthors(on)
@@ -127,6 +131,10 @@ ColumnLayout {
     /// Whether the card is on screen — what automation reports, since
     /// the input side would read true with the binding cut.
     readonly property bool authorCardOpen: authorCard.opened
+    /// The name ran out of room and was elided — what a headless run
+    /// reads in place of an ellipsis it cannot see
+    /// (`CommitAuthorRow.nameClipped`).
+    readonly property bool authorNameClipped: authorRow.nameClipped
     function openAuthorCard(at) {
         if (detailsPane.details.authorName === "")
             return

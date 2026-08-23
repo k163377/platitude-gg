@@ -47,6 +47,13 @@ RowLayout {
     /// The verdict tooltip is up (`SignatureMark.tipShown` — the output side, so a cut binding cannot read as green).
     readonly property bool signatureTipShown: avatarBadge.signatureTipShown
 
+    /// The name did not fit the room the row gave it. Nothing is drawn differently for it — the ellipsis already says
+    /// so — but a headless run cannot see an ellipsis, and the width rule against `authorLabel` is the whole of what
+    /// this row promises the name (`Text.truncated`, the output side).
+    readonly property bool nameClipped: authorLabel.truncated
+    /// The same question for the credit line under it (`CoAuthorLine.clipped`).
+    readonly property bool matesClipped: coBlock.clipped
+
     signal avatarClicked()
     signal copyRequested(string text)
     signal parentClicked(string oidHex)
@@ -122,9 +129,11 @@ RowLayout {
                 elide: Text.ElideRight
                 // Grows no further than the name itself, so the mark sits against the name rather than being pushed
                 // across to the hash — and shrinks, with the name eliding, when a long one would otherwise crowd the
-                // mark out.
+                // mark out. **Rounded up**: a natural width lands on a fraction of a pixel as often as not, and the
+                // layout hands the item the whole pixel below it, which is a ceiling one hair under the name's own
+                // width — the name then elides against a rule meant to fit it (app-ui.md §自然幅の上限は切り上げる).
                 Layout.fillWidth: true
-                Layout.maximumWidth: authorLabel.implicitWidth
+                Layout.maximumWidth: Math.ceil(authorLabel.implicitWidth)
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontMd
                 font.weight: Font.DemiBold
@@ -174,11 +183,12 @@ RowLayout {
                 // left of this row; this is the rest.
                 nameWidth: authorRow.paneWidth / 2
                 // Grows no further than the names themselves, and gives way when the row cannot hold them -- the rule
-                // the author's name above already follows. Without the pair this line is Fixed, and a Fixed item is a
-                // floor the layout cannot go under: the row then lays out at its own width and every box in the pane,
-                // sized to fill it, paints past the window's edge (measured at 483 against a 384px pane).
+                // the author's name above already follows, rounding up with it. Without the pair this line is Fixed,
+                // and a Fixed item is a floor the layout cannot go under: the row then lays out at its own width and
+                // every box in the pane, sized to fill it, paints past the window's edge (measured at 483 against a
+                // 384px pane).
                 Layout.fillWidth: true
-                Layout.maximumWidth: coBlock.implicitWidth
+                Layout.maximumWidth: Math.ceil(coBlock.implicitWidth)
                 Layout.alignment: Qt.AlignVCenter
                 onPointerChanged: inside => authorRow.showCoAuthors(inside)
             }

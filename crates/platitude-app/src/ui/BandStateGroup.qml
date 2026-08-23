@@ -247,7 +247,10 @@ Item {
                 // The one part of this badge that gives: the count and the second operation mean nothing cut in half.
                 elide: Text.ElideRight
                 Layout.fillWidth: true
-                Layout.maximumWidth: implicitWidth
+                // Rounded up, the way the badge's own width above is: the layout hands an item the whole pixel below a
+                // fractional ceiling, and a ceiling one hair under the word's own width elides it
+                // (app-ui.md §自然幅の上限は切り上げる). The three badges below cap themselves the same way.
+                Layout.maximumWidth: Math.ceil(implicitWidth)
             }
             // Drawn, not typed — a middle dot would put a full-width cell in the badge (規約 §余白).
             DotMark {
@@ -284,7 +287,7 @@ Item {
                 font.weight: Font.DemiBold
                 elide: Text.ElideRight
                 Layout.fillWidth: true
-                Layout.maximumWidth: implicitWidth
+                Layout.maximumWidth: Math.ceil(implicitWidth)
             }
         }
         StateBadge {
@@ -301,7 +304,7 @@ Item {
                 font.weight: Font.DemiBold
                 elide: Text.ElideRight
                 Layout.fillWidth: true
-                Layout.maximumWidth: implicitWidth
+                Layout.maximumWidth: Math.ceil(implicitWidth)
             }
         }
         StateBadge {
@@ -316,7 +319,7 @@ Item {
                 font.weight: Font.DemiBold
                 elide: Text.ElideRight
                 Layout.fillWidth: true
-                Layout.maximumWidth: implicitWidth
+                Layout.maximumWidth: Math.ceil(implicitWidth)
             }
         }
     }

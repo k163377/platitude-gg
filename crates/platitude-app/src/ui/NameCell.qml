@@ -100,7 +100,9 @@ RowLayout {
             id: origName
             visible: !nameCell.folder && nameCell.origPath !== ""
             Layout.fillWidth: true
-            Layout.maximumWidth: origName.implicitWidth
+            // Rounded up: the layout hands an item the whole pixel below a fractional ceiling, and a ceiling one hair
+            // under the name's own width elides it (app-ui.md §自然幅の上限は切り上げる).
+            Layout.maximumWidth: Math.ceil(origName.implicitWidth)
             text: nameCell.origPath
             elide: Text.ElideMiddle
             font.pixelSize: Theme.fontMd

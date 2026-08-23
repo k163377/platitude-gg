@@ -18,6 +18,25 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "details_fit fits=true",
     },
+    // The author's name, capped at its own width so the signature's one
+    // word stays against it. A ceiling drawn a fraction of a pixel under
+    // that width elides the name, and an ellipsis is what a picture
+    // answers worst — it is a few pixels wide, both OSes draw one, and
+    // the box around it does not move, so the run that lost the last
+    // glyph frames exactly like the run that kept it (2026-08-23
+    // ユーザー報告: Ubuntu drew `Yuki Tana…` where Windows drew
+    // `Yuki Tanaka`, in the same 78px of ink). At the window the verbs
+    // open, the row has 200px of slack — nothing here is meant to give.
+    Verb {
+        name: "author-card",
+        when: &[],
+        plain: "author_card cut=false",
+    },
+    Verb {
+        name: "author-card-open",
+        when: &[],
+        plain: "author_card cut=false",
+    },
     // A pull that took more room than the pane had leaves what sits
     // under the box — the author card, the commit button — drawn over
     // the window's own footer, and that frames like a pane that fits:

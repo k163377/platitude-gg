@@ -2907,7 +2907,7 @@ Item {
             driver.complete()
         }
     }
-    // The details have to arrive before the name can name anybody.
+    // The details have to arrive before the name can name anybody. `cut=` leads: judgement is a run (verbs.md).
     SampleTimer {
         id: authorCardTimer
         onTriggered: {
@@ -2919,7 +2919,7 @@ Item {
                 return
             authorCardTimer.stop()
             AppBackend.report(
-                "author_card open=" + detailsPane.authorCardOpen
+                "author_card cut=" + detailsPane.authorNameClipped + " open=" + detailsPane.authorCardOpen
                 + " author=" + detailsPane.details.authorEmail
                 + " committer=" + detailsPane.details.committerEmail
                 + " other=" + detailsPane.details.committerDiffers
@@ -2939,9 +2939,9 @@ Item {
                 return
             coAuthorTimer.stop()
             // `open` is the card's own visibility, not the input that asked for it: reporting the input would go green
-            // with the binding cut.
+            // with the binding cut. `cut=` is the credit line's own eliding, read rather than judged (verbs.md).
             AppBackend.report(
-                "co_authors count=" + detailsPane.coAuthorRecords.length
+                "co_authors count=" + detailsPane.coAuthorRecords.length + " cut=" + detailsPane.coAuthorsClipped
                 + " first=" + detailsPane.coAuthorName(0)
                 + " open=" + detailsPane.matesCardOpen)
             driver.complete()
