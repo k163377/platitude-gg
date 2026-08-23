@@ -22,12 +22,12 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
             Some("description_grow keeps=true")
         }
         // Half of these the picture holds — which row is lit, and whose
-        // commit fills the right-hand pane. The other half it cannot: in a
-        // history short enough to fit on screen, a viewport that followed
-        // the new commit and one that never moved frame the same way.
-        "revert-commit" | "cherry-pick" | "merge-branch" => {
-            Some("tip_landed follows=true onscreen=true")
-        }
+        // commit fills the pane; in a history that fits, a viewport that
+        // followed frames like one that never moved. `op=` is the half the
+        // pair cannot say: both hold of a selection already at the tip.
+        "revert-commit" => Some("tip_landed follows=true onscreen=true op=revert"),
+        "cherry-pick" => Some("tip_landed follows=true onscreen=true op=cherry-pick"),
+        "merge-branch" => Some("tip_landed follows=true onscreen=true op=merge"),
         // The other landing the same press has. Two halves the picture
         // cannot hold either: that no red line was written over an
         // ordinary conflict, and that the command log stayed down.

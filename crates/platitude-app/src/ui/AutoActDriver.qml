@@ -2087,29 +2087,67 @@ Item {
     // half: a row can be selected and still be somewhere nobody can see.
     SampleTimer {
         id: tipLandedTimer
+        /// The name this run's own write answered by, latched off the answer that carried it rather than read back
+        /// at the report — **every** answer rewrites the group it comes from (`RepoTab::settle_write`), so a fetch
+        /// settling while the landing is still being waited out takes it away again. The counter having moved says
+        /// only that *an* answer arrived; a fetch's answer moves it too.
+        ///
+        /// Empty until that answer, and the emptiness is the arm. A press made with the selection already sitting at
+        /// the tip — a merge from a ref row, a revert of HEAD — satisfies every other reading below before git has
+        /// done anything, and the run would quit over an untouched repository (2026-08-22 実測: a copy nobody could
+        /// see in the picture, `op=` empty in this very report, green).
+        property string answeredOp: ""
+        function begin() {
+            tipLandedTimer.answeredOp = ""
+            tipLandedTimer.start()
+        }
         onTriggered: {
             const row = graphModel.rowOf(page.selectedOid)
-            // The write's own answer first: a press made with the selection already sitting at the tip — a merge from
-            // a ref row, a revert of HEAD — satisfies every reading below before git has done anything, and the run
-            // would quit over an untouched repository (measured 2026-08-23: merge-branch went green with no merge
-            // commit on disk and `op=` empty in this very report). And then the landing the answer armed: at the
-            // barrier the refs are still the old ones, so `selected === headOid` holds vacuously until the page's own
-            // `pendingHeadSelect` has resolved onto the refreshed pair — which is also the arm that stays down when a
-            // refusal never armed it, and a refused write sinks the run as a write failure anyway.
-            if (repoTab.writeSeq <= driver.writeSeqBefore || page.pendingHeadSelect
+            // Then the landing that answer armed: at the barrier the refs are still the old ones, so
+            // `selected === headOid` holds vacuously until the page's own `pendingHeadSelect` has resolved onto the
+            // refreshed pair.
+            //
+            // And last the pane the landing sends for. The details of the commit that was selected *before* the press
+            // are still on the right until its own round trip comes back, and for a merge from a ref row that commit
+            // is the old tip — so the half of this the picture does hold, whose commit fills the right-hand pane,
+            // frames as the repository before the write (2026-08-23 実測: the pane's second round trip landed after
+            // `screenshot saved=true`). Waited out the way `stashLandTimer` waits for it.
+            if (tipLandedTimer.answeredOp === "" || page.pendingHeadSelect
                     || repoTab.busyCount !== 0 || row < 0
-                    || !graphPane.rowOnScreen(row) || page.selectedOid !== branchesModel.headOid)
+                    || !graphPane.rowOnScreen(row) || page.selectedOid !== branchesModel.headOid
+                    || detailsModel.shaHex !== page.selectedOid)
                 return
             tipLandedTimer.stop()
             AppBackend.report(
                 "tip_landed follows="
                 + (page.selectedOid !== "" && page.selectedOid === branchesModel.headOid)
                 + " onscreen=" + (row >= 0 && graphPane.rowOnScreen(row))
-                + " op=" + repoTab.lastWriteOp
+                // Next to the pair above because that is where the harness reads it: the name is what tells the
+                // three verbs' own writes from anything else that could have moved the counter (`must_say`).
+                + " op=" + tipLandedTimer.answeredOp
                 + " head=" + branchesModel.headOid.substring(0, 8)
                 + " selected=" + page.selectedOid.substring(0, 8)
                 + " row=" + row)
             driver.complete()
+        }
+    }
+    /// The answer `tipLandedTimer` waits on, taken on the notify rather than on the sampling beat: two answers inside
+    /// one beat would leave only the later one to be read, and it is the earlier one that says the write was this
+    /// run's (app-ui.md §UI 自動化の因果性 — 一瞬だけ立つ状態は signal で観測して latch する). The *rise* of
+    /// `busyCount` is deliberately not waited for anywhere in this chain: a write that begins and ends between two
+    /// looks never shows one, and requiring it wedges the run instead (`writeSeqBefore`).
+    ///
+    /// `writeAtTip` is the bridge's own word for "landed, did not stop part-way, and answers at the tip" — the op
+    /// names are turned into meanings on that side of it (`RepoTab::settle_write`), not branched on here. A fetch's
+    /// answer, a refusal and a stop all leave the arm down, and the run walks into its watchdog rather than
+    /// photographing a repository nothing happened to.
+    Connections {
+        target: driver.repoTab
+        function onWriteSeqChanged() {
+            if (!tipLandedTimer.running || tipLandedTimer.answeredOp !== ""
+                    || driver.repoTab.writeSeq <= driver.writeSeqBefore || !driver.repoTab.writeAtTip)
+                return
+            tipLandedTimer.answeredOp = driver.repoTab.lastWriteOp
         }
     }
     // Where a merge that stopped on conflicts left the reader. The other half of `tipLandedTimer`: there is no commit
@@ -3626,7 +3664,7 @@ Item {
             if (act === "cherry-pick-stops")
                 opStoppedTimer.begin(false)
             else
-                tipLandedTimer.start()
+                tipLandedTimer.begin()
             repoTab.cherryPick(pickOid)
         } else if (act === "reset-soft" || act === "reset-mixed") {
             // With nothing given, the row under HEAD's: a reset to where the branch already stands moves nothing, and
@@ -3726,7 +3764,7 @@ Item {
                 if (act === "revert-stops")
                     opStoppedTimer.begin(false)
                 else
-                    tipLandedTimer.start()
+                    tipLandedTimer.begin()
                 repoTab.revert(oidHex)
             } else {
                 page.openRefMenu("branch", arg, arg,
@@ -3737,7 +3775,7 @@ Item {
                     if (act === "merge-stops")
                         mergeStoppedTimer.start()
                     else
-                        tipLandedTimer.start()
+                        tipLandedTimer.begin()
                     repoTab.merge(arg, false, false, "")
                 } else if (act === "rebase-onto" || act === "rebase-stops") {
                     // A replay that stopped part-way answers in the working tree like the other three: no commit
