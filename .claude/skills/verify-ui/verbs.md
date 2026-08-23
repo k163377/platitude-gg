@@ -62,6 +62,9 @@
 - `diff-keep-folded`(引数はパス。diff が左メニューを畳む / `✕` で閉じて戻す / **一覧を戻すと diff が閉じる**(帯のブロック = `-by-hand`)/ **改名の入力欄は戻さないので diff も残る**(`-by-rename`。`collapsed=true diff=true editing=branch:…` が `must_say` — 規約 §左メニューを畳む。**この 2 つは対で読む**: 戻す所作と戻さない所作が同じ絵にならないことが答え)/ 先に手で畳んであれば畳んだまま。判定は同じ `nav_rail` 行の `collapsed=` と `diff=`)
 - `rename-branch` / `rename-tag` / `rename-stash`
 - `branch-at-tag`(いずれも引数は新しい名前)
+- `create-tag`(引数は新しいタグ名。**グラフの道を端まで通す** = HEAD の 1 つ下の行にコミットメニューを開き、`Create tag here…` の行を押して、チップ列に出た箱へ名前を入れて確定する(規約 §タグを作る・送る)。**書き込み境界で撮らない** — core は `AfterWrite::Graph` の読み直しより先に答えるので、そこで撮ると **TAGS に何も増えていない絵**が緑で通る(実測: 1 回目の実装がそうなった)。待つのは `tagsModel.oidOfName(<引数>)` が答えること。報告行 `create_tag tag= row= total= at=` の **`at=` は頼んだコミットに着いたか** — 本数だけでは HEAD に置いた実装も通る)
+- `nav-tag-box`(引数は `nav-branch-box` と同じ `<section>:<ref>[:<幅>][:away]`。**同じ欄の 3 つ目のモード**で、報告行も `nav_name_box` の同じ 1 行(`mode=tag` が出る)。`must_say` は `open=true focused=true shown=true` — **どのモードで開いたかだけは絵が答える**(空の箱に書いてあるのは問い 1 行だけ = `Create tag here?`))
+- `tag-menu` / `push-tag`(引数 `<tag>` または `<tag>:drift`。前者はタグの ref メニューを立てたまま止まり、後者は push の行をそのまま押す・長押しする。報告行 `tag_menu tag= tag_here= push= code= held= lease= text=`。**`:drift` は「ズレている側を撮る」ための待ち**で、fetch を撃ってから `ls-remote --tags` の答えが `NavSectionModel.remoteTagDrift` に届くまで待つ — **fetch の完了だけで進むと素の `push` の行を撮って「force を撮った」と読む**。**2 本で 1 組**: 素の側だけではリモートを一度も読まない実装が通り、ズレ側だけでは常に force を出す実装が通る。ズレの土台は `--preset tags` の `v1.5`(手元は HEAD・origin は 2 つ目のコミット)、素の側は `--preset basic` の `v0.3-local`。**`lease=` は絵では一切判定できない** — 空の lease を張った `push --force` は正しい lease のものと 1px も違わない)
 - `delete-branch`(**3 つとも引数はブランチ名** — 省かれると `git branch --delete -- ''` を撃つだけで何も撮れない。メニューを開いたまま `--delete`。マージ済みなら消えてメニューが閉じ、拒まれたら行が `branch -D` + `not merged` に化ける。**拒まれる側は `--preset basic` の `feature/topic-a`**)
 - `delete-branch-refused`(その化けた行を出したまま止める。報告行 `ref_menu delete=<チップ> <名前> note=`)
 - `delete-branch-go`(化けた行の長押しまで走らせて `-D`)
