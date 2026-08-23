@@ -31,11 +31,6 @@ Rectangle {
     readonly property real bandTabRun: tabStrip.runAvail
     readonly property real bandTabContent: tabStrip.contentWidth
     readonly property bool bandTabScrolls: tabStrip.contentWidth > tabStrip.tabsWidth
-    /// Automation: what the command log's mark came out to — the band's own reading of the log and the error line
-    /// together, and the colour it painted from it. Asked here rather than of the page, because what is being checked
-    /// is that the page's news reached this mark at all (`PG_AUTO_ACT=commands-clear`).
-    readonly property bool commandsWrong: commandsToggle.wrong
-    readonly property color commandsMarkColor: commandsToggle.markColor
     /// Automation: the four things that can be the matter here. The group owns the conditions and the hidden
     /// measurements behind them; what the hooks ask the band for comes back through here (`BandStateGroup`).
     readonly property bool opBadgeShown: stateGroup.opBadgeShown
@@ -229,8 +224,11 @@ Rectangle {
             tabContentWidth: tabStrip.contentWidth
             tabRunAvail: tabStrip.runAvail
             tabCount: tabStrip.tabCount
-            // Measured off the pair beside it rather than written to tokens of its own — `commandsToggle` below carries
-            // the reasoning, and this is the same number.
+            // Measured off the pair beside it rather than written to tokens of its own: what sets how big a target is
+            // here is the padding a Fusion `ToolButton` keeps around its content — a number the theme does not have.
+            // The button's `padding` rather than the two sides it settles to: those carry the shared box's slack as
+            // well (`ActionButton.slack`), so reading them would move this group every time the fetch button changed
+            // its wording.
             controlPadding: fetchButton.padding
             controlHeight: fetchButton.implicitHeight
             Layout.fillWidth: true
@@ -239,12 +237,6 @@ Rectangle {
             // Second in both queues (the strip's comment carries the order).
             Layout.horizontalStretchFactor: 1
             onIdentityEditRequested: topBar.identityEditRequested()
-        }
-        CommandsToggle {
-            id: commandsToggle
-            curPage: topBar.curPage
-            controlPadding: fetchButton.padding
-            controlHeight: fetchButton.implicitHeight
         }
         // Fetch, and everything the network has to say about fetching (`BandFetchButton`).
         BandFetchButton {

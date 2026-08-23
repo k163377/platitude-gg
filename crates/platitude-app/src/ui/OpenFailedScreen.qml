@@ -22,6 +22,10 @@ Item {
     /// How wide the page is. Measured against the page rather than this item's own box: a `SplitView` gives no width to
     /// an item that is not on screen, and this one is off screen until the moment it is needed.
     required property real pageWidth
+    /// The page this screen took the panes' seat on. This screen stands where the left menu would be, so the block at
+    /// the foot of that pane has to be here too — a tab that would not open still ran the command that says why, and
+    /// with nothing else on screen to say it the log is the only place it is written (デザイン規約 §git が言ったことを読む場所).
+    property var commandsPage: null
 
     /// The "Close tab" button.
     signal closeRequested()
@@ -56,5 +60,13 @@ Item {
             text: qsTr("Close tab")
             onActivated: screen.closeRequested()
         }
+    }
+
+    CommandsToggle {
+        id: commandsSeat
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        visible: screen.commandsPage !== null && !commandsSeat.open
+        curPage: screen.commandsPage
     }
 }

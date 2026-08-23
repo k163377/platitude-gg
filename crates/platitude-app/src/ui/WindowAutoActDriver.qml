@@ -37,9 +37,9 @@ Item {
     property bool commandsWrongSeen: false
     property bool errorLineSeen: false
     Connections {
-        target: topBar
+        target: window.curPage
         function onCommandsWrongChanged() {
-            if (topBar.commandsWrong)
+            if (window.curPage.commandsWrong)
                 driver.commandsWrongSeen = true
         }
     }
@@ -727,14 +727,14 @@ Item {
                 window.curPage.clearCommandLog()
                 return
             }
-            if (topBar.commandsWrong || window.curPage.commandsShown)
+            if (window.curPage.commandsWrong || window.curPage.commandsShown)
                 return
             stop()
             AppBackend.report(
                 "commands_clear was=" + commandsClearActTimer.was
-                + " wrong=" + topBar.commandsWrong
+                + " wrong=" + window.curPage.commandsWrong
                 + " open=" + window.curPage.commandsShown
-                + " mark=" + topBar.commandsMarkColor)
+                + " mark=" + window.curPage.commandsMarkColor)
             window.finishAutoAct()
         }
     }
@@ -760,7 +760,7 @@ Item {
                 window.curPage.pageTab.fetch("")
                 return
             }
-            if (topBar.commandsWrong
+            if (window.curPage.commandsWrong
                     || window.curPage.pageTab.lastError !== ""
                     || window.curPage.pageTab.busyCount !== 0
                     || window.curPage.pageTab.fetchFailures !== 0)
@@ -769,7 +769,7 @@ Item {
             AppBackend.report(
                 "fetch_recover was=" + fetchRecoverActTimer.was
                 + " hadline=" + fetchRecoverActTimer.hadLine
-                + " wrong=" + topBar.commandsWrong
+                + " wrong=" + window.curPage.commandsWrong
                 + " line=" + (window.curPage.pageTab.lastError !== "")
                 + " failures=" + window.curPage.pageTab.fetchFailures
                 + " open=" + window.curPage.commandsShown)

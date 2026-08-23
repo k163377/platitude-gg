@@ -42,6 +42,7 @@ CommitMenuState 1.0 CommitMenuState.qml
 CommitRowMenu 1.0 CommitRowMenu.qml
 EolHoverCard 1.0 EolHoverCard.qml
 CommandRowDelegate 1.0 CommandRowDelegate.qml
+CommandsBand 1.0 CommandsBand.qml
 CommandsPane 1.0 CommandsPane.qml
 CommandsToggle 1.0 CommandsToggle.qml
 DescriptionBox 1.0 DescriptionBox.qml

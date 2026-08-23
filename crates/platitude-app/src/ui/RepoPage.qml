@@ -100,13 +100,12 @@ Item {
         // §git が言ったことを読む場所).
         function onFetchFirstFailed() {
             page.commandsOpen = true
-            commandsPane.showLatest()
         }
     }
 
-    // A tab whose repository would not open. The screen sits where the panes do, not over the whole page, so the log
-    // stays reachable under it. The log is not raised on its own: the failed command is a background read, so the panel
-    // would come up empty (実測).
+    // A tab whose repository would not open. The screen sits where the panes do, not over the whole page, so the log's
+    // seat and the panel both stay reachable. The log is not raised on its own: the failed command is a background
+    // read, so the panel would come up empty (実測).
     readonly property bool openFailed: !page.blank && repoTab.state === "error"
 
     property int seenHeadCommitSeq: 0
@@ -962,7 +961,6 @@ Item {
             // themselves — and whether an operation built out of several of them failed is a question only its own
             // answer can settle.
             page.commandsOpen = true
-            commandsPane.showLatest()
             // A rename that did not happen has nothing to carry over.
             page.pendingRenameRemote = ""
             page.pendingRenameTo = ""
@@ -1241,23 +1239,23 @@ Item {
     /// exposure, the same one `GraphPane.view` is (app-ui.md). `var` because `TopBar` is above this file, not beside it.
     property var pageBand: null
 
-    /// Whether the command log is up. Closed is the resting state: the toolbar's `>_` opens it, and a failed command
-    /// raises it.
+    /// Whether the command log is up. Closed is the resting state: the `>_` at the foot of the left menu opens it, and
+    /// a failed command raises it.
     property bool commandsOpen: false
     function toggleCommands() {
         page.commandsOpen = !page.commandsOpen
-        if (page.commandsOpen)
-            commandsPane.showLatest()
     }
-    /// What the panel is doing, rather than what was asked of it — the automation reads this one, so a cut binding
-    /// cannot pass.
-    readonly property bool commandsShown: commandsPane.visible
+    /// One mark for a failed command and for this tab's error line both. The page's rule, since the mark moves seats.
+    readonly property bool commandsWrong: commandsModel.failed || repoTab.lastError !== ""
+    /// Automation: the colour the `>_` painted, from whichever of its seats is standing (`PG_AUTO_ACT=commands-clear`).
+    readonly property color commandsMarkColor: page.commandsOpen ? commandsBand.markColor : sidebarPane.commandsMarkColor
+    /// What the panel is doing rather than what was asked of it — automation reads this one, so a cut binding fails.
+    readonly property bool commandsShown: commandsBand.visible
     /// Automation reads the laid-out width, not the preferred width it requested, before persisting a state round trip.
     readonly property real stateDetailsWidth: rightPane.width
-    /// Automation only: the header's `Clear`, pressed from outside the pane. The answer to what it clears is on the
-    /// band, which cannot reach in here (`PG_AUTO_ACT=commands-clear`).
+    /// Automation only: the header's `Clear`, pressed from outside the panel (`PG_AUTO_ACT=commands-clear`).
     function clearCommandLog() {
-        commandsPane.clearPanel()
+        commandsBand.clearPanel()
     }
 
     RepoTab { id: repoTab }
@@ -1342,7 +1340,7 @@ Item {
         page: page
         sidebarPane: sidebarPane
         rightPane: rightPane
-        commandsPane: commandsPane
+        commandsBand: commandsBand
         graphPane: graphPane
         wipPane: wipPane
         detailsPane: detailsPane
@@ -1844,6 +1842,7 @@ Item {
                 path: repoTab.errorPath
                 message: repoTab.error
                 pageWidth: page.width
+                commandsPage: page
                 onCloseRequested: page.closeTabRequested()
             }
 
@@ -1874,6 +1873,8 @@ Item {
                     stashesModel: stashesModel
                     tagsModel: tagsModel
                     collapsed: page.sidebarCollapsed
+                    // Null on the blank page: nothing has run there (the band's `>_` answered the same way up above).
+                    commandsPage: page.blank ? null : page
                     // The menus the rows raise are the page's, so only the page can say one is standing over the folded
                     // list.
                     menuOpen: page.menuStanding
@@ -2047,11 +2048,11 @@ Item {
             }
 
             // ---- command log ------------------------------------------
-            // Hidden until asked for, and raised by a failure.
-
-            CommandsPane {
-                id: commandsPane
+            // Hidden until asked for, and raised by a failure. The `>_` comes down here with it (`CommandsBand`).
+            CommandsBand {
+                id: commandsBand
                 visible: page.commandsOpen
+                curPage: page
                 commandsModel: commandsModel
                 errorText: repoTab.lastError
                 SplitView.preferredHeight: 280
@@ -2075,7 +2076,6 @@ Item {
                 return
             }
             page.commandsOpen = true
-            commandsPane.showLatest()
         }
     }
 

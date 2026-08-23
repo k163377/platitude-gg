@@ -21,6 +21,11 @@ Rectangle {
     /// Folded down to the rail. Held by the page: what folds it is going
     /// to include opening a diff, and that is the page's to know.
     required property bool collapsed
+    /// The page whose command log the block at the foot of this pane
+    /// opens (`CommandsToggle`). Null while no tab is open — and the
+    /// whole seat goes once the log is up, since from then on the block
+    /// stands at the head of the panel's own strip (`CommandsBand`).
+    property var commandsPage: null
 
     signal refActivated(string oidHex)
     /// Right-click on a row. `kind` is the section it came from, `name`
@@ -262,6 +267,25 @@ Rectangle {
             sidebar.expTags = !sidebar.expTags
     }
 
+    // ---- the log's seat ----------------------------------------------
+    // The foot of the pane, mirroring the block at the head of it: the
+    // list and the rail alike stop above this one, so the `>_` keeps the
+    // same corner whichever of the two is standing, and pressing it takes
+    // the whole band away to the panel's strip (デザイン規約 §git が言った
+    // ことを読む場所).
+    CommandsToggle {
+        id: commandsSeat
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        visible: sidebar.commandsPage !== null && !commandsSeat.open
+        curPage: sidebar.commandsPage
+    }
+    /// Automation: the colour the `>_` painted while the panel is down
+    /// (`PG_AUTO_ACT=commands-clear`; the page picks the standing seat).
+    readonly property alias commandsMarkColor: commandsSeat.markColor
+    /// What the seat leaves for the list above it.
+    readonly property real footRoom: commandsSeat.visible ? commandsSeat.height : 0
+
     // ---- the open list ----------------------------------------------
     // The filter band, the five sections and the ground under them, as
     // one column (`NavSections`). The column reports upward; the pane
@@ -269,6 +293,7 @@ Rectangle {
     NavSections {
         id: sections
         anchors.fill: parent
+        anchors.bottomMargin: sidebar.footRoom
         visible: !sidebar.collapsed
         repoTab: sidebar.repoTab
         workTree: sidebar.workTree
@@ -296,6 +321,7 @@ Rectangle {
     NavRail {
         id: rail
         anchors.fill: parent
+        anchors.bottomMargin: sidebar.footRoom
         visible: sidebar.collapsed
         branchesModel: sidebar.branchesModel
         remotesModel: sidebar.remotesModel
