@@ -44,6 +44,8 @@ Item {
     property AppMenuItem refSwitchItem
     property AppMenuItem refPushTagItem
     property AppMenuItem refTagHereItem
+    property AppMenuItem refRemoteTagDeleteItem
+    property AppMenuItem refTagBothDeleteItem
     property FileRowMenu fileRowMenu
     property AppMenu fileMenu
     property AppMenuItem fileDiscardItem
@@ -188,7 +190,7 @@ Item {
                 "create-tag",
                 // Both wait for the readings that decide the push row's shape, and the second runs its press from
                 // there — so the barrier is behind the wait rather than in front of it.
-                "tag-menu", "push-tag",
+                "tag-menu", "push-tag", "delete-remote-tag", "delete-tag-both",
                 "nav-add-remote", "push-default", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "chip-menu", "chip-menu-current",
@@ -1754,48 +1756,100 @@ Item {
     // rides out with; waiting on the fetch alone photographs the plain row and calls it the forced one.
     SampleTimer {
         id: tagMenuTimer
-        /// The tag the menu is to stand on, and whether this run wants the drifted reading first.
+        /// The tag the menu is to stand on, and what the run needs known about it before the card is worth
+        /// photographing: `drift` (a remote has the name on another commit) or `remote` (a remote has it at all).
+        /// Both are answers only `ls-remote --tags` carries, so either one fetches first.
         property string tag: ""
-        property bool drift: false
-        /// Run the hold out once the row is the forced one — `push-tag-go`, which is the only way that push is sent.
-        property bool go: false
-        function begin(arg, running) {
+        property string wants: ""
+        /// Which row this run presses, empty for the ones that only stand the card up.
+        property string press: ""
+        function begin(arg, pressing) {
             const parts = arg.split(":")
             tagMenuTimer.tag = parts[0]
-            tagMenuTimer.drift = parts.length > 1 && parts[1] === "drift"
-            tagMenuTimer.go = running
-            if (tagMenuTimer.drift)
+            tagMenuTimer.wants = parts.length > 1 ? parts[1] : ""
+            tagMenuTimer.press = pressing
+            if (tagMenuTimer.wants !== "")
                 repoTab.fetch("")
             tagMenuTimer.start()
         }
+        /// Whether what this run is waiting on has arrived, asked of the same lookups the menu asks
+        /// (`NavSectionModel`): the readings are in or they are not, and no count of fetches says which.
+        function ready() {
+            if (tagMenuTimer.wants === "drift")
+                return tagsModel.remoteTagDrift(tagMenuTimer.tag, repoTab.defaultRemote) !== ""
+            if (tagMenuTimer.wants === "remote") {
+                const sides = tagsModel.tagSides(tagMenuTimer.tag)
+                return sides === "remote" || sides === "both"
+            }
+            return true
+        }
         onTriggered: {
-            // What the drifted side is waiting on, asked of the same lookup the menu asks (`NavSectionModel`): the
-            // readings are in or they are not, and no count of fetches says which.
-            if (tagMenuTimer.drift
-                && tagsModel.remoteTagDrift(tagMenuTimer.tag, repoTab.defaultRemote) === "")
-                return
-            if (repoTab.busyCount !== 0)
+            if (!tagMenuTimer.ready() || repoTab.busyCount !== 0)
                 return
             tagMenuTimer.stop()
             page.openRefMenu("tag", tagMenuTimer.tag, tagMenuTimer.tag,
                              tagsModel.oidOfName(tagMenuTimer.tag), true)
+            // Every row this menu grew, in one line. The delete rows are told apart by nothing but which of them is
+            // drawn, and a card missing one frames exactly like a card that never offered it.
+            // **The order is the judging order.** `must_say` matches a run of this line, so what one run has to
+            // assert together has to sit together: the sides and the four rows they decide first, the push row's
+            // own shape after them (`verify/verbs/remote.rs`).
             AppBackend.report("tag_menu tag=" + tagMenuTimer.tag
+                              + " sides=" + tagsModel.tagSides(tagMenuTimer.tag)
+                              + " local_del=" + refDeleteItem.offered
+                              + " remote_del=" + refRemoteTagDeleteItem.offered
+                              + " both_del=" + refTagBothDeleteItem.offered
                               + " tag_here=" + refTagHereItem.offered
                               + " push=" + refPushTagItem.offered
                               + " code=" + refPushTagItem.code
                               + " held=" + (refPushTagItem.holdMs > 0)
                               + " lease=" + refRowMenu.tagDriftOid
                               + " text=" + refPushTagItem.text)
-            if (!tagMenuTimer.go) {
+            if (tagMenuTimer.press === "") {
                 driver.complete()
                 return
             }
             driver.writeSeqBefore = repoTab.writeSeq
+            if (tagMenuTimer.press === "remote-delete" || tagMenuTimer.press === "both-delete") {
+                // What a delete is judged on is the sidebar afterwards, and **the write answers before the read that
+                // rebuilds it** (core `AfterWrite::Graph`) — stopping at the write barrier photographs the list as it
+                // was and calls it the list as it is. What the run waits for is this name's own reading changing.
+                tagGoneTimer.was = tagsModel.tagSides(tagMenuTimer.tag)
+                tagGoneTimer.tag = tagMenuTimer.tag
+                if (tagMenuTimer.press === "remote-delete")
+                    refRemoteTagDeleteItem.completeHold()
+                else
+                    refTagBothDeleteItem.completeHold()
+                tagGoneTimer.start()
+                return
+            }
             if (refPushTagItem.holdMs > 0)
                 refPushTagItem.completeHold()
             else
                 refPushTagItem.triggered()
             writeBarrier.start()
+        }
+    }
+    // A tag delete, judged on the sidebar it leaves rather than on the write that made it. The name's own reading is
+    // the edge: gone from both sides it answers nothing at all, gone from the remote alone it drops back to `here`.
+    // **A count would not do** — the remote half of a name held on both sides takes no row away.
+    SampleTimer {
+        id: tagGoneTimer
+        property string tag: ""
+        property string was: ""
+        onTriggered: {
+            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
+                return
+            const now = tagsModel.tagSides(tagGoneTimer.tag)
+            if (now === tagGoneTimer.was)
+                return
+            tagGoneTimer.stop()
+            AppBackend.report("tag_gone tag=" + tagGoneTimer.tag
+                              + " was=" + tagGoneTimer.was
+                              + " sides=" + now
+                              + " row=" + tagsModel.rowOfName(tagGoneTimer.tag)
+                              + " total=" + tagsModel.total)
+            renderedBarrier.begin()
         }
     }
     // Waits on the early answer, not on a refusal: nothing here writes.
@@ -3753,10 +3807,15 @@ Item {
                 graphPane.view.namingSubmitted(driver.createTagOid, arg, "tag")
                 createTagTimer.start()
             }
-        } else if (act === "tag-menu" || act === "push-tag") {
-            // The push row's two forms, and the press that sends one of them. `<tag>:drift` fetches first and waits
-            // for the remotes' readings, which is the only thing that tells the forms apart.
-            tagMenuTimer.begin(arg, act === "push-tag")
+        } else if (act === "tag-menu" || act === "push-tag"
+                   || act === "delete-remote-tag" || act === "delete-tag-both") {
+            // The rows a tag's menu grew, and the press that runs one of them. The suffix on the argument says what
+            // has to be known before the card is worth reading — `:drift` for the forced push, `:remote` for the
+            // delete rows — and both of those are answers only a fetch brings.
+            tagMenuTimer.begin(arg,
+                               act === "push-tag" ? "push"
+                             : act === "delete-remote-tag" ? "remote-delete"
+                             : act === "delete-tag-both" ? "both-delete" : "")
         } else if (act === "nav-branch-box" || act === "nav-rename-box" || act === "nav-tag-box") {
             // The two boxes the left menu opens on a row, left standing instead of submitted — the copy of the chip
             // column's box on the side with no lanes to grow into, and the rename box that shares the field with it.

@@ -514,6 +514,22 @@ impl RepoTab {
         self.with_session(|s| s.push_tag(remote.clone(), tag.clone(), lease_expect.clone()));
     }
 
+    /// `git push <remote> --delete refs/tags/<tag>`. Fully qualified,
+    /// because a bare name a branch shares over there is refused and
+    /// neither is deleted (実測 — `remote::delete_remote_tag`).
+    #[qslot]
+    fn delete_remote_tag(&mut self, remote: String, tag: String) {
+        self.with_session(|s| s.delete_remote_tag(remote.clone(), tag.clone()));
+    }
+
+    /// `git tag --delete` and then the remote's copy, as one queued
+    /// write: the local half first, so a pair that stops part-way never
+    /// leaves the name gone from the remote and still in the sidebar.
+    #[qslot]
+    fn delete_tag_everywhere(&mut self, tag: String, remote: String) {
+        self.with_session(|s| s.delete_tag_everywhere(tag.clone(), remote.clone()));
+    }
+
     /// Renames a tag. git has none, so core builds it out of a new name on
     /// the same object and a delete of the old one.
     #[qslot]

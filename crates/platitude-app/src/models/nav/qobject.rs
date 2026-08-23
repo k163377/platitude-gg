@@ -206,6 +206,37 @@ impl NavSectionModel {
         self.told(Role::Name, &name, Role::Upstream)
     }
 
+    /// Which sides the tag with this name stands on — `here` / `remote` /
+    /// `both`, empty when this section holds no such row
+    /// (`platitude_core::offers::TagSides`).
+    ///
+    /// **A tag has no namespace**, so one row carries both sides of a
+    /// name held here and over there, and the rows that act on it are not
+    /// the same rows: `tag --delete` needs a local one, `push --delete` a
+    /// remote one. The row cannot say this on its own, and neither half
+    /// alone answers it — `only_remote` is what the sidebar draws, and a
+    /// name only a remote has is the one row of TAGS that no local ref
+    /// points at.
+    #[qslot]
+    pub(super) fn tag_sides(&self, name: String) -> String {
+        if name.is_empty() || self.section != "tags" {
+            return String::new();
+        }
+        // No row of this name at all — a section that has not been read
+        // yet, or a name this one does not carry.
+        let Some(only_remote) = self.told_flag(Role::Name, &name, Role::OnlyRemote) else {
+            return String::new();
+        };
+        let carried = self
+            .told_flag(Role::Name, &name, Role::HasRemote)
+            .unwrap_or(false);
+        match (only_remote, carried) {
+            (true, _) => "remote".to_string(),
+            (false, true) => "both".to_string(),
+            (false, false) => "here".to_string(),
+        }
+    }
+
     /// Where `remote` carries this tag when that is not where this
     /// repository has it; empty when they agree or that remote has never
     /// been heard to carry the name.

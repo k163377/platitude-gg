@@ -69,6 +69,7 @@ mod model;
 mod open;
 mod ops_integrate;
 mod ops_remote;
+mod ops_remote_tags;
 mod ops_tree;
 mod print;
 mod query;

@@ -168,6 +168,59 @@ fn at_origin(work: &mut TestRepo, name: &str) -> String {
         .to_string()
 }
 
+/// Taking a tag off a remote, and the two measurements that decide how
+/// it has to be spelled.
+///
+/// **The name is qualified because a bare one is ambiguous.** A remote
+/// carrying a branch and a tag of the same name refuses `--delete <name>`
+/// outright — `error: dst refspec … matches more than one` — and deletes
+/// neither (実測 git 2.55). `refs/tags/<name>` takes the tag and leaves
+/// the branch where it is.
+#[tokio::test]
+async fn a_qualified_delete_takes_the_tag_and_leaves_the_branch_of_the_same_name() {
+    let (_bare, mut work, root, _head) = tag_scenario();
+    let exec = crate::support::exec::isolated();
+    let cancel = CancellationToken::new();
+    let path = work.path.clone();
+    // A branch over there under the name a tag already has.
+    work.git(&["push", "origin", &format!("{root}:refs/heads/v-both")]);
+
+    remote::delete_remote_tag(&exec, &path, "origin", "v-both", NET, &cancel)
+        .await
+        .expect("the qualified refspec names one ref");
+
+    assert_eq!(at_origin(&mut work, "v-both"), "", "the tag is gone");
+    assert_eq!(
+        work.git(&["ls-remote", "origin", "refs/heads/v-both"])
+            .split_whitespace()
+            .next()
+            .unwrap_or_default(),
+        root,
+        "and the branch of the same name was not touched"
+    );
+    assert_eq!(
+        work.git(&["rev-list", "-n", "1", "v-both"]),
+        root,
+        "nor was the one here"
+    );
+}
+
+/// **git does not refuse a name the remote has not got, in this
+/// spelling.** The qualified form needs no resolution over there, so the
+/// answer is `warning: deleting a non-existent ref` and exit 0 (実測) —
+/// where a bare name would have failed. Whether there is anything to
+/// delete is the menu's to know before it asks (`offers::TagSides`).
+#[tokio::test]
+async fn deleting_a_tag_the_remote_has_not_got_is_not_an_error() {
+    let (_bare, work, _root, _head) = tag_scenario();
+    let exec = crate::support::exec::isolated();
+    let cancel = CancellationToken::new();
+
+    remote::delete_remote_tag(&exec, &work.path, "origin", "v-local", NET, &cancel)
+        .await
+        .expect("git answers with a warning, not a refusal");
+}
+
 /// The lease is what makes the hold safe to offer without a dialog: it is
 /// pinned to the commit the reader was being shown, so a remote that has
 /// moved since is refused rather than flattened.

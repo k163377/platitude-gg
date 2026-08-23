@@ -81,6 +81,34 @@ fn only_the_tags_section_answers_for_a_drift() {
     let mut model = section("branches", Source::Locals(snapshot(Vec::new(), Vec::new())));
     model.arrange();
     assert_eq!(model.remote_tag_drift("v1.0".into(), "origin".into()), "");
+    assert_eq!(model.tag_sides("v1.0".into()), "");
+}
+
+/// Which sides a tag's name stands on — what tells the three delete rows
+/// apart, since one row of TAGS carries both (`offers::TagSides`).
+#[test]
+fn a_tag_row_says_which_sides_its_name_stands_on() {
+    let mut model = section(
+        "tags",
+        Source::Tags(snapshot(
+            Vec::new(),
+            vec![
+                tag("v-here", false, true),
+                tag("v-both", true, true),
+                tag("v-theirs", true, false),
+            ],
+        )),
+    );
+    model.arrange();
+
+    assert_eq!(model.tag_sides("v-here".into()), "here");
+    assert_eq!(model.tag_sides("v-both".into()), "both");
+    assert_eq!(model.tag_sides("v-theirs".into()), "remote");
+    // **Not `here`.** A name no row carries has to be told from one that
+    // is only local, or a section still loading would offer the everyday
+    // delete on a tag nobody has (`told_flag` answers `None`, not false).
+    assert_eq!(model.tag_sides("v-nobody".into()), "");
+    assert_eq!(model.tag_sides(String::new()), "");
 }
 #[test]
 fn a_file_row_reads_out_of_the_status() {

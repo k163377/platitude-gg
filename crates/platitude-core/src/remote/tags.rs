@@ -84,6 +84,42 @@ pub async fn push_tag(
     })
 }
 
+/// Takes one tag off one remote. Nothing here is touched.
+///
+/// **The name is fully qualified, and it has to be.** A bare `--delete
+/// <name>` is resolved against everything the remote carries, so a name
+/// that is a branch over there as well is refused outright — `error: dst
+/// refspec dup matches more than one`, with neither of the two deleted
+/// (実測 git 2.55). `refs/tags/<name>` names the one ref meant, and the
+/// branch beside it is left alone.
+///
+/// **A name the remote has not got is not an error in this spelling.**
+/// The qualified form needs no resolution over there, so git answers
+/// `warning: deleting a non-existent ref` and exits 0 (実測) — where the
+/// bare form would have failed. Whether there is anything to delete is
+/// therefore the caller's to know before it asks (`offers::TagSides`);
+/// git will not be the one to say.
+pub async fn delete_remote_tag(
+    executor: &GitExecutor,
+    workdir: &Path,
+    remote: &str,
+    tag: &str,
+    timeout: Duration,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args([
+            "push",
+            "--delete",
+            "--",
+            remote,
+            &format!("refs/tags/{tag}"),
+        ])
+        .timeout(timeout);
+    executor.run(cmd, cancel).await.map(drop)
+}
+
 /// One tag as a remote advertises it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteTag {

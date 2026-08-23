@@ -910,6 +910,8 @@ Item {
             refSwitchItem: refRowMenu.switchItem
             refPushTagItem: refRowMenu.pushTagItem
             refTagHereItem: refRowMenu.tagHereItem
+            refRemoteTagDeleteItem: refRowMenu.deleteRemoteTagItem
+            refTagBothDeleteItem: refRowMenu.deleteTagBothItem
             fileRowMenu: fileRowMenu
             fileMenu: fileRowMenu.menu
             fileDiscardItem: fileRowMenu.discardItem

@@ -171,6 +171,7 @@ impl GitFacts {
         held_by_worktree: String,
         remote_counterpart: String,
         default_remote: String,
+        tag_sides: String,
     ) -> String {
         let Some(kind) = platitude_core::offers::RefKind::from_word(&kind) else {
             return String::new();
@@ -188,6 +189,7 @@ impl GitFacts {
             &held_by_worktree,
             &remote_counterpart,
             &default_remote,
+            &tag_sides,
         )
         .words()
     }

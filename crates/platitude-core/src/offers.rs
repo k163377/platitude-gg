@@ -35,6 +35,48 @@ impl RefKind {
     }
 }
 
+/// Which sides of a tag exist, in the words the menu asks with.
+///
+/// A tag has no namespace, so the same bare name stands for the one here
+/// and the one a remote carries, and the rows that act on it are not the
+/// same rows: `tag --delete` needs a local one, `push --delete` needs a
+/// remote one, and sending needs something local to send. The sidebar
+/// lists a name held on both sides once, so the row cannot say this on
+/// its own (`NavSectionModel.tagSides`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TagSides {
+    /// Made here and no remote is known to carry the name.
+    Here,
+    /// A remote carries it and this repository does not — the one kind of
+    /// tag row that names a commit no local ref points at.
+    Remote,
+    Both,
+}
+
+impl TagSides {
+    /// Decoded from the word `GitFacts.refMenuOffers` is handed; `None`
+    /// for every row that is not a tag, and for a tag whose section has
+    /// not been read yet.
+    pub fn from_word(word: &str) -> Option<Self> {
+        match word {
+            "here" => Some(Self::Here),
+            "remote" => Some(Self::Remote),
+            "both" => Some(Self::Both),
+            _ => None,
+        }
+    }
+
+    /// Whether this repository holds the tag.
+    fn here(self) -> bool {
+        matches!(self, Self::Here | Self::Both)
+    }
+
+    /// Whether a remote was last heard to carry the name.
+    fn on_remote(self) -> bool {
+        matches!(self, Self::Remote | Self::Both)
+    }
+}
+
 /// What the right-click menu on a ref may offer, decided as it opens and
 /// frozen while it stands (`RefRowMenu.offerOn`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -72,8 +114,18 @@ pub struct RefMenuOffers {
     /// that decide how hard it may push are (デザイン規約 §リモートへ送る),
     /// and a remote-tracking ref is a reading of what is already there.
     /// Nothing about the working tree stands in its way — a tag names a
-    /// commit, and where HEAD is has no bearing on sending it.
+    /// commit, and where HEAD is has no bearing on sending it. **A tag
+    /// only a remote has is not sent**: there is nothing here to send.
     pub push_tag: bool,
+    /// The tag taken off the remote, leaving whatever is here. Offered
+    /// wherever a remote was last heard to carry the name — and only
+    /// there, because the qualified `--delete` git needs does not fail on
+    /// a name the remote has not got (実測 — [`crate::remote::
+    /// delete_remote_tag`]), so a row offered on a guess would report
+    /// success for having done nothing.
+    pub delete_remote_tag: bool,
+    /// Both at once, for the name that stands on both sides.
+    pub delete_tag_everywhere: bool,
     /// The row is the branch HEAD is on — what the delete rows' refusal
     /// names first.
     pub on_current_branch: bool,
@@ -81,7 +133,8 @@ pub struct RefMenuOffers {
 
 impl RefMenuOffers {
     /// The offers as packed words (`switch asks branch-here integrate
-    /// delete delete-remote push-tag current`), the shape
+    /// delete delete-remote push-tag delete-remote-tag
+    /// delete-tag-everywhere current`), the shape
     /// `GitFacts.refMenuOffers` answers with and the opening function
     /// decodes mechanically.
     pub fn words(&self) -> String {
@@ -107,6 +160,12 @@ impl RefMenuOffers {
         if self.push_tag {
             words.push("push-tag");
         }
+        if self.delete_remote_tag {
+            words.push("delete-remote-tag");
+        }
+        if self.delete_tag_everywhere {
+            words.push("delete-tag-everywhere");
+        }
         if self.on_current_branch {
             words.push("current");
         }
@@ -123,7 +182,9 @@ impl RefMenuOffers {
 /// holding the branch this row lands on, empty when none does;
 /// `remote_counterpart` is the remote reading a local branch also
 /// carries, empty where it has none; `default_remote` is where this
-/// repository's pushes go, empty where it has no remote at all. Per-row
+/// repository's pushes go, empty where it has no remote at all;
+/// `tag_sides` says which sides a tag row's name stands on
+/// ([`TagSides::from_word`] — ignored for every other kind). Per-row
 /// kind choices (a tag's row keeping rebase for the tag's own gestures)
 /// stay with the rows.
 #[expect(clippy::too_many_arguments)]
@@ -140,12 +201,23 @@ pub fn ref_menu(
     held_by_worktree: &str,
     remote_counterpart: &str,
     default_remote: &str,
+    tag_sides: &str,
 ) -> RefMenuOffers {
     let branchy = matches!(kind, RefKind::Branch | RefKind::Remote);
     let busy = busy_count > 0;
     let op_standing = !op_text.is_empty();
     let held = !held_by_worktree.is_empty();
     let on_current_branch = kind == RefKind::Branch && full == current_branch;
+    // Only a tag has sides; every other row's local half is simply there.
+    let sides = (kind == RefKind::Tag)
+        .then(|| TagSides::from_word(tag_sides))
+        .flatten();
+    // Unread is read as "here": that is what a tag row was before any
+    // remote was asked, and it keeps the everyday delete on a row whose
+    // section has not answered yet. The rows that need a remote reading
+    // stay out until there is one.
+    let tag_here = sides.is_none_or(TagSides::here);
+    let tag_on_remote = sides.is_some_and(TagSides::on_remote);
     RefMenuOffers {
         switch_to: branchy && full != current_branch,
         switch_asks: held || op_standing || conflict_count > 0,
@@ -157,9 +229,15 @@ pub fn ref_menu(
             && !op_standing
             && !full.is_empty()
             && full != current_branch,
-        delete: !busy && !(kind == RefKind::Branch && (full == current_branch || held)),
+        delete: !busy
+            && !(kind == RefKind::Branch && (full == current_branch || held))
+            // A tag only a remote has leaves `tag --delete` nothing to
+            // name; the row below it is the one that reaches it.
+            && tag_here,
         delete_remote: !busy && !remote_counterpart.is_empty(),
-        push_tag: kind == RefKind::Tag && !busy && !default_remote.is_empty(),
+        push_tag: kind == RefKind::Tag && !busy && !default_remote.is_empty() && tag_here,
+        delete_remote_tag: !busy && !default_remote.is_empty() && tag_on_remote,
+        delete_tag_everywhere: !busy && !default_remote.is_empty() && tag_on_remote && tag_here,
         on_current_branch,
     }
 }
@@ -388,5 +466,7 @@ pub fn skip_is_free(counts: &Counts) -> bool {
     counts.conflicted == 0 && counts.staged == 0 && counts.unstaged == 0
 }
 
+#[cfg(test)]
+mod commit_tests;
 #[cfg(test)]
 mod tests;

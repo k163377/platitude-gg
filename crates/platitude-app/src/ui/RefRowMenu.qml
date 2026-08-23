@@ -53,6 +53,10 @@ Item {
     /// remote that has moved since is refused rather than flattened (§相手の履歴を置き換える).
     property bool canPushTag: false
     property string tagDriftOid: ""
+    /// The tag taken off the remote, and both copies at once. A tag has no namespace, so one row of TAGS carries both
+    /// sides of a name — which of the delete rows have anything to name is core's answer off `tagSides`.
+    property bool canDeleteRemoteTag: false
+    property bool canDeleteTagEverywhere: false
     /// Where this repository's pushes go. Not read per row — it is the repository's answer — but latched with the rest
     /// so the row that names it cannot be renamed out from under the hand.
     property string pushRemote: ""
@@ -101,6 +105,8 @@ Item {
     readonly property alias branchHereItem: refBranchHereItem
     readonly property alias tagHereItem: refTagHereItem
     readonly property alias pushTagItem: refPushTagItem
+    readonly property alias deleteRemoteTagItem: refRemoteTagDeleteItem
+    readonly property alias deleteTagBothItem: refBothTagDeleteItem
     readonly property alias deleteItem: refDeleteItem
     readonly property alias switchItem: refSwitchItem
 
@@ -139,6 +145,8 @@ Item {
         refRowMenu.pushRemote = refRowMenu.repoTab.defaultRemote
         refRowMenu.tagDriftOid = kind === "tag"
             ? refRowMenu.tagsModel.remoteTagDrift(full, refRowMenu.pushRemote) : ""
+        // Which sides of the name exist, which is what tells the three delete rows apart.
+        const sides = kind === "tag" ? refRowMenu.tagsModel.tagSides(full) : ""
         // A remote row lands on the local branch of the same name, so it is that one another copy can be holding.
         refRowMenu.heldByWorktree =
             kind === "branch" ? refRowMenu.worktreesModel.worktreeHolding(full)
@@ -155,7 +163,7 @@ Item {
             refRowMenu.workTree.branch, refRowMenu.workTree.detached,
             refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
             refRowMenu.heldByWorktree, refRowMenu.remoteCounterpart,
-            refRowMenu.pushRemote).split(" ")
+            refRowMenu.pushRemote, sides).split(" ")
         refRowMenu.canSwitch = offers.includes("switch")
         refRowMenu.switchAsks = offers.includes("asks")
         refRowMenu.canBranchHere = offers.includes("branch-here")
@@ -163,6 +171,8 @@ Item {
         refRowMenu.canDelete = offers.includes("delete")
         refRowMenu.canDeleteRemote = offers.includes("delete-remote")
         refRowMenu.canPushTag = offers.includes("push-tag")
+        refRowMenu.canDeleteRemoteTag = offers.includes("delete-remote-tag")
+        refRowMenu.canDeleteTagEverywhere = offers.includes("delete-tag-everywhere")
         refRowMenu.onCurrentBranch = offers.includes("current")
         if (refRowMenu.repoTab.state === "open" && refRowMenu.rebaseRange !== "")
             refRowMenu.repoTab.checkPublish(refRowMenu.rebaseRange)
@@ -337,6 +347,49 @@ Item {
                     refRowMenu.deleting("branch", refRowMenu.refId)
                     refRowMenu.repoTab.deleteBranch(refRowMenu.refId, true)
                 }
+            }
+        }
+        // The tag's copy on the remote, taken off without touching the one here — and, where the name is only over
+        // there, the one delete this menu has to offer at all (デザイン規約 §タグを作る・送る).
+        //
+        // **Assembled, not a fixed table.** The branch's three deletes stay and grey out because the current branch's
+        // menu would otherwise open empty; a tag always has something to press, so its rows follow the ordinary rule
+        // and the ones with nothing to name are gone (デザイン規約 §メニュー). What decides that is the sides the name
+        // stands on, not a guess: the qualified `--delete` git needs does not fail on a name the remote has not got
+        // (実測), so a row offered on a hunch would report success for having done nothing.
+        AppMenuItem {
+            id: refRemoteTagDeleteItem
+            code: "push --delete"
+            text: refRowMenu.refId
+            growsForText: false
+            offered: refRowMenu.kind === "tag" && refRowMenu.canDeleteRemoteTag
+            holdMs: Metrics.holdMs
+            // Reaching past this machine is warning, not danger — what goes is a name over there, and whatever it
+            // marked stays wherever it is (デザイン規約 §状態).
+            holdTone: Theme.warning
+            onHeld: {
+                refMenu.close()
+                // A name only the remote had leaves the sidebar with it; one held here keeps its row and loses the
+                // badge, which the read after the write brings back (デザイン規約 §消す操作は先に画面から消す).
+                if (!refRowMenu.canDeleteTagEverywhere)
+                    refRowMenu.deleting("tag", refRowMenu.refId)
+                refRowMenu.repoTab.deleteRemoteTag(refRowMenu.pushRemote, refRowMenu.refId)
+            }
+        }
+        // Both copies of the one name. A composite of two commands is no one command, so words rather than a chip —
+        // the same row the branch table carries, for the same reason (§git 用語のコード表記 の 1:1 規則).
+        AppMenuItem {
+            id: refBothTagDeleteItem
+            text: qsTr("Delete both")
+            offered: refRowMenu.kind === "tag" && refRowMenu.canDeleteTagEverywhere
+            holdMs: Metrics.holdMs
+            // The local half of a tag throws nothing away that the commit is not still holding — git keeps the object
+            // and only the name goes — so this pair never reaches the danger the branch's `-D` does.
+            holdTone: Theme.warning
+            onHeld: {
+                refMenu.close()
+                refRowMenu.deleting("tag", refRowMenu.refId)
+                refRowMenu.repoTab.deleteTagEverywhere(refRowMenu.refId, refRowMenu.pushRemote)
             }
         }
         // The branch's remote reading, deleted without touching the local one — on the current branch the one delete on

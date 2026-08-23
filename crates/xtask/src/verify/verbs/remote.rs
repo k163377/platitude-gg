@@ -37,20 +37,60 @@ pub(super) const TABLE: &[Verb] = &[
     // alone passes for an implementation that never reads the remotes,
     // and the drifted side alone for one that always forces.
     Verb {
-        name: "tag-menu",
-        when: &[(
-            Arg::Ends(":drift"),
-            "tag_here=true push=true code=push --force held=true lease=",
-        )],
-        plain: "tag_here=true push=true code=push held=false lease= ",
-    },
-    Verb {
         name: "push-tag",
         when: &[(
             Arg::Ends(":drift"),
-            "tag_here=true push=true code=push --force held=true lease=",
+            "push=true code=push --force held=true lease=",
         )],
-        plain: "tag_here=true push=true code=push held=false lease= ",
+        plain: "push=true code=push held=false lease= ",
+    },
+    // The two that run a delete. **Judged on the sidebar afterwards**, not on
+    // the write: the read that rebuilds the list answers after the write
+    // does, so a run stopped at the write barrier photographs the row it
+    // just deleted and passes. `was=` / `sides=` is that name's own
+    // reading either side of the press — a count would not do, since the
+    // remote half of a name held on both sides takes no row away.
+    Verb {
+        name: "delete-remote-tag",
+        when: &[(
+            Arg::Starts("v0.9-theirs"),
+            "tag_gone tag=v0.9-theirs was=remote sides= row=-1",
+        )],
+        plain: "was=both sides=here",
+    },
+    Verb {
+        name: "delete-tag-both",
+        when: &[],
+        plain: "was=both sides= row=-1",
+    },
+    // The three deletes a tag's name can want, told apart by which of
+    // them is drawn at all — a card missing one frames exactly like a
+    // card that never offered it. `sides=` is the reading they come off,
+    // so a wrong row and a wrong reading are not the same failure.
+    //
+    // **Read as a set of four.** A name held only here must not offer
+    // the remote rows (git would report success for deleting nothing —
+    // 実測), one held only over there must not offer the local delete
+    // (there is nothing to name), one held on both offers all three, and
+    // the drifted run is the push row's own second form. Any single one
+    // proves none of that.
+    Verb {
+        name: "tag-menu",
+        when: &[
+            (
+                Arg::Ends(":drift"),
+                "push=true code=push --force held=true lease=",
+            ),
+            (
+                Arg::Starts("v0.9-theirs"),
+                "sides=remote local_del=false remote_del=true both_del=false",
+            ),
+            (
+                Arg::Ends(":remote"),
+                "sides=both local_del=true remote_del=true both_del=true",
+            ),
+        ],
+        plain: "sides=here local_del=true remote_del=false both_del=false",
     },
     // Which remote a push goes to. The mark is one badge on one row:
     // a picture of the band cannot tell "marked" from "the badge was
