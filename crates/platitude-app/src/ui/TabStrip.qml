@@ -372,8 +372,10 @@ Item {
         x: menuButton.width
         height: tabStrip.height
         /// Band the tabs may not grow into: the empty run past the last tab is the only place left to take hold of the
-        /// window, so opening one more tab may not squeeze it to nothing.
-        readonly property real grabRun: tabStrip.captionMerged ? 2 * Theme.railWidth : 0
+        /// window, so opening one more tab may not squeeze it to nothing. One end cell plus the band's own margin —
+        /// the width Chrome keeps between its own `+` and its window buttons, in this theme's tokens (2026-08-23
+        /// ユーザー指示; measured off Chrome at 100%: 52px between the two boxes).
+        readonly property real grabRun: tabStrip.captionMerged ? Theme.railWidth + Theme.spaceMd : 0
         /// The run the tabs share out between them; the width below and the cap both read this one expression.
         //
         // `tabs.grabRun` stays qualified: an unqualified name here reads whatever id happens to share it — ids outrank
