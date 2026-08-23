@@ -21,7 +21,7 @@ QtObject {
     /// The right-hand seat: the working-tree pane and the commit details share it, and `SplitView` measures the seat
     /// rather than either.
     required property Item rightPane
-    required property CommandsBand commandsBand
+    required property CommandsPane commandsPane
     required property GraphPane graphPane
     required property WipPane wipPane
     required property DetailsPane detailsPane
@@ -41,7 +41,7 @@ QtObject {
         layout.page.sidebarCollapsed = AppBackend.startSidebarCollapsed()
         layout.page.commandsOpen = AppBackend.startCommandsShown()
         layout.rightPane.SplitView.preferredWidth = AppBackend.startDetailsWidth()
-        layout.commandsBand.SplitView.preferredHeight = AppBackend.startCommandsHeight()
+        layout.commandsPane.SplitView.preferredHeight = AppBackend.startCommandsHeight()
         // -1 travels through unchanged: the pane reads it as "follow the default lane count", which is what a divider
         // nobody has dragged has always done.
         layout.graphPane.labelWManual = AppBackend.startGraphLabelsWidth()
@@ -123,7 +123,7 @@ QtObject {
             // list keeps: a size nobody chose is not a size to come back to. Measured before the window had a floor:
             // opening the log in a 420px window wrote 168 over the 280 that had been asked for, and every launch after
             // came back to the smaller one).
-            layout.commandsBand.SplitView.preferredHeight,
+            layout.commandsPane.SplitView.preferredHeight,
             // The dragged values, not the widths on screen: a column that nobody has moved reports -1 and goes on
             // following the default rather than freezing today's number into the file.
             layout.graphPane.labelWManual, layout.graphPane.graphColWManual)

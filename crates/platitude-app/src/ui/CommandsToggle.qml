@@ -23,9 +23,9 @@ Rectangle {
     /// Whether the seat closes itself off from what stands above it — the hairline the rail's own head block draws
     /// under itself. False in the panel's band, where the seat is part of that band rather than under it.
     property bool ruled: true
-    /// The step the mark is drawn at, which is the one whatever it stands among is drawn at: a band's marks beside the
-    /// sections' (`iconMd`), a block filling a band on its own one up from them (`iconLg`), and the folded rail's cell
-    /// the cell's own content (`iconXl` — デザイン規約 §寸法, and §左メニューを畳む for why those two differ).
+    /// The step the mark is drawn at, which is the one whatever it stands among is drawn at: the sections' own marks
+    /// where it stands beside a name (`iconMd`), and the fold control's where it stands alone at the end of the rail
+    /// (`iconLg` — that block is what this one is read against down there, 2026-08-23 ユーザー指示. デザイン規約 §寸法).
     property real markSize: Theme.iconMd
 
     /// The log this tab is filling. Asked of the log rather than of the page: closing a tab takes the page's models
@@ -41,16 +41,18 @@ Rectangle {
     /// (`PG_AUTO_ACT=commands-clear`).
     readonly property alias markColor: commandsMark.tint
 
-    /// Where a section's mark stands and where its caption begins (`NavHeader`'s row: a step, the fold arrow, a step,
-    /// the mark, a step). Written as that row's own sum rather than as numbers, so this band stays in the sections'
-    /// columns when theirs move — the fold arrow's column is left empty here, since this row has no section to open
-    /// and a name that skipped the column would not line up with any of them.
-    readonly property real markX: Theme.spaceXs + Theme.iconSm + Theme.spaceXs
+    /// Where the mark stands and where the name begins — a section's row without the fold arrow's column, which is
+    /// what this row has no use for (2026-08-23 ユーザー指示: 「>モードは無いので左に揃えて」). Written as the sum of the
+    /// steps rather than as numbers, so the row moves with the pane's own inset when that moves.
+    readonly property real markX: Theme.spaceXs
     readonly property real captionX: toggle.markX + Theme.iconMd + Theme.spaceXs
 
     visible: toggle.curPage !== null
-    implicitWidth: Theme.railWidth
-    implicitHeight: toggle.captioned ? Theme.rowHeight : Theme.toolbarHeight
+    // Its name's own run when it carries one — the log's band seats it in a row of controls, where a seat asking for
+    // the pane's width would push the rest of them off the end. It stops at the name so that what follows sits the
+    // band's own step away, the way a section's count sits from its caption.
+    implicitWidth: toggle.captioned ? toggle.captionX + commandsName.implicitWidth : Theme.railWidth
+    implicitHeight: toggle.captioned ? Theme.rowHeight : Theme.headerHeight
     color: commandsMouse.containsMouse ? Theme.bgHover : "transparent"
     Rectangle {
         visible: toggle.ruled
@@ -79,6 +81,7 @@ Rectangle {
     // red with the mark rather than staying grey beside it: a section's band moves its mark and its caption together,
     // and one red glyph in a column of words is not what a failure looks like here (規約 §無効 is the same shape).
     Label {
+        id: commandsName
         visible: toggle.captioned
         x: toggle.captionX
         anchors.verticalCenter: parent.verticalCenter

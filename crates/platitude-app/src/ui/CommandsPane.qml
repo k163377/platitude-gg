@@ -5,8 +5,13 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The git commands this tab ran, oldest first. Hidden until asked for (the toolbar's `>_`), and raised on its own when
-// something the user asked for fails — until the error surfaces are built, this is where a failure is read in full.
+// The git commands this tab ran, oldest first. Hidden until asked for, and raised on its own when something the user
+// asked for fails — until the error surfaces are built, this is where a failure is read in full.
+//
+// **Its band is the left menu's last row, carried on across the window** (デザイン規約 §git が言ったことを読む場所): the
+// same mark at the same step in the same column, the same name after it, and the panel's own controls filling the run
+// the pane's foot had nothing in. Pressing that mark is what took the row down here, and pressing it again puts it
+// back at the foot of the pane.
 //
 // Nothing is written to disk and nothing survives the tab: the model keeps the last few hundred rows and drops the
 // rest.
@@ -14,6 +19,9 @@ Rectangle {
     id: pane
 
     required property var commandsModel
+    /// The page this panel belongs to: the seat in its band reads the log and the error line off it, the same as the
+    /// seat at the foot of the pane does while the panel is down.
+    required property var curPage
     /// A failure that never became a command row (a background read that gave up). Shown in the header, cleared by
     /// clicking it — and by `Clear`, which takes everything the panel says at once.
     property string errorText: ""
@@ -24,20 +32,27 @@ Rectangle {
 
     color: Theme.bgBase
 
+    /// Automation: the colour the `>_` in this band came out to (`PG_AUTO_ACT=commands-clear`).
+    readonly property alias markColor: seat.markColor
+
+    // The panel opens on its newest row, wherever it was raised from — the row that has just been added is the one
+    // somebody came here to read.
+    onVisibleChanged: if (pane.visible) pane.showLatest()
+
     /// Puts the newest row back in view — what the panel opens on.
     function showLatest() {
         list.follow = true
         list.positionViewAtEnd()
     }
 
-    /// What `Clear` empties: the rows and the line in the header both. The toolbar's mark is red for either of them, so
-    /// a Clear that left the line standing left the mark red over an empty panel, with nothing on screen left to
-    /// explain it (2026-08-10 報告).
+    /// What `Clear` empties: the rows and the line in the header both. The mark is red for either of them, so a Clear
+    /// that left the line standing left the mark red over an empty panel, with nothing on screen left to explain it
+    /// (2026-08-10 報告).
     ///
     /// And then the panel goes down with them (2026-08-21 ユーザー報告). A panel raised by a failure is read once; the
     /// press that says "I am done with this" is the same press that empties it, and what stays behind otherwise is a
-    /// panel saying `Nothing yet` over the graph it pushed out of the way. Reopening is the toolbar's `>_`, where it
-    /// always was.
+    /// panel saying `Nothing yet` over the graph it pushed out of the way. Reopening is the `>_`, which goes back to
+    /// the foot of the left menu with the panel.
     function clearPanel() {
         pane.commandsModel.clear()
         pane.errorCleared()
@@ -55,15 +70,20 @@ Rectangle {
             BandRule { z: 1 }
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: Theme.spaceSm
+                // No inset of its own at this end: the seat carries the pane's, so the mark and the name stand in the
+                // columns they stood in at the foot of the list (2026-08-23 ユーザー指示).
                 anchors.rightMargin: Theme.spaceMd
-                spacing: Theme.spaceSm
+                // The sections' own step, now that this band opens with one of their rows: at `spaceSm` the count sat
+                // twice as far from the name here as `(2)` does from `BRANCHES` (2026-08-23 ユーザー指示).
+                spacing: Theme.spaceXs
 
-                Label {
-                    text: qsTr("GIT COMMANDS")
-                    font.pixelSize: Theme.fontMd
-                    font.weight: Font.DemiBold
-                    color: Theme.textSecondary
+                // The row this band is: the mark, and the name it has been carrying all along.
+                CommandsToggle {
+                    id: seat
+                    Layout.fillHeight: true
+                    captioned: true
+                    ruled: false
+                    curPage: pane.curPage
                 }
                 Label {
                     text: "(" + list.count + ")"

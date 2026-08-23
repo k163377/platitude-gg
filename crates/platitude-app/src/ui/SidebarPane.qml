@@ -278,9 +278,11 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        height: sidebar.collapsed ? Theme.toolbarHeight : Theme.rowHeight
+        // Folded, it is the fold control's own block at the other end of the rail — same box, same step of mark
+        // (2026-08-23 ユーザー指示). Open, it is one more of the sections' bands.
+        height: sidebar.collapsed ? Theme.headerHeight : Theme.rowHeight
         captioned: !sidebar.collapsed
-        markSize: sidebar.collapsed ? Theme.iconXl : Theme.iconMd
+        markSize: sidebar.collapsed ? Theme.iconLg : Theme.iconMd
         visible: sidebar.commandsPage !== null && !commandsSeat.open
         curPage: sidebar.commandsPage
     }

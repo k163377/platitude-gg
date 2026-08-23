@@ -1248,14 +1248,14 @@ Item {
     /// One mark for a failed command and for this tab's error line both. The page's rule, since the mark moves seats.
     readonly property bool commandsWrong: commandsModel.failed || repoTab.lastError !== ""
     /// Automation: the colour the `>_` painted, from whichever of its seats is standing (`PG_AUTO_ACT=commands-clear`).
-    readonly property color commandsMarkColor: page.commandsOpen ? commandsBand.markColor : sidebarPane.commandsMarkColor
+    readonly property color commandsMarkColor: page.commandsOpen ? commandsPane.markColor : sidebarPane.commandsMarkColor
     /// What the panel is doing rather than what was asked of it — automation reads this one, so a cut binding fails.
-    readonly property bool commandsShown: commandsBand.visible
+    readonly property bool commandsShown: commandsPane.visible
     /// Automation reads the laid-out width, not the preferred width it requested, before persisting a state round trip.
     readonly property real stateDetailsWidth: rightPane.width
     /// Automation only: the header's `Clear`, pressed from outside the panel (`PG_AUTO_ACT=commands-clear`).
     function clearCommandLog() {
-        commandsBand.clearPanel()
+        commandsPane.clearPanel()
     }
 
     RepoTab { id: repoTab }
@@ -1340,7 +1340,7 @@ Item {
         page: page
         sidebarPane: sidebarPane
         rightPane: rightPane
-        commandsBand: commandsBand
+        commandsPane: commandsPane
         graphPane: graphPane
         wipPane: wipPane
         detailsPane: detailsPane
@@ -2048,9 +2048,9 @@ Item {
             }
 
             // ---- command log ------------------------------------------
-            // Hidden until asked for, and raised by a failure. The `>_` comes down here with it (`CommandsBand`).
-            CommandsBand {
-                id: commandsBand
+            // Hidden until asked for, and raised by a failure. Its band is the left menu's last row, carried across.
+            CommandsPane {
+                id: commandsPane
                 visible: page.commandsOpen
                 curPage: page
                 commandsModel: commandsModel
