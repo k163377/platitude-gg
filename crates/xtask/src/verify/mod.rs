@@ -9,7 +9,6 @@
 mod options;
 mod outcome;
 mod ownership;
-mod remote_verbs;
 mod repos;
 mod run;
 mod shim;

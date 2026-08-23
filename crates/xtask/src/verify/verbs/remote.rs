@@ -1,17 +1,13 @@
-//! The [`super::verbs::must_say`] rows for the verbs about remotes:
-//! where a push goes, the mark that decides it, and the forms that set
-//! one.
+//! The verbs about remotes: where a push goes, the mark that decides it,
+//! and the forms that set one.
 //!
-//! A table of their own because almost none of them can be judged from
-//! the picture — a mark, a destination and a row that should have gone
-//! are each a few pixels or none at all — so the rows carry more
-//! reasoning per verb than the panes do.
+//! Almost none of them can be judged from the picture — a mark, a
+//! destination and a row that should have gone are each a few pixels or
+//! none at all — so these rows carry more reasoning per verb than the
+//! panes do.
 
-use super::verbs::{Arg, Verb};
+use super::{Arg, Verb};
 
-/// The remote verbs' rows, walked beside the rest by
-/// [`super::verbs::must_say`]. Which table is walked first does not
-/// matter: no verb may stand on two (`verbs::tests`).
 pub(super) const TABLE: &[Verb] = &[
     // The `+` on a REMOTES band that has gone unavailable around it.
     // The picture holds the band; it cannot hold whether the mark
