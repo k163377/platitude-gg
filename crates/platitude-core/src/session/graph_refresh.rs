@@ -59,7 +59,18 @@ pub enum RemoteTagRefreshOutcome {
     Disabled,
     /// Tags are outside the graph, so their badges are not worth a read.
     Hidden,
-    /// Another remote-tag read already owns the single-flight slot.
+    /// Another remote-tag read already owns the single-flight slot, and
+    /// this request was dropped rather than booked behind it.
+    ///
+    /// `ReadSlot` books a repeat because its second caller knows something
+    /// the read in flight does not — a write that landed after it started.
+    /// Nothing here does: no local operation moves what a remote carries
+    /// under `refs/tags/` (a push is branches only), and the two places
+    /// that ask (an opening, and installing the interval) ask the same
+    /// question of the same remotes. A request arriving while the interval
+    /// was off cannot see this either, since the permission it brings is
+    /// what lets a read run at all. So the read that made this `Busy` is
+    /// the answer, and it publishes one.
     Busy,
     /// The repository is not open any more.
     Unavailable,

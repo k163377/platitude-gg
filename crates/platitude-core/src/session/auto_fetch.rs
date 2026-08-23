@@ -284,6 +284,13 @@ impl RepoSession {
         if !self.log_options().include_tags {
             return RemoteTagRefreshTask::ready(RemoteTagRefreshOutcome::Hidden);
         }
+        // Dropped, not booked behind the read in flight: that read is
+        // asking the same remotes the same question, and no repeat would
+        // carry anything it cannot already see
+        // ([`RemoteTagRefreshOutcome::Busy`]). What a second `ls-remote`
+        // per collision would buy on the reference repository — 45,000
+        // tags — is one badge round trip earlier, on the path whose whole
+        // budget is a badge.
         let Ok(permit) = Arc::clone(&self.remote_tags_slot).try_acquire_owned() else {
             tracing::debug!("remote tags: the previous read has not finished");
             return RemoteTagRefreshTask::ready(RemoteTagRefreshOutcome::Busy);
