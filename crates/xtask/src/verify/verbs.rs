@@ -59,11 +59,11 @@ pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
         "switch-lands" => {
             Some("switch_landed branch=feature/clash stashes=0 wanted=0 conflicts=0 log=false")
         }
-        // A bar with no words in it frames like a bar with words: this
-        // one is judged on the pill being held and on the chip being
-        // absent, neither of which a run that photographed the opening
-        // could say.
+        // Bars with no words in them frame like bars with words: both are
+        // judged on the held pill and the absent chip, neither of which a
+        // run that photographed the opening could say.
         "move-ask" => Some("move_ask hold=true code= branch=main"),
+        "rename-remote" => Some("rename_ask hold=true code="),
         // A bar that never came down and a bar that came down empty are
         // the same picture, and where the move ended is the half the
         // picture cannot answer at all: the run that answered the

@@ -114,7 +114,7 @@ Item {
                 "discard-many-go", "take-side-ours", "take-side-theirs",
                 "open-mergetool", "discard-file-go", "delete-file-go",
                 "discard-staged-go", "switch", "switch-remote", "nav-dbl",
-                "rename-branch", "rename-tag", "rename-stash", "rename-remote",
+                "rename-branch", "rename-tag", "rename-stash",
                 "rename-remote-go", "rename-local-upstream", "delete-branch",
                 "delete-branch-go", "delete-tag-go", "delete-stash-go",
                 "delete-remote-go", "delete-force", "delete-branch-refused",
@@ -157,6 +157,9 @@ Item {
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "chip-menu", "chip-menu-current",
                 "delete-blocked-tip", "switch-stopped", "switch-lands",
+                // Stops at its question, so the ask bar settling is the completion — a write
+                // never comes (the write half is "-go", which stays a write act above).
+                "rename-remote",
                 "move-ask", "switch-conflicted", "switch-held", "switch-mark",
                 // The write barrier is behind these, not in front of them: the commands that clear the way and the
                 // move they carry only start once the question standing in the graph has been answered.
@@ -1361,6 +1364,21 @@ Item {
     // Where the move came to rest, and what the carry left in the stash list. The branch itself is the edge — the
     // status pass after the move is what writes it — so a run that never landed waits out the watchdog rather than
     // photographing the tree it started in.
+    // The rename's own question, waited on for the same settle: a bar photographed before its words arrive is a red
+    // line with nothing on it. The plain verb ends here — the write is "-go"'s half.
+    SampleTimer {
+        id: renameAskTimer
+        onTriggered: {
+            if (!graphPane.askSettled)
+                return
+            renameAskTimer.stop()
+            // `code=` being empty is part of the claim: a push and a delete make no one command, so the pill answers
+            // in the ordinary voice (規約 §git 用語のコード表記 の 1:1 規則 — the same reading `move_ask` makes).
+            AppBackend.report("rename_ask hold=" + graphPane.askHold
+                              + " code=" + graphPane.askCode)
+            driver.complete()
+        }
+    }
     SampleTimer {
         id: moveAskTimer
         onTriggered: {
@@ -3190,6 +3208,8 @@ Item {
             sidebarPane.submitEdit(parts[1])
             if (act === "rename-remote-go")
                 graphPane.completeHold()
+            else
+                renameAskTimer.start()
         } else if (act === "rename-local-upstream") {
             // The question about carrying the name over comes back only when git says the local rename landed (so the
             // shot is late).
