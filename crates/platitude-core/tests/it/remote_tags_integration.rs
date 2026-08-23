@@ -24,8 +24,8 @@ use crate::support::TestRepo;
 use crate::support::session::CaptureSink;
 use platitude_core::remote;
 use platitude_core::session::{
-    LabelKind, RefLabel, RefsSnapshot, RemoteTagRefreshOutcome, RepoSession, SessionEvent,
-    SessionSink, TagItem,
+    LabelKind, Recording, RefLabel, RefsSnapshot, RemoteTagRefreshOutcome, RepoSession,
+    SessionEvent, SessionSink, TagItem,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -140,17 +140,18 @@ async fn snapshot_after_the_fetch(sink: &CaptureSink) -> RefsSnapshot {
 /// come after.
 async fn opened(work: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
     let sink = CaptureSink::new();
-    let session = RepoSession::open(
+    // Recording is part of how this session is created, not something
+    // switched on once it exists: graph baselines here count the opening's
+    // own walks, and the opening spawns them the moment the path is
+    // accepted — a flag set from this thread afterwards would keep however
+    // many of them the scheduler had not reached yet.
+    let session = RepoSession::open_recording(
         crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
         work.path.clone(),
         Arc::clone(&sink) as Arc<dyn SessionSink>,
+        Recording::WithBackground,
     );
-    // Here and not in the test that reads them: graph baselines count the
-    // opening's own walks, and by the time `Opened` has been delivered the
-    // first one is already on its way. Switched on before the wait below,
-    // this is ahead of everything the session spawns off `Opened`.
-    session.set_record_background(true);
     sink.wait_for("Opened", |evs| {
         evs.iter()
             .any(|e| matches!(e, SessionEvent::Opened { .. }))
@@ -292,10 +293,11 @@ async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_gra
             | platitude_core::session::RefreshOutcome::Unchanged
     ));
     let (settled_walks, settled_swaps, settled_chips) = (walks(&sink), swaps(&sink), chips(&sink));
-    // Which rests on the opening's own reads being recorded (`opened`): a
-    // walk nobody wrote down is one the wait reads as silence, and the
-    // baseline goes back to being taken mid-opening. A zero here is that
-    // regression, said out loud rather than left to come back as a flake.
+    // Which rests on the opening's own reads being recorded (`opened`
+    // asks for that when it creates the session): a walk nobody wrote down
+    // is one the wait reads as silence, and the baseline goes back to
+    // being taken mid-opening. A zero here is that regression, said out
+    // loud rather than left to come back as a flake.
     assert!(
         settled_walks > 0,
         "the opening walks, so the baseline has to have one to show for it"

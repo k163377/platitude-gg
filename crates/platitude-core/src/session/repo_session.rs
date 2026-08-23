@@ -226,11 +226,14 @@ impl RepoSession {
         }
     }
 
-    /// Whether the command log also records the reads this session makes
-    /// on its own (polling, refreshes, details). Off by default; it
-    /// applies to commands spawned from here on, not retroactively.
-    pub fn set_record_background(&self, on: bool) {
-        self.commands.record_background.store(on, Ordering::Relaxed);
+    /// Moves what the command log keeps — whether the reads this session
+    /// makes on its own (polling, refreshes, details) are in it too.
+    ///
+    /// Applies to commands spawned from here on, not retroactively, and
+    /// not to an opening already under way: where a session *starts* is
+    /// [`RepoSession::open_recording`]'s to say (see [`Recording`]).
+    pub fn set_recording(&self, recording: Recording) {
+        self.commands.set_recording(recording);
     }
 
     /// Cancels everything this session is doing. Idempotent.

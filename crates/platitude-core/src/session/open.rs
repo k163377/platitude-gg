@@ -7,14 +7,32 @@ use crate::repo;
 impl RepoSession {
     /// Creates the session and starts opening `path` in the background.
     /// On success everything loads: log stream, refs, status, stashes.
+    ///
+    /// The command log holds what the user asks for and nothing else;
+    /// [`RepoSession::open_recording`] is the door for an opening whose
+    /// own reads are to be kept as well.
     pub fn open(
         executor: GitExecutor,
         runtime: tokio::runtime::Handle,
         path: PathBuf,
         sink: Arc<dyn SessionSink>,
     ) -> Arc<Self> {
+        Self::open_recording(executor, runtime, path, sink, Recording::UserOnly)
+    }
+
+    /// [`RepoSession::open`], with what the command log keeps decided
+    /// before the first git command is spawned rather than after the
+    /// handle comes back — which is the only way to be sure of how much
+    /// of an opening it holds (see [`Recording`]).
+    pub fn open_recording(
+        executor: GitExecutor,
+        runtime: tokio::runtime::Handle,
+        path: PathBuf,
+        sink: Arc<dyn SessionSink>,
+        recording: Recording,
+    ) -> Arc<Self> {
         let (write_tx, write_rx) = tokio::sync::mpsc::unbounded_channel();
-        let commands = Arc::new(CommandFeed::new(Arc::clone(&sink)));
+        let commands = Arc::new(CommandFeed::new(Arc::clone(&sink), recording));
         let observer: Arc<dyn crate::process::CommandObserver> = Arc::clone(&commands) as _;
         let session = Arc::new(Self {
             executor: executor.observed(Arc::clone(&observer), false),

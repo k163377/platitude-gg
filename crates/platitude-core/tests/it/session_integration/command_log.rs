@@ -1,7 +1,7 @@
 //! The command log holds what the user asked for, and not the background.
 
 use crate::support::session::{CaptureSink, scenario};
-use platitude_core::session::{RepoSession, SessionEvent};
+use platitude_core::session::{Recording, RepoSession, SessionEvent};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_command_log_holds_what_the_user_asked_for() {
@@ -63,8 +63,10 @@ async fn the_command_log_holds_what_the_user_asked_for() {
     let commands = sink.count(|e| matches!(e, SessionEvent::CommandStarted { .. }));
     assert_eq!(commands, 1, "only the write itself was recorded");
 
-    // Switched on, the reads show up as well.
-    session.set_record_background(true);
+    // Switched on, the reads show up as well. Exact even though it is set
+    // on a live session: the read below is asked for after the store, and
+    // the ask is what spawns it.
+    session.set_recording(Recording::WithBackground);
     session.refresh_status();
     sink.wait_for("a background read", |evs| {
         evs.iter()

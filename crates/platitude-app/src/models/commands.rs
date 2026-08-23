@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
+use platitude_core::session::Recording;
+
 use crate::hub::{CommandMsg, Feed};
 
 use super::qml_register;
@@ -139,7 +141,12 @@ impl CommandsModel {
     #[qslot]
     fn set_background_reads(&mut self, on: bool) {
         self.background_reads = on;
-        crate::hub::with_session(self.tab_id, |s| s.set_record_background(on));
+        let recording = if on {
+            Recording::WithBackground
+        } else {
+            Recording::UserOnly
+        };
+        crate::hub::with_session(self.tab_id, |s| s.set_recording(recording));
         self.changed();
     }
 

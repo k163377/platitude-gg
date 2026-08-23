@@ -85,6 +85,7 @@ mod write;
 pub use auto_fetch::OpenFetch;
 pub use event::SessionEvent;
 use feed::CommandFeed;
+pub use feed::Recording;
 pub use graph_refresh::{
     RefreshOutcome, RefreshTask, RemoteTagRefreshOutcome, RemoteTagRefreshTask,
 };

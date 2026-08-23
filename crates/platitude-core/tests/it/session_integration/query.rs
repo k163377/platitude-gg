@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened, write_result};
 use platitude_core::details::DiffTarget;
-use platitude_core::session::{DiffRefreshOutcome, RepoSession, SessionEvent};
+use platitude_core::session::{DiffRefreshOutcome, Recording, RepoSession, SessionEvent};
 
 /// Opening a repository asks for a read, and so does the window becoming
 /// active a moment later; on a large repository that pair would be two
@@ -89,10 +89,11 @@ async fn a_refs_read_takes_head_out_of_the_listing_it_already_has() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "0\n", "root");
     let (sink, session) = opened(&repo).await;
-    // Complete the opening work before clearing the observer; `Opened`
-    // alone only accepts the path.
+    // The opening's own reads have to be done before recording starts, or
+    // this counts them as the refresh's; `Opened` alone only accepts the
+    // path.
     sink.opened_graph(&session, 1).await;
-    session.set_record_background(true);
+    session.set_recording(Recording::WithBackground);
     // A baseline index, not an erasure: the history stays for the failure
     // message, and the wait below reads only past it.
     let from = sink.events.lock().unwrap().len();
@@ -222,7 +223,7 @@ async fn the_walk_reads_head_from_the_refs_read_that_already_landed() {
     sink.opened_graph(&session, 1).await;
     // Background recording starts only now, so the commands below are the
     // refresh's own; the event history stays for the failure message.
-    session.set_record_background(true);
+    session.set_recording(Recording::WithBackground);
 
     // An external commit moves the refs, which is what rebuilds the graph.
     repo.commit_file("g.txt", "1\n", "second");
@@ -252,7 +253,7 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
     sink.opened_graph(&session, 1).await;
     // Background recording starts only now, so `reads` counts the work
     // below; the waits are count-relative, so the history can stay.
-    session.set_record_background(true);
+    session.set_recording(Recording::WithBackground);
 
     let reads = |sink: &CaptureSink| {
         commands_of(sink)
@@ -313,7 +314,7 @@ async fn concurrent_diffs_share_the_line_ending_setting_read() {
     // diff racing that tail reads git twice — the settled boundary is
     // what the count needs.
     sink.opening_settled(&session).await;
-    session.set_record_background(true);
+    session.set_recording(Recording::WithBackground);
 
     let head = platitude_core::Oid::from_hex_str(&repo.git(&["rev-parse", "HEAD"])).unwrap();
     let parent = platitude_core::Oid::from_hex_str(&repo.git(&["rev-parse", "HEAD^"])).unwrap();
