@@ -200,6 +200,7 @@ Item {
                 "details-fit", "corner", "graph-step", "graph-step-edge", "graph-step-far",
                 "graph-step-named", "graph-step-dirty", "graph-step-diff", "diff-step",
                 "diff-step-edge", "changes-step", "changes-step-edge", "wip-step",
+                "changes-fold", "changes-unfold",
                 "graph-bar", "graph-bar-away", "middle-scroll",
                 "graph-tail", "graph-head", "graph-head-below", "graph-head-back",
                 "graph-head-go", "graph-head-lit", "wip-lanes",
@@ -2109,6 +2110,67 @@ Item {
             driver.complete()
         }
     }
+    // A folder row of the commit's CHANGES tree struck shut, and struck open again (`-unfold`). The strike is the row's
+    // own signal, where a click lands — the pane's handler is what carries it to the model, and calling past it would
+    // leave the report proving nothing.
+    //
+    // The two lists that draw a fold arrow keep the answer in different fields (`NameCell.folded`), so `turn=` is read
+    // off the icon rather than off either flag: a run that read the flag back would go green with the arrow unwired,
+    // which is exactly the shape this verb was cut for.
+    SampleTimer {
+        id: changesFoldTimer
+        /// The directory row struck, and whether the run leaves it shut or strikes it a second time back open. **Read
+        /// as a pair** — one arrow on its own says nothing about which way it turned.
+        property string path: ""
+        property bool reopen: false
+        /// How many strikes have gone out. After `n` of them the row is shut exactly when `n` is odd, which is the
+        /// wait between one strike and the next: the toggle rebuilds the list, so the row answering a later tick is a
+        /// later row.
+        property int struck: 0
+        function begin() {
+            changesFoldTimer.struck = 0
+            changesFoldTimer.start()
+        }
+        /// The folder row for this directory, once the list has built it. Not `FileRowWalk.rowFor`, which answers by
+        /// `walkKey` — the name a folder deliberately has none of.
+        function folderRow() {
+            const view = detailsPane.filesWalk.view
+            for (let i = 0; i < view.count; i++) {
+                const row = view.itemAtIndex(i)
+                if (row && row.isFolder && row.pathText === changesFoldTimer.path)
+                    return row
+            }
+            return null
+        }
+        onTriggered: {
+            const row = changesFoldTimer.folderRow()
+            if (!row)
+                return
+            const strikes = changesFoldTimer.reopen ? 2 : 1
+            if (row.isFolded !== (changesFoldTimer.struck % 2 === 1))
+                return
+            if (changesFoldTimer.struck < strikes) {
+                // The commit's own files first, and **read only here**: a read landing after a strike puts the rows
+                // back with every fold choice cleared (`DetailsModel::set_files`), so the row swings open under a wait
+                // that then never ends (observed 2026-08-23 — 1 run in a handful reached the watchdog in silence).
+                // Read every tick instead, and the verb's own answer would break its own precondition.
+                if (detailsModel.loading || detailsModel.shaHex !== page.selectedOid)
+                    return
+                changesFoldTimer.struck++
+                row.folderToggled(row.pathText)
+                return
+            }
+            changesFoldTimer.stop()
+            AppBackend.report(
+                "changes_fold path=" + changesFoldTimer.path
+                + " strikes=" + changesFoldTimer.struck
+                + " shut=" + row.isFolded
+                + " turn=" + row.foldTurn
+                + " rows=" + detailsPane.filesWalk.view.count
+                + " tree=" + detailsModel.treeView)
+            driver.complete()
+        }
+    }
     // The diff's own arrows, which no headless run can press either: the walk enters where `Keys.onDownPressed` enters
     // (`DiffPane.stepRows`). The hand is walked into the pane first, through the same door the wheel comes in by
     // (`DiffPane.handArrived`) — the diff does not take the keyboard by appearing, so without that the arrows are still
@@ -3670,6 +3732,19 @@ Item {
             }
             fileStepTimer.overrun = act === "changes-step-edge"
             fileStepTimer.begin()
+        } else if (act === "changes-fold" || act === "changes-unfold") {
+            // The commit's CHANGES tree opened and shut by its folder rows. The argument is the directory, written the
+            // way the row is keyed — a chain with nothing beside it is one row and one key (`a/b/c`) — and it has to
+            // name a row the list has actually built, since `itemAtIndex` answers for no other. The default is the
+            // first row of the list, which is also the one the picture can hold: a folder struck shut below the fold
+            // frames exactly like one left open.
+            page.activateRow(branchesModel.headOid !== "" ? branchesModel.headOid : graphModel.oidAt(0))
+            // Said rather than assumed: the tree is the list's resting look, but a run that inherited the paths view
+            // would wait out the watchdog looking for a folder row that flat paths never put there.
+            detailsModel.setTreeView(true)
+            changesFoldTimer.path = arg === "" ? "assets/icons" : arg
+            changesFoldTimer.reopen = act === "changes-unfold"
+            changesFoldTimer.begin()
         } else if (act === "diff-step" || act === "diff-step-edge") {
             // Moves the view, not a selection (規約 §diff を上下に送る). Rides the 320x240 seed: no demo file's diff is longer
             // than a default window, and even there the room below the fold is two rows (実測) — which is why the plain

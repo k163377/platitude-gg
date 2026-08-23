@@ -32,6 +32,24 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "moved=true stopped=true lit=true focused=true",
     },
+    // The same list's folder rows, where the arrow is the whole of the
+    // picture: `>` shut, `v` open. `turn=` is the rotation the icon is
+    // actually drawn at rather than the model's flag — the two file
+    // lists keep that flag in different fields, and a cell that read
+    // only one of them left this list's arrow lying open in both states
+    // while `shut=` went on answering true. Read as a pair: an arrow on
+    // its own says nothing about which way it turned, so `-unfold`
+    // strikes the same row a second time and has to come back to 90.
+    Verb {
+        name: "changes-fold",
+        when: &[],
+        plain: "shut=true turn=0",
+    },
+    Verb {
+        name: "changes-unfold",
+        when: &[],
+        plain: "shut=false turn=90",
+    },
     // The diff's own arrows, where the picture is the weakest witness
     // in the app: a diff scrolled two rows and a diff never scrolled
     // at all are the same photograph of the same file. Everything that
