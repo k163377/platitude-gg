@@ -161,6 +161,11 @@ pub struct RepoTab {
     /// success) and a counter QML compares against to spot a new one. A
     /// signal with arguments would be the natural shape, but the bridge
     /// only carries parameterless ones.
+    ///
+    /// Name and message stay raw data over there — the automation's
+    /// diagnostics quote the name, the push flow shows the message. What
+    /// an answer *means* is the classified group below: the page never
+    /// branches on git vocabulary (app-ui.md).
     last_write_op: String,
     last_write_error: String,
     /// Whether git stopped part-way through that write and left the
@@ -169,6 +174,47 @@ pub struct RepoTab {
     /// three.
     last_write_stopped: bool,
     write_seq: i32,
+    /// That answer, classified where the op names are known
+    /// (`drain::settle_write`). Every one of these describes the answer
+    /// `write_seq` counted last, and every answer rewrites the whole
+    /// group — nothing stays armed for a later write to trip over.
+    ///
+    /// git would not do it, or could not reach the far side to;
+    /// `last_write_error` holds its words.
+    write_refused: bool,
+    /// The shown diff is a picture of a file that is gone: a landed
+    /// stage / unstage / discard / commit / stash moved what the two
+    /// sides hold, and a refused stage / unstage / discard was refused
+    /// *because* the rows on screen drifted. Either way the answer is
+    /// the fresh file.
+    write_stale_diff: bool,
+    /// The answer is a commit at the tip: a revert / cherry-pick / merge
+    /// that landed without stopping — including a merge git answered
+    /// "Already up to date", whose tip is exactly where that merge would
+    /// have put anyone.
+    write_at_tip: bool,
+    /// HEAD moved (a checkout or a reset landed), so the working tree
+    /// under an open diff was rewritten.
+    write_moved_head: bool,
+    /// The editor's commit landed.
+    write_committed: bool,
+    /// A reword landed: the saved message is on its commit.
+    write_reworded: bool,
+    /// A stash operation landed. Which one is not said — push, pop,
+    /// apply, drop and rename all answer as one — so a reader waiting on
+    /// a particular one tells its own answer apart by `write_seq`
+    /// (`RepoPage.absorbPopLabel`).
+    write_stashed: bool,
+    /// The answer was about a branch (create / delete / rename),
+    /// whichever way it went: what the page armed for one — a refusal to
+    /// wear `-D`, a rename to carry to the remote — reads this beside
+    /// its own state.
+    write_branch_op: bool,
+    /// The answer was a push, landed or not. A remote branch's rename
+    /// and delete answer under the same name, so whether it was the
+    /// toolbar button's push stays the flow's own slot to say
+    /// (`PublishFlow.pushSentBranch`).
+    write_pushed: bool,
     /// A branch move that would leave commits unreachable, waiting to be
     /// asked about. Nothing has happened yet.
     move_ask_local: String,

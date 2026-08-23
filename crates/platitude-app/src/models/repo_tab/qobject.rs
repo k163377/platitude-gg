@@ -125,6 +125,25 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!("writeSeq", Member = write_seq, Notify = changed);
+    // The last answer, classified in drain::settle_write — the page reads
+    // meanings, never op names (app-ui.md).
+    qproperty!("writeRefused", Member = write_refused, Notify = changed);
+    qproperty!(
+        "writeStaleDiff",
+        Member = write_stale_diff,
+        Notify = changed
+    );
+    qproperty!("writeAtTip", Member = write_at_tip, Notify = changed);
+    qproperty!(
+        "writeMovedHead",
+        Member = write_moved_head,
+        Notify = changed
+    );
+    qproperty!("writeCommitted", Member = write_committed, Notify = changed);
+    qproperty!("writeReworded", Member = write_reworded, Notify = changed);
+    qproperty!("writeStashed", Member = write_stashed, Notify = changed);
+    qproperty!("writeBranchOp", Member = write_branch_op, Notify = changed);
+    qproperty!("writePushed", Member = write_pushed, Notify = changed);
     qproperty!("moveAskLocal", Member = move_ask_local, Notify = changed);
     qproperty!("moveAskStart", Member = move_ask_start, Notify = changed);
     qproperty!("moveAskSeq", Member = move_ask_seq, Notify = changed);

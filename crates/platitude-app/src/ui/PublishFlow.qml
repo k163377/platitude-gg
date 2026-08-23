@@ -104,17 +104,17 @@ Item {
                ? publishFlow.remotesModel.oidOfName(publishFlow.workTree.upstream)
                : ""
     }
-    /// A push this button sent has come back. Nothing in the answer says which branch it was for, and a remote branch's
-    /// rename and delete report under the same name — the slot filled at the send is what makes this the toolbar
-    /// button's news (デザイン規約 §リモートへ送る).
-    function noteWriteAnswer(op, error) {
-        if (op !== "push" || publishFlow.pushSentBranch === "")
+    /// A push this button sent has come back (`writePushed` — the page calls this once per answer). Nothing in the
+    /// answer says which branch it was for, and a remote branch's rename and delete answer under the same word — the
+    /// slot filled at the send is what makes this the toolbar button's news (デザイン規約 §リモートへ送る).
+    function noteWriteAnswer() {
+        if (!publishFlow.repoTab.writePushed || publishFlow.pushSentBranch === "")
             return
         const sent = publishFlow.pushSentBranch
         publishFlow.pushSentBranch = ""
-        if (error !== "") {
+        if (publishFlow.repoTab.writeRefused) {
             publishFlow.pushFailBranch = sent
-            publishFlow.pushFailReason = error
+            publishFlow.pushFailReason = publishFlow.repoTab.lastWriteError
         } else if (publishFlow.pushFailBranch === sent) {
             // Landed. The button that went through must not go on saying that the go before it did not.
             publishFlow.pushFailBranch = ""

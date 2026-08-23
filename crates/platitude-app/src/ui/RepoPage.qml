@@ -183,10 +183,11 @@ Item {
     property string pendingPopLabel: ""
     /// What `writeSeq` stood at when it was armed, so the answer it is waiting for can be told from any other.
     ///
-    /// **Every stash operation answers under the same `lastWriteOp`**, so the op alone does not say whose answer this
-    /// is: the details pane's band leaves its buttons live, and an `apply` pressed just before a pop would take the
-    /// pop's name with it — and drop it if that apply were refused. Only the very next answer is this one's, and
-    /// anything else disarms it: a name put back off the wrong write is worse than one not put back at all.
+    /// **Every stash operation answers under the same word** (`writeStashed` cannot say whose), so the answer alone
+    /// does not say it was the pop's: the details pane's band leaves its buttons live, and an `apply` pressed just
+    /// before a pop would take the pop's name with it — and drop it if that apply were refused. Only the very next
+    /// answer is this one's, and anything else disarms it: a name put back off the wrong write is worse than one not
+    /// put back at all.
     property int pendingPopSeq: -1
     /// Both ways in to a pop — the graph row's menu and the details pane's band — so the name comes back from one
     /// place (デザイン規約 §変更を退避する).
@@ -206,8 +207,7 @@ Item {
         if (page.pendingPopSeq < 0 || repoTab.writeSeq <= page.pendingPopSeq)
             return
         const carried = page.pendingPopLabel
-        const mine = repoTab.writeSeq === page.pendingPopSeq + 1
-                     && repoTab.lastWriteOp === "stash" && repoTab.lastWriteError === ""
+        const mine = repoTab.writeSeq === page.pendingPopSeq + 1 && repoTab.writeStashed
         page.pendingPopLabel = ""
         page.pendingPopSeq = -1
         if (mine && carried !== "" && wipPane.subjectText === "" && wipPane.bodyText === "")
@@ -937,6 +937,8 @@ Item {
     // A finished write the editor asked for: clear it only once git says the commit landed, so a rejected one keeps its
     // text.
     property int seenWriteSeq: 0
+    // What an answer *means* is settled on the tab, where the op names are known (`drain::settle_write`); this
+    // function only sequences the screen off those classified properties — reads, landings, menus.
     function absorbWriteResult() {
         if (repoTab.writeSeq === page.seenWriteSeq)
             return
@@ -944,31 +946,30 @@ Item {
         // The press has its answer. What is left of the wait is the read, which says so itself (`diffSettling`).
         page.diffAwaits = false
         // A push this button sent has come back; what it means for the toolbar's button is the flow's to work out.
-        publishFlow.noteWriteAnswer(repoTab.lastWriteOp, repoTab.lastWriteError)
+        publishFlow.noteWriteAnswer()
         // A pop that did not happen leaves its entry, and its name, where they were — so this is read on both
         // landings, above the refusal branch and its early returns.
         page.absorbPopLabel()
-        // Whether the working tree emptying next is this window's own doing. Every stash operation answers under the
-        // same op, and only one of them can empty a tree — so the count arriving at zero is what says it was a push,
-        // and this only says whose. Written on every answer rather than armed and cleared, so nothing can be left
-        // standing for a later write to trip over; a refusal writes `false` the same way.
-        page.stashLanded = repoTab.lastWriteOp === "stash" && repoTab.lastWriteError === ""
-        if (repoTab.lastWriteError !== "") {
+        // Whether the working tree emptying next is this window's own doing — only a stash can empty a tree, so the
+        // count arriving at zero is what says it was one, and this only says whose. Read off every answer rather than
+        // armed and cleared, so nothing can be left standing for a later write to trip over; a refusal writes `false`
+        // the same way.
+        page.stashLanded = repoTab.writeStashed
+        if (repoTab.writeRefused) {
             // Whatever the window took away for this write is still there — git would not do it, or could not reach
             // the far side to. Put back before anything below answers for the refusal, so the row the question is
             // about is on screen when the question is (デザイン規約 §消す操作は先に画面から消す).
             page.showBack()
-            // A refused stage, unstage or discard says the rows on screen are not the file any more — drifted bytes are
-            // the one thing the fingerprint refuses on. The tally watch below cannot always catch the drift that caused
-            // it (an outside change that moves no bucket count moves no tally), so left alone the same press would be
-            // refused again for as long as the reader cared to try. The refusal's answer is the fresh file.
-            if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage"
-                    || repoTab.lastWriteOp === "discard") {
+            // The rows on screen are not the file any more — drifted bytes are the one thing the fingerprint refuses
+            // on, and the tally watch below cannot always catch the drift that caused it (an outside change that moves
+            // no bucket count moves no tally), so left alone the same press would be refused again for as long as the
+            // reader cared to try. The refusal's answer is the fresh file.
+            if (repoTab.writeStaleDiff) {
                 page.diffReadAt = repoTab.writeSeq
                 page.reloadDiff()
             }
             // The one refusal this page has a second move for: a branch delete git would not do on its own.
-            if (repoTab.lastWriteOp === "branch" && page.pendingDeleteBranch !== "") {
+            if (repoTab.writeBranchOp && page.pendingDeleteBranch !== "") {
                 const refused = page.pendingDeleteBranch
                 page.pendingDeleteBranch = ""
                 page.noteForceDelete(refused)
@@ -996,14 +997,14 @@ Item {
         }
         // The branch took its new name here; the remote it speaks for is still under the old one. Asked only now, and
         // only because there is a remote to ask about (デザイン規約 §左メニューの所作).
-        if (repoTab.lastWriteOp === "branch" && page.pendingRenameRemote !== "") {
+        if (repoTab.writeBranchOp && page.pendingRenameRemote !== "") {
             const spokenFor = page.pendingRenameRemote
             const took = page.pendingRenameTo
             page.pendingRenameRemote = ""
             page.pendingRenameTo = ""
             page.askRenameRemote(spokenFor, took)
         }
-        if (repoTab.lastWriteOp === "commit") {
+        if (repoTab.writeCommitted) {
             page.clearCommitEditor()
             wipPane.setAmendChecked(false)
             page.amending = false
@@ -1014,21 +1015,16 @@ Item {
         // status that will carry those rows has not arrived yet (2026-08-22 ユーザー要望).
         if (repoTab.lastWriteStopped)
             page.pendingWipSelect = true
-        // These three answer with a commit at the tip — the undo, the copy, the merge — and that commit is what was
-        // asked for here, not the row or the ref that was clicked. The selection goes to it and the viewport follows:
-        // what was clicked can be anywhere in the history, while the answer is always at the top.
-        //
-        // A merge of something the branch already holds lands there too, and rightly: git says "Already up to date",
-        // and the tip is exactly where that merge would have put anyone.
-        else if (repoTab.lastWriteOp === "revert" || repoTab.lastWriteOp === "cherry-pick"
-                || repoTab.lastWriteOp === "merge") {
+        // The answer is a commit at the tip, and that commit is what was asked for here, not the row or the ref that
+        // was clicked. The selection goes to it and the viewport follows: what was clicked can be anywhere in the
+        // history, while the answer is always at the top.
+        else if (repoTab.writeAtTip) {
             page.pendingHeadSelect = true
             page.pendingHeadSeenSeq = workTree.statusSeq
             page.pendingHeadAsked = true
         }
-        // Everything that moves what the two sides hold. A commit empties the index and a stash empties both, so a diff
-        // left open on either is a picture of a file as it was — the same staleness the file list's own `+` used to
-        // leave behind.
+        // The write moved what the two sides hold, so a diff left open on either is a picture of a file as it was —
+        // the same staleness the file list's own `+` used to leave behind.
         //
         // **Read here, where the answer is.** git has already moved the index by the time it answers, so the file's
         // diff is the new one — what has not caught up yet is the *file list*, and that is a different question
@@ -1037,21 +1033,18 @@ Item {
         // at all.
         //
         // Which write this was is remembered, so the status that follows does not read the same file over again.
-        if (repoTab.lastWriteOp === "stage" || repoTab.lastWriteOp === "unstage"
-                || repoTab.lastWriteOp === "discard"
-                || repoTab.lastWriteOp === "commit"
-                || repoTab.lastWriteOp === "stash") {
+        if (repoTab.writeStaleDiff) {
             page.diffReadAt = repoTab.writeSeq
             page.reloadDiff()
         }
         // The message landed: the editor stops offering to save it, and keeps what was written until the selection
         // catches up with the commit that now carries it.
-        if (repoTab.lastWriteOp === "reword")
+        if (repoTab.writeReworded)
             detailsPane.noteMessageSaved()
         // Moving HEAD rewrites the working tree under the diff pane: the file it holds may not even exist where the
         // move landed, so the center goes back to the graph that was moved through. Taking the branch back does the
         // same to the file, and to which side of the index it sits on.
-        if (repoTab.lastWriteOp === "checkout" || repoTab.lastWriteOp === "reset")
+        if (repoTab.writeMovedHead)
             page.closeDiff()
         page.refreshHeadPublished()
         // HEAD may have moved: what the selected commit is to it — and so whether its message is ours to rewrite — is
