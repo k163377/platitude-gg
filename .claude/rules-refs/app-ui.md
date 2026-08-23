@@ -334,7 +334,7 @@
 - 寸法を収めるだけでは足りず、最後にフレームごと作業領域へ入れ直す(`winframe::fit_to_work_area`。最大化中は触らない)— 収まるべきはフレーム(1920 でフレーム 1936)で、作業領域は QML がどの画面についても出さない。縮めるのは作業領域までで、あとは動かして収める。動かした run では frame slop を測らない(差がフレーム余白でなくなる)。汚染の出所は最大化中の数字が windowed の形として書かれる経路 — 復元先矩形になって自己増殖する
 - 前回の形は画面の中へ収めてから戻す(`WindowShape.insideScreen` = 3OS 共通の粗い歯止め)。比べる相手は `Screen.width` / `Screen.height`(その窓の画面)で `desktopAvailableWidth` ではない。畳むのは人が見ている窓だけ — `AppBackend.automated` な run は渡された寸法のまま。verify-ui は必ず `PG_CONFIG_DIR` を渡すのでファイル有無では分けられず、offscreen の画面は 800×800(実測)= 分け損ねると全スクリーンショットが 800 幅に化ける
 - 窓は床を割る大きさを自分で撥ね返す(規約 §窓の床)。Qt Quick は床を上へ渡さない — `SplitView` と `Layout` は下限で縮むのをやめ、残りを右端の外へ並べる(実測: 窓幅 640 で右ペインは 32px)。`minimumWidth` / `minimumHeight` は半分にしかならない — `QWindow::resize` はサイズヒントを一切見ない(実測: 床より小さい 200×150 を取った)。アプリが自分で置く大きさは全部 `WindowShape.holdFloor()` を通す(床そのものは Main が持つ = 帯とページの大きい方)
-- 床は 2 か所の大きい方(`TopBar.floorWidth` / `RepoPage.floorWidth`。実測 821×245、畳むと Windows 748 / Linux 677 = 畳んだ側だけ帯が勝ちうる。両者の値は規約 §窓の床 の表)。帯側は足し算を書かず `bandRow` の Layout から採る(コントロールが増えても数え漏らさない)。**どちらが床を決めたかは `window_floor` の `bandW=` / `pageW=` が名乗る**
+- 床は 2 か所の大きい方(`TopBar.floorWidth` / `RepoPage.floorWidth`。実測 821×245、畳むと Windows 696 / Linux 677 = 畳んだ側だけ帯が勝ちうる。両者の値は規約 §窓の床 の表)。帯側は足し算を書かず `bandRow` の Layout から採る(コントロールが増えても数え漏らさない)。**どちらが床を決めたかは `window_floor` の `bandW=` / `pageW=` が名乗る**
 - 床を読む相手は `curPage` ではなく `Main.floorPage` — タブ 0 枚でも窓は同じ 3 ペインの空ページを出しており、`curPage`(null)のままだと空ページの窓だけ帯の床まで縮められる。ヘッドレスは `window-floor --restore`(`tabs=0` でも `floorW=821` が答え)
 - `holdFloor` が窓を広げたら `askedWidth` / `askedHeight` も更新 — しないと成長が frame slop として測られ、その分小さい形がファイルへ書かれる(実測: 床に立った窓が 510 と記録された)
 - 中央ペインの下限は数ではなく式(`PageLayout.centreMinWidth`。実測 333)。不採用: チップ列を窓に合わせて詰める — チップを潰して描く・畳みだけで列幅が動く・床が確保済み、の 3 症状で取り消し(規約 §窓の床)。`labelWManual`(手がドラッグした列)だけ `labelColWMax` で抑える — 抑えないと窓を狭めた時に message 列が消える
@@ -342,7 +342,7 @@
 - メッセージの枠はホイールを自分で取り、端で外へ渡す(規約 §窓の床。`DescriptionBox.rollBy` / `wheelPastEnd` / `rollBlock` / `rollSummary`)。受け側は `contentY - pixels` — 足すと逆へ動く。`ScrollView` 内の `Flickable` は `interactive: false` — 同じホイールを 2 回処理し「一瞬上へ行って引き戻される」。不採用: `event.accepted = false` で Qt に流す(ホイールは注入できない = ヘッドレスで証明できない)
 - 右ペインの 2 つの姿(`WipPane` / `DetailsPane`)の `descOwed` / `blockScrolls` は `blockRoom` と比べる — 並べ終わった `blockScroll.height` と比べると輪になり取った分を全部返す(実測: `wip-grow` が cap=120 rows=25 = 掴みが効かないまま緑。正は cap=667 rows=2。規約 §窓の床)
 - ヘッドレスは `window-floor` の 4 形(`wip`)と `details-fit`(仕込み・報告行は verbs.md)
-- 帯のリポジトリ状態は 3 段で譲る(規約 §ウィンドウの縁)。群が床へ入れるのは `Layout.minimumWidth`(= `foldedWidth` = `…` の姿)だけで、`implicitWidth` の側は語のままの `naturalWidth` = 要求幅 — **床に入るのは印の分だけ**なので、状態が 3 つ立っても一覧を開いた窓の床は動かない(実測 Windows: 語を出した 1440px の窓でも群 272 に対し帯の床は 778 のまま。畳んだ窓は規約 §窓の床)。足し算を書いていないので誰も数え直さずに床へ入る
+- 帯のリポジトリ状態は 3 段で譲る(規約 §ウィンドウの縁)。群が床へ入れるのは `Layout.minimumWidth`(= `foldedWidth` = `…` の姿)だけで、`implicitWidth` の側は語のままの `naturalWidth` = 要求幅 — **床に入るのは印の分だけ**なので、状態が 3 つ立っても一覧を開いた窓の床は動かない(実測 Windows: 語を出した 1440px の窓でも群 272 に対し帯の床は 726 のまま。畳んだ窓は規約 §窓の床)。足し算を書いていないので誰も数え直さずに床へ入る
 - タブ列と群は「何も切らずに描いた時の幅」で要求する(`tabsWantWidth` / `naturalWidth`)— 片方が縮んだ姿で要求すると要求しなかった側が全部譲る(実測: 印幅 28 で要求した群は 1440px で 104px、`stretchFactor` 100 ではタブ 3 文字でも群の語が残った)。Qt の stretch は伸長にしか効かず、縮小は `Layout.minimumWidth` までの余地に比例 = 縮む順序は付けられない(譲り合いで確定 = ユーザー了承)
 - `TopBar.floorWidth` は `bandRow.Layout.minimumWidth` から読む — 要求幅を床にすると窓が縮まなくなる(タブ列の床は `tabStripFloorW` = タブ 2 枚)
 - 群の天井と配り分けは同じ整数から作る(規約 §ウィンドウの縁「整数で計算する」)— 天井を端数のまま合計し配り分けを `Math.ceil` で回すと、天井ぴったりの群が数 px 足りないと判断して全語を省略(実測 2026-08-11 Linux: groupW=270 で cap=103。Windows は端数が出ず露見せず)
@@ -354,7 +354,7 @@
 - ヘッドレスは `badges` / `badges-hover`(`identity-tip` も同じカードを読む。仕込み・合格条件は verbs.md)
 - git の版は帯の 4 つ目のバッジ `OLD GIT`、門ではない(規約 §git が無い時・古い時)。core は事実だけ返す — 不採用: 「古ければ Err」で止める API(誰も止めないのに止めると名乗ると読み違えられる)。全画面ゲートは `missing` / `error` の 2 つだけ。右下の版表示は色を変えない(2 か所で言うと「版」と「警告」を別々に持てない)
 - ヘッドレスは `old-git` / `old-git-card` / `old-git-fold`(`git_shim` の仕込み・合格条件・`tint=` の読みは verbs.md)
-- 掴む所作はプラットフォームの正規経路: QML は掴み代の位置を報告するだけ(`captionStripMoved` → `HTCAPTION`)— `DragHandler` / `TapHandler` を書き戻さない。不採用: `startSystemMove` 方式(Qt の hit test を病気ごと生かす)。掴める空きは `railWidth` × 2 を必ず残す(`tabs.grabRun` — タブが伸びて消える空きは掴もうと思えない)
+- 掴む所作はプラットフォームの正規経路: QML は掴み代の位置を報告するだけ(`captionStripMoved` → `HTCAPTION`)— `DragHandler` / `TapHandler` を書き戻さない。不採用: `startSystemMove` 方式(Qt の hit test を病気ごと生かす)。掴める空きは `railWidth` + `spaceMd` を必ず残す(`tabs.grabRun` — タブが伸びて消える空きは掴もうと思えない。Chrome の `+` と窓ボタンの間の最小に合わせた値で、根拠は規約 §ウィンドウの縁)
 - **掴み代は 2 本ある** — タブ列の空き(`TabStrip.grabArea`)と、**窓ボタンの前の区切りが立つ幅**(`TopBar.dividerRun` = 線 + 帯の `spacing` 両側 = 9px。2026-08-23 ユーザー指示)。**両方を 1 回の `setCaptionStrips` で渡す**(片方だけ更新する口を作ると、消えた側が最後の幅のまま残る)。**hit test を自前で答えた時に落ちた挙動**(59a7754f 以前は Qt が「誰も受けない点 = HTCAPTION」と答えていたので、押せる箱の間の空きは全部掴めた)— **帯に「何も受けない空き」を新しく作ったら、掴み代として報告するかを決める**。報告先は `dividerRun` と同じ形(`RowLayout` の外に置き、両隣の item の座標を読む Item。中に置くと自分が並びを動かす)
 - 2 本目は数字でしか見えない(区切りの線は報告の有無と無関係に描かれる)ので `band` の報告行に `dividerRun=` がある。Windows の実窓での判定は**区切りの上でダブルクリック = 最大化 / ドラッグ = 窓が動く**
 - 兼ねるかはプラットフォームの名指し(`Main.captionMerged`)— 窓の生成時に読まれ「効いたか見てから」ができない。`PG_PLAIN_CHROME=1` で兼ねない側の形をこの機械から出せる(常設 Search 箱の消し忘れはこれで発見)
