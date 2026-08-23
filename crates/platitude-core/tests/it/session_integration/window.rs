@@ -3,7 +3,7 @@
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, pass_of};
-use platitude_core::session::{LabelKind, RepoSession, SessionEvent};
+use platitude_core::session::{LabelKind, RefreshOutcome, RepoSession, SessionEvent};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn tag_only_commits_follow_the_include_tags_option() {
@@ -30,20 +30,16 @@ async fn tag_only_commits_follow_the_include_tags_option() {
     // Tags are walked by default → the tag-only commit has a row. The
     // tag-inclusive pass differs from the fast pass here, so it arrives
     // as an atomic replacement.
-    let (first_gen, drawn) = sink
+    let first_gen = sink
         .wait_for("tags-on LogReplaced", |evs| {
             evs.iter().find_map(|e| match e {
                 SessionEvent::LogReplaced {
                     generation, rows, ..
-                } if rows.len() == 2 => Some((*generation, chips_of(rows))),
+                } if rows.len() == 2 => Some(*generation),
                 _ => None,
             })
         })
         .await;
-    assert!(
-        drawn.contains(&LabelKind::Tag),
-        "the tags are drawn while they are in the graph: {drawn:?}"
-    );
 
     // Two-phase streaming: when the fast tag-less pass lands, it lands
     // before the tag-inclusive swap. Its landing is not guaranteed — an
@@ -64,25 +60,28 @@ async fn tag_only_commits_follow_the_include_tags_option() {
         );
     }
 
+    // The chips ride the refs snapshot, not the walk: a pass that beats
+    // the opening refs read lands its rows bare, and the chips catch up
+    // as a `LabelsChanged` diff onto the same generation (the swap above
+    // proves the walk, not the chips — its rows read `[]` under load).
+    // So what "is drawn" is the union of the two (`drawn_at`), and it is
+    // read off the settled opening, where the refs are in whichever half
+    // carried them.
+    let base = sink.opened_graph(&session, 2).await;
+    let drawn = drawn_at(&sink.events.lock().unwrap(), base.generation);
+    assert!(
+        drawn.contains(&LabelKind::Tag),
+        "the tags are drawn while they are in the graph: {drawn:?}"
+    );
+
     session.set_include_tags(false);
-    let off = sink.pass_after("the tag-less graph", first_gen).await;
+    let off = sink.pass_after("the tag-less graph", base.generation).await;
     assert_eq!(off.total, 1, "the tag-only commit left the walk");
     // The row main still holds keeps its branch chip and loses its tag:
     // taking the tags out of the walk is not the whole of taking them out
     // of the graph, and this is the row where the difference shows.
     {
-        let events = sink.events.lock().unwrap();
-        let left: Vec<LabelKind> = events
-            .iter()
-            .filter_map(|e| match e {
-                SessionEvent::LogChunk { generation, rows }
-                | SessionEvent::LogReplaced {
-                    generation, rows, ..
-                } if *generation == off.generation => Some(chips_of(rows)),
-                _ => None,
-            })
-            .flatten()
-            .collect();
+        let left = drawn_at(&sink.events.lock().unwrap(), off.generation);
         assert!(
             left.contains(&LabelKind::LocalBranch),
             "the branch is still drawn: {left:?}"
@@ -131,6 +130,129 @@ fn chips_of(rows: &[platitude_core::session::LogRow]) -> Vec<LabelKind> {
     rows.iter()
         .flat_map(|row| row.labels.iter().map(|label| label.kind))
         .collect()
+}
+
+/// Every chip drawn onto the pass `generation`: the rows as they landed,
+/// plus the `LabelsChanged` diffs that caught up with them afterwards.
+fn drawn_at(events: &[SessionEvent], generation: u64) -> Vec<LabelKind> {
+    events
+        .iter()
+        .flat_map(|e| match e {
+            SessionEvent::LogChunk {
+                generation: g,
+                rows,
+            }
+            | SessionEvent::LogReplaced {
+                generation: g,
+                rows,
+                ..
+            } if *g == generation => chips_of(rows),
+            SessionEvent::LabelsChanged {
+                generation: g,
+                rows,
+            } if *g == generation => rows
+                .iter()
+                .flat_map(|(_, labels)| labels.iter().map(|label| label.kind))
+                .collect(),
+            _ => Vec::new(),
+        })
+        .collect()
+}
+
+/// The walk does not wait for the refs read: whatever lands first lands
+/// bare, and the chips catch up as a `LabelsChanged` diff onto the very
+/// generation on screen — install and diff serialize on the graph lock,
+/// so there is no order in which they miss each other (`apply_refs`).
+///
+/// Left to the scheduler the refs almost always win, and the loser's
+/// order went unexercised: it turned up as a full-suite flake (a bare
+/// 2-row swap read as "no tags drawn"), not as a test. Parking the refs
+/// delivery holds that order exactly.
+// `worker_threads = 2`: the parked hook must not own the only worker
+// (see the window-change siblings below).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn chips_catch_up_when_the_refs_read_lands_last() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "base");
+    repo.git(&["checkout", "--detach", "HEAD"]);
+    repo.commit_file("g.txt", "t\n", "tag only work");
+    repo.git(&["tag", "islet"]);
+    repo.git(&["checkout", "main"]);
+
+    let sink = CaptureSink::new();
+    // Park inside the delivery of the opening refs snapshot: the event is
+    // recorded, but `apply_refs` — the line after it — cannot run until
+    // the release, so the label map stays empty for every pass landing
+    // meanwhile.
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    sink.hook_once(
+        |e| matches!(e, SessionEvent::RefsLoaded { .. }),
+        move || {
+            held.recv().expect("the test releases the refs read");
+        },
+    );
+    let session = RepoSession::open(
+        crate::support::exec::isolated(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+
+    // The tag-inclusive graph lands while the refs are parked. Bare rows
+    // are the premise, not a taste: chips here would mean the
+    // interleaving did not hold.
+    let (swap_gen, bare) = sink
+        .wait_for("the tag-inclusive swap", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::LogReplaced {
+                    generation, rows, ..
+                } if rows.len() == 2 => Some((*generation, chips_of(rows))),
+                _ => None,
+            })
+        })
+        .await;
+    assert!(
+        bare.is_empty(),
+        "the swap landed before the refs were applied: {bare:?}"
+    );
+
+    release.send(()).expect("let the refs read land");
+    let (caught_gen, chips) = sink
+        .wait_for("the chips catch up", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::LabelsChanged { generation, rows } => {
+                    let kinds: Vec<LabelKind> = rows
+                        .iter()
+                        .flat_map(|(_, labels)| labels.iter().map(|label| label.kind))
+                        .collect();
+                    Some((*generation, kinds))
+                }
+                _ => None,
+            })
+        })
+        .await;
+    assert_eq!(caught_gen, swap_gen, "the diff names the graph on screen");
+    assert!(
+        chips.contains(&LabelKind::Tag) && chips.contains(&LabelKind::LocalBranch),
+        "the catch-up carries the whole join: {chips:?}"
+    );
+
+    // The catch-up also patched the delivered-rows record: the next
+    // rebuild finds the picture it would draw already on screen, instead
+    // of seeing a phantom difference and swapping an identical graph.
+    sink.opening_settled(&session).await;
+    let outcome = crate::support::wait::bounded(
+        "the rebuild after the catch-up",
+        session.refresh_log_tracked().outcome(),
+    )
+    .await;
+    assert_eq!(
+        outcome,
+        RefreshOutcome::Unchanged,
+        "the chips were mirrored into the delivered rows"
+    );
+
+    session.close();
 }
 
 #[tokio::test(flavor = "multi_thread")]
