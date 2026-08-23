@@ -173,7 +173,7 @@ Item {
                 "graph-bar", "graph-bar-away", "middle-scroll",
                 "graph-tail", "graph-head", "graph-head-below", "graph-head-back",
                 "graph-head-go", "graph-head-lit", "wip-lanes",
-                "divider-refuse", "cherry-pick", "reword", "edit-message",
+                "divider-refuse", "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",
                 "edit-message-leave", "edit-message-focus",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
                 "find", "find-next", "find-prev", "find-drop",
@@ -1967,7 +1967,15 @@ Item {
         id: tipLandedTimer
         onTriggered: {
             const row = graphModel.rowOf(page.selectedOid)
-            if (repoTab.busyCount !== 0 || row < 0
+            // The write's own answer first: a press made with the selection already sitting at the tip — a merge from
+            // a ref row, a revert of HEAD — satisfies every reading below before git has done anything, and the run
+            // would quit over an untouched repository (measured 2026-08-23: merge-branch went green with no merge
+            // commit on disk and `op=` empty in this very report). And then the landing the answer armed: at the
+            // barrier the refs are still the old ones, so `selected === headOid` holds vacuously until the page's own
+            // `pendingHeadSelect` has resolved onto the refreshed pair — which is also the arm that stays down when a
+            // refusal never armed it, and a refused write sinks the run as a write failure anyway.
+            if (repoTab.writeSeq <= driver.writeSeqBefore || page.pendingHeadSelect
+                    || repoTab.busyCount !== 0 || row < 0
                     || !graphPane.rowOnScreen(row) || page.selectedOid !== branchesModel.headOid)
                 return
             tipLandedTimer.stop()
