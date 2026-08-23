@@ -13,8 +13,8 @@ Rectangle {
     // The RepoPage of the active tab (null while no tab is open).
     property var curPage: null
     /// Whether this band is the window's title bar. When it is, the band carries the window's own buttons, and tells
-    /// the platform where its empty run sits — the gestures on that run (drag, snap, the double-click, the window menu)
-    /// are the platform's own, because the hit test calls it caption (`AppBackend.setCaptionStrip`).
+    /// the platform where its empty runs sit — the gestures on those (drag, snap, the double-click, the window menu)
+    /// are the platform's own, because the hit test calls them caption (`AppBackend.setCaptionStrips`).
     property bool captionMerged: false
     /// Which shape the middle button is in.
     property bool windowMaximized: false
@@ -24,6 +24,9 @@ Rectangle {
     /// platform draws no buttons at all. The strip's own readings come back through here because the hooks ask the band
     /// rather than the strip (`WindowAutoActDriver`).
     readonly property real bandGrabRun: tabStrip.grabRun
+    /// …and the band's other run, which a picture holds no better: the divider is drawn the same whether or not the
+    /// hit test was ever told about the stretch it stands in.
+    readonly property real bandDividerRun: dividerRun.width
     readonly property real bandButtonsX: minimizeButton.x
     readonly property real bandRightMargin: bandRow.anchors.rightMargin
     readonly property real bandTabsWidth: tabStrip.tabsWidth
@@ -70,10 +73,11 @@ Rectangle {
     /// The grab-run moved or changed size in this band's own layout. `Main` folds in the shifts this band cannot see
     /// from here (the maximised inset, the window resizing) and reports the strip on.
     signal captionStripMoved()
-    /// The run itself, for `Main` to measure in scene coordinates.
+    /// The two runs themselves, for `Main` to measure in scene coordinates.
     readonly property Item grabRunItem: tabStrip.grabRunItem
-    /// Whether the ☰'s card is standing (`TabStrip`). The grab run is the one part of the band a press never reaches,
-    /// so it hands the run back to the scene while the card is up (`WindowChrome.captionYielded`).
+    readonly property Item dividerRunItem: dividerRun
+    /// Whether the ☰'s card is standing (`TabStrip`). The runs are the parts of the band a press never reaches, so it
+    /// hands them back to the scene while the card is up (`WindowChrome.captionYielded`).
     readonly property bool appMenuOpen: tabStrip.appMenuOpen
 
     /// The narrowest this band can be laid out at — one of the two numbers the window's floor is the larger of
@@ -267,6 +271,7 @@ Rectangle {
         }
         // Where what the app owns ends and what the window owns begins.
         Rectangle {
+            id: chromeDivider
             visible: topBar.captionMerged
             Layout.alignment: Qt.AlignVCenter
             implicitWidth: Theme.borderWidth
@@ -295,5 +300,26 @@ Rectangle {
             Accessible.name: qsTr("Close")
             onTriggered: topBar.closeRequested()
         }
+    }
+
+    // The run the divider stands in: the line, and the band's own spacing either side of it — which together are the
+    // whole stretch between the last thing the app can be asked and the first thing the window can. The hit test
+    // answers HTCAPTION for it the way it does for the run past the last tab (`TabStrip.grabArea`), so a press here
+    // is the platform's own gesture rather than a press that lands on nothing (2026-08-23 ユーザー指示: 掴み代と同じ
+    // 挙動。Qt's own hit test called it caption until the window took the message over — 59a7754f).
+    //
+    // Outside the row, so that measuring the row's own layout does not become part of it: a child of a `RowLayout` is
+    // laid out, and this one only wants to know where two of the row's items came to rest. `bandRow` fills the band,
+    // so its children's coordinates are this item's.
+    Item {
+        id: dividerRun
+        x: bandRow.x + chromeDivider.x - bandRow.spacing
+        // Nothing at all while the band is not the title bar: the divider is not drawn there, and a `RowLayout` leaves
+        // an item it is not laying out at whatever geometry it last had.
+        width: chromeDivider.visible ? chromeDivider.width + 2 * bandRow.spacing : 0
+        height: topBar.height
+        onXChanged: topBar.captionStripMoved()
+        onWidthChanged: topBar.captionStripMoved()
+        Component.onCompleted: topBar.captionStripMoved()
     }
 }

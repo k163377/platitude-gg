@@ -10,11 +10,13 @@
 use std::cell::Cell;
 use std::ffi::c_void;
 
+use super::CAPTION_RUNS;
+
 mod frame;
 mod icon;
 mod window;
 
-pub(super) use frame::{set_caption_strip, take_frame_hit_test};
+pub(super) use frame::{set_caption_strips, take_frame_hit_test};
 pub(super) use icon::set_icon;
 pub(super) use window::{
     fit_to_work_area, keep_system_gestures, minimize, set_maximized, square_corners,

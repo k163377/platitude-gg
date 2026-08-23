@@ -62,14 +62,16 @@ const SM_CXPADDEDBORDER: i32 = 92;
 const FRAME_SUBCLASS_ID: usize = 7;
 
 thread_local! {
-    /// The grab-run strip, in logical scene pixels: left edge, right
-    /// edge, bottom. Scene x0 is client x0, so no origin shift is
-    /// owed — only the DPI scale, taken fresh per hit test.
-    static STRIP: Cell<(f64, f64, f64)> = const { Cell::new((0.0, 0.0, 0.0)) };
+    /// The grab-run strips, in logical scene pixels: a left and a right
+    /// edge each, and the one bottom they all reach down to. Scene x0 is
+    /// client x0, so no origin shift is owed — only the DPI scale, taken
+    /// fresh per hit test.
+    static STRIPS: Cell<([(f64, f64); CAPTION_RUNS], f64)> =
+        const { Cell::new(([(0.0, 0.0); CAPTION_RUNS], 0.0)) };
 }
 
-pub(crate) fn set_caption_strip(x0: f64, x1: f64, bottom: f64) {
-    STRIP.set((x0, x1, bottom));
+pub(crate) fn set_caption_strips(runs: [(f64, f64); CAPTION_RUNS], bottom: f64) {
+    STRIPS.set((runs, bottom));
 }
 
 pub(crate) fn take_frame_hit_test() {
@@ -222,9 +224,10 @@ fn hit_test(window: *mut c_void, lparam: isize) -> isize {
         ScreenToClient(window, &mut point);
     }
     let scale = f64::from(dpi) / 96.0;
-    let (x0, x1, strip_bottom) = STRIP.get();
+    let (runs, strip_bottom) = STRIPS.get();
     let (x, y) = (f64::from(point.x), f64::from(point.y));
-    if x1 > x0 && y < strip_bottom * scale && x >= x0 * scale && x < x1 * scale {
+    let in_run = |&(x0, x1): &(f64, f64)| x1 > x0 && x >= x0 * scale && x < x1 * scale;
+    if y < strip_bottom * scale && runs.iter().any(in_run) {
         return HTCAPTION;
     }
     HTCLIENT

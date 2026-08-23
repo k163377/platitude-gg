@@ -108,7 +108,7 @@ pub fn fit_to_work_area() -> bool {
 // expose.
 
 /// Takes `WM_NCHITTEST` away from Qt for the windows that are up, and
-/// answers it from the strip `set_caption_strip` describes.
+/// answers it from the strips `set_caption_strips` describes.
 ///
 /// This is not an optimisation, it is the bug fix. Qt 6.10's own answer
 /// for an `ExpandedClientAreaHint` + `CustomizeWindowHint` window
@@ -128,8 +128,8 @@ pub fn fit_to_work_area() -> bool {
 /// none of this reproduces under automation — only under a hand.
 ///
 /// Answering the message ourselves starves that whole branch: every
-/// point is client except the resize borders and the one strip the QML
-/// side says is grab-run, and those get the platform's own caption
+/// point is client except the resize borders and the strips the QML
+/// side says are grab-run, and those get the platform's own caption
 /// behaviour — drag, snap, double-click, and the window menu on
 /// right-click — through the front door.
 ///
@@ -146,13 +146,22 @@ pub fn take_frame_hit_test() {
 // the edges by it, in device pixels, and is the only reader (written up
 // on `Main.mainUi`).
 
-/// Where the band's empty run sits, in logical scene pixels: from `x0`
-/// to `x1`, reaching down from the window's top edge to `bottom`. The
-/// subclass turns it into device pixels itself, per hit test, so a DPI
-/// change needs no new report.
-pub fn set_caption_strip(x0: f64, x1: f64, bottom: f64) {
+/// Where the band's empty runs sit, in logical scene pixels: each from
+/// its `x0` to its `x1`, all of them reaching down from the window's top
+/// edge to `bottom` — they stand in the one band, so the one bottom
+/// carries them. The subclass turns them into device pixels itself, per
+/// hit test, so a DPI change needs no new report.
+///
+/// All of them together, on every report: a run that has gone comes back
+/// as an empty one rather than being left behind at the width it had.
+pub fn set_caption_strips(runs: [(f64, f64); CAPTION_RUNS], bottom: f64) {
     #[cfg(windows)]
-    win32::set_caption_strip(x0, x1, bottom);
+    win32::set_caption_strips(runs, bottom);
     #[cfg(not(windows))]
-    let _ = (x0, x1, bottom);
+    let _ = (runs, bottom);
 }
+
+/// How many stretches of the band the hit test answers caption for: the
+/// empty run past the last tab, and the one the divider before the
+/// window's buttons stands in.
+pub const CAPTION_RUNS: usize = 2;

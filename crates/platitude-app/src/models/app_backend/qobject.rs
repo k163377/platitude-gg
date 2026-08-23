@@ -226,13 +226,24 @@ impl AppBackend {
         crate::winframe::take_frame_hit_test();
     }
 
-    /// Where the band's empty run sits, in logical scene pixels — the
-    /// one stretch of the window the hit test calls caption, which is
-    /// what makes it drag, snap and answer a right-click with the
-    /// window menu. The scene reports it; the platform does the rest.
+    /// Where the band's empty runs sit, in logical scene pixels — the
+    /// stretches of the window the hit test calls caption, which is what
+    /// makes them drag, snap and answer a right-click with the window
+    /// menu. The scene reports them; the platform does the rest.
+    ///
+    /// Two of them: the run past the last tab, and the one the divider
+    /// before the window's buttons stands in. Both in the one call, so
+    /// the platform never holds half an answer.
     #[qslot]
-    fn set_caption_strip(&self, x0: f64, x1: f64, bottom: f64) {
-        crate::winframe::set_caption_strip(x0, x1, bottom);
+    fn set_caption_strips(
+        &self,
+        tabs_x0: f64,
+        tabs_x1: f64,
+        gap_x0: f64,
+        gap_x1: f64,
+        bottom: f64,
+    ) {
+        crate::winframe::set_caption_strips([(tabs_x0, tabs_x1), (gap_x0, gap_x1)], bottom);
     }
 
     /// Maximises the window or puts it back, through the platform rather

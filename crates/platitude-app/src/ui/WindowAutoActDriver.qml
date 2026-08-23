@@ -792,7 +792,7 @@ Item {
             AppBackend.report(
                 "band merged=" + window.captionMerged
                 + " plain=" + AppBackend.plainChrome
-                + " grabRun=" + topBar.bandGrabRun
+                + " grabRun=" + topBar.bandGrabRun + " dividerRun=" + topBar.bandDividerRun
                 + " buttonsX=" + topBar.bandButtonsX
                 + " width=" + topBar.width
                 + " tabsW=" + topBar.bandTabsWidth

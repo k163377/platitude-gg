@@ -11,7 +11,7 @@ Item {
 
     /// The window these moves act on (`Main`).
     required property var window
-    /// The band whose grab-run the hit test is told about (`TopBar.grabRunItem`).
+    /// The band whose grab-runs the hit test is told about (`TopBar.grabRunItem` / `dividerRunItem`).
     required property var topBar
 
     /// The button and the band's double-click have to mean the same thing, so both go to the platform: Qt maximises
@@ -35,10 +35,10 @@ Item {
         else
             chrome.window.visibility = Window.Minimized
     }
-    /// Whether the scene wants its grab-run back for a while. The run is the one part of the window a press never
-    /// reaches — the hit test answers HTCAPTION for it, so the platform takes the press and the scene is told nothing
+    /// Whether the scene wants its grab-runs back for a while. They are the parts of the window a press never
+    /// reaches — the hit test answers HTCAPTION for them, so the platform takes the press and the scene is told nothing
     /// — and a card that is meant to close on a press outside it would stand through every click landing there
-    /// (2026-08-23 ユーザー報告: the ☰'s menu). While such a card is up the run is ordinary client area again, so the
+    /// (2026-08-23 ユーザー報告: the ☰'s menu). While such a card is up the runs are ordinary client area again, so the
     /// press closes it; the band gives up drag, snap and the double-click for exactly that long, which is what a
     /// platform menu does with the click that dismisses it.
     ///
@@ -47,29 +47,37 @@ Item {
     readonly property bool captionYielded: chrome.topBar.appMenuOpen
     onCaptionYieldedChanged: chrome.reportCaptionStrip()
 
-    /// Automation: what the platform was last told the run is, `none` while the scene has it back
-    /// (`PG_AUTO_ACT=app-menu`). Which side owns that run is not a thing a screenshot holds — the band frames the same
-    /// either way.
+    /// Automation: what the platform was last told the run past the tabs is, `none` while the scene has it back
+    /// (`PG_AUTO_ACT=app-menu`). Which side owns the runs is not a thing a screenshot holds — the band frames the same
+    /// either way. The one run stands for both: they are yielded and reported together.
     property string sentStrip: "none"
 
-    /// Tells the hit test where the band's grab-run is, in scene coordinates — the one stretch it answers HTCAPTION
-    /// for, which gives the band drag, snap, double-click maximise and the window menu as the platform's own
+    /// Tells the hit test where the band's grab-runs are, in scene coordinates — the stretches it answers HTCAPTION
+    /// for, which give the band drag, snap, double-click maximise and the window menu as the platform's own
     /// gestures. Called from the strip's layout changes and from the one shift it cannot see: the window resizing,
     /// which maximising is.
+    ///
+    /// Two runs: the empty band past the last tab, and the one the divider before the window's buttons stands in.
+    /// Both stand in this band and reach up to its top edge, so the one bottom carries them.
     function reportCaptionStrip() {
         if (!chrome.window.captionMerged || chrome.topBar.grabRunItem === null)
             return
-        // An empty strip is how "there is no caption here" is said: the hit test takes `x1 > x0` as the question
-        // (`winframe::hit_test`), so nothing else has to know about the yield.
+        // Empty strips are how "there is no caption here" is said: the hit test takes `x1 > x0` as the question of each
+        // run (`winframe::hit_test`), so nothing else has to know about the yield. Both go — the divider's run closes
+        // the same card the same way.
         if (chrome.captionYielded) {
             chrome.sentStrip = "none"
-            AppBackend.setCaptionStrip(0, 0, 0)
+            AppBackend.setCaptionStrips(0, 0, 0, 0, 0)
             return
         }
         const run = chrome.topBar.grabRunItem
         const at = run.mapToItem(null, 0, 0)
+        const gap = chrome.topBar.dividerRunItem
+        const gapAt = gap.mapToItem(null, 0, 0)
         chrome.sentStrip = Math.round(at.x) + "-" + Math.round(at.x + run.width)
-        AppBackend.setCaptionStrip(at.x, at.x + run.width, at.y + run.height)
+        AppBackend.setCaptionStrips(at.x, at.x + run.width,
+                                    gapAt.x, gapAt.x + gap.width,
+                                    at.y + run.height)
     }
     /// What Windows has to be told about this window. A run that was turned away gets a window too, and undecorated
     /// it would sit on the taskbar as a second application wearing the shell's generic icon.
