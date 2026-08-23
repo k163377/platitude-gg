@@ -79,9 +79,39 @@ impl DemoRepo {
 
     /// For commands whose non-zero exit is the state we want (a merge
     /// stopping on conflicts). Only a spawn failure is an error.
+    /// Runs a command whose success is a *stopped* operation — a rebase
+    /// waiting on an emptied commit, a merge or a cherry-pick waiting on
+    /// a conflict. git answers those with a non-zero exit, so the exit
+    /// alone cannot tell "stopped where we wanted" from "refused the
+    /// command outright": a flag the minimum git does not know exits the
+    /// same way, and the preset then builds a repository with nothing
+    /// standing in it (2026-08-23 実測 — 2.43 knows `--empty=ask`, not
+    /// its 2.45 rename `stop`, and every rebase-empty run on the Linux
+    /// container photographed a resting page). The markers are the proof
+    /// — the same ones core reads (`platitude_core::opstate`), spelled
+    /// out here because xtask depends on std alone.
     pub(super) fn git_expecting_stop(&mut self, args: &[&str]) -> Result<(), String> {
         let dir = self.work.clone();
-        crate::run_captured(&mut self.command(&dir, args)).map(drop)
+        crate::run_captured(&mut self.command(&dir, args)).map(drop)?;
+        let git_dir = self.work.join(".git");
+        let stopped = [
+            "rebase-merge",
+            "rebase-apply",
+            "MERGE_HEAD",
+            "CHERRY_PICK_HEAD",
+            "REVERT_HEAD",
+        ]
+        .iter()
+        .any(|marker| git_dir.join(marker).exists());
+        if stopped {
+            Ok(())
+        } else {
+            Err(format!(
+                "git {} was expected to stop an operation, but none is standing — \
+                 did git refuse the command instead?",
+                args.join(" ")
+            ))
+        }
     }
 
     pub(super) fn write(&self, rel: &str, content: &str) -> Result<(), String> {
