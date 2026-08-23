@@ -174,109 +174,22 @@ Item {
     }
     // No mark: nothing asks a question about a row in this list any more. What one of these rows takes away is held
     // down on the menu row that names it, and that menu is standing over the row while it is held (デザイン規約 §長押し).
-    RowLayout {
+    // The ink of the row, one column after another (`NavRowBody`). Handed the row itself rather than its fields — a
+    // delegate is recycled, and mirroring them here would double every binding it pays on reuse.
+    NavRowBody {
         id: rowLayout
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceXs + navRow.depth * Theme.spaceMd
         // Not padding: the gutter the list's own scroll bar is drawn in. This row ends in a right-aligned column (the
         // branch a worktree has out), and at the pane's own inset the thumb was drawn over its last glyph (measured).
         anchors.rightMargin: Theme.spaceSm
-        spacing: Theme.spaceXs
-        // The mark and the name, in the part both file lists share (`NameCell`): the slot every row opens with — a
-        // folder's fold arrow, a worktree file's change icon, and later the mark for a hidden branch — and the name
-        // after it. A ref row has nothing to put in the slot and it stays open all the same, which is what keeps every
-        // name at a given depth beginning in one column.
-        NameCell {
-            // The box below takes the row's slack while it is open, and the slot stays where it is: a name going into a
-            // box must not walk the columns beside it sideways.
-            Layout.fillWidth: !navRow.editing
-            showName: !navRow.editing
-            folder: navRow.folder
-            change: navRow.change
-            showChange: navRow.kindHint === "wt"
-            // A worktree row has no change code, so the seat carries the state of the checkout instead — the same
-            // shared slot a folder keeps its fold state in (`models::nav::item`). A lock is somebody's choice and
-            // wears the quiet colour every other row mark does; a folder git can no longer find is a warning.
-            //
-            // A branch row uses the same slot for the one question it shares with those rows: whether a move can land
-            // here. Its mark is the WORKTREES section's own (`tree`) — where the branch actually is — and **not the
-            // padlock**, which is spoken for by `git worktree lock`; a mark cannot mean two things in one window.
-            seatMark: navRow.kindHint === "branch" ? (navRow.change === "HELD" ? "tree" : "")
-                    : navRow.kindHint !== "worktree" ? ""
-                    : navRow.change === "LOCKED" ? "lock"
-                    : navRow.change === "PRUNABLE" ? "bang" : ""
-            seatTint: navRow.change === "PRUNABLE" ? Theme.warning : Theme.textSecondary
-            name: navRow.name
-            // Where a renamed file came from, said the same way the commit's own file list says it: a rename is two
-            // names, and a row that shows only the new one leaves the reader to work out what moved. Empty on
-            // everything else — the model fills it for staged files alone, which is the only side git names a source
-            // on, and a folder row keeps its own path in the slot beside it (`orig_path`, which this is not).
-            origPath: navRow.orig_name
-            // The name says where the ref is, the way a chip's does: grey for one this repository does not hold (デザイン規約
-            // §ref の種別).
-            tone: navRow.is_head ? Theme.textLink : navRow.only_remote ? Theme.textSecondary : Theme.textPrimary
-            weight: navRow.is_head ? Font.DemiBold : Font.Normal
-            // A pending file whose change says something about its line endings wears the mark on the name's shoulder.
-            // What it is about is the row's hover; the sentence in full is the diff pane's.
-            marked: navRow.kindHint === "wt" && navRow.eol_mark
-        }
-        // Where the box stands, and the slack it takes off the row while it is open. The box itself is drawn outside
-        // this layout (below) — it is allowed to be wider than the seat, and a seat that grew with it would push the
-        // row's own columns sideways.
-        Item {
-            id: boxSeat
-            visible: navRow.editing
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-        }
-        // Worktree rows: checked-out branch on the right.
-        Label {
-            visible: !navRow.folder && navRow.kindHint === "worktree"
-            text: navRow.bucket !== "" ? navRow.bucket : qsTr("detached")
-            color: Theme.textSecondary
-            font.pixelSize: Theme.fontSm
-            elide: Text.ElideMiddle
-            Layout.maximumWidth: navRow.listWidth / 2
-        }
-        // Current branch's ahead/behind, left of the state icon.
-        HeadTrack {
-            visible: !navRow.folder && navRow.kindHint === "branch" && navRow.is_head && navRow.headTracks
-            ahead: navRow.headAhead
-            behind: navRow.headBehind
-            Layout.alignment: Qt.AlignVCenter
-        }
-        // Branch remote state: nothing = local only, remote icon = has a remote, PR icon = has a PR (real data in Phase
-        // 4; PG_FAKE_PR previews the look). Remote-branch and worktree rows show the PR state too. A tag reads the same
-        // way — the badge answers "is this only here?" whatever it is on, and the fetch carries the bit for it
-        // (`ls-remote --tags`).
-        NavIcon {
-            visible: !navRow.folder
-                     && (((navRow.kindHint === "branch"
-                           || navRow.kindHint === "tag")
-                          && (navRow.has_remote || navRow.has_pr))
-                         || ((navRow.kindHint === "remote" || navRow.kindHint === "worktree") && navRow.has_pr))
-            kind: navRow.has_pr ? "pr" : "remote"
-            tint: navRow.has_pr ? Theme.success : Theme.textSecondary
-            // The size the graph's chips wear the same badge at: one question, one mark, one size (デザイン規約 §寸法).
-            width: Theme.iconSm
-            height: Theme.iconSm
-        }
-        // The remote this repository sends pushes to. The toolbar's own push mark, in the seat the badge above holds
-        // on every other row — one question, one mark, one size. `accent` because what it answers is which of the rows
-        // is the one in effect (デザイン規約 §色 アクセント: 選択インジケータ), not what kind of ref the row is.
-        NavIcon {
-            visible: navRow.pushesHere
-            kind: "push"
-            tint: Theme.accent
-            width: Theme.iconSm
-            height: Theme.iconSm
-        }
+        row: navRow
     }
     // The name, in a box, where the name was — drawn outside the list, which is the box's own business (`NavNameBox`).
     NavNameBox {
         id: editField
         row: navRow
-        seat: boxSeat
+        seat: rowLayout.boxSeat
         drawnIn: navRow.boxLayer
         // Where the seat sits inside the row is the layout's to say, so what the box is told is where the row's own
         // columns begin; it adds the seat's place to that itself.
@@ -324,7 +237,7 @@ Item {
     /// whether it is on screen at all, and where it landed.
     readonly property real editBoxWidth: editField.width
     readonly property real editBoxWhole: editField.wantWidth
-    readonly property real editBoxSeat: boxSeat.width
+    readonly property real editBoxSeat: rowLayout.boxSeat.width
     readonly property bool editBoxShown: editField.visible
     readonly property string editBoxAt: editField.cameOut
     /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at

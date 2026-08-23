@@ -97,6 +97,7 @@ NavItemDelegate 1.0 NavItemDelegate.qml
 NavList 1.0 NavList.qml
 NavNameBox 1.0 NavNameBox.qml
 NavRail 1.0 NavRail.qml
+NavRowBody 1.0 NavRowBody.qml
 NavSections 1.0 NavSections.qml
 NoticeButton 1.0 NoticeButton.qml
 NoticeLine 1.0 NoticeLine.qml
