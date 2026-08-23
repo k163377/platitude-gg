@@ -146,6 +146,7 @@ TabStrip 1.0 TabStrip.qml
 TopBar 1.0 TopBar.qml
 TreeViewToggle 1.0 TreeViewToggle.qml
 WindowAutoActDriver 1.0 WindowAutoActDriver.qml
+WindowChrome 1.0 WindowChrome.qml
 WindowPerfDriver 1.0 WindowPerfDriver.qml
 WindowButton 1.0 WindowButton.qml
 WindowShape 1.0 WindowShape.qml
