@@ -94,6 +94,17 @@ impl CaptureSink {
     /// tokio leaves a task queued there queued: whatever has to run
     /// meanwhile must be started from the test's own thread, not from
     /// inside the hook.
+    ///
+    /// And while parked, **await only what is already recorded** (the
+    /// sink records before it runs the hook). The delivery that fires the
+    /// hook wakes the waiters watching the sink, and a woken task can
+    /// land in the parked worker's LIFO slot — the one place stealing
+    /// never reaches. A wait for a *future* event can therefore be held
+    /// captive by the very park it is supposed to release: no task runs,
+    /// no timer serves the captive `Patience`, and the binary sits at 0%
+    /// CPU until the CI kill. 実測: a hook parked on the opening refs
+    /// delivery plus a wait for the tag-inclusive swap deadlocked exactly
+    /// so in the container, deterministically, while passing on Windows.
     pub fn hook_once(
         &self,
         when: impl Fn(&SessionEvent) -> bool + Send + 'static,
